@@ -1,0 +1,29 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Local reference documents (not repository source)
+AI1.docx
+AI2.docx
+AI3.docx
+
+# Runtime data: keep only documentation and explicit fixtures
+data/*
+!data/README.md
+!data/fixtures/
+!data/fixtures/**
+
+# Common generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+node_modules/
+dist/
+build/
+.DS_Store
+Thumbs.db
+*.log
