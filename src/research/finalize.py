@@ -14,6 +14,7 @@ def finalize_research_result(
     *,
     output: ResearchExcelOutput,
     inquiry_id: str,
+    importance_raw: str | None,
     status: ResearchStatus,
     resolved_brand: str | None = None,
     reason_code: ResearchReasonCode | None = None,
@@ -38,7 +39,11 @@ def finalize_research_result(
         )
 
     try:
-        output.upsert(inquiry_id, remarks=remarks)
+        output.upsert(
+            inquiry_id,
+            importance_raw=importance_raw,
+            remarks=remarks,
+        )
     except ExcelOutputError:
         return ResearchResult(
             inquiry_id=inquiry_id,
