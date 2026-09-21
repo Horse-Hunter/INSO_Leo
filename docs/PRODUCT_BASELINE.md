@@ -11,23 +11,47 @@ This document contains durable, evidence-backed product facts. Unknown facts rem
 
 ## Confirmed system shape
 
-- The project has five logical modules: `core`, `research`, `inso`, `quotation`, and `workflow`.
+- The project has six logical modules: `core`, `sheets`, `research`, `workflow`, `inso`, and `quotation`.
+- `sheets` is the Google Sheets external-integration boundary for one-shot reads, pending-record queries, specified-field reads, raw record location, and explicitly commanded safe field updates.
 - `research` concerns webpage research and price-evidence collection.
 - `inso` concerns INSO queries, inquiry actions, and result retrieval.
 - `quotation` concerns quotation rules, generation, and output.
-- `workflow` coordinates the three domain modules and does not own their concrete business behavior.
-- This initial task provides architecture, collaboration rules, and module skeletons only.
+- `workflow` owns global orchestration, scheduling, `inquiry_id` and global state, retry, duplicate prevention, and module handoffs; it does not own concrete module business behavior.
+- Every 15 minutes, the Workflow scheduler calls `sheets` once; `sheets` returns the current pending records, and Workflow decides the next action. Sheets does not run its own polling loop.
+
+## Research V1
+
+- Contract shape: `ResearchInput` -> read-only web market research -> `ResearchResult`.
+- Confirmed sources: IC.net, Findchips, 华强电子网, LCSC / 立创商城, and Bom.Ai.
+- Bom.Ai requires login and may obtain authorized credentials through the project Credential Provider.
+- Research does not access Google Sheets and does not depend on `sheets`, `workflow`, `inso`, or `quotation`.
+- Research results currently output to a local Excel file rather than directly to Google Sheets.
+- Local Excel output remains part of Research V1. Do not create a separate Excel/storage module unless later evidence shows a stable shared need across modules.
+
+## Credential Provider
+
+- The project has a local Windows Credential Provider backed by Windows DPAPI CurrentUser encryption.
+- The local vault is stored outside the repository at `%LOCALAPPDATA%\INSO_Leo\credential-vault.json`.
+- Business modules depend only on the Credential Provider capability, not DPAPI, the JSON path, or PowerShell implementation details.
+- A stable `site_id` identifies a site's login; the current PowerShell interface is `Get-InsoVaultLogin -SiteId <id>`.
+- PowerShell 7 and Windows PowerShell 5.1 have been tested.
+- The vault is for one local Windows user and does not support cross-computer synchronization or multi-user sharing.
+- Real usernames, passwords, tokens, cookies, secrets, vault data, and secret-bearing examples must never enter the repository, Task Packets, logs, fixtures, or examples.
+- Credential Provider is infrastructure capability, not a separate business module.
 
 ## Business facts
 
 - Supported products or services: `UNKNOWN`
 - Markets, currencies, taxes, and locales: `UNKNOWN`
-- Price evidence requirements and source-quality rules: `UNKNOWN`
+- Detailed price-evidence acceptance and source-quality rules: `UNKNOWN`
 - INSO system definition, ownership, endpoints, and access method: `UNKNOWN`
 - Inquiry inputs, outputs, state transitions, and failure semantics: `UNKNOWN`
 - Quotation formulas, rounding, margins, approvals, and validity periods: `UNKNOWN`
 - Quotation output formats and recipients: `UNKNOWN`
-- Workflow triggers, ordering, retries, and human-review points: `UNKNOWN`
+- Workflow ordering, retry policies, duplicate keys, state transitions, and human-review points beyond the confirmed 15-minute Sheet check: `UNKNOWN`
+- Google Sheet identity, worksheet selection, column mappings, pending-record criteria, and writable fields: `UNKNOWN`
+- `ResearchInput` and `ResearchResult` field schemas: `UNKNOWN`
+- Local Research Excel schema, filename policy, and retention: `UNKNOWN`
 
 ## Data and compliance
 
@@ -42,17 +66,19 @@ This document contains durable, evidence-backed product facts. Unknown facts rem
 - Programming language and version: `UNKNOWN`
 - Runtime and deployment target: `UNKNOWN`
 - Persistence technology: `UNKNOWN`
-- Authentication and secret-management approach: `UNKNOWN`
+- Authentication and secret-management approach outside the confirmed local Credential Provider: `UNKNOWN`
 - Observability requirements: `UNKNOWN`
 - CI/CD platform and release process: `UNKNOWN`
 - Test, lint, formatting, and type-check toolchain: `UNKNOWN`
 
 ## Current safety constraints
 
-- Do not implement webpage crawling or scraping.
+- Research V1 may perform read-only market research against IC.net, Findchips, 华强电子网, LCSC / 立创商城, and Bom.Ai only.
+- Bom.Ai access may use authorized login credentials obtained through the project Credential Provider.
+- This Research authorization does not permit arbitrary website access, unauthorized writes, customer messaging, INSO actions, production-data modification, or storing secrets in the repository.
 - Do not log in to or call the INSO system.
 - Do not implement quotation algorithms or infer missing pricing rules.
-- Do not connect to production systems.
+- Do not connect to production systems except for the explicitly authorized read-only Research V1 source access above.
 - Do not install dependencies without a concrete, reviewed need.
 - Do not store secrets or sensitive live data in the repository.
 

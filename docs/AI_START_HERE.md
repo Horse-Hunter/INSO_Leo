@@ -26,6 +26,7 @@ This repository is organized for long-lived collaboration among humans, ChatGPT,
 | --- | --- |
 | `AGENTS.md` | Short, durable rules for coding agents |
 | `docs/` | Stable product, architecture, and collaboration documentation |
+| `docs/modules/` | Durable boundaries and confirmed facts for individual modules |
 | `tasks/` | Task Packets describing bounded units of work |
 | `src/` | Source modules |
 | `tests/` | Tests mirroring source module ownership |
@@ -35,5 +36,5 @@ This repository is organized for long-lived collaboration among humans, ChatGPT,
 
 - Project language and runtime: `UNKNOWN`
 - Build, lint, type-check, and test commands: `UNKNOWN`
-- Production connectivity: not configured and not authorized by the baseline scaffolding
-- Business functionality: intentionally not implemented
+- External access: Research V1 is authorized only for read-only market research against the sources listed in `PRODUCT_BASELINE.md`; INSO and other production operations remain unauthorized
+- Business implementation: module behavior remains unimplemented; a local Credential Provider infrastructure capability exists
