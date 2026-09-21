@@ -179,6 +179,13 @@ def test_successful_price_source_can_carry_matching_candidate(
 
     assert result.price_candidate is not None
 
+    result_without_candidate = SourceResult(
+        source=source,
+        outcome=SourceOutcome.SUCCESS,
+        evidence=_evidence(source),
+    )
+    assert result_without_candidate.price_candidate is None
+
 
 def test_ic_net_success_can_omit_price_candidate() -> None:
     result = SourceResult(
