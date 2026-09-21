@@ -26,7 +26,9 @@ def _evidence(
     return SourceEvidence(
         source=source,
         query_mpn="ABC123",
-        matched_mpn="ABC123" if outcome is not SourceOutcome.NO_STRICT_MPN_MATCH else None,
+        matched_mpn=(
+            "ABC123" if outcome is not SourceOutcome.NO_STRICT_MPN_MATCH else None
+        ),
         outcome=outcome,
         captured_at=CAPTURED_AT,
         source_url="https://example.invalid/item",
@@ -112,6 +114,22 @@ def test_price_candidate_is_immutable_and_decimal_safe() -> None:
         candidate.raw_price = Decimal("2.00")  # type: ignore[misc]
 
 
+@pytest.mark.parametrize("field", ["raw_price", "normalized_rmb_price"])
+def test_price_candidate_rejects_binary_float(field: str) -> None:
+    values = {
+        "source": ResearchSource.FINDCHIPS,
+        "matched_mpn": "ABC123",
+        "raw_price": Decimal("1.25"),
+        "raw_currency": "USD",
+        "normalized_rmb_price": Decimal("8.90"),
+        "captured_at": CAPTURED_AT,
+    }
+    values[field] = 1.25
+
+    with pytest.raises(TypeError, match="must be Decimal"):
+        PriceCandidate(**values)  # type: ignore[arg-type]
+
+
 def test_ic_net_cannot_produce_price_candidate() -> None:
     with pytest.raises(ValueError, match="price sources"):
         _candidate(ResearchSource.IC_NET)
@@ -137,9 +155,10 @@ def test_non_success_outcome_rejects_price_candidate(outcome: SourceOutcome) -> 
         )
 
 
-def test_successful_price_source_can_carry_matching_candidate() -> None:
-    source = ResearchSource.LCSC
-
+@pytest.mark.parametrize("source", PRICE_SOURCES)
+def test_successful_price_source_can_carry_matching_candidate(
+    source: ResearchSource,
+) -> None:
     result = SourceResult(
         source=source,
         outcome=SourceOutcome.SUCCESS,
