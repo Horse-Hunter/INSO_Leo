@@ -71,26 +71,41 @@ class ResearchExcelOutput:
 
     def _ensure_schema(self, workbook: OpenpyxlWorkbook) -> tuple[int, int]:
         worksheet = workbook.active
-        headers = {
-            worksheet.cell(row=1, column=column).value: column
-            for column in range(1, worksheet.max_column + 1)
-            if worksheet.cell(row=1, column=column).value is not None
-        }
-
-        inquiry_col = headers.get(INQUIRY_ID_HEADER)
+        inquiry_col = self._find_unique_header(worksheet, INQUIRY_ID_HEADER)
         if inquiry_col is None:
-            inquiry_col = worksheet.max_column + 1
+            inquiry_col = self._next_header_column(worksheet)
             worksheet.cell(row=1, column=inquiry_col, value=INQUIRY_ID_HEADER)
 
-        remarks_col = headers.get(REMARKS_HEADER)
+        remarks_col = self._find_unique_header(worksheet, REMARKS_HEADER)
         if remarks_col is None:
-            remarks_col = worksheet.max_column + 1
+            remarks_col = self._next_header_column(worksheet)
             worksheet.cell(row=1, column=remarks_col, value=REMARKS_HEADER)
 
         worksheet.column_dimensions[
             worksheet.cell(row=1, column=inquiry_col).column_letter
         ].hidden = True
         return inquiry_col, remarks_col
+
+    @staticmethod
+    def _find_unique_header(worksheet, header: str) -> int | None:
+        columns = [
+            column
+            for column in range(1, worksheet.max_column + 1)
+            if worksheet.cell(row=1, column=column).value == header
+        ]
+        if len(columns) > 1:
+            raise ExcelConsistencyError(f"duplicate Excel header: {header}")
+        return columns[0] if columns else None
+
+    @staticmethod
+    def _next_header_column(worksheet) -> int:
+        if (
+            worksheet.max_row == 1
+            and worksheet.max_column == 1
+            and worksheet.cell(row=1, column=1).value is None
+        ):
+            return 1
+        return worksheet.max_column + 1
 
     def _save_atomically(self, workbook: OpenpyxlWorkbook) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -109,3 +124,5 @@ class ResearchExcelOutput:
                 temp_path.unlink(missing_ok=True)
             finally:
                 raise ExcelWriteError("unable to save Research workbook") from exc
+        finally:
+            workbook.close()
