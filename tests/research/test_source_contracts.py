@@ -15,7 +15,6 @@ from src.research.source_contracts import (
     is_strict_mpn_match,
 )
 
-
 CAPTURED_AT = datetime(2026, 9, 21, 8, 0, tzinfo=UTC)
 
 
