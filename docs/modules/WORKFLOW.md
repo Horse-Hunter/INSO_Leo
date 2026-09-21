@@ -31,7 +31,7 @@ Workflow owns cross-module orchestration. It coordinates module contracts and pr
 Google Sheet -> Workflow -> Research -> project-local `调研价格.xlsx`
 ```
 
-Workflow sends the canonical V1 `ResearchInput`: `inquiry_id`, `mpn`, optional `brand`, and `quantity`; it does not pass `importance_raw`. Workflow consumes the canonical `ResearchResult`: `inquiry_id`, `status`, optional `resolved_brand`, optional `reason_code`, and optional `remarks`. V1 has no `output_ref`.
+Workflow sends the canonical V1 `ResearchInput`: `inquiry_id`, `mpn`, optional `brand`, `quantity`, and `importance_raw`. Workflow passes `importance_raw` through from Sheets without interpreting it. Workflow consumes the canonical `ResearchResult`: `inquiry_id`, `status`, optional `resolved_brand`, optional `reason_code`, and optional `remarks`. V1 has no `output_ref`.
 
 Workflow may pass `resolved_brand` to Sheets for the confirmed Brand update. A Sheets Brand conflict does not undo an already completed Research result or change that Inquiry from `COMPLETED`.
 
