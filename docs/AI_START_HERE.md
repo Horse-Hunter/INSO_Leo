@@ -26,6 +26,7 @@ This repository is organized for long-lived collaboration among humans, ChatGPT,
 | --- | --- |
 | `AGENTS.md` | Short, durable rules for coding agents |
 | `docs/` | Stable product, architecture, and collaboration documentation |
+| `docs/AI_TEAM.md` | AI collaboration roles and decision hierarchy |
 | `docs/modules/` | Durable boundaries and confirmed facts for individual modules |
 | `tasks/` | Task Packets describing bounded units of work |
 | `src/` | Source modules |
