@@ -65,17 +65,19 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 - Workflow does not use a fixed stale timeout. After restart, inherited `RESEARCHING` work is checked through a public Research capability to confirm whether output completed before Workflow chooses recovery or retry.
 - Research Excel output must be idempotent by `inquiry_id`. `SUCCESS` and `PARTIAL_SUCCESS` may be returned only after the required Excel output succeeds; an Excel write failure is `RETRYABLE_FAILURE`.
 - `PARTIAL_SUCCESS` requires at least one valid price.
-- V1 `ResearchInput` contains `inquiry_id`, model / MPN, brand, and quantity; `importance_raw` is not passed to Research.
+- V1 `ResearchInput` contains `inquiry_id`, model / MPN, brand, quantity, and `importance_raw`. Sheets supplies the raw column C value and Workflow passes it through without interpreting it.
 - Research returns `resolved_brand` to Workflow for the Sheets Brand update. A Brand conflict does not undo completed Research or change the Inquiry from `COMPLETED`.
 - Workflow uses the `record_ref` / `record_identity` supplied by Sheets and never treats row number alone as a permanent identity.
 
 ## Research V1
 
-- Canonical `ResearchInput`: `inquiry_id`, `mpn`, optional `brand`, and `quantity`.
+- Canonical `ResearchInput`: `inquiry_id`, `mpn`, optional `brand`, `quantity`, and `importance_raw`.
 - Canonical `ResearchResult`: `inquiry_id`, `status`, optional `resolved_brand`, optional `reason_code`, and optional `remarks`. V1 does not include `output_ref`.
 - Allowed Research statuses: `SUCCESS`, `PARTIAL_SUCCESS`, `MANUAL_REVIEW_REQUIRED`, and `RETRYABLE_FAILURE`.
 - Confirmed sources: IC.net, Findchips, 华强电子网 / HQEW, LCSC / 立创商城, and Bom.Ai.
 - Bom.Ai requires login and may obtain authorized credentials through the project Credential Provider.
+- Bom.Ai price validity is one month. If valid prices exist within the most recent 7 days, use the lowest valid 7-day price; otherwise, if valid prices exist within one month, use the lowest valid one-month price. Prices older than one month are not valid Bom.Ai candidates.
+- Research uses `importance_raw` only for the V1 Excel `重要等级` display: exact `A` / `B` -> `重要`; every other value -> `普通`. This display rule must not affect market research behavior and must not be treated as the future INSO importance rule.
 - Research does not access Google Sheets and does not depend on `sheets`, `workflow`, `inso`, or `quotation`.
 - The project-local `调研价格.xlsx` is the official persisted Research V1 output. Its hidden `_inquiry_id` field is the technical idempotency key; retry or crash recovery must not create duplicate normal records.
 - `SUCCESS` and `PARTIAL_SUCCESS` may be returned only after the required Excel output succeeds. `PARTIAL_SUCCESS` also requires at least one valid price. Excel write failure returns `RETRYABLE_FAILURE`.
@@ -105,7 +107,7 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 - Workflow implementation details not confirmed above, including SQLite schema/migrations, duplicate-prevention key/algorithm, detailed state-transition guards, scheduling mechanism, Research completion-confirmation contract, and operational recovery details: `UNKNOWN`
 - Google Sheet spreadsheet/worksheet configuration, identifying-snapshot fields, record-relocation matching algorithm, OAuth details, and writable fields beyond the confirmed Brand rule: `UNKNOWN`
 - Research input normalization/validation rules, price-item schema, status-specific field requirements, and reason-code catalog beyond confirmed cases: `UNKNOWN`
-- Research Excel business columns beyond hidden `_inquiry_id`, workbook layout/update/locking mechanics, and retention policy: `UNKNOWN`
+- Research Excel business columns beyond hidden `_inquiry_id` and confirmed visible `重要等级` / `备注`, workbook layout/update/locking mechanics, and retention policy: `UNKNOWN`
 
 ## Data and compliance
 
