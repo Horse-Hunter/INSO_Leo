@@ -38,7 +38,7 @@ class SourceOutcome(str, Enum):
 def is_strict_mpn_match(target_mpn: str, observed_mpn: str) -> bool:
     """Compare MPNs after trimming edges and ignoring letter case only."""
 
-    return target_mpn.strip().casefold() == observed_mpn.strip().casefold()
+    return target_mpn.strip().lower() == observed_mpn.strip().lower()
 
 
 EvidenceValue = str | int | bool | Decimal | date | datetime | None
@@ -103,7 +103,9 @@ class SourceResult:
         if self.price_candidate is None:
             return
         if self.outcome is not SourceOutcome.SUCCESS:
-            raise ValueError("only a successful source result may carry a price candidate")
+            raise ValueError(
+                "only a successful source result may carry a price candidate"
+            )
         if self.source not in PRICE_SOURCES:
             raise ValueError("only confirmed price sources may carry a price candidate")
         if self.price_candidate.source is not self.source:
