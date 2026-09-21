@@ -1,6 +1,6 @@
 # Task: RESEARCH-001 — Research Contract & Excel Output Foundation
 
-status: ready
+status: complete
 owner: Research Codex
 created: 2026-09-21
 updated: 2026-09-21
@@ -117,18 +117,18 @@ Sources: `docs/PRODUCT_BASELINE.md`, `docs/modules/RESEARCH.md`, `docs/MODULE_IN
 
 ## acceptance
 
-- [ ] `ResearchInput`, `ResearchResult`, `ResearchStatus`, and the confirmed minimal `ResearchReasonCode` exist and match the documented V1 contract.
-- [ ] `ResearchResult` has no `output_ref`.
-- [ ] Excel output uses openpyxl and maintains hidden `_inquiry_id`.
-- [ ] Repeated upsert of the same `inquiry_id` does not create a second normal record.
-- [ ] Existing duplicate non-empty `_inquiry_id` rows fail closed.
-- [ ] `备注` can be written/updated for the same inquiry.
-- [ ] Excel write/save failure is represented as `RETRYABLE_FAILURE`, not success.
-- [ ] `MANUAL_REVIEW_REQUIRED` is finalized only after its manual-review reason is successfully persisted.
-- [ ] `SUCCESS` / `PARTIAL_SUCCESS` finalization requires successful Excel persistence.
-- [ ] Tests do not call live websites, Sheets, Workflow, INSO, Quotation, SQLite, Playwright, or Credential Provider.
-- [ ] No real website adapter or source-specific business logic is introduced.
-- [ ] Research code has no forbidden cross-module imports.
+- [x] `ResearchInput`, `ResearchResult`, `ResearchStatus`, and the confirmed minimal `ResearchReasonCode` exist and match the documented V1 contract.
+- [x] `ResearchResult` has no `output_ref`.
+- [x] Excel output uses openpyxl and maintains hidden `_inquiry_id`.
+- [x] Repeated upsert of the same `inquiry_id` does not create a second normal record.
+- [x] Existing duplicate non-empty `_inquiry_id` rows fail closed.
+- [x] `备注` can be written/updated for the same inquiry.
+- [x] Excel write/save failure is represented as `RETRYABLE_FAILURE`, not success.
+- [x] `MANUAL_REVIEW_REQUIRED` is finalized only after its manual-review reason is successfully persisted.
+- [x] `SUCCESS` / `PARTIAL_SUCCESS` finalization requires successful Excel persistence.
+- [x] Tests do not call live websites, Sheets, Workflow, INSO, Quotation, SQLite, Playwright, or Credential Provider.
+- [x] No real website adapter or source-specific business logic is introduced.
+- [x] Research code has no forbidden cross-module imports.
 
 ## verification
 
@@ -142,7 +142,7 @@ Sources: `docs/PRODUCT_BASELINE.md`, `docs/modules/RESEARCH.md`, `docs/MODULE_IN
 
 ## completion
 
-- status: pending
-- changed: pending
-- verified: pending
-- limitations: Excel business columns beyond `_inquiry_id` and `备注`, source/evidence schemas, price aggregation, source adapters, and broader reason-code catalog remain outside this task.
+- status: complete
+- changed: added canonical Research V1 dataclass/Enum contracts, Research-owned idempotent Excel output with hidden `_inquiry_id`, manual-review remarks persistence, atomic replacement save behavior, and result finalization that maps Excel persistence failure to `RETRYABLE_FAILURE`; added scoped unit tests
+- verified: scoped pytest reproduction of the branch files passed 10 tests; reviewed the branch diff and confirmed no real website adapters, live URLs/credentials, forbidden cross-module imports, SQLite, Playwright, or network/browser calls were introduced
+- limitations: ruff could not be executed in the available validation environment; Excel business columns beyond `_inquiry_id` and `备注`, source/evidence schemas, price aggregation, source adapters, PARTIAL_SUCCESS price-validity decision logic, and the broader reason-code catalog remain outside this task.
