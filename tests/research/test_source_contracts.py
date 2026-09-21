@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-
 from src.research.source_contracts import (
     PRICE_SOURCES,
     EvidenceField,
