@@ -13,6 +13,7 @@ class ResearchStatus(str, Enum):
 
 class ResearchReasonCode(str, Enum):
     NO_MATCHING_PRODUCT = "NO_MATCHING_PRODUCT"
+    SOURCE_UNAVAILABLE = "SOURCE_UNAVAILABLE"
 
 
 @dataclass(frozen=True, slots=True)

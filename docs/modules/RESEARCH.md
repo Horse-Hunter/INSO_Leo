@@ -45,6 +45,18 @@ Bom.Ai requires login. Research may request an authorized login using a stable `
 
 Bom.Ai price records are valid for one month. If one or more valid prices exist within the most recent 7 days, Bom.Ai contributes the lowest valid 7-day price. If no valid 7-day price exists but one or more valid prices exist within one month, it contributes the lowest valid one-month price. Prices older than one month are not valid Bom.Ai price candidates.
 
+### Source and evidence foundation
+
+Research owns one website-agnostic source contract for the five confirmed sources. The canonical price-source collection contains Findchips, HQEW, LCSC, and Bom.Ai only; IC.net does not produce a final V1 market-price candidate.
+
+Each source reports one of four pre-aggregation outcomes: successful processing, no strict MPN match, strict MPN match with no valid source price, or source unavailability/technical failure. These outcomes are not themselves final `ResearchStatus` values. A technical failure must remain distinguishable from business absence.
+
+Strict MPN matching trims leading and trailing whitespace and compares case-insensitively. It does not remove or alter internal whitespace, punctuation, prefixes, suffixes, package codes, or any other characters, and it does not guess variants.
+
+A selected price candidate records the source, matched MPN, decimal-safe raw price and currency, decimal-safe normalized RMB price, capture timestamp, and optional source URL. It represents a result that has already passed a future adapter's source-specific validity rules; it does not define those rules or perform FX conversion.
+
+Source evidence records the source, query and optional matched MPN, outcome, capture timestamp, optional source URL, and immutable structured key/value observations. Evidence must not contain secrets, credentials, cookies, or token data. Screenshot, raw-HTML, and persistence requirements remain outside this contract.
+
 ## Excel output and result consistency
 
 The project-local `调研价格.xlsx` is the official persisted output of Research V1. It uses a hidden `_inquiry_id` field as the technical idempotency key.
