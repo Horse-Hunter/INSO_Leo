@@ -42,6 +42,19 @@ V1 does not implement INSO, Quotation, the final customer quotation, or writing 
 
 For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCESS` result containing at least one valid website price, has been successfully written to `调研价格.xlsx`.
 
+## Sheets V1 contract
+
+- Confirmed column mapping: A = status; C = raw importance level; E = model / MPN; F = brand; G = quantity.
+- A record is pending when column A is exactly `未发`.
+- Workflow calls Sheets once every 15 minutes; Sheets does not poll by itself.
+- Record identity is the combination of worksheet identity, row position, and an identifying snapshot. Row number alone is not a permanent identity.
+- Before any write, Sheets must relocate and validate the record. If it cannot identify exactly one matching record, it fails closed and returns a conflict rather than guessing.
+- V1 does not add a stable Sheet ID column.
+- Brand may be written to column F only when F remains empty immediately before the write. Sheets must re-read F; if a human has populated it, Sheets returns a conflict and does not overwrite it.
+- Every write must be a targeted field update; updating one field must not overwrite an entire row.
+- The preferred V1 integration is Google Sheets API with OAuth User Authorization.
+- Spreadsheet/worksheet configuration, identifying-snapshot fields, relocation and matching details, OAuth token storage, OAuth scopes, consent/refresh behavior, and any writable fields beyond the confirmed Brand rule remain `UNKNOWN` for implementation tasks.
+
 ## Research V1
 
 - Contract shape: `ResearchInput` -> read-only web market research -> `ResearchResult`.
@@ -72,7 +85,7 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 - Quotation formulas, rounding, margins, approvals, and validity periods: `UNKNOWN`
 - Quotation output formats and recipients: `UNKNOWN`
 - Workflow ordering, retry policies, duplicate keys, state transitions, and human-review points beyond the confirmed 15-minute Sheet check: `UNKNOWN`
-- Google Sheet identity, worksheet selection, column mappings, pending-record criteria, and writable fields: `UNKNOWN`
+- Google Sheet spreadsheet/worksheet configuration, identifying-snapshot fields, record-relocation matching algorithm, OAuth details, and writable fields beyond the confirmed Brand rule: `UNKNOWN`
 - `ResearchInput` and `ResearchResult` field schemas: `UNKNOWN`
 - Local Research Excel schema, filename policy, and retention: `UNKNOWN`
 
