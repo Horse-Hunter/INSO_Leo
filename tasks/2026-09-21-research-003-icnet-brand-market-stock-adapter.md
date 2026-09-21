@@ -22,6 +22,7 @@ This task must not implement any other website or any final multi-source Researc
 - Current public IC.net site: `https://www.ic.net.cn/`; the site currently exposes model search and an exact-model option.
 - Research V1 external access authorizes read-only IC.net market research.
 - Web access baseline: ordinary HTTP first; Playwright only when JavaScript/browser behavior is actually required.
+- Research Chat decision (2026-09-21): Playwright normal browser mode is authorized for read-only IC.net verification; CAPTCHA or anti-bot bypass remains prohibited.
 - Shared `ResearchSource`, `SourceOutcome`, `SourceEvidence`, `SourceResult`, and `is_strict_mpn_match` already exist under `src/research/source_contracts.py`.
 - IC.net must never produce a `PriceCandidate`.
 - Strict MPN matching: trim leading/trailing whitespace and compare case-insensitively; otherwise characters must match completely. No suffix/variant/fuzzy substitution.
@@ -238,9 +239,14 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
   - Bounded read-only live smoke attempt against `https://www.ic.net.cn/`: the ordinary HTTP request timed out.
   - Bounded read-only inspection of the public model-result entry `https://www.ic.net.cn/searchPnCode.php?l=ins`: IC.net returned a rate-limit/CAPTCHA page (`您的速度太快了，请慢一点搜索` / CAPTCHA prompt), not reliable result-row HTML.
   - The challenge page cannot be treated as `NO_STRICT_MPN_MATCH`; parsing it would have to take the source-unavailable path.
-  - Python 3.12 pytest and ruff were not run because implementation did not begin after the mandatory HTTP blocker stop; the local command runner also failed initialization with `setup refresh had errors`.
+  - After Research Chat authorized Playwright normal browser mode, installed Python Playwright 1.63.0 and its Chromium runtime in the local execution environment only; no dependency metadata or application code was committed.
+  - Headed Chromium loaded `https://www.ic.net.cn/` successfully with HTTP 200 and exposed the public model-search input plus exact-model checkbox.
+  - A normal browser exact-model search for public test MPN `STM32F103C8T6` redirected to `https://member.ic.net.cn/login.php?from=www.ic.net.cn/search/STM32F103C8T6.html%3FisExact%3D1` and displayed the membership login page; no result rows were returned.
+  - Per the task prohibition, no login, CAPTCHA interaction, cookie reuse, or anti-bot bypass was attempted.
+  - Python 3.12 pytest and ruff were not run because implementation did not begin after the browser path proved to require prohibited login.
 - limitations:
-  - Ordinary HTTP cannot currently retrieve a reliable first-page model-result document containing displayed MPN, manufacturer, quantity, and SSCP/ICCP certification fields.
-  - Per task rules, no Playwright, new dependency, alternate browser path, CAPTCHA handling, anti-bot bypass, login, retry crawler, or speculative selector implementation was attempted.
-  - RESEARCH-003 remains blocked pending an authorized, reliable read-only IC.net response path or explicit Research Chat direction.
+  - Neither ordinary HTTP nor the authorized Playwright normal-browser path currently retrieves a first-page model-result document containing displayed MPN, manufacturer, quantity, and SSCP/ICCP certification fields without login.
+  - Playwright reaches the public search UI, but IC.net gates the result page behind member authentication. Login is explicitly outside this task's authorization.
+  - No CAPTCHA handling, anti-bot bypass, login, cookie reuse, retry crawler, or speculative selector implementation was attempted.
+  - RESEARCH-003 remains blocked pending an authorized anonymous result path, a separately authorized authentication decision, or sanitized representative result HTML supplied for parser work; live adapter completion would still require a permitted live path.
   - Findchips, HQEW, LCSC, Bom.Ai, FX, final aggregation, Excel business-row completion, and Research orchestration remain future tasks.
