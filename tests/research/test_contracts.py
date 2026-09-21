@@ -39,5 +39,6 @@ def test_status_catalog_is_exact() -> None:
 
 def test_reason_code_catalog_is_minimal() -> None:
     assert {reason.value for reason in ResearchReasonCode} == {
-        "NO_MATCHING_PRODUCT"
+        "NO_MATCHING_PRODUCT",
+        "SOURCE_UNAVAILABLE",
     }
