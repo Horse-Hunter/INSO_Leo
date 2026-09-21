@@ -1,6 +1,6 @@
 # Task: RESEARCH-003 — IC.net Brand & Market Stock Adapter
 
-status: ready
+status: blocked
 owner: Research Codex
 created: 2026-09-21
 updated: 2026-09-21
@@ -247,7 +247,7 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
 ## completion
 
 - status: blocked
-- changed: No adapter or test code was added. This Task Packet records the verified IC.net ordinary-HTTP blocker on the dedicated task branch.
+- changed: No adapter or test code was added. This Task Packet records the verified ordinary-HTTP, unauthenticated-browser, and authenticated-browser blockers on the dedicated task branch.
 - verified:
   - Read the required repository rules, Research module contract, and this Task Packet from the latest `main`.
   - Bounded read-only live smoke attempt against `https://www.ic.net.cn/`: the ordinary HTTP request timed out.
@@ -256,11 +256,14 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
   - After Research Chat authorized Playwright normal browser mode, installed Python Playwright 1.63.0 and its Chromium runtime in the local execution environment only; no dependency metadata or application code was committed.
   - Headed Chromium loaded `https://www.ic.net.cn/` successfully with HTTP 200 and exposed the public model-search input plus exact-model checkbox.
   - A normal browser exact-model search for public test MPN `STM32F103C8T6` redirected to `https://member.ic.net.cn/login.php?from=www.ic.net.cn/search/STM32F103C8T6.html%3FisExact%3D1` and displayed the membership login page; no result rows were returned.
-  - Per the task prohibition, no login, CAPTCHA interaction, cookie reuse, or anti-bot bypass was attempted.
-  - Python 3.12 pytest and ruff were not run because implementation did not begin after the browser path proved to require prohibited login.
+  - After Owner authorization commit `5119794bbe4cdf24e1ac9c3450aaf45408bd10a4`, the existing Credential Provider reported a configured `ic.net.cn` entry. The provider supplied the credential only in process memory; no username, password, cookie value, or token was committed or added to evidence.
+  - Normal account/password login succeeded without CAPTCHA, SMS/OTP, QR confirmation, or device approval and redirected to the exact-model result URL.
+  - The authenticated result response returned HTTP 200 but contained only `https://www.ic.net.cn/media/js/q.js?v=1616807238`: after 30 seconds the complete document still had no `<body>`, no result rows, and an HTML payload length of 108 characters.
+  - The same behavior occurred with Playwright's installed Chromium and the standard installed Chrome channel in headed mode, without stealth or browser-fingerprint modification.
+  - No CAPTCHA interaction, anti-bot bypass, cookie persistence/reuse, challenge-script analysis, or IC.net write action was attempted.
+  - Python 3.12 pytest and ruff were not run because implementation stopped before code changes when the authenticated live path remained blocked.
 - limitations:
-  - Neither ordinary HTTP nor the authorized Playwright normal-browser path currently retrieves a first-page model-result document containing displayed MPN, manufacturer, quantity, and SSCP/ICCP certification fields without login.
-  - Playwright reaches the public search UI, but IC.net gates the result page behind member authentication. Login is explicitly outside this task's authorization.
-  - No CAPTCHA handling, anti-bot bypass, login, cookie reuse, retry crawler, or speculative selector implementation was attempted.
-  - RESEARCH-003 remains blocked pending an authorized anonymous result path, a separately authorized authentication decision, or sanitized representative result HTML supplied for parser work; live adapter completion would still require a permitted live path.
+  - Authorized normal login works, but the authenticated result URL does not deliver parseable business HTML to an unmodified Playwright browser. It returns a script-only document consistent with an anti-automation challenge.
+  - Obtaining result rows would require a permitted site-supported access path or behavior beyond the authorized normal browser flow. Hiding automation, modifying browser fingerprints, or reverse-engineering/bypassing the challenge is prohibited.
+  - RESEARCH-003 remains blocked pending an Owner-provided site-supported read-only access method or sanitized representative result HTML for parser work; live adapter completion would still require a permitted live result path.
   - Findchips, HQEW, LCSC, Bom.Ai, FX, final aggregation, Excel business-row completion, and Research orchestration remain future tasks.
