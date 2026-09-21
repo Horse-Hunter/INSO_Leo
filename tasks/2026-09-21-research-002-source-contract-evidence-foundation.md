@@ -1,6 +1,6 @@
 # Task: RESEARCH-002 — Source Contract & Evidence Foundation
 
-status: ready
+status: in_progress
 owner: Research Codex
 created: 2026-09-21
 updated: 2026-09-21
