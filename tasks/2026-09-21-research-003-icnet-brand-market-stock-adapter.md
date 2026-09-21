@@ -1,6 +1,6 @@
 # Task: RESEARCH-003 — IC.net Brand & Market Stock Adapter
 
-status: blocked
+status: ready
 owner: Research Codex
 created: 2026-09-21
 updated: 2026-09-21
@@ -42,6 +42,7 @@ This task must not implement any other website or any final multi-source Researc
 - `total > quantity * 3` => `货多`.
 - Equality at exactly `3 * quantity` is `货少`.
 - IC.net stock is evidence/output context only and does not create a market-price candidate.
+- Owner authorization: IC.net normal member login is allowed for this task only to perform read-only Research. Credentials must be obtained at runtime through the existing project Credential Provider; credentials must not be committed, logged, copied into Task Packets, or pasted into chat/code.
 - Detailed selectors, XPath, hidden endpoints, and session mechanics are implementation details and must not be promoted into durable architecture docs.
 - Research must not import `sheets`, `workflow`, `inso`, or `quotation`.
 
@@ -60,6 +61,7 @@ Sources: current `main` documentation, confirmed Research rules, and public IC.n
   - certified-stock summation;
   - stock-label classification.
 - Implement one read-only model search against IC.net.
+- If IC.net requires authentication, use the existing project Credential Provider to obtain runtime credentials through a stable IC.net site identity. Research must consume the credential capability only; it must not implement vault storage, DPAPI, credential CRUD, or secret lifecycle.
 - Prefer ordinary HTTP and HTML parsing if sufficient.
 - If ordinary HTTP cannot reliably obtain the required result data, stop and report the concrete blocker before adding Playwright or a new dependency.
 - Reuse the shared strict-MPN helper.
@@ -87,7 +89,8 @@ Sources: current `main` documentation, confirmed Research rules, and public IC.n
 - No Research orchestrator.
 - No Excel business-column expansion.
 - No Sheets, Workflow, INSO, or Quotation implementation.
-- No login, credential use, cookies from authenticated accounts, form submission with side effects, messaging, inquiry submission, or write action on IC.net.
+- No credential storage/CRUD, DPAPI/vault implementation changes, secret logging, messaging, inquiry submission, or write action on IC.net.
+- No reuse of arbitrary browser cookies or credentials outside the existing project Credential Provider.
 - No pagination beyond the first IC.net search-results page.
 - No screenshots as a mandatory requirement.
 - No speculative Brand normalization, aliases, manufacturer dictionaries, transliteration, fuzzy matching, or extra tie-break rules.
@@ -187,6 +190,17 @@ IC.net Evidence must remain structured and include enough observations to audit 
 
 Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary personal/business contact data from supplier rows.
 
+### Authentication boundary
+
+- Normal IC.net member login is explicitly authorized for this task when required to reach read-only model-search results.
+- Obtain credentials only at runtime through the existing project Credential Provider capability.
+- Do not hardcode usernames/passwords, persist live secrets, print secrets, or add secret-bearing fixtures.
+- Do not modify the Credential Provider, vault format, DPAPI logic, GUI, or credential lifecycle in this task.
+- If the local Credential Provider has no IC.net credential entry, stop and request that the Owner add one locally; never request the password in chat.
+- If login requires CAPTCHA, SMS/OTP, QR confirmation, device approval, or another interactive challenge, do not bypass or automate the challenge. Stop and report the exact user action required.
+- Authenticated cookies/session state may be held only in-memory for the bounded read-only session unless an existing approved browser/session facility already defines otherwise.
+- Successful login does not authorize any write-side action.
+
 ### HTTP / parsing boundary
 
 - Keep network acquisition separate from pure parsing/business-rule functions so fixture tests do not require live internet.
@@ -214,7 +228,7 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
 - [ ] Successful generic source outcome carries structured IC.net Evidence and no price candidate.
 - [ ] No-match and technical-unavailability paths remain distinct.
 - [ ] Default tests use deterministic local fixtures/synthetic HTML and make no live call.
-- [ ] A separate read-only IC.net live smoke verification is attempted when environment/network permits and its result is recorded honestly.
+- [ ] A separate read-only authenticated IC.net live smoke verification is attempted when IC.net requires login and local authorized credentials are available; its result is recorded honestly.
 - [ ] No other website adapter, FX, aggregation, orchestrator, Excel expansion, credentials, login, or write side effect is introduced.
 - [ ] Python 3.12 Research tests pass.
 - [ ] Ruff passes for changed Python files.
@@ -227,8 +241,8 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
 - Perform one bounded read-only IC.net live smoke check using a public test MPN; do not assert volatile quantities/Brand counts as fixed long-term values.
 - Inspect the complete diff against this Task Packet.
 - Confirm no imports from `sheets`, `workflow`, `inso`, or `quotation`.
-- Confirm no IC.net write actions, login, credentials, anti-bot bypass, pagination crawler, or secret-bearing values.
-- If the live site cannot be accessed or parsed in the execution environment, keep the Task blocked and report the concrete reason; do not pretend the real adapter has been verified.
+- Confirm IC.net authentication, when used, goes only through the existing Credential Provider and introduces no secret-bearing values; confirm no IC.net write actions, CAPTCHA/anti-bot bypass, pagination crawler, or credential-storage changes.
+- If the live site still cannot be accessed or parsed after the authorized normal-login path, keep the Task blocked and report the concrete reason; do not pretend the real adapter has been verified.
 
 ## completion
 
