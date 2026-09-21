@@ -105,13 +105,24 @@ def test_strict_mpn_match_does_not_normalize_variants(
     assert not is_strict_mpn_match(target, observed)
 
 
-def test_price_candidate_is_immutable_and_decimal_safe() -> None:
+def test_contracts_are_immutable_and_price_is_decimal_safe() -> None:
     candidate = _candidate()
+    evidence = _evidence(ResearchSource.FINDCHIPS)
+    result = SourceResult(
+        source=ResearchSource.FINDCHIPS,
+        outcome=SourceOutcome.SUCCESS,
+        evidence=evidence,
+        price_candidate=candidate,
+    )
 
     assert isinstance(candidate.raw_price, Decimal)
     assert isinstance(candidate.normalized_rmb_price, Decimal)
     with pytest.raises(FrozenInstanceError):
         candidate.raw_price = Decimal("2.00")  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        evidence.query_mpn = "changed"  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        result.outcome = SourceOutcome.NO_VALID_PRICE  # type: ignore[misc]
 
 
 @pytest.mark.parametrize("field", ["raw_price", "normalized_rmb_price"])
