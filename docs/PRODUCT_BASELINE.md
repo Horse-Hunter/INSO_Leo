@@ -71,12 +71,16 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 
 ## Research V1
 
-- Contract shape: `ResearchInput` -> read-only web market research -> `ResearchResult`.
-- Confirmed sources: IC.net, Findchips, 华强电子网, LCSC / 立创商城, and Bom.Ai.
+- Canonical `ResearchInput`: `inquiry_id`, `mpn`, optional `brand`, and `quantity`.
+- Canonical `ResearchResult`: `inquiry_id`, `status`, optional `resolved_brand`, optional `reason_code`, and optional `remarks`. V1 does not include `output_ref`.
+- Allowed Research statuses: `SUCCESS`, `PARTIAL_SUCCESS`, `MANUAL_REVIEW_REQUIRED`, and `RETRYABLE_FAILURE`.
+- Confirmed sources: IC.net, Findchips, 华强电子网 / HQEW, LCSC / 立创商城, and Bom.Ai.
 - Bom.Ai requires login and may obtain authorized credentials through the project Credential Provider.
 - Research does not access Google Sheets and does not depend on `sheets`, `workflow`, `inso`, or `quotation`.
-- Research results currently output to a local Excel file rather than directly to Google Sheets.
-- Local Excel output remains part of Research V1. Do not create a separate Excel/storage module unless later evidence shows a stable shared need across modules.
+- The project-local `调研价格.xlsx` is the official persisted Research V1 output. Its hidden `_inquiry_id` field is the technical idempotency key; retry or crash recovery must not create duplicate normal records.
+- `SUCCESS` and `PARTIAL_SUCCESS` may be returned only after the required Excel output succeeds. `PARTIAL_SUCCESS` also requires at least one valid price. Excel write failure returns `RETRYABLE_FAILURE`.
+- `NO_MATCHING_PRODUCT` is valid only when Findchips, HQEW, LCSC, and Bom.Ai all complete successfully and none has a strict MPN match. Technical failure is not “no match”; a strict Bom.Ai model match with expired or unavailable pricing is also not `NO_MATCHING_PRODUCT`.
+- Do not create a separate Excel/storage module unless later evidence shows a stable shared need across modules.
 
 ## Credential Provider
 
@@ -100,8 +104,8 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 - Quotation output formats and recipients: `UNKNOWN`
 - Workflow implementation details not confirmed above, including SQLite schema/migrations, duplicate-prevention key/algorithm, detailed state-transition guards, scheduling mechanism, Research completion-confirmation contract, and operational recovery details: `UNKNOWN`
 - Google Sheet spreadsheet/worksheet configuration, identifying-snapshot fields, record-relocation matching algorithm, OAuth details, and writable fields beyond the confirmed Brand rule: `UNKNOWN`
-- Research input normalization/validation rules and remaining `ResearchResult` field schema: `UNKNOWN`
-- Local Research Excel schema, filename policy, and retention: `UNKNOWN`
+- Research input normalization/validation rules, price-item schema, status-specific field requirements, and reason-code catalog beyond confirmed cases: `UNKNOWN`
+- Research Excel business columns beyond hidden `_inquiry_id`, workbook layout/update/locking mechanics, and retention policy: `UNKNOWN`
 
 ## Data and compliance
 
@@ -113,13 +117,17 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 
 ## Technical baseline
 
-- Programming language and version: `UNKNOWN`
-- Runtime and deployment target: `UNKNOWN`
-- Persistence technology: `UNKNOWN`
-- Authentication and secret-management approach outside the confirmed local Credential Provider: `UNKNOWN`
-- Observability requirements: `UNKNOWN`
-- CI/CD platform and release process: `UNKNOWN`
-- Test, lint, formatting, and type-check toolchain: `UNKNOWN`
+- Deployment: single-machine Windows.
+- Language/runtime: Python 3.12.
+- Tests: pytest.
+- Lint/format baseline: ruff.
+- Workflow state: SQLite through Python `sqlite3`; runtime database files must not enter Git.
+- Research Excel access: openpyxl.
+- Sheets integration: Google Sheets API with OAuth User Authorization.
+- Web access: prefer ordinary HTTP; use Playwright for websites that require JavaScript or login.
+- Credentials: use the existing project Credential Provider; do not embed secrets in code or configuration committed to Git.
+- V1 does not introduce Redis, Celery, Kafka, Docker, or a large Workflow Engine.
+- Packaging, dependency pinning, CI/CD, observability, OAuth token/scope/refresh details, browser-version management, and deployment automation: `UNKNOWN`.
 
 ## Current safety constraints
 

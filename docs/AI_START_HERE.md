@@ -35,7 +35,8 @@ This repository is organized for long-lived collaboration among humans, ChatGPT,
 
 ## Current implementation status
 
-- Project language and runtime: `UNKNOWN`
-- Build, lint, type-check, and test commands: `UNKNOWN`
+- Platform and runtime: single-machine Windows with Python 3.12
+- Verification baseline: pytest and ruff; packaging and exact commands remain `UNKNOWN`
+- Selected V1 infrastructure: Python `sqlite3`, openpyxl, Google Sheets API with OAuth User Authorization, ordinary HTTP first, and Playwright where JavaScript or login is required
 - External access: Research V1 is authorized only for read-only market research against the sources listed in `PRODUCT_BASELINE.md`; INSO and other production operations remain unauthorized
 - Business implementation: module behavior remains unimplemented; a local Credential Provider infrastructure capability exists

@@ -24,7 +24,7 @@ A V1 record is identified by the combination of:
 - row position;
 - an identifying snapshot.
 
-A row number alone is not a permanent identity. Before any write, Sheets must relocate and validate the record. If the record cannot be identified uniquely, the operation fails closed and returns a conflict; it must not guess a target row. V1 does not add a stable Sheet ID column.
+Sheets exposes this composite identity through its public `record_ref` / `record_identity` contract; Workflow treats that reference as opaque. A row number alone is not a permanent identity. Before any write, Sheets must relocate and validate the record. If the record cannot be identified uniquely, the operation fails closed and returns a conflict; it must not guess a target row. V1 does not add a stable Sheet ID column.
 
 The exact fields included in the identifying snapshot and the matching algorithm are `UNKNOWN`.
 
