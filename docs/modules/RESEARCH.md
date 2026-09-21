@@ -12,7 +12,9 @@ Research accepts a `ResearchInput`, performs read-only web market research, prod
 - `quantity`
 - `importance_raw`
 
-`importance_raw` is the raw Sheet column C value passed through by Workflow. Research uses it only to render the V1 Excel `重要等级` value: exact `A` or `B` -> `重要`; every other value -> `普通`. It must not affect website selection, prices, MPN handling, evidence, Research status, retry, or any other research decision. This Excel-only display rule is not an INSO order-importance rule.
+`importance_raw` originates from Google Sheet column C. Sheets reads the raw value, Workflow forwards it unchanged, and Research uses it only for display in `调研价格.xlsx`: exact `A` or `B` displays as `重要`; every other value displays as `普通`.
+
+`importance_raw` must not affect website selection, research order, pricing algorithms, prices, MPN handling, evidence, Research status, retry, `NO_MATCHING_PRODUCT`, or any other Research behavior. Future INSO order-importance behavior belongs to a future version and must not implicitly reuse this display rule.
 
 ### ResearchResult V1
 
@@ -57,11 +59,12 @@ Local Excel output remains part of Research V1. A separate Excel or storage modu
 
 ## NO_MATCHING_PRODUCT
 
-`NO_MATCHING_PRODUCT` is valid only when all four price sources—Findchips, HQEW, LCSC, and Bom.Ai—were queried successfully and none returned a strict MPN match.
+Return `MANUAL_REVIEW_REQUIRED` with `reason_code = NO_MATCHING_PRODUCT` only when all four price sources—Findchips, HQEW, LCSC, and Bom.Ai—were queried successfully and none returned a strict MPN match.
 
 - A technical failure must not be counted as “no match.”
-- If Bom.Ai finds a strict matching model but its price is expired or unavailable, the result must not be classified as `NO_MATCHING_PRODUCT`.
-- The mapping from this reason code to user-facing remarks and any broader reason-code catalog remain `UNKNOWN`.
+- If Bom.Ai finds a strict MPN match, the result must not be classified as `NO_MATCHING_PRODUCT`, even when the price is older than two months, unavailable, or absent.
+- Product existence and price validity are separate decisions.
+- User-facing remarks wording and the broader reason-code catalog remain `UNKNOWN`.
 
 ## Boundaries
 

@@ -65,13 +65,13 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 - Workflow does not use a fixed stale timeout. After restart, inherited `RESEARCHING` work is checked through a public Research capability to confirm whether output completed before Workflow chooses recovery or retry.
 - Research Excel output must be idempotent by `inquiry_id`. `SUCCESS` and `PARTIAL_SUCCESS` may be returned only after the required Excel output succeeds; an Excel write failure is `RETRYABLE_FAILURE`.
 - `PARTIAL_SUCCESS` requires at least one valid price.
-- V1 `ResearchInput` contains `inquiry_id`, model / MPN, brand, quantity, and `importance_raw`. Sheets supplies the raw column C value and Workflow passes it through without interpreting it.
+- V1 `ResearchInput` contains `inquiry_id`, `mpn` / model, optional `brand`, `quantity`, and `importance_raw`. Sheets reads column C raw, Workflow forwards it unchanged, and Research uses it only to display exact A/B as `重要` and all other values as `普通` in `调研价格.xlsx`; it must not influence Research behavior, and future INSO importance must not implicitly reuse this display rule.
 - Research returns `resolved_brand` to Workflow for the Sheets Brand update. A Brand conflict does not undo completed Research or change the Inquiry from `COMPLETED`.
 - Workflow uses the `record_ref` / `record_identity` supplied by Sheets and never treats row number alone as a permanent identity.
 
 ## Research V1
 
-- Canonical `ResearchInput`: `inquiry_id`, `mpn`, optional `brand`, `quantity`, and `importance_raw`.
+- Canonical `ResearchInput`: `inquiry_id`, `mpn` / model, optional `brand`, `quantity`, and `importance_raw`.
 - Canonical `ResearchResult`: `inquiry_id`, `status`, optional `resolved_brand`, optional `reason_code`, and optional `remarks`. V1 does not include `output_ref`.
 - Allowed Research statuses: `SUCCESS`, `PARTIAL_SUCCESS`, `MANUAL_REVIEW_REQUIRED`, and `RETRYABLE_FAILURE`.
 - Confirmed sources: IC.net, Findchips, 华强电子网 / HQEW, LCSC / 立创商城, and Bom.Ai.
@@ -81,7 +81,7 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 - Research does not access Google Sheets and does not depend on `sheets`, `workflow`, `inso`, or `quotation`.
 - The project-local `调研价格.xlsx` is the official persisted Research V1 output. Its hidden `_inquiry_id` field is the technical idempotency key; retry or crash recovery must not create duplicate normal records.
 - `SUCCESS` and `PARTIAL_SUCCESS` may be returned only after the required Excel output succeeds. `PARTIAL_SUCCESS` also requires at least one valid price. Excel write failure returns `RETRYABLE_FAILURE`.
-- `NO_MATCHING_PRODUCT` is valid only when Findchips, HQEW, LCSC, and Bom.Ai all complete successfully and none has a strict MPN match. Technical failure is not “no match”; a strict Bom.Ai model match with expired or unavailable pricing is also not `NO_MATCHING_PRODUCT`.
+- `NO_MATCHING_PRODUCT` maps to `MANUAL_REVIEW_REQUIRED` and is valid only when Findchips, HQEW, LCSC, and Bom.Ai all query successfully and none has a strict MPN match. Technical failure is not “no match”; a strict Bom.Ai match is not `NO_MATCHING_PRODUCT` even when pricing is older than two months, unavailable, or absent. Product existence and price validity are distinct.
 - Do not create a separate Excel/storage module unless later evidence shows a stable shared need across modules.
 
 ## Credential Provider
@@ -106,7 +106,7 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 - Quotation output formats and recipients: `UNKNOWN`
 - Workflow implementation details not confirmed above, including SQLite schema/migrations, duplicate-prevention key/algorithm, detailed state-transition guards, scheduling mechanism, Research completion-confirmation contract, and operational recovery details: `UNKNOWN`
 - Google Sheet spreadsheet/worksheet configuration, identifying-snapshot fields, record-relocation matching algorithm, OAuth details, and writable fields beyond the confirmed Brand rule: `UNKNOWN`
-- Research input normalization/validation rules, price-item schema, status-specific field requirements, and reason-code catalog beyond confirmed cases: `UNKNOWN`
+- Research input normalization/validation rules beyond the confirmed `importance_raw` display mapping, price-item schema, status-specific field requirements, and reason-code catalog beyond confirmed cases: `UNKNOWN`
 - Research Excel business columns beyond hidden `_inquiry_id` and confirmed visible `重要等级` / `备注`, workbook layout/update/locking mechanics, and retention policy: `UNKNOWN`
 
 ## Data and compliance

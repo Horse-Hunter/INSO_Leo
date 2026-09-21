@@ -42,3 +42,11 @@ Chat 历史摘要或推断
 ## Communication Discipline
 
 默认使用精简可复制模式；不重复已确认背景；Draft/Review 优先输出 Delta；接近单次复制不便的长度时主动拆 Part 1/Part 2；给 CEO Review 优先纯文字并突出结论、变化、`UNKNOWN`、需决策事项和下一步。
+
+## Operating Model: Module Autonomy + Necessary Escalation
+
+- Module Chats autonomously manage their internal requirements, Tasks, Codex execution, and Review.
+- Ordinary module-internal implementation questions do not require escalation through CEO / Architecture Chat.
+- Escalate only cross-module Contracts, module-boundary changes, shared infrastructure, security or Credential boundaries, product-version scope, and major architecture disputes.
+- Task Codex reports to and accepts Review from the corresponding Module Chat by default.
+- Architecture Codex should batch confirmed Repo synchronization where practical instead of creating a separate documentation update for every small decision.
