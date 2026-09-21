@@ -10,8 +10,9 @@ Research accepts a `ResearchInput`, performs read-only web market research, prod
 - `mpn`
 - optional `brand`
 - `quantity`
+- `importance_raw`
 
-`importance_raw` is not passed to Research.
+`importance_raw` is the raw Sheet column C value passed through by Workflow. Research uses it only to render the V1 Excel `重要等级` value: exact `A` or `B` -> `重要`; every other value -> `普通`. It must not affect website selection, prices, MPN handling, evidence, Research status, retry, or any other research decision. This Excel-only display rule is not an INSO order-importance rule.
 
 ### ResearchResult V1
 
@@ -40,6 +41,8 @@ Research returns `resolved_brand` to Workflow when it resolves a Brand value. De
 
 Bom.Ai requires login. Research may request an authorized login using a stable `site_id` through the project Credential Provider. Research must not know or reproduce DPAPI, vault-file, or PowerShell storage details, and it must never log or persist a live secret.
 
+Bom.Ai price records are valid for one month. If one or more valid prices exist within the most recent 7 days, Bom.Ai contributes the lowest valid 7-day price. If no valid 7-day price exists but one or more valid prices exist within one month, it contributes the lowest valid one-month price. Prices older than one month are not valid Bom.Ai price candidates.
+
 ## Excel output and result consistency
 
 The project-local `调研价格.xlsx` is the official persisted output of Research V1. It uses a hidden `_inquiry_id` field as the technical idempotency key.
@@ -48,7 +51,7 @@ The project-local `调研价格.xlsx` is the official persisted output of Resear
 - Research may return `SUCCESS` only after the required Excel output succeeds.
 - Research may return `PARTIAL_SUCCESS` only when at least one valid price exists and the required Excel output succeeds.
 - An Excel write failure returns `RETRYABLE_FAILURE`; it must not be reported as a successful result.
-- Business-column schema, workbook update/locking mechanics, and the detailed idempotency implementation remain `UNKNOWN`.
+- The visible `重要等级` and `备注` columns are confirmed. Other business-column schema, workbook update/locking mechanics, and detailed idempotency implementation remain `UNKNOWN`.
 
 Local Excel output remains part of Research V1. A separate Excel or storage module should be considered only after multiple modules demonstrate a stable shared requirement.
 
