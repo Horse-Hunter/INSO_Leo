@@ -1,6 +1,6 @@
 # Task: RESEARCH-002 — Source Contract & Evidence Foundation
 
-status: blocked
+status: complete
 owner: Research Codex
 created: 2026-09-21
 updated: 2026-09-21
@@ -229,7 +229,7 @@ Do not invent a broad reason-code catalog.
 
 ## completion
 
-- status: blocked
+- status: complete
 - changed: added Research-owned source identity/outcome contracts, strict MPN matching, decimal-safe price candidates, structured evidence, source-result invariants, SOURCE_UNAVAILABLE, pure synthetic tests, and durable Research documentation.
-- verified: reviewed the complete branch diff against latest main (branch behind by 0); confirmed changed Python files have no forbidden cross-module imports, HTTP/browser/credential code, real-source access, secret-bearing data, or lines over 88 characters. Local pytest and ruff could not start because the Windows workspace sandbox helper failed during process setup; the repository reported no CI workflow runs or commit statuses for the branch.
-- limitations: completion is blocked only on executing the required pytest/ruff verification. All real source adapters, FX, source-specific selection logic, final multi-source aggregation, Excel business output completion, and orchestration remain future tasks.
+- verified: Python 3.12.10 local verification passed `py -3.12 -m pytest tests/research` with 39 tests passed and `py -3.12 -m ruff check src/research/contracts.py src/research/source_contracts.py tests/research/test_contracts.py tests/research/test_source_contracts.py` with all checks passed; reviewed the complete branch diff and confirmed no forbidden cross-module imports, HTTP/browser/credential code, real-source access, or secret-bearing data.
+- limitations: all real source adapters, FX, source-specific selection logic, final multi-source aggregation, Excel business output completion, and orchestration remain future tasks.
