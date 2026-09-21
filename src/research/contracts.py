@@ -21,6 +21,7 @@ class ResearchInput:
     mpn: str
     brand: str | None
     quantity: int
+    importance_raw: str | None
 
 
 @dataclass(frozen=True, slots=True)
