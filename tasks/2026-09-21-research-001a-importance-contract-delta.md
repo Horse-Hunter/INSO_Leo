@@ -1,6 +1,6 @@
 # Task: RESEARCH-001A — Importance Contract Delta Sync
 
-status: ready
+status: complete
 owner: Research Codex
 created: 2026-09-21
 updated: 2026-09-21
@@ -67,15 +67,15 @@ Synchronize the approved `importance_raw` contract and Excel display behavior, p
 
 ## acceptance
 
-- [ ] Canonical ResearchInput contains `importance_raw`.
-- [ ] Existing ResearchResult contract is unchanged.
-- [ ] Excel contains visible `重要等级`.
-- [ ] `A` and `B` persist as `重要`; all other tested raw values persist as `普通`.
-- [ ] Re-upsert of the same `inquiry_id` updates the same row and does not duplicate it.
-- [ ] `importance_raw` does not alter Research status/result semantics.
-- [ ] Research, Workflow, and Product Baseline docs no longer state that `importance_raw` is excluded.
-- [ ] Bom.Ai one-month validity and seven-day-priority lowest-price rule are documented.
-- [ ] No real website adapter, credential use, network/browser access, or forbidden Research dependency is introduced.
+- [x] Canonical ResearchInput contains `importance_raw`.
+- [x] Existing ResearchResult contract is unchanged.
+- [x] Excel contains visible `重要等级`.
+- [x] `A` and `B` persist as `重要`; all other tested raw values persist as `普通`.
+- [x] Re-upsert of the same `inquiry_id` updates the same row and does not duplicate it.
+- [x] `importance_raw` does not alter Research status/result semantics.
+- [x] Research, Workflow, and Product Baseline docs no longer state that `importance_raw` is excluded.
+- [x] Bom.Ai one-month validity and seven-day-priority lowest-price rule are documented.
+- [x] No real website adapter, credential use, network/browser access, or forbidden Research dependency is introduced.
 
 ## verification
 
@@ -88,7 +88,7 @@ Synchronize the approved `importance_raw` contract and Excel display behavior, p
 
 ## completion
 
-- status: pending
-- changed: pending
-- verified: pending
-- limitations: real Bom.Ai behavior and all source adapters remain for later tasks.
+- status: complete
+- changed: added `importance_raw` to ResearchInput, persisted the V1 Excel-only `重要等级` display value, threaded it through result finalization, synchronized Research/Workflow/Product Baseline docs, and recorded the confirmed Bom.Ai one-month / seven-day price-window rule
+- verified: scoped Research pytest reproduction passed 16 tests; reviewed the scoped branch diff and confirmed no real website adapter, credential use, network/browser access, or forbidden Research dependency was introduced
+- limitations: ruff was not available in the validation environment; real Bom.Ai behavior and all source adapters remain for later tasks.

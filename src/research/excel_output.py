@@ -10,6 +10,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.workbook.workbook import Workbook as OpenpyxlWorkbook
 
 INQUIRY_ID_HEADER = "_inquiry_id"
+IMPORTANCE_HEADER = "重要等级"
 REMARKS_HEADER = "备注"
 DEFAULT_SHEET_TITLE = "Research"
 
@@ -26,16 +27,27 @@ class ExcelWriteError(ExcelOutputError):
     """Raised when a workbook cannot be durably saved."""
 
 
+def importance_display_value(importance_raw: str | None) -> str:
+    """Map raw Sheet importance to the V1 Excel-only display value."""
+    return "重要" if importance_raw in {"A", "B"} else "普通"
+
+
 class ResearchExcelOutput:
     """Persist one logical Research record per inquiry_id."""
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
 
-    def upsert(self, inquiry_id: str, *, remarks: str | None = None) -> None:
+    def upsert(
+        self,
+        inquiry_id: str,
+        *,
+        importance_raw: str | None,
+        remarks: str | None = None,
+    ) -> None:
         workbook = self._load_or_create()
         worksheet = workbook.active
-        inquiry_col, remarks_col = self._ensure_schema(workbook)
+        inquiry_col, importance_col, remarks_col = self._ensure_schema(workbook)
 
         matching_rows = [
             row
@@ -53,6 +65,11 @@ class ResearchExcelOutput:
             row = worksheet.max_row + 1
             worksheet.cell(row=row, column=inquiry_col, value=inquiry_id)
 
+        worksheet.cell(
+            row=row,
+            column=importance_col,
+            value=importance_display_value(importance_raw),
+        )
         if remarks is not None:
             worksheet.cell(row=row, column=remarks_col, value=remarks)
 
@@ -69,12 +86,17 @@ class ResearchExcelOutput:
         workbook.active.title = DEFAULT_SHEET_TITLE
         return workbook
 
-    def _ensure_schema(self, workbook: OpenpyxlWorkbook) -> tuple[int, int]:
+    def _ensure_schema(self, workbook: OpenpyxlWorkbook) -> tuple[int, int, int]:
         worksheet = workbook.active
         inquiry_col = self._find_unique_header(worksheet, INQUIRY_ID_HEADER)
         if inquiry_col is None:
             inquiry_col = self._next_header_column(worksheet)
             worksheet.cell(row=1, column=inquiry_col, value=INQUIRY_ID_HEADER)
+
+        importance_col = self._find_unique_header(worksheet, IMPORTANCE_HEADER)
+        if importance_col is None:
+            importance_col = self._next_header_column(worksheet)
+            worksheet.cell(row=1, column=importance_col, value=IMPORTANCE_HEADER)
 
         remarks_col = self._find_unique_header(worksheet, REMARKS_HEADER)
         if remarks_col is None:
@@ -84,7 +106,7 @@ class ResearchExcelOutput:
         worksheet.column_dimensions[
             worksheet.cell(row=1, column=inquiry_col).column_letter
         ].hidden = True
-        return inquiry_col, remarks_col
+        return inquiry_col, importance_col, remarks_col
 
     @staticmethod
     def _find_unique_header(worksheet, header: str) -> int | None:

@@ -14,6 +14,7 @@ def test_research_input_contract_is_exact() -> None:
         "mpn",
         "brand",
         "quantity",
+        "importance_raw",
     ]
 
 
