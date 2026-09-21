@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 
@@ -41,7 +41,7 @@ def is_strict_mpn_match(target_mpn: str, observed_mpn: str) -> bool:
     return target_mpn.strip().casefold() == observed_mpn.strip().casefold()
 
 
-EvidenceValue = str | int | bool | Decimal | None
+EvidenceValue = str | int | bool | Decimal | date | datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +67,10 @@ class PriceCandidate:
     def __post_init__(self) -> None:
         if self.source not in PRICE_SOURCES:
             raise ValueError("only confirmed price sources may produce PriceCandidate")
+        if not isinstance(self.raw_price, Decimal):
+            raise TypeError("raw_price must be Decimal")
+        if not isinstance(self.normalized_rmb_price, Decimal):
+            raise TypeError("normalized_rmb_price must be Decimal")
 
 
 @dataclass(frozen=True, slots=True)
