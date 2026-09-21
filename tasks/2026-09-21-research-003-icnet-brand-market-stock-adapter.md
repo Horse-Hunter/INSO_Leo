@@ -1,6 +1,6 @@
 # Task: RESEARCH-003 — IC.net Brand & Market Stock Adapter
 
-status: ready
+status: blocked
 owner: Research Codex
 created: 2026-09-21
 updated: 2026-09-21
@@ -231,7 +231,16 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
 
 ## completion
 
-- status: pending
-- changed: pending
-- verified: pending
-- limitations: Findchips, HQEW, LCSC, Bom.Ai, FX, final aggregation, Excel business-row completion, and Research orchestration remain future tasks.
+- status: blocked
+- changed: No adapter or test code was added. This Task Packet records the verified IC.net ordinary-HTTP blocker on the dedicated task branch.
+- verified:
+  - Read the required repository rules, Research module contract, and this Task Packet from the latest `main`.
+  - Bounded read-only live smoke attempt against `https://www.ic.net.cn/`: the ordinary HTTP request timed out.
+  - Bounded read-only inspection of the public model-result entry `https://www.ic.net.cn/searchPnCode.php?l=ins`: IC.net returned a rate-limit/CAPTCHA page (`您的速度太快了，请慢一点搜索` / CAPTCHA prompt), not reliable result-row HTML.
+  - The challenge page cannot be treated as `NO_STRICT_MPN_MATCH`; parsing it would have to take the source-unavailable path.
+  - Python 3.12 pytest and ruff were not run because implementation did not begin after the mandatory HTTP blocker stop; the local command runner also failed initialization with `setup refresh had errors`.
+- limitations:
+  - Ordinary HTTP cannot currently retrieve a reliable first-page model-result document containing displayed MPN, manufacturer, quantity, and SSCP/ICCP certification fields.
+  - Per task rules, no Playwright, new dependency, alternate browser path, CAPTCHA handling, anti-bot bypass, login, retry crawler, or speculative selector implementation was attempted.
+  - RESEARCH-003 remains blocked pending an authorized, reliable read-only IC.net response path or explicit Research Chat direction.
+  - Findchips, HQEW, LCSC, Bom.Ai, FX, final aggregation, Excel business-row completion, and Research orchestration remain future tasks.
