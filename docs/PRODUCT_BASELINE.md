@@ -19,6 +19,29 @@ This document contains durable, evidence-backed product facts. Unknown facts rem
 - `workflow` owns global orchestration, scheduling, `inquiry_id` and global state, retry, duplicate prevention, and module handoffs; it does not own concrete module business behavior.
 - Every 15 minutes, the Workflow scheduler calls `sheets` once; `sheets` returns the current pending records, and Workflow decides the next action. Sheets does not run its own polling loop.
 
+## V1 product scope
+
+V1 implements only this path:
+
+```text
+Workflow scheduler (every 15 minutes)
+-> Sheets queries Google Sheet records whose inquiry status is "未发"
+-> Workflow establishes or identifies the inquiry
+-> Research performs market research
+-> Research results are written to the project-local `调研价格.xlsx`
+```
+
+V1 does not implement INSO, Quotation, the final customer quotation, or writing a final quotation back to Google Sheets. The `inso` and `quotation` modules remain part of the long-term architecture and dependency graph, but their business behavior belongs to a future version.
+
+### ResearchResult handling in V1
+
+- `SUCCESS`: write the result to `调研价格.xlsx`. After the write succeeds, the Inquiry is `COMPLETED` in V1.
+- `PARTIAL_SUCCESS`: when at least one valid website price exists, write the available result to `调研价格.xlsx`. After the write succeeds, the Inquiry is `COMPLETED` in V1.
+- `MANUAL_REVIEW_REQUIRED`: retain or write the record to `调研价格.xlsx`, put a concise reason for human intervention in that record's `备注` column, stop automatic progression, and wait for human handling. It is not treated as `COMPLETED` by the current V1 definition.
+- `RETRYABLE_FAILURE`: do not generate a false normal price. Workflow owns subsequent retry; retry count and interval are `UNKNOWN`.
+
+For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCESS` result containing at least one valid website price, has been successfully written to `调研价格.xlsx`.
+
 ## Research V1
 
 - Contract shape: `ResearchInput` -> read-only web market research -> `ResearchResult`.
