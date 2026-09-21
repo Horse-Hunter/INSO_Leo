@@ -38,3 +38,7 @@ Chat 历史摘要或推断
 3. 继续原职责。
 
 不要仅依赖旧 Chat 的历史上下文。
+
+## Communication Discipline
+
+默认使用精简可复制模式；不重复已确认背景；Draft/Review 优先输出 Delta；接近单次复制不便的长度时主动拆 Part 1/Part 2；给 CEO Review 优先纯文字并突出结论、变化、`UNKNOWN`、需决策事项和下一步。

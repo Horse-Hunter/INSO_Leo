@@ -38,7 +38,7 @@ V1 does not implement INSO, Quotation, the final customer quotation, or writing 
 - `SUCCESS`: write the result to `调研价格.xlsx`. After the write succeeds, the Inquiry is `COMPLETED` in V1.
 - `PARTIAL_SUCCESS`: when at least one valid website price exists, write the available result to `调研价格.xlsx`. After the write succeeds, the Inquiry is `COMPLETED` in V1.
 - `MANUAL_REVIEW_REQUIRED`: retain or write the record to `调研价格.xlsx`, put a concise reason for human intervention in that record's `备注` column, stop automatic progression, and wait for human handling. It is not treated as `COMPLETED` by the current V1 definition.
-- `RETRYABLE_FAILURE`: do not generate a false normal price. Workflow owns subsequent retry; retry count and interval are `UNKNOWN`.
+- `RETRYABLE_FAILURE`: do not generate a false normal price. Workflow applies its default retry policy: one initial attempt plus retries after 15, 30, and 60 minutes; exhaustion transitions to `FAILED`.
 
 For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCESS` result containing at least one valid website price, has been successfully written to `调研价格.xlsx`.
 
@@ -54,6 +54,20 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 - Every write must be a targeted field update; updating one field must not overwrite an entire row.
 - The preferred V1 integration is Google Sheets API with OAuth User Authorization.
 - Spreadsheet/worksheet configuration, identifying-snapshot fields, relocation and matching details, OAuth token storage, OAuth scopes, consent/refresh behavior, and any writable fields beyond the confirmed Brand rule remain `UNKNOWN` for implementation tasks.
+
+## Workflow V1 architecture
+
+- Workflow persists state in a local SQLite runtime database; the runtime database must not enter Git.
+- Workflow creates and persists `inquiry_id` as `inq_<UUIDv4>` and does not write it to Google Sheets.
+- The 15-minute Sheet poller and Research worker are decoupled. Only one Sheet poll may run at a time, and Research concurrency is `1`.
+- V1 states are `QUEUED`, `RESEARCHING`, `RETRY_WAIT`, `COMPLETED`, `MANUAL_REVIEW`, and `FAILED`.
+- Default retry is one initial attempt plus three retries after 15, 30, and 60 minutes. Exhaustion transitions the Inquiry to `FAILED`.
+- Workflow does not use a fixed stale timeout. After restart, inherited `RESEARCHING` work is checked through a public Research capability to confirm whether output completed before Workflow chooses recovery or retry.
+- Research Excel output must be idempotent by `inquiry_id`. `SUCCESS` and `PARTIAL_SUCCESS` may be returned only after the required Excel output succeeds; an Excel write failure is `RETRYABLE_FAILURE`.
+- `PARTIAL_SUCCESS` requires at least one valid price.
+- V1 `ResearchInput` contains `inquiry_id`, model / MPN, brand, and quantity; `importance_raw` is not passed to Research.
+- Research returns `resolved_brand` to Workflow for the Sheets Brand update. A Brand conflict does not undo completed Research or change the Inquiry from `COMPLETED`.
+- Workflow uses the `record_ref` / `record_identity` supplied by Sheets and never treats row number alone as a permanent identity.
 
 ## Research V1
 
@@ -81,12 +95,12 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 - Markets, currencies, taxes, and locales: `UNKNOWN`
 - Detailed price-evidence acceptance and source-quality rules: `UNKNOWN`
 - INSO system definition, ownership, endpoints, and access method: `UNKNOWN`
-- Inquiry inputs, outputs, state transitions, and failure semantics: `UNKNOWN`
+- Inquiry fields beyond the confirmed ID, Research input, and V1 state set; detailed transition guards and failure semantics: `UNKNOWN`
 - Quotation formulas, rounding, margins, approvals, and validity periods: `UNKNOWN`
 - Quotation output formats and recipients: `UNKNOWN`
-- Workflow ordering, retry policies, duplicate keys, state transitions, and human-review points beyond the confirmed 15-minute Sheet check: `UNKNOWN`
+- Workflow implementation details not confirmed above, including SQLite schema/migrations, duplicate-prevention key/algorithm, detailed state-transition guards, scheduling mechanism, Research completion-confirmation contract, and operational recovery details: `UNKNOWN`
 - Google Sheet spreadsheet/worksheet configuration, identifying-snapshot fields, record-relocation matching algorithm, OAuth details, and writable fields beyond the confirmed Brand rule: `UNKNOWN`
-- `ResearchInput` and `ResearchResult` field schemas: `UNKNOWN`
+- Research input normalization/validation rules and remaining `ResearchResult` field schema: `UNKNOWN`
 - Local Research Excel schema, filename policy, and retention: `UNKNOWN`
 
 ## Data and compliance
