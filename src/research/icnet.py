@@ -423,12 +423,17 @@ class PlaywrightIcNetClient:
                         wait_until="domcontentloaded",
                         timeout=self._timeout_ms,
                     )
+                    for selector in ("#username", "#password", "#btn_login"):
+                        page.wait_for_selector(
+                            selector,
+                            state="visible",
+                            timeout=self._timeout_ms,
+                        )
                     username = page.locator("#username")
                     password = page.locator("#password")
                     login_button = page.locator("#btn_login")
                     if not all(
-                        locator.count() == 1 and locator.is_visible()
-                        for locator in (username, password, login_button)
+                        locator.count() == 1 for locator in (username, password, login_button)
                     ):
                         raise IcNetPageUnavailable("LOGIN_FORM_UNAVAILABLE")
                     username.fill(login.username)
@@ -446,12 +451,17 @@ class PlaywrightIcNetClient:
                         wait_until="domcontentloaded",
                         timeout=self._timeout_ms,
                     )
+                    for selector in ("#key", "input[name=isExact]", "#btn_topSearch"):
+                        page.wait_for_selector(
+                            selector,
+                            state="visible",
+                            timeout=self._timeout_ms,
+                        )
                     search_input = page.locator("#key")
                     exact = page.locator("input[name=isExact]")
                     submit = page.locator("#btn_topSearch")
                     if not all(
-                        locator.count() == 1 and locator.is_visible()
-                        for locator in (search_input, exact, submit)
+                        locator.count() == 1 for locator in (search_input, exact, submit)
                     ):
                         raise IcNetPageUnavailable("SEARCH_FORM_UNAVAILABLE")
                     search_input.fill(mpn)
