@@ -1,11 +1,13 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Self
 
 import pytest
 
 from src.research.findchips import (
     FindchipsAdapter,
+    FindchipsHttpClient,
     FindchipsOffer,
     FindchipsPage,
     FindchipsPageUnavailable,
@@ -65,6 +67,57 @@ class InvalidFxProvider:
         return object()
 
 
+class FakeHeaders:
+    def get_content_type(self) -> str:
+        return "text/html"
+
+    def get_content_charset(self) -> str:
+        return "utf-8"
+
+
+class FakeHttpResponse:
+    status = 200
+    headers = FakeHeaders()
+
+    def __init__(self, url: str) -> None:
+        self._url = url
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: object,
+        exc_value: object,
+        traceback: object,
+    ) -> None:
+        return None
+
+    def geturl(self) -> str:
+        return self._url
+
+    def read(self) -> bytes:
+        return (
+            b'<html><body><section class="distributor-results">'
+            b"</section></body></html>"
+        )
+
+
+def _patch_http_response(
+    monkeypatch: pytest.MonkeyPatch,
+    final_url: str,
+) -> None:
+    def fake_urlopen(
+        _request: object,
+        *,
+        timeout: float,
+    ) -> FakeHttpResponse:
+        assert timeout == 30.0
+        return FakeHttpResponse(final_url)
+
+    monkeypatch.setattr("src.research.findchips.urlopen", fake_urlopen)
+
+
 def _fields(result: object) -> dict[str, object]:
     source_result = result
     return {
@@ -103,6 +156,51 @@ def test_build_search_url_strips_edges_only() -> None:
     assert build_findchips_search_url("  Ab c-1  ") == (
         "https://www.findchips.com/search/Ab%20c-1"
     )
+
+
+@pytest.mark.parametrize(
+    "final_url",
+    [
+        "https://www.findchips.com/search/ABC-123",
+        "https://findchips.com/search/ABC-123",
+        "https://region.findchips.com/search/ABC-123",
+    ],
+)
+def test_http_client_accepts_findchips_response_hosts(
+    monkeypatch: pytest.MonkeyPatch,
+    final_url: str,
+) -> None:
+    _patch_http_response(monkeypatch, final_url)
+
+    page = FindchipsHttpClient().fetch_first_page("ABC-123")
+
+    assert page.url == final_url
+
+
+def test_http_client_rejects_unrelated_redirect_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    final_url = "https://evil.example/redirected"
+    _patch_http_response(monkeypatch, final_url)
+
+    result = FindchipsAdapter(
+        FindchipsHttpClient(),
+        FixedFxProvider(),
+    ).search("ABC-123", 10)
+
+    assert result.outcome is SourceOutcome.SOURCE_UNAVAILABLE
+    assert result.price_candidate is None
+    assert _fields(result)["failure_code"] == "UNEXPECTED_RESPONSE_HOST"
+    assert result.evidence.source_url == final_url
+
+
+@pytest.mark.parametrize(
+    "price",
+    [Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity")],
+)
+def test_price_tier_rejects_non_finite_price(price: Decimal) -> None:
+    with pytest.raises(ValueError, match="finite"):
+        FindchipsPriceTier(1, price, "USD")
 
 
 def test_fixture_parser_keeps_only_safe_offer_facts() -> None:
