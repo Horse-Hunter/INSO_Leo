@@ -302,18 +302,20 @@ If a separately approved live FX capability is discovered in current `main`, sto
 
 - status: complete
 - changed:
-  - Added `src/research/findchips.py` with ordinary-HTTP acquisition, server-rendered offer parsing, strict-MPN enforcement, positive-stock filtering, Qty-applicable USD tier selection, lowest-price selection, structured Evidence, and Findchips `PriceCandidate` creation.
-  - Added `src/research/fx.py` with immutable positive-Decimal `UsdRmbQuote` and an injected `UsdRmbProvider` protocol oriented as `1 USD = rate RMB/CNY`; no live FX provider was added.
+  - Added `src/research/findchips.py` with ordinary-HTTP acquisition, post-redirect Findchips hostname enforcement, server-rendered offer parsing, strict-MPN enforcement, positive-stock filtering, Qty-applicable USD tier selection, lowest-price selection, structured Evidence, and Findchips `PriceCandidate` creation.
+  - Added `src/research/fx.py` with immutable positive finite-Decimal `UsdRmbQuote` and an injected `UsdRmbProvider` protocol oriented as `1 USD = rate RMB/CNY`; no live FX provider was added.
   - Exported the intended Findchips adapter/client and USD/RMB boundary from `src/research/__init__.py`.
-  - Added a sanitized Findchips fixture and deterministic tests for strict MPN, stock state, Qty tiers, MOQ/price-range exclusion, currency filtering, outcomes, Decimal normalization, FX validation, and technical failures.
+  - Added a sanitized Findchips fixture and deterministic tests for strict MPN, stock state, Qty tiers, MOQ/price-range exclusion, currency filtering, outcomes, Decimal normalization, non-finite financial values, response-host boundaries, FX validation, and technical failures.
   - Added durable Findchips and FX-boundary rules to `docs/modules/RESEARCH.md`.
 - verified:
-  - Focused `py -3.12 -m pytest tests/research/test_fx.py tests/research/test_findchips.py`: 25 passed.
-  - `py -3.12 -m pytest tests/research`: 94 passed.
+  - Focused `py -3.12 -m pytest tests/research/test_fx.py tests/research/test_findchips.py`: 35 passed.
+  - `py -3.12 -m pytest tests/research`: 104 passed.
   - `py -3.12 -m ruff check src/research/fx.py src/research/findchips.py src/research/__init__.py tests/research/test_fx.py tests/research/test_findchips.py`: passed.
   - `git diff --check origin/main...HEAD`: passed.
   - Public ordinary-HTTP live smoke for `MMBT2222ALT1G` with customer Qty 100 parsed 87 offers, found 65 strict-MPN offers, 65 positive-stock strict offers, and 27 offers with an applicable USD tier. It selected displayed break 100 at raw USD unit price `0.0086`. This price is a volatile observation from this smoke only, not a permanent constant.
   - The live smoke used no FX provider and made no claim of a live normalized RMB price. Deterministic tests verified exact `Decimal` USD multiplication using a synthetic injected quote labeled test-only.
+  - `FindchipsPriceTier.unit_price` and `UsdRmbQuote.rate` reject `NaN`, `Infinity`, and `-Infinity`; financial values remain fail closed before `PriceCandidate` construction.
+  - Redirected HTTP responses are accepted only when the parsed final hostname is `findchips.com` or a legitimate subdomain; unrelated hosts map through `UNEXPECTED_RESPONSE_HOST` to `SOURCE_UNAVAILABLE`.
   - No concrete Findchips stock quantity, MOQ, raw HTML, cookie, token, account data, or contact data is persisted in Evidence, `PriceCandidate`, or public Findchips result objects.
   - No imports from `sheets`, `workflow`, `inso`, or `quotation`; no HQEW/LCSC/Bom.Ai/IC.net change, orchestration, aggregation, Excel expansion, login, write action, crawler, browser automation, stealth, or anti-bot bypass was introduced.
 - limitations:
