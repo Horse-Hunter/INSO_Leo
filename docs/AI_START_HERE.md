@@ -27,3 +27,5 @@
 | 当前实现 | Git `main`、当前 Task、代码、测试、Module Final Report |
 
 `tasks/` 是审计历史，不是默认上下文。本地 AI1/AI2/AI3 和旧 Word 文件只作参考，不是 canonical 事实。
+
+通用治理模板保存在 `templates/lean-ai-baseline/`，供新项目复制使用，不属于本项目默认上下文。
