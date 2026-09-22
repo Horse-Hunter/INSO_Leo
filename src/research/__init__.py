@@ -31,9 +31,9 @@ from .icnet import (
 )
 
 __all__ = [
+    "BrandResolution",
     "ExcelConsistencyError",
     "ExcelOutputError",
-    "BrandResolution",
     "ExcelWriteError",
     "IcNetAdapter",
     "IcNetLogin",
