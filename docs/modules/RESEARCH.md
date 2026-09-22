@@ -90,6 +90,19 @@ IC.net contributes Brand resolution and the V1 market-stock display only; it nev
 - An unparseable quantity on a row that must contribute to certified stock is a source-unavailable technical failure, not zero stock or no match.
 - When authentication is required, IC.net credentials are obtained at runtime through the project Credential Provider and remain in memory for the bounded read-only session. Login does not authorize any write action or challenge bypass.
 
+## Findchips price and USD/RMB boundary
+
+Findchips is a V1 price source and may produce one `PriceCandidate`.
+
+- Every price-eligible offer must pass the shared strict-MPN rule and report positive stock. Stock does not need to meet customer quantity, and concrete stock quantities are not persisted in Evidence or public results.
+- MOQ is not an exclusion criterion and is not persisted.
+- For each eligible offer, Research selects the greatest displayed quantity break at or below customer quantity. A higher break is never substituted when no applicable break exists, and a summary price-range minimum is not a quantity tier.
+- Only USD tiers are eligible in this adapter. Non-USD tiers are not converted or inferred.
+- Findchips contributes the lowest applicable USD unit price across eligible offers.
+- Research owns an injected USD/RMB quote boundary oriented as `1 USD = rate RMB/CNY`. The rate and all price math use positive `Decimal` values without hidden rounding or quantization.
+- The live FX source, refresh cadence, fallback, and final RMB display precision remain `UNKNOWN`. No live FX provider is selected by this task.
+- Public Findchips acquisition is bounded, read-only ordinary HTTP without login, crawling, RFQ, alert, or purchase actions.
+
 ## Boundaries
 
 - Allowed dependency: `core`, including the Credential Provider capability, plus explicitly approved web and local Excel adapters.
