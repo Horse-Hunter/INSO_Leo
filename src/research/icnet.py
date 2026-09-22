@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from html.parser import HTMLParser
-from typing import Callable, Protocol
+from typing import Protocol
 from urllib.parse import quote
 
 from .source_contracts import (
@@ -50,7 +51,7 @@ _HIDDEN_CLASS_RE = re.compile(
 )
 _DISPLAY_NONE_RE = re.compile(r"display\s*:\s*none\b", re.IGNORECASE)
 _CERTIFICATION_RE = re.compile(
-    r"(?<![A-Za-z0-9])(?:SSCP|ICCP)(?![A-Za-z0-9])", re.I
+    r"(?<![A-Za-z0-9])(?:SSCP|ICCP)(?![A-Za-z0-9])", re.IGNORECASE
 )
 
 
