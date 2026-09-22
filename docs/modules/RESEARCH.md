@@ -78,6 +78,18 @@ Return `MANUAL_REVIEW_REQUIRED` with `reason_code = NO_MATCHING_PRODUCT` only wh
 - Product existence and price validity are separate decisions.
 - User-facing remarks wording and the broader reason-code catalog remain `UNKNOWN`.
 
+## IC.net Brand and market stock
+
+IC.net contributes Brand resolution and the V1 market-stock display only; it never produces a `PriceCandidate`.
+
+- Every row used for Brand or stock must satisfy the shared strict-MPN rule.
+- A nonblank input Brand is preserved. When input Brand is blank, Research inspects at most the first 20 first-page result rows, counts displayed manufacturer candidates from strict-MPN rows, and selects by highest frequency, then English preference, then shorter English name. A tie that remains after those rules stays unresolved.
+- Pure English and pure Chinese manufacturer labels are kept as displayed. A clearly separable English component of a bilingual displayed label is used without translation, transliteration, aliasing, or invention.
+- Market stock uses all first-page strict-MPN rows carrying SSCP or ICCP. A row carrying both certifications is counted once, and Brand does not filter the stock sum.
+- Certified stock at or below three times customer quantity displays `货少`; a greater total displays `货多`.
+- An unparseable quantity on a row that must contribute to certified stock is a source-unavailable technical failure, not zero stock or no match.
+- When authentication is required, IC.net credentials are obtained at runtime through the project Credential Provider and remain in memory for the bounded read-only session. Login does not authorize any write action or challenge bypass.
+
 ## Boundaries
 
 - Allowed dependency: `core`, including the Credential Provider capability, plus explicitly approved web and local Excel adapters.

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <style>
+    .decoy_mpn_a { display: none !important; }
+    .decoy_qty_a { display:none!important; }
+    .decoy_qty_b { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="right_results">
+    <ul>
+      <li class="stair_tr">
+        <div class="result_id">
+          <span class="product_number">
+            <a class="result_goCompany decoy_mpn_a">WRONG-MPN</a>
+            <a class="result_goCompany">ABC-123</a>
+          </span>
+        </div>
+        <div class="result_factory">Acme/艾克米</div>
+        <div class="result_totalNumber decoy_qty_a">999999</div>
+        <div class="result_totalNumber">20</div>
+        <div class="result_supply"><p class="result_icons"><a class="sscp"></a></p></div>
+      </li>
+      <li class="stair_tr gray_bg">
+        <div class="result_id">
+          <span class="product_number"><a class="result_goCompany"> abc-123 </a></span>
+        </div>
+        <div class="result_factory">Acme</div>
+        <div class="result_totalNumber">10</div>
+        <div class="result_supply">
+          <p class="result_icons"><a class="sscp"></a><a class="iccp"></a></p>
+        </div>
+      </li>
+      <li class="stair_tr">
+        <div class="result_id">
+          <span class="product_number"><a class="result_goCompany">ABC-123</a></span>
+        </div>
+        <div class="result_factory">华芯</div>
+        <div class="result_totalNumber decoy_qty_b">bad-decoy</div>
+        <div class="result_totalNumber">5</div>
+        <div class="result_supply"><p class="result_icons"><span title="ICCP 认证"></span></p></div>
+      </li>
+      <li class="stair_tr">
+        <div class="result_id">
+          <span class="product_number"><a class="result_goCompany">ABC-123-T</a></span>
+        </div>
+        <div class="result_factory">DifferentBrand</div>
+        <div class="result_totalNumber">9,999</div>
+        <div class="result_supply"><p class="result_icons"><a class="sscp"></a></p></div>
+      </li>
+    </ul>
+  </div>
+</body>
+</html>
