@@ -264,6 +264,8 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
 - changed:
   - Added `src/research/icnet.py` with immutable IC.net contracts, visibility-aware parsing, deterministic Brand/stock rules, structured Evidence, and no `PriceCandidate`.
   - Added `CdpIcNetClient`, which connects to an Owner-approved ordinary Chrome instance through official localhost CDP. It supports attach-only reading of an already-open target page and bounded navigation in the same normal browser context.
+  - Hardened `CdpIcNetClient` to accept only loopback CDP hosts, identify IC.net tabs by parsed hostname, preserve unrelated tabs by opening a new page, and trim only leading/trailing MPN whitespace before URL construction.
+  - Kept `PlaywrightIcNetClient` as an internal diagnostic implementation but removed it from the package-level public API; `CdpIcNetClient` remains the V1 public live acquisition client.
   - Exported the IC.net public API from `src/research/__init__.py`.
   - Added a sanitized fixture and deterministic tests for parser, Brand/stock behavior, Adapter outcomes, CDP attach-only behavior, CDP navigation, and fail-closed page handling.
   - Added durable IC.net rules to `docs/modules/RESEARCH.md`. No selectors, raw Owner HTML, credentials, cookies, tokens, supplier contacts, or browser profile data were committed.
@@ -272,7 +274,8 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
   - CDP Test B reused the same ordinary Chrome profile/context and navigated to the same HTTPS target URL. Navigation completed without error; body and result container remained present; the parser again returned 21 strict rows, 2 qualified rows, and certified stock 244.
   - The implemented `CdpIcNetClient` plus `IcNetAdapter` authenticated live smoke returned `SUCCESS`, resolved Brand `Telit`, 21 inspected/strict rows, 2 qualified rows, certified stock 244, stock label `货多` for smoke customer quantity 10, and no `PriceCandidate`.
   - The Owner-provided real HTML sample was used only locally and parsed as the same 21 / 2 / 244 observations. The full sample was not committed.
-  - `py -3.12 -m pytest tests/research`: 64 passed.
+  - PR hardening tests cover `localhost`, `127.0.0.1`, and `::1` acceptance; remote CDP rejection; legitimate IC.net subdomain reuse; unrelated-tab preservation; and leading/trailing MPN trimming.
+  - `py -3.12 -m pytest tests/research`: 69 passed.
   - `py -3.12 -m ruff check src/research/icnet.py src/research/__init__.py tests/research/test_icnet.py`: passed.
   - The branch contains the latest `origin/main`; `git diff --check origin/main...HEAD` passed.
   - No imports from `sheets`, `workflow`, `inso`, or `quotation` were added. No CAPTCHA/OTP/device-verification bypass, stealth, fingerprint modification, `navigator.webdriver` patch, challenge-script reverse engineering, cookie/token export, or IC.net write action was used.
