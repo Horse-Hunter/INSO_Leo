@@ -1,26 +1,26 @@
-# Workflow Module
+# Workflow 模块
 
-## Public responsibility
+## 公共职责
 
-Workflow owns cross-module orchestration, scheduling, `inquiry_id`, process state, retry, duplicate prevention, and module handoffs. It consumes module public contracts and never embeds their internal business logic.
+Workflow 负责跨模块编排、Scheduler、`inquiry_id`、流程状态、retry、duplicate prevention 和模块衔接。只消费模块 Public Contract，不承载模块内部业务逻辑。
 
-## V1 execution
+## V1 执行
 
-- Trigger one Sheets pending-record poll every 15 minutes; only one poll may run at once.
-- Decouple the poller from the Research worker; Research concurrency is `1`.
-- Use Sheets-supplied `record_ref` / `record_identity` as opaque identity; never derive permanent identity from row number.
-- Create and persist `inquiry_id` as `inq_<UUIDv4>` in local SQLite; do not write it to Google Sheets.
-- States: `QUEUED`, `RESEARCHING`, `RETRY_WAIT`, `COMPLETED`, `MANUAL_REVIEW`, `FAILED`.
-- Send Research the canonical input in `RESEARCH.md`, forwarding `importance_raw` unchanged.
-- Map Research `SUCCESS` and qualifying `PARTIAL_SUCCESS` to `COMPLETED` only after Research confirms idempotent Excel persistence. Map `MANUAL_REVIEW_REQUIRED` to `MANUAL_REVIEW`; retry `RETRYABLE_FAILURE`.
-- Pass `resolved_brand` to the confirmed Sheets Brand update. A Sheets Brand conflict does not undo completed Research.
+- 每 15 分钟触发一次 Sheets 待处理记录查询；同一时间只允许一个 Sheet Poll。
+- Poller 与 Research Worker 解耦；Research concurrency 为 `1`。
+- 将 Sheets 提供的 `record_ref` / `record_identity` 视为 opaque identity；不得从 row number 推导永久身份。
+- 创建 `inq_<UUIDv4>` 格式的 `inquiry_id` 并持久化到本地 SQLite；不得写入 Google Sheets。
+- 状态：`QUEUED`、`RESEARCHING`、`RETRY_WAIT`、`COMPLETED`、`MANUAL_REVIEW`、`FAILED`。
+- 按 `RESEARCH.md` 的 canonical input 调用 Research，并原样透传 `importance_raw`。
+- Research 确认幂等 Excel 落盘后，才把 `SUCCESS` 或合格的 `PARTIAL_SUCCESS` 映射为 `COMPLETED`；`MANUAL_REVIEW_REQUIRED` 映射为 `MANUAL_REVIEW`；`RETRYABLE_FAILURE` 进入 retry。
+- 将 `resolved_brand` 传给已确认的 Sheets Brand 更新；Sheets Brand conflict 不撤销已完成 Research。
 
-## Retry and recovery
+## Retry 与恢复
 
-Default is one initial attempt plus three retries after 15, 30, and 60 minutes; exhaustion becomes `FAILED`. Do not use a fixed stale timeout. On restart, inspect inherited `RESEARCHING` work through a public Research completion capability before recovering completion or scheduling retry.
+默认一次 initial attempt，加 15、30、60 分钟后的三次 retry；耗尽后转为 `FAILED`。不使用固定 stale timeout。重启时，先通过 Research Public Contract 检查遗留 `RESEARCHING` 是否已完成，再恢复完成状态或安排 retry。
 
-## Boundary and UNKNOWN
+## 边界与 UNKNOWN
 
-V1 orchestrates Sheets → Research → local Excel only; INSO and Quotation are future-version handoffs. Dependency direction is owned by `MODULE_INDEX.md`; Workflow never embeds collaborator adapters or business internals.
+V1 只编排 Sheets → Research → 本地 Excel；INSO 与 Quotation 属于 Future Version。依赖方向归 `MODULE_INDEX.md`；Workflow 不嵌入协作模块的 adapter 或业务内部逻辑。
 
-Still `UNKNOWN`: SQLite schema/migrations, duplicate-prevention algorithm, detailed transition guards, scheduling mechanism, Research completion-confirmation contract, and operational recovery mechanics.
+仍为 `UNKNOWN`：SQLite schema/migration、duplicate-prevention algorithm、详细状态转换 guard、Scheduler 机制、Research completion-confirmation Contract 和运行恢复细节。

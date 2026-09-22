@@ -1,33 +1,33 @@
-# Sheets Module
+# Sheets 模块
 
-## Public contract
+## Public Contract
 
-Sheets performs one Google Sheets operation per explicit Workflow call: read pending records or execute an explicitly requested safe field update. It returns structured records and opaque `record_ref` / `record_identity` values; it does not schedule or poll.
+Sheets 每次只执行一个由 Workflow 明确调用的 Google Sheets 操作：读取待处理记录，或执行明确命令下的安全字段更新。返回结构化 Record 和 opaque `record_ref` / `record_identity`；自身不调度、不 polling。
 
-## V1 read
+## V1 读取
 
-| Column | Meaning |
+| Column | 含义 |
 | --- | --- |
-| A | status |
-| C | raw importance |
-| E | model / MPN |
+| A | 状态 |
+| C | 重要等级原始值 |
+| E | 型号 / MPN |
 | F | Brand |
-| G | quantity |
+| G | 数量 |
 
-A record is pending only when A is exactly `未发`. Workflow receives C unchanged as `importance_raw`.
+仅当 A 严格等于 `未发` 时 Record 才待处理。Workflow 将 C 原样作为 `importance_raw` 接收。
 
-## Identity and write
+## Identity 与写入
 
-- Record identity combines worksheet identity, row position, and an identifying snapshot; row number alone is never permanent identity.
-- Before a write, relocate and validate exactly one record. Ambiguous/missing identity returns conflict and writes nothing.
-- V1 adds no stable Sheet ID column.
-- Brand F may be written only while F is still empty. Re-read F immediately before writing; a human value returns conflict and is never overwritten.
-- Every write is a targeted field update; never replace a full row to update one field.
+- Record identity 由 worksheet identity、row position、identifying snapshot 组合；row number 不得单独作为永久身份。
+- 写入前必须重新定位并唯一校验 Record；缺失或不唯一时返回 conflict，且不写入。
+- V1 不新增 stable Sheet ID 列。
+- 只有 F 仍为空时才允许写 Brand。写前立即重读 F；人工已填写时返回 conflict，绝不覆盖。
+- 所有写入必须 targeted field update；不得为更新一个字段而整行覆盖。
 
-The preferred integration is Google Sheets API with OAuth User Authorization. All live writes also follow `BOUNDARIES.md`.
+首选集成为 Google Sheets API + OAuth User Authorization。所有真实写入同时遵守 `BOUNDARIES.md`。
 
-## Boundary and UNKNOWN
+## 边界与 UNKNOWN
 
-Workflow owns the 15-minute trigger, global state, retry, and duplicate prevention. Dependency direction is owned by `MODULE_INDEX.md`.
+Workflow 负责 15 分钟触发、全局状态、retry 和 duplicate prevention。依赖方向归 `MODULE_INDEX.md`。
 
-Still `UNKNOWN`: spreadsheet/worksheet configuration, identifying-snapshot fields and relocation algorithm, OAuth token storage/scopes/consent/refresh details, and writable fields beyond Brand.
+仍为 `UNKNOWN`：spreadsheet/worksheet 配置、identifying snapshot 字段及重定位算法、OAuth token storage/scope/consent/refresh 细节，以及 Brand 以外的可写字段。

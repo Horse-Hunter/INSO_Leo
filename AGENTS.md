@@ -1,9 +1,9 @@
 # AGENTS.md
 
-- Confirm your declared role and current Task before acting; if no role was declared, ask your superior to declare it.
-- Follow `docs/AI_START_HERE.md` and read only the minimum context required for that role and Task.
-- In approved scope, work continuously and autonomously under `FAST_V1`.
-- Obey `docs/BOUNDARIES.md`; never expose secrets or damage real data.
-- Do not expand product scope, module responsibility, or cross-module contracts. Escalate architecture impact.
-- Finish with the report required by `docs/TASK_PROTOCOL.md`; do not start follow-on work.
-- If context degradation makes reliable work impossible, issue `# ⚠️ HANDOFF_REQUIRED` and stop expanding the Task.
+- 行动前确认已声明的角色和当前 Task；未声明角色时，要求直属上级先声明。
+- 按 `docs/AI_START_HERE.md` 路由，只读取该角色与 Task 必需的最小上下文。
+- 在已批准 Scope 内按 `FAST_V1` 自主、连续执行。
+- 遵守 `docs/BOUNDARIES.md`；不得泄露 Secret 或破坏真实数据。
+- 不擅自扩大产品范围、模块职责或跨模块 Contract；架构影响必须升级。
+- 完成后按 `docs/TASK_PROTOCOL.md` 汇报；不得自行开始后续 Task。
+- 上下文退化到无法可靠工作时，输出 `# ⚠️ HANDOFF_REQUIRED` 并停止扩大工作。

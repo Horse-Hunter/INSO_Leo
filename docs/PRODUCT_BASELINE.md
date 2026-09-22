@@ -1,48 +1,48 @@
-# Product Baseline
+# 产品基线
 
-This file owns product scope and durable cross-module business rules only. Module rules belong in `docs/modules/`; safety in `BOUNDARIES.md`; dependencies in `MODULE_INDEX.md`; implementation status comes from Git `main`, the current Task, and Module Final Reports.
+本文件只维护产品范围和长期跨模块业务规则。模块规则归 `docs/modules/`，安全归 `BOUNDARIES.md`，依赖归 `MODULE_INDEX.md`；实现状态以 Git `main`、当前 Task 和 Module Final Report 为准。
 
-## Product goal
+## 产品目标
 
-- Project: `INSO_Leo`.
-- The confirmed V1 outcome is a repeatable inquiry-to-market-research flow.
-- Broader business goal, primary users, and measurable outcome: `UNKNOWN`.
+- 项目：`INSO_Leo`。
+- 已确认 V1 结果：可重复执行“询价 → 市场调研”流程。
+- 更广泛的业务目标、主要用户和可衡量结果：`UNKNOWN`。
 
-## Current V1 user flow
+## 当前 V1 用户流程
 
 ```text
-Workflow scheduler (every 15 minutes)
--> Sheets reads Google Sheet records with status “未发”
--> Workflow creates or recognizes an inquiry
--> Research performs market research
--> Research persists the result in local `调研价格.xlsx`
+Workflow Scheduler（每 15 分钟）
+-> Sheets 读取 Google Sheet 中状态为“未发”的记录
+-> Workflow 创建或识别 inquiry
+-> Research 执行市场调研
+-> Research 将结果持久化到本地 `调研价格.xlsx`
 ```
 
-## V1 includes
+## V1 包含
 
-- Google Sheet pending-record reads and the confirmed safe Brand update path.
-- Workflow identity/state, duplicate prevention, retry, and Sheets → Research orchestration.
-- Research across the five confirmed sources and Research-owned Excel output.
-- `SUCCESS` or qualifying `PARTIAL_SUCCESS` becomes Workflow `COMPLETED` only after required inquiry-idempotent Excel persistence succeeds.
-- `MANUAL_REVIEW_REQUIRED` stops automation for human handling; `RETRYABLE_FAILURE` does not create a false normal price and follows Workflow retry.
-- Sheet column-C `importance_raw` passes through Workflow unchanged and affects only Research’s Excel display; it does not change research behavior or define future INSO importance.
-- Research may return `resolved_brand`; a safe Sheets Brand conflict does not undo completed Research.
+- Google Sheet 待处理记录读取，以及已确认的安全 Brand 写回路径。
+- Workflow identity/state、duplicate prevention、retry 和 Sheets → Research 编排。
+- 五个已确认来源的 Research，以及 Research 自有 Excel 输出。
+- 只有必要的 inquiry-idempotent Excel 落盘成功后，`SUCCESS` 或合格的 `PARTIAL_SUCCESS` 才转为 Workflow `COMPLETED`。
+- `MANUAL_REVIEW_REQUIRED` 停止自动推进并等待人工；`RETRYABLE_FAILURE` 不生成伪正常价格，由 Workflow retry。
+- Sheet C 列 `importance_raw` 由 Workflow 原样透传，只影响 Research Excel 展示，不改变调研行为，也不定义未来 INSO 重要性。
+- Research 可返回 `resolved_brand`；Sheets 安全写回发生 Brand conflict 时，不撤销已完成的 Research。
 
-Detailed Sheets, Research, and Workflow contracts are owned by their module docs.
+Sheets、Research、Workflow 的详细 Contract 归各自 module doc。
 
-## V1 does not include
+## V1 不包含
 
-- INSO behavior, Quotation, a final customer quotation, or final quotation write-back to Google Sheets.
-- A shared Excel/storage module.
-- Redis, Celery, Kafka, Docker, or a large Workflow engine.
+- INSO 业务、Quotation、最终客户报价、最终报价写回 Google Sheet。
+- 共享 Excel/storage 模块。
+- Redis、Celery、Kafka、Docker 或大型 Workflow Engine。
 
-`inso` and `quotation` remain registered future-version modules.
+`inso` 和 `quotation` 保留为 Future Version 模块。
 
-## Future scope and product UNKNOWN
+## Future Scope / 产品级 UNKNOWN
 
-- INSO system definition, access, inquiry behavior, and results.
-- Quotation formulas, rounding, margins, approvals, validity, output, and recipients.
-- Product/service coverage, markets, taxes, locales, customer-data classification, retention, audit, and regulatory obligations.
-- V1 production operating model and success metrics beyond the confirmed flow.
+- INSO 系统定义、访问、询价行为和结果。
+- Quotation 公式、舍入、利润、审批、有效期、输出和接收方。
+- 产品/服务覆盖、市场、税务、地区、客户数据分类、保留、审计和监管要求。
+- 已确认流程之外的 V1 生产运行方式和成功指标。
 
-Unknowns that affect only one module stay in that module’s Task or module doc, not here.
+只影响单一模块的 UNKNOWN 留在对应 module doc 或 Task，不写入本文件。

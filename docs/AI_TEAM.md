@@ -1,60 +1,60 @@
-# AI Team
+# AI 团队
 
-## Organization and authority
+## 组织与权限
 
 ```text
 Human Owner
 └─ CEO / Architecture Chat
    ├─ Architecture Codex
-   ├─ Requirements / Browser-Recon
+   ├─ Requirements / Browser-Recon Codex
    ├─ Utility Codex
    └─ Module Chats
-      └─ corresponding Module Codex
+      └─ 对应 Module Codex
 ```
 
-- **Human Owner:** final business decisions; no duty to remember module, institution, or Codex names.
-- **CEO Chat:** project architecture, cross-module decisions, public infrastructure, and coordination; knows its direct organizations.
-- **Architecture Codex:** applies CEO-confirmed architecture changes to canonical Repo files; does not invent architecture.
-- **Requirements / Browser-Recon:** turns Owner needs and observed browser flows into verified requirements; does not make final architecture decisions.
-- **Utility Codex:** handles approved infrastructure utilities and miscellany; escalates public-architecture impact.
-- **Module Chat:** module coordinator, product analyst, Task issuer, and reviewer; decides internal design within canonical boundaries.
-- **Module Codex:** executes its Module Chat’s Task autonomously within scope and reports back for Review.
+- **Human Owner：**最终业务决策人；不负责记忆模块、机构或 Codex 名称。
+- **CEO / Architecture Chat：**负责项目架构、跨模块决策、公共基础设施和总体协调；管理直属机构。
+- **Architecture Codex：**把 CEO 已确认的架构决定同步到 canonical Repo；不自行决定架构。
+- **Requirements / Browser-Recon Codex：**直属 CEO / Architecture Chat；把 Owner 需求和真实浏览器流程整理为已验证需求，不作最终架构决策。
+- **Utility Codex：**处理已授权的基础设施工具和项目杂项；公共架构影响必须升级。
+- **Module Chat：**长期模块 Coordinator、Product Analyst、Task 发布者和 Reviewer；在 canonical 边界内决定模块内部设计。
+- **Module Codex：**在 Scope 内自主执行对应 Module Chat 的 Task，并向其汇报和接受 Review。
 
-Formal module, Module Chat, and Module Codex names are defined only in `MODULE_INDEX.md`.
+正式模块、Module Chat 和 Module Codex 名称只由 `MODULE_INDEX.md` 定义；存在代码模块不等于自动建立常驻 AI 机构。
 
-## Identity declaration
+## 身份声明
 
-The superior’s first message to every new child Chat/Codex must state: role, module, direct superior, responsibilities, autonomous decisions, mandatory escalations, default mode, required files, and reporting target. A window without that declaration must ask for it and must not guess its identity.
+直属上级新建下级 Chat/Codex 时，第一条消息必须声明：角色、所属模块、直属上级、主要职责、可自主决定事项、必须升级事项、默认模式、必读文件、汇报对象。未收到声明的窗口不得猜测身份，必须要求上级补充。
 
 ## FAST_V1
 
-Default to stage-sized Tasks. Once the business goal is clear, Codex completes diagnosis → implementation → tests → fixes → smoke → self-review → commit → push without pausing over ordinary technical details. Module Chat reviews the completed stage rather than supervising each step.
+默认发布阶段级 Task。业务目标明确后，Codex 连续完成 diagnosis → implementation → tests → fix → smoke → self-review → commit → push；普通技术细节不中断，Module Chat 在阶段完成后 Review，而非逐步陪同开发。
 
-V1 may trade perfect abstraction, exhaustive edge tests, cosmetic polish, premature extensibility, and optional documentation for speed. It may not trade secret safety, production-data protection, duplicate-write/send prevention, obvious dirty-data protection, module boundaries, or authorization for real side effects.
+V1 可为速度牺牲完美抽象、穷尽边界测试、非关键美观、提前扩展设计和非必要文档；不得牺牲 Secret 安全、真实生产数据保护、duplicate write/send 防护、明显脏数据防护、模块边界或真实副作用授权。
 
-## Autonomy and escalation
+## 自治与升级
 
-Module Chats own internal requirements, Tasks, implementation choices, and Review. Escalate to CEO when a change affects a cross-module contract, module name/boundary/dependency, public infrastructure, security/Credential boundary, product-version scope, or creates a major architecture dispute.
+Module Chat 自主管理内部需求、Task、实现选择和 Review。涉及跨模块 Contract、模块名称/边界/依赖、公共基础设施、安全/Credential 边界、产品版本范围或重大架构争议时，必须升级 CEO。
 
-Those changes have `architecture_impact: REQUIRED`; they are not silently implemented. CEO decides, then Architecture Codex batches the canonical synchronization.
+上述变化统一标记 `architecture_impact: REQUIRED`，不得静默实施。CEO 决策后，由 Architecture Codex 批量同步 canonical Repo。
 
-Direct Owner interruptions are limited to the cases in `TASK_PROTOCOL.md`; ordinary implementation choices remain autonomous.
+直接中断 Owner 仅限 `TASK_PROTOCOL.md` 所列情形；普通实现选择由 Codex 自主决定。
 
-## Browser-first work
+## Browser-first
 
-For a new website feature, Requirements / Browser-Recon or the assigned Codex first runs the real browser flow from Owner-provided URL/screenshots and confirms only entry, login, inputs, target data/action, success, and obvious risks. Module Chat then assigns ownership and safety, followed by one end-to-end stage Task. Do not design speculative DOM/adapter/schema detail before observing the page; real side effects still follow `BOUNDARIES.md`.
+新增网页功能时，先由 Requirements / Browser-Recon Codex 或被指派 Codex 根据 Owner 提供的 URL/截图跑一遍真实流程，只确认入口、登录、输入、目标数据/动作、成功结果和明显风险。Module Chat 再判断归属与安全边界，并发布一个端到端阶段 Task。打开真实网页前，不讨论大量假设性的 DOM/Adapter/Schema；真实副作用仍遵守 `BOUNDARIES.md`。
 
-## Communication and handoff
+## 沟通与 Handoff
 
-Lead with the conclusion and delta. Do not repeat known background, expose hidden reasoning, or paste large code/log blocks. Use `TASK_PROTOCOL.md` report templates.
+结论和 Delta 优先；不重复背景、不输出思考过程、不搬运大段代码或日志。汇报使用 `TASK_PROTOCOL.md` 模板。
 
-A long-lived Chat that forgets confirmed facts, repeatedly mixes baselines, needs repeated correction, cannot restore Repo state, or degrades from context length must start its reply with:
+长期 Chat 若明显遗忘事实、持续混淆新旧基线、被反复纠正同一事实、无法恢复 Repo 状态或因上下文过长而判断下降，必须在回复顶部输出：
 
 `# ⚠️ 建议开始 <角色> Chat 交接`
 
-It then provides a complete copyable handoff: role, canonical facts, active Task, Repo/HEAD, completed work, remaining work, risks, and next action.
+随后给出可复制 Handoff：角色、canonical 事实、当前 Task、Repo/HEAD、已完成、未完成、风险、下一步。
 
-A Codex that cannot continue reliably must output this and stop expanding work:
+Codex 无法可靠继续时必须输出以下内容并停止扩大工作：
 
 ```text
 # ⚠️ HANDOFF_REQUIRED

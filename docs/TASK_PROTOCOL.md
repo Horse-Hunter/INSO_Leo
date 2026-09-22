@@ -1,8 +1,8 @@
 # Task Protocol
 
-Use one stage-sized Task Packet for one bounded outcome. The packet carries the context Codex needs; historical Tasks are audit evidence and are not default reading.
+一个阶段级 Task Packet 对应一个有边界的结果。Task 自带 Codex 所需上下文；历史 Tasks 是审计证据，不是默认阅读材料。
 
-Recommended path: `tasks/YYYY-MM-DD-short-slug.md`.
+建议路径：`tasks/YYYY-MM-DD-short-slug.md`。
 
 ## Task Packet
 
@@ -19,49 +19,49 @@ architecture_impact: NONE | REQUIRED
 ## Problem
 ## Goal
 ## Current Facts
-Only facts required by this Task; mark missing evidence UNKNOWN.
+只放本 Task 必需事实；缺少证据时标记 UNKNOWN。
 
 ## Required Context
-Exact files/evidence to read. Do not request all historical context.
+指定必须读取的文件/证据，不要求全量历史上下文。
 
 ## Write Scope
-Exact paths or systems the actor may change.
+列出允许修改的路径或系统。
 
 ## Scope
 ## Non-scope
 ## Requirements
 ## Acceptance
-- [ ] Observable outcome.
+- [ ] 可观察的验收结果。
 
 ## Execution
-Required checks, authorized side effects, commit/push expectation, and stop point.
+写明必要检查、已授权副作用、commit/push 预期和停止点。
 
 ## Final Report
-Use the standard Codex report below; record limitations and remaining UNKNOWN.
+使用下方 Codex 标准报告，记录限制和剩余 UNKNOWN。
 ```
 
-`architecture_impact: REQUIRED` applies to module add/delete/rename, responsibility or dependency changes, public contracts, global Workflow, safety boundaries, or AI roles. Module actors escalate it; CEO decides and Architecture Codex synchronizes canonical files.
+新增/删除/重命名模块、改变模块职责或依赖、公共 Contract、全局 Workflow、安全边界或 AI 角色时，必须设为 `architecture_impact: REQUIRED`。模块角色负责升级，CEO 决策，Architecture Codex 同步 canonical 文件。
 
-## FAST_V1 execution
+## FAST_V1 执行
 
-Within approved scope, Codex runs diagnosis → implementation → tests → fix → smoke → self-review → commit → push continuously. Do not split a simple feature into mechanical micro-Tasks or pause over function names, class/function choice, mocks, parsers, selectors, test layout, internal exception wrappers, ordinary library choice, small scoped bugs, or non-critical refactors.
+在已批准 Scope 内，Codex 连续完成 diagnosis → implementation → tests → fix → smoke → self-review → commit → push。不得把简单功能机械拆成微型 Tasks，也不得因函数名、class/function 选择、mock、parser、selector、测试结构、内部异常封装、普通 library 选择、Scope 内小 bug 或非关键重构而停下来请示。
 
-Codex interrupts Owner only for: a real business-behavior decision; human login/CAPTCHA/OTP/device verification; a first or unauthorized production write; possible overwrite/deletion of real data; sensitive Credential/customer-message/order/payment behavior; or material expansion beyond approved business scope. Ordinary implementation choices remain autonomous.
+Codex 只在以下情形中断 Owner：必须决定真实业务行为；需要人工登录/CAPTCHA/OTP/设备验证；首次或未授权生产写；可能覆盖/删除真实数据；涉及敏感 Credential/客户消息/订单/支付；必须明显扩大已批准业务 Scope。普通实现问题自主决定。
 
-All external effects follow `BOUNDARIES.md`. For a new website flow, complete the browser-first reconnaissance in `AI_TEAM.md`, then prefer one end-to-end stage Task covering understanding, adapter, parser, automation, integration, tests, and smoke.
+所有外部副作用遵守 `BOUNDARIES.md`。新增网页流程先按 `AI_TEAM.md` 完成 Browser-first 观察，再优先用一个端到端阶段 Task 覆盖 understanding、adapter、parser、automation、integration、tests 和 smoke。
 
 ## Review
 
-- **DONE:** acceptance is met.
-- **CONTINUE:** list only changes required for acceptance.
-- **FOLLOW-UP:** original Task is DONE; open a new Task for the new issue.
-- **BLOCKED:** state the real blocker.
+- **DONE：**满足当前 Task 验收。
+- **CONTINUE：**只列影响验收的必须修改项。
+- **FOLLOW-UP：**原 Task DONE；新问题另开 Task。
+- **BLOCKED：**说明真实阻塞。
 
-Do not prolong V1 Review for naming, cosmetic abstraction, non-critical debt, or “could be prettier.”
+不得因命名、轻微抽象、非关键技术债或“可以更漂亮”而反复要求 V1 修改。
 
-## Reports
+## 汇报模板
 
-Codex → superior:
+Codex → 上级：
 
 ```text
 状态：
@@ -89,7 +89,7 @@ SUCCESS / NOT PUSHED
 NONE / 一个明确问题
 ```
 
-Module Chat → CEO:
+Module Chat → CEO：
 
 ```text
 状态：
@@ -111,7 +111,7 @@ Commit：
 <如有>
 ```
 
-CEO → Owner:
+CEO → Owner：
 
 ```text
 结论：
@@ -130,7 +130,7 @@ NONE / 明确选项。
 谁做什么。
 ```
 
-When Codex or a subordinate must ask Owner, the first screen is:
+Codex 或下级机构必须向 Owner 提问时，第一屏使用：
 
 ```text
 以前：
@@ -155,8 +155,8 @@ When Codex or a subordinate must ask Owner, the first screen is:
 <一句话>
 ```
 
-Only then attach essential tests, logs, or technical evidence. Do not paste development history.
+之后只附必要 Tests、Logs 或 Technical Evidence，不搬运开发过程。
 
-## Completion
+## 完成标准
 
-Before reporting DONE: satisfy acceptance, run proportionate checks, inspect the full diff, confirm no unrelated or secret material, update Task status, commit/push when authorized, and stop at the Task boundary.
+报告 DONE 前：满足 Acceptance，运行适用检查，检查完整 diff，确认无无关内容或 Secret，更新 Task 状态，在授权时 commit/push，并停在 Task 边界。

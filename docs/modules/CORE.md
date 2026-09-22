@@ -1,18 +1,8 @@
-# Core Module
+# Core 模块
 
-## Public boundary
+- Core 拥有 Credential Provider 公共能力边界。
+- 业务模块通过稳定的 provider 能力请求已授权凭据。
+- 业务模块不得依赖 DPAPI、文件路径、PowerShell 或其他底层实现细节。
+- 真实 Secret 不得进入 Git、Task、log、fixture 或 evidence；调用方同时遵守 `BOUNDARIES.md`。
 
-Core owns stable shared primitives and infrastructure capabilities. It must remain free of module-specific business rules and may not depend on a business module.
-
-## Credential Provider
-
-Business modules request authorized website login data through the Credential Provider using a stable `site_id`; they do not depend on DPAPI, file paths, or PowerShell details. The currently confirmed local interface is `Get-InsoVaultLogin -SiteId <id>`.
-
-The current local vault uses Windows DPAPI CurrentUser and stores its runtime data outside Git at `%LOCALAPPDATA%\INSO_Leo\credential-vault.json`. It is single-user/local-machine only; cross-machine synchronization and multi-user sharing are not supported.
-
-Returned credentials are bounded runtime values. They must never enter Git, Tasks, logs, fixtures, evidence, screenshots, or examples; callers also follow `BOUNDARIES.md`.
-
-## UNKNOWN
-
-- A language-neutral application API beyond the confirmed provider capability.
-- Shared configuration, logging, time, identifier, and error contracts until concrete multi-module needs are confirmed.
+Vault 尚未进入 canonical `main`；具体实现状态待正式合并后另行同步。
