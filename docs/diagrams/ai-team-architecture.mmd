@@ -1,0 +1,49 @@
+flowchart TB
+    OWNER["Human Owner<br/>最终业务决策人"]
+    CEO["CEO / Architecture Chat<br/>架构、跨模块决策、总体协调"]
+
+    OWNER --> CEO
+
+    CEO --> ARCH["Architecture Codex"]
+    CEO --> RECON["Requirements / Browser-Recon Codex"]
+    CEO --> UTILITY["Utility Codex"]
+
+    CEO --> RESEARCH_CHAT["Research Module Chat"]
+    CEO --> SHEETS_CHAT["Sheets Module Chat"]
+    CEO --> WORKFLOW_CHAT["Workflow Module Chat"]
+    CEO --> INSO_CHAT["INSO Module Chat"]
+    CEO --> QUOTATION_CHAT["Quotation Module Chat"]
+
+    RESEARCH_CHAT --> RESEARCH_CODEX["Research Module Codex"]
+    RESEARCH_CODEX --> RESEARCH["代码模块<br/>research"]
+
+    SHEETS_CHAT --> SHEETS_CODEX["Sheets Module Codex"]
+    SHEETS_CODEX --> SHEETS["代码模块<br/>sheets"]
+
+    WORKFLOW_CHAT --> WORKFLOW_CODEX["Workflow Module Codex"]
+    WORKFLOW_CODEX --> WORKFLOW["代码模块<br/>workflow"]
+
+    INSO_CHAT --> INSO_CODEX["INSO Module Codex"]
+    INSO_CODEX --> INSO["代码模块<br/>inso"]
+
+    QUOTATION_CHAT --> QUOTATION_CODEX["Quotation Module Codex"]
+    QUOTATION_CODEX --> QUOTATION["代码模块<br/>quotation"]
+
+    ARCH -. "CEO 按具体 Task 分配" .-> CORE["代码 / 公共能力模块<br/>core<br/>当前不设常驻 Core Chat / Core Codex"]
+    UTILITY -. "CEO 按具体 Task 分配" .-> CORE
+
+    classDef owner fill:#16324f,color:#ffffff,stroke:#16324f,stroke-width:2px;
+    classDef ceo fill:#334e9e,color:#ffffff,stroke:#334e9e,stroke-width:2px;
+    classDef staff fill:#e8eef8,color:#172033,stroke:#7b8ba8,stroke-width:1.5px;
+    classDef chat fill:#dce9f7,color:#172033,stroke:#4d78a8,stroke-width:1.5px;
+    classDef codex fill:#f1f4f8,color:#172033,stroke:#8b98aa,stroke-width:1.5px;
+    classDef module fill:#e2f2e8,color:#173624,stroke:#52936a,stroke-width:1.5px;
+    classDef core fill:#fff0cf,color:#3d2c08,stroke:#ba8526,stroke-width:2px;
+
+    class OWNER owner;
+    class CEO ceo;
+    class ARCH,RECON,UTILITY staff;
+    class RESEARCH_CHAT,SHEETS_CHAT,WORKFLOW_CHAT,INSO_CHAT,QUOTATION_CHAT chat;
+    class RESEARCH_CODEX,SHEETS_CODEX,WORKFLOW_CODEX,INSO_CODEX,QUOTATION_CODEX codex;
+    class RESEARCH,SHEETS,WORKFLOW,INSO,QUOTATION module;
+    class CORE core;

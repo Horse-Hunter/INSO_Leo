@@ -22,6 +22,11 @@ Human Owner
 
 正式模块、Module Chat 和 Module Codex 名称只由 `MODULE_INDEX.md` 定义；存在代码模块不等于自动建立常驻 AI 机构。
 
+## 架构图
+
+- [AI 团队 / 模块架构图](diagrams/ai-team-architecture.svg)（[Mermaid 源文件](diagrams/ai-team-architecture.mmd)）
+- AI 团队或模块架构发生变化时，必须同步更新 Mermaid 源文件和 SVG 成品图。
+
 ## 身份声明
 
 直属上级新建下级 Chat/Codex 时，第一条消息必须声明：角色、所属模块、直属上级、主要职责、可自主决定事项、必须升级事项、默认模式、必读文件、汇报对象。未收到声明的窗口不得猜测身份，必须要求上级补充。
