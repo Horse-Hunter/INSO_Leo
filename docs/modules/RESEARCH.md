@@ -108,7 +108,10 @@ Findchips is a V1 price source and may produce one `PriceCandidate`.
 - Research owns an injected USD/RMB quote boundary oriented as `1 USD = rate RMB/CNY`. The rate and all price math use positive `Decimal` values without hidden rounding or quantization.
 - HQEW reads its normal public first cloud-price result page. A safety challenge
   is a technical source failure requiring later human access; Research does not
-  bypass it.
+  bypass it. For the current temporary operating policy, this failure is
+  non-blocking when another price source returns a valid candidate: Research
+  persists the available result and returns `PARTIAL_SUCCESS`. It does not wait
+  for a person to complete the challenge.
 - LCSC reads only the primary product represented by the official product page.
   It selects the greatest displayed quantity break at or below the customer
   quantity. A valid displayed preorder or zero-stock price remains eligible.

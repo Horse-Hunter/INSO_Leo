@@ -58,6 +58,22 @@ def test_aggregation_20_percent_and_partial_failure() -> None:
     assert agg.estimated_total == Decimal(80)
 
 
+def test_hqew_challenge_is_non_blocking_when_another_price_is_valid() -> None:
+    results = (
+        _result(ResearchSource.FINDCHIPS, SourceOutcome.SUCCESS, "8"),
+        _result(ResearchSource.HQEW, SourceOutcome.SOURCE_UNAVAILABLE),
+        _result(ResearchSource.LCSC, SourceOutcome.NO_VALID_PRICE),
+        _result(ResearchSource.BOM_AI, SourceOutcome.NO_VALID_PRICE),
+    )
+
+    aggregation = aggregate_price_results(results, 10)
+
+    assert aggregation.status is ResearchStatus.PARTIAL_SUCCESS
+    assert aggregation.market_reference == "8"
+    assert aggregation.estimated_total == Decimal(80)
+    assert aggregation.reason_code is ResearchReasonCode.SOURCE_UNAVAILABLE
+
+
 def test_no_matching_product_requires_four_successful_no_matches() -> None:
     no_matches = tuple(
         _result(source, SourceOutcome.NO_STRICT_MPN_MATCH) for source in PRICE_SOURCES

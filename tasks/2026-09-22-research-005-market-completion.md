@@ -111,6 +111,9 @@ Provide one Workflow-callable Research capability: `ResearchInput -> IC.net -> f
   the displayed 50-unit USD tier and normalized it with the live ECB quote.
 - HQEW normal public cloud-price URL returned
   `INTERACTIVE_CHALLENGE_REQUIRED`; no CAPTCHA/safety mechanism was bypassed.
+- Owner selected the temporary non-blocking policy on 2026-09-22: an HQEW
+  challenge does not pause the workflow when another valid price exists; the
+  available result is persisted as `PARTIAL_SUCCESS`.
 - Local uncommitted CredentialVault code was used only at runtime, as explicitly
   approved by the Owner. No provider file or secret was copied. The configured
   `bom.ai` entry authenticated a disposable browser context; the repository

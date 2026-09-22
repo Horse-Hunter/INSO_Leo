@@ -83,6 +83,10 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 - Research uses ECB daily reference rates as the live USD/RMB source. It derives
   CNY per USD through same-date USD/EUR and CNY/EUR observations using exact
   decimal arithmetic. There is no fallback FX rate or hidden rounding.
+- The temporary HQEW operating policy is non-blocking: when its safety challenge
+  makes the source unavailable but another price source supplies a valid
+  candidate, Research writes the available result and returns
+  `PARTIAL_SUCCESS` without waiting for human intervention.
 - The Research market reference is the lowest normalized RMB price. It adds a
   newline and the second-lowest price plus source only when the lowest is at
   least 20% lower (`lowest <= second * 0.80`). Estimated total is lowest unit
