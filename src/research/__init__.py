@@ -23,7 +23,7 @@ from .excel_output import (
 )
 from .findchips import FindchipsAdapter, FindchipsHttpClient
 from .fx import UsdRmbProvider, UsdRmbQuote
-from .hqew import HqewAdapter, HqewHttpClient
+from .hqew import CdpHqewClient, HqewAdapter
 from .icnet import (
     BrandResolution,
     CdpIcNetClient,
@@ -53,6 +53,7 @@ __all__ = [
     "BomAiPriceRecord",
     "BomAiRawPage",
     "BrandResolution",
+    "CdpHqewClient",
     "CdpIcNetClient",
     "EcbDailyUsdRmbProvider",
     "EcbFxError",
@@ -62,7 +63,6 @@ __all__ = [
     "FindchipsAdapter",
     "FindchipsHttpClient",
     "HqewAdapter",
-    "HqewHttpClient",
     "IcNetAdapter",
     "IcNetLogin",
     "IcNetPage",

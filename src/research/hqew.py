@@ -7,10 +7,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
+from ipaddress import ip_address
 from typing import Protocol
-from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
-from urllib.request import Request, urlopen
 
 from .source_contracts import (
     EvidenceField,
@@ -23,7 +22,6 @@ from .source_contracts import (
 )
 
 HQEW_RESULT_URL = "https://p.hqew.com/yunquote/"
-HQEW_USER_AGENT = "INSO-Leo-Research/1.0 (read-only HQEW adapter)"
 
 
 class HqewError(RuntimeError):
@@ -74,36 +72,113 @@ def _is_hqew_url(url: str) -> bool:
     )
 
 
-class HqewHttpClient:
-    def __init__(self, *, timeout_seconds: float = 30.0) -> None:
-        self._timeout_seconds = timeout_seconds
+def _is_loopback_hostname(hostname: str) -> bool:
+    if hostname.casefold() == "localhost":
+        return True
+    try:
+        return ip_address(hostname).is_loopback
+    except ValueError:
+        return False
+
+
+def _is_expected_result_url(url: str, mpn: str) -> bool:
+    parsed = urlsplit(url)
+    encoded_mpn = quote(mpn.strip(), safe="")
+    expected_path = f"/yunquote/{encoded_mpn}.html"
+    return _is_hqew_url(url) and parsed.path.casefold() == expected_path.casefold()
+
+
+class CdpHqewClient:
+    """Read HQEW through an Owner-authenticated ordinary Chrome session."""
+
+    def __init__(
+        self,
+        *,
+        cdp_url: str = "http://127.0.0.1:9222",
+        timeout_ms: int = 45_000,
+        settle_ms: int = 5_000,
+        navigate: bool = True,
+        playwright_factory: Callable[[], object] | None = None,
+    ) -> None:
+        hostname = urlsplit(cdp_url).hostname
+        if hostname is None or not _is_loopback_hostname(hostname):
+            raise HqewPageUnavailable("CDP_REMOTE_ENDPOINT_FORBIDDEN")
+        self._cdp_url = cdp_url
+        self._timeout_ms = timeout_ms
+        self._settle_ms = settle_ms
+        self._navigate = navigate
+        self._playwright_factory = playwright_factory
 
     def fetch_first_page(self, mpn: str) -> HqewPage:
-        url = build_hqew_result_url(mpn)
-        try:
-            with urlopen(
-                Request(
-                    url, headers={"User-Agent": HQEW_USER_AGENT, "Accept": "text/html"}
-                ),
-                timeout=self._timeout_seconds,
-            ) as response:
-                final_url = response.geturl()
-                if not _is_hqew_url(final_url):
-                    raise HqewPageUnavailable("UNEXPECTED_RESPONSE_HOST", final_url)
-                html = response.read().decode(
-                    response.headers.get_content_charset() or "utf-8", errors="replace"
+        mpn = mpn.strip()
+        factory = self._playwright_factory
+        timeout_error: type[Exception] = TimeoutError
+        if factory is None:
+            try:
+                from playwright.sync_api import (
+                    TimeoutError as PlaywrightTimeoutError,
                 )
+                from playwright.sync_api import sync_playwright
+            except ImportError as error:
+                raise HqewPageUnavailable("PLAYWRIGHT_NOT_INSTALLED") from error
+            factory = sync_playwright
+            timeout_error = PlaywrightTimeoutError
+
+        target_url = build_hqew_result_url(mpn)
+        current_url: str | None = None
+        try:
+            with factory() as playwright:  # type: ignore[attr-defined]
+                browser = playwright.chromium.connect_over_cdp(
+                    self._cdp_url,
+                    timeout=self._timeout_ms,
+                )
+                if not browser.contexts:
+                    raise HqewPageUnavailable("CDP_CONTEXT_UNAVAILABLE")
+                context = browser.contexts[0]
+                pages = list(context.pages)
+                exact_pages = [
+                    page for page in pages if _is_expected_result_url(page.url, mpn)
+                ]
+
+                if not self._navigate:
+                    if not exact_pages:
+                        raise HqewPageUnavailable("CDP_TARGET_PAGE_NOT_OPEN")
+                    page = exact_pages[0]
+                else:
+                    hqew_pages = [page for page in pages if _is_hqew_url(page.url)]
+                    if exact_pages:
+                        page = exact_pages[0]
+                    elif hqew_pages:
+                        page = hqew_pages[0]
+                    else:
+                        page = context.new_page()
+                    page.goto(
+                        target_url,
+                        wait_until="domcontentloaded",
+                        timeout=self._timeout_ms,
+                    )
+                    page.wait_for_load_state("load", timeout=self._timeout_ms)
+                    page.wait_for_timeout(self._settle_ms)
+
+                current_url = page.url
+                if page.locator("body").count() == 0:
+                    raise HqewPageUnavailable("RESULT_PAGE_BLOCKED", current_url)
+                html = page.content()
                 if "安全验证" in html or "captcha-reset" in html:
                     raise HqewPageUnavailable(
-                        "INTERACTIVE_CHALLENGE_REQUIRED", final_url
+                        "INTERACTIVE_CHALLENGE_REQUIRED", current_url
                     )
-                if response.status != 200 or not html.strip():
-                    raise HqewPageUnavailable("HTTP_RESPONSE_UNUSABLE", final_url)
-                return HqewPage(html, final_url, datetime.now(UTC))
+                if not _is_expected_result_url(current_url, mpn):
+                    raise HqewPageUnavailable(
+                        "RESULT_NAVIGATION_FAILED", current_url
+                    )
+                return HqewPage(html, current_url, datetime.now(UTC))
         except HqewPageUnavailable:
             raise
-        except (HTTPError, URLError, TimeoutError, OSError) as exc:
-            raise HqewPageUnavailable("HTTP_REQUEST_FAILED", url) from exc
+        except timeout_error as error:
+            raise HqewPageUnavailable("BROWSER_TIMEOUT", current_url) from error
+        except Exception as error:
+            raise HqewPageUnavailable("BROWSER_FAILURE", current_url) from error
 
 
 class _OfferParser(HTMLParser):

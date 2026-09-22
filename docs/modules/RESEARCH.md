@@ -106,12 +106,14 @@ Findchips is a V1 price source and may produce one `PriceCandidate`.
 - Only USD tiers are eligible in this adapter. Non-USD tiers are not converted or inferred.
 - Findchips contributes the lowest applicable USD unit price across eligible offers.
 - Research owns an injected USD/RMB quote boundary oriented as `1 USD = rate RMB/CNY`. The rate and all price math use positive `Decimal` values without hidden rounding or quantization.
-- HQEW reads its normal public first cloud-price result page. A safety challenge
-  is a technical source failure requiring later human access; Research does not
-  bypass it. For the current temporary operating policy, this failure is
-  non-blocking when another price source returns a valid candidate: Research
-  persists the available result and returns `PARTIAL_SUCCESS`. It does not wait
-  for a person to complete the challenge.
+- HQEW reads the first cloud-price result page through an Owner-authenticated
+  ordinary Chrome context connected only over loopback CDP. The client reuses
+  the browser context without reading, exporting, or persisting its cookies;
+  anonymous direct HTTP is not the production acquisition path. A safety
+  challenge encountered on this authenticated path remains a technical source
+  failure and is not bypassed. Under the temporary policy, that failure is
+  non-blocking when another source returns a valid candidate: Research persists
+  the available result and returns `PARTIAL_SUCCESS`.
 - LCSC reads only the primary product represented by the official product page.
   It selects the greatest displayed quantity break at or below the customer
   quantity. A valid displayed preorder or zero-stock price remains eligible.

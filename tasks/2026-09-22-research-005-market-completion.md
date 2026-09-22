@@ -81,8 +81,9 @@ Provide one Workflow-callable Research capability: `ResearchInput -> IC.net -> f
 ## acceptance
 
 - [x] Deterministic integration covers IC.net + four price sources + FX + aggregation + Excel and returns a complete result/row.
-- [x] HQEW strict-MPN fixture produces a valid RMB candidate; the bounded live
-  read reached an interactive safety challenge and failed closed without bypass.
+- [x] HQEW strict-MPN fixture produces a valid RMB candidate; production
+  acquisition reuses an Owner-authenticated ordinary Chrome context through a
+  loopback-only CDP boundary and fails closed if that path encounters a challenge.
 - [x] LCSC quantity-tier and preorder/out-of-stock behavior pass.
 - [x] Bom.Ai auth boundary, secret safety, calendar-month selection, and no-valid-price semantics pass.
 - [x] Lowest/second-lowest, 20%, single-price, partial failure, and exact no-match semantics pass.
@@ -109,8 +110,11 @@ Provide one Workflow-callable Research capability: `ResearchInput -> IC.net -> f
   a fixture.
 - LCSC official product page smoke for `MMBT2222ALT1G`, quantity 50, selected
   the displayed 50-unit USD tier and normalized it with the live ECB quote.
-- HQEW normal public cloud-price URL returned
-  `INTERACTIVE_CHALLENGE_REQUIRED`; no CAPTCHA/safety mechanism was bypassed.
+- The earlier anonymous direct HTTP smoke returned
+  `INTERACTIVE_CHALLENGE_REQUIRED`. Owner verification showed that the normal
+  login-then-search browser flow did not encounter that challenge, so anonymous
+  HTTP was removed as the production path and replaced with an authenticated
+  ordinary-Chrome loopback-CDP client. No CAPTCHA/safety mechanism is bypassed.
 - Owner selected the temporary non-blocking policy on 2026-09-22: an HQEW
   challenge does not pause the workflow when another valid price exists; the
   available result is persisted as `PARTIAL_SUCCESS`.
@@ -130,15 +134,19 @@ Provide one Workflow-callable Research capability: `ResearchInput -> IC.net -> f
   unmerged)
 - changed: HQEW, LCSC, Bom.Ai, ECB FX, aggregation, Research service, final Excel
   schema/idempotency, tests, and durable Research documentation.
-- verified: 136 tests passed after the concentrated hardening pass; Research
+- verified: 145 tests passed after the concentrated hardening and HQEW
+  authenticated-browser correction; Research
   ruff, compileall, and diff checks passed; live reads recorded above were not
   repeated during local persistence hardening.
 - hardening: canonical legacy Excel migration, full-snapshot stale-cell clearing,
   corrupted workbook and synthetic save failure conversion, package public API
-  cleanup, and canonical documentation synchronization.
-- limitations: HQEW live data may be unavailable behind its safety challenge,
-  but the selected temporary policy does not pause the workflow when another
-  valid price exists. Bom.Ai production login remains an injected
+  cleanup, authenticated HQEW Chrome-session acquisition, and canonical
+  documentation synchronization.
+- limitations: an authenticated HQEW live smoke from this worktree still needs
+  an already-running, Owner-authenticated Chrome instance with loopback CDP;
+  neither port 9222 nor 9333 was available during this correction. If that real
+  browser path encounters a challenge, the temporary policy does not pause the
+  workflow when another valid price exists. Bom.Ai production login remains an injected
   browser boundary because the canonical branch does not yet contain the
   Credential Provider implementation. Display precision and concurrent workbook
   locking remain `UNKNOWN`; exact decimal values are preserved.
