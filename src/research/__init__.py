@@ -15,6 +15,7 @@ from .excel_output import (
 from .finalize import finalize_research_result
 from .icnet import (
     BrandResolution,
+    CdpIcNetClient,
     IcNetAdapter,
     IcNetLogin,
     IcNetPage,
@@ -32,6 +33,7 @@ from .icnet import (
 
 __all__ = [
     "BrandResolution",
+    "CdpIcNetClient",
     "ExcelConsistencyError",
     "ExcelOutputError",
     "ExcelWriteError",
