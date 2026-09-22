@@ -58,9 +58,10 @@ _CERTIFICATION_RE = re.compile(
 class IcNetError(RuntimeError):
     """Base class for safe, non-secret IC.net adapter failures."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, source_url: str | None = None) -> None:
         super().__init__(code)
         self.code = code
+        self.source_url = source_url
 
 
 class IcNetPageUnavailable(IcNetError):
@@ -469,11 +470,14 @@ class PlaywrightIcNetClient:
                     submit.click()
                     page.wait_for_timeout(5_000)
                     if page.locator("body").count() == 0:
-                        raise IcNetPageUnavailable("RESULT_PAGE_BLOCKED")
+                        raise IcNetPageUnavailable("RESULT_PAGE_BLOCKED", page.url)
                     result_url = page.url
                     expected_path = f"/search/{quote(mpn, safe='')}.html"
                     if expected_path.casefold() not in result_url.casefold():
-                        raise IcNetPageUnavailable("RESULT_NAVIGATION_FAILED")
+                        raise IcNetPageUnavailable(
+                            "RESULT_NAVIGATION_FAILED",
+                            result_url,
+                        )
                     html = page.content()
                     return IcNetPage(html, result_url, datetime.now(UTC))
                 finally:
@@ -506,7 +510,6 @@ class IcNetAdapter:
     ) -> IcNetResult:
         try:
             page = self._client.fetch_first_page(target_mpn)
-            rows = parse_icnet_rows(page.html)
         except IcNetError as error:
             evidence = SourceEvidence(
                 source=ResearchSource.IC_NET,
@@ -514,7 +517,27 @@ class IcNetAdapter:
                 matched_mpn=None,
                 outcome=SourceOutcome.SOURCE_UNAVAILABLE,
                 captured_at=self._clock(),
-                source_url=None,
+                source_url=error.source_url,
+                fields=(EvidenceField("failure_code", error.code),),
+            )
+            return IcNetResult(
+                SourceResult(
+                    source=ResearchSource.IC_NET,
+                    outcome=SourceOutcome.SOURCE_UNAVAILABLE,
+                    evidence=evidence,
+                )
+            )
+
+        try:
+            rows = parse_icnet_rows(page.html)
+        except IcNetError as error:
+            evidence = SourceEvidence(
+                source=ResearchSource.IC_NET,
+                query_mpn=target_mpn,
+                matched_mpn=None,
+                outcome=SourceOutcome.SOURCE_UNAVAILABLE,
+                captured_at=page.captured_at,
+                source_url=page.url,
                 fields=(EvidenceField("failure_code", error.code),),
             )
             return IcNetResult(
