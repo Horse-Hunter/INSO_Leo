@@ -10,7 +10,7 @@ from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
 from typing import Protocol
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
 from .fx import UsdRmbProvider, UsdRmbQuote
@@ -58,8 +58,8 @@ class FindchipsPriceTier:
             raise ValueError("break_quantity must be greater than zero")
         if not isinstance(self.unit_price, Decimal):
             raise TypeError("unit_price must be Decimal")
-        if self.unit_price <= 0:
-            raise ValueError("unit_price must be greater than zero")
+        if not self.unit_price.is_finite() or self.unit_price <= 0:
+            raise ValueError("unit_price must be finite and greater than zero")
         if not self.currency.strip():
             raise ValueError("currency must not be blank")
 
@@ -95,6 +95,17 @@ def build_findchips_search_url(mpn: str) -> str:
     return f"{FINDCHIPS_SEARCH_URL}{quote(mpn.strip(), safe='')}"
 
 
+def _is_findchips_response_url(url: str) -> bool:
+    try:
+        hostname = urlsplit(url).hostname
+    except ValueError:
+        return False
+    if hostname is None:
+        return False
+    normalized = hostname.casefold()
+    return normalized == "findchips.com" or normalized.endswith(".findchips.com")
+
+
 class FindchipsHttpClient:
     """Bounded ordinary-HTTP client for one public Findchips search page."""
 
@@ -112,26 +123,32 @@ class FindchipsHttpClient:
         )
         try:
             with urlopen(request, timeout=self._timeout_seconds) as response:
+                response_url = response.geturl()
+                if not _is_findchips_response_url(response_url):
+                    raise FindchipsPageUnavailable(
+                        "UNEXPECTED_RESPONSE_HOST",
+                        response_url,
+                    )
                 if response.status != 200:
                     raise FindchipsPageUnavailable(
                         "HTTP_STATUS_UNEXPECTED",
-                        response.geturl(),
+                        response_url,
                     )
                 if response.headers.get_content_type() != "text/html":
                     raise FindchipsPageUnavailable(
                         "CONTENT_TYPE_UNEXPECTED",
-                        response.geturl(),
+                        response_url,
                     )
                 encoding = response.headers.get_content_charset() or "utf-8"
                 html = response.read().decode(encoding, errors="replace")
                 if not html.strip():
                     raise FindchipsPageUnavailable(
                         "EMPTY_RESPONSE",
-                        response.geturl(),
+                        response_url,
                     )
                 return FindchipsPage(
                     html=html,
-                    url=response.geturl(),
+                    url=response_url,
                     captured_at=datetime.now(UTC),
                 )
         except FindchipsPageUnavailable:
