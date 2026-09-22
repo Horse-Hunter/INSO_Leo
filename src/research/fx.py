@@ -21,8 +21,8 @@ class UsdRmbQuote:
     def __post_init__(self) -> None:
         if not isinstance(self.rate, Decimal):
             raise TypeError("rate must be Decimal")
-        if self.rate <= 0:
-            raise ValueError("rate must be greater than zero")
+        if not self.rate.is_finite() or self.rate <= 0:
+            raise ValueError("rate must be finite and greater than zero")
         if self.base_currency != "USD":
             raise ValueError("base_currency must be USD")
         if self.quote_currency not in {"RMB", "CNY"}:
