@@ -1,6 +1,6 @@
 # Task: RESEARCH-005 — Market Completion
 
-status: in_progress
+status: complete
 owner: Research Codex
 created: 2026-09-22
 updated: 2026-09-22
@@ -91,7 +91,7 @@ Provide one Workflow-callable Research capability: `ResearchInput -> IC.net -> f
 - [x] No secrets, website writes, fuzzy matching, or forbidden imports.
 - [x] All Research tests and ruff pass; bounded ECB, LCSC, HQEW, and Bom.Ai live
   reads were run. Volatile observations were not copied into fixtures.
-- [ ] Final diff is scoped; packet is complete; one unmerged PR is created.
+- [x] Final diff is scoped; packet is complete; one unmerged PR is created.
 
 ## verification
 
@@ -122,7 +122,9 @@ Provide one Workflow-callable Research capability: `ResearchInput -> IC.net -> f
 
 ## completion
 
-- status: pending PR
+- status: complete
+- pull request: https://github.com/Horse-Hunter/INSO_Leo/pull/6 (open,
+  unmerged)
 - changed: HQEW, LCSC, Bom.Ai, ECB FX, aggregation, Research service, final Excel
   schema/idempotency, tests, and durable Research documentation.
 - verified: 126 tests passed; Research ruff passed; compileall and diff checks
