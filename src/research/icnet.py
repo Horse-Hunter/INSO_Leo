@@ -490,6 +490,117 @@ class PlaywrightIcNetClient:
             raise IcNetPageUnavailable("BROWSER_FAILURE") from error
 
 
+class CdpIcNetClient:
+    """Read one result page through an Owner-approved ordinary Chrome session."""
+
+    def __init__(
+        self,
+        *,
+        cdp_url: str = "http://127.0.0.1:9222",
+        timeout_ms: int = 45_000,
+        settle_ms: int = 5_000,
+        navigate: bool = True,
+        playwright_factory: Callable[[], object] | None = None,
+    ) -> None:
+        self._cdp_url = cdp_url
+        self._timeout_ms = timeout_ms
+        self._settle_ms = settle_ms
+        self._navigate = navigate
+        self._playwright_factory = playwright_factory
+
+    def fetch_first_page(self, mpn: str) -> IcNetPage:
+        factory = self._playwright_factory
+        timeout_error: type[Exception] = TimeoutError
+        if factory is None:
+            try:
+                from playwright.sync_api import (
+                    TimeoutError as PlaywrightTimeoutError,
+                )
+                from playwright.sync_api import sync_playwright
+            except ImportError as error:
+                raise IcNetPageUnavailable("PLAYWRIGHT_NOT_INSTALLED") from error
+            factory = sync_playwright
+            timeout_error = PlaywrightTimeoutError
+
+        target_url = f"{ICNET_HOME_URL}search/{quote(mpn, safe='')}.html"
+        current_url: str | None = None
+        try:
+            with factory() as playwright:  # type: ignore[attr-defined]
+                browser = playwright.chromium.connect_over_cdp(
+                    self._cdp_url,
+                    timeout=self._timeout_ms,
+                )
+                if not browser.contexts:
+                    raise IcNetPageUnavailable("CDP_CONTEXT_UNAVAILABLE")
+                context = browser.contexts[0]
+                pages = list(context.pages)
+                exact_pages = [
+                    page
+                    for page in pages
+                    if page.url.rstrip("/").casefold()
+                    == target_url.rstrip("/").casefold()
+                ]
+
+                if not self._navigate:
+                    if not exact_pages:
+                        raise IcNetPageUnavailable("CDP_TARGET_PAGE_NOT_OPEN")
+                    page = exact_pages[0]
+                else:
+                    icnet_pages = [
+                        page
+                        for page in pages
+                        if "ic.net.cn" in page.url.casefold()
+                    ]
+                    if exact_pages:
+                        page = exact_pages[0]
+                    elif icnet_pages:
+                        page = icnet_pages[0]
+                    elif pages:
+                        page = pages[0]
+                    else:
+                        page = context.new_page()
+                    page.goto(
+                        target_url,
+                        wait_until="domcontentloaded",
+                        timeout=self._timeout_ms,
+                    )
+                    page.wait_for_load_state(
+                        "load",
+                        timeout=self._timeout_ms,
+                    )
+                    page.wait_for_timeout(self._settle_ms)
+
+                current_url = page.url
+                if page.locator("body").count() == 0:
+                    raise IcNetPageUnavailable(
+                        "RESULT_PAGE_BLOCKED",
+                        current_url,
+                    )
+                expected_path = f"/search/{quote(mpn, safe='')}.html"
+                if expected_path.casefold() not in current_url.casefold():
+                    raise IcNetPageUnavailable(
+                        "RESULT_NAVIGATION_FAILED",
+                        current_url,
+                    )
+                return IcNetPage(
+                    page.content(),
+                    current_url,
+                    datetime.now(UTC),
+                )
+        except IcNetPageUnavailable:
+            raise
+        except timeout_error as error:
+            raise IcNetPageUnavailable(
+                "BROWSER_TIMEOUT",
+                current_url,
+            ) from error
+        except Exception as error:
+            raise IcNetPageUnavailable(
+                "BROWSER_FAILURE",
+                current_url,
+            ) from error
+
+
 class IcNetAdapter:
     """Build Research-owned IC.net evidence without price candidates."""
 
