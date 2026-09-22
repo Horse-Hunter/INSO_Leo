@@ -60,6 +60,11 @@ class FailingFxProvider:
         raise RuntimeError("synthetic provider failure")
 
 
+class InvalidFxProvider:
+    def get_quote(self) -> object:
+        return object()
+
+
 def _fields(result: object) -> dict[str, object]:
     source_result = result
     return {
@@ -282,10 +287,16 @@ def test_technical_failure_is_source_unavailable(
     assert _fields(result)["failure_code"] == failure_code
 
 
-def test_fx_provider_failure_is_source_unavailable() -> None:
+@pytest.mark.parametrize(
+    "provider",
+    [FailingFxProvider(), InvalidFxProvider()],
+)
+def test_fx_provider_failure_or_invalid_quote_is_source_unavailable(
+    provider: object,
+) -> None:
     result = FindchipsAdapter(
         FakeClient(FIXTURE.read_text(encoding="utf-8")),
-        FailingFxProvider(),
+        provider,  # type: ignore[arg-type]
     ).search("ABC-123", 50)
 
     assert result.outcome is SourceOutcome.SOURCE_UNAVAILABLE
