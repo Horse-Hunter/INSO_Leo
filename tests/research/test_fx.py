@@ -23,7 +23,7 @@ def test_usd_rmb_quote_is_positive_decimal_and_immutable() -> None:
         quote.rate = Decimal("7.20")  # type: ignore[misc]
 
 
-@pytest.mark.parametrize("rate", [Decimal("0"), Decimal("-1")])
+@pytest.mark.parametrize("rate", [Decimal(0), Decimal(-1)])
 def test_usd_rmb_quote_rejects_non_positive_rate(rate: Decimal) -> None:
     with pytest.raises(ValueError, match="greater than zero"):
         UsdRmbQuote(rate, CAPTURED_AT, "synthetic-test-only")
