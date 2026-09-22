@@ -4,10 +4,10 @@ import pytest
 from openpyxl import Workbook, load_workbook
 
 from src.research.excel_output import (
-    ExcelConsistencyError,
     IMPORTANCE_HEADER,
     INQUIRY_ID_HEADER,
     REMARKS_HEADER,
+    ExcelConsistencyError,
     ResearchExcelOutput,
 )
 
@@ -42,9 +42,10 @@ def test_upsert_is_idempotent_and_hides_inquiry_id(tmp_path: Path) -> None:
     assert matching_rows == [2]
     assert worksheet.cell(2, importance_col).value == "重要"
     assert worksheet.cell(2, remarks_col).value == "updated"
-    assert worksheet.column_dimensions[
-        worksheet.cell(1, inquiry_col).column_letter
-    ].hidden is True
+    assert (
+        worksheet.column_dimensions[worksheet.cell(1, inquiry_col).column_letter].hidden
+        is True
+    )
 
 
 @pytest.mark.parametrize(

@@ -1,11 +1,20 @@
-"""Public Research V1 contracts and local output helpers."""
+"""Public Research V1 contracts, adapters, aggregation, and output helpers."""
 
-from .contracts import (
-    ResearchInput,
-    ResearchReasonCode,
-    ResearchResult,
-    ResearchStatus,
+from .aggregation import PriceAggregation, aggregate_price_results
+from .bom_ai import (
+    BomAiAdapter,
+    BomAiCapture,
+    BomAiClientError,
+    BomAiCredentialedClient,
+    BomAiCredentialProvider,
+    BomAiLogin,
+    BomAiPriceRecord,
+    BomAiRawPage,
+    calendar_month_cutoff,
+    select_bom_ai_price,
 )
+from .contracts import ResearchInput, ResearchReasonCode, ResearchResult, ResearchStatus
+from .ecb_fx import EcbDailyUsdRmbProvider, EcbFxError
 from .excel_output import (
     ExcelConsistencyError,
     ExcelOutputError,
@@ -15,6 +24,7 @@ from .excel_output import (
 from .finalize import finalize_research_result
 from .findchips import FindchipsAdapter, FindchipsHttpClient
 from .fx import UsdRmbProvider, UsdRmbQuote
+from .hqew import HqewAdapter, HqewHttpClient
 from .icnet import (
     BrandResolution,
     CdpIcNetClient,
@@ -31,15 +41,29 @@ from .icnet import (
     select_brand_by_frequency,
     sum_certified_stock,
 )
+from .lcsc import LcscAdapter, LcscHttpClient
+from .service import ResearchExecution, ResearchService
 
 __all__ = [
+    "BomAiAdapter",
+    "BomAiCapture",
+    "BomAiClientError",
+    "BomAiCredentialProvider",
+    "BomAiCredentialedClient",
+    "BomAiLogin",
+    "BomAiPriceRecord",
+    "BomAiRawPage",
     "BrandResolution",
     "CdpIcNetClient",
+    "EcbDailyUsdRmbProvider",
+    "EcbFxError",
     "ExcelConsistencyError",
     "ExcelOutputError",
     "ExcelWriteError",
     "FindchipsAdapter",
     "FindchipsHttpClient",
+    "HqewAdapter",
+    "HqewHttpClient",
     "IcNetAdapter",
     "IcNetLogin",
     "IcNetPage",
@@ -47,17 +71,25 @@ __all__ = [
     "IcNetParseError",
     "IcNetResult",
     "IcNetRow",
+    "LcscAdapter",
+    "LcscHttpClient",
+    "PriceAggregation",
     "ResearchExcelOutput",
+    "ResearchExecution",
     "ResearchInput",
     "ResearchReasonCode",
     "ResearchResult",
+    "ResearchService",
     "ResearchStatus",
     "UsdRmbProvider",
     "UsdRmbQuote",
+    "aggregate_price_results",
+    "calendar_month_cutoff",
     "classify_stock",
     "extract_manufacturer_display",
     "finalize_research_result",
     "parse_icnet_rows",
+    "select_bom_ai_price",
     "select_brand_by_frequency",
     "sum_certified_stock",
 ]

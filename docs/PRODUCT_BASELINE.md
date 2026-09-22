@@ -76,10 +76,24 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 - Allowed Research statuses: `SUCCESS`, `PARTIAL_SUCCESS`, `MANUAL_REVIEW_REQUIRED`, and `RETRYABLE_FAILURE`.
 - Confirmed sources: IC.net, Findchips, 华强电子网 / HQEW, LCSC / 立创商城, and Bom.Ai.
 - Bom.Ai requires login and may obtain authorized credentials through the project Credential Provider.
-- Bom.Ai price validity is one month. If valid prices exist within the most recent 7 days, use the lowest valid 7-day price; otherwise, if valid prices exist within one month, use the lowest valid one-month price. Prices older than one month are not valid Bom.Ai candidates.
+- Bom.Ai price validity is one calendar month: use the same wall-clock time in
+  the previous month, clamped to that month's final day. If valid prices exist
+  within the most recent 7 days, use the lowest valid 7-day price; otherwise,
+  use the lowest valid calendar-month price. Older prices are not valid.
+- Research uses ECB daily reference rates as the live USD/RMB source. It derives
+  CNY per USD through same-date USD/EUR and CNY/EUR observations using exact
+  decimal arithmetic. There is no fallback FX rate or hidden rounding.
+- The Research market reference is the lowest normalized RMB price. It adds a
+  newline and the second-lowest price plus source only when the lowest is at
+  least 20% lower (`lowest <= second * 0.80`). Estimated total is lowest unit
+  price times quantity using exact decimal arithmetic.
 - Research uses `importance_raw` only for the V1 Excel `重要等级` display: exact `A` / `B` -> `重要`; every other value -> `普通`. This display rule must not affect market research behavior and must not be treated as the future INSO importance rule.
 - Research does not access Google Sheets and does not depend on `sheets`, `workflow`, `inso`, or `quotation`.
-- The project-local `调研价格.xlsx` is the official persisted Research V1 output. Its hidden `_inquiry_id` field is the technical idempotency key; retry or crash recovery must not create duplicate normal records.
+- The project-local `调研价格.xlsx` is the official persisted Research V1 output.
+  Its visible columns, in order, are `型号`, `品牌`, `数量`, `重要等级`,
+  `货量标识`, `预计订单总价`, `市场最低参考价`, and `备注`. Its hidden
+  `_inquiry_id` field is the technical idempotency key; retry or crash recovery
+  must not create duplicate normal records.
 - `SUCCESS` and `PARTIAL_SUCCESS` may be returned only after the required Excel output succeeds. `PARTIAL_SUCCESS` also requires at least one valid price. Excel write failure returns `RETRYABLE_FAILURE`.
 - `NO_MATCHING_PRODUCT` maps to `MANUAL_REVIEW_REQUIRED` and is valid only when Findchips, HQEW, LCSC, and Bom.Ai all query successfully and none has a strict MPN match. Technical failure is not “no match”; a strict Bom.Ai match is not `NO_MATCHING_PRODUCT` even when pricing is older than two months, unavailable, or absent. Product existence and price validity are distinct.
 - Do not create a separate Excel/storage module unless later evidence shows a stable shared need across modules.
@@ -99,7 +113,8 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 
 - Supported products or services: `UNKNOWN`
 - Markets, currencies, taxes, and locales: `UNKNOWN`
-- Detailed price-evidence acceptance and source-quality rules: `UNKNOWN`
+- Detailed source-quality rules beyond the confirmed strict-MPN, quantity-tier,
+  time-window, and source-specific price rules: `UNKNOWN`
 - INSO system definition, ownership, endpoints, and access method: `UNKNOWN`
 - Inquiry fields beyond the confirmed ID, Research input, and V1 state set; detailed transition guards and failure semantics: `UNKNOWN`
 - Quotation formulas, rounding, margins, approvals, and validity periods: `UNKNOWN`
@@ -107,7 +122,8 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 - Workflow implementation details not confirmed above, including SQLite schema/migrations, duplicate-prevention key/algorithm, detailed state-transition guards, scheduling mechanism, Research completion-confirmation contract, and operational recovery details: `UNKNOWN`
 - Google Sheet spreadsheet/worksheet configuration, identifying-snapshot fields, record-relocation matching algorithm, OAuth details, and writable fields beyond the confirmed Brand rule: `UNKNOWN`
 - Research input normalization/validation rules beyond the confirmed `importance_raw` display mapping, price-item schema, status-specific field requirements, and reason-code catalog beyond confirmed cases: `UNKNOWN`
-- Research Excel business columns beyond hidden `_inquiry_id` and confirmed visible `重要等级` / `备注`, workbook layout/update/locking mechanics, and retention policy: `UNKNOWN`
+- Research workbook layout beyond the confirmed columns, concurrent locking
+  mechanics, display precision, and retention policy: `UNKNOWN`
 
 ## Data and compliance
 

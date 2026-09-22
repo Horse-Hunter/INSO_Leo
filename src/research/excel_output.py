@@ -4,14 +4,32 @@ from __future__ import annotations
 
 import os
 import tempfile
+from decimal import Decimal
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Alignment
 from openpyxl.workbook.workbook import Workbook as OpenpyxlWorkbook
 
-INQUIRY_ID_HEADER = "_inquiry_id"
+MPN_HEADER = "型号"
+BRAND_HEADER = "品牌"
+QUANTITY_HEADER = "数量"
 IMPORTANCE_HEADER = "重要等级"
+STOCK_HEADER = "货量标识"
+ESTIMATED_TOTAL_HEADER = "预计订单总价"
+MARKET_REFERENCE_HEADER = "市场最低参考价"
 REMARKS_HEADER = "备注"
+INQUIRY_ID_HEADER = "_inquiry_id"
+VISIBLE_HEADERS = (
+    MPN_HEADER,
+    BRAND_HEADER,
+    QUANTITY_HEADER,
+    IMPORTANCE_HEADER,
+    STOCK_HEADER,
+    ESTIMATED_TOTAL_HEADER,
+    MARKET_REFERENCE_HEADER,
+    REMARKS_HEADER,
+)
 DEFAULT_SHEET_TITLE = "Research"
 
 
@@ -28,12 +46,15 @@ class ExcelWriteError(ExcelOutputError):
 
 
 def importance_display_value(importance_raw: str | None) -> str:
-    """Map raw Sheet importance to the V1 Excel-only display value."""
     return "重要" if importance_raw in {"A", "B"} else "普通"
 
 
+def _decimal_text(value: Decimal | None) -> str | None:
+    return None if value is None else format(value, "f")
+
+
 class ResearchExcelOutput:
-    """Persist one logical Research record per inquiry_id."""
+    """Persist one logical complete Research record per inquiry_id."""
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -44,10 +65,17 @@ class ResearchExcelOutput:
         *,
         importance_raw: str | None,
         remarks: str | None = None,
+        mpn: str | None = None,
+        brand: str | None = None,
+        quantity: int | None = None,
+        stock_label: str | None = None,
+        estimated_total: Decimal | None = None,
+        market_reference: str | None = None,
     ) -> None:
         workbook = self._load_or_create()
         worksheet = workbook.active
-        inquiry_col, importance_col, remarks_col = self._ensure_schema(workbook)
+        columns = self._ensure_schema(workbook)
+        inquiry_col = columns[INQUIRY_ID_HEADER]
 
         matching_rows = [
             row
@@ -58,20 +86,27 @@ class ResearchExcelOutput:
             raise ExcelConsistencyError(
                 f"duplicate {INQUIRY_ID_HEADER} rows for inquiry_id"
             )
+        row = matching_rows[0] if matching_rows else worksheet.max_row + 1
+        worksheet.cell(row=row, column=inquiry_col, value=inquiry_id)
 
-        if matching_rows:
-            row = matching_rows[0]
-        else:
-            row = worksheet.max_row + 1
-            worksheet.cell(row=row, column=inquiry_col, value=inquiry_id)
-
-        worksheet.cell(
-            row=row,
-            column=importance_col,
-            value=importance_display_value(importance_raw),
-        )
+        values: dict[str, object | None] = {
+            IMPORTANCE_HEADER: importance_display_value(importance_raw),
+            MPN_HEADER: mpn,
+            BRAND_HEADER: brand,
+            QUANTITY_HEADER: quantity,
+            STOCK_HEADER: stock_label,
+            ESTIMATED_TOTAL_HEADER: _decimal_text(estimated_total),
+            MARKET_REFERENCE_HEADER: market_reference,
+        }
+        for header, value in values.items():
+            if value is not None:
+                worksheet.cell(row=row, column=columns[header], value=value)
         if remarks is not None:
-            worksheet.cell(row=row, column=remarks_col, value=remarks)
+            worksheet.cell(row=row, column=columns[REMARKS_HEADER], value=remarks)
+        if market_reference is not None:
+            worksheet.cell(
+                row=row, column=columns[MARKET_REFERENCE_HEADER]
+            ).alignment = Alignment(wrap_text=True)
 
         self._save_atomically(workbook)
 
@@ -79,34 +114,36 @@ class ResearchExcelOutput:
         if self.path.exists():
             try:
                 return load_workbook(self.path)
-            except Exception as exc:  # openpyxl exposes multiple parse errors
+            except (OSError, ValueError) as exc:
                 raise ExcelOutputError("unable to load Research workbook") from exc
-
         workbook = Workbook()
         workbook.active.title = DEFAULT_SHEET_TITLE
         return workbook
 
-    def _ensure_schema(self, workbook: OpenpyxlWorkbook) -> tuple[int, int, int]:
+    def _ensure_schema(self, workbook: OpenpyxlWorkbook) -> dict[str, int]:
         worksheet = workbook.active
-        inquiry_col = self._find_unique_header(worksheet, INQUIRY_ID_HEADER)
-        if inquiry_col is None:
-            inquiry_col = self._next_header_column(worksheet)
-            worksheet.cell(row=1, column=inquiry_col, value=INQUIRY_ID_HEADER)
+        blank = (
+            worksheet.max_row == 1
+            and worksheet.max_column == 1
+            and worksheet.cell(row=1, column=1).value is None
+        )
+        if blank:
+            for index, header in enumerate(
+                (*VISIBLE_HEADERS, INQUIRY_ID_HEADER), start=1
+            ):
+                worksheet.cell(row=1, column=index, value=header)
 
-        importance_col = self._find_unique_header(worksheet, IMPORTANCE_HEADER)
-        if importance_col is None:
-            importance_col = self._next_header_column(worksheet)
-            worksheet.cell(row=1, column=importance_col, value=IMPORTANCE_HEADER)
-
-        remarks_col = self._find_unique_header(worksheet, REMARKS_HEADER)
-        if remarks_col is None:
-            remarks_col = self._next_header_column(worksheet)
-            worksheet.cell(row=1, column=remarks_col, value=REMARKS_HEADER)
-
+        columns: dict[str, int] = {}
+        for header in (*VISIBLE_HEADERS, INQUIRY_ID_HEADER):
+            column = self._find_unique_header(worksheet, header)
+            if column is None:
+                column = worksheet.max_column + 1
+                worksheet.cell(row=1, column=column, value=header)
+            columns[header] = column
         worksheet.column_dimensions[
-            worksheet.cell(row=1, column=inquiry_col).column_letter
+            worksheet.cell(row=1, column=columns[INQUIRY_ID_HEADER]).column_letter
         ].hidden = True
-        return inquiry_col, importance_col, remarks_col
+        return columns
 
     @staticmethod
     def _find_unique_header(worksheet, header: str) -> int | None:
@@ -118,16 +155,6 @@ class ResearchExcelOutput:
         if len(columns) > 1:
             raise ExcelConsistencyError(f"duplicate Excel header: {header}")
         return columns[0] if columns else None
-
-    @staticmethod
-    def _next_header_column(worksheet) -> int:
-        if (
-            worksheet.max_row == 1
-            and worksheet.max_column == 1
-            and worksheet.cell(row=1, column=1).value is None
-        ):
-            return 1
-        return worksheet.max_column + 1
 
     def _save_atomically(self, workbook: OpenpyxlWorkbook) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -141,7 +168,7 @@ class ResearchExcelOutput:
         try:
             workbook.save(temp_path)
             os.replace(temp_path, self.path)
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             try:
                 temp_path.unlink(missing_ok=True)
             finally:
