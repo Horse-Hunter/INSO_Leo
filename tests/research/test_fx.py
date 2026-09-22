@@ -29,6 +29,15 @@ def test_usd_rmb_quote_rejects_non_positive_rate(rate: Decimal) -> None:
         UsdRmbQuote(rate, CAPTURED_AT, "synthetic-test-only")
 
 
+@pytest.mark.parametrize(
+    "rate",
+    [Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity")],
+)
+def test_usd_rmb_quote_rejects_non_finite_rate(rate: Decimal) -> None:
+    with pytest.raises(ValueError, match="finite"):
+        UsdRmbQuote(rate, CAPTURED_AT, "synthetic-test-only")
+
+
 def test_usd_rmb_quote_rejects_float_rate() -> None:
     with pytest.raises(TypeError, match="Decimal"):
         UsdRmbQuote(7.1, CAPTURED_AT, "synthetic-test-only")  # type: ignore[arg-type]
