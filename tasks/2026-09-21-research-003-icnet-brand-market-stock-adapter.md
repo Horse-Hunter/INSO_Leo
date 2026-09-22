@@ -3,7 +3,7 @@
 status: blocked
 owner: Research Codex
 created: 2026-09-21
-updated: 2026-09-21
+updated: 2026-09-22
 
 ## problem
 
@@ -260,10 +260,13 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
   - Normal account/password login succeeded without CAPTCHA, SMS/OTP, QR confirmation, or device approval and redirected to the exact-model result URL.
   - The authenticated result response returned HTTP 200 but contained only `https://www.ic.net.cn/media/js/q.js?v=1616807238`: after 30 seconds the complete document still had no `<body>`, no result rows, and an HTML payload length of 108 characters.
   - The same behavior occurred with Playwright's installed Chromium and the standard installed Chrome channel in headed mode, without stealth or browser-fingerprint modification.
+  - Dedicated headed re-verification on 2026-09-22 confirmed the login automation itself: `username_field_found`, `username_filled`, `password_field_found`, `password_filled`, `login_clicked`, and `logged_in_marker_found` were all true; the resulting URL was the IC.net homepage. No credential value, cookie, or token was logged.
+  - In that same authenticated standard-Chrome session, submitting the exact-model homepage search for `STM32F103C8T6` reached the expected result URL but produced no `<body>`, no table rows, and no target-MPN node after a 20-second wait.
+  - Owner-provided `icnet_login_sample.html` (SHA-256 `66c6a3acc5acdb2fe8d9bbcc9f5ce43112d455c78463169fd5bc2af06f72967d`, 303802 bytes) was inspected only as local input. Its page structure is the IC.net membership login page and contains zero occurrences of `SSCP`, `ICCP`, or `STM32F103C8T6`; it is not a logged-in result-page fixture and was not committed.
   - No CAPTCHA interaction, anti-bot bypass, cookie persistence/reuse, challenge-script analysis, or IC.net write action was attempted.
   - Python 3.12 pytest and ruff were not run because implementation stopped before code changes when the authenticated live path remained blocked.
 - limitations:
   - Authorized normal login works, but the authenticated result URL does not deliver parseable business HTML to an unmodified Playwright browser. It returns a script-only document consistent with an anti-automation challenge.
   - Obtaining result rows would require a permitted site-supported access path or behavior beyond the authorized normal browser flow. Hiding automation, modifying browser fingerprints, or reverse-engineering/bypassing the challenge is prohibited.
-  - RESEARCH-003 remains blocked pending an Owner-provided site-supported read-only access method or sanitized representative result HTML for parser work; live adapter completion would still require a permitted live result path.
+  - RESEARCH-003 remains blocked pending an Owner-provided site-supported read-only access method or an actual post-login result-page HTML sample. The replacement sample must preserve only the minimum result-row structure needed for displayed MPN, manufacturer, quantity, and SSCP/ICCP indicators and must omit supplier/contact details; live adapter completion would still require a permitted live result path.
   - Findchips, HQEW, LCSC, Bom.Ai, FX, final aggregation, Excel business-row completion, and Research orchestration remain future tasks.
