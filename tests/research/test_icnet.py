@@ -316,17 +316,52 @@ def _cdp_client(
     pages: list[FakeCdpPage],
     *,
     navigate: bool,
+    cdp_url: str = "http://127.0.0.1:9333",
 ) -> tuple[CdpIcNetClient, FakeChromium]:
     context = FakeCdpContext(pages)
     chromium = FakeChromium(FakeCdpBrowser(context))
     client = CdpIcNetClient(
-        cdp_url="http://127.0.0.1:9333",
+        cdp_url=cdp_url,
         timeout_ms=1234,
         settle_ms=0,
         navigate=navigate,
         playwright_factory=lambda: FakePlaywright(chromium),
     )
     return client, chromium
+
+
+@pytest.mark.parametrize(
+    "cdp_url",
+    [
+        "http://localhost:9222",
+        "http://127.0.0.1:9222",
+        "http://[::1]:9222",
+    ],
+)
+def test_cdp_client_accepts_loopback_endpoints(cdp_url: str) -> None:
+    target_url = "https://www.ic.net.cn/search/ABC-123.html"
+    page = FakeCdpPage(target_url, FIXTURE.read_text(encoding="utf-8"))
+    client, chromium = _cdp_client(
+        [page],
+        navigate=False,
+        cdp_url=cdp_url,
+    )
+
+    client.fetch_first_page("ABC-123")
+
+    assert chromium.connect_calls == [(cdp_url, 1234)]
+
+
+def test_cdp_client_rejects_remote_endpoint() -> None:
+    with pytest.raises(
+        IcNetPageUnavailable,
+        match="CDP_REMOTE_ENDPOINT_FORBIDDEN",
+    ):
+        _cdp_client(
+            [],
+            navigate=True,
+            cdp_url="http://192.0.2.10:9222",
+        )
 
 
 def test_cdp_client_attach_only_reads_exact_existing_page() -> None:
@@ -344,16 +379,35 @@ def test_cdp_client_attach_only_reads_exact_existing_page() -> None:
 
 def test_cdp_client_navigation_reuses_attached_normal_chrome_page() -> None:
     page = FakeCdpPage(
-        "https://www.ic.net.cn/",
+        "https://member.ic.net.cn/login.php",
         FIXTURE.read_text(encoding="utf-8"),
     )
     client, _ = _cdp_client([page], navigate=True)
 
-    captured = client.fetch_first_page("ABC-123")
+    captured = client.fetch_first_page("  ABC-123  ")
 
     target_url = "https://www.ic.net.cn/search/ABC-123.html"
     assert captured.url == target_url
     assert page.goto_calls == [(target_url, "domcontentloaded", 1234)]
+
+
+def test_cdp_client_navigation_does_not_reuse_unrelated_page() -> None:
+    unrelated = FakeCdpPage(
+        "https://evil.example/?next=ic.net.cn",
+        FIXTURE.read_text(encoding="utf-8"),
+    )
+    client, chromium = _cdp_client([unrelated], navigate=True)
+
+    captured = client.fetch_first_page("ABC-123")
+
+    target_url = "https://www.ic.net.cn/search/ABC-123.html"
+    context = chromium.browser.contexts[0]
+    assert captured.url == target_url
+    assert unrelated.goto_calls == []
+    assert len(context.pages) == 2
+    assert context.pages[1].goto_calls == [
+        (target_url, "domcontentloaded", 1234)
+    ]
 
 
 def test_cdp_client_attach_only_requires_target_page_to_be_open() -> None:
