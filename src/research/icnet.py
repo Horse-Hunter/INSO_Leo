@@ -9,8 +9,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from html.parser import HTMLParser
+from ipaddress import ip_address
 from typing import Protocol
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from .source_contracts import (
     EvidenceField,
@@ -25,6 +26,26 @@ ICNET_SITE_ID = "ic.net.cn"
 ICNET_HOME_URL = "https://www.ic.net.cn/"
 ICNET_LOGIN_URL = "https://member.ic.net.cn/login.php"
 ICNET_USER_AGENT = "INSO-Leo-Research/1.0 (read-only IC.net adapter)"
+
+
+
+def _is_loopback_hostname(hostname: str) -> bool:
+    if hostname.casefold() == "localhost":
+        return True
+    try:
+        return ip_address(hostname).is_loopback
+    except ValueError:
+        return False
+
+
+
+def _is_icnet_url(url: str) -> bool:
+    hostname = urlsplit(url).hostname
+    if hostname is None:
+        return False
+    normalized = hostname.casefold()
+    return normalized == "ic.net.cn" or normalized.endswith(".ic.net.cn")
+
 
 _VOID_ELEMENTS = frozenset(
     {
@@ -502,6 +523,9 @@ class CdpIcNetClient:
         navigate: bool = True,
         playwright_factory: Callable[[], object] | None = None,
     ) -> None:
+        hostname = urlsplit(cdp_url).hostname
+        if hostname is None or not _is_loopback_hostname(hostname):
+            raise IcNetPageUnavailable("CDP_REMOTE_ENDPOINT_FORBIDDEN")
         self._cdp_url = cdp_url
         self._timeout_ms = timeout_ms
         self._settle_ms = settle_ms
@@ -509,6 +533,7 @@ class CdpIcNetClient:
         self._playwright_factory = playwright_factory
 
     def fetch_first_page(self, mpn: str) -> IcNetPage:
+        mpn = mpn.strip()
         factory = self._playwright_factory
         timeout_error: type[Exception] = TimeoutError
         if factory is None:
@@ -549,14 +574,12 @@ class CdpIcNetClient:
                     icnet_pages = [
                         page
                         for page in pages
-                        if "ic.net.cn" in page.url.casefold()
+                        if _is_icnet_url(page.url)
                     ]
                     if exact_pages:
                         page = exact_pages[0]
                     elif icnet_pages:
                         page = icnet_pages[0]
-                    elif pages:
-                        page = pages[0]
                     else:
                         page = context.new_page()
                     page.goto(
