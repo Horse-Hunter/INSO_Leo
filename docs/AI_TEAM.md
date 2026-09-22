@@ -1,52 +1,70 @@
 # AI Team
 
-## 角色层级
-
-- **Human Owner** → 最终业务决策人。
-- **Architecture / CEO Chat** → 项目总指挥和总架构；负责模块划分、跨模块 Contract、架构 Gate、公共基础设施和总体协调。架构发生变化时，负责要求 Architecture Codex 同步 Repo。
-- **Architecture Codex** → 按 Architecture Chat 已确认的决定修改架构相关 Repo 文件；不自行决定新的项目架构。
-- **Requirements Codex** → 将 Human Owner 的业务描述整理成模块需求文档；不负责最终架构决策或业务实现。
-- **Utility Codex** → 处理密码箱、辅助工具及其他项目杂项；涉及公共架构时必须回到 Architecture Chat Review。
-- **Module Chats** → Research、Sheets、Workflow、INSO、Quotation。每个 Module Chat 是该模块的长期 Coordinator / Product Analyst / Reviewer，管理本模块需求、Task 和 Review；跨模块变化提交 Architecture Chat 决策。
-- **Task Codex** → 由对应 Module Chat 指挥；一次只执行一个明确 Task Packet；不自行扩大 Scope 或修改跨模块架构。
-
-## 决策原则
-
-- Human Owner → 最终业务决策。
-- Architecture Chat → 项目架构与跨模块决策。
-- Module Chat → 模块内部设计决策。
-- Codex → 执行已经确认的 Task，不作为架构决策者。
-
-## Repo / Chat 事实优先级
+## Organization and authority
 
 ```text
-当前 GitHub main 的正式项目事实
->
-已确认但尚待 Repo 固化的 Architecture Decision
->
-Chat 历史摘要或推断
+Human Owner
+└─ CEO / Architecture Chat
+   ├─ Architecture Codex
+   ├─ Requirements / Browser-Recon
+   ├─ Utility Codex
+   └─ Module Chats
+      └─ corresponding Module Codex
 ```
 
-架构变更确认后，应尽快同步 Repo，避免长期依赖 Chat 上下文。
+- **Human Owner:** final business decisions; no duty to remember module, institution, or Codex names.
+- **CEO Chat:** project architecture, cross-module decisions, public infrastructure, and coordination; knows its direct organizations.
+- **Architecture Codex:** applies CEO-confirmed architecture changes to canonical Repo files; does not invent architecture.
+- **Requirements / Browser-Recon:** turns Owner needs and observed browser flows into verified requirements; does not make final architecture decisions.
+- **Utility Codex:** handles approved infrastructure utilities and miscellany; escalates public-architecture impact.
+- **Module Chat:** module coordinator, product analyst, Task issuer, and reviewer; decides internal design within canonical boundaries.
+- **Module Codex:** executes its Module Chat’s Task autonomously within scope and reports back for Review.
 
-## Chat 交接
+Formal module, Module Chat, and Module Codex names are defined only in `MODULE_INDEX.md`.
 
-当长期 Architecture Chat 或 Module Chat 因上下文过长不适合继续工作时，应先生成交接提示词，再由新 Chat：
+## Identity declaration
 
-1. 读取 GitHub 当前事实。
-2. 读取交接摘要。
-3. 继续原职责。
+The superior’s first message to every new child Chat/Codex must state: role, module, direct superior, responsibilities, autonomous decisions, mandatory escalations, default mode, required files, and reporting target. A window without that declaration must ask for it and must not guess its identity.
 
-不要仅依赖旧 Chat 的历史上下文。
+## FAST_V1
 
-## Communication Discipline
+Default to stage-sized Tasks. Once the business goal is clear, Codex completes diagnosis → implementation → tests → fixes → smoke → self-review → commit → push without pausing over ordinary technical details. Module Chat reviews the completed stage rather than supervising each step.
 
-默认使用精简可复制模式；不重复已确认背景；Draft/Review 优先输出 Delta；接近单次复制不便的长度时主动拆 Part 1/Part 2；给 CEO Review 优先纯文字并突出结论、变化、`UNKNOWN`、需决策事项和下一步。
+V1 may trade perfect abstraction, exhaustive edge tests, cosmetic polish, premature extensibility, and optional documentation for speed. It may not trade secret safety, production-data protection, duplicate-write/send prevention, obvious dirty-data protection, module boundaries, or authorization for real side effects.
 
-## Operating Model: Module Autonomy + Necessary Escalation
+## Autonomy and escalation
 
-- Module Chats autonomously manage their internal requirements, Tasks, Codex execution, and Review.
-- Ordinary module-internal implementation questions do not require escalation through CEO / Architecture Chat.
-- Escalate only cross-module Contracts, module-boundary changes, shared infrastructure, security or Credential boundaries, product-version scope, and major architecture disputes.
-- Task Codex reports to and accepts Review from the corresponding Module Chat by default.
-- Architecture Codex should batch confirmed Repo synchronization where practical instead of creating a separate documentation update for every small decision.
+Module Chats own internal requirements, Tasks, implementation choices, and Review. Escalate to CEO when a change affects a cross-module contract, module name/boundary/dependency, public infrastructure, security/Credential boundary, product-version scope, or creates a major architecture dispute.
+
+Those changes have `architecture_impact: REQUIRED`; they are not silently implemented. CEO decides, then Architecture Codex batches the canonical synchronization.
+
+Direct Owner interruptions are limited to the cases in `TASK_PROTOCOL.md`; ordinary implementation choices remain autonomous.
+
+## Browser-first work
+
+For a new website feature, Requirements / Browser-Recon or the assigned Codex first runs the real browser flow from Owner-provided URL/screenshots and confirms only entry, login, inputs, target data/action, success, and obvious risks. Module Chat then assigns ownership and safety, followed by one end-to-end stage Task. Do not design speculative DOM/adapter/schema detail before observing the page; real side effects still follow `BOUNDARIES.md`.
+
+## Communication and handoff
+
+Lead with the conclusion and delta. Do not repeat known background, expose hidden reasoning, or paste large code/log blocks. Use `TASK_PROTOCOL.md` report templates.
+
+A long-lived Chat that forgets confirmed facts, repeatedly mixes baselines, needs repeated correction, cannot restore Repo state, or degrades from context length must start its reply with:
+
+`# ⚠️ 建议开始 <角色> Chat 交接`
+
+It then provides a complete copyable handoff: role, canonical facts, active Task, Repo/HEAD, completed work, remaining work, risks, and next action.
+
+A Codex that cannot continue reliably must output this and stop expanding work:
+
+```text
+# ⚠️ HANDOFF_REQUIRED
+Task:
+HEAD:
+已完成:
+未完成:
+修改文件:
+未提交内容:
+Tests:
+Blocker:
+下一步:
+```

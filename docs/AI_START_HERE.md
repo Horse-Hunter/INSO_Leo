@@ -1,50 +1,29 @@
 # AI Start Here
 
-This repository is organized for long-lived collaboration among humans, ChatGPT,
-Codex, and Git. It contains working Research V1 functionality plus architecture
-and documentation scaffolding for the remaining modules.
+This file routes each role to its minimum context. Do not read every Markdown file “for safety.” Formal role and module names come from `AI_TEAM.md` and `MODULE_INDEX.md`.
 
-## Read in this order
+## Reading matrix
 
-1. Read the active Task Packet in `tasks/`.
-2. Read `MODULE_INDEX.md` for ownership and dependency constraints.
-3. Read `PRODUCT_BASELINE.md` for verified product facts and explicit unknowns.
-4. Read `TASK_PROTOCOL.md` when creating, updating, or closing a task.
-5. Inspect the relevant source and test directories before making changes.
+| Role | Read by default | Read only when needed |
+| --- | --- | --- |
+| Human Owner | Nothing required | Requested decision evidence |
+| CEO Chat | `AI_TEAM.md`, `BOUNDARIES.md`, `PRODUCT_BASELINE.md`, `MODULE_INDEX.md` | Relevant module doc and current Git facts |
+| Architecture Codex | `AGENTS.md`, current Task, `AI_TEAM.md`, directly affected architecture docs | `BOUNDARIES.md`, `MODULE_INDEX.md` |
+| Requirements / Browser-Recon | `AI_TEAM.md`, `BOUNDARIES.md`, `PRODUCT_BASELINE.md`, Owner request | Relevant module doc and live/Repo evidence |
+| Utility Codex | `AGENTS.md`, current Task, directly affected files | `BOUNDARIES.md`, affected module doc |
+| Module Chat | `AI_TEAM.md`, `TASK_PROTOCOL.md`, its module doc | `BOUNDARIES.md`, `MODULE_INDEX.md`, related public contracts |
+| Module Codex | `AGENTS.md`, current Task, its module doc, Task-related code | Product baseline, module index, other module docs, historical Tasks |
 
-## Operating principles
+## Canonical owners
 
-- Separate durable facts from task-specific context.
-- Prefer the smallest change that satisfies the active Task Packet.
-- Keep orchestration in `workflow`; keep domain behavior in its owning module.
-- Record missing evidence as `UNKNOWN`, not as an assumption presented as fact.
-- Keep external systems behind explicit module boundaries and test doubles.
-- Do not add a dependency until a concrete task requires it and its cost is justified.
-- Before completion, run applicable checks and inspect `git diff`.
-
-## Repository map
-
-| Path | Purpose |
+| Fact | Canonical document |
 | --- | --- |
-| `AGENTS.md` | Short, durable rules for coding agents |
-| `docs/` | Stable product, architecture, and collaboration documentation |
-| `docs/AI_TEAM.md` | AI collaboration roles and decision hierarchy |
-| `docs/modules/` | Durable boundaries and confirmed facts for individual modules |
-| `tasks/` | Task Packets describing bounded units of work |
-| `src/` | Source modules |
-| `tests/` | Tests mirroring source module ownership |
-| `data/` | Local runtime data and explicit non-sensitive fixtures |
+| AI organization, authority, escalation, handoff | `AI_TEAM.md` |
+| Task format, execution, review, reporting | `TASK_PROTOCOL.md` |
+| Safety and real-side-effect authorization | `BOUNDARIES.md` |
+| Module names, ownership, dependencies | `MODULE_INDEX.md` |
+| Product scope and cross-module business facts | `PRODUCT_BASELINE.md` |
+| One module’s public contract and durable rules | `modules/<MODULE>.md` |
+| Current implementation | Git `main`, current Task, code, tests, Module Final Report |
 
-## Current implementation status
-
-- Platform and runtime: single-machine Windows with Python 3.12
-- Verification baseline: pytest and ruff; packaging and exact commands remain `UNKNOWN`
-- Selected V1 infrastructure: Python `sqlite3`, openpyxl, Google Sheets API with OAuth User Authorization, ordinary HTTP first, and Playwright where JavaScript or login is required
-- External access: Research V1 is authorized only for read-only market research against the sources listed in `PRODUCT_BASELINE.md`; INSO and other production operations remain unauthorized
-- Research V1 implementation: source adapters, market aggregation, idempotent
-  Excel persistence, and the public `ResearchService` execution path are
-  implemented
-- Remaining implementation: Sheets, Workflow orchestration, INSO, and Quotation
-  business behavior remain unimplemented on the current branch
-- Credential Provider: the capability is documented, but its implementation is
-  not present in the canonical source tree
+`tasks/` is audit history, not default context. Local AI1/AI2/AI3 and old Word files are reference material, not canonical facts.

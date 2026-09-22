@@ -1,24 +1,68 @@
-# Local configuration and secrets
+# Local configuration, secrets, and auth runtime
 .env
 .env.*
 !.env.example
 *.local
+password.txt
+credential-vault*.json
+credentials.json
+client_secret*.json
+token.json
+oauth-token*.json
+google-token*.json
+storage-state*.json
 
-# Local reference documents (not repository source)
+# Local reference documents (not canonical Repo source)
 AI1.docx
 AI2.docx
 AI3.docx
+research模块工作流程.docx
+sheets模块工作流程 V1.docx
+workflow模块工作流程.docx
 
-# Runtime data: keep only documentation and explicit fixtures
+# Runtime data: retain documentation and explicit fixtures only
 data/*
 !data/README.md
 !data/fixtures/
 !data/fixtures/**
+runtime/
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+调研价格.xlsx
+
+# Browser/profile runtime and local captures
+.browser-profile/
+browser-profile/
+.chrome-profile/
+chrome-profile/
+playwright/.auth/
+playwright-report/
+test-results/
+captures/
+browser-captures/
+*_capture.html
+*_sample.html
+*_sample_files/
+
+# Local worktrees and transient files
+.worktrees/
+.tmp/
+tmp/
+*.tmp
+*.temp
+~$*.docx
+~$*.xlsx
+~$*.xlsm
 
 # Common generated files
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 node_modules/

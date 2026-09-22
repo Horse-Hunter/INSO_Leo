@@ -1,3 +1,3 @@
-# Quotation module
+# Quotation
 
-Quotation rules, generation, and output boundary. Pricing rules and algorithms are intentionally not implemented. See `docs/MODULE_INDEX.md`.
+Future-version quotation directory. Current ownership and boundary: `docs/MODULE_INDEX.md`.

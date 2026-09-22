@@ -1,3 +1,3 @@
-# INSO module
+# INSO
 
-INSO query, inquiry, and result-retrieval boundary. Login and live-system access are intentionally not implemented. See `docs/MODULE_INDEX.md`.
+Future-version INSO integration directory. Current ownership and boundary: `docs/MODULE_INDEX.md`.

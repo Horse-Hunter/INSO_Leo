@@ -1,3 +1,3 @@
-# Sheets module
+# Sheets
 
-Google Sheets one-shot read/query and explicitly commanded safe-update boundary. Scheduling, global state, retry, and duplicate prevention belong to `workflow`. No Google Sheets API implementation exists yet. See `docs/MODULE_INDEX.md` and `docs/modules/SHEETS.md`.
+Google Sheets integration directory. Canonical public contract: `docs/modules/SHEETS.md`; module ownership: `docs/MODULE_INDEX.md`.

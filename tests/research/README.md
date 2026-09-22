@@ -1,3 +1,3 @@
 # Research tests
 
-Tests for behavior owned by `src/research/` will live here. Use local fakes or fixtures instead of live websites.
+Tests for `src/research/`. Use controlled fixtures/fakes unless a Task explicitly authorizes a live read. Run with `python -m pytest tests/research`.

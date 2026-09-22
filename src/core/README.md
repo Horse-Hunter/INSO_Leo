@@ -1,3 +1,3 @@
-# Core module
+# Core
 
-Shared, infrastructure-neutral primitives and utilities. See `docs/MODULE_INDEX.md` for its dependency contract. No implementation exists yet.
+Shared primitives and infrastructure capabilities. Canonical boundary: `docs/modules/CORE.md`; dependency ownership: `docs/MODULE_INDEX.md`.

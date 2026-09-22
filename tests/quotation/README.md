@@ -1,3 +1,3 @@
 # Quotation tests
 
-Tests for behavior owned by `src/quotation/` will live here. Do not invent expected business formulas.
+Tests for future `src/quotation/` behavior. Do not invent business formulas.
