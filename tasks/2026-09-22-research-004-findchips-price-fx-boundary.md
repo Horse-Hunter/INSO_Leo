@@ -1,6 +1,6 @@
 # Task: RESEARCH-004 — Findchips Price Adapter & USD/RMB FX Boundary
 
-status: ready
+status: complete
 owner: Research Codex
 created: 2026-09-22
 updated: 2026-09-22
@@ -257,32 +257,32 @@ If a separately approved live FX capability is discovered in current `main`, sto
 
 ## acceptance
 
-- [ ] Findchips adapter exists under `src/research/` and has no forbidden cross-module imports.
-- [ ] Shared strict-MPN helper is reused.
-- [ ] Only strict-MPN offers may contribute pricing.
-- [ ] Positive stock is required, but stock does not need to meet customer Qty.
-- [ ] Concrete stock quantity is not persisted in Evidence/public results.
-- [ ] MOQ is not used as an exclusion rule and is not persisted.
-- [ ] Applicable tier uses the greatest displayed tier break <= customer Qty.
-- [ ] A row with no tier break <= customer Qty does not fabricate an applicable price.
-- [ ] Summary price-range minimum is not substituted for the Qty-applicable tier.
-- [ ] Non-USD tiers are not silently converted in this task.
-- [ ] Lowest applicable USD unit price across eligible offers is selected.
-- [ ] Strict matches with no eligible price map to `NO_VALID_PRICE`.
-- [ ] No strict match maps to `NO_STRICT_MPN_MATCH`.
-- [ ] Technical acquisition/parsing/FX failure maps to `SOURCE_UNAVAILABLE`.
-- [ ] Successful adapter call produces a Findchips `PriceCandidate`.
-- [ ] Price math uses `Decimal` only.
-- [ ] Research-owned USD/RMB FX quote/provider boundary exists with positive-rate validation and provenance.
-- [ ] No live FX source is added.
-- [ ] No rounding/quantization rule is invented.
-- [ ] Default tests are deterministic and make no live calls.
-- [ ] One bounded read-only Findchips live smoke is attempted and honestly recorded.
-- [ ] No Findchips write action, login, alert, RFQ, purchase action, or crawl is introduced.
-- [ ] No HQEW/LCSC/Bom.Ai/final aggregation/Excel expansion is introduced.
-- [ ] Python 3.12 Research tests pass.
-- [ ] Ruff passes for changed Research Python/test files.
-- [ ] Final diff contains no unrelated changes.
+- [x] Findchips adapter exists under `src/research/` and has no forbidden cross-module imports.
+- [x] Shared strict-MPN helper is reused.
+- [x] Only strict-MPN offers may contribute pricing.
+- [x] Positive stock is required, but stock does not need to meet customer Qty.
+- [x] Concrete stock quantity is not persisted in Evidence/public results.
+- [x] MOQ is not used as an exclusion rule and is not persisted.
+- [x] Applicable tier uses the greatest displayed tier break <= customer Qty.
+- [x] A row with no tier break <= customer Qty does not fabricate an applicable price.
+- [x] Summary price-range minimum is not substituted for the Qty-applicable tier.
+- [x] Non-USD tiers are not silently converted in this task.
+- [x] Lowest applicable USD unit price across eligible offers is selected.
+- [x] Strict matches with no eligible price map to `NO_VALID_PRICE`.
+- [x] No strict match maps to `NO_STRICT_MPN_MATCH`.
+- [x] Technical acquisition/parsing/FX failure maps to `SOURCE_UNAVAILABLE`.
+- [x] Successful adapter call produces a Findchips `PriceCandidate`.
+- [x] Price math uses `Decimal` only.
+- [x] Research-owned USD/RMB FX quote/provider boundary exists with positive-rate validation and provenance.
+- [x] No live FX source is added.
+- [x] No rounding/quantization rule is invented.
+- [x] Default tests are deterministic and make no live calls.
+- [x] One bounded read-only Findchips live smoke is attempted and honestly recorded.
+- [x] No Findchips write action, login, alert, RFQ, purchase action, or crawl is introduced.
+- [x] No HQEW/LCSC/Bom.Ai/final aggregation/Excel expansion is introduced.
+- [x] Python 3.12 Research tests pass.
+- [x] Ruff passes for changed Research Python/test files.
+- [x] Final diff contains no unrelated changes.
 
 ## verification
 
@@ -300,10 +300,23 @@ If a separately approved live FX capability is discovered in current `main`, sto
 
 ## completion
 
-- status: pending
-- changed: pending
-- verified: pending
+- status: complete
+- changed:
+  - Added `src/research/findchips.py` with ordinary-HTTP acquisition, server-rendered offer parsing, strict-MPN enforcement, positive-stock filtering, Qty-applicable USD tier selection, lowest-price selection, structured Evidence, and Findchips `PriceCandidate` creation.
+  - Added `src/research/fx.py` with immutable positive-Decimal `UsdRmbQuote` and an injected `UsdRmbProvider` protocol oriented as `1 USD = rate RMB/CNY`; no live FX provider was added.
+  - Exported the intended Findchips adapter/client and USD/RMB boundary from `src/research/__init__.py`.
+  - Added a sanitized Findchips fixture and deterministic tests for strict MPN, stock state, Qty tiers, MOQ/price-range exclusion, currency filtering, outcomes, Decimal normalization, FX validation, and technical failures.
+  - Added durable Findchips and FX-boundary rules to `docs/modules/RESEARCH.md`.
+- verified:
+  - Focused `py -3.12 -m pytest tests/research/test_fx.py tests/research/test_findchips.py`: 25 passed.
+  - `py -3.12 -m pytest tests/research`: 94 passed.
+  - `py -3.12 -m ruff check src/research/fx.py src/research/findchips.py src/research/__init__.py tests/research/test_fx.py tests/research/test_findchips.py`: passed.
+  - `git diff --check origin/main...HEAD`: passed.
+  - Public ordinary-HTTP live smoke for `MMBT2222ALT1G` with customer Qty 100 parsed 87 offers, found 65 strict-MPN offers, 65 positive-stock strict offers, and 27 offers with an applicable USD tier. It selected displayed break 100 at raw USD unit price `0.0086`. This price is a volatile observation from this smoke only, not a permanent constant.
+  - The live smoke used no FX provider and made no claim of a live normalized RMB price. Deterministic tests verified exact `Decimal` USD multiplication using a synthetic injected quote labeled test-only.
+  - No concrete Findchips stock quantity, MOQ, raw HTML, cookie, token, account data, or contact data is persisted in Evidence, `PriceCandidate`, or public Findchips result objects.
+  - No imports from `sheets`, `workflow`, `inso`, or `quotation`; no HQEW/LCSC/Bom.Ai/IC.net change, orchestration, aggregation, Excel expansion, login, write action, crawler, browser automation, stealth, or anti-bot bypass was introduced.
 - limitations:
-  - Live USD/RMB FX source/cadence/fallback remain UNKNOWN and intentionally out of scope.
-  - Final RMB display rounding/precision remains UNKNOWN.
-  - HQEW, LCSC, Bom.Ai, final aggregation, 20% comparison, estimated total, Excel business-column completion, and Research orchestration remain future tasks.
+  - Live USD/RMB FX source, refresh cadence, fallback policy, and final RMB display rounding/precision remain `UNKNOWN` and intentionally out of scope.
+  - Findchips live prices and result counts are volatile and must not become fixture assertions or business constants.
+  - HQEW, LCSC, Bom.Ai, final aggregation, 20% comparison, second-lowest logic, estimated total, Excel business-column completion, and Research orchestration remain future tasks.
