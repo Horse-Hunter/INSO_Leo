@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Self
 
 import pytest
 
@@ -109,7 +110,7 @@ class FakePlaywright:
     def __init__(self, chromium: FakeChromium) -> None:
         self.chromium = chromium
 
-    def __enter__(self) -> "FakePlaywright":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *args: object) -> None:
