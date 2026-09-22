@@ -43,7 +43,13 @@ Research returns `resolved_brand` to Workflow when it resolves a Brand value. De
 
 Bom.Ai requires login. Research may request an authorized login using a stable `site_id` through the project Credential Provider. Research must not know or reproduce DPAPI, vault-file, or PowerShell storage details, and it must never log or persist a live secret.
 
-Bom.Ai price records are valid for one month. If one or more valid prices exist within the most recent 7 days, Bom.Ai contributes the lowest valid 7-day price. If no valid 7-day price exists but one or more valid prices exist within one month, it contributes the lowest valid one-month price. Prices older than one month are not valid Bom.Ai price candidates.
+Bom.Ai price records are valid for one calendar month. The cutoff is the same
+wall-clock time in the previous month, clamped to that month's final day (for
+example, March 31 maps to February 28 or 29). If one or more valid prices exist
+within the most recent 7 days, Bom.Ai contributes the lowest valid 7-day price.
+If no valid 7-day price exists but one or more valid prices exist within the
+calendar-month window, it contributes the lowest valid one-month price. Older
+prices are not valid Bom.Ai price candidates.
 
 ### Source and evidence foundation
 
@@ -74,7 +80,7 @@ Local Excel output remains part of Research V1. A separate Excel or storage modu
 Return `MANUAL_REVIEW_REQUIRED` with `reason_code = NO_MATCHING_PRODUCT` only when all four price sources—Findchips, HQEW, LCSC, and Bom.Ai—were queried successfully and none returned a strict MPN match.
 
 - A technical failure must not be counted as “no match.”
-- If Bom.Ai finds a strict MPN match, the result must not be classified as `NO_MATCHING_PRODUCT`, even when the price is older than two months, unavailable, or absent.
+- If Bom.Ai finds a strict MPN match, the result must not be classified as `NO_MATCHING_PRODUCT`, even when the price is outside the one-calendar-month validity window, unavailable, or absent.
 - Product existence and price validity are separate decisions.
 - User-facing remarks wording and the broader reason-code catalog remain `UNKNOWN`.
 
@@ -90,7 +96,7 @@ IC.net contributes Brand resolution and the V1 market-stock display only; it nev
 - An unparseable quantity on a row that must contribute to certified stock is a source-unavailable technical failure, not zero stock or no match.
 - When authentication is required, IC.net credentials are obtained at runtime through the project Credential Provider and remain in memory for the bounded read-only session. Login does not authorize any write action or challenge bypass.
 
-## Findchips price and USD/RMB boundary
+## Price acquisition and USD/RMB boundary
 
 Findchips is a V1 price source and may produce one `PriceCandidate`.
 
@@ -100,8 +106,60 @@ Findchips is a V1 price source and may produce one `PriceCandidate`.
 - Only USD tiers are eligible in this adapter. Non-USD tiers are not converted or inferred.
 - Findchips contributes the lowest applicable USD unit price across eligible offers.
 - Research owns an injected USD/RMB quote boundary oriented as `1 USD = rate RMB/CNY`. The rate and all price math use positive `Decimal` values without hidden rounding or quantization.
-- The live FX source, refresh cadence, fallback, and final RMB display precision remain `UNKNOWN`. No live FX provider is selected by this task.
+- HQEW reads the first cloud-price result page through an Owner-authenticated
+  ordinary Chrome context connected only over loopback CDP. The client reuses
+  the browser context without reading, exporting, or persisting its cookies;
+  anonymous direct HTTP is not the production acquisition path. A safety
+  challenge encountered on this authenticated path remains a technical source
+  failure and is not bypassed. Under the temporary policy, that failure is
+  non-blocking when another source returns a valid candidate: Research persists
+  the available result and returns `PARTIAL_SUCCESS`.
+- LCSC reads only the primary product represented by the official product page.
+  It selects the greatest displayed quantity break at or below the customer
+  quantity. A valid displayed preorder or zero-stock price remains eligible.
+  USD prices use the approved FX boundary; explicit RMB/CNY prices do not.
+- Bom.Ai obtains credentials and an authenticated page through separate injected
+  capabilities. Server-rendered quote records carry absolute quote times and
+  RMB prices. Secrets, cookies, and raw authenticated pages are not evidence and
+  are never persisted by Research.
+- The live FX provider is the ECB daily reference-rate API. It requests USD/EUR
+  and CNY/EUR observations for the same date and derives
+  `CNY per USD = CNY per EUR / USD per EUR` with `Decimal`. Missing,
+  non-positive, non-finite, duplicate, or date-mismatched observations fail
+  closed. There is no fallback rate and no hidden rounding or quantization.
 - Public Findchips acquisition is bounded, read-only ordinary HTTP without login, crawling, RFQ, alert, or purchase actions.
+
+## Aggregation and final output
+
+Research sorts the four price-source candidates by normalized RMB unit price.
+The lowest candidate is the market reference. When a second candidate exists
+and `lowest <= second * Decimal("0.80")`, the Excel market-reference cell
+contains the lowest value followed by a newline and
+`second-lowest RMB price-source name`. Otherwise it contains only the lowest
+value. Estimated total is the exact lowest normalized unit price multiplied by
+customer quantity.
+
+The visible columns of `调研价格.xlsx`, in order, are `型号`, `品牌`,
+`数量`, `重要等级`, `货量标识`, `预计订单总价`,
+`市场最低参考价`, and `备注`. The hidden `_inquiry_id` column is the
+idempotency key. Decimal values are persisted as exact decimal text; display
+precision remains a presentation concern and is not rounded by Research.
+
+The known legacy schema `_inquiry_id | 重要等级 | 备注` is migrated
+deterministically to the canonical column order without duplicating rows or
+discarding those values. A workbook with an unrecognized or ambiguous schema
+fails closed. A complete `ResearchService` execution replaces the full business
+snapshot for its inquiry, including clearing stale values when the new value is
+explicitly empty. Ordinary workbook load, parse, migration, and save exceptions
+are converted to Research Excel errors and therefore to
+`RETRYABLE_FAILURE`; `KeyboardInterrupt` and `SystemExit` are not swallowed.
+
+`ResearchService` is the public single-call owner of IC.net, the canonical
+four price sources, aggregation, Excel persistence, and the final
+`ResearchResult`. It preserves per-source evidence in its detailed execution
+result and does not own Workflow scheduling or retry timing.
+The earlier `finalize_research_result` helper remains internal for compatibility
+but is not part of the package-level public API.
 
 ## Boundaries
 
