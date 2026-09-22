@@ -247,26 +247,21 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
 ## completion
 
 - status: blocked
-- changed: No adapter or test code was added. This Task Packet records the verified ordinary-HTTP, unauthenticated-browser, and authenticated-browser blockers on the dedicated task branch.
+- changed:
+  - Added `src/research/icnet.py` with an immutable IC.net result contract, pure Brand/stock helpers, a minimal visibility-aware HTML parser, an injectable page boundary, and a bounded authenticated Playwright client.
+  - Exported the IC.net public API from `src/research/__init__.py`.
+  - Added a minimal synthetic fixture and deterministic IC.net tests without supplier/contact data or live network calls.
+  - Added durable IC.net Brand, certified-stock, authentication, and failure rules to `docs/modules/RESEARCH.md`.
+  - The Owner-provided full HTML samples remain local and were not committed.
 - verified:
-  - Read the required repository rules, Research module contract, and this Task Packet from the latest `main`.
-  - Bounded read-only live smoke attempt against `https://www.ic.net.cn/`: the ordinary HTTP request timed out.
-  - Bounded read-only inspection of the public model-result entry `https://www.ic.net.cn/searchPnCode.php?l=ins`: IC.net returned a rate-limit/CAPTCHA page (`您的速度太快了，请慢一点搜索` / CAPTCHA prompt), not reliable result-row HTML.
-  - The challenge page cannot be treated as `NO_STRICT_MPN_MATCH`; parsing it would have to take the source-unavailable path.
-  - After Research Chat authorized Playwright normal browser mode, installed Python Playwright 1.63.0 and its Chromium runtime in the local execution environment only; no dependency metadata or application code was committed.
-  - Headed Chromium loaded `https://www.ic.net.cn/` successfully with HTTP 200 and exposed the public model-search input plus exact-model checkbox.
-  - A normal browser exact-model search for public test MPN `STM32F103C8T6` redirected to `https://member.ic.net.cn/login.php?from=www.ic.net.cn/search/STM32F103C8T6.html%3FisExact%3D1` and displayed the membership login page; no result rows were returned.
-  - After Owner authorization commit `5119794bbe4cdf24e1ac9c3450aaf45408bd10a4`, the existing Credential Provider reported a configured `ic.net.cn` entry. The provider supplied the credential only in process memory; no username, password, cookie value, or token was committed or added to evidence.
-  - Normal account/password login succeeded without CAPTCHA, SMS/OTP, QR confirmation, or device approval and redirected to the exact-model result URL.
-  - The authenticated result response returned HTTP 200 but contained only `https://www.ic.net.cn/media/js/q.js?v=1616807238`: after 30 seconds the complete document still had no `<body>`, no result rows, and an HTML payload length of 108 characters.
-  - The same behavior occurred with Playwright's installed Chromium and the standard installed Chrome channel in headed mode, without stealth or browser-fingerprint modification.
-  - Dedicated headed re-verification on 2026-09-22 confirmed the login automation itself: `username_field_found`, `username_filled`, `password_field_found`, `password_filled`, `login_clicked`, and `logged_in_marker_found` were all true; the resulting URL was the IC.net homepage. No credential value, cookie, or token was logged.
-  - In that same authenticated standard-Chrome session, submitting the exact-model homepage search for `STM32F103C8T6` reached the expected result URL but produced no `<body>`, no table rows, and no target-MPN node after a 20-second wait.
-  - Owner-provided `icnet_login_sample.html` (SHA-256 `66c6a3acc5acdb2fe8d9bbcc9f5ce43112d455c78463169fd5bc2af06f72967d`, 303802 bytes) was inspected only as local input. Its page structure is the IC.net membership login page and contains zero occurrences of `SSCP`, `ICCP`, or `STM32F103C8T6`; it is not a logged-in result-page fixture and was not committed.
-  - No CAPTCHA interaction, anti-bot bypass, cookie persistence/reuse, challenge-script analysis, or IC.net write action was attempted.
-  - Python 3.12 pytest and ruff were not run because implementation stopped before code changes when the authenticated live path remained blocked.
+  - Dedicated standard-Chrome headed login verification found and filled both credential fields, clicked login, reached `https://www.ic.net.cn/`, and found the logged-in marker. Credentials came only from the existing Credential Provider and were neither printed nor persisted.
+  - The real result sample `icnet_result_sample.html` (SHA-256 `b2925e0483d8b2f4d6b76c47c54c794ee94634ddd963ca8a82631908e4089055`) parsed in memory as 21 first-page rows; all 21 strictly matched `BE890D3S152T0I1000`; 2 SSCP/ICCP-qualified rows summed to displayed stock 244. The parser ignored CSS-hidden decoy MPN and quantity nodes.
+  - `py -3.12 -m pytest tests/research`: 60 passed.
+  - `py -3.12 -m ruff check src/research/icnet.py src/research/__init__.py tests/research/test_icnet.py`: passed.
+  - Authenticated headed live smoke through the implemented Adapter used the configured `ic.net.cn` Credential Provider entry and returned `SOURCE_UNAVAILABLE` with `failure_code = RESULT_PAGE_BLOCKED`; Evidence retained the non-secret result URL.
+  - No CAPTCHA, OTP, device verification, stealth setting, browser-fingerprint change, challenge-script analysis, cookie persistence/reuse, or IC.net write action was used.
 - limitations:
-  - Authorized normal login works, but the authenticated result URL does not deliver parseable business HTML to an unmodified Playwright browser. It returns a script-only document consistent with an anti-automation challenge.
-  - Obtaining result rows would require a permitted site-supported access path or behavior beyond the authorized normal browser flow. Hiding automation, modifying browser fingerprints, or reverse-engineering/bypassing the challenge is prohibited.
-  - RESEARCH-003 remains blocked pending an Owner-provided site-supported read-only access method or an actual post-login result-page HTML sample. The replacement sample must preserve only the minimum result-row structure needed for displayed MPN, manufacturer, quantity, and SSCP/ICCP indicators and must omit supplier/contact details; live adapter completion would still require a permitted live result path.
+  - The authenticated live result response still completes as a 108-character script-only document containing `q.js`, without a `<body>` or product rows, in unmodified headed Chrome. The local real sample proves parser behavior but is not a successful live retrieval.
+  - The Task Packet explicitly requires a successful authenticated live smoke; therefore RESEARCH-003 remains blocked and a PR must not be created yet.
+  - Completion requires an Owner-provided site-supported read-only path that returns the result document to an unmodified normal browser. Anti-bot or challenge bypass remains prohibited.
   - Findchips, HQEW, LCSC, Bom.Ai, FX, final aggregation, Excel business-row completion, and Research orchestration remain future tasks.
