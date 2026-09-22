@@ -23,6 +23,7 @@ This task must not implement any other website or any final multi-source Researc
 - Research V1 external access authorizes read-only IC.net market research.
 - Web access baseline: ordinary HTTP first; Playwright only when JavaScript/browser behavior is actually required.
 - Research Chat decision (2026-09-21): Playwright normal browser mode is authorized for read-only IC.net verification; CAPTCHA or anti-bot bypass remains prohibited.
+- Owner direction (2026-09-22): IC.net stock is required business evidence, so RESEARCH-003 must continue. A normal user-launched Chrome session may be connected through Chrome's supported remote-debugging/CDP interface and controlled/read through Playwright `connect_over_cdp`; this is an approved browser integration path, not authorization for stealth, fingerprint modification, navigator.webdriver patching, challenge-script reverse engineering, CAPTCHA handling, or other anti-bot evasion.
 - Shared `ResearchSource`, `SourceOutcome`, `SourceEvidence`, `SourceResult`, and `is_strict_mpn_match` already exist under `src/research/source_contracts.py`.
 - IC.net must never produce a `PriceCandidate`.
 - Strict MPN matching: trim leading/trailing whitespace and compare case-insensitively; otherwise characters must match completely. No suffix/variant/fuzzy substitution.
@@ -201,6 +202,17 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
 - Authenticated cookies/session state may be held only in-memory for the bounded read-only session unless an existing approved browser/session facility already defines otherwise.
 - Successful login does not authorize any write-side action.
 
+### Normal-Chrome CDP bridge
+
+- Add a second live-client path that attaches to an already-running ordinary Chrome instance through Chrome's supported remote-debugging/CDP interface instead of launching Chrome through Playwright.
+- The preferred experiment is a dedicated normal Chrome profile/session started by the Owner or by a plain Chrome process, with no Playwright launch arguments and no stealth/fingerprint modifications.
+- Playwright may use `connect_over_cdp` only to attach to that existing Chrome instance, access its default browser context, navigate/read the IC.net page, and obtain the rendered DOM.
+- Credentials should still come from the existing Credential Provider when programmatic login is needed. An already authenticated dedicated IC.net Chrome profile may be used only when explicitly created/approved for this Research task; do not copy cookies/tokens into code, fixtures, logs, or Git.
+- First verify whether an existing ordinary Chrome page that already renders IC.net results remains readable after CDP attachment. Then verify whether navigation/search performed after attachment still returns the normal result document.
+- Record diagnostic facts only: connection success, browser/channel, resulting URL, document/body presence, result-row count, target-MPN count, and generic failure code. Do not log secrets or cookie values.
+- If CDP attachment itself causes IC.net to replace the page with a challenge document, stop and report that boundary. Do not add stealth or anti-detection patches.
+- If this supported CDP path succeeds, it may become the V1 IC.net live acquisition boundary while the existing parser/Brand/stock logic remains unchanged.
+
 ### HTTP / parsing boundary
 
 - Keep network acquisition separate from pure parsing/business-rule functions so fixture tests do not require live internet.
@@ -229,6 +241,7 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
 - [ ] No-match and technical-unavailability paths remain distinct.
 - [ ] Default tests use deterministic local fixtures/synthetic HTML and make no live call.
 - [ ] A separate read-only authenticated IC.net live smoke verification is attempted when IC.net requires login and local authorized credentials are available; its result is recorded honestly.
+- [ ] Normal-Chrome CDP bridge is tested before concluding that no compliant live acquisition path exists; no stealth/fingerprint/anti-detection changes are used.
 - [ ] No other website adapter, FX, aggregation, orchestrator, Excel expansion, credentials, login, or write side effect is introduced.
 - [ ] Python 3.12 Research tests pass.
 - [ ] Ruff passes for changed Python files.
@@ -239,6 +252,7 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
 - Run `py -3.12 -m ruff check` for changed Research Python/test files.
 - Run focused IC.net unit/fixture tests separately if useful.
 - Perform one bounded read-only IC.net live smoke check using a public test MPN; do not assert volatile quantities/Brand counts as fixed long-term values.
+- Perform the Normal-Chrome CDP bridge verification: attach to an Owner-approved ordinary Chrome session, first read an already-rendered result page, then test post-attachment navigation/search. Treat a successful normal DOM/result-row retrieval as the preferred V1 live acquisition path.
 - Inspect the complete diff against this Task Packet.
 - Confirm no imports from `sheets`, `workflow`, `inso`, or `quotation`.
 - Confirm IC.net authentication, when used, goes only through the existing Credential Provider and introduces no secret-bearing values; confirm no IC.net write actions, CAPTCHA/anti-bot bypass, pagination crawler, or credential-storage changes.
