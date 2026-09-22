@@ -1,6 +1,6 @@
 # Task: RESEARCH-003 — IC.net Brand & Market Stock Adapter
 
-status: ready
+status: blocked
 owner: Research Codex
 created: 2026-09-21
 updated: 2026-09-21
@@ -22,6 +22,7 @@ This task must not implement any other website or any final multi-source Researc
 - Current public IC.net site: `https://www.ic.net.cn/`; the site currently exposes model search and an exact-model option.
 - Research V1 external access authorizes read-only IC.net market research.
 - Web access baseline: ordinary HTTP first; Playwright only when JavaScript/browser behavior is actually required.
+- Research Chat decision (2026-09-21): Playwright normal browser mode is authorized for read-only IC.net verification; CAPTCHA or anti-bot bypass remains prohibited.
 - Shared `ResearchSource`, `SourceOutcome`, `SourceEvidence`, `SourceResult`, and `is_strict_mpn_match` already exist under `src/research/source_contracts.py`.
 - IC.net must never produce a `PriceCandidate`.
 - Strict MPN matching: trim leading/trailing whitespace and compare case-insensitively; otherwise characters must match completely. No suffix/variant/fuzzy substitution.
@@ -41,6 +42,7 @@ This task must not implement any other website or any final multi-source Researc
 - `total > quantity * 3` => `货多`.
 - Equality at exactly `3 * quantity` is `货少`.
 - IC.net stock is evidence/output context only and does not create a market-price candidate.
+- Owner authorization: IC.net normal member login is allowed for this task only to perform read-only Research. Credentials must be obtained at runtime through the existing project Credential Provider; credentials must not be committed, logged, copied into Task Packets, or pasted into chat/code.
 - Detailed selectors, XPath, hidden endpoints, and session mechanics are implementation details and must not be promoted into durable architecture docs.
 - Research must not import `sheets`, `workflow`, `inso`, or `quotation`.
 
@@ -59,6 +61,7 @@ Sources: current `main` documentation, confirmed Research rules, and public IC.n
   - certified-stock summation;
   - stock-label classification.
 - Implement one read-only model search against IC.net.
+- If IC.net requires authentication, use the existing project Credential Provider to obtain runtime credentials through a stable IC.net site identity. Research must consume the credential capability only; it must not implement vault storage, DPAPI, credential CRUD, or secret lifecycle.
 - Prefer ordinary HTTP and HTML parsing if sufficient.
 - If ordinary HTTP cannot reliably obtain the required result data, stop and report the concrete blocker before adding Playwright or a new dependency.
 - Reuse the shared strict-MPN helper.
@@ -86,7 +89,8 @@ Sources: current `main` documentation, confirmed Research rules, and public IC.n
 - No Research orchestrator.
 - No Excel business-column expansion.
 - No Sheets, Workflow, INSO, or Quotation implementation.
-- No login, credential use, cookies from authenticated accounts, form submission with side effects, messaging, inquiry submission, or write action on IC.net.
+- No credential storage/CRUD, DPAPI/vault implementation changes, secret logging, messaging, inquiry submission, or write action on IC.net.
+- No reuse of arbitrary browser cookies or credentials outside the existing project Credential Provider.
 - No pagination beyond the first IC.net search-results page.
 - No screenshots as a mandatory requirement.
 - No speculative Brand normalization, aliases, manufacturer dictionaries, transliteration, fuzzy matching, or extra tie-break rules.
@@ -186,6 +190,17 @@ IC.net Evidence must remain structured and include enough observations to audit 
 
 Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary personal/business contact data from supplier rows.
 
+### Authentication boundary
+
+- Normal IC.net member login is explicitly authorized for this task when required to reach read-only model-search results.
+- Obtain credentials only at runtime through the existing project Credential Provider capability.
+- Do not hardcode usernames/passwords, persist live secrets, print secrets, or add secret-bearing fixtures.
+- Do not modify the Credential Provider, vault format, DPAPI logic, GUI, or credential lifecycle in this task.
+- If the local Credential Provider has no IC.net credential entry, stop and request that the Owner add one locally; never request the password in chat.
+- If login requires CAPTCHA, SMS/OTP, QR confirmation, device approval, or another interactive challenge, do not bypass or automate the challenge. Stop and report the exact user action required.
+- Authenticated cookies/session state may be held only in-memory for the bounded read-only session unless an existing approved browser/session facility already defines otherwise.
+- Successful login does not authorize any write-side action.
+
 ### HTTP / parsing boundary
 
 - Keep network acquisition separate from pure parsing/business-rule functions so fixture tests do not require live internet.
@@ -213,7 +228,7 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
 - [ ] Successful generic source outcome carries structured IC.net Evidence and no price candidate.
 - [ ] No-match and technical-unavailability paths remain distinct.
 - [ ] Default tests use deterministic local fixtures/synthetic HTML and make no live call.
-- [ ] A separate read-only IC.net live smoke verification is attempted when environment/network permits and its result is recorded honestly.
+- [ ] A separate read-only authenticated IC.net live smoke verification is attempted when IC.net requires login and local authorized credentials are available; its result is recorded honestly.
 - [ ] No other website adapter, FX, aggregation, orchestrator, Excel expansion, credentials, login, or write side effect is introduced.
 - [ ] Python 3.12 Research tests pass.
 - [ ] Ruff passes for changed Python files.
@@ -226,12 +241,29 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
 - Perform one bounded read-only IC.net live smoke check using a public test MPN; do not assert volatile quantities/Brand counts as fixed long-term values.
 - Inspect the complete diff against this Task Packet.
 - Confirm no imports from `sheets`, `workflow`, `inso`, or `quotation`.
-- Confirm no IC.net write actions, login, credentials, anti-bot bypass, pagination crawler, or secret-bearing values.
-- If the live site cannot be accessed or parsed in the execution environment, keep the Task blocked and report the concrete reason; do not pretend the real adapter has been verified.
+- Confirm IC.net authentication, when used, goes only through the existing Credential Provider and introduces no secret-bearing values; confirm no IC.net write actions, CAPTCHA/anti-bot bypass, pagination crawler, or credential-storage changes.
+- If the live site still cannot be accessed or parsed after the authorized normal-login path, keep the Task blocked and report the concrete reason; do not pretend the real adapter has been verified.
 
 ## completion
 
-- status: pending
-- changed: pending
-- verified: pending
-- limitations: Findchips, HQEW, LCSC, Bom.Ai, FX, final aggregation, Excel business-row completion, and Research orchestration remain future tasks.
+- status: blocked
+- changed: No adapter or test code was added. This Task Packet records the verified ordinary-HTTP, unauthenticated-browser, and authenticated-browser blockers on the dedicated task branch.
+- verified:
+  - Read the required repository rules, Research module contract, and this Task Packet from the latest `main`.
+  - Bounded read-only live smoke attempt against `https://www.ic.net.cn/`: the ordinary HTTP request timed out.
+  - Bounded read-only inspection of the public model-result entry `https://www.ic.net.cn/searchPnCode.php?l=ins`: IC.net returned a rate-limit/CAPTCHA page (`您的速度太快了，请慢一点搜索` / CAPTCHA prompt), not reliable result-row HTML.
+  - The challenge page cannot be treated as `NO_STRICT_MPN_MATCH`; parsing it would have to take the source-unavailable path.
+  - After Research Chat authorized Playwright normal browser mode, installed Python Playwright 1.63.0 and its Chromium runtime in the local execution environment only; no dependency metadata or application code was committed.
+  - Headed Chromium loaded `https://www.ic.net.cn/` successfully with HTTP 200 and exposed the public model-search input plus exact-model checkbox.
+  - A normal browser exact-model search for public test MPN `STM32F103C8T6` redirected to `https://member.ic.net.cn/login.php?from=www.ic.net.cn/search/STM32F103C8T6.html%3FisExact%3D1` and displayed the membership login page; no result rows were returned.
+  - After Owner authorization commit `5119794bbe4cdf24e1ac9c3450aaf45408bd10a4`, the existing Credential Provider reported a configured `ic.net.cn` entry. The provider supplied the credential only in process memory; no username, password, cookie value, or token was committed or added to evidence.
+  - Normal account/password login succeeded without CAPTCHA, SMS/OTP, QR confirmation, or device approval and redirected to the exact-model result URL.
+  - The authenticated result response returned HTTP 200 but contained only `https://www.ic.net.cn/media/js/q.js?v=1616807238`: after 30 seconds the complete document still had no `<body>`, no result rows, and an HTML payload length of 108 characters.
+  - The same behavior occurred with Playwright's installed Chromium and the standard installed Chrome channel in headed mode, without stealth or browser-fingerprint modification.
+  - No CAPTCHA interaction, anti-bot bypass, cookie persistence/reuse, challenge-script analysis, or IC.net write action was attempted.
+  - Python 3.12 pytest and ruff were not run because implementation stopped before code changes when the authenticated live path remained blocked.
+- limitations:
+  - Authorized normal login works, but the authenticated result URL does not deliver parseable business HTML to an unmodified Playwright browser. It returns a script-only document consistent with an anti-automation challenge.
+  - Obtaining result rows would require a permitted site-supported access path or behavior beyond the authorized normal browser flow. Hiding automation, modifying browser fingerprints, or reverse-engineering/bypassing the challenge is prohibited.
+  - RESEARCH-003 remains blocked pending an Owner-provided site-supported read-only access method or sanitized representative result HTML for parser work; live adapter completion would still require a permitted live result path.
+  - Findchips, HQEW, LCSC, Bom.Ai, FX, final aggregation, Excel business-row completion, and Research orchestration remain future tasks.
