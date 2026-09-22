@@ -1,6 +1,6 @@
 # Task: RESEARCH-003 — IC.net Brand & Market Stock Adapter
 
-status: blocked
+status: complete
 owner: Research Codex
 created: 2026-09-21
 updated: 2026-09-22
@@ -224,27 +224,27 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
 
 ## acceptance
 
-- [ ] IC.net adapter exists under `src/research/` and has no forbidden cross-module imports.
-- [ ] IC.net uses the shared strict-MPN helper.
-- [ ] IC.net cannot produce a `PriceCandidate`.
-- [ ] Provided input Brand is preserved and not replaced by IC.net.
-- [ ] Blank Brand is resolved from at most the first 20 result rows using the confirmed frequency/tie rules.
-- [ ] Pure English / pure Chinese / bilingual-English display handling has deterministic tests.
-- [ ] Remaining unresolved Brand tie is preserved as unresolved rather than guessed.
-- [ ] Stock uses first-page strict-MPN rows carrying SSCP or ICCP.
-- [ ] A row carrying both SSCP and ICCP is counted once.
-- [ ] No Brand filter is applied to stock calculation.
-- [ ] `total == quantity * 3` yields `货少`.
-- [ ] `total > quantity * 3` yields `货多`.
-- [ ] Required but unparseable qualified quantity fails closed rather than becoming zero.
-- [ ] Successful generic source outcome carries structured IC.net Evidence and no price candidate.
-- [ ] No-match and technical-unavailability paths remain distinct.
-- [ ] Default tests use deterministic local fixtures/synthetic HTML and make no live call.
-- [ ] A separate read-only authenticated IC.net live smoke verification is attempted when IC.net requires login and local authorized credentials are available; its result is recorded honestly.
-- [ ] Normal-Chrome CDP bridge is tested before concluding that no compliant live acquisition path exists; no stealth/fingerprint/anti-detection changes are used.
-- [ ] No other website adapter, FX, aggregation, orchestrator, Excel expansion, credentials, login, or write side effect is introduced.
-- [ ] Python 3.12 Research tests pass.
-- [ ] Ruff passes for changed Python files.
+- [x] IC.net adapter exists under `src/research/` and has no forbidden cross-module imports.
+- [x] IC.net uses the shared strict-MPN helper.
+- [x] IC.net cannot produce a `PriceCandidate`.
+- [x] Provided input Brand is preserved and not replaced by IC.net.
+- [x] Blank Brand is resolved from at most the first 20 result rows using the confirmed frequency/tie rules.
+- [x] Pure English / pure Chinese / bilingual-English display handling has deterministic tests.
+- [x] Remaining unresolved Brand tie is preserved as unresolved rather than guessed.
+- [x] Stock uses first-page strict-MPN rows carrying SSCP or ICCP.
+- [x] A row carrying both SSCP and ICCP is counted once.
+- [x] No Brand filter is applied to stock calculation.
+- [x] `total == quantity * 3` yields `货少`.
+- [x] `total > quantity * 3` yields `货多`.
+- [x] Required but unparseable qualified quantity fails closed rather than becoming zero.
+- [x] Successful generic source outcome carries structured IC.net Evidence and no price candidate.
+- [x] No-match and technical-unavailability paths remain distinct.
+- [x] Default tests use deterministic local fixtures/synthetic HTML and make no live call.
+- [x] A separate read-only authenticated IC.net live smoke verification is attempted when IC.net requires login and local authorized credentials are available; its result is recorded honestly.
+- [x] Normal-Chrome CDP bridge is tested before concluding that no compliant live acquisition path exists; no stealth/fingerprint/anti-detection changes are used.
+- [x] No other website adapter, FX, aggregation, orchestrator, Excel expansion, credentials, login, or write side effect is introduced.
+- [x] Python 3.12 Research tests pass.
+- [x] Ruff passes for changed Python files.
 
 ## verification
 
@@ -260,23 +260,24 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
 
 ## completion
 
-- status: blocked
+- status: complete
 - changed:
-  - Added `src/research/icnet.py` with an immutable IC.net result contract, pure Brand/stock helpers, a minimal visibility-aware HTML parser, an injectable page boundary, and a bounded authenticated Playwright client.
+  - Added `src/research/icnet.py` with immutable IC.net contracts, visibility-aware parsing, deterministic Brand/stock rules, structured Evidence, and no `PriceCandidate`.
+  - Added `CdpIcNetClient`, which connects to an Owner-approved ordinary Chrome instance through official localhost CDP. It supports attach-only reading of an already-open target page and bounded navigation in the same normal browser context.
   - Exported the IC.net public API from `src/research/__init__.py`.
-  - Added a minimal synthetic fixture and deterministic IC.net tests without supplier/contact data or live network calls.
-  - Added durable IC.net Brand, certified-stock, authentication, and failure rules to `docs/modules/RESEARCH.md`.
-  - The Owner-provided full HTML samples remain local and were not committed.
+  - Added a sanitized fixture and deterministic tests for parser, Brand/stock behavior, Adapter outcomes, CDP attach-only behavior, CDP navigation, and fail-closed page handling.
+  - Added durable IC.net rules to `docs/modules/RESEARCH.md`. No selectors, raw Owner HTML, credentials, cookies, tokens, supplier contacts, or browser profile data were committed.
 - verified:
-  - Dedicated standard-Chrome headed login verification found and filled both credential fields, clicked login, reached `https://www.ic.net.cn/`, and found the logged-in marker. Credentials came only from the existing Credential Provider and were neither printed nor persisted.
-  - The real result sample `icnet_result_sample.html` (SHA-256 `b2925e0483d8b2f4d6b76c47c54c794ee94634ddd963ca8a82631908e4089055`) parsed in memory as 21 first-page rows; all 21 strictly matched `BE890D3S152T0I1000`; 2 SSCP/ICCP-qualified rows summed to displayed stock 244. The parser ignored CSS-hidden decoy MPN and quantity nodes.
-  - `py -3.12 -m pytest tests/research`: 60 passed.
+  - CDP Test A attached to the dedicated normal Chrome after the Owner opened the authenticated target page. It did not navigate, refresh, search, or click. Connection succeeded; URL was `https://www.ic.net.cn/search/BE890D3S152T0I1000.html`; `document.readyState` was `complete`; body and result container existed; the DOM contained 24 result-row elements and 21 visible target-MPN nodes; the existing parser returned 21 strict rows, 2 SSCP/ICCP-qualified rows, and certified stock 244.
+  - CDP Test B reused the same ordinary Chrome profile/context and navigated to the same HTTPS target URL. Navigation completed without error; body and result container remained present; the parser again returned 21 strict rows, 2 qualified rows, and certified stock 244.
+  - The implemented `CdpIcNetClient` plus `IcNetAdapter` authenticated live smoke returned `SUCCESS`, resolved Brand `Telit`, 21 inspected/strict rows, 2 qualified rows, certified stock 244, stock label `货多` for smoke customer quantity 10, and no `PriceCandidate`.
+  - The Owner-provided real HTML sample was used only locally and parsed as the same 21 / 2 / 244 observations. The full sample was not committed.
+  - `py -3.12 -m pytest tests/research`: 64 passed.
   - `py -3.12 -m ruff check src/research/icnet.py src/research/__init__.py tests/research/test_icnet.py`: passed.
-  - Authenticated headed live smoke through the implemented Adapter used the configured `ic.net.cn` Credential Provider entry and returned `SOURCE_UNAVAILABLE` with `failure_code = RESULT_PAGE_BLOCKED`; Evidence retained the non-secret result URL.
-  - A separate headed standard-Chrome check logged in successfully and navigated directly to the Owner-specified HTTPS URL `https://www.ic.net.cn/search/BE890D3S152T0I1000.html`. The HTTPS response was HTTP 200 and the final URL remained HTTPS, but the complete document still had no `<body>`, result rows, or target-MPN nodes.
-  - No CAPTCHA, OTP, device verification, stealth setting, browser-fingerprint change, challenge-script analysis, cookie persistence/reuse, or IC.net write action was used.
+  - The branch contains the latest `origin/main`; `git diff --check origin/main...HEAD` passed.
+  - No imports from `sheets`, `workflow`, `inso`, or `quotation` were added. No CAPTCHA/OTP/device-verification bypass, stealth, fingerprint modification, `navigator.webdriver` patch, challenge-script reverse engineering, cookie/token export, or IC.net write action was used.
 - limitations:
-  - The authenticated live result response still completes as a 108-character script-only document containing `q.js`, without a `<body>` or product rows, in unmodified headed Chrome. The local real sample proves parser behavior but is not a successful live retrieval.
-  - The Task Packet explicitly requires a successful authenticated live smoke; therefore RESEARCH-003 remains blocked and a PR must not be created yet.
-  - Completion requires an Owner-provided site-supported read-only path that returns the result document to an unmodified normal browser. Anti-bot or challenge bypass remains prohibited.
+  - V1 live acquisition requires an Owner-approved ordinary Chrome instance with official localhost CDP enabled and a dedicated authenticated IC.net profile. Interactive login challenges remain Owner actions and are never bypassed.
+  - Playwright-launched Chrome still receives the script-only result document; the verified V1 path is attachment to ordinary Chrome through official CDP, not browser-launch automation.
+  - Live counts and Brand observations are volatile smoke data, not permanent business constants.
   - Findchips, HQEW, LCSC, Bom.Ai, FX, final aggregation, Excel business-row completion, and Research orchestration remain future tasks.
