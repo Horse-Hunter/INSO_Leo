@@ -13,6 +13,8 @@ from .excel_output import (
     ResearchExcelOutput,
 )
 from .finalize import finalize_research_result
+from .findchips import FindchipsAdapter, FindchipsHttpClient
+from .fx import UsdRmbProvider, UsdRmbQuote
 from .icnet import (
     BrandResolution,
     CdpIcNetClient,
@@ -36,6 +38,8 @@ __all__ = [
     "ExcelConsistencyError",
     "ExcelOutputError",
     "ExcelWriteError",
+    "FindchipsAdapter",
+    "FindchipsHttpClient",
     "IcNetAdapter",
     "IcNetLogin",
     "IcNetPage",
@@ -48,6 +52,8 @@ __all__ = [
     "ResearchReasonCode",
     "ResearchResult",
     "ResearchStatus",
+    "UsdRmbProvider",
+    "UsdRmbQuote",
     "classify_stock",
     "extract_manufacturer_display",
     "finalize_research_result",
