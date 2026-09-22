@@ -39,7 +39,10 @@ class FakeClient:
 
 class UnavailableClient:
     def fetch_first_page(self, mpn: str) -> IcNetPage:
-        raise IcNetPageUnavailable("RESULT_PAGE_BLOCKED")
+        raise IcNetPageUnavailable(
+            "RESULT_PAGE_BLOCKED",
+            f"https://www.ic.net.cn/search/{mpn}.html?isExact=1",
+        )
 
 
 def _fields(result: object) -> dict[str, object]:
@@ -222,8 +225,10 @@ def test_unexpected_page_shape_and_client_failure_are_source_unavailable() -> No
 
     assert bad_page.source_result.outcome is SourceOutcome.SOURCE_UNAVAILABLE
     assert _fields(bad_page)["failure_code"] == "RESULT_CONTAINER_MISSING"
+    assert bad_page.source_result.evidence.source_url is not None
     assert blocked.source_result.outcome is SourceOutcome.SOURCE_UNAVAILABLE
     assert _fields(blocked)["failure_code"] == "RESULT_PAGE_BLOCKED"
+    assert blocked.source_result.evidence.source_url is not None
 
 
 def test_login_repr_does_not_expose_secret_values() -> None:
