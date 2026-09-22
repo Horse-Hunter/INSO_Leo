@@ -1,9 +1,10 @@
-"""Minimal non-persistent OAuth path for read-only Google Sheets access."""
+"""Minimal non-persistent OAuth paths for Google Sheets access."""
 
 from pathlib import Path
 from typing import Any
 
 READ_ONLY_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
+READ_WRITE_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 
 
 class GoogleSheetsDependencyError(RuntimeError):
@@ -19,6 +20,33 @@ def build_read_only_google_sheets_service(
 ) -> Any:
     """Authorize interactively without persisting tokens and build Sheets v4."""
 
+    return _build_google_sheets_service(
+        client_secret_file,
+        scope=READ_ONLY_SCOPE,
+        access_description="read-only",
+    )
+
+
+def build_read_write_google_sheets_service(
+    client_secret_file: str | Path,
+) -> Any:
+    """Authorize for Sheets reads/writes without persisting tokens."""
+
+    return _build_google_sheets_service(
+        client_secret_file,
+        scope=READ_WRITE_SCOPE,
+        access_description="read/write",
+    )
+
+
+def _build_google_sheets_service(
+    client_secret_file: str | Path,
+    *,
+    scope: str,
+    access_description: str,
+) -> Any:
+    """Build one Sheets v4 service for the explicitly supplied OAuth scope."""
+
     try:
         from google_auth_oauthlib.flow import InstalledAppFlow
         from googleapiclient.discovery import build
@@ -30,7 +58,7 @@ def build_read_only_google_sheets_service(
     try:
         flow = InstalledAppFlow.from_client_secrets_file(
             str(client_secret_file),
-            scopes=[READ_ONLY_SCOPE],
+            scopes=[scope],
         )
         credentials = flow.run_local_server(port=0)
         return build(
@@ -41,5 +69,5 @@ def build_read_only_google_sheets_service(
         )
     except Exception as exc:
         raise GoogleSheetsAuthorizationError(
-            "Unable to authorize read-only Google Sheets access"
+            f"Unable to authorize {access_description} Google Sheets access"
         ) from exc
