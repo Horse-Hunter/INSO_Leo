@@ -259,6 +259,7 @@ Do not persist credentials, cookies, tokens, full raw HTML, or unnecessary perso
   - `py -3.12 -m pytest tests/research`: 60 passed.
   - `py -3.12 -m ruff check src/research/icnet.py src/research/__init__.py tests/research/test_icnet.py`: passed.
   - Authenticated headed live smoke through the implemented Adapter used the configured `ic.net.cn` Credential Provider entry and returned `SOURCE_UNAVAILABLE` with `failure_code = RESULT_PAGE_BLOCKED`; Evidence retained the non-secret result URL.
+  - A separate headed standard-Chrome check logged in successfully and navigated directly to the Owner-specified HTTPS URL `https://www.ic.net.cn/search/BE890D3S152T0I1000.html`. The HTTPS response was HTTP 200 and the final URL remained HTTPS, but the complete document still had no `<body>`, result rows, or target-MPN nodes.
   - No CAPTCHA, OTP, device verification, stealth setting, browser-fingerprint change, challenge-script analysis, cookie persistence/reuse, or IC.net write action was used.
 - limitations:
   - The authenticated live result response still completes as a 108-character script-only document containing `q.js`, without a `<body>` or product rows, in unmodified headed Chrome. The local real sample proves parser behavior but is not a successful live retrieval.
