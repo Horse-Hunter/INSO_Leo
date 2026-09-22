@@ -412,7 +412,7 @@ class FindchipsAdapter:
             fx_quote = self._fx_provider.get_quote()
             if not isinstance(fx_quote, UsdRmbQuote):
                 raise TypeError("FX provider returned an invalid quote")
-        except Exception:
+        except Exception:  # noqa: BLE001 - external provider boundary
             return self._unavailable(
                 target_mpn,
                 "FX_QUOTE_UNAVAILABLE",
