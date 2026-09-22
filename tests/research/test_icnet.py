@@ -5,6 +5,7 @@ import pytest
 
 from src.research.icnet import (
     BrandResolution,
+    CdpIcNetClient,
     IcNetAdapter,
     IcNetLogin,
     IcNetPage,
@@ -43,6 +44,76 @@ class UnavailableClient:
             "RESULT_PAGE_BLOCKED",
             f"https://www.ic.net.cn/search/{mpn}.html?isExact=1",
         )
+
+
+class FakeLocator:
+    def __init__(self, count: int) -> None:
+        self._count = count
+
+    def count(self) -> int:
+        return self._count
+
+
+class FakeCdpPage:
+    def __init__(self, url: str, html: str, *, has_body: bool = True) -> None:
+        self.url = url
+        self.html = html
+        self.has_body = has_body
+        self.goto_calls: list[tuple[str, str, int]] = []
+
+    def goto(self, url: str, *, wait_until: str, timeout: int) -> None:
+        self.goto_calls.append((url, wait_until, timeout))
+        self.url = url
+
+    def wait_for_load_state(self, state: str, *, timeout: int) -> None:
+        assert state == "load"
+        assert timeout > 0
+
+    def wait_for_timeout(self, timeout: int) -> None:
+        assert timeout >= 0
+
+    def locator(self, selector: str) -> FakeLocator:
+        assert selector == "body"
+        return FakeLocator(int(self.has_body))
+
+    def content(self) -> str:
+        return self.html
+
+
+class FakeCdpContext:
+    def __init__(self, pages: list[FakeCdpPage]) -> None:
+        self.pages = pages
+
+    def new_page(self) -> FakeCdpPage:
+        page = FakeCdpPage("about:blank", "<html><body></body></html>")
+        self.pages.append(page)
+        return page
+
+
+class FakeCdpBrowser:
+    def __init__(self, context: FakeCdpContext) -> None:
+        self.contexts = [context]
+
+
+class FakeChromium:
+    def __init__(self, browser: FakeCdpBrowser) -> None:
+        self.browser = browser
+        self.connect_calls: list[tuple[str, int]] = []
+
+    def connect_over_cdp(self, url: str, *, timeout: int) -> FakeCdpBrowser:
+        self.connect_calls.append((url, timeout))
+        return self.browser
+
+
+class FakePlaywright:
+    def __init__(self, chromium: FakeChromium) -> None:
+        self.chromium = chromium
+
+    def __enter__(self) -> "FakePlaywright":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
 
 
 def _fields(result: object) -> dict[str, object]:
@@ -237,3 +308,76 @@ def test_login_repr_does_not_expose_secret_values() -> None:
     rendered = repr(login)
     assert "user-secret" not in rendered
     assert "password-secret" not in rendered
+
+
+
+def _cdp_client(
+    pages: list[FakeCdpPage],
+    *,
+    navigate: bool,
+) -> tuple[CdpIcNetClient, FakeChromium]:
+    context = FakeCdpContext(pages)
+    chromium = FakeChromium(FakeCdpBrowser(context))
+    client = CdpIcNetClient(
+        cdp_url="http://127.0.0.1:9333",
+        timeout_ms=1234,
+        settle_ms=0,
+        navigate=navigate,
+        playwright_factory=lambda: FakePlaywright(chromium),
+    )
+    return client, chromium
+
+
+def test_cdp_client_attach_only_reads_exact_existing_page() -> None:
+    target_url = "https://www.ic.net.cn/search/ABC-123.html"
+    page = FakeCdpPage(target_url, FIXTURE.read_text(encoding="utf-8"))
+    client, chromium = _cdp_client([page], navigate=False)
+
+    captured = client.fetch_first_page("ABC-123")
+
+    assert captured.url == target_url
+    assert captured.html == page.html
+    assert page.goto_calls == []
+    assert chromium.connect_calls == [("http://127.0.0.1:9333", 1234)]
+
+
+def test_cdp_client_navigation_reuses_attached_normal_chrome_page() -> None:
+    page = FakeCdpPage(
+        "https://www.ic.net.cn/",
+        FIXTURE.read_text(encoding="utf-8"),
+    )
+    client, _ = _cdp_client([page], navigate=True)
+
+    captured = client.fetch_first_page("ABC-123")
+
+    target_url = "https://www.ic.net.cn/search/ABC-123.html"
+    assert captured.url == target_url
+    assert page.goto_calls == [(target_url, "domcontentloaded", 1234)]
+
+
+def test_cdp_client_attach_only_requires_target_page_to_be_open() -> None:
+    page = FakeCdpPage(
+        "https://www.ic.net.cn/search/OTHER.html",
+        FIXTURE.read_text(encoding="utf-8"),
+    )
+    client, _ = _cdp_client([page], navigate=False)
+
+    with pytest.raises(IcNetPageUnavailable, match="CDP_TARGET_PAGE_NOT_OPEN"):
+        client.fetch_first_page("ABC-123")
+
+    assert page.goto_calls == []
+
+
+def test_cdp_client_fails_closed_when_attached_page_has_no_body() -> None:
+    target_url = "https://www.ic.net.cn/search/ABC-123.html"
+    page = FakeCdpPage(
+        target_url,
+        "<html></html>",
+        has_body=False,
+    )
+    client, _ = _cdp_client([page], navigate=False)
+
+    with pytest.raises(IcNetPageUnavailable, match="RESULT_PAGE_BLOCKED") as caught:
+        client.fetch_first_page("ABC-123")
+
+    assert caught.value.source_url == target_url
