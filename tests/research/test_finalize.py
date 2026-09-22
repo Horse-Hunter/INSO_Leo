@@ -23,6 +23,13 @@ class FailingOutput:
         raise ExcelWriteError("synthetic failure")
 
 
+def test_legacy_finalizer_is_not_exported_from_package_api() -> None:
+    from src import research
+
+    assert not hasattr(research, "finalize_research_result")
+    assert "finalize_research_result" not in research.__all__
+
+
 def test_success_requires_successful_persistence(tmp_path: Path) -> None:
     output = ResearchExcelOutput(tmp_path / "调研价格.xlsx")
 

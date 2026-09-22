@@ -185,3 +185,130 @@ def test_service_excel_failure_is_retryable_and_preserves_evidence() -> None:
     assert execution.result.status is ResearchStatus.RETRYABLE_FAILURE
     assert execution.price_sources == tuple(sources)
     assert execution.aggregation.lowest is not None
+
+
+def test_partial_then_success_clears_stale_remarks_without_duplicate(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "调研价格.xlsx"
+    partial_sources = [
+        _result(ResearchSource.FINDCHIPS, SourceOutcome.SUCCESS, "8"),
+        _result(ResearchSource.HQEW, SourceOutcome.SOURCE_UNAVAILABLE),
+        _result(ResearchSource.LCSC, SourceOutcome.NO_VALID_PRICE),
+        _result(ResearchSource.BOM_AI, SourceOutcome.NO_VALID_PRICE),
+    ]
+    success_sources = [
+        partial_sources[0],
+        _result(ResearchSource.HQEW, SourceOutcome.NO_VALID_PRICE),
+        partial_sources[2],
+        partial_sources[3],
+    ]
+    value = ResearchInput("inq_refresh", "ABC", None, 10, "A")
+
+    first = ResearchService(
+        icnet=FakeIcNet(),
+        findchips=FakePrice(partial_sources[0]),
+        hqew=FakePrice(partial_sources[1]),
+        lcsc=FakePrice(partial_sources[2]),
+        bom_ai=FakePrice(partial_sources[3]),
+        output=ResearchExcelOutput(path),
+    ).execute(value)
+    second = ResearchService(
+        icnet=FakeIcNet(),
+        findchips=FakePrice(success_sources[0]),
+        hqew=FakePrice(success_sources[1]),
+        lcsc=FakePrice(success_sources[2]),
+        bom_ai=FakePrice(success_sources[3]),
+        output=ResearchExcelOutput(path),
+    ).execute(value)
+
+    worksheet = load_workbook(path).active
+    headers = {
+        worksheet.cell(1, column).value: column
+        for column in range(1, worksheet.max_column + 1)
+    }
+    assert first.status is ResearchStatus.PARTIAL_SUCCESS
+    assert second.status is ResearchStatus.SUCCESS
+    assert worksheet.max_row == 2
+    assert worksheet.cell(2, headers["备注"]).value is None
+
+
+def test_new_no_price_snapshot_clears_old_market_reference(tmp_path: Path) -> None:
+    path = tmp_path / "调研价格.xlsx"
+    value = ResearchInput("inq_manual", "ABC", None, 10, "A")
+    priced = [
+        _result(ResearchSource.FINDCHIPS, SourceOutcome.SUCCESS, "8"),
+        _result(ResearchSource.HQEW, SourceOutcome.NO_VALID_PRICE),
+        _result(ResearchSource.LCSC, SourceOutcome.NO_VALID_PRICE),
+        _result(ResearchSource.BOM_AI, SourceOutcome.NO_VALID_PRICE),
+    ]
+    no_matches = [
+        _result(source, SourceOutcome.NO_STRICT_MPN_MATCH) for source in PRICE_SOURCES
+    ]
+
+    ResearchService(
+        icnet=FakeIcNet(),
+        findchips=FakePrice(priced[0]),
+        hqew=FakePrice(priced[1]),
+        lcsc=FakePrice(priced[2]),
+        bom_ai=FakePrice(priced[3]),
+        output=ResearchExcelOutput(path),
+    ).execute(value)
+    result = ResearchService(
+        icnet=FakeIcNet(),
+        findchips=FakePrice(no_matches[0]),
+        hqew=FakePrice(no_matches[1]),
+        lcsc=FakePrice(no_matches[2]),
+        bom_ai=FakePrice(no_matches[3]),
+        output=ResearchExcelOutput(path),
+    ).execute(value)
+
+    worksheet = load_workbook(path).active
+    headers = {
+        worksheet.cell(1, column).value: column
+        for column in range(1, worksheet.max_column + 1)
+    }
+    assert result.status is ResearchStatus.MANUAL_REVIEW_REQUIRED
+    assert worksheet.max_row == 2
+    assert worksheet.cell(2, headers["预计订单总价"]).value is None
+    assert worksheet.cell(2, headers["市场最低参考价"]).value is None
+
+
+def test_corrupted_workbook_load_becomes_retryable_failure(tmp_path: Path) -> None:
+    path = tmp_path / "调研价格.xlsx"
+    path.write_bytes(b"not an xlsx archive")
+    source = _result(ResearchSource.FINDCHIPS, SourceOutcome.SUCCESS, "8")
+    service = ResearchService(
+        icnet=FakeIcNet(),
+        findchips=FakePrice(source),
+        hqew=FakePrice(_result(ResearchSource.HQEW, SourceOutcome.NO_VALID_PRICE)),
+        lcsc=FakePrice(_result(ResearchSource.LCSC, SourceOutcome.NO_VALID_PRICE)),
+        bom_ai=FakePrice(_result(ResearchSource.BOM_AI, SourceOutcome.NO_VALID_PRICE)),
+        output=ResearchExcelOutput(path),
+    )
+
+    result = service.execute(ResearchInput("inq_corrupt", "ABC", None, 10, "A"))
+
+    assert result.status is ResearchStatus.RETRYABLE_FAILURE
+
+
+def test_synthetic_save_failure_becomes_retryable_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    def fail_save(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("synthetic openpyxl save failure")
+
+    monkeypatch.setattr("openpyxl.workbook.workbook.Workbook.save", fail_save)
+    source = _result(ResearchSource.FINDCHIPS, SourceOutcome.SUCCESS, "8")
+    service = ResearchService(
+        icnet=FakeIcNet(),
+        findchips=FakePrice(source),
+        hqew=FakePrice(_result(ResearchSource.HQEW, SourceOutcome.NO_VALID_PRICE)),
+        lcsc=FakePrice(_result(ResearchSource.LCSC, SourceOutcome.NO_VALID_PRICE)),
+        bom_ai=FakePrice(_result(ResearchSource.BOM_AI, SourceOutcome.NO_VALID_PRICE)),
+        output=ResearchExcelOutput(tmp_path / "调研价格.xlsx"),
+    )
+
+    result = service.execute(ResearchInput("inq_save", "ABC", None, 10, "A"))
+
+    assert result.status is ResearchStatus.RETRYABLE_FAILURE

@@ -21,7 +21,6 @@ from .excel_output import (
     ExcelWriteError,
     ResearchExcelOutput,
 )
-from .finalize import finalize_research_result
 from .findchips import FindchipsAdapter, FindchipsHttpClient
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .hqew import HqewAdapter, HqewHttpClient
@@ -87,7 +86,6 @@ __all__ = [
     "calendar_month_cutoff",
     "classify_stock",
     "extract_manufacturer_display",
-    "finalize_research_result",
     "parse_icnet_rows",
     "select_bom_ai_price",
     "select_brand_by_frequency",

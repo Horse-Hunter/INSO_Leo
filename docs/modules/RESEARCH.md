@@ -80,7 +80,7 @@ Local Excel output remains part of Research V1. A separate Excel or storage modu
 Return `MANUAL_REVIEW_REQUIRED` with `reason_code = NO_MATCHING_PRODUCT` only when all four price sources—Findchips, HQEW, LCSC, and Bom.Ai—were queried successfully and none returned a strict MPN match.
 
 - A technical failure must not be counted as “no match.”
-- If Bom.Ai finds a strict MPN match, the result must not be classified as `NO_MATCHING_PRODUCT`, even when the price is older than two months, unavailable, or absent.
+- If Bom.Ai finds a strict MPN match, the result must not be classified as `NO_MATCHING_PRODUCT`, even when the price is outside the one-calendar-month validity window, unavailable, or absent.
 - Product existence and price validity are separate decisions.
 - User-facing remarks wording and the broader reason-code catalog remain `UNKNOWN`.
 
@@ -143,10 +143,21 @@ The visible columns of `调研价格.xlsx`, in order, are `型号`, `品牌`,
 idempotency key. Decimal values are persisted as exact decimal text; display
 precision remains a presentation concern and is not rounded by Research.
 
+The known legacy schema `_inquiry_id | 重要等级 | 备注` is migrated
+deterministically to the canonical column order without duplicating rows or
+discarding those values. A workbook with an unrecognized or ambiguous schema
+fails closed. A complete `ResearchService` execution replaces the full business
+snapshot for its inquiry, including clearing stale values when the new value is
+explicitly empty. Ordinary workbook load, parse, migration, and save exceptions
+are converted to Research Excel errors and therefore to
+`RETRYABLE_FAILURE`; `KeyboardInterrupt` and `SystemExit` are not swallowed.
+
 `ResearchService` is the public single-call owner of IC.net, the canonical
 four price sources, aggregation, Excel persistence, and the final
 `ResearchResult`. It preserves per-source evidence in its detailed execution
 result and does not own Workflow scheduling or retry timing.
+The earlier `finalize_research_result` helper remains internal for compatibility
+but is not part of the package-level public API.
 
 ## Boundaries
 

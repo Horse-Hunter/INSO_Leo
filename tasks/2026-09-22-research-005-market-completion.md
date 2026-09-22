@@ -130,10 +130,15 @@ Provide one Workflow-callable Research capability: `ResearchInput -> IC.net -> f
   unmerged)
 - changed: HQEW, LCSC, Bom.Ai, ECB FX, aggregation, Research service, final Excel
   schema/idempotency, tests, and durable Research documentation.
-- verified: 126 tests passed; Research ruff passed; compileall and diff checks
-  passed before final documentation update; live reads recorded above.
-- limitations: HQEW currently requires interactive human completion of its
-  safety challenge for live data. Bom.Ai production login remains an injected
+- verified: 136 tests passed after the concentrated hardening pass; Research
+  ruff, compileall, and diff checks passed; live reads recorded above were not
+  repeated during local persistence hardening.
+- hardening: canonical legacy Excel migration, full-snapshot stale-cell clearing,
+  corrupted workbook and synthetic save failure conversion, package public API
+  cleanup, and canonical documentation synchronization.
+- limitations: HQEW live data may be unavailable behind its safety challenge,
+  but the selected temporary policy does not pause the workflow when another
+  valid price exists. Bom.Ai production login remains an injected
   browser boundary because the canonical branch does not yet contain the
   Credential Provider implementation. Display precision and concurrent workbook
   locking remain `UNKNOWN`; exact decimal values are preserved.

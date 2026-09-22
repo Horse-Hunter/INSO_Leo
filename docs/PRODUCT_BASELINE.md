@@ -99,7 +99,7 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
   `_inquiry_id` field is the technical idempotency key; retry or crash recovery
   must not create duplicate normal records.
 - `SUCCESS` and `PARTIAL_SUCCESS` may be returned only after the required Excel output succeeds. `PARTIAL_SUCCESS` also requires at least one valid price. Excel write failure returns `RETRYABLE_FAILURE`.
-- `NO_MATCHING_PRODUCT` maps to `MANUAL_REVIEW_REQUIRED` and is valid only when Findchips, HQEW, LCSC, and Bom.Ai all query successfully and none has a strict MPN match. Technical failure is not “no match”; a strict Bom.Ai match is not `NO_MATCHING_PRODUCT` even when pricing is older than two months, unavailable, or absent. Product existence and price validity are distinct.
+- `NO_MATCHING_PRODUCT` maps to `MANUAL_REVIEW_REQUIRED` and is valid only when Findchips, HQEW, LCSC, and Bom.Ai all query successfully and none has a strict MPN match. Technical failure is not “no match”; a strict Bom.Ai match is not `NO_MATCHING_PRODUCT` even when pricing is outside the one-calendar-month validity window, unavailable, or absent. Product existence and price validity are distinct.
 - Do not create a separate Excel/storage module unless later evidence shows a stable shared need across modules.
 
 ## Credential Provider

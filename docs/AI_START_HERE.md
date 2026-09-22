@@ -1,6 +1,8 @@
 # AI Start Here
 
-This repository is organized for long-lived collaboration among humans, ChatGPT, Codex, and Git. The current repository contains architecture and documentation scaffolding only; it does not contain working business functionality.
+This repository is organized for long-lived collaboration among humans, ChatGPT,
+Codex, and Git. It contains working Research V1 functionality plus architecture
+and documentation scaffolding for the remaining modules.
 
 ## Read in this order
 
@@ -39,4 +41,10 @@ This repository is organized for long-lived collaboration among humans, ChatGPT,
 - Verification baseline: pytest and ruff; packaging and exact commands remain `UNKNOWN`
 - Selected V1 infrastructure: Python `sqlite3`, openpyxl, Google Sheets API with OAuth User Authorization, ordinary HTTP first, and Playwright where JavaScript or login is required
 - External access: Research V1 is authorized only for read-only market research against the sources listed in `PRODUCT_BASELINE.md`; INSO and other production operations remain unauthorized
-- Business implementation: module behavior remains unimplemented; a local Credential Provider infrastructure capability exists
+- Research V1 implementation: source adapters, market aggregation, idempotent
+  Excel persistence, and the public `ResearchService` execution path are
+  implemented
+- Remaining implementation: Sheets, Workflow orchestration, INSO, and Quotation
+  business behavior remain unimplemented on the current branch
+- Credential Provider: the capability is documented, but its implementation is
+  not present in the canonical source tree
