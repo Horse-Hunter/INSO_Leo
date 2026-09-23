@@ -40,6 +40,16 @@ from .icnet import (
     select_brand_by_frequency,
     sum_certified_stock,
 )
+from .inso_history import (
+    InsoCredentialedClient,
+    InsoCredentialProvider,
+    InsoHistoryAdapter,
+    InsoHistoryCapture,
+    InsoHistoryRecord,
+    InsoLogin,
+    InsoReadError,
+    InsoReadOnlyBrowser,
+)
 from .lcsc import LcscAdapter, LcscHttpClient
 from .service import ResearchExecution, ResearchService
 
@@ -70,6 +80,14 @@ __all__ = [
     "IcNetParseError",
     "IcNetResult",
     "IcNetRow",
+    "InsoCredentialProvider",
+    "InsoCredentialedClient",
+    "InsoHistoryAdapter",
+    "InsoHistoryCapture",
+    "InsoHistoryRecord",
+    "InsoLogin",
+    "InsoReadError",
+    "InsoReadOnlyBrowser",
     "LcscAdapter",
     "LcscHttpClient",
     "PriceAggregation",

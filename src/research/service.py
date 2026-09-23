@@ -9,7 +9,7 @@ from .aggregation import PriceAggregation, aggregate_price_results
 from .contracts import ResearchInput, ResearchReasonCode, ResearchResult, ResearchStatus
 from .excel_output import ExcelOutputError, ResearchExcelOutput
 from .icnet import IcNetResult
-from .source_contracts import SourceOutcome, SourceResult
+from .source_contracts import ResearchSource, SourceResult, format_source_result
 
 
 class IcNetSearcher(Protocol):
@@ -39,10 +39,11 @@ class ResearchService:
         hqew: PriceSearcher,
         lcsc: PriceSearcher,
         bom_ai: PriceSearcher,
+        inso: PriceSearcher,
         output: ResearchExcelOutput,
     ) -> None:
         self._icnet = icnet
-        self._price_sources = (findchips, hqew, lcsc, bom_ai)
+        self._price_sources = (findchips, hqew, lcsc, bom_ai, inso)
         self._output = output
 
     def execute(self, research_input: ResearchInput) -> ResearchResult:
@@ -63,17 +64,17 @@ class ResearchService:
             aggregation.reason_code,
             aggregation.remarks,
         )
-        if status in {ResearchStatus.SUCCESS, ResearchStatus.PARTIAL_SUCCESS} and (
-            icnet.source_result.outcome is SourceOutcome.SOURCE_UNAVAILABLE
-        ):
-            status = ResearchStatus.PARTIAL_SUCCESS
-            reason_code = ResearchReasonCode.SOURCE_UNAVAILABLE
-            remarks = "部分调研来源暂时不可用"
-        if status is ResearchStatus.RETRYABLE_FAILURE:
-            result = ResearchResult(
-                research_input.inquiry_id, status, resolved_brand, reason_code, remarks
-            )
-            return ResearchExecution(result, icnet, price_results, aggregation)
+        source_values = {
+            result.source: format_source_result(result) for result in price_results
+        }
+        if set(source_values) != {
+            ResearchSource.FINDCHIPS,
+            ResearchSource.HQEW,
+            ResearchSource.LCSC,
+            ResearchSource.BOM_AI,
+            ResearchSource.INSO,
+        }:
+            raise ValueError("Research service requires all five price sources")
         try:
             self._output.upsert(
                 research_input.inquiry_id,
@@ -84,6 +85,7 @@ class ResearchService:
                 stock_label=icnet.stock_label,
                 estimated_total=aggregation.estimated_total,
                 market_reference=aggregation.market_reference,
+                source_values=source_values,
                 remarks=remarks,
             )
         except ExcelOutputError:

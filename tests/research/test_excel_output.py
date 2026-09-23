@@ -5,23 +5,18 @@ import pytest
 from openpyxl import Workbook, load_workbook
 
 from src.research.excel_output import (
-    BRAND_HEADER,
     CANONICAL_HEADERS,
     ESTIMATED_TOTAL_HEADER,
     IMPORTANCE_HEADER,
     INQUIRY_ID_HEADER,
-    MARKET_REFERENCE_HEADER,
-    MPN_HEADER,
-    QUANTITY_HEADER,
-    REMARKS_HEADER,
-    STOCK_HEADER,
     ExcelConsistencyError,
     ExcelWriteError,
     ResearchExcelOutput,
 )
+from src.research.source_contracts import ResearchSource
 
 
-def _headers(path: Path) -> dict[str, int]:
+def _columns(path: Path) -> dict[str, int]:
     worksheet = load_workbook(path).active
     return {
         worksheet.cell(1, column).value: column
@@ -29,145 +24,155 @@ def _headers(path: Path) -> dict[str, int]:
     }
 
 
-def test_upsert_is_idempotent_and_hides_inquiry_id(tmp_path: Path) -> None:
+def test_upsert_is_idempotent_hides_identity_and_preserves_raw_importance(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "调研价格.xlsx"
     output = ResearchExcelOutput(path)
 
     output.upsert("inq_1", importance_raw="A", remarks="first")
-    output.upsert("inq_1", importance_raw="B", remarks="updated")
+    output.upsert("inq_1", importance_raw="D", remarks="updated")
 
-    workbook = load_workbook(path)
-    worksheet = workbook.active
-    headers = _headers(path)
-    inquiry_col = headers[INQUIRY_ID_HEADER]
-    importance_col = headers[IMPORTANCE_HEADER]
-    remarks_col = headers[REMARKS_HEADER]
-
-    matching_rows = [
-        row
-        for row in range(2, worksheet.max_row + 1)
-        if worksheet.cell(row, inquiry_col).value == "inq_1"
-    ]
-    assert matching_rows == [2]
-    assert worksheet.cell(2, importance_col).value == "重要"
-    assert worksheet.cell(2, remarks_col).value == "updated"
-    assert (
-        worksheet.column_dimensions[worksheet.cell(1, inquiry_col).column_letter].hidden
-        is True
-    )
+    worksheet = load_workbook(path).active
+    columns = _columns(path)
+    assert worksheet.max_row == 2
+    assert worksheet.cell(2, columns[IMPORTANCE_HEADER]).value == "D"
+    assert worksheet.cell(2, columns["备注"]).value == "updated"
+    identity_letter = worksheet.cell(1, columns[INQUIRY_ID_HEADER]).column_letter
+    assert worksheet.column_dimensions[identity_letter].hidden is True
 
 
-@pytest.mark.parametrize(
-    ("importance_raw", "expected"),
-    [
-        ("A", "重要"),
-        ("B", "重要"),
-        ("C", "普通"),
-        ("", "普通"),
-        (None, "普通"),
-        ("a", "普通"),
-    ],
-)
-def test_importance_is_excel_display_only(
-    tmp_path: Path,
-    importance_raw: str | None,
-    expected: str,
+@pytest.mark.parametrize("importance_raw", ["A", "B", "C", "D", "", None])
+def test_importance_is_written_verbatim(
+    tmp_path: Path, importance_raw: str | None
 ) -> None:
     path = tmp_path / "调研价格.xlsx"
-    ResearchExcelOutput(path).upsert(
-        "inq_1",
-        importance_raw=importance_raw,
+    ResearchExcelOutput(path).upsert("inq_1", importance_raw=importance_raw)
+
+    worksheet = load_workbook(path).active
+    assert worksheet.cell(2, _columns(path)[IMPORTANCE_HEADER]).value == (
+        importance_raw or None
     )
 
-    workbook = load_workbook(path)
-    worksheet = workbook.active
-    headers = _headers(path)
-    assert worksheet.cell(2, headers[IMPORTANCE_HEADER]).value == expected
 
-
-def test_duplicate_inquiry_ids_fail_closed(tmp_path: Path) -> None:
-    path = tmp_path / "调研价格.xlsx"
-    workbook = Workbook()
-    worksheet = workbook.active
-    worksheet.append([INQUIRY_ID_HEADER, IMPORTANCE_HEADER, REMARKS_HEADER])
-    worksheet.append(["inq_1", "普通", "a"])
-    worksheet.append(["inq_1", "普通", "b"])
-    workbook.save(path)
-
-    with pytest.raises(ExcelConsistencyError):
-        ResearchExcelOutput(path).upsert(
-            "inq_1",
-            importance_raw="C",
-            remarks="new",
-        )
-
-
-def test_legacy_workbook_migrates_to_canonical_schema_without_data_loss(
+def test_previous_eight_visible_column_schema_migrates_without_fabricating_sources(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "调研价格.xlsx"
     workbook = Workbook()
     worksheet = workbook.active
-    worksheet.append([INQUIRY_ID_HEADER, IMPORTANCE_HEADER, REMARKS_HEADER])
-    worksheet.append(["inq_legacy", "普通", "legacy remark"])
-    worksheet.column_dimensions["A"].hidden = True
+    worksheet.append(
+        [
+            "型号",
+            "品牌",
+            "数量",
+            "重要等级",
+            "货量标识",
+            "预计订单总价",
+            "市场最低参考价",
+            "备注",
+            INQUIRY_ID_HEADER,
+        ]
+    )
+    worksheet.append(
+        ["ABC", "Acme", 10, "普通", "货多", "80", "8", "old", "inq_old"]
+    )
     workbook.save(path)
     workbook.close()
 
     ResearchExcelOutput(path).upsert(
-        "inq_legacy",
+        "inq_old",
         importance_raw="C",
-        mpn="ABC-1",
+        remarks=None,
+        source_values={
+            source: "无结果"
+            for source in (
+                ResearchSource.INSO,
+                ResearchSource.FINDCHIPS,
+                ResearchSource.HQEW,
+                ResearchSource.LCSC,
+                ResearchSource.BOM_AI,
+            )
+        },
     )
 
-    migrated = load_workbook(path)
-    worksheet = migrated.active
+    worksheet = load_workbook(path).active
     headers = [
-        worksheet.cell(row=1, column=column).value
+        worksheet.cell(1, column).value
         for column in range(1, worksheet.max_column + 1)
     ]
+    row = {header: worksheet.cell(2, index + 1).value for index, header in enumerate(headers)}
+    assert headers == list(CANONICAL_HEADERS)
+    assert row[INQUIRY_ID_HEADER] == "inq_old"
+    assert row["型号"] == "ABC"
+    assert row[ESTIMATED_TOTAL_HEADER] == "80"
+    assert row["INSO"] == "无结果"
+    assert row["Findchips"] == "无结果"
+    assert row["备注"] is None
+
+
+def test_minimal_known_schema_migrates_and_retains_row_identity(tmp_path: Path) -> None:
+    path = tmp_path / "调研价格.xlsx"
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.append([INQUIRY_ID_HEADER, IMPORTANCE_HEADER, "备注"])
+    worksheet.append(["inq_legacy", "普通", "legacy"])
+    workbook.save(path)
+    workbook.close()
+
+    ResearchExcelOutput(path).upsert(
+        "inq_legacy", importance_raw="B", mpn="ABC-1"
+    )
+
+    worksheet = load_workbook(path).active
+    headers = [worksheet.cell(1, col).value for col in range(1, worksheet.max_column + 1)]
     assert headers == list(CANONICAL_HEADERS)
     assert worksheet.max_row == 2
     assert worksheet.cell(2, headers.index(INQUIRY_ID_HEADER) + 1).value == "inq_legacy"
-    assert worksheet.cell(2, headers.index(IMPORTANCE_HEADER) + 1).value == "普通"
-    assert worksheet.cell(2, headers.index(REMARKS_HEADER) + 1).value == "legacy remark"
-    assert worksheet.cell(2, headers.index(MPN_HEADER) + 1).value == "ABC-1"
-    assert all(
-        worksheet.column_dimensions[
-            worksheet.cell(1, headers.index(header) + 1).column_letter
-        ].hidden
-        is not True
-        for header in CANONICAL_HEADERS
-        if header != INQUIRY_ID_HEADER
-    )
-    inquiry_letter = worksheet.cell(
-        1, headers.index(INQUIRY_ID_HEADER) + 1
-    ).column_letter
-    assert worksheet.column_dimensions[inquiry_letter].hidden is True
+    assert worksheet.cell(2, headers.index("型号") + 1).value == "ABC-1"
 
 
-def test_unrecognized_schema_fails_closed(tmp_path: Path) -> None:
+def test_duplicate_identity_anywhere_fails_closed(tmp_path: Path) -> None:
+    path = tmp_path / "调研价格.xlsx"
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.append(CANONICAL_HEADERS)
+    worksheet.append([None] * 13 + ["duplicate"])
+    worksheet.append([None] * 13 + ["duplicate"])
+    workbook.save(path)
+    workbook.close()
+
+    with pytest.raises(ExcelConsistencyError, match="duplicate"):
+        ResearchExcelOutput(path).upsert("new", importance_raw="A")
+
+
+def test_unknown_or_ambiguous_schema_fails_closed(tmp_path: Path) -> None:
     path = tmp_path / "调研价格.xlsx"
     workbook = Workbook()
     worksheet = workbook.active
     worksheet.append([INQUIRY_ID_HEADER, "未知列"])
-    worksheet.append(["inq_1", "must not be guessed"])
+    worksheet.append(["inq_1", "do not guess"])
     workbook.save(path)
     workbook.close()
 
     with pytest.raises(ExcelConsistencyError, match="unrecognized"):
         ResearchExcelOutput(path).upsert("inq_1", importance_raw="A")
-
-    unchanged = load_workbook(path).active
-    assert unchanged.cell(1, 2).value == "未知列"
-    assert unchanged.cell(2, 2).value == "must not be guessed"
+    assert load_workbook(path).active.cell(2, 2).value == "do not guess"
 
 
-def test_explicit_none_clears_stale_snapshot_values_without_duplicate(
-    tmp_path: Path,
-) -> None:
+def test_full_snapshot_explicit_none_clears_stale_cells(tmp_path: Path) -> None:
     path = tmp_path / "调研价格.xlsx"
     output = ResearchExcelOutput(path)
+    sources = {
+        source: "8"
+        for source in (
+            ResearchSource.INSO,
+            ResearchSource.FINDCHIPS,
+            ResearchSource.HQEW,
+            ResearchSource.LCSC,
+            ResearchSource.BOM_AI,
+        )
+    }
     output.upsert(
         "inq_1",
         importance_raw="A",
@@ -177,38 +182,39 @@ def test_explicit_none_clears_stale_snapshot_values_without_duplicate(
         stock_label="货少",
         estimated_total=Decimal(80),
         market_reference="8",
-        remarks="部分价格源暂时不可用",
+        source_values=sources,
+        remarks="old",
     )
-
     output.upsert(
         "inq_1",
-        importance_raw="C",
+        importance_raw="D",
         mpn=None,
         brand=None,
         quantity=None,
         stock_label=None,
         estimated_total=None,
         market_reference=None,
+        source_values={source: "无结果" for source in sources},
         remarks=None,
     )
 
     worksheet = load_workbook(path).active
-    headers = _headers(path)
+    columns = _columns(path)
     assert worksheet.max_row == 2
-    assert worksheet.cell(2, headers[IMPORTANCE_HEADER]).value == "普通"
     for header in (
-        MPN_HEADER,
-        BRAND_HEADER,
-        QUANTITY_HEADER,
-        STOCK_HEADER,
+        "型号",
+        "品牌",
+        "数量",
+        "货量标识",
         ESTIMATED_TOTAL_HEADER,
-        MARKET_REFERENCE_HEADER,
-        REMARKS_HEADER,
+        "市场最低参考价",
+        "备注",
     ):
-        assert worksheet.cell(2, headers[header]).value is None
+        assert worksheet.cell(2, columns[header]).value is None
+    assert worksheet.cell(2, columns["Findchips"]).value == "无结果"
 
 
-def test_save_failure_is_wrapped_as_excel_write_error(
+def test_save_failure_is_wrapped_and_does_not_create_target(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = tmp_path / "调研价格.xlsx"
@@ -217,8 +223,6 @@ def test_save_failure_is_wrapped_as_excel_write_error(
         raise RuntimeError("synthetic save failure")
 
     monkeypatch.setattr(Workbook, "save", fail_save)
-
     with pytest.raises(ExcelWriteError, match="unable to save"):
         ResearchExcelOutput(path).upsert("inq_1", importance_raw="A")
-
     assert not path.exists()

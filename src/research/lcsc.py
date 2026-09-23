@@ -6,7 +6,7 @@ import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Protocol
 from urllib.error import HTTPError, URLError
@@ -16,12 +16,14 @@ from urllib.request import Request, urlopen
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .source_contracts import (
     EvidenceField,
+    MpnMatchKind,
     PriceCandidate,
     ResearchSource,
     SourceEvidence,
     SourceOutcome,
     SourceResult,
-    is_strict_mpn_match,
+    calendar_month_cutoff,
+    price_source_mpn_match,
 )
 
 LCSC_USER_AGENT = "INSO-Leo-Research/1.0 (read-only LCSC adapter)"
@@ -63,6 +65,7 @@ class LcscProduct:
     is_preorder: bool
     stock_quantity: int | None
     tiers: tuple[LcscPriceTier, ...]
+    observed_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,14 +161,51 @@ def parse_lcsc_product(html: str) -> LcscProduct:
     stock = data.get("stockNumber")
     if stock is not None and (isinstance(stock, bool) or not isinstance(stock, int)):
         raise LcscParseError("STOCK_UNPARSEABLE")
-    return LcscProduct(mpn, bool(data.get("isPreSale", False)), stock, tuple(tiers))
+    observed_at = _parse_optional_date(
+        data.get("quoteDate") or data.get("updateTime") or data.get("updatedAt")
+    )
+    return LcscProduct(
+        mpn,
+        bool(data.get("isPreSale", False)),
+        stock,
+        tuple(tiers),
+        observed_at,
+    )
+
+
+_CHINA_TZ = timezone(timedelta(hours=8))
+
+
+def _parse_optional_date(value: object) -> datetime | None:
+    if value is None or not isinstance(value, str) or not value.strip():
+        return None
+    raw = value.strip()
+    for pattern in ("%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(raw, pattern).replace(
+                tzinfo=_CHINA_TZ
+            ).astimezone(UTC)
+        except ValueError:
+            continue
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise LcscParseError("QUOTE_DATE_UNPARSEABLE") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=_CHINA_TZ)
+    return parsed.astimezone(UTC)
 
 
 def select_lcsc_tier(
     tiers: tuple[LcscPriceTier, ...], quantity: int
 ) -> LcscPriceTier | None:
-    applicable = [tier for tier in tiers if tier.break_quantity <= quantity]
-    return max(applicable, key=lambda tier: tier.break_quantity) if applicable else None
+    del quantity
+    applicable = [tier for tier in tiers if tier.currency in {"USD", "RMB", "CNY"}]
+    return (
+        min(applicable, key=lambda tier: (tier.unit_price, tier.break_quantity))
+        if applicable
+        else None
+    )
 
 
 class LcscAdapter:
@@ -186,14 +226,40 @@ class LcscAdapter:
             product = parse_lcsc_product(page.html)
         except LcscError as exc:
             return self._failure(target_mpn, exc)
-        if not is_strict_mpn_match(target_mpn, product.mpn):
+        match = price_source_mpn_match(target_mpn, product.mpn)
+        if match is None:
             return self._result(
-                target_mpn, page, product, SourceOutcome.NO_STRICT_MPN_MATCH, None, None
+                target_mpn,
+                page,
+                product,
+                SourceOutcome.NO_STRICT_MPN_MATCH,
+                None,
+                None,
+                None,
+            )
+        now = self._clock()
+        if product.observed_at is not None and not (
+            calendar_month_cutoff(now) <= product.observed_at <= now
+        ):
+            return self._result(
+                target_mpn,
+                page,
+                product,
+                SourceOutcome.NO_VALID_PRICE,
+                None,
+                None,
+                None,
             )
         tier = select_lcsc_tier(product.tiers, customer_quantity)
         if tier is None or tier.currency not in {"USD", "RMB", "CNY"}:
             return self._result(
-                target_mpn, page, product, SourceOutcome.NO_VALID_PRICE, None, None
+                target_mpn,
+                page,
+                product,
+                SourceOutcome.NO_VALID_PRICE,
+                None,
+                None,
+                None,
             )
         quote: UsdRmbQuote | None = None
         if tier.currency == "USD":
@@ -216,9 +282,22 @@ class LcscAdapter:
             normalized,
             page.captured_at,
             page.url,
+            product.mpn if match is MpnMatchKind.SUFFIX else None,
+        )
+        stocked = (
+            product.stock_quantity is not None
+            and product.stock_quantity > 0
+            and not product.is_preorder
         )
         return self._result(
-            target_mpn, page, product, SourceOutcome.SUCCESS, candidate, quote, tier
+            target_mpn,
+            page,
+            product,
+            SourceOutcome.SUCCESS,
+            candidate if stocked else None,
+            candidate if not stocked else None,
+            quote,
+            tier,
         )
 
     def _result(
@@ -228,6 +307,7 @@ class LcscAdapter:
         product: LcscProduct,
         outcome: SourceOutcome,
         candidate: PriceCandidate | None,
+        out_of_stock_candidate: PriceCandidate | None,
         quote: UsdRmbQuote | None,
         tier: LcscPriceTier | None = None,
     ) -> SourceResult:
@@ -245,19 +325,31 @@ class LcscAdapter:
             EvidenceField("fx_rate", quote.rate if quote else None),
             EvidenceField(
                 "normalized_rmb_price",
-                candidate.normalized_rmb_price if candidate else None,
+                (
+                    candidate.normalized_rmb_price
+                    if candidate
+                    else out_of_stock_candidate.normalized_rmb_price
+                    if out_of_stock_candidate
+                    else None
+                ),
             ),
         )
         evidence = SourceEvidence(
             ResearchSource.LCSC,
             query,
-            product.mpn if is_strict_mpn_match(query, product.mpn) else None,
+            product.mpn if price_source_mpn_match(query, product.mpn) else None,
             outcome,
             page.captured_at,
             page.url,
             fields,
         )
-        return SourceResult(ResearchSource.LCSC, outcome, evidence, candidate)
+        return SourceResult(
+            ResearchSource.LCSC,
+            outcome,
+            evidence,
+            candidate,
+            out_of_stock_candidate,
+        )
 
     def _failure(self, query: str, exc: LcscError) -> SourceResult:
         evidence = SourceEvidence(

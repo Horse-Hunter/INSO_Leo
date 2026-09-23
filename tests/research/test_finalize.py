@@ -86,5 +86,5 @@ def test_manual_review_reason_and_importance_are_persisted(tmp_path: Path) -> No
     }
 
     assert result.status is ResearchStatus.MANUAL_REVIEW_REQUIRED
-    assert worksheet.cell(2, headers[IMPORTANCE_HEADER]).value == "普通"
+    assert worksheet.cell(2, headers[IMPORTANCE_HEADER]).value == "C"
     assert worksheet.cell(2, headers["备注"]).value == "需要人工介入"

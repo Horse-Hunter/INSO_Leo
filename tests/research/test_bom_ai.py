@@ -10,10 +10,14 @@ from src.research.bom_ai import (
     BomAiLogin,
     BomAiPriceRecord,
     BomAiRawPage,
-    calendar_month_cutoff,
     parse_bom_ai_price_records,
 )
-from src.research.source_contracts import SourceOutcome
+from src.research.fx import UsdRmbQuote
+from src.research.source_contracts import (
+    SourceOutcome,
+    calendar_month_cutoff,
+    format_source_result,
+)
 
 NOW = datetime(2026, 9, 22, 12, tzinfo=UTC)
 
@@ -26,95 +30,96 @@ class Client:
         return BomAiCapture(self.records, "https://www.bom.ai/search", NOW)
 
 
-def cutoff(now: datetime) -> datetime:
-    return now - timedelta(days=31)
+class Fx:
+    def get_quote(self) -> UsdRmbQuote:
+        return UsdRmbQuote(Decimal(7), NOW, "synthetic-test-only")
 
 
-def test_seven_day_window_wins_over_cheaper_month_price() -> None:
+def test_one_natural_month_minimum_has_no_seven_day_preference() -> None:
     records = (
         BomAiPriceRecord("ABC", Decimal(8), NOW - timedelta(days=2)),
         BomAiPriceRecord("ABC", Decimal(7), NOW - timedelta(days=6)),
         BomAiPriceRecord("ABC", Decimal(1), NOW - timedelta(days=20)),
     )
-    result = BomAiAdapter(Client(records), cutoff, clock=lambda: NOW).search("ABC", 1)
+    result = BomAiAdapter(Client(records), clock=lambda: NOW).search("ABC", 1)
     assert result.price_candidate is not None
-    assert result.price_candidate.raw_price == Decimal(7)
+    assert result.price_candidate.raw_price == Decimal(1)
 
 
-def test_month_fallback_expiry_and_strict_no_match() -> None:
-    month = BomAiAdapter(
-        Client((BomAiPriceRecord("ABC", Decimal(2), NOW - timedelta(days=20)),)),
-        cutoff,
+def test_suffix_match_expiry_and_overlong_suffix() -> None:
+    suffix = BomAiAdapter(
+        Client((BomAiPriceRecord("ABC-T", Decimal(2), NOW),)),
         clock=lambda: NOW,
     ).search("ABC", 1)
     expired = BomAiAdapter(
         Client((BomAiPriceRecord("ABC", Decimal(1), NOW - timedelta(days=40)),)),
-        cutoff,
         clock=lambda: NOW,
     ).search("ABC", 1)
     mismatch = BomAiAdapter(
-        Client((BomAiPriceRecord("ABC-T", Decimal(1), NOW),)), cutoff, clock=lambda: NOW
+        Client((BomAiPriceRecord("ABC-ABCDEF", Decimal(1), NOW),)),
+        clock=lambda: NOW,
     ).search("ABC", 1)
-    assert (
-        month.price_candidate is not None
-        and month.price_candidate.raw_price == Decimal(2)
-    )
+    assert suffix.price_candidate is not None
+    assert format_source_result(suffix) == "2（ABC-T）"
     assert expired.outcome is SourceOutcome.NO_VALID_PRICE
     assert mismatch.outcome is SourceOutcome.NO_STRICT_MPN_MATCH
 
 
-def test_login_repr_hides_secret() -> None:
-    rendered = repr(BomAiLogin("user-secret", "password-secret", "company-secret"))
-    assert "user-secret" not in rendered
-    assert "password-secret" not in rendered
-    assert "company-secret" not in rendered
-
-
 @pytest.mark.parametrize(
-    ("now", "expected"),
+    ("now", "months", "expected"),
     [
         (
             datetime(2026, 3, 31, 9, 15, tzinfo=UTC),
+            1,
             datetime(2026, 2, 28, 9, 15, tzinfo=UTC),
         ),
         (
             datetime(2024, 3, 31, 9, 15, tzinfo=UTC),
+            1,
             datetime(2024, 2, 29, 9, 15, tzinfo=UTC),
         ),
         (
-            datetime(2026, 1, 30, 9, 15, tzinfo=UTC),
-            datetime(2025, 12, 30, 9, 15, tzinfo=UTC),
+            datetime(2026, 3, 31, 9, 15, tzinfo=UTC),
+            2,
+            datetime(2026, 1, 31, 9, 15, tzinfo=UTC),
         ),
     ],
 )
 def test_calendar_month_cutoff_clamps_month_ends(
-    now: datetime, expected: datetime
+    now: datetime, months: int, expected: datetime
 ) -> None:
-    assert calendar_month_cutoff(now) == expected
+    assert calendar_month_cutoff(now, months) == expected
 
 
-def test_authenticated_html_parser_uses_strict_page_identity_and_absolute_dates() -> (
-    None
-):
+def test_parser_binds_quotes_to_matching_model_section_and_detects_currency() -> None:
     html = """
-    <h3>ABC-1</h3>
-    <data><quotePrice>2.50</quotePrice><quoteDate>2026/9/21 14:30:40</quoteDate></data>
-    <data><quotePrice>{{stock.Price}}</quotePrice><quoteDate>{{stock.Date}}</quoteDate></data>
+    <div><data><quotePrice>0.01</quotePrice><quoteDate>2026/9/22 08:00:00</quoteDate></data></div>
+    <h3>OTHER</h3>
+    <data><quotePrice>0.02</quotePrice><quoteDate>2026/9/22 08:00:00</quoteDate></data>
+    <h3>ABC-1-T</h3>
+    <data><quotePrice>$1.25</quotePrice><quoteDate>2026/9/21 14:30:40</quoteDate></data>
+    <data><quotePrice>¥8.50</quotePrice><quoteDate>2026/9/20 14:30:40</quoteDate></data>
+    <h3>AFTER</h3>
+    <data><quotePrice>0.03</quotePrice><quoteDate>2026/9/22 08:00:00</quoteDate></data>
     """
+    records = parse_bom_ai_price_records(html, "ABC-1")
+    assert [(record.mpn, record.raw_price, record.currency) for record in records] == [
+        ("ABC-1-T", Decimal("1.25"), "USD"),
+        ("ABC-1-T", Decimal("8.50"), "RMB"),
+    ]
 
-    records = parse_bom_ai_price_records(html, "abc-1")
-
-    assert records == (
-        BomAiPriceRecord(
-            "abc-1",
-            Decimal("2.50"),
-            datetime(2026, 9, 21, 6, 30, 40, tzinfo=UTC),
-        ),
-    )
-    assert parse_bom_ai_price_records(html, "ABC-1-T") == ()
+    result = BomAiAdapter(
+        Client(records), fx_provider=Fx(), clock=lambda: NOW
+    ).search("ABC-1", 1)
+    assert result.price_candidate is not None
+    assert result.price_candidate.normalized_rmb_price == Decimal("8.50")
+    assert result.price_candidate.raw_currency == "RMB"
 
 
-def test_credentialed_client_uses_site_id_and_keeps_browser_injected() -> None:
+def test_login_repr_hides_secret_and_client_only_exposes_read_capture() -> None:
+    rendered = repr(BomAiLogin("user-secret", "password-secret", "company-secret"))
+    assert "secret" not in rendered
+
     class Credentials:
         seen_site_id: str | None = None
 
@@ -123,10 +128,7 @@ def test_credentialed_client_uses_site_id_and_keeps_browser_injected() -> None:
             return BomAiLogin("user-secret", "password-secret")
 
     class Browser:
-        seen_login: BomAiLogin | None = None
-
         def fetch_price_page(self, mpn: str, login: BomAiLogin) -> BomAiRawPage:
-            self.seen_login = login
             return BomAiRawPage(
                 f"<h3>{mpn}</h3><data><quotePrice>1.25</quotePrice>"
                 "<quoteDate>2026/9/22 08:00:00</quoteDate></data>",
@@ -135,9 +137,8 @@ def test_credentialed_client_uses_site_id_and_keeps_browser_injected() -> None:
             )
 
     credentials = Credentials()
-    browser = Browser()
-    capture = BomAiCredentialedClient(credentials, browser).fetch_price_records("ABC")
-
+    capture = BomAiCredentialedClient(credentials, Browser()).fetch_price_records(
+        "ABC"
+    )
     assert credentials.seen_site_id == "bom.ai"
-    assert browser.seen_login is not None
     assert capture.records[0].unit_price_rmb == Decimal("1.25")
