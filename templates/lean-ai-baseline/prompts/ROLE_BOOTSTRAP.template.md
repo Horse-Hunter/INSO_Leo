@@ -1,11 +1,12 @@
 # 新窗口身份声明模板
 
-新建 Chat/Codex 时，把以下内容作为第一条消息，并替换全部占位符：
+新建 Chat/Executor 时，把以下内容作为第一条消息，并替换全部占位符：
 
 ```text
 【角色身份】
 
 角色：<CANONICAL_ROLE>
+实际执行工具：<CODEX | BUDDY | OTHER>
 所属模块：<MODULE_ID / architecture / utility>
 直属上级：<DIRECT_SUPERIOR>
 

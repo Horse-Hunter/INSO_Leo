@@ -8,11 +8,11 @@
 | --- | --- | --- |
 | Human Owner | 无强制要求 | 决策所需证据 |
 | CEO / Architecture Chat | `AI_TEAM.md`、`BOUNDARIES.md`、`PRODUCT_BASELINE.md`、`MODULE_INDEX.md` | 相关 module doc、Git 当前事实 |
-| Architecture Codex | `AGENTS.md`、当前 Task、`AI_TEAM.md`、直接相关架构文档 | `BOUNDARIES.md`、`MODULE_INDEX.md` |
-| Requirements / Browser-Recon Codex | `AI_TEAM.md`、`BOUNDARIES.md`、`PRODUCT_BASELINE.md`、Owner 当前需求 | 相关 module doc、真实流程/Repo 证据 |
-| Utility Codex | `AGENTS.md`、当前 Task、直接相关文件 | `BOUNDARIES.md`、受影响 module doc |
+| Architecture Executor | `AGENTS.md`、当前 Task、`AI_TEAM.md`、直接相关架构文档 | `BOUNDARIES.md`、`MODULE_INDEX.md` |
+| Requirements / Browser-Recon Executor | `AI_TEAM.md`、`BOUNDARIES.md`、`PRODUCT_BASELINE.md`、Owner 当前需求 | 相关 module doc、真实流程/Repo 证据 |
+| Utility Executor | `AGENTS.md`、当前 Task、直接相关文件 | `BOUNDARIES.md`、受影响 module doc |
 | Module Chat | `AI_TEAM.md`、`TASK_PROTOCOL.md`、本模块 module doc | `BOUNDARIES.md`、`MODULE_INDEX.md`、相关 Public Contract |
-| Module Codex | `AGENTS.md`、当前 Task、本模块 module doc、相关代码 | 产品基线、模块注册表、其他 module docs、历史 Tasks |
+| Module Coding Executor | `AGENTS.md`、当前 Task、本模块 module doc、相关代码 | 产品基线、模块注册表、其他 module docs、历史 Tasks |
 
 ## Canonical 归属
 

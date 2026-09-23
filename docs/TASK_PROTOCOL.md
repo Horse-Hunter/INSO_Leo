@@ -1,6 +1,6 @@
 # Task Protocol
 
-一个阶段级 Task Packet 对应一个有边界的结果。Task 自带 Codex 所需上下文；历史 Tasks 是审计证据，不是默认阅读材料。
+一个阶段级 Task Packet 对应一个有边界的结果，并自带执行所需上下文。
 
 建议路径：`tasks/YYYY-MM-DD-short-slug.md`。
 
@@ -11,6 +11,7 @@
 
 status: proposed | ready | in_progress | blocked | complete
 actor_role: <canonical role>
+executor_tool: CODEX | BUDDY | OTHER  # optional；当前实际工具
 module: <module_id | architecture | utility>
 reports_to: <canonical superior>
 execution_mode: FAST_V1
@@ -33,6 +34,12 @@ architecture_impact: NONE | REQUIRED
 ## Acceptance
 - [ ] 可观察的验收结果。
 
+## Owner Decisions（optional）
+只记录会改变代码行为的正式决定。
+
+## Pending Owner Decision（temporary, optional）
+只记录当前唯一待确认问题。
+
 ## Execution
 写明必要检查、已授权副作用、commit/push 预期和停止点。
 
@@ -40,15 +47,21 @@ architecture_impact: NONE | REQUIRED
 使用下方 Codex 标准报告，记录限制和剩余 UNKNOWN。
 ```
 
-新增/删除/重命名模块、改变模块职责或依赖、公共 Contract、全局 Workflow、安全边界或 AI 角色时，必须设为 `architecture_impact: REQUIRED`。模块角色负责升级，CEO 决策，Architecture Codex 同步 canonical 文件。
+模块增删/改名、职责/依赖、公共 Contract、全局 Workflow、安全边界或 AI 角色变化时设 `architecture_impact: REQUIRED`；模块升级、CEO 决策、Architecture Codex 同步。
+
+## 执行器与上下文
+
+`actor_role` 是逻辑岗位，`executor_tool` 是当前工具。优先在 Task 边界切换；中途故障可 Handoff，但 Task ID、role、Scope、Contract、权限和 Acceptance 原则上不变。新执行器读取当前 Task、必要 canonical docs、`git status`、`git diff`、recent commits，不假定继承隐藏上下文。
+
+同一 dirty worktree 只允许一个写入执行器；并行须拆分 Write Scope/worktree。等待 Owner 时写 `Pending Owner Decision`；回答后、继续前移入 `Owner Decisions`。若未记录便中断，新执行器只确认该 Pending Decision。
 
 ## FAST_V1 执行
 
-在已批准 Scope 内，Codex 连续完成 diagnosis → implementation → tests → fix → smoke → self-review → commit → push。不得把简单功能机械拆成微型 Tasks，也不得因函数名、class/function 选择、mock、parser、selector、测试结构、内部异常封装、普通 library 选择、Scope 内小 bug 或非关键重构而停下来请示。
+Scope 内连续完成 diagnosis → implementation → tests → fix → smoke → self-review → commit → push。普通实现选择自主处理，不机械拆 Task。
 
-Codex 只在以下情形中断 Owner：必须决定真实业务行为；需要人工登录/CAPTCHA/OTP/设备验证；首次或未授权生产写；可能覆盖/删除真实数据；涉及敏感 Credential/客户消息/订单/支付；必须明显扩大已批准业务 Scope。普通实现问题自主决定。
+仅因真实业务决定、人工验证、未授权生产写、真实数据覆盖/删除、敏感 Credential/客户消息/订单/支付或明显扩 Scope 中断 Owner。
 
-所有外部副作用遵守 `BOUNDARIES.md`。新增网页流程先按 `AI_TEAM.md` 完成 Browser-first 观察，再优先用一个端到端阶段 Task 覆盖 understanding、adapter、parser、automation、integration、tests 和 smoke。
+外部副作用遵守 `BOUNDARIES.md`；新增网页流程先按 `AI_TEAM.md` 做 Browser-first，再发布端到端阶段 Task。
 
 ## Review
 
@@ -160,3 +173,5 @@ Codex 或下级机构必须向 Owner 提问时，第一屏使用：
 ## 完成标准
 
 报告 DONE 前：满足 Acceptance，运行适用检查，检查完整 diff，确认无无关内容或 Secret，更新 Task 状态，在授权时 commit/push，并停在 Task 边界。
+
+DONE 后删除 Pending Decision、临时 Handoff、debug/报错、中间方案和恢复说明；保留 Goal、Final Result、关键 Owner Decisions、Verification、Commit、Remaining Gap。长期决定提升到 canonical owner 文档；completed Task 仅供追溯，不是默认上下文。

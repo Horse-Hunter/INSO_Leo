@@ -1,6 +1,6 @@
 # Task Protocol
 
-一个阶段级 Task Packet 对应一个有边界的结果。Task 自带执行所需上下文；历史 Tasks 是审计证据，不是默认阅读材料。
+一个阶段级 Task Packet 对应一个有边界的结果，并自带执行所需上下文。
 
 建议路径：`tasks/YYYY-MM-DD-short-slug.md`。
 
@@ -11,6 +11,7 @@
 
 status: proposed | ready | in_progress | blocked | complete
 actor_role: <CANONICAL_ROLE>
+executor_tool: CODEX | BUDDY | OTHER  # optional
 module: <MODULE_ID | architecture | utility>
 reports_to: <CANONICAL_SUPERIOR>
 execution_mode: FAST_V1
@@ -33,6 +34,12 @@ architecture_impact: NONE | REQUIRED
 ## Acceptance
 - [ ] 可观察的验收结果。
 
+## Owner Decisions（optional）
+只记影响代码行为的正式决定。
+
+## Pending Owner Decision（temporary, optional）
+只记当前唯一待确认问题。
+
 ## Execution
 写明必要检查、已授权副作用、commit/push 预期和停止点。
 
@@ -40,15 +47,21 @@ architecture_impact: NONE | REQUIRED
 使用本文件的标准报告，记录限制和剩余 UNKNOWN。
 ```
 
-新增/删除/重命名模块，改变职责/依赖、公共 Contract、全局 Workflow、安全边界或 AI 角色时，设为 `architecture_impact: REQUIRED`。模块角色升级，CEO 决策，Architecture Codex 同步 canonical 文件。
+模块增删/改名、职责/依赖、公共 Contract、全局 Workflow、安全边界或 AI 角色变化时设 `architecture_impact: REQUIRED`；模块升级、CEO 决策、Architecture Executor 同步。
+
+## 执行器与上下文
+
+`actor_role` 是逻辑岗位，`executor_tool` 是当前工具。优先在 Task 边界切换；中途故障可 Handoff，但 Task ID、role、Scope、Contract、权限和 Acceptance 原则上不变。新执行器读取当前 Task、必要 canonical docs、`git status`、`git diff`、recent commits，不继承隐藏上下文。
+
+同一 dirty worktree 只允许一个写入执行器；并行须拆分 Write Scope/worktree。等待 Owner 时写 Pending；回答后、继续前移入 `Owner Decisions`。若未记录便中断，新执行器只确认该 Pending Decision。
 
 ## FAST_V1 执行
 
-Scope 内连续完成 diagnosis → implementation → tests → fix → smoke → self-review → commit → push。不得机械拆分简单功能，也不得因命名、内部结构、mock、parser、selector、测试布局、普通 library 选择、小 bug 或非关键重构而频繁请示。
+Scope 内连续完成 diagnosis → implementation → tests → fix → smoke → self-review → commit → push；普通实现选择自主处理，不机械拆 Task。
 
-只在以下情形中断 Owner：真实业务行为必须由 Owner 决定；人工登录/CAPTCHA/OTP/设备验证；首次或未授权生产写；可能覆盖/删除真实数据；敏感 Credential/客户消息/订单/支付；必须明显扩大业务 Scope。
+仅因真实业务决定、人工验证、未授权生产写、真实数据覆盖/删除、敏感 Credential/客户消息/订单/支付或明显扩 Scope 中断 Owner。
 
-所有外部副作用遵守 `BOUNDARIES.md`。新增网页流程先按 `AI_TEAM.md` 完成 Browser-first 观察，再发布端到端阶段 Task。
+外部副作用遵守 `BOUNDARIES.md`；新增网页流程先做 Browser-first，再发布端到端阶段 Task。
 
 ## Review
 
@@ -61,100 +74,15 @@ Scope 内连续完成 diagnosis → implementation → tests → fix → smoke �
 
 ## 标准报告
 
-Codex → 上级：
+- Coding Executor → 上级：状态、完成、验证、真实效果、剩余、Commit、Push、需要决定。
+- Module Chat → CEO：状态、完成、跨模块影响、需要 CEO 决定、下一步、Commit。
+- CEO → Owner：结论、进展、问题、需要你决定、下一步。
+- 向 Owner 提问第一屏：以前、现在、真实效果、你要做什么、还有什么没解决、建议、原因。
 
-```text
-状态：
-DONE / BLOCKED
-
-完成：
-- 核心结果
-
-验证：
-- 关键 tests / smoke
-
-真实效果：
-- 业务上现在能做什么
-
-剩余：
-NONE / 真实 gap
-
-Commit：
-<HASH>
-
-Push：
-SUCCESS / NOT PUSHED
-
-需要决定：
-NONE / 一个明确问题
-```
-
-Module Chat → CEO：
-
-```text
-状态：
-DONE / CONTINUE / BLOCKED / ESCALATE
-
-完成：
-<1-3 句>
-
-跨模块影响：
-NONE / <IMPACT>
-
-需要 CEO 决定：
-NONE / <ONE_DECISION>
-
-下一步：
-<NEXT_ACTION>
-
-Commit：
-<HASH_IF_ANY>
-```
-
-CEO → Owner：
-
-```text
-结论：
-<ONE_SENTENCE>
-
-进展：
-<IMPORTANT_DELTA>
-
-问题：
-NONE / <REAL_PROBLEM>
-
-需要你决定：
-NONE / <CLEAR_OPTIONS>
-
-下一步：
-<WHO_DOES_WHAT>
-```
-
-向 Owner 提问时，第一屏使用：
-
-```text
-以前：
-<OLD_STATE>
-
-现在：
-<CURRENT_PROBLEM>
-
-真实效果：
-<BUSINESS_IMPACT>
-
-你要做什么：
-<ONE_ACTION_OR_A_B>
-
-还有什么没解决：
-NONE / <GAP>
-
-建议：
-<A_OR_B>
-
-原因：
-<ONE_SENTENCE>
-```
+可复制格式和 Handoff 见 `prompts/REPORTS_HANDOFF.template.md`；保持结论优先，不搬运过程。
 
 ## 完成标准
 
 报告 DONE 前：满足 Acceptance，运行适用检查，检查完整 diff，确认无无关内容或 Secret，更新 Task 状态，在授权时 commit/push，并停在 Task 边界。
+
+DONE 后删除 Pending、临时 Handoff、debug/报错、中间方案和恢复说明；保留 Goal、Final Result、关键 Owner Decisions、Verification、Commit、Remaining Gap。长期决定提升到 canonical owner 文档；completed Task 仅供追溯，不是默认上下文。

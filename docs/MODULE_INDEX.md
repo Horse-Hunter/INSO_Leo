@@ -15,6 +15,8 @@
 
 测试按 `tests/<module>/` 镜像模块归属。
 
+表中的 `* Codex` 是逻辑执行岗位，不限定实际 Coding Agent；工具可按 `AI_TEAM.md` 替换，且不改变本注册表。
+
 ## 边界地图
 
 | module_id | responsibility | allowed dependencies | forbidden dependencies |

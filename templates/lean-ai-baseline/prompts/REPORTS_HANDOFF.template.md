@@ -2,12 +2,19 @@
 
 正式字段和状态以 `docs/TASK_PROTOCOL.md`、`docs/AI_TEAM.md` 为准；本文件只提供可复制提示词。
 
-## Codex 阶段汇报
+## Coding Executor 阶段汇报
 
 ```text
-请按 canonical Codex Final Report 输出，仅包含：
+请按 canonical Executor Final Report 输出，仅包含：
 状态 / 完成 / 验证 / 真实效果 / 剩余 / Commit / Push / 需要决定。
 结论优先，不搬运开发过程、长日志或大段代码。
+```
+
+## 管理层汇报
+
+```text
+Module Chat → CEO：状态 / 完成 / 跨模块影响 / 需要 CEO 决定 / 下一步 / Commit。
+CEO → Owner：结论 / 进展 / 问题 / 需要你决定 / 下一步。
 ```
 
 ## 向 Owner 提问
@@ -32,7 +39,7 @@
 新 Chat 必须先核对 Git 当前事实，再继续原职责。
 ```
 
-## Codex 强制交接
+## Executor 强制交接
 
 ```text
 # ⚠️ HANDOFF_REQUIRED

@@ -1,6 +1,6 @@
 # Lean AI Baseline 通用模板
 
-这套模板用于为新项目建立精简、可持续的 Human + Chat + Codex + Git 协作基线。它只提供治理方法和文档结构，不包含任何具体项目事实。
+这套模板用于为新项目建立精简、可持续的 Human + Chat + Coding Executor + Git 协作基线。它只提供治理方法和文档结构，不包含任何具体项目事实，也不绑定厂商或模型。
 
 ## 目录
 
@@ -24,7 +24,7 @@ lean-ai-baseline/
 
 | 文件 | 用途 |
 | --- | --- |
-| `AGENTS.template.md` | Codex 最低硬规则 |
+| `AGENTS.template.md` | Coding Executor 最低硬规则 |
 | `AI_START_HERE.template.md` | 按角色路由最小上下文 |
 | `AI_TEAM.template.md` | 组织、权限、升级和 Handoff |
 | `TASK_PROTOCOL.template.md` | 阶段级 Task、执行、Review 和完成标准 |
