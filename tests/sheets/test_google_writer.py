@@ -65,6 +65,25 @@ def test_google_writer_updates_only_target_brand_f_cell() -> None:
     ]
 
 
+def test_google_writer_updates_only_shahab_brand_e_cell() -> None:
+    service = FakeSheetsService()
+    target = WorksheetIdentity(spreadsheet="spreadsheet-id", worksheet="shahab")
+
+    GoogleSheetsBrandWriter(service).write_brand(target, 13, "Resolved Brand")
+
+    assert service.values_resource.update_calls == [
+        {
+            "spreadsheetId": "spreadsheet-id",
+            "range": "'shahab'!E13",
+            "valueInputOption": "RAW",
+            "body": {
+                "majorDimension": "ROWS",
+                "values": [["Resolved Brand"]],
+            },
+        }
+    ]
+
+
 def test_google_write_failure_is_sheets_owned() -> None:
     writer = GoogleSheetsBrandWriter(
         FakeSheetsService(RuntimeError("simulated Google failure"))

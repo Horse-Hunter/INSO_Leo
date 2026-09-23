@@ -56,6 +56,43 @@ def row(
     )
 
 
+def shahab_worksheet() -> WorksheetIdentity:
+    return WorksheetIdentity(spreadsheet="spreadsheet-id", worksheet="shahab")
+
+
+def shahab_identity(*, row_position: int = 4) -> SheetRecordIdentity:
+    return SheetRecordIdentity(
+        worksheet=shahab_worksheet(),
+        row_position=row_position,
+        identifying_snapshot=IdentifyingSnapshot(
+            status="未发",
+            importance_raw=None,
+            model="MPN-1",
+            brand=None,
+            quantity=10,
+        ),
+    )
+
+
+def shahab_row(
+    row_position: int,
+    *,
+    status: object = "未发",
+    model: object = "MPN-1",
+    brand: object = None,
+    quantity: object = 10,
+) -> WorksheetRow:
+    return WorksheetRow(
+        row_position=row_position,
+        cells={
+            "B": status,
+            "D": model,
+            "E": brand,
+            "F": quantity,
+        },
+    )
+
+
 class SequencedReader:
     def __init__(self, reads: Iterable[Iterable[WorksheetRow]]) -> None:
         self._reads = [tuple(items) for items in reads]
@@ -114,6 +151,11 @@ def test_duplicate_snapshot_matches_are_a_conflict() -> None:
             identity(row_position=4),
             [row(5), row(8)],
         )
+
+
+def test_original_position_does_not_bypass_standard_global_uniqueness() -> None:
+    with pytest.raises(SheetRecordConflict):
+        relocate_record(identity(), [row(4), row(8)])
 
 
 def test_blank_brand_is_rechecked_then_targeted_write_is_allowed() -> None:
@@ -199,3 +241,92 @@ def test_writer_failure_is_a_sheets_owned_write_error() -> None:
         write_brand_safely(reader, writer, identity(), "Resolved Brand")
 
     assert isinstance(raised.value.__cause__, RuntimeError)
+
+
+def test_shahab_unique_bdf_candidate_relocates_after_shift() -> None:
+    moved = shahab_row(9)
+
+    resolved = relocate_record(
+        shahab_identity(row_position=4),
+        [shahab_row(4, model="OTHER"), moved],
+    )
+
+    assert resolved is moved
+
+
+def test_shahab_zero_and_multiple_bdf_candidates_are_conflicts() -> None:
+    with pytest.raises(SheetRecordConflict):
+        relocate_record(shahab_identity(), [shahab_row(4, model="OTHER")])
+
+    with pytest.raises(SheetRecordConflict):
+        relocate_record(shahab_identity(), [shahab_row(5), shahab_row(8)])
+
+
+def test_shahab_brand_does_not_disambiguate_same_bdf_candidates() -> None:
+    reader = SequencedReader(
+        [[shahab_row(7), shahab_row(9, brand="Human Brand")]]
+    )
+    writer = FakeBrandWriter()
+
+    with pytest.raises(SheetRecordConflict):
+        write_brand_safely(
+            reader,
+            writer,
+            shahab_identity(row_position=4),
+            "Resolved Brand",
+        )
+
+    assert writer.calls == []
+
+
+def test_shahab_blank_e_is_rechecked_then_targeted_write_is_allowed() -> None:
+    reader = SequencedReader([[shahab_row(4)], [shahab_row(4)]])
+    writer = FakeBrandWriter()
+
+    result = write_brand_safely(
+        reader,
+        writer,
+        shahab_identity(),
+        "Resolved Brand",
+    )
+
+    assert reader.calls == [shahab_worksheet(), shahab_worksheet()]
+    assert writer.calls == [(shahab_worksheet(), 4, "Resolved Brand")]
+    assert result.row_position == 4
+
+
+def test_shahab_human_populated_e_is_conflict_with_zero_writes() -> None:
+    reader = SequencedReader(
+        [[shahab_row(4)], [shahab_row(4, brand="Human Brand")]]
+    )
+    writer = FakeBrandWriter()
+
+    with pytest.raises(BrandCellNotBlankConflict):
+        write_brand_safely(
+            reader,
+            writer,
+            shahab_identity(),
+            "Resolved Brand",
+        )
+
+    assert writer.calls == []
+
+
+def test_shahab_fresh_read_relocates_shifted_row_before_write() -> None:
+    reader = SequencedReader(
+        [
+            [shahab_row(7)],
+            [shahab_row(7, model="OTHER"), shahab_row(11)],
+        ]
+    )
+    writer = FakeBrandWriter()
+
+    result = write_brand_safely(
+        reader,
+        writer,
+        shahab_identity(),
+        "Resolved Brand",
+    )
+
+    assert writer.calls == [(shahab_worksheet(), 11, "Resolved Brand")]
+    assert result.row_position == 11

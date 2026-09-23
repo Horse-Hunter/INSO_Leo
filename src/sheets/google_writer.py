@@ -5,6 +5,7 @@ from typing import Any, Protocol
 
 from .brand_write import SheetsWriteError, TargetedBrandWriter
 from .pending import WorksheetIdentity
+from .worksheet_schema import worksheet_schema
 
 
 class GoogleSheetsWriteError(SheetsWriteError):
@@ -28,7 +29,7 @@ class GoogleSheetsWritableService(Protocol):
 
 
 class GoogleSheetsBrandWriter(TargetedBrandWriter):
-    """Update exactly one Brand cell in column F using RAW input."""
+    """Update exactly one worksheet-specific Brand cell using RAW input."""
 
     def __init__(self, service: GoogleSheetsWritableService) -> None:
         self._service = service
@@ -41,13 +42,18 @@ class GoogleSheetsBrandWriter(TargetedBrandWriter):
     ) -> None:
         if row_position < 1:
             raise ValueError("row_position must be a positive Google Sheet row number")
+        brand_column = worksheet_schema(worksheet.worksheet).brand_column
         try:
             (
                 self._service.spreadsheets()
                 .values()
                 .update(
                     spreadsheetId=worksheet.spreadsheet,
-                    range=_brand_cell_range(worksheet.worksheet, row_position),
+                    range=_brand_cell_range(
+                        worksheet.worksheet,
+                        brand_column,
+                        row_position,
+                    ),
                     valueInputOption="RAW",
                     body={
                         "majorDimension": "ROWS",
@@ -57,9 +63,15 @@ class GoogleSheetsBrandWriter(TargetedBrandWriter):
                 .execute()
             )
         except Exception as exc:
-            raise GoogleSheetsWriteError("Unable to update Brand column F") from exc
+            raise GoogleSheetsWriteError(
+                f"Unable to update Brand column {brand_column}"
+            ) from exc
 
 
-def _brand_cell_range(worksheet_title: str, row_position: int) -> str:
+def _brand_cell_range(
+    worksheet_title: str,
+    brand_column: str,
+    row_position: int,
+) -> str:
     escaped_title = worksheet_title.replace("'", "''")
-    return f"'{escaped_title}'!F{row_position}"
+    return f"'{escaped_title}'!{brand_column}{row_position}"

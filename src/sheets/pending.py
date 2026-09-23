@@ -4,6 +4,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Protocol, TypeAlias
 
+from .worksheet_schema import WorksheetSchema, worksheet_schema
+
 CellValue: TypeAlias = str | int | float | bool | None
 
 
@@ -31,7 +33,11 @@ class WorksheetRowReader(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class IdentifyingSnapshot:
-    """Exact identifying values observed for the confirmed V1 columns."""
+    """Exact source values observed for the worksheet-specific V1 columns.
+
+    importance_raw is None for SHAHAB because its normalized default is not a
+    source observation.
+    """
 
     status: CellValue
     importance_raw: CellValue
@@ -66,21 +72,16 @@ def query_pending_records(
     reader: WorksheetRowReader,
     worksheet: WorksheetIdentity,
 ) -> tuple[PendingSheetRecord, ...]:
-    """Read a worksheet once and return rows whose A value is exactly 未发."""
+    """Read once and return rows whose schema-specific status is exactly 未发."""
 
+    schema = worksheet_schema(worksheet.worksheet)
     pending: list[PendingSheetRecord] = []
     for row in reader.read_rows(worksheet):
-        status = row.cells.get("A")
+        status = row.cells.get(schema.status_column)
         if status != "未发":
             continue
 
-        snapshot = IdentifyingSnapshot(
-            status=status,
-            importance_raw=row.cells.get("C"),
-            model=row.cells.get("E"),
-            brand=row.cells.get("F"),
-            quantity=row.cells.get("G"),
-        )
+        snapshot = _source_snapshot(row, schema)
         identity = SheetRecordIdentity(
             worksheet=worksheet,
             row_position=row.row_position,
@@ -89,7 +90,11 @@ def query_pending_records(
         pending.append(
             PendingSheetRecord(
                 status=snapshot.status,
-                importance_raw=snapshot.importance_raw,
+                importance_raw=(
+                    snapshot.importance_raw
+                    if schema.importance_column is not None
+                    else schema.default_importance
+                ),
                 model=snapshot.model,
                 brand=snapshot.brand,
                 quantity=snapshot.quantity,
@@ -99,3 +104,20 @@ def query_pending_records(
         )
 
     return tuple(pending)
+
+
+def _source_snapshot(
+    row: WorksheetRow,
+    schema: WorksheetSchema,
+) -> IdentifyingSnapshot:
+    return IdentifyingSnapshot(
+        status=row.cells.get(schema.status_column),
+        importance_raw=(
+            row.cells.get(schema.importance_column)
+            if schema.importance_column is not None
+            else None
+        ),
+        model=row.cells.get(schema.model_column),
+        brand=row.cells.get(schema.brand_column),
+        quantity=row.cells.get(schema.quantity_column),
+    )

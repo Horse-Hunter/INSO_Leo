@@ -39,6 +39,25 @@ def row(
     )
 
 
+def shahab_row(
+    position: int,
+    *,
+    status: object,
+    model: object = None,
+    brand: object = None,
+    quantity: object = None,
+) -> WorksheetRow:
+    return WorksheetRow(
+        row_position=position,
+        cells={
+            "B": status,
+            "D": model,
+            "E": brand,
+            "F": quantity,
+        },
+    )
+
+
 def test_exact_pending_row_is_mapped_with_composite_identity() -> None:
     worksheet = WorksheetIdentity(spreadsheet="supplier-sheet", worksheet="requests")
     reader = FakeWorksheetRowReader(
@@ -129,3 +148,52 @@ def test_row_position_is_not_a_standalone_permanent_identity() -> None:
 
     assert first_identity.row_position == second_identity.row_position == 4
     assert first_identity != second_identity
+
+
+def test_shahab_pending_row_maps_to_unified_record_with_source_provenance() -> None:
+    worksheet = WorksheetIdentity(spreadsheet="supplier-sheet", worksheet="shahab")
+    reader = FakeWorksheetRowReader(
+        [
+            shahab_row(
+                8,
+                status="未发",
+                model="SHAHAB-MPN",
+                brand="Source Brand",
+                quantity=40,
+            )
+        ]
+    )
+
+    record = query_pending_records(reader, worksheet)[0]
+
+    assert record.status == "未发"
+    assert record.importance_raw == "A"
+    assert record.model == "SHAHAB-MPN"
+    assert record.brand == "Source Brand"
+    assert record.quantity == 40
+    assert record.row_position == 8
+    assert record.record_identity.worksheet == worksheet
+    assert record.record_identity.identifying_snapshot == IdentifyingSnapshot(
+        status="未发",
+        importance_raw=None,
+        model="SHAHAB-MPN",
+        brand="Source Brand",
+        quantity=40,
+    )
+    assert record.record_identity.identifying_snapshot.importance_raw is None
+
+
+def test_shahab_pending_status_comparison_is_exact() -> None:
+    worksheet = WorksheetIdentity(spreadsheet="supplier-sheet", worksheet="shahab")
+    reader = FakeWorksheetRowReader(
+        [
+            shahab_row(2, status=" 未发"),
+            shahab_row(3, status="未发 "),
+            shahab_row(4, status="未發"),
+            shahab_row(5, status="未发"),
+        ]
+    )
+
+    records = query_pending_records(reader, worksheet)
+
+    assert [record.row_position for record in records] == [5]

@@ -11,6 +11,7 @@ from .pending import (
     WorksheetRow,
     WorksheetRowReader,
 )
+from .worksheet_schema import WorksheetSchema, worksheet_schema
 
 
 class SheetRecordConflict(RuntimeError):
@@ -18,7 +19,7 @@ class SheetRecordConflict(RuntimeError):
 
 
 class BrandCellNotBlankConflict(SheetRecordConflict):
-    """Brand column F is no longer blank and must not be overwritten."""
+    """The worksheet-specific Brand cell is not blank and cannot be overwritten."""
 
 
 class SheetsWriteError(RuntimeError):
@@ -26,7 +27,7 @@ class SheetsWriteError(RuntimeError):
 
 
 class TargetedBrandWriter(Protocol):
-    """Boundary that may update only one Brand cell in column F."""
+    """Boundary that may update only one worksheet-specific Brand cell."""
 
     def write_brand(
         self,
@@ -46,15 +47,9 @@ def relocate_record(
     identity: SheetRecordIdentity,
     rows: Iterable[WorksheetRow],
 ) -> WorksheetRow:
-    """Resolve an identity using its original position, then a unique snapshot."""
+    """Resolve an identity using one globally unique non-Brand source match."""
 
     current_rows = tuple(rows)
-    original = _row_at_position(current_rows, identity.row_position)
-    if original is not None and _matches_snapshot(
-        original, identity.identifying_snapshot
-    ):
-        return original
-
     return _unique_brand_candidate(identity, current_rows)
 
 
@@ -64,7 +59,7 @@ def write_brand_safely(
     identity: SheetRecordIdentity,
     brand: str,
 ) -> BrandWriteResult:
-    """Relocate, re-read, enforce blank-only F, and write one Brand cell."""
+    """Relocate, re-read, enforce blank-only Brand, and write one cell."""
 
     relocate_record(
         identity,
@@ -72,9 +67,12 @@ def write_brand_safely(
     )
     fresh_rows = tuple(reader.read_rows(identity.worksheet))
     target = _unique_brand_candidate(identity, fresh_rows)
+    schema = worksheet_schema(identity.worksheet.worksheet)
 
-    if not _is_blank(target.cells.get("F")):
-        raise BrandCellNotBlankConflict("Brand column F is no longer blank")
+    if not _is_blank(target.cells.get(schema.brand_column)):
+        raise BrandCellNotBlankConflict(
+            f"Brand column {schema.brand_column} is no longer blank"
+        )
 
     try:
         writer.write_brand(
@@ -97,47 +95,39 @@ def _unique_brand_candidate(
     identity: SheetRecordIdentity,
     rows: tuple[WorksheetRow, ...],
 ) -> WorksheetRow:
+    schema = worksheet_schema(identity.worksheet.worksheet)
     matches = [
         row
         for row in rows
-        if _matches_snapshot_without_brand(row, identity.identifying_snapshot)
+        if _matches_snapshot_without_brand(
+            row,
+            identity.identifying_snapshot,
+            schema,
+        )
     ]
     if len(matches) != 1:
+        columns = "/".join(schema.relocation_columns)
         raise SheetRecordConflict(
-            "Brand relocation requires exactly one A/C/E/G snapshot match"
+            f"Brand relocation requires exactly one {columns} snapshot match"
         )
     return matches[0]
-
-
-def _row_at_position(
-    rows: tuple[WorksheetRow, ...],
-    row_position: int,
-) -> WorksheetRow | None:
-    matches = [row for row in rows if row.row_position == row_position]
-    if len(matches) > 1:
-        raise SheetRecordConflict("Worksheet returned duplicate row positions")
-    return matches[0] if matches else None
-
-
-def _matches_snapshot(
-    row: WorksheetRow,
-    snapshot: IdentifyingSnapshot,
-) -> bool:
-    return (
-        _matches_snapshot_without_brand(row, snapshot)
-        and row.cells.get("F") == snapshot.brand
-    )
 
 
 def _matches_snapshot_without_brand(
     row: WorksheetRow,
     snapshot: IdentifyingSnapshot,
+    schema: WorksheetSchema,
 ) -> bool:
+    if row.cells.get(schema.status_column) != snapshot.status:
+        return False
+    if (
+        schema.importance_column is not None
+        and row.cells.get(schema.importance_column) != snapshot.importance_raw
+    ):
+        return False
     return (
-        row.cells.get("A") == snapshot.status
-        and row.cells.get("C") == snapshot.importance_raw
-        and row.cells.get("E") == snapshot.model
-        and row.cells.get("G") == snapshot.quantity
+        row.cells.get(schema.model_column) == snapshot.model
+        and row.cells.get(schema.quantity_column) == snapshot.quantity
     )
 
 
