@@ -66,7 +66,7 @@ Research V1、Sheets V1 与 Credential Vault 分散在 canonical main、备份�
 - [x] Research、Sheets、全量 Python 测试与静态检查通过。
 - [x] Vault 测试仅使用临时 synthetic 数据并通过。
 - [x] `git diff --check`、Secret scan 与 tracked runtime 检查通过。
-- [ ] 正常推送最新 main，原 dirty checkout 和两份备份保持不变。
+- [x] 正常推送最新 main，原 dirty checkout 和两份备份保持不变。
 
 ## Execution
 
