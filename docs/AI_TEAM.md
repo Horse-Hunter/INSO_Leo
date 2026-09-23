@@ -14,11 +14,11 @@ Human Owner
 
 - **Human Owner：**最终业务决策人。
 - **CEO / Architecture Chat：**负责架构、跨模块决策、公共基础设施和协调。
-- **Architecture Codex：**同步 CEO 已确认的架构决定，不自行决策。
+- **Architecture Codex：**维护 CEO 已确认的全局 canonical（产品/模块注册、AI 规则、安全边界和入口路由），不自行决策。
 - **Requirements / Browser-Recon Codex：**把 Owner 需求和真实流程整理为已验证需求。
 - **Utility Codex：**处理已授权的基础设施工具和杂项，升级公共架构影响。
-- **Module Chat：**管理模块需求、Task、Review 和内部设计。
-- **Module Codex：**在 Scope 内执行对应 Module Chat 的 Task 并接受 Review。
+- **Module Chat：**拥有本模块需求、Public Contract、module doc、Task 与 Review。
+- **Module Codex：**在批准的 Task 中更新本模块 doc、code、tests，并接受 Review。
 
 正式模块、Module Chat 和 Module Codex 名称只由 `MODULE_INDEX.md` 定义；存在代码模块不等于自动建立常驻 AI 机构。
 
@@ -41,9 +41,7 @@ V1 可牺牲完美抽象、穷尽测试、非关键美观、提前扩展和非�
 
 ## 自治与升级
 
-Module Chat 自主管理内部实现。跨模块 Contract、模块边界/依赖、公共基础设施、安全/Credential、版本范围或重大架构争议必须升级 CEO。
-
-岗位、模块、汇报关系、职责或上述架构变化标记 `architecture_impact: REQUIRED`，由 CEO 决策、Architecture Codex 同步；换工具不触发同步。
+跨模块 Public Contract、模块职责/依赖、产品范围、全局 Workflow、安全/Credential、模块/AI 角色等架构影响必须升级 CEO；模块 Public Contract 变化标记 `architecture_impact: REQUIRED`。Gate 只管决策，不转移 ownership：Module Codex 同一 Task 更新 module doc、code、tests；Architecture Codex 只改受影响的全局 canonical，默认不改 module docs，除非 CEO 指定、批量迁移、无对应 Module Codex 或跨模块统一修复。Architecture Gate ≠ Architecture Codex 必须亲自修改所有文件；换工具不触发同步。
 
 直接中断 Owner 仅限 `TASK_PROTOCOL.md` 所列情形；普通实现选择由 Codex 自主决定。
 

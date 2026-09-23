@@ -16,11 +16,11 @@ Human Owner
 
 - **Human Owner：**最终业务决策人。
 - **CEO / Architecture Chat：**负责架构、跨模块决策、公共基础设施和总体协调。
-- **Architecture Executor：**同步已确认架构决定，不自行决定架构。
+- **Architecture Executor：**维护已确认的全局 canonical（产品/模块注册、AI 规则、安全边界和入口路由），不自行决策。
 - **Requirements / Browser-Recon Executor：**把 Owner 需求和真实流程整理为已验证需求，不作最终架构决策。
 - **Utility Executor：**处理已授权的基础设施工具和项目杂项，升级公共架构影响。
-- **Module Chat：**管理模块需求、Task 和 Review，在 canonical 边界内决定内部设计。
-- **Module Coding Executor：**在 Scope 内执行对应 Module Chat 的 Task，并向其汇报。
+- **Module Chat：**拥有本模块需求、Public Contract、module doc、Task 和 Review。
+- **Module Coding Executor：**在批准的 Task 中更新本模块 doc、code、tests，并向 Module Chat 汇报。
 
 存在代码模块不等于必须建立常驻 AI 机构。
 
@@ -38,7 +38,7 @@ V1 可牺牲完美抽象、穷尽测试、非关键美观、提前扩展和非�
 
 ## 自治与升级
 
-Module Chat 自主管理内部实现。跨模块 Contract、岗位/模块/汇报关系/职责、公共基础设施、安全/Credential、版本范围或重大争议须升级 CEO，并标记 `architecture_impact: REQUIRED`；Architecture Executor 同步。换工具不触发同步。
+跨模块 Public Contract、岗位/模块职责或依赖、产品范围、全局 Workflow、公共基础设施、安全/Credential 等架构影响须升级 CEO；模块 Public Contract 变化标记 `architecture_impact: REQUIRED`。Gate 只管决策，不转移 ownership：Module Coding Executor 同一 Task 更新 module doc、code、tests；Architecture Executor 只改受影响的全局 canonical，默认不改 module docs，除非 CEO 指定、批量迁移、无对应 Module Executor 或跨模块统一修复。Architecture Gate ≠ Architecture Executor 必须亲自修改所有文件；换工具不触发同步。
 
 ## Browser-first
 

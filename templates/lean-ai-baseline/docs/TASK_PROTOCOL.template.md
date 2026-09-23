@@ -47,7 +47,7 @@ architecture_impact: NONE | REQUIRED
 使用本文件的标准报告，记录限制和剩余 UNKNOWN。
 ```
 
-模块增删/改名、职责/依赖、公共 Contract、全局 Workflow、安全边界或 AI 角色变化时设 `architecture_impact: REQUIRED`；模块升级、CEO 决策、Architecture Executor 同步。
+模块增删/改名、职责/依赖、Public Contract、产品范围、全局 Workflow、安全边界或 AI 角色变化须设 `architecture_impact: REQUIRED` 并通过 CEO Gate。批准后按 `AI_TEAM.md` 分配 Write Scope：Module Coding Executor 同一 Task 更新 module doc、code、tests；Architecture Executor 只改受影响的全局 canonical。Gate 不转移 ownership。
 
 ## 执行器与上下文
 
