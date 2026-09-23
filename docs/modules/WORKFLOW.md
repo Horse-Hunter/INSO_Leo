@@ -21,6 +21,6 @@ Workflow 负责跨模块编排、Scheduler、`inquiry_id`、流程状态、retry
 
 ## 边界与 UNKNOWN
 
-V1 只编排 Sheets → Research → 本地 Excel；INSO 与 Quotation 属于 Future Version。依赖方向归 `MODULE_INDEX.md`；Workflow 不嵌入协作模块的 adapter 或业务内部逻辑。
+V1 只编排 Sheets → Research → 本地 Excel；Research 内部可查询 INSO read-only 历史价格，但主动采购 INSO Module 与 Quotation 属于 Future Version。未来主动采购不得从 `MANUAL_REVIEW` 自动发布采购需求。依赖方向归 `MODULE_INDEX.md`；Workflow 不嵌入协作模块的 adapter 或业务逻辑。
 
 仍为 `UNKNOWN`：SQLite schema/migration、duplicate-prevention algorithm、详细状态转换 guard、Scheduler 机制、Research completion-confirmation Contract 和运行恢复细节。

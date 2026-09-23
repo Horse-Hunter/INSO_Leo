@@ -22,25 +22,25 @@ Workflow Scheduler（每 15 分钟）
 
 - Google Sheet 待处理记录读取，以及已确认的安全 Brand 写回路径。
 - Workflow identity/state、duplicate prevention、retry 和 Sheets → Research 编排。
-- 五个已确认来源的 Research，以及 Research 自有 Excel 输出。
+- IC.net Brand/货量调研，以及 Findchips、HQEW、LCSC、Bom.Ai、INSO 五个价格源；INSO 仅作 read-only 历史市场价格查询。
 - 只有必要的 inquiry-idempotent Excel 落盘成功后，`SUCCESS` 或合格的 `PARTIAL_SUCCESS` 才转为 Workflow `COMPLETED`。
 - `MANUAL_REVIEW_REQUIRED` 停止自动推进并等待人工；`RETRYABLE_FAILURE` 不生成伪正常价格，由 Workflow retry。
-- Sheet C 列 `importance_raw` 由 Workflow 原样透传，只影响 Research Excel 展示，不改变调研行为，也不定义未来 INSO 重要性。
+- Sheets 标准化的 `importance_raw` 由 Workflow 原样透传，只影响 Research Excel 展示，不改变调研行为，也不定义 Future INSO Module 的重要性。
 - Research 可返回 `resolved_brand`；Sheets 安全写回发生 Brand conflict 时，不撤销已完成的 Research。
 
 Sheets、Research、Workflow 的详细 Contract 归各自 module doc。
 
 ## V1 不包含
 
-- INSO 业务、Quotation、最终客户报价、最终报价写回 Google Sheet。
+- INSO Module 的主动采购业务（发布采购需求、发起采购询价、获取采购报价）、Quotation、最终客户报价及其 Sheet 写回。
 - 共享 Excel/storage 模块。
 - Redis、Celery、Kafka、Docker 或大型 Workflow Engine。
 
-`inso` 和 `quotation` 保留为 Future Version 模块。
+`inso` 主动采购模块和 `quotation` 保留为 Future Version；Research 的 INSO read-only 价格源属于 V1 Research 内部能力。
 
 ## Future Scope / 产品级 UNKNOWN
 
-- INSO 系统定义、访问、询价行为和结果。
+- Future INSO Module 的主动采购流程、权限、结果 Contract 和重要性规则。
 - Quotation 公式、舍入、利润、审批、有效期、输出和接收方。
 - 产品/服务覆盖、市场、税务、地区、客户数据分类、保留、审计和监管要求。
 - 已确认流程之外的 V1 生产运行方式和成功指标。
