@@ -1,6 +1,6 @@
 # Task: CANONICAL-INTEGRATION-001
 
-status: in_progress
+status: complete
 actor_role: Architecture Codex
 module: architecture
 reports_to: CEO / Architecture Chat
@@ -61,11 +61,11 @@ Research V1、Sheets V1 与 Credential Vault 分散在 canonical main、备份�
 
 ## Acceptance
 
-- [ ] canonical 分支同时包含 Research V1、Sheets V1 和 Vault 源码/测试。
-- [ ] Sheets/Core module docs 与真实实现一致且保持简短。
-- [ ] Research、Sheets、全量 Python 测试与静态检查通过。
-- [ ] Vault 测试仅使用临时 synthetic 数据并通过。
-- [ ] `git diff --check`、Secret scan 与 tracked runtime 检查通过。
+- [x] canonical 分支同时包含 Research V1、Sheets V1 和 Vault 源码/测试。
+- [x] Sheets/Core module docs 与真实实现一致且保持简短。
+- [x] Research、Sheets、全量 Python 测试与静态检查通过。
+- [x] Vault 测试仅使用临时 synthetic 数据并通过。
+- [x] `git diff --check`、Secret scan 与 tracked runtime 检查通过。
 - [ ] 正常推送最新 main，原 dirty checkout 和两份备份保持不变。
 
 ## Execution
