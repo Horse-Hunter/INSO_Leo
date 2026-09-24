@@ -57,15 +57,24 @@ Done:
 - 新增三条入队 work 的 stop/drain test，验证所有 due item 落盘和线程退出。
 - `ruff check src tests`、launcher tests 与完整 deterministic pytest 通过；未运行 live smoke（本轮明确不要求）。
 
-Current: 本轮 CEO Review 提出的确定性 blocker 与 graceful-stop cycle 缺陷均已修复，等待 CEO Review。
+Current:
+- 前一轮 composition blocker 与 stop-after-cycle drain 已修复，CEO 代码复审确认主路径方向正确。
+- Final lifecycle review 仍有一个 blocker：GUI 窗口关闭路径 `InsoDashboardApp._on_close()` 直接调用 `backend.shutdown()`；ProductionBackend.shutdown 当前只设置 stop 并 join，没有设置 drain_due_on_stop，因此用户在真实运行中直接关闭窗口时可能只等当前已 claim work 完成、却把同一 poll cycle 已入队的其余 due work 留到下次。该行为与“GUI close 也应 graceful stop，不硬切当前 cycle”的产品约束不一致。
+- 关闭路径还不应长时间阻塞 Tk 主线程造成窗口假死。优先实现非阻塞 close lifecycle：运行中关闭 -> 请求 stop-after-cycle -> UI 显示停止中并通过 Tk after 轮询 backend 已停止 -> 再注销 listener / shutdown / destroy；STOPPED/MANUAL_REVIEW 可直接退出。若采用其他实现，必须同样满足安全收尾且 UI 不假死。
+- 增加 deterministic test 覆盖“窗口关闭期间本轮多个 due work 全部完成后才 destroy / backend threads 已退出”，并保留现有 stop-after-cycle 测试。
+- live smoke 继续暂缓，待该 lifecycle blocker 修复并通过 CEO code review 后再恢复 runtime 配置。
 
-Next: CEO Review；不 merge main。
+Next:
+1. Main Programmer 修复 GUI close graceful lifecycle 与测试。
+2. ruff + GUI/launcher tests + full deterministic pytest + self-review。
+3. commit/push feature/v1-production-launcher，交 CEO 最后代码复审。
+4. CEO 通过后恢复本机 runtime/research.json、新建 runtime/production.json 并做真实 Windows GUI/live smoke。
 
-Blockers: NONE（live smoke 未运行，依本轮要求暂不执行。）
+Blockers: GUI window-close path 尚未保证当前 cycle graceful drain 且不能阻塞 Tk 主线程。
 Owner Decisions:
 - Production GUI 第一阶段默认保持 Google Sheet Brand 写回 disabled/no-op，不新增真实 Sheet 写副作用。
 - 当前阶段目标是先让 GUI 真正跑 V1；EXE 打包与开机自启放在后续阶段。
 
 Branch: feature/v1-production-launcher
 
-Last Good Commit: 944c0624f935cd808f2d45f8fc6c01fcedb3e236
+Last Good Commit: 74689d68ab31773c28a3447979e4b81345c0b3a4
