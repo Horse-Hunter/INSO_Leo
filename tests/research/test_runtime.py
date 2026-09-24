@@ -20,7 +20,7 @@ from src.research.icnet import (
     IcNetPageUnavailable,
     PlaywrightIcNetClient,
 )
-from src.research.inso_history import InsoBrowserConfig, InsoReadError
+from src.research.inso_history import INSO_SITE_ID, InsoBrowserConfig, InsoReadError
 from src.research.lcsc import LcscPageUnavailable
 from src.research.runtime import (
     BrowserRuntimeConfig,
@@ -115,7 +115,7 @@ class AllSitesProvider:
 
 class InsoMissingProvider(AllSitesProvider):
     def get_login(self, site_id: str) -> Login:
-        if site_id == "inso":
+        if site_id == INSO_SITE_ID:
             raise CredentialNotConfiguredError(site_id, "password=must-not-leak")
         return super().get_login(site_id)
 
@@ -323,13 +323,13 @@ def test_readiness_reports_missing_site_and_manual_action(tmp_path: Path) -> Non
         cdp_probe=lambda url: False,
     )
 
-    assert readiness.missing_site_ids == ("inso",)
+    assert readiness.missing_site_ids == (INSO_SITE_ID,)
     assert readiness.ready is False
     issues = readiness.issues()
-    assert any("inso" in issue for issue in issues)
+    assert any(INSO_SITE_ID in issue for issue in issues)
     assert any("CDP" in issue for issue in issues)
     action = readiness.manual_action()
-    assert action is not None and "inso" in action and "Chrome" in action
+    assert action is not None and INSO_SITE_ID in action and "Chrome" in action
 
     report = format_readiness(readiness)
     assert "runtime readiness: BLOCKED" in report
@@ -376,7 +376,7 @@ def test_not_ready_configuration_fails_closed(tmp_path: Path) -> None:
             cdp_probe=lambda url: True,
         )
 
-    assert "inso" in str(error.value)
+    assert INSO_SITE_ID in str(error.value)
 
 
 def test_probe_loopback_endpoint_detects_a_local_listener() -> None:

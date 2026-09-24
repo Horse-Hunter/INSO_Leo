@@ -20,7 +20,7 @@ from .source_contracts import (
     calendar_month_cutoff,
 )
 
-INSO_SITE_ID = "inso"
+INSO_SITE_ID = "yingsuo.alperp.cn"
 
 
 @dataclass(frozen=True, slots=True)

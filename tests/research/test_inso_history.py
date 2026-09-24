@@ -4,6 +4,7 @@ from typing import Self
 
 from src.research.fx import UsdRmbQuote
 from src.research.inso_history import (
+    INSO_SITE_ID,
     InsoBrowserConfig,
     InsoCredentialedClient,
     InsoHistoryAdapter,
@@ -99,7 +100,7 @@ def test_credentialed_client_has_only_read_history_capability_and_hides_secrets(
     browser = Browser()
     client = InsoCredentialedClient(credentials, browser)
     capture = client.fetch_history("ABC")
-    assert credentials.site_id == "inso"
+    assert credentials.site_id == INSO_SITE_ID
     assert browser.query == "ABC"
     assert capture.records == ()
     assert not hasattr(client, "submit")

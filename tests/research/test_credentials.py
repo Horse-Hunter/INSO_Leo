@@ -58,7 +58,7 @@ def _login(site_id: str, company: str | None = None) -> Login:
 
 def test_canonical_site_ids_match_the_source_modules() -> None:
     assert RESEARCH_CREDENTIAL_SITE_IDS == (ICNET_SITE_ID, BOM_AI_SITE_ID, INSO_SITE_ID)
-    assert RESEARCH_CREDENTIAL_SITE_IDS == ("ic.net.cn", "bom.ai", "inso")
+    assert RESEARCH_CREDENTIAL_SITE_IDS == ("ic.net.cn", "bom.ai", "yingsuo.alperp.cn")
 
 
 def test_bridge_translates_core_login_into_each_native_login() -> None:
