@@ -37,6 +37,9 @@ class Fx:
     def get_quote(self) -> UsdRmbQuote:
         return UsdRmbQuote(Decimal("7.10"), NOW, "synthetic-test-only")
 
+    def get_hkd_rmb_rate(self) -> Decimal:
+        return Decimal("0.91")
+
 
 def _tier(quantity: int, price: str, currency: str = "USD") -> FindchipsPriceTier:
     return FindchipsPriceTier(quantity, Decimal(price), currency)
@@ -114,6 +117,25 @@ def test_target_parse_ignores_unrelated_malformed_tiers() -> None:
     assert offers[0].mpn == "TARGET"
     with pytest.raises(FindchipsParseError, match="PRICE_TIERS_UNPARSEABLE"):
         parse_findchips_offers(_page(_row("TARGET", "1", "not-json")), "TARGET")
+
+
+def test_hkd_offer_preserves_currency_and_converts_from_hkd() -> None:
+    result = FindchipsAdapter(
+        Client(_page(_row("FDA801B-VYT", "0", '[[1000,"HKD","94.7456"]]'))),
+        Fx(),
+    ).search("FDA801B-VYT", 10_000)
+    assert result.outcome is SourceOutcome.SUCCESS
+    assert result.out_of_stock_candidate is not None
+    assert result.out_of_stock_candidate.raw_currency == "HKD"
+    assert result.out_of_stock_candidate.normalized_rmb_price == Decimal("86.218496")
+
+
+def test_displayed_thousands_separator_is_parsed_as_price() -> None:
+    offers = parse_findchips_offers(
+        _page(_row("BCM957504-N425G", "0", '[[1,"HKD","6,361.7100"]]')),
+        "BCM957504-N425G",
+    )
+    assert offers[0].tiers[0].unit_price == Decimal("6361.7100")
 
 
 @pytest.mark.parametrize("quantity", [1, 10, 50, 100, 10_000])

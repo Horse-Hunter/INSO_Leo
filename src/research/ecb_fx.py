@@ -17,6 +17,10 @@ ECB_DAILY_USD_CNY_URL = (
     "https://data-api.ecb.europa.eu/service/data/EXR/"
     "D.USD+CNY.EUR.SP00.A?lastNObservations=1&format=csvdata"
 )
+ECB_DAILY_HKD_CNY_URL = (
+    "https://data-api.ecb.europa.eu/service/data/EXR/"
+    "D.HKD+CNY.EUR.SP00.A?lastNObservations=1&format=csvdata"
+)
 
 
 class EcbFxError(RuntimeError):
@@ -38,16 +42,33 @@ class EcbDailyUsdRmbProvider:
     def get_quote(self) -> UsdRmbQuote:
         try:
             body = self._fetch_csv()
-        except EcbFxError:
-            raise
         except (OSError, RuntimeError, UnicodeError) as exc:
             raise EcbFxError("ECB_FETCH_FAILED") from exc
+        rate, date = self._cross_rate(body, "USD")
+        return UsdRmbQuote(
+            rate=rate,
+            captured_at=self._clock(),
+            source_label=f"ECB daily reference rates {date} (EUR bridge)",
+        )
 
-        rows = list(csv.DictReader(io.StringIO(body)))
+    def get_hkd_rmb_rate(self) -> Decimal:
+        """Derive RMB per HKD from same-day official ECB EUR rates."""
+
+        rate, _date = self._cross_rate(
+            self._fetch_official_csv(ECB_DAILY_HKD_CNY_URL), "HKD"
+        )
+        return rate
+
+    @staticmethod
+    def _cross_rate(body: str, base_currency: str) -> tuple[Decimal, str]:
+        try:
+            rows = list(csv.DictReader(io.StringIO(body)))
+        except (OSError, RuntimeError, UnicodeError) as exc:
+            raise EcbFxError("ECB_FETCH_FAILED") from exc
         observations: dict[str, tuple[str, Decimal]] = {}
         for row in rows:
             currency = (row.get("CURRENCY") or "").strip().upper()
-            if currency not in {"USD", "CNY"}:
+            if currency not in {base_currency, "CNY"}:
                 continue
             period = (row.get("TIME_PERIOD") or "").strip()
             raw_value = (row.get("OBS_VALUE") or "").strip()
@@ -61,24 +82,18 @@ class EcbDailyUsdRmbProvider:
                 raise EcbFxError("ECB_DUPLICATE_OBSERVATION")
             observations[currency] = period, value
 
-        if set(observations) != {"USD", "CNY"}:
+        if set(observations) != {base_currency, "CNY"}:
             raise EcbFxError("ECB_MISSING_OBSERVATION")
-        usd_period, usd_per_eur = observations["USD"]
+        base_period, base_per_eur = observations[base_currency]
         cny_period, cny_per_eur = observations["CNY"]
-        if usd_period != cny_period:
+        if base_period != cny_period:
             raise EcbFxError("ECB_OBSERVATION_DATE_MISMATCH")
-
-        rate = cny_per_eur / usd_per_eur
-        return UsdRmbQuote(
-            rate=rate,
-            captured_at=self._clock(),
-            source_label=f"ECB daily reference rates {usd_period} (EUR bridge)",
-        )
+        return cny_per_eur / base_per_eur, base_period
 
     @staticmethod
-    def _fetch_official_csv() -> str:
+    def _fetch_official_csv(url: str = ECB_DAILY_USD_CNY_URL) -> str:
         request = Request(
-            ECB_DAILY_USD_CNY_URL,
+            url,
             headers={
                 "Accept": "text/csv",
                 "User-Agent": "INSO-Leo-Research/1.0",

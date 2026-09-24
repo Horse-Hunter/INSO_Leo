@@ -8,8 +8,8 @@ every prerequisite:
 
     * canonical Core credential site availability, reported by ``site_id``
       only and never by value,
-    * the loopback CDP endpoint required by the HQEW read-only session and by
-      the optional IC.net CDP acquisition path,
+    * the loopback CDP endpoint used by the authenticated, read-only source
+      sessions and the optional IC.net CDP acquisition path,
     * presence and validity of the runtime configuration itself.
 
 The configuration file must never contain a secret. Credentials are retrieved
@@ -67,7 +67,7 @@ from .bom_ai import (
     BomAiAuthenticatedBrowser,
     BomAiBrowserConfig,
     BomAiCredentialedClient,
-    PlaywrightBomAiAuthenticatedBrowser,
+    CdpBomAiAuthenticatedBrowser,
 )
 from .credentials import (
     RESEARCH_CREDENTIAL_SITE_IDS,
@@ -76,7 +76,7 @@ from .credentials import (
 )
 from .ecb_fx import EcbDailyUsdRmbProvider
 from .excel_output import ResearchExcelOutput
-from .findchips import FindchipsAdapter, FindchipsHttpClient, FindchipsPageClient
+from .findchips import CdpFindchipsClient, FindchipsAdapter, FindchipsPageClient
 from .fx import UsdRmbProvider
 from .hqew import CdpHqewClient, HqewAdapter, HqewPageClient
 from .icnet import (
@@ -92,7 +92,7 @@ from .inso_history import (
     InsoReadOnlyBrowser,
     PlaywrightInsoReadOnlyBrowser,
 )
-from .lcsc import LcscAdapter, LcscBrowserClient, LcscPageClient
+from .lcsc import CdpLcscClient, LcscAdapter, LcscPageClient
 from .service import ResearchService
 
 DEFAULT_RUNTIME_CONFIG_RELATIVE_PATH = Path("runtime") / "research.json"
@@ -386,24 +386,23 @@ def build_research_service(
     icnet_client = build_icnet_client(
         config, credentials, icnet_client=icnet_client
     )
-    findchips_client = findchips_client or FindchipsHttpClient()
+    findchips_client = findchips_client or CdpFindchipsClient(
+        cdp_url=config.cdp.cdp_url,
+        timeout_ms=browser.timeout_ms,
+    )
     hqew_client = hqew_client or CdpHqewClient(
         cdp_url=config.cdp.cdp_url,
         timeout_ms=browser.timeout_ms,
         settle_ms=browser.settle_ms,
     )
-    lcsc_client = lcsc_client or LcscBrowserClient(
+    lcsc_client = lcsc_client or CdpLcscClient(
+        cdp_url=config.cdp.cdp_url,
         timeout_ms=browser.timeout_ms,
-        settle_ms=browser.settle_ms,
-        browser_channel=browser.channel,
-        headless=browser.headless,
     )
-    bom_ai_browser = bom_ai_browser or PlaywrightBomAiAuthenticatedBrowser(
+    bom_ai_browser = bom_ai_browser or CdpBomAiAuthenticatedBrowser(
         config.bom_ai,
+        cdp_url=config.cdp.cdp_url,
         timeout_ms=browser.timeout_ms,
-        settle_ms=browser.settle_ms,
-        browser_channel=browser.channel,
-        headless=browser.headless,
     )
     inso_browser = inso_browser or PlaywrightInsoReadOnlyBrowser(
         config.inso,

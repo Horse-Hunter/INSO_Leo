@@ -224,6 +224,80 @@ class LcscBrowserClient:
             raise LcscPageUnavailable("BROWSER_FAILURE", current_url) from exc
 
 
+def parse_lcsc_cooperation_card(text: str, target_mpn: str) -> LcscProduct | None:
+    """Read a displayed cooperation-inventory card, including date and tiers."""
+
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines or price_source_mpn_match(target_mpn, lines[0]) is None:
+        return None
+    try:
+        date_index = lines.index("更新时间")
+        stock_index = lines.index("库存")
+        observed_at = datetime.strptime(
+            lines[date_index + 1], "%Y年%m月%d日"
+        ).replace(tzinfo=_CHINA_TZ).astimezone(UTC)
+        stock = int(lines[stock_index + 1].replace(",", ""))
+        tiers = tuple(
+            LcscPriceTier(int(lines[index][:-1]), Decimal(lines[index + 1].lstrip("¥￥")), "CNY")
+            for index in range(len(lines) - 1)
+            if re.fullmatch(r"\d+\+", lines[index])
+            and re.fullmatch(r"[¥￥]\d+(?:\.\d+)?", lines[index + 1])
+        )
+    except (ValueError, IndexError, InvalidOperation) as exc:
+        raise LcscParseError("COOPERATION_CARD_UNPARSEABLE") from exc
+    if not tiers:
+        raise LcscParseError("COOPERATION_PRICE_MISSING")
+    return LcscProduct(lines[0], False, stock, tiers, observed_at)
+
+
+class CdpLcscClient:
+    """Read LCSC search results in an authenticated Owner Chrome session."""
+
+    def __init__(self, *, cdp_url: str = "http://127.0.0.1:9222", timeout_ms: int = 45_000) -> None:
+        if urlsplit(cdp_url).hostname not in {"127.0.0.1", "localhost", "::1"}:
+            raise ValueError("LCSC CDP endpoint must be loopback")
+        self._cdp_url = cdp_url
+        self._timeout_ms = timeout_ms
+
+    def fetch_product_page(self, mpn: str) -> LcscPage:
+        search_url = "https://so.szlcsc.com/global.html?" + urlencode({"k": mpn.strip()})
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError as exc:
+            raise LcscPageUnavailable("PLAYWRIGHT_NOT_INSTALLED") from exc
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.connect_over_cdp(
+                    self._cdp_url, timeout=self._timeout_ms
+                )
+                context = browser.contexts[0]
+                pages = [page for page in context.pages if urlsplit(page.url).hostname == "so.szlcsc.com"]
+                page = next((item for item in pages if item.locator("#login:visible").count() == 0), None)
+                if page is None:
+                    raise LcscPageUnavailable("AUTHENTICATED_SESSION_REQUIRED", search_url)
+                page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
+                page.wait_for_timeout(3_000)
+                if urlsplit(page.url).hostname != "so.szlcsc.com":
+                    raise LcscPageUnavailable("SEARCH_NAVIGATION_FAILED", page.url)
+                if page.locator("#login:visible").count():
+                    raise LcscPageUnavailable("AUTHENTICATED_SESSION_REQUIRED", page.url)
+                cards = page.locator('section[class*="OverseasCard"]')
+                for _ in range(10):
+                    if cards.count():
+                        break
+                    page.wait_for_timeout(1_000)
+                for card in cards.all():
+                    product = parse_lcsc_cooperation_card(card.inner_text(), mpn)
+                    if product is not None:
+                        return LcscPage("", page.url, datetime.now(UTC), product)
+                product, _product_id = parse_lcsc_search_product(page.content(), mpn)
+                return LcscPage("", page.url, datetime.now(UTC), product)
+        except LcscError:
+            raise
+        except Exception as exc:
+            raise LcscPageUnavailable("BROWSER_FAILURE", search_url) from exc
+
+
 _NEXT_DATA = re.compile(
     r'<script[^>]*id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
     re.IGNORECASE | re.DOTALL,

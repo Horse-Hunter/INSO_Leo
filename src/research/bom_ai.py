@@ -421,6 +421,63 @@ class PlaywrightBomAiAuthenticatedBrowser:
             raise BomAiClientError("INTERACTIVE_CHALLENGE_REQUIRED", url)
 
 
+class CdpBomAiAuthenticatedBrowser:
+    """Use the Owner's ordinary Chrome session for the logged-in cloud-price page."""
+
+    def __init__(
+        self,
+        config: BomAiBrowserConfig,
+        *,
+        cdp_url: str = "http://127.0.0.1:9222",
+        timeout_ms: int = 45_000,
+    ) -> None:
+        if urlsplit(cdp_url).hostname not in {"127.0.0.1", "localhost", "::1"}:
+            raise ValueError("Bom.Ai CDP endpoint must be loopback")
+        self._config = config
+        self._cdp_url = cdp_url
+        self._timeout_ms = timeout_ms
+
+    def fetch_price_page(self, mpn: str, login: BomAiLogin) -> BomAiRawPage:
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError as exc:
+            raise BomAiClientError("PLAYWRIGHT_NOT_INSTALLED") from exc
+        target_url = self._config.result_url(mpn)
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.connect_over_cdp(
+                    self._cdp_url, timeout=self._timeout_ms
+                )
+                context = browser.contexts[0]
+                pages = [page for page in context.pages if _is_bom_ai_host(page.url)]
+                page = pages[0] if pages else context.new_page()
+                page.goto(target_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
+                page.wait_for_timeout(2_000)
+                if not _is_bom_ai_host(page.url):
+                    raise BomAiClientError("UNEXPECTED_NAVIGATION_HOST", page.url)
+                if page.locator("a.bom_layer_login:visible").count():
+                    page.locator("a.bom_layer_login:visible").first.click()
+                    modal = page.locator(".layui-layer:visible").last
+                    modal.locator("li").nth(1).click()
+                    if login.company:
+                        modal.locator("#companyName").fill(login.company)
+                    modal.locator("#accountName").fill(login.username)
+                    modal.locator("#smspassword").fill(login.password)
+                    modal.locator("#smsLoginBtn").click()
+                    page.wait_for_timeout(2_000)
+                    if modal.locator("#accountName:visible").count():
+                        raise BomAiClientError("LOGIN_NOT_CONFIRMED", page.url)
+                    page.goto(target_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
+                    page.wait_for_timeout(2_000)
+                if page.locator("a.bom_layer_login:visible").count():
+                    raise BomAiClientError("LOGIN_NOT_CONFIRMED", page.url)
+                return BomAiRawPage(page.content(), page.url, datetime.now(UTC))
+        except BomAiClientError:
+            raise
+        except Exception as exc:
+            raise BomAiClientError("BROWSER_FAILURE", target_url) from exc
+
+
 class BomAiMonthCutoff(Protocol):
     def __call__(self, now: datetime) -> datetime: ...
 

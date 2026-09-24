@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -280,15 +281,16 @@ def _row_certifications(
     row: _Node, hidden_classes: frozenset[str]
 ) -> frozenset[str]:
     certifications: set[str] = set()
-    for node in [row, *row.descendants()]:
-        if _is_hidden(node, row, hidden_classes):
-            continue
-        for class_name in node.classes:
-            if class_name.casefold() in {"sscp", "iccp"}:
-                certifications.add(class_name.upper())
-        for attribute in ("title", "alt"):
-            value = node.attrs.get(attribute) or ""
-            certifications.update(match.upper() for match in _CERTIFICATION_RE.findall(value))
+    for icon_group in _nodes_with_class(row, "result_icons"):
+        for node in icon_group.descendants():
+            if _is_hidden(node, row, hidden_classes):
+                continue
+            for class_name in node.classes:
+                if class_name.casefold() in {"sscp", "iccp"}:
+                    certifications.add(class_name.upper())
+            for attribute in ("title", "alt"):
+                value = node.attrs.get(attribute) or ""
+                certifications.update(match.upper() for match in _CERTIFICATION_RE.findall(value))
     return frozenset(certifications)
 
 
@@ -521,15 +523,20 @@ class CdpIcNetClient:
         timeout_ms: int = 45_000,
         settle_ms: int = 5_000,
         navigate: bool = True,
+        min_interval_seconds: float = 90.0,
         playwright_factory: Callable[[], object] | None = None,
     ) -> None:
         hostname = urlsplit(cdp_url).hostname
         if hostname is None or not _is_loopback_hostname(hostname):
             raise IcNetPageUnavailable("CDP_REMOTE_ENDPOINT_FORBIDDEN")
+        if min_interval_seconds < 0:
+            raise ValueError("min_interval_seconds must not be negative")
         self._cdp_url = cdp_url
         self._timeout_ms = timeout_ms
         self._settle_ms = settle_ms
         self._navigate = navigate
+        self._min_interval_seconds = min_interval_seconds
+        self._last_navigation_at: float | None = None
         self._playwright_factory = playwright_factory
 
     def fetch_first_page(self, mpn: str) -> IcNetPage:
@@ -582,6 +589,13 @@ class CdpIcNetClient:
                         page = icnet_pages[0]
                     else:
                         page = context.new_page()
+                    if self._last_navigation_at is not None:
+                        remaining = self._min_interval_seconds - (
+                            time.monotonic() - self._last_navigation_at
+                        )
+                        if remaining > 0:
+                            time.sleep(remaining)
+                    self._last_navigation_at = time.monotonic()
                     page.goto(
                         target_url,
                         wait_until="domcontentloaded",
@@ -665,7 +679,8 @@ class IcNetAdapter:
                     source=ResearchSource.IC_NET,
                     outcome=SourceOutcome.SOURCE_UNAVAILABLE,
                     evidence=evidence,
-                )
+                ),
+                stock_label="待验证",
             )
 
         try:
@@ -685,7 +700,8 @@ class IcNetAdapter:
                     source=ResearchSource.IC_NET,
                     outcome=SourceOutcome.SOURCE_UNAVAILABLE,
                     evidence=evidence,
-                )
+                ),
+                stock_label="待验证",
             )
 
         strict_rows = [
@@ -702,6 +718,7 @@ class IcNetAdapter:
                 fields=(
                     EvidenceField("first_page_rows_inspected", len(rows)),
                     EvidenceField("strict_mpn_rows", 0),
+                    EvidenceField("stock_label", "货少"),
                 ),
             )
             return IcNetResult(
@@ -709,7 +726,8 @@ class IcNetAdapter:
                     source=ResearchSource.IC_NET,
                     outcome=SourceOutcome.NO_STRICT_MPN_MATCH,
                     evidence=evidence,
-                )
+                ),
+                stock_label="货少",
             )
 
         if input_brand is not None and input_brand.strip():
@@ -750,7 +768,8 @@ class IcNetAdapter:
                     source=ResearchSource.IC_NET,
                     outcome=SourceOutcome.SOURCE_UNAVAILABLE,
                     evidence=evidence,
-                )
+                ),
+                stock_label="待验证",
             )
 
         threshold = customer_quantity * 3

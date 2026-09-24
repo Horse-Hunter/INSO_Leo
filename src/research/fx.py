@@ -36,3 +36,6 @@ class UsdRmbProvider(Protocol):
 
     def get_quote(self) -> UsdRmbQuote:
         """Return a positive Decimal quote oriented from USD to RMB/CNY."""
+
+    def get_hkd_rmb_rate(self) -> Decimal:
+        """Return a positive same-day official RMB per HKD cross rate."""

@@ -8,6 +8,7 @@ from src.research.lcsc import (
     LcscAdapter,
     LcscBrowserClient,
     LcscPage,
+    parse_lcsc_cooperation_card,
     parse_lcsc_product,
     parse_lcsc_search_product,
     select_lcsc_tier,
@@ -59,6 +60,19 @@ class Client:
 class Fx:
     def get_quote(self) -> UsdRmbQuote:
         return UsdRmbQuote(Decimal("7.00"), NOW, "synthetic-test-only")
+
+
+def test_cooperation_inventory_card_price_and_date() -> None:
+    product = parse_lcsc_cooperation_card(
+        "FDA801B-VYT\n更新时间\n2026年09月24日\n含税\n1+\n￥747.019462"
+        "\n10+\n￥622.516219\n库存\n208",
+        "FDA801B-VYT",
+    )
+    assert product is not None
+    assert product.stock_quantity == 208
+    assert product.observed_at is not None
+    assert product.observed_at.date().isoformat() == "2026-09-23"
+    assert select_lcsc_tier(product.tiers, 10_000).unit_price == Decimal("622.516219")
 
 
 def test_quantity_does_not_select_tier_and_preorder_is_out_of_stock() -> None:

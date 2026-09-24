@@ -281,8 +281,22 @@ def test_no_strict_match_is_not_source_unavailability() -> None:
 
     assert result.source_result.outcome is SourceOutcome.NO_STRICT_MPN_MATCH
     assert result.resolved_brand is None
-    assert result.stock_label is None
+    assert result.stock_label == "货少"
     assert result.source_result.evidence.matched_mpn is None
+
+
+def test_description_text_is_not_a_certification_badge() -> None:
+    row = _row_html("BCM957504-N425G", "Broadcom", "694")
+    row = row.replace(
+        '<div class="result_supply">',
+        '<div class="result_explain" title="SSCP原装正品">SSCP原装正品</div>'
+        '<div class="result_supply">',
+    )
+    result = IcNetAdapter(FakeClient(_page_html(row))).search(
+        "BCM957504-N425G", "Broadcom", 200
+    )
+    assert result.stock_label == "货少"
+    assert _fields(result)["certified_stock_total"] == 0
 
 
 def test_bad_qualified_quantity_maps_to_source_unavailable() -> None:
@@ -300,9 +314,11 @@ def test_unexpected_page_shape_and_client_failure_are_source_unavailable() -> No
     blocked = IcNetAdapter(UnavailableClient()).search("ABC", None, 10)
 
     assert bad_page.source_result.outcome is SourceOutcome.SOURCE_UNAVAILABLE
+    assert bad_page.stock_label == "待验证"
     assert _fields(bad_page)["failure_code"] == "RESULT_CONTAINER_MISSING"
     assert bad_page.source_result.evidence.source_url is not None
     assert blocked.source_result.outcome is SourceOutcome.SOURCE_UNAVAILABLE
+    assert blocked.stock_label == "待验证"
     assert _fields(blocked)["failure_code"] == "RESULT_PAGE_BLOCKED"
     assert blocked.source_result.evidence.source_url is not None
 
@@ -393,6 +409,28 @@ def test_cdp_client_navigation_reuses_attached_normal_chrome_page() -> None:
     target_url = "https://www.ic.net.cn/search/ABC-123.html"
     assert captured.url == target_url
     assert page.goto_calls == [(target_url, "domcontentloaded", 1234)]
+
+
+def test_cdp_client_spaces_queries_to_the_same_site(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    page = FakeCdpPage(
+        "https://www.ic.net.cn/", FIXTURE.read_text(encoding="utf-8")
+    )
+    client, _ = _cdp_client([page], navigate=True)
+    elapsed = [0.0]
+    sleeps: list[float] = []
+    monkeypatch.setattr("src.research.icnet.time.monotonic", lambda: elapsed[0])
+
+    def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        elapsed[0] += seconds
+
+    monkeypatch.setattr("src.research.icnet.time.sleep", sleep)
+    client.fetch_first_page("ABC-123")
+    elapsed[0] = 10.0
+    client.fetch_first_page("ABC-123")
+    assert sleeps == [80.0]
 
 
 def test_cdp_client_navigation_does_not_reuse_unrelated_page() -> None:

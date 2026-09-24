@@ -64,6 +64,7 @@ V1 mainline 已真实跑通（Google Sheet → Workflow → Research → 调研�
 - `tests/research/**`
 - `tests/v1_integration/**`
 - `runtime/`（Git-ignored 运行数据）
+- `docs/modules/RESEARCH.md`（本轮业务规则澄清）
 - 本 Task Packet
 
 ## Non-scope
@@ -116,4 +117,13 @@ diagnose → fix → real run → fix → rerun → verify → commit → push�
 
 ## Remaining Gap
 
-代码与 V1 运行链路：NONE。源 Sheet `2026` 第 91 行为空型号、空数量，已在脏记录中单列，不推断其业务内容。
+代码与 V1 运行链路：NONE。源 Sheet `2026` 第 91 行为空型号、空数量，保持 `RETRY_WAIT`，不推断其业务内容。
+
+## Owner 复核修正（同一 V1 Task）
+
+- IC.net 仅将实际认证标识计入 SSCP/ICCP 货量，供应商说明文字不计；无合格库存或无严格型号匹配时显示 `货少`。技术失败显示 `待验证` 并保留原因，货量格不再空白。同站 CDP 查询间隔设为至少 90 秒。`BCM957504-N425G` 实测合格库存 0、货量 `货少`；`GT17V-10DP-DS-SB(70)` 合格库存 0、货量 `货少`；`HD1x03-HH-CN` 无严格型号匹配、货量 `货少`。
+- Findchips 改读 Owner Chrome 实际渲染结果，识别 HKD 和带千位逗号的价格，并通过 ECB 同日参考汇率换算。`FDA801B-VYT` 实际为 HK$94.7456、无库存，换算后业务展示 ¥81.02；先前 ¥68.95 来源于与 Chrome 不一致的 HTTP 响应及 USD-only 解析。`GT17V-10DP-DS-SB(70)` 找到有库存美元报价，业务展示 ¥39.51。`BCM957504-N425G` 可解析带千位逗号的报价，技术失败备注消失。
+- Bom.Ai 已在当前 Chrome 使用 Core 密码箱正常登录并检查云价格；没有可见 CAPTCHA/OTP。目标型号与报价型号、自然月日期均严格核验：`HW8076502639302S` 页面云价格记录型号为 `HW8076502639302 SR388`，不可当成目标报价；其余目标在本轮没有有效月内目标报价。
+- 立创账号从 Owner 提供的 `password.txt` 写入 Core 密码箱；Owner 手动完成登录页滑块验证后，程序复用已登录 Chrome。`FDA801B-VYT` 合作库存 208，更新日期 2026-09-24，页面 1+ ¥747.019462、10+ ¥622.516219；按既定最低展示 tier 规则写入 ¥622.52。普通商品列表为空不再掩盖合作库存结果。
+- 真实扫描 `2026` 4 条 pending、`shahab` 3 条 pending，入队 7，二次 poll duplicate 0；6 条有效业务记录在 Excel，货量标识均非空。对受真实会话失效影响的 3 条使用原 inquiry ID 幂等补跑，Excel 保持 6 条业务行。Brand 写回禁用。
+- Research 198 passed、Workflow 23 passed、full pytest 299 passed / 10 skipped、Ruff PASS、项目 secret scan `SECRET_SCAN_OK`、`git diff --check` PASS。`runtime/` 的 Excel/SQLite 为 Git-ignored；接管前未跟踪的报告文件保持不动。

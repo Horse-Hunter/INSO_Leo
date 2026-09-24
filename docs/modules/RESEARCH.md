@@ -24,18 +24,19 @@ Findchips、HQEW、LCSC、Bom.Ai 的型号只接受：完全匹配；或网站�
 
 - 用于 Brand 或货量的每一行仍必须满足 STRICT MPN MATCH：只去除首尾空白并忽略大小写，不允许内部空白、标点、前后缀或封装代码变化。
 - 非空输入 Brand 原样保留；否则最多检查第一页前 20 行，按出现频率、英文优先、较短英文名依次选择 manufacturer；仍并列则 unresolved，不翻译、映射或编造。
-- 汇总第一页严格匹配且带 SSCP 或 ICCP 的库存；同一行两种认证只计一次，Brand 不过滤库存。总量 `<= 3 × quantity` 显示 `货少`，否则 `货多`；应计但无法解析时为技术失败，不得当作零。
+- 汇总第一页严格匹配且实际认证标识区域带 SSCP 或 ICCP 的库存；供应商说明中的文字不算标识。同一行两种认证只计一次，Brand 不过滤库存。没有合格库存或严格型号行时显示 `货少`；总量 `<= 3 × quantity` 显示 `货少`，否则 `货多`。访问或解析失败时显示 `待验证` 并在备注保留技术失败，不得当作零。
 - 登录凭据只通过 Credential Provider 获取，用于批准的 read-only session。
 
 ### 五个价格源
 
-- **Findchips：**`quantity` 不参与选价；每条报价取已展示 tiers 的最低 unit price。分别保留有库存、无库存最低价；USD 转 RMB。
+- **Findchips：**`quantity` 不参与选价；每条报价取已展示 tiers 的最低 unit price。分别保留有库存、无库存最低价；浏览器实际显示的 USD 或 HKD 用 ECB 同日参考汇率换算 RMB，并保留原始币种证据。
 - **HQEW：**不使用页面上方“市场参考价”；只读允许型号匹配的历史市场报价，取最近 1 个自然月最低价，不区分库存。
 - **LCSC：**`quantity` 不参与选价；取已展示最低 unit price，分别保留有库存、无库存最低价。RMB/CNY 直接使用，USD 转 RMB。
 - **Bom.Ai：**只读网页下方目标型号报价区域，不混入页面上方其他型号；取最近 1 个自然月最低价，不区分库存。RMB 直接使用，USD 转 RMB 后比较；登录能力由 Credential Provider 注入。
 - **INSO：**路径为“业务询价 → 采购临时询价 → 输入型号 → 查询”，只读该区域下方历史询价结果，使用正数“供方未税价”；零为无有效报价。USD 转 RMB，不判断库存，也不做型号匹配过滤。先取 1 个自然月最低价；无有效价再依次扩大到 2、3 个自然月，来源单元格分别标 `（两个月）`、`（三个月）`；3 个月仍无正数则无结果。2/3 月价格正常参与聚合。
 
 USD/RMB 使用 ECB 同日 daily reference：`CNY per USD = CNY per EUR / USD per EUR`。缺失、重复、日期不一致、非正数或非有限值均 fail closed；不得 fallback 或隐藏舍入。
+HKD/RMB 同样使用 ECB 同日 daily reference：`CNY per HKD = CNY per EUR / HKD per EUR`；价格计算保持原始 Decimal 精度，仅业务展示保留两位小数。
 
 ## 聚合与 Status
 
