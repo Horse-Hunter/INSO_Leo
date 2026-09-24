@@ -1,6 +1,6 @@
 # Current Task
 
-Status: ACTIVE
+Status: READY_FOR_CEO_REVIEW
 
 Goal: 修复 V1 真实运行中暴露的后台运行、Findchips 币种换算、价格源型号匹配与 LCSC 可用性问题，使 V1 能稳定无感执行并生成可信的 `调研价格.xlsx`。
 
@@ -27,10 +27,17 @@ Constraints:
 Done:
 - CEO 已根据 Owner 真实运行反馈定义本阶段与 Acceptance。
 - Owner 已明确批准新的价格源 MPN 规范化/<=6 suffix 规则。
+- Sheets OAuth 首次授权后将 refresh grant 以 Windows CurrentUser DPAPI 加密保存到仓库外；第二次真实构建 Sheets service 未调用授权流程。
+- Findchips 现按逐档可见币种和价格采集、分别换算 RMB 后比较。URAM3T21 当前页面的 `1059.68` 链为 USD 157.9875（无库存）× ECB 2026-09-23 6.707387608447988782753483481 = RMB 1059.683399789676627815265971；用户报告的 HKD/ USD 另一页面版本已覆盖回归测试。
+- 四个网页价格源统一使用去连字符/空白、忽略大小写、最多 6 个尾随字符的匹配；IC.net 严格规则保持不变。
+- LCSC 真实失败码 `AUTHENTICATED_SESSION_REQUIRED`；页面先到已登录 JLC passport，进入搜索页后合作库存卡片无“更新时间”使原 parser 报 `COOPERATION_CARD_UNPARSEABLE`。会话与卡片解析已修复，URAM3T21 真实返回库存 2、CNY 1870.683574。
+- 后台 CDP 新标签页不激活浏览器窗口；最终 smoke 后专用 Chrome 仍为 minimized。
+- 最终只读 V1 live smoke：2026 pending 2、shahab pending 1、入队 3、二次 poll 0、处理 3、Excel 业务行 2；2026 第 91 行空型号/空数量留在 `RETRY_WAIT`，无伪正常结果。URAM3T21 的立创列为 1870.68、Findchips 为 1059.68（无库存）、最低参考价 1800、总价 36000。
+- Full pytest 311 passed / 10 skipped；ruff、secret scan、git diff check 通过。
 
-Current: 等待 Main Programmer 在独立 worktree 复现、修复、测试。
+Current: 开发分支实现和验证完成，等待 CEO Final Review。
 
-Next: Main Programmer 自主完成四项修复 → self-review → commit/push → CEO Final Review。
+Next: CEO Final Review；由 CEO 决定是否进入 `main`。
 
 Blockers: NONE
 
@@ -42,4 +49,4 @@ Owner Decisions:
 
 Branch: fix/v1-live-runtime-stability
 
-Last Good Commit: a6ad201ae8fb9917f347379184be84a6fd78c1ef
+Last Good Commit: 7f2bcae
