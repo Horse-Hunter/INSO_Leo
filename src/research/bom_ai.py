@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import html as html_module
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -122,6 +123,47 @@ def parse_bom_ai_price_records(
     html: str, target_mpn: str
 ) -> tuple[BomAiPriceRecord, ...]:
     """Parse only quote blocks belonging to matching lower-page MPN sections."""
+
+    cloud_start = html.find("bom_cloud_block")
+    if cloud_start >= 0:
+        records: list[BomAiPriceRecord] = []
+        cloud_html = html[cloud_start:]
+        blocks = re.findall(
+            r'<aside\b[^>]*class="[^"]*stock-view[^"]*"[^>]*>.*?</aside>',
+            cloud_html,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not blocks:
+            raise BomAiClientError("RESULT_IDENTITY_MISSING")
+        for block in blocks:
+            model = re.search(
+                r'<div\b[^>]*class="[^"]*\bmodel\b[^"]*"[^>]*\btitle="([^"]+)"',
+                block,
+                re.IGNORECASE,
+            )
+            if model is None:
+                continue
+            section_mpn = html_module.unescape(model.group(1)).strip()
+            if price_source_mpn_match(target_mpn, section_mpn) is None:
+                continue
+            for data in _DATA.findall(block):
+                raw_price = _child_text(data, "quotePrice")
+                raw_date = _child_text(data, "quoteDate")
+                if not raw_price or not raw_date or "*" in raw_price:
+                    continue
+                price, currency = _parse_price(raw_price)
+                try:
+                    observed = datetime.strptime(
+                        raw_date, "%Y/%m/%d %H:%M:%S"
+                    ).replace(tzinfo=_CHINA_TZ)
+                except ValueError as exc:
+                    raise BomAiClientError("PRICE_RECORD_UNPARSEABLE") from exc
+                records.append(
+                    BomAiPriceRecord(
+                        section_mpn, price, observed.astimezone(UTC), currency
+                    )
+                )
+        return tuple(records)
 
     headings = list(_H3.finditer(html))
     if not headings:
@@ -317,10 +359,10 @@ class PlaywrightBomAiAuthenticatedBrowser:
                 )
                 current_url = page.url
                 self._require_expected_host(current_url, expected_host)
-                self._reject_challenge(page.content(), current_url)
+                self._reject_challenge(page.locator("body").inner_text(), current_url)
 
                 username = page.locator(self._config.username_selector)
-                if username.count() > 0:
+                if username.count() > 0 and username.first.is_visible():
                     username.fill(login.username)
                     page.locator(self._config.password_selector).fill(login.password)
                     if self._config.company_selector is not None:
@@ -335,7 +377,7 @@ class PlaywrightBomAiAuthenticatedBrowser:
                     page.wait_for_timeout(self._settle_ms)
                     current_url = page.url
                     self._require_expected_host(current_url, expected_host)
-                    self._reject_challenge(page.content(), current_url)
+                    self._reject_challenge(page.locator("body").inner_text(), current_url)
                     if self._config.post_login_ready_selector is not None:
                         page.wait_for_selector(
                             self._config.post_login_ready_selector,
@@ -352,7 +394,7 @@ class PlaywrightBomAiAuthenticatedBrowser:
                 current_url = page.url
                 self._require_expected_host(current_url, expected_host)
                 html = page.content()
-                self._reject_challenge(html, current_url)
+                self._reject_challenge(page.locator("body").inner_text(), current_url)
                 browser.close()
                 browser = None
                 return BomAiRawPage(html, current_url, datetime.now(UTC))
@@ -373,8 +415,8 @@ class PlaywrightBomAiAuthenticatedBrowser:
             raise BomAiClientError("UNEXPECTED_NAVIGATION_HOST", url)
 
     @staticmethod
-    def _reject_challenge(html: str, url: str) -> None:
-        folded = html.casefold()
+    def _reject_challenge(visible_text: str, url: str) -> None:
+        folded = visible_text.casefold()
         if any(marker in folded for marker in _BOM_AI_CHALLENGE_MARKERS):
             raise BomAiClientError("INTERACTIVE_CHALLENGE_REQUIRED", url)
 

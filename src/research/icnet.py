@@ -599,6 +599,12 @@ class CdpIcNetClient:
                         "RESULT_PAGE_BLOCKED",
                         current_url,
                     )
+                visible_text = page.locator("body").inner_text()
+                if "您的速度太快了" in visible_text:
+                    raise IcNetPageUnavailable(
+                        "INTERACTIVE_CHALLENGE_REQUIRED",
+                        current_url,
+                    )
                 expected_path = f"/search/{quote(mpn, safe='')}.html"
                 if expected_path.casefold() not in current_url.casefold():
                     raise IcNetPageUnavailable(

@@ -178,7 +178,7 @@ class LcscBrowserClient:
                 if urlsplit(current_url).hostname != "so.szlcsc.com":
                     raise LcscPageUnavailable("SEARCH_NAVIGATION_FAILED", current_url)
                 search_html = page.content()
-                _reject_lcsc_challenge(search_html, current_url)
+                _reject_lcsc_challenge(page.locator("body").inner_text(), current_url)
                 product, product_id = parse_lcsc_search_product(search_html, query)
 
                 product_url = f"https://item.szlcsc.com/{product_id}.html"
@@ -198,7 +198,7 @@ class LcscBrowserClient:
                         "PRODUCT_NAVIGATION_FAILED", current_url
                     )
                 product_html = page.content()
-                _reject_lcsc_challenge(product_html, current_url)
+                _reject_lcsc_challenge(page.locator("body").inner_text(), current_url)
                 page_product, page_product_id = _parse_lcsc_product_page(
                     product_html
                 )
@@ -382,8 +382,8 @@ def parse_lcsc_search_product(
     return product, product_id
 
 
-def _reject_lcsc_challenge(html: str, url: str) -> None:
-    folded = html.casefold()
+def _reject_lcsc_challenge(visible_text: str, url: str) -> None:
+    folded = visible_text.casefold()
     if any(
         marker in folded
         for marker in ("access denied", "captcha", "安全验证", "访问过于频繁")

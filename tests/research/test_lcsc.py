@@ -204,8 +204,15 @@ class FakePage:
 
     def content(self) -> str:
         if self.url.startswith("https://so.szlcsc.com/"):
-            return _cn_search_html()
+            return _cn_search_html() + "<script>安全验证</script>"
         return _cn_product_html()
+
+    def locator(self, selector: str) -> "FakePage":
+        assert selector == "body"
+        return self
+
+    def inner_text(self) -> str:
+        return "Search and product details"
 
 
 class FakeBrowser:

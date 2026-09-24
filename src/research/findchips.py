@@ -237,8 +237,9 @@ def _parse_optional_date(value: str | None) -> datetime | None:
 
 
 class _FindchipsParser(HTMLParser):
-    def __init__(self) -> None:
+    def __init__(self, target_mpn: str | None = None) -> None:
         super().__init__(convert_charrefs=True)
+        self.target_mpn = target_mpn
         self.result_container_found = False
         self.offers: list[FindchipsOffer] = []
 
@@ -252,6 +253,10 @@ class _FindchipsParser(HTMLParser):
         if "distributor-results" in classes:
             self.result_container_found = True
         if tag != "tr" or values.get("data-mfrpartnumber") is None:
+            return
+        if self.target_mpn is not None and price_source_mpn_match(
+            self.target_mpn, values["data-mfrpartnumber"] or ""
+        ) is None:
             return
         self.offers.append(
             FindchipsOffer(
@@ -267,10 +272,12 @@ class _FindchipsParser(HTMLParser):
         )
 
 
-def parse_findchips_offers(html: str) -> tuple[FindchipsOffer, ...]:
+def parse_findchips_offers(
+    html: str, target_mpn: str | None = None
+) -> tuple[FindchipsOffer, ...]:
     """Parse safe offer facts without retaining stock quantities or raw HTML."""
 
-    parser = _FindchipsParser()
+    parser = _FindchipsParser(target_mpn)
     try:
         parser.feed(html)
     except FindchipsError:
@@ -374,7 +381,7 @@ class FindchipsAdapter:
             )
 
         try:
-            offers = parse_findchips_offers(page.html)
+            offers = parse_findchips_offers(page.html, target_mpn)
         except FindchipsError as error:
             return self._unavailable(
                 target_mpn,

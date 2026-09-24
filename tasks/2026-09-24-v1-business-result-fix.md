@@ -1,6 +1,6 @@
 # Task: V1 Business Result Fix
 
-status: in_progress
+status: complete
 actor_role: Production Runtime Codex (唯一执行器)
 executor_tool: BUDDY
 module: research_v1_final
@@ -84,19 +84,36 @@ V1 mainline 已真实跑通（Google Sheet → Workflow → Research → 调研�
 
 - [x] live runner 扫描 `2026` + `shahab`：`WORKSHEET_TITLES` 支持逗号分隔多
   worksheet，保持 `WORKSHEET_TITLE` 向后兼容。
-- [x] Excel 所有价格列最多展示 4 位小数（比较逻辑仍用原始精度）。
+- [x] Excel 所有业务价格显示 `ROUND_HALF_UP` 到 2 位小数，计算仍用原始 Decimal 精度。
 - [x] HQEW：修复 `今天`/`昨天`/`前天`/`1周内`/`YYYY-MM` 日期解析；真实 CDP
   验证 STM32F103C8T6 / MAX232CPE / LM358N 全部解析出 40 条报价。
 - [x] INSO：CDP 复用 + `Stock_VenQuote` POST；删废弃 selector；新写 11 个 INSO
   测试与所有 `tests/research/` 183 用例全过；CDP 真实拉数验证 STM32F103C8T6 / MAX232CPE / LM358N。
-- [ ] Bom.Ai：待真实运行后按需诊断（当前无技术失败根因证据）。
-- [ ] 真实运行复跑 `2026 + shahab` → Workflow → Research → Excel。
-- [ ] 真实运行复跑，`调研价格.xlsx` 业务结果改善或失败原因可观察。
-- [ ] 全部确定性测试、Ruff、secret scan 通过。
-- [ ] commit + push 到当前 branch。
+- [x] Bom.Ai：真实 Chrome 页面没有可见挑战；改用实际 `/components-price/{mpn}.html`，只解析目标型号报价行；真实验证 STM32F103C8T6 可读 50 条记录。运行配置已在本 worktree 的 Git-ignored `runtime/research.json` 更新。
+- [x] 真实运行复跑 `2026 + shahab` → Workflow → Research → Excel；7 条入队，二次 poll 0 重复，6 条有效记录落盘，2026 第 91 行型号和数量为空，未写入 Excel。
+- [x] `调研价格.xlsx` 业务结果改善：INSO/HQEW/Findchips 价格可用；Bom.Ai/LCSC/Findchips 的真实无报价与技术失败区分；IC.net 搜索限流/人工验证写入备注。
+- [x] 全部确定性测试、Ruff、secret scan 通过：Research 193、Workflow 23、full pytest 294 passed/10 skipped，Ruff 与项目 secret scan PASS。
+- [x] commit + push 到当前 branch。
 
 ## Execution
 
 diagnose → fix → real run → fix → rerun → verify → commit → push。
 普通 bug 自主解决；仅人工登录 / CAPTCHA / OTP / device verification /
 业务字段真实歧义时暂停 Owner。
+
+## Final Result
+
+- `2026` 扫描 4 条 `未发`，`shahab` 扫描 3 条；合计入队 7，二次 poll duplicate 0。`shahab` 3 条全部进入 Workflow，最终为 `MANUAL_REVIEW`。
+- 有效业务记录 6 条，Excel 业务行 6 条；`2026` 第 91 行型号和数量均为空，处于 `RETRY_WAIT`，不作为业务记录写入 Excel。Brand 回写保持禁用。
+- 五价格源：Findchips 四条有效无库存参考价；HQEW 一条有效价；INSO 两条有效价；LCSC 和 Bom.Ai 在这 6 条型号中无有效报价。无技术失败被写成业务无结果。IC.net 经 Owner 手动完成站点验证后，有 4 条严格匹配并给出货量，2 条无严格型号匹配；已有 Brand 原样保留。
+- 市场参考价与订单估值可用于业务参考；无库存兜底的两条明确标注需人工介入，完全无报价的两条进入 `MANUAL_REVIEW`。价格显示为 2 位半升舍入，内部 Decimal 未降精度。
+
+## Verification
+
+- 真实 Google Sheet → Workflow → Research → `runtime/调研价格.xlsx`，`WORKSHEET_TITLES=2026,shahab`，CDP `127.0.0.1:9222`，二次 poll 新增 0。对 shahab 第 110、111 行按原 inquiry ID 补跑并确认 Excel 仍为 6 条业务行。
+- Research tests 193 passed；Workflow tests 23 passed；full pytest 294 passed / 10 skipped；Ruff PASS；项目 secret scan `SECRET_SCAN_OK`；`git diff --check` PASS。
+- 未跟踪的 `v1-business-result-fix-report.md` 为接管前已有内容，未修改或纳入提交。运行配置和 Excel、SQLite 位于 Git-ignored `runtime/`。
+
+## Remaining Gap
+
+代码与 V1 运行链路：NONE。源 Sheet `2026` 第 91 行为空型号、空数量，已在脏记录中单列，不推断其业务内容。

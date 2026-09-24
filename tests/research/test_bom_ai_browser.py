@@ -26,13 +26,24 @@ def _config(**overrides: object) -> BomAiBrowserConfig:
 
 
 class FakeLocator:
-    def __init__(self, name: str, calls: list, count: int) -> None:
+    def __init__(self, name: str, calls: list, count: int, html: str) -> None:
         self.name = name
         self.calls = calls
         self._count = count
+        self._html = html
 
     def count(self) -> int:
         return self._count
+
+    @property
+    def first(self) -> "FakeLocator":
+        return self
+
+    def is_visible(self) -> bool:
+        return self._count > 0
+
+    def inner_text(self) -> str:
+        return self._html
 
     def fill(self, value: str) -> None:
         self.calls.append(("fill", self.name, value))
@@ -42,9 +53,15 @@ class FakeLocator:
 
 
 class FakePage:
-    def __init__(self, url: str = LOGIN_URL, html: str = "<html>ok</html>") -> None:
+    def __init__(
+        self,
+        url: str = LOGIN_URL,
+        html: str = "<html>ok</html>",
+        visible_text: str | None = None,
+    ) -> None:
         self.url = url
         self.html = html
+        self.visible_text = html if visible_text is None else visible_text
         self.calls: list = []
         self.login_form_present = True
 
@@ -63,7 +80,7 @@ class FakePage:
             "#company",
         }:
             count = 0
-        return FakeLocator(selector, self.calls, count)
+        return FakeLocator(selector, self.calls, count, self.visible_text)
 
     def wait_for_timeout(self, timeout: int) -> None:
         assert timeout >= 0
@@ -174,6 +191,14 @@ def test_browser_skips_login_when_no_form_is_present() -> None:
 
     assert all(call[0] != "fill" for call in page.calls)
     assert ("goto", "https://www.bom.ai/search/ABC", None) in page.calls
+
+
+def test_hidden_challenge_word_is_not_treated_as_visible_verification() -> None:
+    page = FakePage(html="<script>captcha</script>", visible_text="normal result")
+    page.login_form_present = False
+    acquisition, _ = _browser(page, _config())
+    capture = acquisition.fetch_price_page("ABC", BomAiLogin("u", "p"))
+    assert capture.html == "<script>captcha</script>"
 
 
 def test_company_selector_requires_a_company_credential() -> None:

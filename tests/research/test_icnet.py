@@ -48,11 +48,15 @@ class UnavailableClient:
 
 
 class FakeLocator:
-    def __init__(self, count: int) -> None:
+    def __init__(self, count: int, text: str = "") -> None:
         self._count = count
+        self._text = text
 
     def count(self) -> int:
         return self._count
+
+    def inner_text(self) -> str:
+        return self._text
 
 
 class FakeCdpPage:
@@ -75,7 +79,7 @@ class FakeCdpPage:
 
     def locator(self, selector: str) -> FakeLocator:
         assert selector == "body"
-        return FakeLocator(int(self.has_body))
+        return FakeLocator(int(self.has_body), self.html)
 
     def content(self) -> str:
         return self.html
@@ -436,3 +440,15 @@ def test_cdp_client_fails_closed_when_attached_page_has_no_body() -> None:
         client.fetch_first_page("ABC-123")
 
     assert caught.value.source_url == target_url
+
+
+def test_cdp_client_identifies_visible_search_challenge() -> None:
+    page = FakeCdpPage(
+        "https://www.ic.net.cn/searchPnCode.php?l=ins",
+        "对不起！您的速度太快了，请慢一点搜索！请依次点击汉字",
+    )
+    client, _ = _cdp_client([page], navigate=True)
+    with pytest.raises(
+        IcNetPageUnavailable, match="INTERACTIVE_CHALLENGE_REQUIRED"
+    ):
+        client.fetch_first_page("ABC-123")

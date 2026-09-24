@@ -14,10 +14,23 @@ from src.research.source_contracts import (
     SourceOutcome,
     SourceResult,
     is_strict_mpn_match,
+    money_text,
     price_source_mpn_match,
 )
 
 CAPTURED_AT = datetime(2026, 9, 21, 8, 0, tzinfo=UTC)
+
+
+def test_money_text_rounds_display_only_to_two_places() -> None:
+    for raw, expected in (
+        ("68.951944", "68.95"),
+        ("732.4467", "732.45"),
+        ("5034.406", "5034.41"),
+        ("90.000", "90"),
+    ):
+        value = Decimal(raw)
+        assert money_text(value) == expected
+        assert value == Decimal(raw)
 
 
 def _evidence(
