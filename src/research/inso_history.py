@@ -10,11 +10,11 @@ the shared FX quote before ``InsoHistoryAdapter`` emits the ``PriceCandidate``.
 from __future__ import annotations
 
 import json
-from ipaddress import ip_address
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from ipaddress import ip_address
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
@@ -312,7 +312,7 @@ class PlaywrightInsoReadOnlyBrowser:
                 finally:
                     try:
                         browser.close()
-                    except Exception:
+                    except (OSError, RuntimeError):
                         pass
         except InsoReadError:
             raise

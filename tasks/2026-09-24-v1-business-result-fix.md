@@ -82,11 +82,15 @@ V1 mainline 已真实跑通（Google Sheet → Workflow → Research → 调研�
 
 ## Acceptance
 
-- [ ] live runner 扫描 `2026` + `shahab`，SHAHAB 的 3 条 `未发` 被入队处理。
-- [ ] Excel 所有价格列最多展示 4 位小数（比较逻辑仍用原始精度）。
-- [ ] HQEW / Bom.Ai / INSO 的真实失败根因有诊断结论并针对性修复。
+- [x] live runner 扫描 `2026` + `shahab`：`WORKSHEET_TITLES` 支持逗号分隔多
+  worksheet，保持 `WORKSHEET_TITLE` 向后兼容。
+- [x] Excel 所有价格列最多展示 4 位小数（比较逻辑仍用原始精度）。
+- [x] HQEW：修复 `今天`/`昨天`/`前天`/`1周内`/`YYYY-MM` 日期解析；真实 CDP
+  验证 STM32F103C8T6 / MAX232CPE / LM358N 全部解析出 40 条报价。
 - [x] INSO：CDP 复用 + `Stock_VenQuote` POST；删废弃 selector；新写 11 个 INSO
   测试与所有 `tests/research/` 183 用例全过；CDP 真实拉数验证 STM32F103C8T6 / MAX232CPE / LM358N。
+- [ ] Bom.Ai：待真实运行后按需诊断（当前无技术失败根因证据）。
+- [ ] 真实运行复跑 `2026 + shahab` → Workflow → Research → Excel。
 - [ ] 真实运行复跑，`调研价格.xlsx` 业务结果改善或失败原因可观察。
 - [ ] 全部确定性测试、Ruff、secret scan 通过。
 - [ ] commit + push 到当前 branch。

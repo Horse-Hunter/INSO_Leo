@@ -72,7 +72,7 @@ def test_quantity_does_not_select_tier_and_preorder_is_out_of_stock() -> None:
     assert result.price_candidate is None
     assert result.out_of_stock_candidate is not None
     assert result.out_of_stock_candidate.normalized_rmb_price == Decimal("7.0000")
-    assert format_source_result(result) == "7.0000（无库存）"
+    assert format_source_result(result) == "7（无库存）"
 
 
 def test_stocked_suffix_and_rmb_prices_are_supported() -> None:
@@ -85,7 +85,7 @@ def test_stocked_suffix_and_rmb_prices_are_supported() -> None:
 
     assert suffix.price_candidate is not None
     assert suffix.price_candidate.normalized_rmb_price == Decimal("7.0000")
-    assert format_source_result(suffix) == "7.0000（ABC-1-T）"
+    assert format_source_result(suffix) == "7（ABC-1-T）"
     assert rmb.price_candidate is not None
     assert rmb.price_candidate.normalized_rmb_price == Decimal("1.00")
 

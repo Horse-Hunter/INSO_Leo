@@ -5,7 +5,7 @@ from __future__ import annotations
 from calendar import monthrange
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
 
 
@@ -160,7 +160,12 @@ class SourceResult:
 
 
 def money_text(value: Decimal) -> str:
-    return format(value, "f")
+    """Render a price for human-readable display: max 4 decimals, strip trailing zeros."""
+    capped = value.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    text = format(capped, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text if text else "0"
 
 
 def format_source_result(result: SourceResult) -> str:

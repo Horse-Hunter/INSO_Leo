@@ -7,18 +7,19 @@ login keep failing closed at the source layer (no bypass).
 Required (Owner-supplied, never recorded in the repo):
 
     SPREADSHEET_ID       — Google Sheets spreadsheet ID
-    WORKSHEET_TITLE      — worksheet name, e.g. "2026"
+    WORKSHEET_TITLE      — single worksheet name, e.g. "2026"
     CLIENT_SECRET_FILE   — OAuth Desktop client secret JSON path
 
 Optional env overrides:
 
+    WORKSHEET_TITLES     — comma-separated list, e.g. "2026,shahab"
     INSO_SITE_ID=yingsuo.alperp.cn
     BRAND_UPDATER=noop   — always disabled for V1 smoke (no write-back)
 
 Run from the worktree root:
 
-    SPREADSHEET_ID=... WORKSHEET_TITLE=2026 CLIENT_SECRET_FILE=... \\
-        python data/scripts/v1_live_smoke.py
+    SPREADSHEET_ID=... WORKSHEET_TITLES=2026,shahab CLIENT_SECRET_FILE=... \\
+        python tests/v1_integration/v1_live_smoke.py
 """
 
 from __future__ import annotations
@@ -57,9 +58,19 @@ def _require_env(name: str) -> str:
     return value
 
 
+def _worksheet_titles() -> tuple[str, ...]:
+    multi = os.environ.get("WORKSHEET_TITLES", "").strip()
+    if multi:
+        return tuple(title.strip() for title in multi.split(",") if title.strip())
+    single = os.environ.get("WORKSHEET_TITLE", "").strip()
+    if single:
+        return (single,)
+    raise SystemExit("Missing required env var: WORKSHEET_TITLES or WORKSHEET_TITLE")
+
+
 def main() -> int:
     spreadsheet_id = _require_env("SPREADSHEET_ID")
-    worksheet_title = _require_env("WORKSHEET_TITLE")
+    worksheet_titles = _worksheet_titles()
     client_secret = Path(_require_env("CLIENT_SECRET_FILE"))
     if not client_secret.exists():
         raise SystemExit(f"client_secret file not found: {client_secret}")
@@ -78,7 +89,9 @@ def main() -> int:
 
     service = build_read_only_google_sheets_service(client_secret)
     reader = GoogleSheetsRowReader(service)
-    ws = WorksheetIdentity(spreadsheet_id, worksheet_title)
+    worksheets = [
+        WorksheetIdentity(spreadsheet_id, title) for title in worksheet_titles
+    ]
 
     store = WorkflowStateStore(db_path)
     poller = WorkflowPoller(store, reader)
@@ -88,7 +101,7 @@ def main() -> int:
     )
     # Brand updater is disabled: we record NOT_CONFIGURED instead of writing.
     worker = WorkflowWorker(store, research, brand_updater=None)
-    runtime = WorkflowRuntime(poller, worker, [ws])
+    runtime = WorkflowRuntime(poller, worker, worksheets)
 
     now = datetime.now(timezone.utc).replace(microsecond=0)
     print("== first poll ==")
