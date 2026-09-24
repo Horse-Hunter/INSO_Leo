@@ -14,6 +14,7 @@ from ipaddress import ip_address
 from typing import Protocol
 from urllib.parse import quote, urlsplit
 
+from .cdp_pages import new_background_page
 from .source_contracts import (
     EvidenceField,
     ResearchSource,
@@ -588,7 +589,9 @@ class CdpIcNetClient:
                     elif icnet_pages:
                         page = icnet_pages[0]
                     else:
-                        page = context.new_page()
+                        page = new_background_page(
+                            browser, context, timeout_ms=self._timeout_ms
+                        )
                     if self._last_navigation_at is not None:
                         remaining = self._min_interval_seconds - (
                             time.monotonic() - self._last_navigation_at

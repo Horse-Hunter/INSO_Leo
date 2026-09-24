@@ -130,6 +130,47 @@ def test_hkd_offer_preserves_currency_and_converts_from_hkd() -> None:
     assert result.out_of_stock_candidate.normalized_rmb_price == Decimal("86.218496")
 
 
+def test_uram3t21_keeps_stock_and_converts_each_visible_currency() -> None:
+    html = _page(
+        _row("URAM3T21", "8", '[[1,"HKD","1,855.5900"]]'),
+        _row("URAM3T21", "0", '[[1,"USD","227.5800"],[10,"USD","225.7000"]]'),
+    )
+    result = FindchipsAdapter(Client(html), Fx()).search("uRAM3T21", 20)
+    assert result.price_candidate is not None
+    assert result.out_of_stock_candidate is not None
+    assert (result.price_candidate.raw_price, result.price_candidate.raw_currency) == (
+        Decimal("1855.5900"), "HKD"
+    )
+    assert result.price_candidate.normalized_rmb_price == Decimal("1688.586900")
+    assert (result.out_of_stock_candidate.raw_price, result.out_of_stock_candidate.raw_currency) == (
+        Decimal("225.7000"), "USD"
+    )
+    assert result.out_of_stock_candidate.normalized_rmb_price == Decimal("1602.470000")
+
+
+def test_visible_hkd_tiers_override_stale_usd_attribute() -> None:
+    html = _page(
+        '<tr data-mfrpartnumber="URAM3T21" data-instock="8" '
+        'data-price=\'[[1,"USD","227.5800"]]\'>'
+        '<ul class="price-list"><li><span class="label">1</span>'
+        '<span class="value" data-basecurrency="USD">HK$1,855.5900</span>'
+        '</li></ul></tr>'
+    )
+    result = FindchipsAdapter(Client(html), Fx()).search("URAM3T21", 1)
+    assert result.price_candidate is not None
+    assert result.price_candidate.raw_currency == "HKD"
+    assert result.price_candidate.raw_price == Decimal("1855.5900")
+    assert result.price_candidate.normalized_rmb_price == Decimal("1688.586900")
+
+
+def test_mixed_currency_tiers_are_compared_after_rmb_conversion() -> None:
+    html = _page(_row("ABC", "8", '[[1,"USD","20"],[10,"HKD","100"]]'))
+    result = FindchipsAdapter(Client(html), Fx()).search("ABC", 1)
+    assert result.price_candidate is not None
+    assert result.price_candidate.raw_currency == "HKD"
+    assert result.price_candidate.normalized_rmb_price == Decimal("91.00")
+
+
 def test_displayed_thousands_separator_is_parsed_as_price() -> None:
     offers = parse_findchips_offers(
         _page(_row("BCM957504-N425G", "0", '[[1,"HKD","6,361.7100"]]')),
@@ -194,9 +235,9 @@ def test_dated_quotes_use_one_natural_month_and_undated_quotes_remain_valid() ->
     assert result.price_candidate.raw_price == Decimal("2.00")
 
 
-def test_suffix_over_five_or_internal_mutation_does_not_match() -> None:
+def test_suffix_over_six_or_internal_mutation_does_not_match() -> None:
     html = _page(
-        _row("ABC-1ABCDEF", "1", '[[1,"USD","0.01"]]'),
+        _row("ABC-1ABCDEFG", "1", '[[1,"USD","0.01"]]'),
         _row("ABX-1", "1", '[[1,"USD","0.01"]]'),
     )
     result = FindchipsAdapter(Client(html), Fx()).search("ABC-1", 1)

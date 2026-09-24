@@ -57,7 +57,7 @@ def test_suffix_match_expiry_and_overlong_suffix() -> None:
         clock=lambda: NOW,
     ).search("ABC", 1)
     mismatch = BomAiAdapter(
-        Client((BomAiPriceRecord("ABC-ABCDEF", Decimal(1), NOW),)),
+        Client((BomAiPriceRecord("ABC-ABCDEFG", Decimal(1), NOW),)),
         clock=lambda: NOW,
     ).search("ABC", 1)
     assert suffix.price_candidate is not None

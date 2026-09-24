@@ -105,7 +105,7 @@ def test_stocked_suffix_and_rmb_prices_are_supported() -> None:
 
 
 def test_overlong_suffix_and_unsupported_currency_have_no_candidate() -> None:
-    mismatch = LcscAdapter(Client(_html("ABC-1ABCDEF")), Fx()).search("ABC-1", 1)
+    mismatch = LcscAdapter(Client(_html("ABC-1ABCDEFG")), Fx()).search("ABC-1", 1)
     unsupported = LcscAdapter(Client(_html(currency="EUR")), Fx()).search(
         "ABC-1", 1
     )
@@ -200,6 +200,25 @@ def test_chinese_search_parser_is_scoped_and_uses_displayed_discount_tiers() -> 
     assert product_id == "531509"
     assert product.mpn == "ADXL355BEZ-RL7"
     assert min(tier.unit_price for tier in product.tiers) == Decimal("343.1176")
+
+
+def test_live_style_cooperation_card_without_update_date_is_a_price_result() -> None:
+    card = """URAM3T21
+品牌
+Vicor Corporation
+1+
+￥1870.683574
+8-14个工作日
+库存
+2
+增量
+1"""
+    product = parse_lcsc_cooperation_card(card, "uRAM-3T21")
+    assert product is not None
+    assert product.mpn == "URAM3T21"
+    assert product.observed_at is None
+    assert product.stock_quantity == 2
+    assert product.tiers[0].unit_price == Decimal("1870.683574")
 
 
 class FakePage:

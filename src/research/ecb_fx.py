@@ -34,10 +34,15 @@ class EcbDailyUsdRmbProvider:
         self,
         fetch_csv: Callable[[], str] | None = None,
         *,
+        fetch_hkd_csv: Callable[[], str] | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._fetch_csv = fetch_csv or self._fetch_official_csv
+        self._fetch_hkd_csv = fetch_hkd_csv or (
+            lambda: self._fetch_official_csv(ECB_DAILY_HKD_CNY_URL)
+        )
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._last_usd_date: str | None = None
 
     def get_quote(self) -> UsdRmbQuote:
         try:
@@ -45,6 +50,7 @@ class EcbDailyUsdRmbProvider:
         except (OSError, RuntimeError, UnicodeError) as exc:
             raise EcbFxError("ECB_FETCH_FAILED") from exc
         rate, date = self._cross_rate(body, "USD")
+        self._last_usd_date = date
         return UsdRmbQuote(
             rate=rate,
             captured_at=self._clock(),
@@ -54,9 +60,13 @@ class EcbDailyUsdRmbProvider:
     def get_hkd_rmb_rate(self) -> Decimal:
         """Derive RMB per HKD from same-day official ECB EUR rates."""
 
-        rate, _date = self._cross_rate(
-            self._fetch_official_csv(ECB_DAILY_HKD_CNY_URL), "HKD"
-        )
+        try:
+            body = self._fetch_hkd_csv()
+        except (OSError, RuntimeError, UnicodeError) as exc:
+            raise EcbFxError("ECB_FETCH_FAILED") from exc
+        rate, date = self._cross_rate(body, "HKD")
+        if self._last_usd_date is None or date != self._last_usd_date:
+            raise EcbFxError("ECB_OBSERVATION_DATE_MISMATCH")
         return rate
 
     @staticmethod

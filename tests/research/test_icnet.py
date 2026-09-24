@@ -433,7 +433,13 @@ def test_cdp_client_spaces_queries_to_the_same_site(
     assert sleeps == [80.0]
 
 
-def test_cdp_client_navigation_does_not_reuse_unrelated_page() -> None:
+def test_cdp_client_navigation_does_not_reuse_unrelated_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "src.research.icnet.new_background_page",
+        lambda _browser, context, **_kwargs: context.new_page(),
+    )
     unrelated = FakeCdpPage(
         "https://evil.example/?next=ic.net.cn",
         FIXTURE.read_text(encoding="utf-8"),

@@ -224,7 +224,13 @@ def test_cdp_client_reuses_authenticated_hqew_page_for_navigation() -> None:
     assert page.goto_calls == [(target, "domcontentloaded", 1234)]
 
 
-def test_cdp_client_does_not_reuse_unrelated_page() -> None:
+def test_cdp_client_does_not_reuse_unrelated_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "src.research.hqew.new_background_page",
+        lambda _browser, context, **_kwargs: context.new_page(),
+    )
     unrelated = FakeCdpPage("https://evil.example/", _row("ABC", "1.25"))
     client, chromium = _cdp_client([unrelated], navigate=True)
 

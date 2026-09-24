@@ -12,7 +12,7 @@
 
 IC.net 只负责 Brand 与货量，不是价格源。五个价格源为 Findchips、HQEW、LCSC、Bom.Ai 和 INSO；INSO 在 Research 中仅作 read-only 历史市场价格查询。
 
-Findchips、HQEW、LCSC、Bom.Ai 的型号只接受：完全匹配；或网站型号等于完整搜索型号加不超过 5 个字符的尾部后缀。禁止内部/前缀变化或猜测变体；使用后缀型号时在对应来源单元格附实际网站型号，完全匹配不标。
+Findchips、HQEW、LCSC、Bom.Ai 的 target/observed 型号比较前去除 `-` 和所有空白并忽略大小写；规范化后只接受完全匹配，或网站型号等于完整搜索型号再加最多 6 个尾随字符。禁止内部/前缀变化或猜测变体；使用后缀型号时在对应来源单元格附实际网站型号，完全匹配不标。IC.net 继续使用下述严格匹配。
 
 上述四个网页价格源有日期字段时只使用最近 1 个自然月；无日期字段时不做时间过滤。自然月边界为上月同日、同一 wall-clock time，遇短月钳制到月末。INSO 使用下述 1/2/3 月阶梯。
 
@@ -29,7 +29,7 @@ Findchips、HQEW、LCSC、Bom.Ai 的型号只接受：完全匹配；或网站�
 
 ### 五个价格源
 
-- **Findchips：**`quantity` 不参与选价；每条报价取已展示 tiers 的最低 unit price。分别保留有库存、无库存最低价；浏览器实际显示的 USD 或 HKD 用 ECB 同日参考汇率换算 RMB，并保留原始币种证据。
+- **Findchips：**`quantity` 不参与选价；以页面逐档可见价格和币种为准，避免隐藏属性与显示币种不一致；每个 tier 先按对应的 ECB 参考汇率换算 RMB，再分别选有库存、无库存最低价；原始币种、汇率和标准化人民币价保留在 evidence。
 - **HQEW：**不使用页面上方“市场参考价”；只读允许型号匹配的历史市场报价，取最近 1 个自然月最低价，不区分库存。
 - **LCSC：**`quantity` 不参与选价；取已展示最低 unit price，分别保留有库存、无库存最低价。RMB/CNY 直接使用，USD 转 RMB。
 - **Bom.Ai：**只读网页下方目标型号报价区域，不混入页面上方其他型号；取最近 1 个自然月最低价，不区分库存。RMB 直接使用，USD 转 RMB 后比较；登录能力由 Credential Provider 注入。
@@ -64,4 +64,4 @@ HKD/RMB 同样使用 ECB 同日 daily reference：`CNY per HKD = CNY per EUR / H
 
 Research 不访问 Google Sheets、不调度流程、不执行主动 INSO 采购、不计算 Quotation。它可直接使用已批准的 INSO read-only Research adapter，但不依赖 `inso` 模块；本地 Excel 是 V1 唯一写入。
 
-仍为 `UNKNOWN`：完整 reason-code catalog、额外输入校验、Excel 展示精度/保留/并发锁策略，以及 Future INSO Module 的重要性规则。Selector、XPath、session、workaround 和 Task 历史不属于长期 Contract。
+仍为 `UNKNOWN`：完整 reason-code catalog、额外输入校验、Excel 保留/并发锁策略，以及 Future INSO Module 的重要性规则。Selector、XPath、session、workaround 和 Task 历史不属于长期 Contract。

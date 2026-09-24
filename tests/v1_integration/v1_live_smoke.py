@@ -80,7 +80,7 @@ def main() -> int:
     runtime_dir.mkdir(parents=True, exist_ok=True)
     db_path = runtime_dir / "v1_live.sqlite"
     if db_path.exists():
-        db_path.unlink()
+        raise SystemExit(f"Refusing to overwrite existing smoke database: {db_path}")
 
     readiness = assess_readiness(config.cdp.cdp_url)
     print(format_readiness(readiness))
@@ -95,7 +95,7 @@ def main() -> int:
 
     excel_path = config.excel_output_path
     if excel_path.exists():
-        excel_path.unlink()
+        raise SystemExit(f"Refusing to overwrite existing Excel output: {excel_path}")
 
     store = WorkflowStateStore(db_path)
     poller = WorkflowPoller(store, reader)

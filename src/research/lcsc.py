@@ -13,6 +13,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
+from .cdp_pages import new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .source_contracts import (
     EvidenceField,
@@ -231,11 +232,13 @@ def parse_lcsc_cooperation_card(text: str, target_mpn: str) -> LcscProduct | Non
     if not lines or price_source_mpn_match(target_mpn, lines[0]) is None:
         return None
     try:
-        date_index = lines.index("更新时间")
         stock_index = lines.index("库存")
-        observed_at = datetime.strptime(
-            lines[date_index + 1], "%Y年%m月%d日"
-        ).replace(tzinfo=_CHINA_TZ).astimezone(UTC)
+        observed_at = None
+        if "更新时间" in lines:
+            date_index = lines.index("更新时间")
+            observed_at = datetime.strptime(
+                lines[date_index + 1], "%Y年%m月%d日"
+            ).replace(tzinfo=_CHINA_TZ).astimezone(UTC)
         stock = int(lines[stock_index + 1].replace(",", ""))
         tiers = tuple(
             LcscPriceTier(int(lines[index][:-1]), Decimal(lines[index + 1].lstrip("¥￥")), "CNY")
@@ -271,27 +274,40 @@ class CdpLcscClient:
                     self._cdp_url, timeout=self._timeout_ms
                 )
                 context = browser.contexts[0]
-                pages = [page for page in context.pages if urlsplit(page.url).hostname == "so.szlcsc.com"]
-                page = next((item for item in pages if item.locator("#login:visible").count() == 0), None)
-                if page is None:
-                    raise LcscPageUnavailable("AUTHENTICATED_SESSION_REQUIRED", search_url)
-                page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
-                page.wait_for_timeout(3_000)
-                if urlsplit(page.url).hostname != "so.szlcsc.com":
-                    raise LcscPageUnavailable("SEARCH_NAVIGATION_FAILED", page.url)
-                if page.locator("#login:visible").count():
-                    raise LcscPageUnavailable("AUTHENTICATED_SESSION_REQUIRED", page.url)
-                cards = page.locator('section[class*="OverseasCard"]')
-                for _ in range(10):
-                    if cards.count():
-                        break
-                    page.wait_for_timeout(1_000)
-                for card in cards.all():
-                    product = parse_lcsc_cooperation_card(card.inner_text(), mpn)
-                    if product is not None:
-                        return LcscPage("", page.url, datetime.now(UTC), product)
-                product, _product_id = parse_lcsc_search_product(page.content(), mpn)
-                return LcscPage("", page.url, datetime.now(UTC), product)
+                page = new_background_page(
+                    browser, context, timeout_ms=self._timeout_ms
+                )
+                try:
+                    page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
+                    page.wait_for_timeout(3_000)
+                    if urlsplit(page.url).hostname == "passport.jlc.com":
+                        # The existing JLC session can require a one-click return
+                        # to the search site. Never fill a login or challenge.
+                        body = page.locator("body").inner_text()
+                        enter = page.get_by_text("进入系统", exact=True)
+                        if "已登录账号" not in body or enter.count() != 1:
+                            raise LcscPageUnavailable("AUTHENTICATED_SESSION_REQUIRED", page.url)
+                        enter.click(timeout=self._timeout_ms)
+                        page.wait_for_timeout(3_000)
+                    if urlsplit(page.url).hostname != "so.szlcsc.com":
+                        raise LcscPageUnavailable("SEARCH_NAVIGATION_FAILED", page.url)
+                    body = page.locator("body").inner_text()
+                    _reject_lcsc_challenge(body, page.url)
+                    if page.locator("#login:visible").count():
+                        raise LcscPageUnavailable("AUTHENTICATED_SESSION_REQUIRED", page.url)
+                    cards = page.locator('section[class*="OverseasCard"]')
+                    for _ in range(10):
+                        if cards.count():
+                            break
+                        page.wait_for_timeout(1_000)
+                    for card in cards.all():
+                        product = parse_lcsc_cooperation_card(card.inner_text(), mpn)
+                        if product is not None:
+                            return LcscPage("", page.url, datetime.now(UTC), product)
+                    product, _product_id = parse_lcsc_search_product(page.content(), mpn)
+                    return LcscPage("", page.url, datetime.now(UTC), product)
+                finally:
+                    page.close()
         except LcscError:
             raise
         except Exception as exc:
@@ -433,7 +449,9 @@ def parse_lcsc_search_product(
             raise LcscParseError("PRICE_TIERS_UNPARSEABLE") from exc
         if stock is not None and (isinstance(stock, bool) or not isinstance(stock, int)):
             raise LcscParseError("STOCK_UNPARSEABLE")
-        suffix_length = len(mpn.strip()) - len(target_mpn.strip())
+        suffix_length = len(re.sub(r"[\s-]", "", mpn)) - len(
+            re.sub(r"[\s-]", "", target_mpn)
+        )
         product = LcscProduct(
             mpn,
             bool(vo.get("isPreSale", False)),

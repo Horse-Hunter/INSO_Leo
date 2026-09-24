@@ -11,6 +11,7 @@ from ipaddress import ip_address
 from typing import Protocol
 from urllib.parse import quote, urlsplit
 
+from .cdp_pages import new_background_page
 from .source_contracts import (
     EvidenceField,
     MpnMatchKind,
@@ -154,7 +155,9 @@ class CdpHqewClient:
                     elif hqew_pages:
                         page = hqew_pages[0]
                     else:
-                        page = context.new_page()
+                        page = new_background_page(
+                            browser, context, timeout_ms=self._timeout_ms
+                        )
                     page.goto(
                         target_url,
                         wait_until="domcontentloaded",

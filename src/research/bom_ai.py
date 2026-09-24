@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Protocol
 from urllib.parse import quote, urlsplit
 
+from .cdp_pages import new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .source_contracts import (
     EvidenceField,
@@ -450,7 +451,9 @@ class CdpBomAiAuthenticatedBrowser:
                 )
                 context = browser.contexts[0]
                 pages = [page for page in context.pages if _is_bom_ai_host(page.url)]
-                page = pages[0] if pages else context.new_page()
+                page = pages[0] if pages else new_background_page(
+                    browser, context, timeout_ms=self._timeout_ms
+                )
                 page.goto(target_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
                 page.wait_for_timeout(2_000)
                 if not _is_bom_ai_host(page.url):

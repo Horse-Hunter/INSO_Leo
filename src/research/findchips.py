@@ -14,6 +14,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
+from .cdp_pages import new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .source_contracts import (
     EvidenceField,
@@ -187,7 +188,9 @@ class CdpFindchipsClient:
                 )
                 context = browser.contexts[0]
                 pages = [page for page in context.pages if _is_findchips_response_url(page.url)]
-                page = pages[0] if pages else context.new_page()
+                page = pages[0] if pages else new_background_page(
+                    browser, context, timeout_ms=self._timeout_ms
+                )
                 page.goto(target_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
                 page.wait_for_timeout(4_000)
                 if not _is_findchips_response_url(page.url):
@@ -285,6 +288,14 @@ class _FindchipsParser(HTMLParser):
         self.target_mpn = target_mpn
         self.result_container_found = False
         self.offers: list[FindchipsOffer] = []
+        self._row: dict[str, str | None] | None = None
+        self._visible_tiers: list[FindchipsPriceTier] = []
+        self._in_price_list = False
+        self._tier_label: str | None = None
+        self._tier_value: str | None = None
+        self._tier_base_currency: str | None = None
+        self._active_span: str | None = None
+        self._span_text: list[str] = []
 
     def handle_starttag(
         self,
@@ -295,24 +306,99 @@ class _FindchipsParser(HTMLParser):
         classes = frozenset((values.get("class") or "").split())
         if "distributor-results" in classes:
             self.result_container_found = True
-        if tag != "tr" or values.get("data-mfrpartnumber") is None:
+        if tag == "tr" and values.get("data-mfrpartnumber") is not None:
+            if self.target_mpn is not None and price_source_mpn_match(
+                self.target_mpn, values["data-mfrpartnumber"] or ""
+            ) is None:
+                return
+            self._row = values
+            self._visible_tiers = []
             return
-        if self.target_mpn is not None and price_source_mpn_match(
-            self.target_mpn, values["data-mfrpartnumber"] or ""
-        ) is None:
+        if self._row is None:
             return
-        self.offers.append(
-            FindchipsOffer(
-                mpn=values["data-mfrpartnumber"] or "",
-                stock_positive=_parse_stock_presence(values.get("data-instock")),
-                tiers=_parse_tiers(values.get("data-price")),
-                observed_at=_parse_optional_date(
-                    values.get("data-quotedate")
-                    or values.get("data-quote-date")
-                    or values.get("data-date")
-                ),
+        if tag == "ul" and "price-list" in classes:
+            self._in_price_list = True
+        elif self._in_price_list and tag == "li":
+            self._tier_label = None
+            self._tier_value = None
+            self._tier_base_currency = None
+        elif self._in_price_list and tag == "span" and (
+            "label" in classes or "value" in classes
+        ):
+            self._active_span = "label" if "label" in classes else "value"
+            self._span_text = []
+            if self._active_span == "value":
+                self._tier_base_currency = values.get("data-basecurrency")
+
+    def handle_data(self, data: str) -> None:
+        if self._active_span is not None:
+            self._span_text.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._row is None:
+            return
+        if tag == "span" and self._active_span is not None:
+            value = "".join(self._span_text).strip()
+            if self._active_span == "label":
+                self._tier_label = value
+            else:
+                self._tier_value = value
+            self._active_span = None
+        elif tag == "li" and self._in_price_list and self._tier_value:
+            if self._tier_label is None or not self._tier_label.isdecimal():
+                raise FindchipsParseError("VISIBLE_PRICE_TIER_UNPARSEABLE")
+            self._visible_tiers.append(
+                _parse_visible_tier(
+                    int(self._tier_label), self._tier_value,
+                    self._tier_base_currency,
+                )
             )
-        )
+        elif tag == "ul" and self._in_price_list:
+            self._in_price_list = False
+        elif tag == "tr":
+            values = self._row
+            self.offers.append(
+                FindchipsOffer(
+                    mpn=values["data-mfrpartnumber"] or "",
+                    stock_positive=_parse_stock_presence(values.get("data-instock")),
+                    tiers=(
+                        tuple(self._visible_tiers)
+                        if self._visible_tiers
+                        else _parse_tiers(values.get("data-price"))
+                    ),
+                    observed_at=_parse_optional_date(
+                        values.get("data-quotedate")
+                        or values.get("data-quote-date")
+                        or values.get("data-date")
+                    ),
+                )
+            )
+            self._row = None
+            self._in_price_list = False
+
+
+def _parse_visible_tier(
+    break_quantity: int, display_text: str, base_currency: str | None
+) -> FindchipsPriceTier:
+    compact = " ".join(display_text.split())
+    match = re.fullmatch(
+        r"(?:(HK)\$|(USD)\s*\$|\$)\s*(\d[\d,]*(?:\.\d+)?)",
+        compact,
+        re.IGNORECASE,
+    )
+    if match is None:
+        raise FindchipsParseError("VISIBLE_PRICE_TIER_UNPARSEABLE")
+    currency = "HKD" if match.group(1) else "USD" if match.group(2) else (base_currency or "").upper()
+    if currency not in {"USD", "HKD"}:
+        raise FindchipsParseError("VISIBLE_PRICE_CURRENCY_UNPARSEABLE")
+    price_text = match.group(3)
+    if "," in price_text and not re.fullmatch(
+        r"\d{1,3}(?:,\d{3})+(?:\.\d+)?", price_text
+    ):
+        raise FindchipsParseError("VISIBLE_PRICE_TIER_UNPARSEABLE")
+    return FindchipsPriceTier(
+        break_quantity, Decimal(price_text.replace(",", "")), currency
+    )
 
 
 def parse_findchips_offers(
@@ -414,6 +500,7 @@ class FindchipsAdapter:
         )
 
     def search(self, target_mpn: str, customer_quantity: int) -> SourceResult:
+        del customer_quantity  # displayed tiers are independent of inquiry quantity
         try:
             page = self._client.fetch_first_page(target_mpn)
         except FindchipsError as error:
@@ -487,11 +574,13 @@ class FindchipsAdapter:
                 evidence=evidence,
             )
 
+        # A row can display tiers in different currencies. Do not discard one
+        # using the unconverted number before the FX comparison below.
         priced = [
             (offer, tier)
             for offer in matched_offers
-            if (tier := select_applicable_tier(offer.tiers, customer_quantity))
-            is not None
+            for tier in offer.tiers
+            if tier.currency in {"USD", "HKD"}
         ]
         stocked = [(offer, tier) for offer, tier in priced if offer.stock_positive is True]
         out_of_stock = [
@@ -598,10 +687,34 @@ class FindchipsAdapter:
                 EvidenceField("fx_captured_at", fx_quote.captured_at),
                 EvidenceField("fx_source_label", fx_quote.source_label),
                 EvidenceField(
+                    "stocked_raw_price",
+                    stocked_candidate.raw_price if stocked_candidate else None,
+                ),
+                EvidenceField(
+                    "stocked_raw_currency",
+                    stocked_candidate.raw_currency if stocked_candidate else None,
+                ),
+                EvidenceField(
+                    "stocked_fx_rate",
+                    rates[stocked_candidate.raw_currency] if stocked_candidate else None,
+                ),
+                EvidenceField(
                     "stocked_rmb_price",
                     stocked_candidate.normalized_rmb_price
                     if stocked_candidate
                     else None,
+                ),
+                EvidenceField(
+                    "out_of_stock_raw_price",
+                    out_of_stock_candidate.raw_price if out_of_stock_candidate else None,
+                ),
+                EvidenceField(
+                    "out_of_stock_raw_currency",
+                    out_of_stock_candidate.raw_currency if out_of_stock_candidate else None,
+                ),
+                EvidenceField(
+                    "out_of_stock_fx_rate",
+                    rates[out_of_stock_candidate.raw_currency] if out_of_stock_candidate else None,
                 ),
                 EvidenceField(
                     "out_of_stock_rmb_price",
