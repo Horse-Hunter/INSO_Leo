@@ -14,7 +14,7 @@ Windows 本地 Credential Vault 的源码与 synthetic 测试已进入 canonical
 ### 入口
 
 ```python
-from core import get_login, default_provider, Login, CredentialError
+from src.core import get_login, default_provider, Login, CredentialError
 
 login = get_login("example.com")  # raises CredentialError subclass on failure
 ```
@@ -61,7 +61,7 @@ username 任何取值。Provider 失败时绝不返回空 / 占位 `Login`。
 
 ```python
 # research module
-from core import get_login, CredentialError
+from src.core import get_login, CredentialError
 
 try:
     login = get_login("findchips")

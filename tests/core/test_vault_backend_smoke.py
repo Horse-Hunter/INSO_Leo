@@ -30,8 +30,8 @@ import uuid
 
 import pytest
 
-from core import credential_provider as cp
-from core._vault_backend import (
+from src.core import credential_provider as cp
+from src.core._vault_backend import (
     _EMBEDDED_PWSH_SCRIPT,
     _build_default_backend,
     _default_module_path,

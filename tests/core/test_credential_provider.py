@@ -25,7 +25,7 @@ import re
 
 import pytest
 
-from core.credential_provider import (
+from src.core.credential_provider import (
     CredentialError,
     CredentialNotConfiguredError,
     CredentialProvider,
@@ -307,7 +307,7 @@ def test_malformed_vault_exception_does_not_leak_password(backend):
 def test_default_provider_returns_login_through_module_helper(backend, monkeypatch):
     # Replace the singleton with a fake-backed provider so the canonical
     # entry points work without a real PowerShell backend.
-    from core import credential_provider as cp
+    from src.core import credential_provider as cp
     cp._reset_default_provider_for_tests()
     monkeypatch.setattr(
         cp,
@@ -322,8 +322,8 @@ def test_default_provider_returns_login_through_module_helper(backend, monkeypat
 
 
 def test_default_provider_function_exported_from_core_package():
-    # The convenience function is exposed via ``core.__init__``.
-    import core
+    # The convenience function is exposed via ``src.core.__init__``.
+    from src import core
     assert core.get_login is get_login
     assert core.default_provider is default_provider
     assert core.Login is Login
@@ -339,7 +339,7 @@ def test_business_modules_do_not_need_backend_symbols(backend):
     # The Protocol class is intentionally underscore-prefixed: importing it
     # from outside the package is a Core-internal operation, but Python
     # does not forbid it. This test pins the documented surface area.
-    import core
+    from src import core
     public_names = {
         "Login",
         "CredentialError",
@@ -368,19 +368,19 @@ def test_business_modules_do_not_need_backend_symbols(backend):
 
 
 def test_payload_translator_rejects_non_string_password():
-    from core.credential_provider import _payload_to_login
+    from src.core.credential_provider import _payload_to_login
     with pytest.raises(CredentialVaultError):
         _payload_to_login("x.example.com", {"username": "u", "password": 1234})
 
 
 def test_payload_translator_rejects_non_string_username():
-    from core.credential_provider import _payload_to_login
+    from src.core.credential_provider import _payload_to_login
     with pytest.raises(CredentialVaultError):
         _payload_to_login("x.example.com", {"username": None, "password": "p"})
 
 
 def test_payload_translator_rejects_non_string_url():
-    from core.credential_provider import _payload_to_login
+    from src.core.credential_provider import _payload_to_login
     login = _payload_to_login(
         "x.example.com",
         {"username": "u", "password": "p", "url": None, "company": None},
