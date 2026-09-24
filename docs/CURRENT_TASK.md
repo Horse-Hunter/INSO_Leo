@@ -51,25 +51,17 @@ Architecture Decision:
 - 需要读取 Research 结果给 GUI 时，优先使用 Research-owned 的只读结果读取能力或 launcher adapter，按 inquiry_id 读取 canonical Excel schema；Workflow 仍不得解析 Research Excel。
 
 Done:
-- 已新增 src/launcher.ProductionBackend、生产默认 GUI 入口和 deterministic tests。
-- ruff 与 deterministic pytest 已通过。
-- 未修改历史 dirty checkout，未 merge main。
+- 修复 `_Observer` 注入不匹配；Observer 在执行时登记 inquiry，并将登录/CAPTCHA/OTP/设备验证结果标到当前 run 的人工处理状态。
+- stop-after-cycle 现在先封闭后续 poll admission，等待当前 poll 完成，再 drain 所有当前已到期 work；未来 retry 不等待。
+- 新增真实 production `_run` composition seam 的离线 deterministic test，校验合法配置、readiness、Sheets reader、Research service、SQLite store、Workflow runtime 与 Observer wiring。
+- 新增三条入队 work 的 stop/drain test，验证所有 due item 落盘和线程退出。
+- `ruff check src tests`、launcher tests 与完整 deterministic pytest 通过；未运行 live smoke（本轮明确不要求）。
 
-Current:
-- CEO Review 发现一个确定性代码 blocker：src/launcher/backend.py 的 _Observer 构造函数只接受 (service, seen)，但 ProductionBackend._run 实际调用 _Observer(research, self._seen, self._manual_review)，且 ProductionBackend 当前不存在 _manual_review 方法。只要配置齐全进入真实 composition，这里会 TypeError，现有 tests 没有覆盖真实 composition seam。
-- 在修复前不要让 Owner 恢复配置并跑 live，避免把代码 bug 误判为环境/授权问题。
-- 另需补充真实 composition deterministic test，必须至少走到 Observer/WorkflowRuntime 组装成功，而不是只 mock 整个 _run。
-- graceful stop 需验证“本轮结束后停止”是否完成当前 poll cycle 已入队的到期 work，而不是只完成单个已 claim item；若当前实现会遗留同一轮已入队工作，按本 Acceptance 修正并加测试。
-- runtime/production.json 是本阶段新配置，不是历史文件；runtime/research.json 才可能从历史 Research runtime 恢复。代码 blocker 修复后再做本机配置恢复与 live smoke。
+Current: 本轮 CEO Review 提出的确定性 blocker 与 graceful-stop cycle 缺陷均已修复，等待 CEO Review。
 
-Next:
-1. Main Programmer 修复 Observer/composition blocker并补测试。
-2. 验证 graceful stop cycle semantics。
-3. commit/push branch，回报 CEO。
-4. CEO code review 通过后，再指导 Owner 从历史 runtime 恢复 research.json，并新建 production.json，随后执行真实 Windows GUI/live smoke。
+Next: CEO Review；不 merge main。
 
-Blockers: Production composition 当前存在确定性 TypeError；本机 runtime 配置恢复暂缓。
-
+Blockers: NONE（live smoke 未运行，依本轮要求暂不执行。）
 Owner Decisions:
 - Production GUI 第一阶段默认保持 Google Sheet Brand 写回 disabled/no-op，不新增真实 Sheet 写副作用。
 - 当前阶段目标是先让 GUI 真正跑 V1；EXE 打包与开机自启放在后续阶段。

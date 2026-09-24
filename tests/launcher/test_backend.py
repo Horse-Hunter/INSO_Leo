@@ -1,8 +1,229 @@
+from __future__ import annotations
+
+import json
 from decimal import Decimal
-from threading import Event
+from threading import Event, Lock
+from time import monotonic, sleep
+from types import SimpleNamespace
 
 from src.gui.contracts import RunState
+from src.launcher import backend as launcher
 from src.launcher.backend import ProductionBackend, _decimal
+from src.research import ResearchInput, ResearchResult, ResearchStatus
+from src.research.service import ResearchService
+from src.workflow import WorkflowStatus, WorkflowWorker
+
+
+class _Request:
+    def __init__(self, values, called):
+        self.values, self.called = values, called
+
+    def execute(self):
+        self.called.set()
+        return {"values": self.values}
+
+
+class _Values:
+    def __init__(self, values, called):
+        self.rows, self.called = values, called
+
+    def get(self, **_kwargs):
+        return _Request(self.rows, self.called)
+
+
+class _Spreadsheets:
+    def __init__(self, values, called):
+        self.values_api = _Values(values, called)
+
+    def values(self):
+        return self.values_api
+
+
+class _SheetsService:
+    def __init__(self, rows, called):
+        self.resource = _Spreadsheets(rows, called)
+
+    def spreadsheets(self):
+        return self.resource
+
+
+def _write_runtime_configs(tmp_path, *, pending_count=0):
+    client_secret = tmp_path / "oauth-client.json"
+    client_secret.write_text("{}", encoding="utf-8")
+    production = tmp_path / "production.json"
+    production.write_text(
+        json.dumps(
+            {
+                "spreadsheet_id": "synthetic-spreadsheet-id",
+                "worksheet_titles": ["2026"],
+                "client_secret_file": str(client_secret),
+                "sqlite_path": str(tmp_path / "production.sqlite3"),
+            }
+        ),
+        encoding="utf-8",
+    )
+    research = tmp_path / "research.json"
+    research.write_text(
+        json.dumps(
+            {
+                "excel_output_path": str(tmp_path / "research.xlsx"),
+                "bom_ai": {
+                    "login_url": "https://www.bom.ai/",
+                    "result_url_template": "https://www.bom.ai/parts/{mpn}",
+                    "username_selector": "#user",
+                    "password_selector": "#password",
+                    "login_button_selector": "button[type=submit]",
+                },
+                "inso": {
+                    "login_url": "https://example.invalid/",
+                    "cdp_url": "http://127.0.0.1:9222",
+                    "pagesize": 30,
+                },
+                "cdp": {"cdp_url": "http://127.0.0.1:9222"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    rows = [
+        ["未发", None, "A", None, f"SYNTH-MPN-{index}", None, index]
+        for index in range(pending_count)
+    ]
+    return production, research, rows
+
+
+def _wait_until(predicate, timeout=5):
+    deadline = monotonic() + timeout
+    while monotonic() < deadline:
+        if predicate():
+            return True
+        sleep(0.01)
+    return bool(predicate())
+
+
+def test_production_composition_builds_real_seams_without_network(
+    tmp_path, monkeypatch
+):
+    production, research_config, rows = _write_runtime_configs(tmp_path)
+    sheets_called = Event()
+    readiness_calls = []
+    monkeypatch.setattr(
+        launcher,
+        "build_read_only_google_sheets_service",
+        lambda _path: _SheetsService(rows, sheets_called),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "assess_readiness",
+        lambda *_args, **_kwargs: (
+            readiness_calls.append(True) or SimpleNamespace(ready=True)
+        ),
+    )
+
+    import src.research.runtime as research_runtime
+
+    monkeypatch.setattr(
+        research_runtime,
+        "assess_readiness",
+        lambda *_args, **_kwargs: SimpleNamespace(ready=True),
+    )
+    captured = {}
+    real_worker = WorkflowWorker
+
+    def capture_worker(store, observer, **kwargs):
+        captured["observer"] = observer
+        return real_worker(store, observer, **kwargs)
+
+    monkeypatch.setattr(launcher, "WorkflowWorker", capture_worker)
+    backend = ProductionBackend(
+        config_path=research_config, production_config_path=production
+    )
+    backend.start()
+    assert sheets_called.wait(5), "production Sheets reader was not composed/called"
+    assert _wait_until(lambda: backend.get_health().overall == "正常")
+    backend.request_stop_after_cycle()
+    backend._thread.join(timeout=5)
+
+    assert backend._thread is not None and not backend._thread.is_alive()
+    assert readiness_calls
+    assert backend._store is not None
+    assert backend._store.database_path == tmp_path / "production.sqlite3"
+    assert isinstance(captured["observer"].service, ResearchService)
+    assert captured["observer"].seen.__self__ is backend
+    assert captured["observer"].manual_review.__self__ is backend
+    assert backend._last_poll is not None
+
+    # Exercise the Observer seam after composition with a challenge result.
+    class _ChallengeResearch:
+        def execute(self, item):
+            return ResearchResult(
+                item.inquiry_id,
+                ResearchStatus.RETRYABLE_FAILURE,
+                remarks="需要人工验证",
+            )
+
+    captured["observer"].service = _ChallengeResearch()
+    captured["observer"].execute(ResearchInput("inq-challenge", "MPN", None, 1, None))
+    assert "inq-challenge" in backend._inquiries
+    assert "inq-challenge" in backend._manual_inquiries
+    assert backend.get_status().state is RunState.MANUAL_REVIEW
+    assert not backend._drain_due_on_stop.is_set()
+    backend.shutdown()
+
+
+def test_stop_after_cycle_drains_every_due_item_from_current_poll(
+    tmp_path, monkeypatch
+):
+    production, research_config, rows = _write_runtime_configs(
+        tmp_path, pending_count=3
+    )
+    sheets_called = Event()
+    entered_first = Event()
+    release_first = Event()
+    count_lock = Lock()
+    calls = []
+    monkeypatch.setattr(
+        launcher,
+        "build_read_only_google_sheets_service",
+        lambda _path: _SheetsService(rows, sheets_called),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "assess_readiness",
+        lambda *_args, **_kwargs: SimpleNamespace(ready=True),
+    )
+
+    class _Research:
+        def execute(self, item):
+            with count_lock:
+                calls.append(item.inquiry_id)
+                first = len(calls) == 1
+            if first:
+                entered_first.set()
+                assert release_first.wait(5)
+            return ResearchResult(item.inquiry_id, ResearchStatus.SUCCESS)
+
+    monkeypatch.setattr(
+        launcher, "build_production_research_service", lambda *_a, **_kw: _Research()
+    )
+    backend = ProductionBackend(
+        config_path=research_config, production_config_path=production
+    )
+    backend.start()
+    assert sheets_called.wait(5)
+    assert entered_first.wait(5)
+    backend.request_stop_after_cycle()
+    release_first.set()
+    backend._thread.join(timeout=5)
+
+    assert backend._thread is not None and not backend._thread.is_alive()
+    assert len(calls) == 3
+    assert len(set(calls)) == 3
+    assert len(backend._store.all_items()) == 3
+    assert all(
+        item.status is WorkflowStatus.COMPLETED for item in backend._store.all_items()
+    )
+    assert backend.get_status().state is RunState.STOPPED
+    backend.shutdown()
 
 
 def test_duplicate_start_keeps_one_run_and_shutdown_joins_worker(tmp_path):
@@ -41,9 +262,19 @@ def test_missing_runtime_fails_closed_to_manual_review(tmp_path):
     backend.shutdown()
 
 
-def test_session_tracks_executed_inquiry_ids_and_decimal_excel_display():
+def test_session_tracking_and_excel_decimal_display():
     backend = ProductionBackend()
     backend._seen("inq_seen")
     assert backend._inquiries == ["inq_seen"]
     assert _decimal("1586.74\n2000-Findchips") == Decimal("1586.74")
     assert _decimal("无结果") is None
+
+
+def test_runtime_component_error_stops_poll_and_worker_fail_closed():
+    backend = ProductionBackend()
+    backend._runtime_error(RuntimeError("synthetic failure"))
+    assert backend._stop.is_set()
+    assert backend.get_status().state is RunState.MANUAL_REVIEW
+    assert backend.get_health().overall == "需要人工处理"
+    assert "RuntimeError" in backend.get_logs()[-1].message
+    backend.shutdown()

@@ -49,12 +49,28 @@ log = logging.getLogger(__name__)
 
 
 class _Observer:
-    def __init__(self, service, seen):
-        self.service, self.seen = service, seen
+    """Track actual Research attempts and surface interactive challenges."""
+
+    _HUMAN_ACTION_MARKERS = (
+        "需要人工验证",
+        "captcha",
+        "otp",
+        "设备验证",
+        "登录不可用",
+    )
+
+    def __init__(self, service, seen, manual_review):
+        self.service = service
+        self.seen = seen
+        self.manual_review = manual_review
 
     def execute(self, item: ResearchInput) -> ResearchResult:
         self.seen(item.inquiry_id)
-        return self.service.execute(item)
+        result = self.service.execute(item)
+        remarks = (result.remarks or "").casefold()
+        if any(marker in remarks for marker in self._HUMAN_ACTION_MARKERS):
+            self.manual_review(item.inquiry_id)
+        return result
 
 
 class ProductionBackend(GuiBackend):
@@ -71,6 +87,10 @@ class ProductionBackend(GuiBackend):
         self.cdp_probe = cdp_probe
         self._lock = threading.RLock()
         self._stop = threading.Event()
+        self._drain_due_on_stop = threading.Event()
+        self._poll_gate = threading.Lock()
+        self._poll_idle = threading.Event()
+        self._poll_idle.set()
         self._thread = None
         self._closed = False
         self._run_id = None
@@ -109,9 +129,10 @@ class ProductionBackend(GuiBackend):
 
     def start(self):
         with self._lock:
-            if self._closed or self._state in (
-                RunState.RUNNING,
-                RunState.STOPPING_AFTER_CYCLE,
+            if (
+                self._closed
+                or self._state in (RunState.RUNNING, RunState.STOPPING_AFTER_CYCLE)
+                or (self._thread is not None and self._thread.is_alive())
             ):
                 return
             self._run_id = "run_" + str(uuid.uuid4())
@@ -122,6 +143,8 @@ class ProductionBackend(GuiBackend):
             self._results = ()
             self._last_poll = None
             self._stop.clear()
+            self._drain_due_on_stop.clear()
+            self._poll_idle.set()
             self._state = RunState.RUNNING
             self._thread = threading.Thread(
                 target=self._run, name="production-launcher", daemon=False
@@ -133,7 +156,9 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             if self._state is RunState.RUNNING:
                 self._state = RunState.STOPPING_AFTER_CYCLE
-                self._stop.set()
+                with self._poll_gate:
+                    self._drain_due_on_stop.set()
+                    self._stop.set()
                 self._notify()
 
     def _run(self):
@@ -183,21 +208,38 @@ class ProductionBackend(GuiBackend):
 
             def poll_loop():
                 try:
-                    while not self._stop.is_set():
-                        if self._stop.is_set():
+                    while True:
+                        with self._poll_gate:
+                            if self._stop.is_set():
+                                return
+                            self._poll_idle.clear()
+                        try:
+                            self._last_poll = utc_now()
+                            runtime.run_poll(now=self._last_poll)
+                            self._set_health(("正常", "已连接", "正常", "正常"), "正常")
+                        finally:
+                            self._poll_idle.set()
+                        if self._stop.wait(runtime.poll_interval.total_seconds()):
                             return
-                        self._last_poll = utc_now()
-                        runtime.run_poll(now=self._last_poll)
-                        self._set_health(("正常", "已连接", "正常", "正常"), "正常")
-                        self._stop.wait(runtime.poll_interval.total_seconds())
                 except Exception as exc:  # noqa: BLE001 - fail closed at runtime boundary
                     self._runtime_error(exc)
 
             def worker_loop():
                 try:
-                    while not self._stop.is_set():
-                        runtime.worker.process_due_one()
+                    while True:
+                        if self._stop.is_set() and not self._drain_due_on_stop.is_set():
+                            return
+                        processed = runtime.worker.process_due_one()
                         self._refresh()
+                        if processed is not None:
+                            continue
+                        if self._stop.is_set() and self._drain_due_on_stop.is_set():
+                            if self._poll_idle.is_set():
+                                return
+                            self._poll_idle.wait(
+                                timeout=runtime.worker_idle_interval.total_seconds()
+                            )
+                            continue
                         self._stop.wait(runtime.worker_idle_interval.total_seconds())
                 except Exception as exc:  # noqa: BLE001 - fail closed at runtime boundary
                     self._runtime_error(exc)
@@ -235,6 +277,47 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             if inquiry not in self._inquiries:
                 self._inquiries.append(inquiry)
+
+    def _runtime_error(self, exc):
+        log.warning("Production runtime worker failed (%s)", type(exc).__name__)
+        with self._lock:
+            self._state = RunState.MANUAL_REVIEW
+            self._drain_due_on_stop.clear()
+            with self._poll_gate:
+                self._stop.set()
+            self._health = HealthReport(
+                tuple(
+                    HealthItem(name, "需要人工处理", "运行组件停止")
+                    for name in self._components()
+                ),
+                "需要人工处理",
+            )
+        self._append_log(
+            "ERROR", f"需要人工处理：{type(exc).__name__}；检查本地运行状态"
+        )
+        self._notify()
+
+    def _manual_review(self, inquiry_id):
+        with self._lock:
+            self._manual_inquiries.add(inquiry_id)
+            self._state = RunState.MANUAL_REVIEW
+            self._drain_due_on_stop.clear()
+            with self._poll_gate:
+                self._stop.set()
+            self._health = HealthReport(
+                tuple(
+                    HealthItem(
+                        name,
+                        "需要人工处理" if name == "Research" else "已停止",
+                        "采集遇到需要人工介入的登录或安全验证",
+                    )
+                    for name in self._components()
+                ),
+                "需要人工处理",
+            )
+        self._append_log("WARNING", "采集需要人工处理；请完成允许的验证后重新启动")
+        self._refresh()
+        self._notify()
 
     def _refresh(self):
         if not self._store:
@@ -367,7 +450,8 @@ class ProductionBackend(GuiBackend):
             if self._closed:
                 return
             self._closed = True
-            self._stop.set()
+            with self._poll_gate:
+                self._stop.set()
             thread = self._thread
         if thread and thread is not threading.current_thread():
             thread.join()
