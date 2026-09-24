@@ -18,6 +18,17 @@ Behaviour summary:
 
 Do not extend this module to create a second credential store. The canonical
 Vault on disk remains the only source of truth.
+
+Inter-process text encoding protocol (deterministic):
+
+    * The embedded PowerShell script sets
+      ``[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`` before any
+      ``[Console]::Out.WriteLine`` / ``[Console]::Error.WriteLine`` call, so
+      PowerShell writes UTF-8 bytes regardless of the host code page.
+    * Python reads raw bytes (``text=False``) and decodes with
+      ``errors='strict'``. A ``UnicodeDecodeError`` is treated as a backend
+      failure (typed Core exception); the Provider never sees a raw
+      ``UnicodeDecodeError`` or ``AttributeError``.
 """
 from __future__ import annotations
 
@@ -43,11 +54,32 @@ _EXIT_NOT_CONFIGURED = 31
 _EXIT_VAULT_MALFORMED = 32
 _EXIT_UNAVAILABLE = 33
 
+# Canonical encoding for both stdout and stderr of the embedded PowerShell
+# script. PowerShell 5.1 on Windows defaults ``[Console]::OutputEncoding``
+# to the host code page (e.g. cp936 on zh-CN, cp1252 on en-US) which is not
+# compatible with Python's ``locale.getpreferredencoding()``; without an
+# explicit protocol, non-ASCII credential data triggers
+# ``UnicodeDecodeError`` inside ``subprocess._readerthread`` and the
+# ``CompletedProcess.stdout`` buffer is left ``None``. Forcing UTF-8 on
+# both sides is the only stable, locale-independent contract.
+_POWER_SHELL_ENCODING = "utf-8"
+
 
 _EMBEDDED_PWSH_SCRIPT = r"""
 param([string]$ModulePath, [string]$SiteId)
 
 $ErrorActionPreference = 'Stop'
+
+# Force UTF-8 on the host so [Console]::Out.WriteLine / [Console]::Error
+# .WriteLine emit UTF-8 bytes regardless of the host's legacy code page.
+# This is the deterministic contract that the Python side relies on.
+try {
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+}
+catch {
+    [Console]::Error.WriteLine("BACKEND:Unavailable:OutputEncoding:$($_.Exception.Message)")
+    exit 33
+}
 
 try {
     Import-Module -Name $ModulePath -Force -ErrorAction Stop
@@ -112,6 +144,44 @@ $json = $payload | ConvertTo-Json -Compress -Depth 8
 [Console]::Out.WriteLine($json)
 exit 0
 """
+
+
+def _decode_strict_utf8(data, *, kind: str):
+    """Decode subprocess bytes as UTF-8 (strict). Map failures to typed errors.
+
+    ``kind`` must be ``"stdout"`` or ``"stderr"`` and selects which typed
+    Core exception a decode failure maps to:
+
+        * ``stdout`` failure → ``_VaultMalformedError``
+          (the payload that PowerShell intended to deliver is not valid
+          UTF-8, i.e. the Vault payload itself is corrupt).
+        * ``stderr`` failure → ``_BackendUnavailableError``
+          (the backend's diagnostic stream is not valid UTF-8; treat as a
+          backend failure).
+
+    Returns the decoded ``str`` on success.
+    """
+    if data is None:
+        # ``subprocess.run(..., text=False)`` should not produce ``None`` for
+        # ``stdout`` / ``stderr`` with ``capture_output=True``; if it does,
+        # the backend itself is in an unusable state.
+        if kind == "stdout":
+            raise _VaultMalformedError(
+                "PowerShell produced no payload stream for the requested site"
+            )
+        raise _BackendUnavailableError(
+            "PowerShell produced no diagnostic stream for the requested site"
+        )
+    try:
+        return data.decode(_POWER_SHELL_ENCODING, errors="strict")
+    except UnicodeDecodeError as exc:
+        if kind == "stdout":
+            raise _VaultMalformedError(
+                "PowerShell stdout could not be decoded as UTF-8"
+            ) from exc
+        raise _BackendUnavailableError(
+            "PowerShell stderr could not be decoded as UTF-8"
+        ) from exc
 
 
 class _PowerShellVaultBackend:
@@ -187,7 +257,16 @@ class _PowerShellVaultBackend:
                 completed = subprocess.run(
                     args,
                     capture_output=True,
-                    text=True,
+                    # IMPORTANT: keep ``text=False`` and decode bytes
+                    # explicitly below. ``text=True`` would use Python's
+                    # ``locale.getpreferredencoding()`` (e.g. cp936 on
+                    # zh-CN Windows), which is not aligned with the
+                    # UTF-8 protocol this backend forces on the PowerShell
+                    # side. Mismatched decoding previously surfaced as
+                    # ``UnicodeDecodeError`` from
+                    # ``subprocess._readerthread`` and escaped the Provider
+                    # as ``AttributeError``.
+                    text=False,
                     timeout=20,
                     check=False,
                     env=env,
@@ -210,6 +289,12 @@ class _PowerShellVaultBackend:
             except OSError:
                 pass
 
+        # Both streams MUST be decoded with the deterministic UTF-8
+        # contract. Any mismatch is mapped to a typed Core exception so the
+        # Provider never sees a raw UnicodeDecodeError / AttributeError.
+        stdout = _decode_strict_utf8(completed.stdout, kind="stdout")
+        stderr = _decode_strict_utf8(completed.stderr, kind="stderr")
+
         if completed.returncode == _EXIT_SITE_NOT_FOUND:
             raise _SiteNotFoundError()
         if completed.returncode == _EXIT_NOT_CONFIGURED:
@@ -217,16 +302,16 @@ class _PowerShellVaultBackend:
         if completed.returncode == _EXIT_VAULT_MALFORMED:
             # Strip the BACKEND:VaultMalformed: prefix from stderr.
             raise _VaultMalformedError(
-                _strip_backend_prefix(completed.stderr, "VaultMalformed")
+                _strip_backend_prefix(stderr, "VaultMalformed")
             )
         if completed.returncode != _EXIT_OK:
             raise _BackendUnavailableError(
-                _strip_backend_prefix(completed.stderr, "Unavailable")
-                or completed.stdout.strip()
+                _strip_backend_prefix(stderr, "Unavailable")
+                or stdout.strip()
                 or f"PowerShell exited with code {completed.returncode}"
             )
 
-        stdout = completed.stdout.strip()
+        stdout = stdout.strip()
         if not stdout:
             raise _VaultMalformedError(
                 "PowerShell produced no payload for the requested site"
