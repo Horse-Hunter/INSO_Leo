@@ -160,8 +160,8 @@ class SourceResult:
 
 
 def money_text(value: Decimal) -> str:
-    """Render a price for human-readable display: max 4 decimals, strip trailing zeros."""
-    capped = value.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    """Render a price for human-readable display: 1 decimal, strip trailing zeros."""
+    capped = value.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
     text = format(capped, "f")
     if "." in text:
         text = text.rstrip("0").rstrip(".")

@@ -136,7 +136,7 @@ def test_adapter_keeps_stocked_and_out_of_stock_minima_with_suffix_display() -> 
     assert result.price_candidate.normalized_rmb_price == Decimal("0.00710")
     assert result.out_of_stock_candidate is not None
     assert result.out_of_stock_candidate.raw_price == Decimal("0.02")
-    assert format_source_result(result) == "0.0071（ABC-123-T）\n0.142（无库存）"
+    assert format_source_result(result) == "0（ABC-123-T）\n0.1（无库存）"
 
 
 def test_only_out_of_stock_is_successful_query_without_normal_candidate() -> None:
