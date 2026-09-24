@@ -93,6 +93,10 @@ def main() -> int:
         WorksheetIdentity(spreadsheet_id, title) for title in worksheet_titles
     ]
 
+    excel_path = config.excel_output_path
+    if excel_path.exists():
+        excel_path.unlink()
+
     store = WorkflowStateStore(db_path)
     poller = WorkflowPoller(store, reader)
     research = build_production_research_service(

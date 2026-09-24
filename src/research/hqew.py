@@ -272,7 +272,12 @@ def parse_hqew_offers(
     parser = _OfferParser(reference_at or datetime.now(UTC))
     parser.feed(html)
     if not parser.offers:
-        if "暂无商家报价" in html:
+        # HQEW renders empty-result pages with either a merchant-focused message
+        # or a generic "no data" / "no result" block.
+        if any(
+            marker in html
+            for marker in ("暂无商家报价", "暂无数据", "无结果", "抱歉：您搜索的")
+        ):
             return ()
         raise HqewParseError("RESULT_ROWS_MISSING")
     return tuple(parser.offers)

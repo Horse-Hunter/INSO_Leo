@@ -181,6 +181,19 @@ def test_challenge_fails_closed() -> None:
 
 
 @pytest.mark.parametrize(
+    "empty_marker",
+    [
+        '抱歉：您搜索的<span title="ABC">ABC</span>无结果',
+        '<div class="list-none-text">暂无数据</div>',
+        "暂无商家报价",
+    ],
+)
+def test_empty_result_page_returns_no_offers(empty_marker: str) -> None:
+    html = f"<html><body>{empty_marker}</body></html>"
+    assert parse_hqew_offers(html, reference_at=NOW) == ()
+
+
+@pytest.mark.parametrize(
     "cdp_url",
     [
         "http://localhost:9222",
