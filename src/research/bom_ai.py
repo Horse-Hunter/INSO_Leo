@@ -1,9 +1,8 @@
-"""Bom.Ai price selection behind an authenticated read-client boundary."""
+"""Bom.Ai read-only historical-price adapter and section-scoped parser."""
 
 from __future__ import annotations
 
 import re
-from calendar import monthrange
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
@@ -11,14 +10,17 @@ from decimal import Decimal, InvalidOperation
 from typing import Protocol
 from urllib.parse import urlsplit
 
+from .fx import UsdRmbProvider, UsdRmbQuote
 from .source_contracts import (
     EvidenceField,
+    MpnMatchKind,
     PriceCandidate,
     ResearchSource,
     SourceEvidence,
     SourceOutcome,
     SourceResult,
-    is_strict_mpn_match,
+    calendar_month_cutoff,
+    price_source_mpn_match,
 )
 
 BOM_AI_SITE_ID = "bom.ai"
@@ -38,12 +40,23 @@ class BomAiCredentialProvider(Protocol):
 @dataclass(frozen=True, slots=True)
 class BomAiPriceRecord:
     mpn: str
-    unit_price_rmb: Decimal
+    raw_price: Decimal
     observed_at: datetime
+    currency: str = "RMB"
 
     def __post_init__(self) -> None:
-        if not self.unit_price_rmb.is_finite() or self.unit_price_rmb <= 0:
-            raise ValueError("unit_price_rmb must be finite and positive")
+        if not self.raw_price.is_finite() or self.raw_price <= 0:
+            raise ValueError("raw_price must be finite and positive")
+        if self.currency not in {"RMB", "CNY", "USD"}:
+            raise ValueError("currency must be RMB, CNY, or USD")
+
+    @property
+    def unit_price_rmb(self) -> Decimal:
+        """Compatibility accessor for RMB-only records."""
+
+        if self.currency not in {"RMB", "CNY"}:
+            raise ValueError("USD record is not normalized yet")
+        return self.raw_price
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,61 +81,86 @@ class BomAiClientError(RuntimeError):
 
 
 class BomAiAuthenticatedClient(Protocol):
-    """Authenticated read client; credentials remain inside its bounded session."""
-
     def fetch_price_records(self, mpn: str) -> BomAiCapture: ...
 
 
 class BomAiAuthenticatedBrowser(Protocol):
-    """Browser boundary that owns the bounded authenticated session."""
-
     def fetch_price_page(self, mpn: str, login: BomAiLogin) -> BomAiRawPage: ...
 
 
 _H3 = re.compile(r"<h3[^>]*>(.*?)</h3>", re.IGNORECASE | re.DOTALL)
-_DATA = re.compile(r"<data>(.*?)</data>", re.IGNORECASE | re.DOTALL)
+_DATA = re.compile(r"<data(?:\s[^>]*)?>(.*?)</data>", re.IGNORECASE | re.DOTALL)
 _TAG = re.compile(r"<[^>]+>")
 _CHINA_TZ = timezone(timedelta(hours=8))
 
 
 def _child_text(block: str, tag: str) -> str | None:
-    match = re.search(rf"<{tag}>(.*?)</{tag}>", block, re.IGNORECASE | re.DOTALL)
+    match = re.search(
+        rf"<{tag}(?:\s[^>]*)?>(.*?)</{tag}>",
+        block,
+        re.IGNORECASE | re.DOTALL,
+    )
     return None if match is None else _TAG.sub("", match.group(1)).strip()
+
+
+def _parse_price(value: str) -> tuple[Decimal, str]:
+    compact = value.strip()
+    upper = compact.upper()
+    currency = "USD" if "$" in compact or "USD" in upper else "RMB"
+    numeric = re.sub(r"(?i)USD|RMB|CNY|US\$|[$¥￥,\s]", "", compact)
+    try:
+        price = Decimal(numeric)
+    except InvalidOperation as exc:
+        raise BomAiClientError("PRICE_RECORD_UNPARSEABLE") from exc
+    if not price.is_finite() or price <= 0:
+        raise BomAiClientError("PRICE_RECORD_UNPARSEABLE")
+    return price, currency
 
 
 def parse_bom_ai_price_records(
     html: str, target_mpn: str
 ) -> tuple[BomAiPriceRecord, ...]:
-    """Parse authenticated server-rendered historical quote records."""
+    """Parse only quote blocks belonging to matching lower-page MPN sections."""
 
-    headings = [_TAG.sub("", value).strip() for value in _H3.findall(html)]
+    headings = list(_H3.finditer(html))
     if not headings:
         raise BomAiClientError("RESULT_IDENTITY_MISSING")
-    if not any(is_strict_mpn_match(target_mpn, value) for value in headings):
-        return ()
-
     records: list[BomAiPriceRecord] = []
-    for block in _DATA.findall(html):
-        raw_price = _child_text(block, "quotePrice")
-        raw_date = _child_text(block, "quoteDate")
-        if raw_price is None and raw_date is None:
+    for index, heading in enumerate(headings):
+        section_mpn = _TAG.sub("", heading.group(1)).strip()
+        if price_source_mpn_match(target_mpn, section_mpn) is None:
             continue
-        if not raw_price or not raw_date or "{{" in raw_price or "{{" in raw_date:
-            continue
-        try:
-            price = Decimal(raw_price)
-            observed = datetime.strptime(raw_date, "%Y/%m/%d %H:%M:%S").replace(
-                tzinfo=_CHINA_TZ
-            )
-        except (InvalidOperation, ValueError) as exc:
-            raise BomAiClientError("PRICE_RECORD_UNPARSEABLE") from exc
-        records.append(
-            BomAiPriceRecord(
-                target_mpn.strip(),
-                price,
-                observed.astimezone(UTC),
-            )
+        section_end = (
+            headings[index + 1].start() if index + 1 < len(headings) else len(html)
         )
+        section = html[heading.end() : section_end]
+        for block in _DATA.findall(section):
+            raw_price = _child_text(block, "quotePrice")
+            raw_date = _child_text(block, "quoteDate")
+            if raw_price is None and raw_date is None:
+                continue
+            if (
+                not raw_price
+                or not raw_date
+                or "{{" in raw_price
+                or "{{" in raw_date
+            ):
+                continue
+            price, currency = _parse_price(raw_price)
+            try:
+                observed = datetime.strptime(
+                    raw_date, "%Y/%m/%d %H:%M:%S"
+                ).replace(tzinfo=_CHINA_TZ)
+            except ValueError as exc:
+                raise BomAiClientError("PRICE_RECORD_UNPARSEABLE") from exc
+            records.append(
+                BomAiPriceRecord(
+                    section_mpn,
+                    price,
+                    observed.astimezone(UTC),
+                    currency,
+                )
+            )
     return tuple(records)
 
 
@@ -152,47 +190,15 @@ class BomAiCredentialedClient:
             )
         ):
             raise BomAiClientError("UNEXPECTED_RESPONSE_HOST", page.url)
-        records = parse_bom_ai_price_records(page.html, mpn)
-        return BomAiCapture(records, page.url, page.captured_at)
+        return BomAiCapture(
+            parse_bom_ai_price_records(page.html, mpn),
+            page.url,
+            page.captured_at,
+        )
 
 
 class BomAiMonthCutoff(Protocol):
-    """Owner-selected one-month cutoff policy."""
-
     def __call__(self, now: datetime) -> datetime: ...
-
-
-def calendar_month_cutoff(now: datetime) -> datetime:
-    """Return the same wall-clock time one calendar month earlier.
-
-    When the previous month has fewer days, clamp to its final day. For
-    example, March 31 maps to February 28 (or 29 in a leap year).
-    """
-
-    if now.month == 1:
-        year, month = now.year - 1, 12
-    else:
-        year, month = now.year, now.month - 1
-    day = min(now.day, monthrange(year, month)[1])
-    return now.replace(year=year, month=month, day=day)
-
-
-def select_bom_ai_price(
-    records: tuple[BomAiPriceRecord, ...],
-    target_mpn: str,
-    *,
-    now: datetime,
-    month_cutoff: datetime,
-) -> BomAiPriceRecord | None:
-    strict = [
-        record for record in records if is_strict_mpn_match(target_mpn, record.mpn)
-    ]
-    valid = [record for record in strict if month_cutoff <= record.observed_at <= now]
-    recent = [
-        record for record in valid if record.observed_at >= now - timedelta(days=7)
-    ]
-    pool = recent or valid
-    return min(pool, key=lambda record: record.unit_price_rmb) if pool else None
 
 
 class BomAiAdapter:
@@ -201,10 +207,12 @@ class BomAiAdapter:
         client: BomAiAuthenticatedClient,
         month_cutoff: BomAiMonthCutoff = calendar_month_cutoff,
         *,
+        fx_provider: UsdRmbProvider | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._client = client
         self._month_cutoff = month_cutoff
+        self._fx = fx_provider
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def search(self, target_mpn: str, customer_quantity: int) -> SourceResult:
@@ -220,48 +228,94 @@ class BomAiAdapter:
                 target_mpn, now, "AUTHENTICATED_READ_UNAVAILABLE", None
             )
 
-        strict = [
+        matched = [
             record
             for record in capture.records
-            if is_strict_mpn_match(target_mpn, record.mpn)
+            if price_source_mpn_match(target_mpn, record.mpn) is not None
         ]
-        if not strict:
-            outcome = SourceOutcome.NO_STRICT_MPN_MATCH
-            selected = None
-        else:
-            selected = select_bom_ai_price(
-                capture.records, target_mpn, now=now, month_cutoff=cutoff
+        valid = [
+            record
+            for record in matched
+            if cutoff <= record.observed_at <= now
+        ]
+        if not matched:
+            return self._result(target_mpn, capture, SourceOutcome.NO_STRICT_MPN_MATCH)
+        if not valid:
+            return self._result(target_mpn, capture, SourceOutcome.NO_VALID_PRICE)
+
+        quote: UsdRmbQuote | None = None
+        if any(record.currency == "USD" for record in valid):
+            try:
+                if self._fx is None:
+                    raise RuntimeError
+                quote = self._fx.get_quote()
+                if not isinstance(quote, UsdRmbQuote):
+                    raise TypeError
+            except (RuntimeError, TypeError, ValueError):
+                return self._failure(
+                    target_mpn, now, "FX_QUOTE_UNAVAILABLE", capture.url
+                )
+
+        normalized = [
+            (
+                record,
+                record.raw_price * quote.rate
+                if record.currency == "USD" and quote is not None
+                else record.raw_price,
             )
-            outcome = (
-                SourceOutcome.SUCCESS if selected else SourceOutcome.NO_VALID_PRICE
-            )
-        candidate = (
-            None
-            if selected is None
-            else PriceCandidate(
-                ResearchSource.BOM_AI,
-                selected.mpn,
-                selected.unit_price_rmb,
-                "RMB",
-                selected.unit_price_rmb,
-                capture.captured_at,
-                capture.url,
-            )
+            for record in valid
+        ]
+        selected, rmb_price = min(
+            normalized,
+            key=lambda item: (item[1], item[0].observed_at, item[0].mpn.casefold()),
         )
+        match = price_source_mpn_match(target_mpn, selected.mpn)
+        candidate = PriceCandidate(
+            ResearchSource.BOM_AI,
+            selected.mpn,
+            selected.raw_price,
+            selected.currency,
+            rmb_price,
+            capture.captured_at,
+            capture.url,
+            selected.mpn if match is MpnMatchKind.SUFFIX else None,
+        )
+        return self._result(
+            target_mpn, capture, SourceOutcome.SUCCESS, candidate
+        )
+
+    @staticmethod
+    def _result(
+        query: str,
+        capture: BomAiCapture,
+        outcome: SourceOutcome,
+        candidate: PriceCandidate | None = None,
+    ) -> SourceResult:
         evidence = SourceEvidence(
             ResearchSource.BOM_AI,
-            target_mpn,
-            strict[0].mpn if strict else None,
+            query,
+            candidate.matched_mpn if candidate else None,
             outcome,
             capture.captured_at,
             capture.url,
             (
-                EvidenceField("strict_mpn_records", len(strict)),
+                EvidenceField("records_inspected", len(capture.records)),
                 EvidenceField(
-                    "selected_observed_at", selected.observed_at if selected else None
+                    "selected_observed_at",
+                    next(
+                        (
+                            record.observed_at
+                            for record in capture.records
+                            if candidate is not None
+                            and record.mpn == candidate.matched_mpn
+                            and record.raw_price == candidate.raw_price
+                        ),
+                        None,
+                    ),
                 ),
                 EvidenceField(
-                    "selected_rmb_price", selected.unit_price_rmb if selected else None
+                    "selected_rmb_price",
+                    candidate.normalized_rmb_price if candidate else None,
                 ),
             ),
         )

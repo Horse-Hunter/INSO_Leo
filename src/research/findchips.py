@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
 from typing import Protocol
@@ -16,12 +16,14 @@ from urllib.request import Request, urlopen
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .source_contracts import (
     EvidenceField,
+    MpnMatchKind,
     PriceCandidate,
     ResearchSource,
     SourceEvidence,
     SourceOutcome,
     SourceResult,
-    is_strict_mpn_match,
+    calendar_month_cutoff,
+    price_source_mpn_match,
 )
 
 FINDCHIPS_SEARCH_URL = "https://www.findchips.com/search/"
@@ -71,6 +73,7 @@ class FindchipsOffer:
     mpn: str
     stock_positive: bool | None
     tiers: tuple[FindchipsPriceTier, ...] = ()
+    observed_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,6 +213,29 @@ def _parse_tiers(value: str | None) -> tuple[FindchipsPriceTier, ...]:
     return tuple(tiers)
 
 
+_CHINA_TZ = timezone(timedelta(hours=8))
+
+
+def _parse_optional_date(value: str | None) -> datetime | None:
+    if value is None or not value.strip():
+        return None
+    raw = value.strip()
+    for pattern in ("%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(raw, pattern).replace(
+                tzinfo=_CHINA_TZ
+            ).astimezone(UTC)
+        except ValueError:
+            continue
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise FindchipsParseError("QUOTE_DATE_UNPARSEABLE") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=_CHINA_TZ)
+    return parsed.astimezone(UTC)
+
+
 class _FindchipsParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -232,6 +258,11 @@ class _FindchipsParser(HTMLParser):
                 mpn=values["data-mfrpartnumber"] or "",
                 stock_positive=_parse_stock_presence(values.get("data-instock")),
                 tiers=_parse_tiers(values.get("data-price")),
+                observed_at=_parse_optional_date(
+                    values.get("data-quotedate")
+                    or values.get("data-quote-date")
+                    or values.get("data-date")
+                ),
             )
         )
 
@@ -255,19 +286,14 @@ def select_applicable_tier(
     tiers: tuple[FindchipsPriceTier, ...],
     customer_quantity: int,
 ) -> FindchipsPriceTier | None:
-    """Select the greatest displayed USD break at or below customer quantity."""
+    """Select the lowest displayed USD unit price; quantity is irrelevant."""
 
-    eligible = [
-        tier
-        for tier in tiers
-        if tier.currency == "USD" and tier.break_quantity <= customer_quantity
-    ]
-    if not eligible:
-        return None
-    greatest_break = max(tier.break_quantity for tier in eligible)
-    return min(
-        (tier for tier in eligible if tier.break_quantity == greatest_break),
-        key=lambda tier: tier.unit_price,
+    del customer_quantity
+    eligible = [tier for tier in tiers if tier.currency == "USD"]
+    return (
+        min(eligible, key=lambda tier: (tier.unit_price, tier.break_quantity))
+        if eligible
+        else None
     )
 
 
@@ -276,11 +302,11 @@ def select_lowest_valid_price(
     target_mpn: str,
     customer_quantity: int,
 ) -> tuple[str, FindchipsPriceTier] | None:
-    """Select the lowest applicable USD price from strict, stocked offers."""
+    """Select the lowest displayed USD price from matched stocked offers."""
 
     applicable: list[tuple[str, FindchipsPriceTier]] = []
     for offer in offers:
-        if not is_strict_mpn_match(target_mpn, offer.mpn):
+        if price_source_mpn_match(target_mpn, offer.mpn) is None:
             continue
         if offer.stock_positive is not True:
             continue
@@ -357,12 +383,22 @@ class FindchipsAdapter:
                 source_url=page.url,
             )
 
-        strict_offers = [
+        now = self._clock()
+        cutoff = calendar_month_cutoff(now)
+        mpn_matched_offers = [
             offer
             for offer in offers
-            if is_strict_mpn_match(target_mpn, offer.mpn)
+            if price_source_mpn_match(target_mpn, offer.mpn) is not None
         ]
-        if not strict_offers:
+        matched_offers = [
+            offer
+            for offer in mpn_matched_offers
+            if (
+                offer.observed_at is None
+                or cutoff <= offer.observed_at <= now
+            )
+        ]
+        if not mpn_matched_offers:
             evidence = SourceEvidence(
                 source=ResearchSource.FINDCHIPS,
                 query_mpn=target_mpn,
@@ -372,7 +408,7 @@ class FindchipsAdapter:
                 source_url=page.url,
                 fields=(
                     EvidenceField("inspected_offer_count", len(offers)),
-                    EvidenceField("strict_mpn_offer_count", 0),
+                    EvidenceField("matched_mpn_offer_count", 0),
                 ),
             )
             return SourceResult(
@@ -380,39 +416,72 @@ class FindchipsAdapter:
                 outcome=SourceOutcome.NO_STRICT_MPN_MATCH,
                 evidence=evidence,
             )
-
-        positive_stock = [
-            offer for offer in strict_offers if offer.stock_positive is True
-        ]
-        applicable = [
-            (offer, tier)
-            for offer in positive_stock
-            if (tier := select_applicable_tier(offer.tiers, customer_quantity))
-            is not None
-        ]
-        count_fields = (
-            EvidenceField("inspected_offer_count", len(offers)),
-            EvidenceField("strict_mpn_offer_count", len(strict_offers)),
-            EvidenceField(
-                "positive_stock_strict_offer_count",
-                len(positive_stock),
-            ),
-            EvidenceField(
-                "applicable_usd_price_offer_count",
-                len(applicable),
-            ),
-            EvidenceField("customer_quantity", customer_quantity),
-        )
-        selection = select_lowest_valid_price(
-            offers,
-            target_mpn,
-            customer_quantity,
-        )
-        if selection is None:
+        if not matched_offers:
             evidence = SourceEvidence(
                 source=ResearchSource.FINDCHIPS,
                 query_mpn=target_mpn,
-                matched_mpn=strict_offers[0].mpn,
+                matched_mpn=mpn_matched_offers[0].mpn,
+                outcome=SourceOutcome.NO_VALID_PRICE,
+                captured_at=page.captured_at,
+                source_url=page.url,
+                fields=(
+                    EvidenceField("inspected_offer_count", len(offers)),
+                    EvidenceField(
+                        "matched_mpn_offer_count", len(mpn_matched_offers)
+                    ),
+                ),
+            )
+            return SourceResult(
+                source=ResearchSource.FINDCHIPS,
+                outcome=SourceOutcome.NO_VALID_PRICE,
+                evidence=evidence,
+            )
+
+        priced = [
+            (offer, tier)
+            for offer in matched_offers
+            if (tier := select_applicable_tier(offer.tiers, customer_quantity))
+            is not None
+        ]
+        stocked = [(offer, tier) for offer, tier in priced if offer.stock_positive is True]
+        out_of_stock = [
+            (offer, tier) for offer, tier in priced if offer.stock_positive is False
+        ]
+        count_fields = (
+            EvidenceField("inspected_offer_count", len(offers)),
+            EvidenceField("matched_mpn_offer_count", len(matched_offers)),
+            EvidenceField("stocked_price_offer_count", len(stocked)),
+            EvidenceField("out_of_stock_price_offer_count", len(out_of_stock)),
+        )
+        stocked_selection = (
+            min(
+                stocked,
+                key=lambda item: (
+                    item[1].unit_price,
+                    item[0].mpn.casefold(),
+                    item[1].break_quantity,
+                ),
+            )
+            if stocked
+            else None
+        )
+        out_of_stock_selection = (
+            min(
+                out_of_stock,
+                key=lambda item: (
+                    item[1].unit_price,
+                    item[0].mpn.casefold(),
+                    item[1].break_quantity,
+                ),
+            )
+            if out_of_stock
+            else None
+        )
+        if stocked_selection is None and out_of_stock_selection is None:
+            evidence = SourceEvidence(
+                source=ResearchSource.FINDCHIPS,
+                query_mpn=target_mpn,
+                matched_mpn=matched_offers[0].mpn,
                 outcome=SourceOutcome.NO_VALID_PRICE,
                 captured_at=page.captured_at,
                 source_url=page.url,
@@ -424,7 +493,6 @@ class FindchipsAdapter:
                 evidence=evidence,
             )
 
-        matched_mpn, selected_tier = selection
         try:
             fx_quote = self._fx_provider.get_quote()
             if not isinstance(fx_quote, UsdRmbQuote):
@@ -438,7 +506,31 @@ class FindchipsAdapter:
                 fields=count_fields,
             )
 
-        normalized_price = selected_tier.unit_price * fx_quote.rate
+        def candidate(selection: tuple[FindchipsOffer, FindchipsPriceTier] | None):
+            if selection is None:
+                return None
+            offer, tier = selection
+            match = price_source_mpn_match(target_mpn, offer.mpn)
+            return PriceCandidate(
+                source=ResearchSource.FINDCHIPS,
+                matched_mpn=offer.mpn,
+                raw_price=tier.unit_price,
+                raw_currency="USD",
+                normalized_rmb_price=tier.unit_price * fx_quote.rate,
+                captured_at=page.captured_at,
+                source_url=page.url,
+                display_mpn=(
+                    offer.mpn if match is MpnMatchKind.SUFFIX else None
+                ),
+            )
+
+        stocked_candidate = candidate(stocked_selection)
+        out_of_stock_candidate = candidate(out_of_stock_selection)
+        evidence_match = (
+            stocked_selection or out_of_stock_selection
+        )
+        assert evidence_match is not None
+        matched_mpn = evidence_match[0].mpn
         evidence = SourceEvidence(
             source=ResearchSource.FINDCHIPS,
             query_mpn=target_mpn,
@@ -448,34 +540,29 @@ class FindchipsAdapter:
             source_url=page.url,
             fields=(
                 *count_fields,
-                EvidenceField(
-                    "selected_tier_break_quantity",
-                    selected_tier.break_quantity,
-                ),
-                EvidenceField(
-                    "selected_raw_usd_price",
-                    selected_tier.unit_price,
-                ),
                 EvidenceField("fx_base_currency", fx_quote.base_currency),
                 EvidenceField("fx_quote_currency", fx_quote.quote_currency),
                 EvidenceField("fx_rate", fx_quote.rate),
                 EvidenceField("fx_captured_at", fx_quote.captured_at),
                 EvidenceField("fx_source_label", fx_quote.source_label),
-                EvidenceField("normalized_rmb_price", normalized_price),
+                EvidenceField(
+                    "stocked_rmb_price",
+                    stocked_candidate.normalized_rmb_price
+                    if stocked_candidate
+                    else None,
+                ),
+                EvidenceField(
+                    "out_of_stock_rmb_price",
+                    out_of_stock_candidate.normalized_rmb_price
+                    if out_of_stock_candidate
+                    else None,
+                ),
             ),
-        )
-        candidate = PriceCandidate(
-            source=ResearchSource.FINDCHIPS,
-            matched_mpn=matched_mpn,
-            raw_price=selected_tier.unit_price,
-            raw_currency="USD",
-            normalized_rmb_price=normalized_price,
-            captured_at=page.captured_at,
-            source_url=page.url,
         )
         return SourceResult(
             source=ResearchSource.FINDCHIPS,
             outcome=SourceOutcome.SUCCESS,
             evidence=evidence,
-            price_candidate=candidate,
+            price_candidate=stocked_candidate,
+            out_of_stock_candidate=out_of_stock_candidate,
         )

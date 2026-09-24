@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
 from ipaddress import ip_address
@@ -13,12 +13,14 @@ from urllib.parse import quote, urlsplit
 
 from .source_contracts import (
     EvidenceField,
+    MpnMatchKind,
     PriceCandidate,
     ResearchSource,
     SourceEvidence,
     SourceOutcome,
     SourceResult,
-    is_strict_mpn_match,
+    calendar_month_cutoff,
+    price_source_mpn_match,
 )
 
 HQEW_RESULT_URL = "https://p.hqew.com/yunquote/"
@@ -43,6 +45,7 @@ class HqewParseError(HqewError):
 class HqewOffer:
     mpn: str
     unit_price_rmb: Decimal
+    observed_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if not self.unit_price_rmb.is_finite() or self.unit_price_rmb <= 0:
@@ -195,6 +198,7 @@ class _OfferParser(HTMLParser):
             return
         mpn = values.get("pmodel")
         raw_price = values.get("quotationprice")
+        raw_date = values.get("quotationdate") or values.get("quotedate")
         if not mpn or not raw_price:
             return
         try:
@@ -202,9 +206,31 @@ class _OfferParser(HTMLParser):
         except InvalidOperation as exc:
             raise HqewParseError("PRICE_UNPARSEABLE") from exc
         try:
-            self.offers.append(HqewOffer(mpn, price))
+            observed_at = _parse_optional_date(raw_date)
+            self.offers.append(HqewOffer(mpn, price, observed_at))
         except ValueError as exc:
             raise HqewParseError("PRICE_INVALID") from exc
+
+
+_CHINA_TZ = timezone(timedelta(hours=8))
+
+
+def _parse_optional_date(value: str | None) -> datetime | None:
+    if value is None or not value.strip():
+        return None
+    raw = value.strip()
+    for pattern in ("%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(raw, pattern).replace(tzinfo=_CHINA_TZ).astimezone(UTC)
+        except ValueError:
+            continue
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise HqewParseError("QUOTE_DATE_UNPARSEABLE") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=_CHINA_TZ)
+    return parsed.astimezone(UTC)
 
 
 def parse_hqew_offers(html: str) -> tuple[HqewOffer, ...]:
@@ -228,41 +254,64 @@ class HqewAdapter:
 
     def search(self, target_mpn: str, customer_quantity: int) -> SourceResult:
         del customer_quantity
+        now = self._clock()
         try:
             page = self._client.fetch_first_page(target_mpn)
             offers = parse_hqew_offers(page.html)
         except HqewError as exc:
             return self._failure(target_mpn, exc)
-        strict = [
-            offer for offer in offers if is_strict_mpn_match(target_mpn, offer.mpn)
+        matched = [
+            offer
+            for offer in offers
+            if price_source_mpn_match(target_mpn, offer.mpn) is not None
         ]
-        if not strict:
+        if not matched:
             outcome = SourceOutcome.NO_STRICT_MPN_MATCH
             candidate = None
-            matched = None
+            matched_mpn = None
         else:
-            selected = min(strict, key=lambda offer: offer.unit_price_rmb)
-            outcome = SourceOutcome.SUCCESS
-            matched = selected.mpn
-            candidate = PriceCandidate(
-                ResearchSource.HQEW,
-                selected.mpn,
-                selected.unit_price_rmb,
-                "RMB",
-                selected.unit_price_rmb,
-                page.captured_at,
-                page.url,
-            )
+            cutoff = calendar_month_cutoff(now)
+            valid = [
+                offer
+                for offer in matched
+                if offer.observed_at is None or cutoff <= offer.observed_at <= now
+            ]
+            if not valid:
+                outcome = SourceOutcome.NO_VALID_PRICE
+                candidate = None
+                matched_mpn = matched[0].mpn
+            else:
+                selected = min(
+                    valid,
+                    key=lambda offer: (offer.unit_price_rmb, offer.mpn.casefold()),
+                )
+                match_kind = price_source_mpn_match(target_mpn, selected.mpn)
+                outcome = SourceOutcome.SUCCESS
+                matched_mpn = selected.mpn
+                candidate = PriceCandidate(
+                    ResearchSource.HQEW,
+                    selected.mpn,
+                    selected.unit_price_rmb,
+                    "RMB",
+                    selected.unit_price_rmb,
+                    page.captured_at,
+                    page.url,
+                    (
+                        selected.mpn
+                        if match_kind is MpnMatchKind.SUFFIX
+                        else None
+                    ),
+                )
         evidence = SourceEvidence(
             ResearchSource.HQEW,
             target_mpn,
-            matched,
+            matched_mpn,
             outcome,
             page.captured_at,
             page.url,
             (
                 EvidenceField("offers_inspected", len(offers)),
-                EvidenceField("strict_mpn_offers", len(strict)),
+                EvidenceField("matched_mpn_offers", len(matched)),
                 EvidenceField(
                     "selected_rmb_price", candidate.raw_price if candidate else None
                 ),

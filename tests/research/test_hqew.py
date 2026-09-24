@@ -16,8 +16,12 @@ from src.research.source_contracts import SourceOutcome
 NOW = datetime(2026, 9, 22, tzinfo=UTC)
 
 
-def _row(mpn: str, price: str) -> str:
-    return f'<input class="list-data" pmodel="{mpn}" quotationPrice="{price}">'
+def _row(mpn: str, price: str, date: str | None = None) -> str:
+    date_attr = "" if date is None else f' quotationDate="{date}"'
+    return (
+        f'<input class="list-data" pmodel="{mpn}" '
+        f'quotationPrice="{price}"{date_attr}>'
+    )
 
 
 class Client:
@@ -121,7 +125,7 @@ def _cdp_client(
     return client, chromium
 
 
-def test_parser_and_adapter_use_strict_lowest_rmb_offer() -> None:
+def test_parser_and_adapter_use_suffix_lowest_rmb_offer() -> None:
     html = (
         "<table>"
         + _row("ABC-1", "3.20")
@@ -133,8 +137,23 @@ def test_parser_and_adapter_use_strict_lowest_rmb_offer() -> None:
     result = HqewAdapter(Client(html)).search(" ABC-1 ", 50)
     assert result.outcome is SourceOutcome.SUCCESS
     assert result.price_candidate is not None
-    assert result.price_candidate.raw_price == Decimal("2.10")
-    assert result.price_candidate.normalized_rmb_price == Decimal("2.10")
+    assert result.price_candidate.raw_price == Decimal("0.01")
+    assert result.price_candidate.normalized_rmb_price == Decimal("0.01")
+    assert result.price_candidate.display_mpn == "ABC-1-T"
+
+
+def test_dated_history_is_limited_to_one_calendar_month_but_undated_is_allowed() -> None:
+    html = (
+        _row("ABC", "0.01", "2026-08-21 23:59:59")
+        + _row("ABC", "2.00", "2026-08-22 00:00:00")
+        + _row("ABC", "1.50")
+    )
+    adapter = HqewAdapter(Client(html), clock=lambda: NOW)
+
+    result = adapter.search("ABC", 1)
+
+    assert result.price_candidate is not None
+    assert result.price_candidate.raw_price == Decimal("1.50")
 
 
 def test_challenge_fails_closed() -> None:

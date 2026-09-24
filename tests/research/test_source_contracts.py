@@ -7,12 +7,14 @@ import pytest
 from src.research.source_contracts import (
     PRICE_SOURCES,
     EvidenceField,
+    MpnMatchKind,
     PriceCandidate,
     ResearchSource,
     SourceEvidence,
     SourceOutcome,
     SourceResult,
     is_strict_mpn_match,
+    price_source_mpn_match,
 )
 
 CAPTURED_AT = datetime(2026, 9, 21, 8, 0, tzinfo=UTC)
@@ -54,12 +56,14 @@ def test_source_catalog_and_price_sources_are_exact() -> None:
         "hqew",
         "lcsc",
         "bom.ai",
+        "inso",
     }
     assert PRICE_SOURCES == (
         ResearchSource.FINDCHIPS,
         ResearchSource.HQEW,
         ResearchSource.LCSC,
         ResearchSource.BOM_AI,
+        ResearchSource.INSO,
     )
     assert ResearchSource.IC_NET not in PRICE_SOURCES
 
@@ -102,6 +106,24 @@ def test_strict_mpn_match_does_not_normalize_variants(
     observed: str,
 ) -> None:
     assert not is_strict_mpn_match(target, observed)
+
+
+@pytest.mark.parametrize(
+    ("observed", "expected"),
+    [
+        ("abc123", MpnMatchKind.EXACT),
+        ("ABC123-T", MpnMatchKind.SUFFIX),
+        ("ABC123ABCDE", MpnMatchKind.SUFFIX),
+        ("ABC123ABCDEF", None),
+        ("XABC123", None),
+        ("ABC12X", None),
+        ("ABC12", None),
+    ],
+)
+def test_price_source_mpn_match_only_accepts_exact_or_short_tail_suffix(
+    observed: str, expected: MpnMatchKind | None
+) -> None:
+    assert price_source_mpn_match(" ABC123 ", f" {observed} ") is expected
 
 
 def test_contracts_are_immutable_and_price_is_decimal_safe() -> None:
