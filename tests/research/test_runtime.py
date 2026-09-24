@@ -62,12 +62,8 @@ def _mapping(**overrides: object) -> dict:
         },
         "inso": {
             "login_url": "https://inso.example/login",
-            "username_selector": "#u",
-            "password_selector": "#p",
-            "login_button_selector": "#l",
-            "mpn_selector": "#m",
-            "query_button_selector": "#q",
-            "date_headers": ["报价时间"],
+            "cdp_url": "http://127.0.0.1:9222",
+            "pagesize": 20,
         },
     }
     values.update(overrides)
@@ -79,9 +75,7 @@ def _bom_ai_config() -> BomAiBrowserConfig:
 
 
 def _inso_config() -> InsoBrowserConfig:
-    section = dict(_mapping()["inso"])
-    section["date_headers"] = tuple(section["date_headers"])
-    return InsoBrowserConfig(**section)
+    return InsoBrowserConfig(**_mapping()["inso"])
 
 
 def _write_config(tmp_path: Path, mapping: dict | None = None) -> Path:
@@ -186,7 +180,8 @@ def test_load_runtime_config_reads_non_secret_values(tmp_path: Path) -> None:
     assert config.bom_ai.login_url == "https://www.bom.ai/login"
     assert config.bom_ai.result_url("ABC") == "https://www.bom.ai/search/ABC"
     assert config.inso.login_url == "https://inso.example/login"
-    assert config.inso.date_headers == ("报价时间",)
+    assert config.inso.cdp_url == "http://127.0.0.1:9222"
+    assert config.inso.pagesize == 20
     assert config.browser.timeout_ms == 45_000
     assert config.cdp.cdp_url == "http://127.0.0.1:9222"
     assert config.icnet.mode == "credentials"
@@ -207,7 +202,7 @@ def test_missing_or_invalid_configuration_fails_closed(tmp_path: Path) -> None:
         load_runtime_config(_write_config(tmp_path, missing_section))
 
     missing_key = _mapping()
-    del missing_key["inso"]["query_button_selector"]
+    del missing_key["inso"]["login_url"]
     with pytest.raises(ResearchRuntimeConfigError):
         load_runtime_config(_write_config(tmp_path, missing_key))
 

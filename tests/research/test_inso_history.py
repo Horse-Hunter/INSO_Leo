@@ -13,6 +13,7 @@ from src.research.inso_history import (
     InsoLogin,
     InsoReadError,
     PlaywrightInsoReadOnlyBrowser,
+    build_inso_stock_venquote_form,
     parse_inso_history_rows,
 )
 from src.research.source_contracts import SourceOutcome, format_source_result
@@ -33,11 +34,16 @@ class Fx:
         return UsdRmbQuote(Decimal(7), NOW, "synthetic-test-only")
 
 
-def test_inso_uses_positive_supplier_untaxed_usd_and_first_nonempty_window() -> None:
+def _rec(price: str | Decimal, currency: str, observed: datetime) -> InsoHistoryRecord:
+    return InsoHistoryRecord(Decimal(price), currency, observed)
+
+
+def test_inso_uses_lowest_rmb_normalized_price_and_first_nonempty_window() -> None:
+    # RMB 14 is cheaper than USD 4 (which normalizes to RMB 28 at rate 7)
     records = (
-        InsoHistoryRecord(Decimal(0), datetime(2026, 9, 29, tzinfo=UTC)),
-        InsoHistoryRecord(Decimal(2), datetime(2026, 8, 29, tzinfo=UTC)),
-        InsoHistoryRecord(Decimal(1), datetime(2026, 7, 29, tzinfo=UTC)),
+        _rec("0", "USD", datetime(2026, 9, 29, tzinfo=UTC)),
+        _rec("14", "RMB", datetime(2026, 8, 29, tzinfo=UTC)),
+        _rec("4", "USD", datetime(2026, 7, 29, tzinfo=UTC)),  # normalizes to 28 RMB
     )
 
     result = InsoHistoryAdapter(Client(records), Fx(), clock=lambda: NOW).search(
@@ -46,15 +52,17 @@ def test_inso_uses_positive_supplier_untaxed_usd_and_first_nonempty_window() -> 
 
     assert result.outcome is SourceOutcome.SUCCESS
     assert result.price_candidate is not None
-    assert result.price_candidate.raw_price == Decimal(2)
+    assert result.price_candidate.raw_price == Decimal(14)
+    assert result.price_candidate.raw_currency == "RMB"
     assert result.price_candidate.normalized_rmb_price == Decimal(14)
     assert result.price_candidate.age_months == 2
     assert format_source_result(result) == "14（两个月）"
 
 
-def test_inso_three_month_window_and_no_mpn_filtering() -> None:
+def test_inso_three_month_window() -> None:
+    # within last 3 months only
     records = (
-        InsoHistoryRecord(Decimal(3), datetime(2026, 7, 1, tzinfo=UTC)),
+        _rec("3", "USD", datetime(2026, 7, 1, tzinfo=UTC)),
     )
     result = InsoHistoryAdapter(Client(records), Fx(), clock=lambda: NOW).search(
         "ANY-MPN", 1
@@ -66,8 +74,8 @@ def test_inso_three_month_window_and_no_mpn_filtering() -> None:
 
 def test_zero_or_older_than_three_months_is_no_result() -> None:
     records = (
-        InsoHistoryRecord(Decimal(0), datetime(2026, 9, 1, tzinfo=UTC)),
-        InsoHistoryRecord(Decimal(1), datetime(2026, 6, 29, tzinfo=UTC)),
+        _rec("0", "USD", datetime(2026, 9, 1, tzinfo=UTC)),
+        _rec("1", "USD", datetime(2026, 6, 29, tzinfo=UTC)),
     )
     result = InsoHistoryAdapter(Client(records), Fx(), clock=lambda: NOW).search(
         "ABC", 1
@@ -78,7 +86,7 @@ def test_zero_or_older_than_three_months_is_no_result() -> None:
 
 def test_credentialed_client_has_only_read_history_capability_and_hides_secrets() -> None:
     assert "secret" not in repr(InsoLogin("user-secret", "password-secret"))
-    assert "123.45" not in repr(InsoHistoryRecord(Decimal("123.45"), NOW))
+    assert "123.45" not in repr(_rec("123.45", "USD", NOW))
 
     class Credentials:
         site_id: str | None = None
@@ -130,106 +138,111 @@ def test_missing_credentials_and_fx_failure_are_technical_failures() -> None:
             raise RuntimeError("synthetic")
 
     result = InsoHistoryAdapter(
-        Client((InsoHistoryRecord(Decimal(1), NOW),)),
+        Client((_rec("1", "USD", NOW),)),
         BrokenFx(),
         clock=lambda: NOW,
     ).search("ABC", 1)
     assert result.outcome is SourceOutcome.SOURCE_UNAVAILABLE
 
 
-def test_history_row_parser_reads_only_date_and_supplier_untaxed_price() -> None:
+def test_history_row_parser_reads_create_time_rpc_inprice_and_currencyid() -> None:
     records = parse_inso_history_rows(
         [
             {
-                "observed_at": "2026-09-24 13:14:15",
-                "supplier_untaxed_price": "$ 1,234.50",
+                "CreateTime": "2026-09-24 13:14:15",
+                "InPrice": "5.398230",
+                "CurrencyID": "RMB",
             },
             {
-                "observed_at": "2026-09-23",
-                "supplier_untaxed_price": "0",
+                "CreateTime": "2026-09-23 11:00:00",
+                "InPrice": "0",
+                "CurrencyID": "USD",
+            },
+            {
+                "CreateTime": "bad-date",
+                "InPrice": "1.00",
+                "CurrencyID": "USD",
+            },
+            {
+                "CreateTime": "2026-09-22 09:00:00",
+                "InPrice": "junk",
+                "CurrencyID": "USD",
+            },
+            {
+                "CreateTime": "2026-09-21 09:00:00",
+                "InPrice": "2.50",
+                "CurrencyID": "EUR",
             },
         ]
     )
 
-    assert [record.supplier_untaxed_price_usd for record in records] == [
-        Decimal("1234.50"),
-        Decimal(0),
-    ]
+    assert [r.price for r in records] == [Decimal("5.398230")]
+    assert records[0].currency == "RMB"
     assert records[0].observed_at == datetime(2026, 9, 24, 5, 14, 15, tzinfo=UTC)
 
 
-class FakeLocator:
-    def __init__(self, name: str, calls: list[tuple[str, str, str | None]]) -> None:
-        self.name = name
-        self.calls = calls
-
-    def count(self) -> int:
-        return 1
-
-    def fill(self, value: str) -> None:
-        self.calls.append(("fill", self.name, value))
-
-    def click(self) -> None:
-        self.calls.append(("click", self.name, None))
+def test_build_inso_form_encodes_mpn_and_required_keys() -> None:
+    body = build_inso_stock_venquote_form("STM32F103C8T6")
+    # brackets are sent literal here; the HTTP transport URL-encodes them
+    assert "searchData[DetailFieldValue]=STM32F103C8T6" in body
+    assert "searchData[BillDateType]=all" in body
+    assert "searchData[leftlike]=on" in body
+    assert "searchData[CompanyType]=CompanyID" in body
+    assert "searchData[OwnerType]=OwnerID" in body
 
 
-class FakeInsoPage:
-    def __init__(self) -> None:
-        self.url = "about:blank"
-        self.calls: list[tuple[str, str, str | None]] = []
+class FakeResponse:
+    def __init__(self, text: str) -> None:
+        self._text = text
 
-    def goto(self, url: str, *, wait_until: str, timeout: int) -> None:
-        assert wait_until == "domcontentloaded"
-        assert timeout > 0
-        self.url = url
-        self.calls.append(("goto", url, None))
-
-    def locator(self, selector: str) -> FakeLocator:
-        return FakeLocator(selector, self.calls)
-
-    def get_by_text(self, text: str, *, exact: bool) -> FakeLocator:
-        assert exact
-        return FakeLocator(f"text:{text}", self.calls)
-
-    def wait_for_timeout(self, timeout: int) -> None:
-        assert timeout >= 0
-
-    def content(self) -> str:
-        return "<html><body>read-only query</body></html>"
-
-    def evaluate(self, script: str, args: object) -> list[dict[str, str]]:
-        assert "INSO_HISTORY_TABLE_MISSING" in script
-        assert args == {
-            "priceHeader": "供方未税价",
-            "dateHeaders": ["报价时间"],
-        }
-        return [
-            {
-                "observed_at": "2026-09-24 08:00:00",
-                "supplier_untaxed_price": "1.25",
-            }
-        ]
+    def text(self) -> str:
+        return self._text
 
 
-class FakeInsoBrowser:
-    def __init__(self, page: FakeInsoPage) -> None:
-        self.page = page
+class FakeRequest:
+    def __init__(self, response_text: str, captured: dict) -> None:
+        self._response_text = response_text
+        self.captured = captured
+
+    def post(self, url: str, *, headers: dict, data: str, timeout: int) -> FakeResponse:
+        self.captured["url"] = url
+        self.captured["headers"] = headers
+        self.captured["data"] = data
+        self.captured["timeout"] = timeout
+        return FakeResponse(self._response_text)
+
+
+class FakePage:
+    def __init__(self, response_text: str, captured: dict) -> None:
+        self.request = FakeRequest(response_text, captured)
+        self._closed = False
+
+    def is_closed(self) -> bool:
+        return self._closed
+
+
+class FakeContext:
+    def __init__(self, pages: list) -> None:
+        self.pages = pages
+
+
+class FakeBrowser:
+    def __init__(self, page: FakePage | None) -> None:
+        self.contexts = [] if page is None else [FakeContext([page])]
         self.closed = False
-
-    def new_page(self) -> FakeInsoPage:
-        return self.page
+        self._page = page
 
     def close(self) -> None:
         self.closed = True
 
 
 class FakeChromium:
-    def __init__(self, browser: FakeInsoBrowser) -> None:
+    def __init__(self, browser: FakeBrowser) -> None:
         self.browser = browser
 
-    def launch(self, *, channel: str, headless: bool) -> FakeInsoBrowser:
-        assert channel == "chrome"
-        assert not headless
+    def connect_over_cdp(self, cdp_url: str, *, timeout: int) -> FakeBrowser:
+        self.cdp_url = cdp_url
+        self.timeout = timeout
         return self.browser
 
 
@@ -244,67 +257,108 @@ class FakePlaywright:
         return None
 
 
-def test_concrete_browser_login_navigation_query_and_scoped_read() -> None:
-    config = InsoBrowserConfig(
-        "https://inso.example/login",
-        "#username",
-        "#password",
-        "#login",
-        "#mpn",
-        "#query",
-        "#company",
-        ("报价时间",),
-    )
-    page = FakeInsoPage()
-    browser = FakeInsoBrowser(page)
+def test_concrete_browser_uses_cdp_and_posts_stock_venquote() -> None:
+    payload = {
+        "total": -1,
+        "rows": [
+            {
+                "CreateTime": "2026-09-24 08:00:00",
+                "InPrice": "1.25",
+                "CurrencyID": "USD",
+                "PartNo": "ABC-1",
+            }
+        ],
+    }
+    import json as _json
+
+    captured: dict = {}
+    page = FakePage(_json.dumps(payload), captured)
+    browser = FakeBrowser(page)
     acquisition = PlaywrightInsoReadOnlyBrowser(
-        config,
+        InsoBrowserConfig(
+            login_url="https://inso.example/",
+            cdp_url="http://127.0.0.1:9222",
+        ),
         settle_ms=0,
         playwright_factory=lambda: FakePlaywright(FakeChromium(browser)),
     )
 
     capture = acquisition.fetch_procurement_temporary_inquiry_history(
-        " ABC-1 ", InsoLogin("synthetic-user", "synthetic-password", "Synthetic Co")
+        " ABC-1 ", InsoLogin("u", "p")
     )
 
-    assert ("click", "text:1.业务询价", None) in page.calls
-    assert ("click", "text:采购临时询价", None) in page.calls
-    assert ("fill", "#mpn", "ABC-1") in page.calls
-    assert ("click", "#query", None) in page.calls
-    assert capture.records[0].supplier_untaxed_price_usd == Decimal("1.25")
+    assert "ABC-1" in captured["data"]
+    assert captured["headers"]["Content-Type"].startswith(
+        "application/x-www-form-urlencoded"
+    )
+    assert "action=Stock_VenQuote" in captured["url"]
+    assert "DetailField=PartNo" in captured["url"]
+    assert capture.records[0].price == Decimal("1.25")
+    assert capture.records[0].currency == "USD"
+    assert browser.closed
     assert not hasattr(acquisition, "submit")
     assert not hasattr(acquisition, "create_order")
-    assert browser.closed
 
 
-def test_browser_config_and_navigation_fail_closed() -> None:
-    try:
-        InsoBrowserConfig("http://inso.example", "u", "p", "l", "m", "q")
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("non-HTTPS INSO endpoint must be rejected")
-
-    class RedirectPage(FakeInsoPage):
-        def goto(self, url: str, *, wait_until: str, timeout: int) -> None:
-            super().goto(url, wait_until=wait_until, timeout=timeout)
-            self.url = "https://unexpected.example/login"
-
-    config = InsoBrowserConfig(
-        "https://inso.example/login", "u", "p", "l", "m", "q"
-    )
-    page = RedirectPage()
+def test_concrete_browser_empty_response_is_fail_closed() -> None:
+    captured: dict = {}
+    page = FakePage("{}", captured)
+    browser = FakeBrowser(page)
     acquisition = PlaywrightInsoReadOnlyBrowser(
-        config,
-        playwright_factory=lambda: FakePlaywright(
-            FakeChromium(FakeInsoBrowser(page))
-        ),
+        InsoBrowserConfig(login_url="https://inso.example/"),
+        settle_ms=0,
+        playwright_factory=lambda: FakePlaywright(FakeChromium(browser)),
     )
+
     try:
         acquisition.fetch_procurement_temporary_inquiry_history(
             "ABC", InsoLogin("u", "p")
         )
     except InsoReadError as exc:
-        assert exc.code == "UNEXPECTED_NAVIGATION_HOST"
+        assert exc.code == "AUTHENTICATED_READ_EMPTY"
     else:
-        raise AssertionError("cross-host navigation must fail closed")
+        raise AssertionError("empty response must fail closed")
+
+
+def test_concrete_browser_no_page_is_fail_closed() -> None:
+    browser = FakeBrowser(None)
+    acquisition = PlaywrightInsoReadOnlyBrowser(
+        InsoBrowserConfig(login_url="https://inso.example/"),
+        settle_ms=0,
+        playwright_factory=lambda: FakePlaywright(FakeChromium(browser)),
+    )
+
+    try:
+        acquisition.fetch_procurement_temporary_inquiry_history(
+            "ABC", InsoLogin("u", "p")
+        )
+    except InsoReadError as exc:
+        assert exc.code == "CDP_NO_AVAILABLE_PAGE"
+    else:
+        raise AssertionError("missing CDP page must fail closed")
+
+
+def test_browser_config_validates_https_and_loopback_cdp() -> None:
+    try:
+        InsoBrowserConfig("http://inso.example", cdp_url="http://127.0.0.1:9222")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("non-HTTPS INSO endpoint must be rejected")
+
+    try:
+        InsoBrowserConfig(
+            "https://inso.example/",
+            cdp_url="https://attacker.example/remote",
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("non-loopback CDP must be rejected")
+
+    try:
+        InsoBrowserConfig("https://inso.example/", cdp_url="http://127.0.0.1:9222", pagesize=0)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("non-positive pagesize must be rejected")

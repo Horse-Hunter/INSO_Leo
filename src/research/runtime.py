@@ -34,13 +34,8 @@ Configuration schema (all values non-secret)::
       },
       "inso": {
         "login_url": "https://<inso login page>",
-        "username_selector": "...",
-        "password_selector": "...",
-        "login_button_selector": "...",
-        "mpn_selector": "...",
-        "query_button_selector": "...",
-        "company_selector": null,
-        "date_headers": ["询价时间"]
+        "cdp_url": "http://127.0.0.1:9222",
+        "pagesize": 30
       }
     }
 
@@ -48,6 +43,9 @@ Configuration schema (all values non-secret)::
 ``cdp``, and ``icnet`` fall back to defaults. ``icnet.mode`` is
 ``credentials`` (Core Provider login in a fresh browser) or ``cdp`` (read
 through the Owner-authorized ordinary Chrome session on ``cdp.cdp_url``).
+INSO is read through the same Owner-authorised CDP session on
+``inso.cdp_url`` (falls back to ``cdp.cdp_url``); Stock_VenQuote history is
+the only approved read surface.
 """
 
 from __future__ import annotations
@@ -411,8 +409,6 @@ def build_research_service(
         config.inso,
         timeout_ms=browser.timeout_ms,
         settle_ms=browser.settle_ms,
-        browser_channel=browser.channel,
-        headless=browser.headless,
     )
 
     return ResearchService(
@@ -502,24 +498,10 @@ def _config_from_mapping(raw: Mapping) -> ResearchRuntimeConfig:
 
     inso_kwargs: dict = {
         "login_url": _require_text(inso_section, "login_url", prefix="inso"),
-        "username_selector": _require_text(
-            inso_section, "username_selector", prefix="inso"
-        ),
-        "password_selector": _require_text(
-            inso_section, "password_selector", prefix="inso"
-        ),
-        "login_button_selector": _require_text(
-            inso_section, "login_button_selector", prefix="inso"
-        ),
-        "mpn_selector": _require_text(inso_section, "mpn_selector", prefix="inso"),
-        "query_button_selector": _require_text(
-            inso_section, "query_button_selector", prefix="inso"
-        ),
-        "company_selector": _optional_text(inso_section, "company_selector"),
+        "cdp_url": _optional_text(inso_section, "cdp_url")
+        or CdpRuntimeConfig().cdp_url,
+        "pagesize": _optional_int(inso_section, "pagesize", default=30),
     }
-    date_headers = _optional_text_sequence(inso_section, "date_headers")
-    if date_headers is not None:
-        inso_kwargs["date_headers"] = date_headers
 
     try:
         return ResearchRuntimeConfig(
