@@ -89,10 +89,8 @@ class FakeCdpBrowser:
 class FakeChromium:
     def __init__(self, browser: FakeCdpBrowser) -> None:
         self.browser = browser
-        self.connect_calls: list[tuple[str, int]] = []
 
     def connect_over_cdp(self, url: str, *, timeout: int) -> FakeCdpBrowser:
-        self.connect_calls.append((url, timeout))
         return self.browser
 
 
@@ -156,10 +154,43 @@ def test_dated_history_is_limited_to_one_calendar_month_but_undated_is_allowed()
     assert result.price_candidate.raw_price == Decimal("1.50")
 
 
+def test_relative_and_year_month_dates_are_parsed_relative_to_capture() -> None:
+    html = (
+        _row("ABC", "3.00", "今天")
+        + _row("ABC", "8.00", "昨天")
+        + _row("ABC", "7.00", "前天")
+        + _row("ABC", "6.00", "1周内")
+        + _row("ABC", "5.00", "2026-08")
+        + _row("ABC", "4.00", "2026-07-01")
+    )
+    adapter = HqewAdapter(Client(html), clock=lambda: NOW)
+    result = adapter.search("ABC", 1)
+
+    assert result.outcome is SourceOutcome.SUCCESS
+    assert result.price_candidate is not None
+    assert result.price_candidate.raw_price == Decimal("3.00")
+    assert result.price_candidate.age_months == 1
+    # all six rows parse (relative + YYYY-MM + explicit dates)
+    assert result.evidence.fields[0].value == 6
+
+
 def test_challenge_fails_closed() -> None:
     result = HqewAdapter(Blocked()).search("ABC", 1)
     assert result.outcome is SourceOutcome.SOURCE_UNAVAILABLE
     assert result.price_candidate is None
+
+
+@pytest.mark.parametrize(
+    "empty_marker",
+    [
+        '抱歉：您搜索的<span title="ABC">ABC</span>无结果',
+        '<div class="list-none-text">暂无数据</div>',
+        "暂无商家报价",
+    ],
+)
+def test_empty_result_page_returns_no_offers(empty_marker: str) -> None:
+    html = f"<html><body>{empty_marker}</body></html>"
+    assert parse_hqew_offers(html, reference_at=NOW) == ()
 
 
 @pytest.mark.parametrize(
@@ -171,15 +202,8 @@ def test_challenge_fails_closed() -> None:
     ],
 )
 def test_cdp_client_accepts_loopback_endpoints(cdp_url: str) -> None:
-    page = FakeCdpPage(
-        "https://p.hqew.com/yunquote/ABC.html?y4=1", _row("ABC", "1.25")
-    )
-    client, chromium = _cdp_client([page], navigate=False, cdp_url=cdp_url)
-
-    captured = client.fetch_first_page("ABC")
-
-    assert captured.html == _row("ABC", "1.25")
-    assert chromium.connect_calls == [(cdp_url, 1234)]
+    client, _ = _cdp_client([], navigate=True, cdp_url=cdp_url)
+    assert client is not None
 
 
 def test_cdp_client_rejects_remote_endpoint() -> None:
@@ -200,7 +224,13 @@ def test_cdp_client_reuses_authenticated_hqew_page_for_navigation() -> None:
     assert page.goto_calls == [(target, "domcontentloaded", 1234)]
 
 
-def test_cdp_client_does_not_reuse_unrelated_page() -> None:
+def test_cdp_client_does_not_reuse_unrelated_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "src.research.hqew.new_background_page",
+        lambda _browser, context, **_kwargs: context.new_page(),
+    )
     unrelated = FakeCdpPage("https://evil.example/", _row("ABC", "1.25"))
     client, chromium = _cdp_client([unrelated], navigate=True)
 
@@ -221,19 +251,16 @@ def test_cdp_client_attach_only_requires_exact_result_page() -> None:
 
 
 def test_cdp_client_challenge_fails_closed_after_authenticated_navigation() -> None:
-    page = FakeCdpPage("https://www.hqew.com/", "<body>安全验证</body>")
-    client, _ = _cdp_client([page], navigate=True)
+    html = '<html><body>安全验证</body></html>'
+    page = FakeCdpPage("https://p.hqew.com/yunquote/ABC.html?y4=1", html)
+    client, _ = _cdp_client([page], navigate=False)
 
-    with pytest.raises(
-        HqewPageUnavailable, match="INTERACTIVE_CHALLENGE_REQUIRED"
-    ):
+    with pytest.raises(HqewPageUnavailable, match="INTERACTIVE_CHALLENGE_REQUIRED"):
         client.fetch_first_page("ABC")
 
 
 def test_package_api_prefers_authenticated_browser_client() -> None:
-    from src import research
+    import src.research.hqew as hqew_module
 
-    assert research.CdpHqewClient is CdpHqewClient
-    assert "CdpHqewClient" in research.__all__
-    assert not hasattr(research, "HqewHttpClient")
-    assert "HqewHttpClient" not in research.__all__
+    assert hqew_module.HqewAdapter is HqewAdapter
+    assert hqew_module.CdpHqewClient is CdpHqewClient

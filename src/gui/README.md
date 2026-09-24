@@ -33,6 +33,12 @@ class GuiBackend(ABC):
 
 后续 Main Programmer 提供 Production Backend 后，只需在 `src.gui.main` 中替换注入的 backend 实例，GUI 代码无需修改。
 
+### 金额、货量与来源详情
+
+- `Order.min_reference_price` 和 `Order.total_price` 使用 `decimal.Decimal`。生产后端必须保留 Research 金额精度，不得转换为 binary `float`。
+- `Order.stock_label` 是 IC.net Research 提供的展示语义（`货多`、`货少`、`待验证`）；GUI 不合并其他来源库存。
+- 五源详情使用展示型 `SourceDetail(source, display_value, remark, url)`。后端可传入 `1586.74`、`1513.86（无库存）`、`1800（ABC-123-T）`、`无结果` 或 `1050（两个月）`；GUI 不解析或重新解释 Research 规则。
+
 ## 模块边界
 
 - `src/gui/contracts.py`：公共数据类与 `GuiBackend` ABC。
@@ -44,7 +50,8 @@ class GuiBackend(ABC):
 
 ## 设计约束
 
-- UI 线程不执行自动化任务；所有耗时工作由 backend worker 线程完成。
+- UI 线程不执行自动化任务；backend callback 只把不可变事件放入 Queue，Tk 主线程通过固定 `after` drain loop 更新 widget。
 - 禁止在 GUI 中创建多个并行的 workflow 会话（backend start 去重）。
-- 关闭窗口时触发 backend `shutdown()`，join worker 并释放 timer/listener。
+- 关闭窗口时先取消已调度的 `after`，注销 callback/listener，再调用 backend `shutdown()` 并等待 worker 正常退出。
+- 结果表按 `inquiry_id` 增量同步；结果快照未变化时不操作 Treeview。
 - Excel/结果目录操作仅为入口预留；Mock 阶段不写入真实数据。

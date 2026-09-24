@@ -7,9 +7,9 @@ from .contracts import (
     HealthReport,
     Order,
     OrderStatus,
-    PriceEvidence,
     RunSession,
     RunState,
+    SourceDetail,
 )
 from .mock_backend import MockBackend
 from .resources import ResourceManager, RingBufferLog
@@ -23,10 +23,10 @@ __all__ = [
     "MockBackend",
     "Order",
     "OrderStatus",
-    "PriceEvidence",
     "ResourceManager",
     "RingBufferLog",
     "RunSession",
     "RunState",
+    "SourceDetail",
     "make_empty_session",
 ]

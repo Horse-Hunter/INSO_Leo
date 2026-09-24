@@ -8,6 +8,7 @@ Run with a display:
 from __future__ import annotations
 
 import logging
+import sys
 
 from .app import InsoDashboardApp
 from .mock_backend import MockBackend
@@ -25,3 +26,7 @@ def main() -> int:
     app._root.after(2000, app._on_close)
     app.run()
     return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

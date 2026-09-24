@@ -8,6 +8,7 @@ from src.research.lcsc import (
     LcscAdapter,
     LcscBrowserClient,
     LcscPage,
+    parse_lcsc_cooperation_card,
     parse_lcsc_product,
     parse_lcsc_search_product,
     select_lcsc_tier,
@@ -61,6 +62,19 @@ class Fx:
         return UsdRmbQuote(Decimal("7.00"), NOW, "synthetic-test-only")
 
 
+def test_cooperation_inventory_card_price_and_date() -> None:
+    product = parse_lcsc_cooperation_card(
+        "FDA801B-VYT\n更新时间\n2026年09月24日\n含税\n1+\n￥747.019462"
+        "\n10+\n￥622.516219\n库存\n208",
+        "FDA801B-VYT",
+    )
+    assert product is not None
+    assert product.stock_quantity == 208
+    assert product.observed_at is not None
+    assert product.observed_at.date().isoformat() == "2026-09-23"
+    assert select_lcsc_tier(product.tiers, 10_000).unit_price == Decimal("622.516219")
+
+
 def test_quantity_does_not_select_tier_and_preorder_is_out_of_stock() -> None:
     product = parse_lcsc_product(_html())
     assert select_lcsc_tier(product.tiers, 1).unit_price == Decimal("1.00")  # type: ignore[union-attr]
@@ -72,7 +86,7 @@ def test_quantity_does_not_select_tier_and_preorder_is_out_of_stock() -> None:
     assert result.price_candidate is None
     assert result.out_of_stock_candidate is not None
     assert result.out_of_stock_candidate.normalized_rmb_price == Decimal("7.0000")
-    assert format_source_result(result) == "7.0000（无库存）"
+    assert format_source_result(result) == "7（无库存）"
 
 
 def test_stocked_suffix_and_rmb_prices_are_supported() -> None:
@@ -85,13 +99,13 @@ def test_stocked_suffix_and_rmb_prices_are_supported() -> None:
 
     assert suffix.price_candidate is not None
     assert suffix.price_candidate.normalized_rmb_price == Decimal("7.0000")
-    assert format_source_result(suffix) == "7.0000（ABC-1-T）"
+    assert format_source_result(suffix) == "7（ABC-1-T）"
     assert rmb.price_candidate is not None
     assert rmb.price_candidate.normalized_rmb_price == Decimal("1.00")
 
 
 def test_overlong_suffix_and_unsupported_currency_have_no_candidate() -> None:
-    mismatch = LcscAdapter(Client(_html("ABC-1ABCDEF")), Fx()).search("ABC-1", 1)
+    mismatch = LcscAdapter(Client(_html("ABC-1ABCDEFG")), Fx()).search("ABC-1", 1)
     unsupported = LcscAdapter(Client(_html(currency="EUR")), Fx()).search(
         "ABC-1", 1
     )
@@ -188,6 +202,25 @@ def test_chinese_search_parser_is_scoped_and_uses_displayed_discount_tiers() -> 
     assert min(tier.unit_price for tier in product.tiers) == Decimal("343.1176")
 
 
+def test_live_style_cooperation_card_without_update_date_is_a_price_result() -> None:
+    card = """URAM3T21
+品牌
+Vicor Corporation
+1+
+￥1870.683574
+8-14个工作日
+库存
+2
+增量
+1"""
+    product = parse_lcsc_cooperation_card(card, "uRAM-3T21")
+    assert product is not None
+    assert product.mpn == "URAM3T21"
+    assert product.observed_at is None
+    assert product.stock_quantity == 2
+    assert product.tiers[0].unit_price == Decimal("1870.683574")
+
+
 class FakePage:
     def __init__(self) -> None:
         self.url = "about:blank"
@@ -204,8 +237,15 @@ class FakePage:
 
     def content(self) -> str:
         if self.url.startswith("https://so.szlcsc.com/"):
-            return _cn_search_html()
+            return _cn_search_html() + "<script>安全验证</script>"
         return _cn_product_html()
+
+    def locator(self, selector: str) -> "FakePage":
+        assert selector == "body"
+        return self
+
+    def inner_text(self) -> str:
+        return "Search and product details"
 
 
 class FakeBrowser:

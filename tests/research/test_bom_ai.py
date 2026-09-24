@@ -57,7 +57,7 @@ def test_suffix_match_expiry_and_overlong_suffix() -> None:
         clock=lambda: NOW,
     ).search("ABC", 1)
     mismatch = BomAiAdapter(
-        Client((BomAiPriceRecord("ABC-ABCDEF", Decimal(1), NOW),)),
+        Client((BomAiPriceRecord("ABC-ABCDEFG", Decimal(1), NOW),)),
         clock=lambda: NOW,
     ).search("ABC", 1)
     assert suffix.price_candidate is not None
@@ -115,6 +115,23 @@ def test_parser_binds_quotes_to_matching_model_section_and_detects_currency() ->
     assert result.price_candidate is not None
     assert result.price_candidate.normalized_rmb_price == Decimal("8.50")
     assert result.price_candidate.raw_currency == "RMB"
+
+
+def test_parser_reads_target_model_from_real_cloud_row_shape() -> None:
+    html = """
+    <div class="bom_cloud_block">
+      <aside class="stock-view"><div class="model" title="OTHER"></div>
+        <script><data><quotePrice>0.01</quotePrice>
+        <quoteDate>2026/9/24 9:08:04</quoteDate></data></script></aside>
+      <aside class="stock-view"><div class="model znl_quote_model-cell"
+        title="STM32F103C8T6"></div><script class="metadata">
+        <data><quotePrice>5.495575</quotePrice>
+        <quoteDate>2026/9/24 9:08:04</quoteDate></data></script></aside>
+    </div>
+    """
+    records = parse_bom_ai_price_records(html, "STM32F103C8T6")
+    assert len(records) == 1
+    assert records[0].raw_price == Decimal("5.495575")
 
 
 def test_login_repr_hides_secret_and_client_only_exposes_read_capture() -> None:

@@ -110,3 +110,18 @@ def test_status_callback_fires_on_start(backend):
     backend.shutdown()
 
     assert any(s.state == RunState.RUNNING for s in snapshots)
+
+
+def test_shutdown_joins_worker_and_unregisters_callbacks(backend):
+    backend.on_status_change(lambda _status: None)
+    backend.on_log(lambda _entry: None)
+    backend.start()
+    worker = backend._worker
+
+    backend.shutdown()
+
+    assert worker is not None
+    assert not worker.is_alive()
+    assert backend._status_callbacks == []
+    assert backend._log_callbacks == []
+    assert backend._ring_log._listeners == []

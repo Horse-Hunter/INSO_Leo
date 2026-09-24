@@ -1,38 +1,32 @@
 # 产品基线
 
-本文件只维护产品范围和长期跨模块业务规则。模块规则归 `docs/modules/`，安全归 `BOUNDARIES.md`，依赖归 `MODULE_INDEX.md`；实现状态以 Git `main`、当前 Task 和 Final Report 为准。
+本文件只记录当前仍成立的产品范围和跨模块业务规则。模块详细规则归 `modules/<MODULE>.md`，安全归 `SAFETY.md`，依赖归 `MODULE_INDEX.md`；当前阶段归 `CURRENT_TASK.md`，实现以 Git 当前代码和测试为准。
 
 ## 产品目标
 
-- 项目：`<PROJECT_NAME>`。
-- 目标：`<PRODUCT_GOAL>`。
-- 主要用户：`<PRIMARY_USERS 或 UNKNOWN>`。
-- 可衡量结果：`<SUCCESS_METRIC 或 UNKNOWN>`。
+- 项目：`<PROJECT_NAME>`
+- 目标：`<CONFIRMED_OUTCOME 或 UNKNOWN>`
+- 主要用户：`<CONFIRMED_USERS 或 UNKNOWN>`
+- 成功标准：`<MEASURABLE_RESULT 或 UNKNOWN>`
 
-## 当前 V1 用户流程
+## 当前已确认流程
 
-```text
-<V1_FLOW_STEP_1>
--> <V1_FLOW_STEP_2>
--> <V1_OUTCOME>
-```
+`<OBSERVED_USER_FLOW 或 UNKNOWN>`
 
-## V1 包含
+## 已确认范围
 
 - `<CONFIRMED_SCOPE_ITEM>`
-- `<CONFIRMED_CROSS_MODULE_RULE>`
 
-## V1 不包含
+## 明确不在当前范围
 
 - `<EXCLUDED_ITEM>`
-- `<FUTURE_VERSION_ITEM>`
 
-## 跨模块全局业务规则
+## 跨模块长期业务规则
 
-- `<RULE_THAT_TRULY_AFFECTS_MULTIPLE_MODULES>`
+- `<VERIFIED_RULE 或 NONE>`
 
-## Future Scope / 产品级 UNKNOWN
+## Future Scope / UNKNOWN
 
-- `<PRODUCT_LEVEL_UNKNOWN>`
+- `<PRODUCT_LEVEL_UNKNOWN 或 NONE>`
 
-只影响单一模块的事实或 UNKNOWN 留在对应 module doc 或 Task，不写入本文件；不要维护易 stale 的逐模块实现状态。
+不把愿望当成已验证事实；模块局部 UNKNOWN 留在对应 module doc，阶段临时问题留在 `CURRENT_TASK.md`。

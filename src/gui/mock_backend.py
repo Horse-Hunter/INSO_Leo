@@ -14,6 +14,7 @@ import threading
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from decimal import Decimal
 from random import choice, randint, uniform
 from time import monotonic, sleep
 from typing import Any
@@ -26,9 +27,9 @@ from .contracts import (
     LogEntry,
     Order,
     OrderStatus,
-    PriceEvidence,
     RunSession,
     RunState,
+    SourceDetail,
 )
 from .resources import ResourceManager, RingBufferLog, get_process_memory_mb
 from .state import utc_now
@@ -49,14 +50,14 @@ _MOCK_MODELS = (
 
 _MOCK_BRANDS = ("TI", "ST", "Espressif", "Microchip", "ADI", "ON", "Nexperia", None)
 
-_SOURCE_NAMES = ("INSO", "Findchips", "华强", "立创", "正能量")
+_SOURCE_NAMES = ("INSO", "Findchips", "华强", "立创", "Bom.Ai")
 
 _SOURCE_STATUSES = {
     "INSO": "正常",
     "Findchips": "正常",
     "华强": "正常",
     "立创": "正常",
-    "正能量": "需要登录",
+    "Bom.Ai": "需要登录",
 }
 
 
@@ -79,6 +80,7 @@ class MockBackend(GuiBackend):
         self._worker: threading.Thread | None = None
         self._worker_active = False
         self._memory_mb = 0.0
+        self._shutdown = False
 
         # Logging and callbacks
         self._ring_log = RingBufferLog(capacity=1000)
@@ -100,14 +102,18 @@ class MockBackend(GuiBackend):
 
     def _notify_status(self) -> None:
         snapshot = self.get_status()
-        for callback in self._status_callbacks:
+        with self._lock:
+            callbacks = tuple(self._status_callbacks)
+        for callback in callbacks:
             try:
                 callback(snapshot)
             except Exception:  # noqa: BLE001,S110 - callback must not break backend
                 pass
 
     def _notify_log(self, entry: LogEntry) -> None:
-        for callback in self._log_callbacks:
+        with self._lock:
+            callbacks = tuple(self._log_callbacks)
+        for callback in callbacks:
             try:
                 callback(entry)
             except Exception:  # noqa: BLE001,S110 - callback must not break backend
@@ -115,13 +121,19 @@ class MockBackend(GuiBackend):
 
     def _spawn_worker(self) -> None:
         self._worker_active = True
-        self._worker = threading.Thread(target=self._worker_loop, name="MockBackendWorker", daemon=True)
+        self._worker = threading.Thread(
+            target=self._worker_loop, name="MockBackendWorker", daemon=True
+        )
         self._worker.start()
         self._resources.add_thread(self._worker, "mock-backend-worker")
 
     def start(self) -> None:
         with self._lock:
-            if self._state in {RunState.RUNNING, RunState.STOPPING_AFTER_CYCLE}:
+            if self._shutdown:
+                return
+            if self._state in {RunState.RUNNING, RunState.STOPPING_AFTER_CYCLE} or (
+                self._worker is not None and self._worker.is_alive()
+            ):
                 self._log("已经在运行中，忽略重复启动")
                 return
             self._run_id = f"run_{uuid.uuid4().hex[:8]}"
@@ -153,20 +165,12 @@ class MockBackend(GuiBackend):
         self._log("后台 worker 启动")
         while True:
             with self._lock:
-                should_stop = self._stop_requested
-                active = self._state in {RunState.RUNNING, RunState.STOPPING_AFTER_CYCLE}
+                active = self._state in {
+                    RunState.RUNNING,
+                    RunState.STOPPING_AFTER_CYCLE,
+                }
 
             if not active:
-                break
-
-            if should_stop:
-                with self._lock:
-                    self._state = RunState.STOPPED
-                    self._stopped_at = utc_now()
-                    self._next_poll_at = None
-                    self._worker_active = False
-                self._log("本轮完成，安全停止")
-                self._notify_status()
                 break
 
             self._run_cycle()
@@ -179,7 +183,9 @@ class MockBackend(GuiBackend):
                     self._worker_active = False
                     self._log("本轮完成，安全停止")
                 else:
-                    self._next_poll_at = utc_now() + timedelta(seconds=self._cycle_seconds)
+                    self._next_poll_at = utc_now() + timedelta(
+                        seconds=self._cycle_seconds
+                    )
 
             self._notify_status()
 
@@ -217,39 +223,25 @@ class MockBackend(GuiBackend):
         model = choice(_MOCK_MODELS)
         brand = choice(_MOCK_BRANDS)
         quantity = randint(100, 5000)
-        evidence_list: list[PriceEvidence] = []
-        prices: list[float] = []
+        source_details: list[SourceDetail] = []
 
         for source in _SOURCE_NAMES:
             if uniform(0, 1) < 0.15:
-                # Randomly mark one source as unavailable for variety.
-                evidence_list.append(
-                    PriceEvidence(source=source, unit_price=None, stock=None, remark="源不可用")
+                source_details.append(
+                    SourceDetail(source=source, display_value="无结果")
                 )
                 continue
-            unit_price = round(uniform(0.5, 50.0), 2)
-            stock = randint(0, 10000)
-            evidence_list.append(
-                PriceEvidence(source=source, unit_price=unit_price, stock=stock)
+            display_amount = Decimal(randint(10_000, 200_000)) / Decimal(100)
+            source_details.append(
+                SourceDetail(source=source, display_value=f"{display_amount:.2f}")
             )
-            if stock > 0:
-                prices.append(unit_price)
 
-        if not prices:
-            status = OrderStatus.MANUAL_REVIEW
-            min_price = None
-            total = None
-            remark = "全部货源无库存，需人工处理"
-        elif len(prices) < 3:
-            status = OrderStatus.PARTIAL
-            min_price = min(prices)
-            total = round(min_price * quantity, 2)
-            remark = "仅部分来源有报价"
-        else:
-            status = OrderStatus.COMPLETED
-            min_price = min(prices)
-            total = round(min_price * quantity, 2)
-            remark = ""
+        min_price = Decimal(randint(50, 5_000)) / Decimal(100)
+        total = (min_price * quantity).quantize(Decimal("0.01"))
+        status = choice(
+            (OrderStatus.COMPLETED, OrderStatus.PARTIAL, OrderStatus.MANUAL_REVIEW)
+        )
+        remark = "模拟结果，供界面演示" if status == OrderStatus.MANUAL_REVIEW else ""
 
         with self._lock:
             run_id = self._run_id or ""
@@ -259,11 +251,11 @@ class MockBackend(GuiBackend):
             model=model,
             brand=brand,
             quantity=quantity,
-            stock=sum(e.stock or 0 for e in evidence_list),
+            stock_label=choice(("货多", "货少", "待验证")),
             min_reference_price=min_price,
             total_price=total,
             status=status,
-            evidence=tuple(evidence_list),
+            sources=tuple(source_details),
             remark=remark,
             run_id=run_id,
         )
@@ -283,7 +275,9 @@ class MockBackend(GuiBackend):
                 stopped_at=self._stopped_at,
                 orders_found=len(orders),
                 completed=completed,
-                in_progress=1 if self._worker_active and self._state == RunState.RUNNING else 0,
+                in_progress=1
+                if self._worker_active and self._state == RunState.RUNNING
+                else 0,
                 pending=pending,
                 next_poll_at=self._next_poll_at,
             )
@@ -380,18 +374,17 @@ class MockBackend(GuiBackend):
 
     def shutdown(self) -> None:
         with self._lock:
-            if self._state == RunState.STOPPED:
-                self._resources.close_all()
+            if self._shutdown:
                 return
+            self._shutdown = True
             self._stop_requested = True
-            self._state = RunState.STOPPING_AFTER_CYCLE
+            if self._state != RunState.STOPPED:
+                self._state = RunState.STOPPING_AFTER_CYCLE
 
         self._notify_status()
 
-        # Join worker with a short timeout; if it is stuck, the resource manager
-        # will try again during close_all.
         if self._worker is not None and self._worker.is_alive():
-            self._worker.join(timeout=3.0)
+            self._worker.join()
 
         with self._lock:
             self._state = RunState.STOPPED
@@ -400,6 +393,8 @@ class MockBackend(GuiBackend):
             self._next_poll_at = None
 
         self._resources.close_all()
+        self.on_status_change(None)
+        self.on_log(None)
         self._notify_status()
         self._log("Mock backend 已关闭")
 

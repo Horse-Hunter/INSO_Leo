@@ -1,12 +1,22 @@
-"""Read-only INSO procurement-temporary-inquiry history price source."""
+"""Read-only INSO procurement-quote-history source.
+
+The ``Stock_VenQuote`` endpoint exposes supplier quote history for an MPN
+through the Owner-authorised ordinary Chrome session. The history records
+carry ``CreateTime``, ``InPrice`` (supplier untaxed price) and ``CurrencyID``
+(``RMB`` / ``USD``). RMB records are kept as-is; USD records are converted to
+RMB using the shared USD/RMB FX quote, so the emitted
+``PriceCandidate.normalized_rmb_price`` is always in RMB.
+"""
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Protocol
+from ipaddress import ip_address
+from typing import Any, Protocol
 from urllib.parse import urlsplit
 
 from .fx import UsdRmbProvider, UsdRmbQuote
@@ -20,7 +30,7 @@ from .source_contracts import (
     calendar_month_cutoff,
 )
 
-INSO_SITE_ID = "inso"
+INSO_SITE_ID = "yingsuo.alperp.cn"
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,15 +46,17 @@ class InsoCredentialProvider(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class InsoHistoryRecord:
-    supplier_untaxed_price_usd: Decimal = field(repr=False)
+    price: Decimal = field(repr=False)
+    currency: str = field(repr=False)  # "RMB" or "USD"
     observed_at: datetime
 
     def __post_init__(self) -> None:
-        value = self.supplier_untaxed_price_usd
-        if not isinstance(value, Decimal):
-            raise TypeError("supplier_untaxed_price_usd must be Decimal")
-        if not value.is_finite() or value < 0:
-            raise ValueError("supplier_untaxed_price_usd must be finite and nonnegative")
+        if not isinstance(self.price, Decimal) or not self.price.is_finite():
+            raise ValueError("price must be a finite Decimal")
+        if self.price < 0:
+            raise ValueError("price must be nonnegative")
+        if self.currency not in {"RMB", "USD"}:
+            raise ValueError("currency must be RMB or USD")
         if self.observed_at.tzinfo is None:
             raise ValueError("observed_at must be timezone-aware")
 
@@ -64,208 +76,128 @@ class InsoReadError(RuntimeError):
 
 
 class InsoReadOnlyBrowser(Protocol):
-    """Only the approved inquiry-history query is exposed; no write operation."""
+    """Only the approved Stock_VenQuote read is exposed; no write operation."""
 
     def fetch_procurement_temporary_inquiry_history(
         self, mpn: str, login: InsoLogin
     ) -> InsoHistoryCapture:
-        """Read 业务询价 → 采购临时询价 → query → history results."""
+        """Read Stock_VenQuote history for ``mpn`` via the CDP-attached session."""
 
 
 @dataclass(frozen=True, slots=True)
 class InsoBrowserConfig:
-    """Runtime selectors for the approved read-only INSO query screen."""
+    """Runtime config for the INSO read-only Stock_VenQuote client."""
 
     login_url: str
-    username_selector: str
-    password_selector: str
-    login_button_selector: str
-    mpn_selector: str
-    query_button_selector: str
-    company_selector: str | None = None
-    date_headers: tuple[str, ...] = (
-        "询价时间",
-        "报价时间",
-        "更新时间",
-        "创建时间",
-        "日期",
-    )
+    cdp_url: str = "http://127.0.0.1:9222"
+    pagesize: int = 30
 
     def __post_init__(self) -> None:
         parsed = urlsplit(self.login_url)
         if parsed.scheme != "https" or not parsed.hostname:
             raise ValueError("INSO login_url must be HTTPS")
-        required = (
-            self.username_selector,
-            self.password_selector,
-            self.login_button_selector,
-            self.mpn_selector,
-            self.query_button_selector,
-        )
-        if any(not value.strip() for value in required):
-            raise ValueError("INSO selectors must not be blank")
+        cdp_parsed = urlsplit(self.cdp_url)
+        if cdp_parsed.scheme not in {"http", "https"} or not cdp_parsed.hostname:
+            raise ValueError("INSO cdp_url must be a loopback http(s) URL")
+        if not _is_loopback_host(cdp_parsed.hostname):
+            raise ValueError("INSO cdp_url must point to a loopback address")
+        if cdp_parsed.port is None:
+            raise ValueError("INSO cdp_url must include an explicit port")
+        if self.pagesize <= 0:
+            raise ValueError("INSO pagesize must be positive")
 
 
-class PlaywrightInsoReadOnlyBrowser:
-    """Concrete login/navigation/query acquisition with no write capability."""
-
-    def __init__(
-        self,
-        config: InsoBrowserConfig,
-        *,
-        timeout_ms: int = 45_000,
-        settle_ms: int = 2_000,
-        browser_channel: str = "chrome",
-        headless: bool = False,
-        playwright_factory: Callable[[], object] | None = None,
-    ) -> None:
-        self._config = config
-        self._timeout_ms = timeout_ms
-        self._settle_ms = settle_ms
-        self._browser_channel = browser_channel
-        self._headless = headless
-        self._playwright_factory = playwright_factory
-
-    def fetch_procurement_temporary_inquiry_history(
-        self, mpn: str, login: InsoLogin
-    ) -> InsoHistoryCapture:
-        factory = self._playwright_factory
-        timeout_error: type[Exception] = TimeoutError
-        if factory is None:
-            try:
-                from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-                from playwright.sync_api import sync_playwright
-            except ImportError as exc:
-                raise InsoReadError("PLAYWRIGHT_NOT_INSTALLED") from exc
-            factory = sync_playwright
-            timeout_error = PlaywrightTimeoutError
-
-        browser = None
-        current_url: str | None = self._config.login_url
-        expected_host = urlsplit(self._config.login_url).hostname
-        try:
-            with factory() as playwright:  # type: ignore[attr-defined]
-                browser = playwright.chromium.launch(
-                    channel=self._browser_channel,
-                    headless=self._headless,
-                )
-                page = browser.new_page()
-                page.goto(
-                    self._config.login_url,
-                    wait_until="domcontentloaded",
-                    timeout=self._timeout_ms,
-                )
-                current_url = page.url
-                self._require_expected_host(current_url, expected_host)
-                self._reject_challenge(page.content(), current_url)
-
-                username = page.locator(self._config.username_selector)
-                if username.count() > 0:
-                    username.fill(login.username)
-                    page.locator(self._config.password_selector).fill(login.password)
-                    if self._config.company_selector is not None:
-                        company = page.locator(self._config.company_selector)
-                        if company.count() > 0:
-                            if login.company is None:
-                                raise InsoReadError(
-                                    "COMPANY_CREDENTIAL_UNAVAILABLE", current_url
-                                )
-                            company.fill(login.company)
-                    page.locator(self._config.login_button_selector).click()
-                    page.wait_for_timeout(self._settle_ms)
-                    current_url = page.url
-                    self._require_expected_host(current_url, expected_host)
-                    self._reject_challenge(page.content(), current_url)
-
-                page.get_by_text("1.业务询价", exact=True).click()
-                page.get_by_text("采购临时询价", exact=True).click()
-                page.locator(self._config.mpn_selector).fill(mpn.strip())
-                page.locator(self._config.query_button_selector).click()
-                page.wait_for_timeout(self._settle_ms)
-                current_url = page.url
-                self._require_expected_host(current_url, expected_host)
-                self._reject_challenge(page.content(), current_url)
-                rows = page.evaluate(
-                    _INSO_TABLE_READER,
-                    {
-                        "priceHeader": "供方未税价",
-                        "dateHeaders": list(self._config.date_headers),
-                    },
-                )
-                records = parse_inso_history_rows(rows)
-                capture = InsoHistoryCapture(
-                    records, current_url, datetime.now(UTC)
-                )
-                browser.close()
-                browser = None
-                return capture
-        except InsoReadError:
-            raise
-        except timeout_error as exc:
-            raise InsoReadError("BROWSER_TIMEOUT", current_url) from exc
-        except Exception as exc:
-            raise InsoReadError("BROWSER_FAILURE", current_url) from exc
-
-    @staticmethod
-    def _require_expected_host(url: str, expected_host: str | None) -> None:
-        if urlsplit(url).hostname != expected_host:
-            raise InsoReadError("UNEXPECTED_NAVIGATION_HOST", url)
-
-    @staticmethod
-    def _reject_challenge(html: str, url: str) -> None:
-        folded = html.casefold()
-        if any(
-            marker in folded
-            for marker in ("captcha", "验证码", "安全验证", "一次性密码", "otp")
-        ):
-            raise InsoReadError("INTERACTIVE_CHALLENGE_REQUIRED", url)
+# Form body captured from the live UI. The server ignores empty fields and
+# rejects the request when ``BillDateType`` / ``leftlike`` / ``CompanyType`` /
+# ``OwnerType`` are missing, so the body must be sent verbatim.
+_INSO_STOCK_VENQUOTE_FORM = (
+    "searchData[MainVendorID]=0"
+    "&searchData[DetailField]=PartNo"
+    "&searchData[DetailField_text]=%E5%9E%8B%E5%8F%B7"
+    "&searchData[VendorID2]="
+    "&searchData[CompanyName2]="
+    "&searchData[DetailFieldValue]={MPN}"
+    "&searchData[BillDateType]=all"
+    "&searchData[BillDateType_text]=%E6%89%80%E6%9C%89%E6%97%A5%E6%9C%9F"
+    "&searchData[VendorID]="
+    "&searchData[CompanyName]="
+    "&searchData[ImpValueF]="
+    "&searchData[PENO]="
+    "&searchData[StartBillDate]="
+    "&searchData[EndBillDate]="
+    "&searchData[leftlike]=on"
+    "&searchData[CompanyType]=CompanyID"
+    "&searchData[CompanyType_text]=%E6%8C%89%E5%85%AC%E5%8F%B8"
+    "&searchData[CompanyTypeValue]="
+    "&searchData[CompanyTypeValue_text]="
+    "&searchData[OwnerType]=OwnerID"
+    "&searchData[OwnerType_text]=%E6%8B%A5%E6%9C%89%E4%BA%BA"
+    "&searchData[OwnerTypeValue]="
+    "&searchData[OwnerTypeValue_text]="
+    "&searchData[BuysOwnerID]="
+    "&searchData[BuysOwnerID_text]="
+    "&searchData[GroupID]="
+    "&searchData[GroupID_text]="
+    "&searchData[VenContact]="
+    "&searchData[CusVenType]="
+    "&searchData[StartAmount]="
+    "&searchData[EndAmount]="
+    "&searchData_More[VendorID2]="
+    "&searchData_More[CompanyName2]="
+    "&searchData_More[OwnerTypeValue2]="
+    "&searchData_More[OwnerTypeValue2_text]="
+    "&searchData_More[CompanyTypeValue2]="
+    "&searchData_More[CompanyTypeValue2_text]="
+    "&formData="
+)
 
 
-_INSO_TABLE_READER = """
-({priceHeader, dateHeaders}) => {
-  const clean = (value) => (value || '').replace(/\\s+/g, ' ').trim();
-  for (const table of document.querySelectorAll('table')) {
-    const headers = Array.from(table.querySelectorAll('thead th')).map(
-      (cell) => clean(cell.innerText)
-    );
-    const priceIndex = headers.indexOf(priceHeader);
-    const dateIndex = headers.findIndex((header) => dateHeaders.includes(header));
-    if (priceIndex < 0) continue;
-    if (dateIndex < 0) throw new Error('INSO_DATE_COLUMN_MISSING');
-    return Array.from(table.querySelectorAll('tbody tr')).map((row) => {
-      const cells = Array.from(row.querySelectorAll('td'));
-      return {
-        observed_at: clean(cells[dateIndex]?.innerText),
-        supplier_untaxed_price: clean(cells[priceIndex]?.innerText),
-      };
-    });
-  }
-  throw new Error('INSO_HISTORY_TABLE_MISSING');
-}
-"""
+def _is_loopback_host(hostname: str) -> bool:
+    if hostname.casefold() == "localhost":
+        return True
+    try:
+        return ip_address(hostname).is_loopback
+    except ValueError:
+        return False
+
+
+def build_inso_stock_venquote_form(mpn: str) -> str:
+    return _INSO_STOCK_VENQUOTE_FORM.replace("{MPN}", mpn)
 
 
 def parse_inso_history_rows(rows: object) -> tuple[InsoHistoryRecord, ...]:
-    """Parse only date and 供方未税价 from an already-scoped result table."""
+    """Parse the ``rows`` array from a ``Stock_VenQuote`` JSON response.
 
+    Required fields per row: ``CreateTime`` (Asia/Shanghai string), ``InPrice``
+    (string Decimal), ``CurrencyID`` (``RMB`` / ``USD``). Rows whose
+    ``InPrice`` does not parse to a finite non-negative Decimal are skipped
+    (an empty price means the supplier did not actually quote).
+    """
     if not isinstance(rows, list):
         raise InsoReadError("HISTORY_ROWS_UNPARSEABLE")
     records: list[InsoHistoryRecord] = []
     for row in rows:
         if not isinstance(row, dict):
-            raise InsoReadError("HISTORY_ROWS_UNPARSEABLE")
-        raw_date = row.get("observed_at")
-        raw_price = row.get("supplier_untaxed_price")
+            continue
+        raw_date = row.get("CreateTime")
+        raw_price = row.get("InPrice")
+        raw_currency = row.get("CurrencyID")
         if not isinstance(raw_date, str) or not isinstance(raw_price, str):
-            raise InsoReadError("HISTORY_ROWS_UNPARSEABLE")
+            continue
+        if raw_currency not in {"RMB", "USD"}:
+            continue
         try:
-            price = Decimal(
-                raw_price.strip().replace(",", "").removeprefix("$").strip()
-            )
-        except InvalidOperation as exc:
-            raise InsoReadError("SUPPLIER_UNTAXED_PRICE_UNPARSEABLE") from exc
-        observed_at = _parse_inso_datetime(raw_date)
-        records.append(InsoHistoryRecord(price, observed_at))
+            price = Decimal(raw_price.strip().replace(",", ""))
+        except InvalidOperation:
+            continue
+        # InPrice == 0 means the supplier did not actually quote a price.
+        if not price.is_finite() or price <= 0:
+            continue
+        try:
+            observed = _parse_inso_datetime(raw_date)
+        except InsoReadError:
+            continue
+        records.append(InsoHistoryRecord(price, raw_currency, observed))
     return tuple(records)
 
 
@@ -292,6 +224,105 @@ def _parse_inso_datetime(value: str) -> datetime:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone(timedelta(hours=8)))
     return parsed.astimezone(UTC)
+
+
+class PlaywrightInsoReadOnlyBrowser:
+    """Concrete CDP-attached acquisition of Stock_VenQuote history."""
+
+    def __init__(
+        self,
+        config: InsoBrowserConfig,
+        *,
+        timeout_ms: int = 45_000,
+        settle_ms: int = 2_000,
+        playwright_factory: Callable[[], object] | None = None,
+    ) -> None:
+        self._config = config
+        self._timeout_ms = timeout_ms
+        self._settle_ms = settle_ms
+        self._playwright_factory = playwright_factory
+
+    def fetch_procurement_temporary_inquiry_history(
+        self, mpn: str, login: InsoLogin
+    ) -> InsoHistoryCapture:
+        del login  # CDP session is already authenticated by the Owner
+        factory = self._playwright_factory
+        timeout_error: type[Exception] = TimeoutError
+        if factory is None:
+            try:
+                from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+                from playwright.sync_api import sync_playwright
+            except ImportError as exc:
+                raise InsoReadError("PLAYWRIGHT_NOT_INSTALLED") from exc
+            factory = sync_playwright
+            timeout_error = PlaywrightTimeoutError
+
+        mpn_clean = mpn.strip()
+        url = (
+            f"{self._config.login_url.rstrip('/')}"
+            "/services/stock/select.ashx"
+            "?action=Stock_VenQuote"
+            f"&para={mpn_clean}"
+            "&DetailField=PartNo"
+            "&BillPage=Stock_VenQuote"
+            f"&pageindex=1&pagesize={self._config.pagesize}"
+        )
+        body = build_inso_stock_venquote_form(mpn_clean)
+
+        try:
+            with factory() as playwright:  # type: ignore[attr-defined]
+                browser = playwright.chromium.connect_over_cdp(
+                    self._config.cdp_url,
+                    timeout=self._timeout_ms,
+                )
+                try:
+                    pages: list[Any] = []
+                    for ctx in browser.contexts:
+                        pages.extend(ctx.pages)
+                    page = next((p for p in pages if not p.is_closed()), None)
+                    if page is None:
+                        raise InsoReadError("CDP_NO_AVAILABLE_PAGE", url)
+                    response = page.request.post(
+                        url,
+                        headers={
+                            "Content-Type": (
+                                "application/x-www-form-urlencoded; "
+                                "charset=UTF-8"
+                            ),
+                            "X-Requested-With": "XMLHttpRequest",
+                            "Referer": (
+                                f"{self._config.login_url.rstrip('/')}"
+                                "/skins/etaoerp//InnerEnquiry/YeWuXJ/List.aspx"
+                            ),
+                            "Accept": "application/json, text/javascript, */*; q=0.01",
+                        },
+                        data=body,
+                        timeout=self._timeout_ms,
+                    )
+                    text = response.text()
+                    if not text or text.strip() in {"{}", ""}:
+                        raise InsoReadError("AUTHENTICATED_READ_EMPTY", url)
+                    try:
+                        payload = json.loads(text)
+                    except json.JSONDecodeError as exc:
+                        raise InsoReadError("RESPONSE_NOT_JSON", url) from exc
+                    rows = payload.get("rows") if isinstance(payload, dict) else None
+                    if rows is None:
+                        raise InsoReadError("RESPONSE_ROWS_MISSING", url)
+                    records = parse_inso_history_rows(rows)
+                finally:
+                    try:
+                        browser.close()
+                    except (OSError, RuntimeError):
+                        pass
+        except InsoReadError:
+            raise
+        except timeout_error as exc:
+            raise InsoReadError("CDP_TIMEOUT", url) from exc
+        except Exception as exc:
+            raise InsoReadError("CDP_FAILURE", url) from exc
+
+        return InsoHistoryCapture(records, url, datetime.now(UTC))
 
 
 class InsoHistoryClient(Protocol):
@@ -343,10 +374,19 @@ class InsoHistoryAdapter:
         except InsoReadError as exc:
             return self._failure(target_mpn, now, exc.code, exc.source_url)
 
+        try:
+            quote = self._fx.get_quote()
+            if not isinstance(quote, UsdRmbQuote):
+                raise TypeError
+        except (RuntimeError, TypeError, ValueError):
+            return self._failure(
+                target_mpn, capture.captured_at, "FX_QUOTE_UNAVAILABLE", capture.url
+            )
+
         positive = tuple(
             record
             for record in capture.records
-            if record.supplier_untaxed_price_usd > 0 and record.observed_at <= now
+            if record.price > 0 and record.observed_at <= now
         )
         selected: InsoHistoryRecord | None = None
         selected_months = 1
@@ -357,7 +397,7 @@ class InsoHistoryAdapter:
                 selected = min(
                     pool,
                     key=lambda record: (
-                        record.supplier_untaxed_price_usd,
+                        self._to_normalized_rmb(record, quote),
                         record.observed_at,
                     ),
                 )
@@ -380,20 +420,12 @@ class InsoHistoryAdapter:
                 ResearchSource.INSO, SourceOutcome.NO_VALID_PRICE, evidence
             )
 
-        try:
-            quote = self._fx.get_quote()
-            if not isinstance(quote, UsdRmbQuote):
-                raise TypeError
-        except (RuntimeError, TypeError, ValueError):
-            return self._failure(
-                target_mpn, capture.captured_at, "FX_QUOTE_UNAVAILABLE", capture.url
-            )
-        normalized = selected.supplier_untaxed_price_usd * quote.rate
+        normalized = self._to_normalized_rmb(selected, quote)
         candidate = PriceCandidate(
             ResearchSource.INSO,
             target_mpn.strip(),
-            selected.supplier_untaxed_price_usd,
-            "USD",
+            selected.price,
+            selected.currency,
             normalized,
             capture.captured_at,
             capture.url,
@@ -411,12 +443,21 @@ class InsoHistoryAdapter:
                 EvidenceField("records_inspected", len(capture.records)),
                 EvidenceField("positive_records", len(positive)),
                 EvidenceField("selected_window_months", selected_months),
+                EvidenceField("selected_native_price", str(selected.price)),
+                EvidenceField("selected_currency", selected.currency),
                 EvidenceField("fx_rate", quote.rate),
             ),
         )
         return SourceResult(
             ResearchSource.INSO, SourceOutcome.SUCCESS, evidence, candidate
         )
+
+    @staticmethod
+    def _to_normalized_rmb(record: InsoHistoryRecord, quote: UsdRmbQuote) -> Decimal:
+        if record.currency == "RMB":
+            return record.price
+        # USD: multiply by RMB-per-USD rate
+        return record.price * quote.rate
 
     @staticmethod
     def _failure(

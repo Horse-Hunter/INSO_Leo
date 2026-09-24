@@ -13,6 +13,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
+from .cdp_pages import new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .source_contracts import (
     EvidenceField,
@@ -178,7 +179,7 @@ class LcscBrowserClient:
                 if urlsplit(current_url).hostname != "so.szlcsc.com":
                     raise LcscPageUnavailable("SEARCH_NAVIGATION_FAILED", current_url)
                 search_html = page.content()
-                _reject_lcsc_challenge(search_html, current_url)
+                _reject_lcsc_challenge(page.locator("body").inner_text(), current_url)
                 product, product_id = parse_lcsc_search_product(search_html, query)
 
                 product_url = f"https://item.szlcsc.com/{product_id}.html"
@@ -198,7 +199,7 @@ class LcscBrowserClient:
                         "PRODUCT_NAVIGATION_FAILED", current_url
                     )
                 product_html = page.content()
-                _reject_lcsc_challenge(product_html, current_url)
+                _reject_lcsc_challenge(page.locator("body").inner_text(), current_url)
                 page_product, page_product_id = _parse_lcsc_product_page(
                     product_html
                 )
@@ -222,6 +223,95 @@ class LcscBrowserClient:
             raise LcscPageUnavailable("BROWSER_TIMEOUT", current_url) from exc
         except Exception as exc:
             raise LcscPageUnavailable("BROWSER_FAILURE", current_url) from exc
+
+
+def parse_lcsc_cooperation_card(text: str, target_mpn: str) -> LcscProduct | None:
+    """Read a displayed cooperation-inventory card, including date and tiers."""
+
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines or price_source_mpn_match(target_mpn, lines[0]) is None:
+        return None
+    try:
+        stock_index = lines.index("库存")
+        observed_at = None
+        if "更新时间" in lines:
+            date_index = lines.index("更新时间")
+            observed_at = datetime.strptime(
+                lines[date_index + 1], "%Y年%m月%d日"
+            ).replace(tzinfo=_CHINA_TZ).astimezone(UTC)
+        stock = int(lines[stock_index + 1].replace(",", ""))
+        tiers = tuple(
+            LcscPriceTier(int(lines[index][:-1]), Decimal(lines[index + 1].lstrip("¥￥")), "CNY")
+            for index in range(len(lines) - 1)
+            if re.fullmatch(r"\d+\+", lines[index])
+            and re.fullmatch(r"[¥￥]\d+(?:\.\d+)?", lines[index + 1])
+        )
+    except (ValueError, IndexError, InvalidOperation) as exc:
+        raise LcscParseError("COOPERATION_CARD_UNPARSEABLE") from exc
+    if not tiers:
+        raise LcscParseError("COOPERATION_PRICE_MISSING")
+    return LcscProduct(lines[0], False, stock, tiers, observed_at)
+
+
+class CdpLcscClient:
+    """Read LCSC search results in an authenticated Owner Chrome session."""
+
+    def __init__(self, *, cdp_url: str = "http://127.0.0.1:9222", timeout_ms: int = 45_000) -> None:
+        if urlsplit(cdp_url).hostname not in {"127.0.0.1", "localhost", "::1"}:
+            raise ValueError("LCSC CDP endpoint must be loopback")
+        self._cdp_url = cdp_url
+        self._timeout_ms = timeout_ms
+
+    def fetch_product_page(self, mpn: str) -> LcscPage:
+        search_url = "https://so.szlcsc.com/global.html?" + urlencode({"k": mpn.strip()})
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError as exc:
+            raise LcscPageUnavailable("PLAYWRIGHT_NOT_INSTALLED") from exc
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.connect_over_cdp(
+                    self._cdp_url, timeout=self._timeout_ms
+                )
+                context = browser.contexts[0]
+                page = new_background_page(
+                    browser, context, timeout_ms=self._timeout_ms
+                )
+                try:
+                    page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
+                    page.wait_for_timeout(3_000)
+                    if urlsplit(page.url).hostname == "passport.jlc.com":
+                        # The existing JLC session can require a one-click return
+                        # to the search site. Never fill a login or challenge.
+                        body = page.locator("body").inner_text()
+                        enter = page.get_by_text("进入系统", exact=True)
+                        if "已登录账号" not in body or enter.count() != 1:
+                            raise LcscPageUnavailable("AUTHENTICATED_SESSION_REQUIRED", page.url)
+                        enter.click(timeout=self._timeout_ms)
+                        page.wait_for_timeout(3_000)
+                    if urlsplit(page.url).hostname != "so.szlcsc.com":
+                        raise LcscPageUnavailable("SEARCH_NAVIGATION_FAILED", page.url)
+                    body = page.locator("body").inner_text()
+                    _reject_lcsc_challenge(body, page.url)
+                    if page.locator("#login:visible").count():
+                        raise LcscPageUnavailable("AUTHENTICATED_SESSION_REQUIRED", page.url)
+                    cards = page.locator('section[class*="OverseasCard"]')
+                    for _ in range(10):
+                        if cards.count():
+                            break
+                        page.wait_for_timeout(1_000)
+                    for card in cards.all():
+                        product = parse_lcsc_cooperation_card(card.inner_text(), mpn)
+                        if product is not None:
+                            return LcscPage("", page.url, datetime.now(UTC), product)
+                    product, _product_id = parse_lcsc_search_product(page.content(), mpn)
+                    return LcscPage("", page.url, datetime.now(UTC), product)
+                finally:
+                    page.close()
+        except LcscError:
+            raise
+        except Exception as exc:
+            raise LcscPageUnavailable("BROWSER_FAILURE", search_url) from exc
 
 
 _NEXT_DATA = re.compile(
@@ -359,7 +449,9 @@ def parse_lcsc_search_product(
             raise LcscParseError("PRICE_TIERS_UNPARSEABLE") from exc
         if stock is not None and (isinstance(stock, bool) or not isinstance(stock, int)):
             raise LcscParseError("STOCK_UNPARSEABLE")
-        suffix_length = len(mpn.strip()) - len(target_mpn.strip())
+        suffix_length = len(re.sub(r"[\s-]", "", mpn)) - len(
+            re.sub(r"[\s-]", "", target_mpn)
+        )
         product = LcscProduct(
             mpn,
             bool(vo.get("isPreSale", False)),
@@ -382,8 +474,8 @@ def parse_lcsc_search_product(
     return product, product_id
 
 
-def _reject_lcsc_challenge(html: str, url: str) -> None:
-    folded = html.casefold()
+def _reject_lcsc_challenge(visible_text: str, url: str) -> None:
+    folded = visible_text.casefold()
     if any(
         marker in folded
         for marker in ("access denied", "captcha", "安全验证", "访问过于频繁")

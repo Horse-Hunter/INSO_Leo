@@ -7,6 +7,7 @@ lifetimes so the GUI can shut down without leaking processes.
 from __future__ import annotations
 
 import logging
+import queue
 import sys
 import threading
 from collections import deque
@@ -15,7 +16,33 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from .contracts import LogEntry
+from .contracts import LogEntry, RunSession
+
+
+@dataclass(frozen=True, slots=True)
+class BackendEvent:
+    """Immutable backend notification queued for main-thread UI handling."""
+
+    kind: str
+    payload: RunSession | LogEntry
+
+
+class MainThreadEventQueue:
+    """Thread-safe handoff from backend callbacks to the Tk event loop."""
+
+    def __init__(self) -> None:
+        self._queue: queue.SimpleQueue[BackendEvent] = queue.SimpleQueue()
+
+    def publish(self, event: BackendEvent) -> None:
+        self._queue.put(event)
+
+    def drain(self) -> tuple[BackendEvent, ...]:
+        events: list[BackendEvent] = []
+        while True:
+            try:
+                events.append(self._queue.get_nowait())
+            except queue.Empty:
+                return tuple(events)
 
 
 class RingBufferLog(logging.Handler):
@@ -146,7 +173,9 @@ def get_process_memory_mb() -> float:
         PROCESS_VM_READ = 0x0010
 
         pid = kernel32.GetCurrentProcessId()
-        h = kernel32.OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, False, pid)
+        h = kernel32.OpenProcess(
+            PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, False, pid
+        )
         if not h:
             return 0.0
         try:

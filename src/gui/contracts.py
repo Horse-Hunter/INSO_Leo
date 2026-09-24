@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 from typing import Any
 
@@ -33,14 +34,13 @@ class OrderStatus(str, Enum):
 
 
 @dataclass(frozen=True, slots=True)
-class PriceEvidence:
-    """One price/stock observation from a single source."""
+class SourceDetail:
+    """Display-only value reported for one source; GUI applies no business rules."""
 
     source: str
-    unit_price: float | None
-    stock: int | None
-    url: str | None = None
+    display_value: str
     remark: str | None = None
+    url: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,11 +51,11 @@ class Order:
     model: str
     brand: str | None
     quantity: int
-    stock: int
-    min_reference_price: float | None
-    total_price: float | None
+    stock_label: str
+    min_reference_price: Decimal | None
+    total_price: Decimal | None
     status: OrderStatus
-    evidence: tuple[PriceEvidence, ...] = ()
+    sources: tuple[SourceDetail, ...] = ()
     remark: str = ""
     run_id: str = ""
 

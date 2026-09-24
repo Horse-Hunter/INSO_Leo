@@ -1,29 +1,9 @@
 # 模块注册表
 
-本文件是正式模块、Module Chat 和 Module Coding Executor 名称的唯一来源，只定义职责与依赖方向，不记录内部算法。
+软件模块化与 AI 团队结构无关。本文件只登记当前实际模块的职责、Public Contract 入口和依赖方向；普通实现变化由 Main Programmer 维护，模块职责或跨模块 Public Contract 边界变化升级 CEO。不提前建立无用模块。
 
-## 注册表
+| module_id | display_name | code_path | responsibility | Public Contract / module doc | allowed dependencies | forbidden dependencies | status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `<MODULE_ID>` | `<DISPLAY_NAME>` | `src/<MODULE_ID>/` | `<ONE_SENTENCE>` | `docs/modules/<MODULE_DOC>.md` | `<ALLOWED>` | `<FORBIDDEN>` | `<CURRENT_OR_FUTURE>` |
 
-复制下方行，为每个正式模块填写一次：
-
-| module_id | display_name | module_chat_role | module_executor_role | code_path | Public Contract / module doc |
-| --- | --- | --- | --- | --- | --- |
-| `<MODULE_ID>` | `<DISPLAY_NAME>` | `<MODULE_CHAT_ROLE 或 当前不设常驻角色>` | `<MODULE_EXECUTOR_ROLE 或按 Task 分配>` | `src/<MODULE_ID>/` | `docs/modules/<MODULE_DOC>.md` |
-
-测试路径建议按 `tests/<MODULE_ID>/` 镜像模块归属。存在代码模块不等于必须创建常驻 AI 机构。
-
-Executor 是逻辑岗位，不绑定厂商、产品或模型；实际工具可替换，不改变本注册表。
-
-## 边界地图
-
-| module_id | responsibility | allowed dependencies | forbidden dependencies |
-| --- | --- | --- | --- |
-| `<MODULE_ID>` | `<ONE_SENTENCE_RESPONSIBILITY>` | `<ALLOWED>` | `<FORBIDDEN>` |
-
-## 依赖方向
-
-```text
-<CALLER_MODULE> -> <CALLEE_PUBLIC_CONTRACT>
-```
-
-跨模块调用只使用 Public Contract，不导入私有实现。注册、职责、Contract 或依赖变化标记 `architecture_impact: REQUIRED`。
+测试建议放在 `tests/<MODULE_ID>/`。跨模块调用只用 Public Contract，不导入私有实现。若项目无需某列，可简化表格；职责和依赖事实须保持可查。

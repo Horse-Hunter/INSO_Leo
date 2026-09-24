@@ -16,7 +16,13 @@ def test_ring_buffer_respects_capacity():
 
     for i in range(10):
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0, msg=f"msg-{i}", args=(), exc_info=None
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg=f"msg-{i}",
+            args=(),
+            exc_info=None,
         )
         buf.emit(record)
 
@@ -36,7 +42,13 @@ def test_ring_buffer_listener_receives_entries():
 
     buf.add_listener(listener)
     record = logging.LogRecord(
-        name="test", level=logging.INFO, pathname="", lineno=0, msg="hello", args=(), exc_info=None
+        name="test",
+        level=logging.INFO,
+        pathname="",
+        lineno=0,
+        msg="hello",
+        args=(),
+        exc_info=None,
     )
     buf.emit(record)
 

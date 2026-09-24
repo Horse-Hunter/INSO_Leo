@@ -22,6 +22,20 @@ def test_ecb_provider_uses_eur_bridge_with_decimal() -> None:
     assert quote.source_label == "ECB daily reference rates 2026-09-21 (EUR bridge)"
 
 
+def test_hkd_and_usd_cross_rates_must_share_the_same_ecb_date() -> None:
+    usd = HEADER + "USD,2026-09-21,1.2\nCNY,2026-09-21,8.4\n"
+    hkd = HEADER + "HKD,2026-09-21,9.2\nCNY,2026-09-21,8.4\n"
+    provider = EcbDailyUsdRmbProvider(lambda: usd, fetch_hkd_csv=lambda: hkd)
+    provider.get_quote()
+    assert provider.get_hkd_rmb_rate() == Decimal("8.4") / Decimal("9.2")
+
+    hkd = HEADER + "HKD,2026-09-20,9.2\nCNY,2026-09-20,8.4\n"
+    provider = EcbDailyUsdRmbProvider(lambda: usd, fetch_hkd_csv=lambda: hkd)
+    provider.get_quote()
+    with pytest.raises(EcbFxError, match="ECB_OBSERVATION_DATE_MISMATCH"):
+        provider.get_hkd_rmb_rate()
+
+
 @pytest.mark.parametrize(
     ("body", "code"),
     [

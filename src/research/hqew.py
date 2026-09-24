@@ -11,6 +11,7 @@ from ipaddress import ip_address
 from typing import Protocol
 from urllib.parse import quote, urlsplit
 
+from .cdp_pages import new_background_page
 from .source_contracts import (
     EvidenceField,
     MpnMatchKind,
@@ -154,7 +155,9 @@ class CdpHqewClient:
                     elif hqew_pages:
                         page = hqew_pages[0]
                     else:
-                        page = context.new_page()
+                        page = new_background_page(
+                            browser, context, timeout_ms=self._timeout_ms
+                        )
                     page.goto(
                         target_url,
                         wait_until="domcontentloaded",
@@ -175,7 +178,10 @@ class CdpHqewClient:
                     raise HqewPageUnavailable(
                         "RESULT_NAVIGATION_FAILED", current_url
                     )
-                return HqewPage(html, current_url, datetime.now(UTC))
+                captured_at = datetime.now(UTC)
+                return HqewPage(
+                    html, current_url, captured_at
+                )
         except HqewPageUnavailable:
             raise
         except timeout_error as error:
@@ -185,9 +191,10 @@ class CdpHqewClient:
 
 
 class _OfferParser(HTMLParser):
-    def __init__(self) -> None:
+    def __init__(self, reference_at: datetime) -> None:
         super().__init__(convert_charrefs=True)
         self.offers: list[HqewOffer] = []
+        self._reference_at = reference_at
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag.casefold() != "input":
@@ -206,7 +213,7 @@ class _OfferParser(HTMLParser):
         except InvalidOperation as exc:
             raise HqewParseError("PRICE_UNPARSEABLE") from exc
         try:
-            observed_at = _parse_optional_date(raw_date)
+            observed_at = _parse_optional_date(raw_date, self._reference_at)
             self.offers.append(HqewOffer(mpn, price, observed_at))
         except ValueError as exc:
             raise HqewParseError("PRICE_INVALID") from exc
@@ -215,15 +222,42 @@ class _OfferParser(HTMLParser):
 _CHINA_TZ = timezone(timedelta(hours=8))
 
 
-def _parse_optional_date(value: str | None) -> datetime | None:
+def _parse_optional_date(
+    value: str | None, reference_at: datetime
+) -> datetime | None:
     if value is None or not value.strip():
         return None
     raw = value.strip()
+    # Full date/time formats
     for pattern in ("%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S", "%Y-%m-%d"):
         try:
-            return datetime.strptime(raw, pattern).replace(tzinfo=_CHINA_TZ).astimezone(UTC)
+            return (
+                datetime.strptime(raw, pattern)
+                .replace(tzinfo=_CHINA_TZ)
+                .astimezone(UTC)
+            )
         except ValueError:
             continue
+    # Natural-language approximations relative to capture time
+    lowered = raw.casefold()
+    if lowered in {"今天", "今日"}:
+        return reference_at.astimezone(_CHINA_TZ).astimezone(UTC)
+    if lowered == "昨天":
+        approx = reference_at - timedelta(days=1)
+        return approx.astimezone(_CHINA_TZ).astimezone(UTC)
+    if lowered == "前天":
+        approx = reference_at - timedelta(days=2)
+        return approx.astimezone(_CHINA_TZ).astimezone(UTC)
+    if lowered in {"1周内", "一周内", "7天内", "最近一周"}:
+        approx = reference_at - timedelta(days=6)
+        return approx.astimezone(_CHINA_TZ).astimezone(UTC)
+    # Year-month only: treat as the first day of that month in China time
+    try:
+        year, month = map(int, raw.split("-"))
+        if 1 <= month <= 12:
+            return datetime(year, month, 1, tzinfo=_CHINA_TZ).astimezone(UTC)
+    except ValueError:
+        pass
     try:
         parsed = datetime.fromisoformat(raw)
     except ValueError as exc:
@@ -233,13 +267,20 @@ def _parse_optional_date(value: str | None) -> datetime | None:
     return parsed.astimezone(UTC)
 
 
-def parse_hqew_offers(html: str) -> tuple[HqewOffer, ...]:
+def parse_hqew_offers(
+    html: str, *, reference_at: datetime | None = None
+) -> tuple[HqewOffer, ...]:
     if "安全验证" in html or "captcha-reset" in html:
         raise HqewPageUnavailable("INTERACTIVE_CHALLENGE_REQUIRED")
-    parser = _OfferParser()
+    parser = _OfferParser(reference_at or datetime.now(UTC))
     parser.feed(html)
     if not parser.offers:
-        if "暂无商家报价" in html:
+        # HQEW renders empty-result pages with either a merchant-focused message
+        # or a generic "no data" / "no result" block.
+        if any(
+            marker in html
+            for marker in ("暂无商家报价", "暂无数据", "无结果", "抱歉：您搜索的")
+        ):
             return ()
         raise HqewParseError("RESULT_ROWS_MISSING")
     return tuple(parser.offers)
@@ -257,7 +298,7 @@ class HqewAdapter:
         now = self._clock()
         try:
             page = self._client.fetch_first_page(target_mpn)
-            offers = parse_hqew_offers(page.html)
+            offers = parse_hqew_offers(page.html, reference_at=page.captured_at)
         except HqewError as exc:
             return self._failure(target_mpn, exc)
         matched = [

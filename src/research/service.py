@@ -5,11 +5,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from .aggregation import PriceAggregation, aggregate_price_results
+from .aggregation import (
+    PriceAggregation,
+    _failure_code,
+    _failure_reason,
+    aggregate_price_results,
+)
 from .contracts import ResearchInput, ResearchReasonCode, ResearchResult, ResearchStatus
 from .excel_output import ExcelOutputError, ResearchExcelOutput
 from .icnet import IcNetResult
-from .source_contracts import ResearchSource, SourceResult, format_source_result
+from .source_contracts import (
+    ResearchSource,
+    SourceOutcome,
+    SourceResult,
+    format_source_result,
+)
 
 
 class IcNetSearcher(Protocol):
@@ -64,6 +74,11 @@ class ResearchService:
             aggregation.reason_code,
             aggregation.remarks,
         )
+        if icnet.source_result.outcome is SourceOutcome.SOURCE_UNAVAILABLE:
+            icnet_remark = (
+                f"IC.net：{_failure_reason(_failure_code(icnet.source_result))}"
+            )
+            remarks = "；".join(part for part in (remarks, icnet_remark) if part)
         source_values = {
             result.source: format_source_result(result) for result in price_results
         }

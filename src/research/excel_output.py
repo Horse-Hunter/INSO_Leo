@@ -96,7 +96,9 @@ def importance_display_value(importance_raw: str | None) -> str | None:
 
 
 def _decimal_text(value: Decimal | None) -> str | None:
-    return None if value is None else format(value, "f")
+    from .source_contracts import money_text
+
+    return None if value is None else money_text(value)
 
 
 class ResearchExcelOutput:

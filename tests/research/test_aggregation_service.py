@@ -230,6 +230,26 @@ def _service(path: Path, values: tuple[SourceResult, ...]) -> ResearchService:
     )
 
 
+def test_icnet_challenge_is_visible_in_excel_remarks(tmp_path: Path) -> None:
+    class ChallengedIcNet:
+        def search(
+            self, target_mpn: str, input_brand: str | None, customer_quantity: int
+        ) -> IcNetResult:
+            source = _result(
+                ResearchSource.IC_NET,
+                SourceOutcome.SOURCE_UNAVAILABLE,
+                failure_code="INTERACTIVE_CHALLENGE_REQUIRED",
+            )
+            return IcNetResult(source)
+
+    path = tmp_path / "price.xlsx"
+    service = _service(path, _complete())
+    service._icnet = ChallengedIcNet()
+    result = service.execute(ResearchInput("inq_challenge", "ABC", None, 10, "A"))
+    assert result.remarks == "疑似客户报错型号；IC.net：需要人工验证"
+    assert load_workbook(path).active["M2"].value == result.remarks
+
+
 def test_service_writes_13_column_idempotent_full_snapshot(tmp_path: Path) -> None:
     path = tmp_path / "调研价格.xlsx"
     sources = _complete(

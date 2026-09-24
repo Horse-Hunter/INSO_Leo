@@ -5,7 +5,7 @@ from __future__ import annotations
 from calendar import monthrange
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
 
 
@@ -52,18 +52,18 @@ def is_strict_mpn_match(target_mpn: str, observed_mpn: str) -> bool:
 def price_source_mpn_match(
     target_mpn: str, observed_mpn: str
 ) -> MpnMatchKind | None:
-    """Match an exact MPN or the full MPN plus a <=5 character tail suffix."""
+    """Ignore hyphens/whitespace/case, then allow a tail of at most 6 chars."""
 
-    target = target_mpn.strip()
-    observed = observed_mpn.strip()
-    folded_target = target.casefold()
-    folded_observed = observed.casefold()
-    if folded_observed == folded_target:
+    target = "".join(char for char in target_mpn if char != "-" and not char.isspace()).casefold()
+    observed = "".join(char for char in observed_mpn if char != "-" and not char.isspace()).casefold()
+    if not target or not observed:
+        return None
+    if observed == target:
         return MpnMatchKind.EXACT
-    if not folded_observed.startswith(folded_target):
+    if not observed.startswith(target):
         return None
     suffix_length = len(observed) - len(target)
-    return MpnMatchKind.SUFFIX if 1 <= suffix_length <= 5 else None
+    return MpnMatchKind.SUFFIX if 1 <= suffix_length <= 6 else None
 
 
 def calendar_month_cutoff(now: datetime, months: int = 1) -> datetime:
@@ -160,7 +160,12 @@ class SourceResult:
 
 
 def money_text(value: Decimal) -> str:
-    return format(value, "f")
+    """Render a price to two decimal places without changing calculation values."""
+    capped = value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    text = format(capped, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text if text else "0"
 
 
 def format_source_result(result: SourceResult) -> str:

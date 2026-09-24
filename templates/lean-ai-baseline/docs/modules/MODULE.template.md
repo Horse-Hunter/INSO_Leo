@@ -16,7 +16,7 @@
 
 - 负责：`<OWNED_RESPONSIBILITY>`
 - 不负责：`<NON_RESPONSIBILITY>`
-- 依赖方向以 `MODULE_INDEX.md` 为准；安全规则以 `BOUNDARIES.md` 为准。
+- 依赖方向以 `../MODULE_INDEX.md` 为准；安全规则以 `../SAFETY.md` 为准。
 
 ## 外部读写
 
@@ -28,4 +28,4 @@
 
 - `<MODULE_LEVEL_UNKNOWN>`
 
-不要在本文件保存 selector、XPath、临时 workaround、函数实现细节、测试过程、Task 历史或其他文档已拥有的规则。
+只保留当前仍成立的业务事实和 Public Contract；不要保存 selector、XPath、临时 workaround、函数实现细节、测试过程或历史阶段记录。

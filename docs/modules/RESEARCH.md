@@ -12,7 +12,7 @@
 
 IC.net 只负责 Brand 与货量，不是价格源。五个价格源为 Findchips、HQEW、LCSC、Bom.Ai 和 INSO；INSO 在 Research 中仅作 read-only 历史市场价格查询。
 
-Findchips、HQEW、LCSC、Bom.Ai 的型号只接受：完全匹配；或网站型号等于完整搜索型号加不超过 5 个字符的尾部后缀。禁止内部/前缀变化或猜测变体；使用后缀型号时在对应来源单元格附实际网站型号，完全匹配不标。
+Findchips、HQEW、LCSC、Bom.Ai 的 target/observed 型号比较前去除 `-` 和所有空白并忽略大小写；规范化后只接受完全匹配，或网站型号等于完整搜索型号再加最多 6 个尾随字符。禁止内部/前缀变化或猜测变体；使用后缀型号时在对应来源单元格附实际网站型号，完全匹配不标。IC.net 继续使用下述严格匹配。
 
 上述四个网页价格源有日期字段时只使用最近 1 个自然月；无日期字段时不做时间过滤。自然月边界为上月同日、同一 wall-clock time，遇短月钳制到月末。INSO 使用下述 1/2/3 月阶梯。
 
@@ -24,18 +24,19 @@ Findchips、HQEW、LCSC、Bom.Ai 的型号只接受：完全匹配；或网站�
 
 - 用于 Brand 或货量的每一行仍必须满足 STRICT MPN MATCH：只去除首尾空白并忽略大小写，不允许内部空白、标点、前后缀或封装代码变化。
 - 非空输入 Brand 原样保留；否则最多检查第一页前 20 行，按出现频率、英文优先、较短英文名依次选择 manufacturer；仍并列则 unresolved，不翻译、映射或编造。
-- 汇总第一页严格匹配且带 SSCP 或 ICCP 的库存；同一行两种认证只计一次，Brand 不过滤库存。总量 `<= 3 × quantity` 显示 `货少`，否则 `货多`；应计但无法解析时为技术失败，不得当作零。
+- 汇总第一页严格匹配且实际认证标识区域带 SSCP 或 ICCP 的库存；供应商说明中的文字不算标识。同一行两种认证只计一次，Brand 不过滤库存。没有合格库存或严格型号行时显示 `货少`；总量 `<= 3 × quantity` 显示 `货少`，否则 `货多`。访问或解析失败时显示 `待验证` 并在备注保留技术失败，不得当作零。
 - 登录凭据只通过 Credential Provider 获取，用于批准的 read-only session。
 
 ### 五个价格源
 
-- **Findchips：**`quantity` 不参与选价；每条报价取已展示 tiers 的最低 unit price。分别保留有库存、无库存最低价；USD 转 RMB。
+- **Findchips：**`quantity` 不参与选价；以页面逐档可见价格和币种为准，避免隐藏属性与显示币种不一致；每个 tier 先按对应的 ECB 参考汇率换算 RMB，再分别选有库存、无库存最低价；原始币种、汇率和标准化人民币价保留在 evidence。
 - **HQEW：**不使用页面上方“市场参考价”；只读允许型号匹配的历史市场报价，取最近 1 个自然月最低价，不区分库存。
 - **LCSC：**`quantity` 不参与选价；取已展示最低 unit price，分别保留有库存、无库存最低价。RMB/CNY 直接使用，USD 转 RMB。
 - **Bom.Ai：**只读网页下方目标型号报价区域，不混入页面上方其他型号；取最近 1 个自然月最低价，不区分库存。RMB 直接使用，USD 转 RMB 后比较；登录能力由 Credential Provider 注入。
 - **INSO：**路径为“业务询价 → 采购临时询价 → 输入型号 → 查询”，只读该区域下方历史询价结果，使用正数“供方未税价”；零为无有效报价。USD 转 RMB，不判断库存，也不做型号匹配过滤。先取 1 个自然月最低价；无有效价再依次扩大到 2、3 个自然月，来源单元格分别标 `（两个月）`、`（三个月）`；3 个月仍无正数则无结果。2/3 月价格正常参与聚合。
 
 USD/RMB 使用 ECB 同日 daily reference：`CNY per USD = CNY per EUR / USD per EUR`。缺失、重复、日期不一致、非正数或非有限值均 fail closed；不得 fallback 或隐藏舍入。
+HKD/RMB 同样使用 ECB 同日 daily reference：`CNY per HKD = CNY per EUR / HKD per EUR`；价格计算保持原始 Decimal 精度，仅业务展示保留两位小数。
 
 ## 聚合与 Status
 
@@ -63,4 +64,4 @@ USD/RMB 使用 ECB 同日 daily reference：`CNY per USD = CNY per EUR / USD per
 
 Research 不访问 Google Sheets、不调度流程、不执行主动 INSO 采购、不计算 Quotation。它可直接使用已批准的 INSO read-only Research adapter，但不依赖 `inso` 模块；本地 Excel 是 V1 唯一写入。
 
-仍为 `UNKNOWN`：完整 reason-code catalog、额外输入校验、Excel 展示精度/保留/并发锁策略，以及 Future INSO Module 的重要性规则。Selector、XPath、session、workaround 和 Task 历史不属于长期 Contract。
+仍为 `UNKNOWN`：完整 reason-code catalog、额外输入校验、Excel 保留/并发锁策略，以及 Future INSO Module 的重要性规则。Selector、XPath、session、workaround 和 Task 历史不属于长期 Contract。

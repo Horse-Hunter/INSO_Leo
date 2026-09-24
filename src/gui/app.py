@@ -7,15 +7,17 @@ updates its widgets from the main thread via tkinter.after.
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import datetime, timezone
+from decimal import Decimal
 from tkinter import ttk
 from typing import Any
 
-import customtkinter as ctk
-
 from .contracts import GuiBackend, LogEntry, Order, RunSession, RunState
+from .resources import BackendEvent, MainThreadEventQueue
 
 logger = logging.getLogger(__name__)
+ctk: Any
 
 # Colour palette
 _BG = "#121212"
@@ -58,9 +60,17 @@ class InsoDashboardApp:
     """Single-page INSO_V1.0 operator dashboard."""
 
     def __init__(self, backend: GuiBackend) -> None:
+        global ctk
+        import customtkinter as ctk
+
         self._backend = backend
         self._status: RunSession = backend.get_status()
         self._selected_order: Order | None = None
+        self._displayed_orders: dict[str, Order] = {}
+        self._events = MainThreadEventQueue()
+        self._main_thread_id = threading.get_ident()
+        self._after_id: str | None = None
+        self._closing = False
 
         self._root = ctk.CTk()
         self._root.title("INSO_V1.0")
@@ -99,7 +109,9 @@ class InsoDashboardApp:
             row=1, column=0, columnspan=2, sticky="nsew", pady=(12, 0)
         )
 
-        self._build_health_bar().grid(row=2, column=0, sticky="ew", padx=24, pady=(12, 24))
+        self._build_health_bar().grid(
+            row=2, column=0, sticky="ew", padx=24, pady=(12, 24)
+        )
 
     def _build_header(self) -> ctk.CTkFrame:
         frame = ctk.CTkFrame(self._root, fg_color="transparent")
@@ -239,7 +251,15 @@ class InsoDashboardApp:
         table_card.grid_rowconfigure(0, weight=1)
         table_card.grid_columnconfigure(0, weight=1)
 
-        columns = ("model", "brand", "quantity", "stock", "min_price", "total", "status")
+        columns = (
+            "model",
+            "brand",
+            "quantity",
+            "stock",
+            "min_price",
+            "total",
+            "status",
+        )
         self._tree = ttk.Treeview(
             table_card,
             columns=columns,
@@ -310,7 +330,9 @@ class InsoDashboardApp:
         detail_title.grid(row=0, column=0, sticky="w", padx=16, pady=(16, 8))
 
         self._detail_container = ctk.CTkFrame(detail_card, fg_color="transparent")
-        self._detail_container.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 16))
+        self._detail_container.grid(
+            row=1, column=0, sticky="nsew", padx=16, pady=(0, 16)
+        )
         self._detail_empty = ctk.CTkLabel(
             self._detail_container,
             text="点击左侧订单查看详情",
@@ -359,18 +381,32 @@ class InsoDashboardApp:
 
     def _wire_backend(self) -> None:
         def on_status(status: RunSession) -> None:
-            self._root.after(0, lambda: self._update_status(status))
+            self._events.publish(BackendEvent("status", status))
 
         def on_log(entry: LogEntry) -> None:
-            self._root.after(0, lambda: self._append_log(entry))
+            self._events.publish(BackendEvent("log", entry))
 
+        self._status_callback = on_status
+        self._log_callback = on_log
         self._backend.on_status_change(on_status)
         self._backend.on_log(on_log)
 
     def _schedule_tick(self) -> None:
-        """Slow background poll to keep time labels fresh."""
+        """Drain backend events and refresh changing dashboard state on Tk thread."""
+        if self._closing:
+            return
+        self._assert_main_thread()
+        for event in self._events.drain():
+            if event.kind == "status":
+                self._update_status(event.payload)
+            elif event.kind == "log":
+                self._append_log(event.payload)
         self._update_status(self._backend.get_status())
-        self._root.after(1000, self._schedule_tick)
+        self._after_id = self._root.after(1000, self._schedule_tick)
+
+    def _assert_main_thread(self) -> None:
+        if threading.get_ident() != self._main_thread_id:
+            raise RuntimeError("Tk UI updates must run on the main thread")
 
     def _on_action(self) -> None:
         if self._status.state == RunState.STOPPED:
@@ -381,6 +417,7 @@ class InsoDashboardApp:
             logger.debug("忽略操作：当前状态 %s", self._status.state.value)
 
     def _update_status(self, status: RunSession) -> None:
+        self._assert_main_thread()
         self._status = status
 
         # Header badge
@@ -416,7 +453,9 @@ class InsoDashboardApp:
         self._run_info_labels["已完成"].configure(text=str(status.completed))
         self._run_info_labels["正在处理"].configure(text=str(status.in_progress))
         self._run_info_labels["待处理"].configure(text=str(status.pending))
-        self._run_info_labels["下次轮询时间"].configure(text=_format_time(status.next_poll_at))
+        self._run_info_labels["下次轮询时间"].configure(
+            text=_format_time(status.next_poll_at)
+        )
 
         # Refresh results
         self._refresh_results()
@@ -429,36 +468,49 @@ class InsoDashboardApp:
                 lbl.configure(text=item.status, text_color=_status_color(item.status))
 
     def _refresh_results(self) -> None:
-        orders = self._backend.get_current_run_results()
-        # Avoid full redraw when possible, but keep it simple for V1.
-        for item in self._tree.get_children():
-            self._tree.delete(item)
-        for order in orders:
-            self._tree.insert(
-                "",
-                "end",
-                iid=order.inquiry_id,
-                values=(
-                    order.model,
-                    order.brand or "--",
-                    order.quantity,
-                    order.stock,
-                    f"¥{order.min_reference_price:.2f}" if order.min_reference_price else "--",
-                    f"¥{order.total_price:.2f}" if order.total_price else "--",
-                    order.status.value,
-                ),
-                tags=(order.status.value,),
+        self._assert_main_thread()
+        orders = {
+            order.inquiry_id: order for order in self._backend.get_current_run_results()
+        }
+        for inquiry_id in self._displayed_orders.keys() - orders.keys():
+            if self._tree.exists(inquiry_id):
+                self._tree.delete(inquiry_id)
+        for order in orders.values():
+            if self._displayed_orders.get(order.inquiry_id) == order:
+                continue
+            values = (
+                order.model,
+                order.brand or "--",
+                order.quantity,
+                order.stock_label,
+                self._format_money(order.min_reference_price),
+                self._format_money(order.total_price),
+                order.status.value,
             )
+            if self._tree.exists(order.inquiry_id):
+                self._tree.item(
+                    order.inquiry_id, values=values, tags=(order.status.value,)
+                )
+            else:
+                self._tree.insert(
+                    "",
+                    "end",
+                    iid=order.inquiry_id,
+                    values=values,
+                    tags=(order.status.value,),
+                )
+        self._displayed_orders = orders
+
+    @staticmethod
+    def _format_money(value: Decimal | None) -> str:
+        return f"¥{value:.2f}" if value is not None else "--"
 
     def _on_row_select(self, _event: Any) -> None:
         selection = self._tree.selection()
         if not selection:
             return
         inquiry_id = selection[0]
-        order = next(
-            (o for o in self._backend.get_current_run_results() if o.inquiry_id == inquiry_id),
-            None,
-        )
+        order = self._displayed_orders.get(inquiry_id)
         if order is None:
             return
         self._selected_order = order
@@ -484,10 +536,10 @@ class InsoDashboardApp:
         )
         sub.pack(anchor="w", pady=(0, 12))
 
-        for ev in order.evidence:
+        for ev in order.sources:
             row = ctk.CTkFrame(self._detail_container, fg_color="transparent")
             row.pack(fill="x", pady=4)
-            source_color = _GREEN if ev.unit_price is not None else _YELLOW
+            source_color = _GREEN if ev.display_value != "无结果" else _YELLOW
             name = ctk.CTkLabel(
                 row,
                 text=ev.source,
@@ -496,11 +548,9 @@ class InsoDashboardApp:
                 width=80,
             )
             name.pack(side="left")
-            price_text = (
-                f"¥{ev.unit_price:.2f}"
-                if ev.unit_price is not None
-                else (ev.remark or "无报价")
-            )
+            price_text = ev.display_value
+            if ev.remark:
+                price_text = f"{price_text}（{ev.remark}）"
             price = ctk.CTkLabel(
                 row,
                 text=price_text,
@@ -508,14 +558,6 @@ class InsoDashboardApp:
                 text_color=_TEXT,
             )
             price.pack(side="left", padx=(8, 0))
-            stock = ctk.CTkLabel(
-                row,
-                text=f"库存 {ev.stock}" if ev.stock is not None else "",
-                font=_FONT_SMALL,
-                text_color=_TEXT_SECONDARY,
-            )
-            stock.pack(side="right")
-
         if order.remark:
             remark = ctk.CTkLabel(
                 self._detail_container,
@@ -535,6 +577,17 @@ class InsoDashboardApp:
         self._root.mainloop()
 
     def _on_close(self) -> None:
+        if self._closing:
+            return
+        self._closing = True
+        if self._after_id is not None:
+            try:
+                self._root.after_cancel(self._after_id)
+            except Exception as exc:  # noqa: BLE001 - root may already be closing
+                logger.debug("Could not cancel Tk callback during close: %s", exc)
+            self._after_id = None
+        self._backend.on_status_change(None)
+        self._backend.on_log(None)
         try:
             self._backend.shutdown()
         except Exception as exc:  # noqa: BLE001 - defensive close path
