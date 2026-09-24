@@ -1,21 +1,20 @@
 # 模块注册表
 
-本文件是正式模块、Module Chat 和 Module Codex 名称的唯一来源，只定义职责与依赖方向，不记录模块内部算法。
+本文件只登记软件模块职责、Public Contract 与依赖方向，不定义 AI 岗位，也不记录模块内部算法。Main Programmer 可维护普通新增或实现变化；模块职责或跨模块 Public Contract 边界变化须升级 CEO。
 
 ## 注册表
 
-| module_id | display_name | module_chat_role | module_codex_role | code_path | Public Contract / module doc |
-| --- | --- | --- | --- | --- | --- |
-| `core` | Core | 当前不设常驻角色 | 按具体 Task 由 CEO 分配 Architecture Codex 或 Utility Codex | `src/core/` | `docs/modules/CORE.md` |
-| `sheets` | Sheets | Sheets Module Chat | Sheets Module Codex | `src/sheets/` | `docs/modules/SHEETS.md` |
-| `research` | Research | Research Module Chat | Research Module Codex | `src/research/` | `docs/modules/RESEARCH.md` |
-| `workflow` | Workflow | Workflow Module Chat | Workflow Module Codex | `src/workflow/` | `docs/modules/WORKFLOW.md` |
-| `inso` | INSO | INSO Module Chat | INSO Module Codex | `src/inso/` | Future Version Contract：`UNKNOWN` |
-| `quotation` | Quotation | Quotation Module Chat | Quotation Module Codex | `src/quotation/` | Future Version Contract：`UNKNOWN` |
+| module_id | display_name | code_path | Public Contract / module doc | status |
+| --- | --- | --- | --- | --- |
+| `core` | Core | `src/core/` | `docs/modules/CORE.md` | V1 |
+| `sheets` | Sheets | `src/sheets/` | `docs/modules/SHEETS.md` | V1 |
+| `research` | Research | `src/research/` | `docs/modules/RESEARCH.md` | V1 |
+| `workflow` | Workflow | `src/workflow/` | `docs/modules/WORKFLOW.md` | V1 |
+| `inso` | INSO | `src/inso/` | Future Version Contract：`UNKNOWN` | Future Version |
+| `quotation` | Quotation | `src/quotation/` | Future Version Contract：`UNKNOWN` | Future Version |
 
 测试按 `tests/<module>/` 镜像模块归属。
 
-表中的 `* Codex` 是逻辑执行岗位，不限定实际 Coding Agent；工具可按 `AI_TEAM.md` 替换，且不改变本注册表。
 
 ## 边界地图
 
@@ -33,4 +32,4 @@ workflow -> core, sheets, research, inso, quotation
 sheets | research | inso | quotation -> core
 ```
 
-跨模块调用只使用 Public Contract，不导入私有实现。注册、职责、Contract 或依赖变化均按 `AI_TEAM.md` 标记 `architecture_impact: REQUIRED`。
+跨模块调用只使用 Public Contract，不导入私有实现。普通注册和实现变化由 Main Programmer 维护；模块职责或有跨模块影响的 Public Contract、依赖边界变化须升级 CEO，详见 `AI_WORKFLOW.md`。

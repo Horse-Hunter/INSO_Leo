@@ -1,6 +1,6 @@
 # 产品基线
 
-本文件只维护产品范围和长期跨模块业务规则。模块规则归 `docs/modules/`，安全归 `BOUNDARIES.md`，依赖归 `MODULE_INDEX.md`；实现状态以 Git `main`、当前 Task 和 Module Final Report 为准。
+本文件只维护产品范围和长期跨模块业务规则。模块规则归 `docs/modules/`，安全归 `SAFETY.md`，依赖归 `MODULE_INDEX.md`；实现状态以 Git `main`、`CURRENT_TASK.md` 和相关 module docs 为准。
 
 ## 产品目标
 
@@ -45,4 +45,4 @@ Sheets、Research、Workflow 的详细 Contract 归各自 module doc。
 - 产品/服务覆盖、市场、税务、地区、客户数据分类、保留、审计和监管要求。
 - 已确认流程之外的 V1 生产运行方式和成功指标。
 
-只影响单一模块的 UNKNOWN 留在对应 module doc 或 Task，不写入本文件。
+只影响单一模块的 UNKNOWN 留在对应 module doc 或 `CURRENT_TASK.md`，不写入本文件。

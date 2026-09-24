@@ -1,52 +1,29 @@
-# Lean AI Baseline 通用模板
+# 精简 AI 团队项目模板
 
-这套模板用于为新项目建立精简、可持续的 Human + Chat + Coding Executor + Git 协作基线。它只提供治理方法和文档结构，不包含任何具体项目事实，也不绑定厂商或模型。
+复制本目录的 `AGENTS.template.md` 为项目根目录 `AGENTS.md`，将 `docs/*.template.md` 去掉 `.template` 后复制到项目 `docs/`，将 `docs/modules/MODULE.template.md` 按实际模块复制并命名。`prompts/` 供启动新 Agent 或临时交接时复制使用。删除未启用的占位内容；`UNKNOWN` 表示尚无证据，不得当作已批准规则。
 
-## 目录
+## 启动顺序
 
-```text
-lean-ai-baseline/
-├─ AGENTS.template.md
-├─ docs/
-│  ├─ AI_START_HERE.template.md
-│  ├─ AI_TEAM.template.md
-│  ├─ TASK_PROTOCOL.template.md
-│  ├─ BOUNDARIES.template.md
-│  ├─ MODULE_INDEX.template.md
-│  ├─ PRODUCT_BASELINE.template.md
-│  └─ modules/MODULE.template.md
-└─ prompts/
-   ├─ ROLE_BOOTSTRAP.template.md
-   └─ REPORTS_HANDOFF.template.md
-```
+1. 复制模板，填写 `PRODUCT_BASELINE.md` 中已确认的目标、范围和真实业务事实。
+2. Main Programmer 按实际代码初始化 `MODULE_INDEX.md`，只建立确实存在或有明确近期需要的模块。
+3. CEO 定义第一阶段的 `CURRENT_TASK.md`：目标、业务结果、边界和可观察的 Acceptance。
+4. Main Programmer 按阶段自主开发、验证、修复、review、commit/push；需要时 CEO 临时引入 Specialist。
+5. 阶段完成后把仍成立的长期事实更新到产品基线、模块注册表或 module docs，再切换 `CURRENT_TASK.md` 到下一阶段或 `NONE`。
+6. 不保存历史 Task 文档；Git 历史保留已完成工作。
 
-## 每个文件解决什么问题
+项目业务文档主要由 Main Programmer 随真实实现持续生成和维护，Owner/CEO 不必在启动时先写大量设计文件。软件保持模块化，AI 团队保持扁平化；组织复杂度必须低于问题复杂度。不要提前建立无用模块、团队、依赖或审批层。
 
-| 文件 | 用途 |
+## Canonical 归属
+
+| 事实 | 文件 |
 | --- | --- |
-| `AGENTS.template.md` | Coding Executor 最低硬规则 |
-| `AI_START_HERE.template.md` | 按角色路由最小上下文 |
-| `AI_TEAM.template.md` | 组织、权限、升级和 Handoff |
-| `TASK_PROTOCOL.template.md` | 阶段级 Task、执行、Review 和完成标准 |
-| `BOUNDARIES.template.md` | 真实副作用与安全授权 |
-| `MODULE_INDEX.template.md` | 正式模块/角色名称、职责与依赖 |
-| `PRODUCT_BASELINE.template.md` | 产品范围和跨模块业务事实 |
-| `modules/MODULE.template.md` | 单模块 Public Contract 和长期规则 |
-| `prompts/*` | 新窗口身份声明、汇报、提问与交接骨架 |
+| 团队、权限、工作流、Review、Handoff | `docs/AI_WORKFLOW.md` |
+| 安全和外部真实副作用 | `docs/SAFETY.md` |
+| 产品范围与跨模块业务规则 | `docs/PRODUCT_BASELINE.md` |
+| 模块职责、Public Contract 入口与依赖 | `docs/MODULE_INDEX.md` |
+| 当前唯一阶段 | `docs/CURRENT_TASK.md` |
+| Owner 汇报格式 | `docs/REPORTING.md` |
+| 模块长期业务规则和 Public Contract | `docs/modules/<MODULE>.md` |
+| 实现、验证和历史 | Git 当前代码、测试和提交 |
 
-## 新项目如何使用
-
-1. 将本目录复制到新 Repo 外作工作副本。
-2. 把 `AGENTS.template.md` 复制为 Repo 根目录 `AGENTS.md`。
-3. 把 `docs/*.template.md` 复制到 `docs/` 并移除文件名中的 `.template`。
-4. 每个正式模块复制一份 `docs/modules/MODULE.template.md`，以模块名重命名。
-5. 替换全部 `<PLACEHOLDER>`，删除不适用的可选角色/规则，不保留示例事实。
-6. 建立首个 Task Packet，检查文档之间无重复或冲突后提交 baseline commit。
-
-## 必须替换
-
-- `<PROJECT_NAME>`、`<PRODUCT_GOAL>`、`<V1_FLOW>`、`<OWNER>`。
-- `<MODULE_ID>`、`<DISPLAY_NAME>`、角色名、代码/测试路径、Public Contract 路径。
-- 模块职责、允许/禁止依赖、V1 范围、真实安全授权和项目级 UNKNOWN。
-
-一个事实只在一个主文档详细描述；其他文件只引用。未知事实写 `UNKNOWN`，不要把模板占位符当成已确认事实。
+每项事实只在一个主文件详述，其他文件链接过去。Secret、真实数据和 runtime 输出留在源码与 Git 之外。阶段完成前检查完整 diff，清除临时 debug、handoff 和无关生成文件；不要为了文档结构而改产品实现。

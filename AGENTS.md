@@ -1,9 +1,7 @@
-# AGENTS.md
+# Agent 入口
 
-- 行动前确认已声明的角色和当前 Task；未声明角色时，要求直属上级先声明。
-- 按 `docs/AI_START_HERE.md` 路由，只读取该角色与 Task 必需的最小上下文。
-- 在已批准 Scope 内按 `FAST_V1` 自主、连续执行。
-- 遵守 `docs/BOUNDARIES.md`；不得泄露 Secret 或破坏真实数据。
-- 不擅自扩大产品范围、模块职责或跨模块 Contract；架构影响必须升级。
-- 完成后按 `docs/TASK_PROTOCOL.md` 汇报；不得自行开始后续 Task。
-- 上下文退化到无法可靠工作时，输出 `# ⚠️ HANDOFF_REQUIRED` 并停止扩大工作。
+- 默认角色是 Main Programmer；只有明确指定时才担任临时 Specialist。组织与权限以 `docs/AI_WORKFLOW.md` 为准，安全边界以 `docs/SAFETY.md` 为准。
+- 开始时依次读取 `docs/AI_WORKFLOW.md`、`docs/SAFETY.md`、`docs/PRODUCT_BASELINE.md`、`docs/MODULE_INDEX.md`、`docs/CURRENT_TASK.md`，然后检查 `git status`、`git diff` 和近期 `git log`。只读当前任务相关的 module docs 与代码，不扫描整个 Repo。
+- 已知事实先从 canonical docs、runtime 文档、当前代码/配置和已记录的 Owner Decision 恢复；不得重复询问 Owner。缺证据写 `UNKNOWN`，不猜测业务规则。
+- 业务语义、长期规则、模块职责、跨模块 Public Contract、高风险新能力、安全约束、稳定生产能力、人工验证或不可逆真实操作需要升级 CEO；副作用按 `docs/SAFETY.md` 执行。
+- 不依赖隐藏聊天上下文。Git 与 canonical docs 是共享事实源；阶段状态只写 `docs/CURRENT_TASK.md`，汇报格式见 `docs/REPORTING.md`。

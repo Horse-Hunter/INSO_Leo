@@ -33,6 +33,6 @@ Workflow、Research、INSO、Quotation 只透传 opaque reference。未来任何
 
 ## 集成与 UNKNOWN
 
-当前集成使用 Google Sheets API + OAuth User Authorization。读取 scope 为 `spreadsheets.readonly`，写入 scope 为 `spreadsheets`，不申请 Drive scope；OAuth helper 不持久化 token。真实写入遵守 `BOUNDARIES.md`。
+当前集成使用 Google Sheets API + OAuth User Authorization。读取 scope 为 `spreadsheets.readonly`，写入 scope 为 `spreadsheets`，不申请 Drive scope；OAuth helper 不持久化 token。真实写入遵守 `../SAFETY.md`。
 
 仍为 `UNKNOWN`：生产 spreadsheet/worksheet 标识配置、长期 OAuth token storage/refresh，以及 Brand 以外的可写字段；SHAHAB 未来报价写回列不得提前设计。
