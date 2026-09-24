@@ -27,7 +27,7 @@ Done:
 - 恢复 GUI 五源显示名 INSO / Findchips / 华强 / 立创 / 正能量；health 直接模拟四个 GUI 组件。
 - `ruff check src tests`、`pytest tests/gui -v`、完整 deterministic pytest 通过。
 
-Current: 运行时 blockers 已修复；等待 commit/push 后由 CEO 再次 Final Review。GUI smoke 受当前 Windows Python 缺失可用 Tcl/Tk `init.tcl` 限制，不报告通过。
+Current: 运行时 blockers 已修复并 push 到 `inso-v1-gui`；等待 CEO 再次 Final Review。GUI smoke 受当前 Windows Python 缺失可用 Tcl/Tk `init.tcl` 限制，不报告通过。
 
 Next: CEO 再次 Review；通过后由 CEO 决定是否合并 main。
 
@@ -37,4 +37,4 @@ Owner Decisions: NONE
 
 Branch: inso-v1-gui
 
-Last Good Commit: e54e625bfc941f16ac60730f73d9abe29985e4cb
+Last Good Commit: d5689ec30d6314982a25207bdf12f4c2840a7a99
