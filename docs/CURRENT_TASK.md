@@ -60,16 +60,18 @@ Done:
 - GUI deterministic tests 覆盖运行中关闭、cycle 多条 due work drain、等待 worker 退出后 destroy，以及 STOPPED 立即关闭。
 
 Current:
-- 前一轮 composition blocker 与 stop-after-cycle drain 已修复，CEO 代码复审确认主路径方向正确。
-- GUI close lifecycle blocker 已修复，等待本轮完整 deterministic 验证、自查及 CEO 最终代码复审。
-- live smoke 继续暂缓；本轮不恢复 runtime 配置。
+- CEO 最终代码复审通过：production composition、stop-after-cycle drain、fail-closed runtime handling 与 GUI non-blocking graceful close 均满足本阶段代码验收。
+- deterministic verification：GUI + launcher 36 passed；full deterministic pytest 358 passed；ruff 与 diff-check 通过。
+- 进入真实 Windows GUI/live smoke；尚未 merge main。
 
 Next:
-1. 完成 ruff + GUI/launcher tests + full deterministic pytest + self-review。
-2. commit/push feature/v1-production-launcher，交 CEO 最后代码复审。
-3. CEO 通过后恢复本机 runtime/research.json、新建 runtime/production.json 并做真实 Windows GUI/live smoke。
+1. 从历史 Research runtime worktree 只读恢复本机 Git-ignored runtime/research.json 到当前 feature worktree；不得修改、reset、clean 或删除历史 worktree。
+2. 新建 Git-ignored runtime/production.json，使用已知生产 Spreadsheet / worksheet / OAuth client 路径与独立 production SQLite。
+3. 启动已授权 CDP Chrome，先做 readiness，再从 GUI production mode 执行真实 poll。
+4. 验证：GUI 可启动；真实 Sheets poll；有 pending 时 Excel/GUI 同 inquiry 一致；stop-after-cycle；第二次 Start dedup；OAuth 不重复弹窗；正常采集不主动抢前台。
+5. live smoke 通过后更新 Current Task -> READY_FOR_CEO_REVIEW，commit/push，再由 CEO 决定 merge main。
 
-Blockers: NONE（真实 live smoke 依赖 CEO 复审通过后恢复 runtime 配置）。
+Blockers: NONE。
 Owner Decisions:
 - Production GUI 第一阶段默认保持 Google Sheet Brand 写回 disabled/no-op，不新增真实 Sheet 写副作用。
 - 当前阶段目标是先让 GUI 真正跑 V1；EXE 打包与开机自启放在后续阶段。
