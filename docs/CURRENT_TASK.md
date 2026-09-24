@@ -57,13 +57,16 @@ Architecture Decision:
 - 允许新增窄的 launcher / composition-root 模块，依赖 gui Public Contract 与 workflow / sheets / research Public API，负责生产对象组装、session observability、health 与 graceful lifecycle；不得承载业务规则。
 - 需要读取 Research 结果给 GUI 时，优先新增/使用 Research-owned 的只读结果读取能力或 launcher adapter，按 inquiry_id 读取 canonical Excel schema；Workflow 仍不得解析 Research Excel。
 
-Done: NONE
+Done:
+- 新增 `src/launcher.ProductionBackend`，将现有 Sheets、Workflow、Research runtime 组合为 GUI backend；默认禁用 Brand 写回。
+- GUI 默认使用 ProductionBackend，`--mock` 明确进入演示模式；增加 launcher deterministic tests。
+- `ruff check src tests` 与完整 deterministic pytest 通过；检查 GUI/launcher diff 和工作树隔离。
 
-Current: 等待 Main Programmer 开发。
+Current: 代码与确定性验证完成；等待本机非敏感 runtime 配置恢复后执行真实 Windows GUI/live smoke。
 
-Next: Main Programmer 实现 -> deterministic tests -> Windows GUI real smoke -> self-review -> commit/push -> CEO Final Review。
+Next: 配置文件可用后完成 Google Sheets poll、GUI 启停、Excel/GUI inquiry 一致性与 dedup live smoke；随后更新本任务验收并交 CEO Final Review。
 
-Blockers: NONE
+Blockers: 当前两个 checkout 均缺少 Git-ignored `runtime/production.json` 和 `runtime/research.json`。缺少 spreadsheet/worksheet/OAuth client 路径与既有 Research/CDP 配置，无法安全判断真实目标或启动 live smoke。没有运行可能弹 OAuth、访问未知表或触碰现有 Excel/SQLite 的流程。
 
 Owner Decisions:
 - Production GUI 第一阶段默认保持 Google Sheet Brand 写回 disabled/no-op，不新增真实 Sheet 写副作用。

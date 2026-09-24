@@ -270,7 +270,7 @@ class InsoDashboardApp:
         self._tree.heading("brand", text="品牌")
         self._tree.heading("quantity", text="数量")
         self._tree.heading("stock", text="货量")
-        self._tree.heading("min_price", text="最低参考价")
+        self._tree.heading("min_price", text="市场最低参考价")
         self._tree.heading("total", text="总价")
         self._tree.heading("status", text="状态")
         self._tree.column("model", width=160, anchor="w")

@@ -8,6 +8,7 @@
 | --- | --- | --- | --- | --- |
 | `core` | Core | `src/core/` | `docs/modules/CORE.md` | V1 |
 | `gui` | GUI | `src/gui/` | `src/gui/README.md` | V1 Shell |
+| `launcher` | Production Launcher | `src/launcher/` | `src/launcher/README.md` | V1 |
 | `sheets` | Sheets | `src/sheets/` | `docs/modules/SHEETS.md` | V1 |
 | `research` | Research | `src/research/` | `docs/modules/RESEARCH.md` | V1 |
 | `workflow` | Workflow | `src/workflow/` | `docs/modules/WORKFLOW.md` | V1 |
@@ -30,6 +31,7 @@
 
 ```text
 workflow -> core, sheets, research, inso, quotation
+launcher -> gui (contract), workflow, sheets, research
 gui -> core
 sheets | research | inso | quotation -> core
 ```
