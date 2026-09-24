@@ -201,24 +201,6 @@ class BomAiMonthCutoff(Protocol):
     def __call__(self, now: datetime) -> datetime: ...
 
 
-def select_bom_ai_price(
-    records: tuple[BomAiPriceRecord, ...],
-    target_mpn: str,
-    *,
-    now: datetime,
-    month_cutoff: datetime,
-) -> BomAiPriceRecord | None:
-    """Select the one-natural-month minimum (no seven-day preference)."""
-
-    valid = [
-        record
-        for record in records
-        if price_source_mpn_match(target_mpn, record.mpn) is not None
-        and month_cutoff <= record.observed_at <= now
-    ]
-    return min(valid, key=lambda record: record.raw_price) if valid else None
-
-
 class BomAiAdapter:
     def __init__(
         self,

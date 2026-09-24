@@ -72,18 +72,35 @@ Run diagnosis → implementation → tests/fix → bounded read-only smoke → s
 
 ## Final Report
 
-Implemented the canonical five-source Research V1 contract within the Research module. The source model now separates normal and out-of-stock candidates, applies exact/short-suffix MPN matching and natural-month windows, normalizes supported USD prices through the shared Research FX boundary, and adds the INSO read-only 1/2/3-month history adapter without importing the future INSO module.
+状态：DONE
 
-Aggregation now implements all SUCCESS/PARTIAL/RETRYABLE/MANUAL paths, deterministic technical remarks, normal/fallback 20% comparison, and correct source-cell display. Excel now writes the exact 13 visible columns plus hidden identity, safely migrates known prior schemas, replaces full snapshots idempotently, and fails closed for corrupt, ambiguous, duplicate, or unsavable workbooks.
+完成：
+- Added a concrete Research-owned Playwright INSO read-only acquisition for credential-injected login, exact navigation through `1.业务询价 → 采购临时询价`, MPN query, and a table-scoped extraction of only date plus `供方未税价`; HTTPS/cross-host/challenge checks fail closed and no procurement-write capability exists.
+- Replaced the incorrect international LCSC smoke path with the production Chinese path `so.szlcsc.com/global.html?k=<MPN> → item.szlcsc.com/<productId>.html`; search results are strict/suffix matched, unrelated variants are excluded, displayed price tiers are parsed, and product identity is verified again on the official item page.
+- Removed the mixed-currency-unsafe legacy `select_bom_ai_price` implementation and its package-level export; `BomAiAdapter` remains the single V1 selection path and normalizes currencies before comparison.
+- Added deterministic browser/parser/safety tests for both acquisitions and a public-API regression test for Bom.Ai.
 
-Verification:
+验证：
+- Research tests: PASS, 154 tests.
+- Full tests: PASS, 179 tests.
+- Ruff: PASS.
+- compileall: PASS.
+- diff-check: PASS.
+- Live smoke: LCSC Chinese production path PASS for the Owner-confirmed MPN; official search resolved an official item page, identity validation passed, and a stocked `PriceCandidate` was formed. No price/session value was recorded. INSO live smoke remains runtime UNKNOWN because canonical Python Credential Provider integration, production URL/selectors, and an approved credential runtime are unavailable; no credential or procurement history was accessed.
+- Forbidden dependency / sensitive-data scan: PASS; no Research import of Sheets/Workflow/INSO/Quotation and no credential, cookie, token, customer procurement history, or supplier detail added.
 
-- Research tests: 148 passed.
-- Full tests: 173 passed.
-- Ruff: passed.
-- compileall: passed.
-- diff-check: passed.
-- Forbidden dependency and plaintext-secret pattern scans: no matches.
-- Read-only live smoke: ECB positive/finite quote and Findchips result structure succeeded. HQEW attach-only loopback CDP returned `BROWSER_FAILURE`; LCSC public search-page attempt returned `NEXT_DATA_MISSING`. Bom.Ai and INSO authenticated live reads were not attempted because the canonical language-neutral/Python Credential Provider remains `UNKNOWN`; no authentication challenge was bypassed and no sensitive value was emitted.
+真实效果：
+- Research V1 can now execute the LCSC Chinese-site read-only path end to end and has an executable, credential-injected INSO browser path that is limited to login, navigation, query, and reading date/`供方未税价` columns. Mixed RMB/USD Bom.Ai selection can no longer be entered through the unsafe legacy helper.
 
-Remaining non-blocking runtime UNKNOWN: authenticated browser capability/credentials for Bom.Ai and INSO, an open authenticated HQEW CDP target, and a live LCSC product URL resolver are deployment inputs outside this Task's approved module-local implementation.
+剩余：
+- Non-blocking runtime prerequisite: INSO live verification requires the Owner-provided production URL/selectors and canonical Credential Provider binding. The implementation and deterministic safety coverage are complete without handling or persisting real runtime data.
+
+Commit：Recorded in this Task branch history; exact hash is reported at handoff.
+
+Push：NOT PUSHED
+
+Branch：`codex/research-006-five-source-v1`
+
+PR：NONE
+
+需要决定：NONE

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from decimal import Decimal
+from datetime import UTC, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from typing import Protocol
+from urllib.parse import urlsplit
 
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .source_contracts import (
@@ -69,6 +70,228 @@ class InsoReadOnlyBrowser(Protocol):
         self, mpn: str, login: InsoLogin
     ) -> InsoHistoryCapture:
         """Read 业务询价 → 采购临时询价 → query → history results."""
+
+
+@dataclass(frozen=True, slots=True)
+class InsoBrowserConfig:
+    """Runtime selectors for the approved read-only INSO query screen."""
+
+    login_url: str
+    username_selector: str
+    password_selector: str
+    login_button_selector: str
+    mpn_selector: str
+    query_button_selector: str
+    company_selector: str | None = None
+    date_headers: tuple[str, ...] = (
+        "询价时间",
+        "报价时间",
+        "更新时间",
+        "创建时间",
+        "日期",
+    )
+
+    def __post_init__(self) -> None:
+        parsed = urlsplit(self.login_url)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("INSO login_url must be HTTPS")
+        required = (
+            self.username_selector,
+            self.password_selector,
+            self.login_button_selector,
+            self.mpn_selector,
+            self.query_button_selector,
+        )
+        if any(not value.strip() for value in required):
+            raise ValueError("INSO selectors must not be blank")
+
+
+class PlaywrightInsoReadOnlyBrowser:
+    """Concrete login/navigation/query acquisition with no write capability."""
+
+    def __init__(
+        self,
+        config: InsoBrowserConfig,
+        *,
+        timeout_ms: int = 45_000,
+        settle_ms: int = 2_000,
+        browser_channel: str = "chrome",
+        headless: bool = False,
+        playwright_factory: Callable[[], object] | None = None,
+    ) -> None:
+        self._config = config
+        self._timeout_ms = timeout_ms
+        self._settle_ms = settle_ms
+        self._browser_channel = browser_channel
+        self._headless = headless
+        self._playwright_factory = playwright_factory
+
+    def fetch_procurement_temporary_inquiry_history(
+        self, mpn: str, login: InsoLogin
+    ) -> InsoHistoryCapture:
+        factory = self._playwright_factory
+        timeout_error: type[Exception] = TimeoutError
+        if factory is None:
+            try:
+                from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+                from playwright.sync_api import sync_playwright
+            except ImportError as exc:
+                raise InsoReadError("PLAYWRIGHT_NOT_INSTALLED") from exc
+            factory = sync_playwright
+            timeout_error = PlaywrightTimeoutError
+
+        browser = None
+        current_url: str | None = self._config.login_url
+        expected_host = urlsplit(self._config.login_url).hostname
+        try:
+            with factory() as playwright:  # type: ignore[attr-defined]
+                browser = playwright.chromium.launch(
+                    channel=self._browser_channel,
+                    headless=self._headless,
+                )
+                page = browser.new_page()
+                page.goto(
+                    self._config.login_url,
+                    wait_until="domcontentloaded",
+                    timeout=self._timeout_ms,
+                )
+                current_url = page.url
+                self._require_expected_host(current_url, expected_host)
+                self._reject_challenge(page.content(), current_url)
+
+                username = page.locator(self._config.username_selector)
+                if username.count() > 0:
+                    username.fill(login.username)
+                    page.locator(self._config.password_selector).fill(login.password)
+                    if self._config.company_selector is not None:
+                        company = page.locator(self._config.company_selector)
+                        if company.count() > 0:
+                            if login.company is None:
+                                raise InsoReadError(
+                                    "COMPANY_CREDENTIAL_UNAVAILABLE", current_url
+                                )
+                            company.fill(login.company)
+                    page.locator(self._config.login_button_selector).click()
+                    page.wait_for_timeout(self._settle_ms)
+                    current_url = page.url
+                    self._require_expected_host(current_url, expected_host)
+                    self._reject_challenge(page.content(), current_url)
+
+                page.get_by_text("1.业务询价", exact=True).click()
+                page.get_by_text("采购临时询价", exact=True).click()
+                page.locator(self._config.mpn_selector).fill(mpn.strip())
+                page.locator(self._config.query_button_selector).click()
+                page.wait_for_timeout(self._settle_ms)
+                current_url = page.url
+                self._require_expected_host(current_url, expected_host)
+                self._reject_challenge(page.content(), current_url)
+                rows = page.evaluate(
+                    _INSO_TABLE_READER,
+                    {
+                        "priceHeader": "供方未税价",
+                        "dateHeaders": list(self._config.date_headers),
+                    },
+                )
+                records = parse_inso_history_rows(rows)
+                capture = InsoHistoryCapture(
+                    records, current_url, datetime.now(UTC)
+                )
+                browser.close()
+                browser = None
+                return capture
+        except InsoReadError:
+            raise
+        except timeout_error as exc:
+            raise InsoReadError("BROWSER_TIMEOUT", current_url) from exc
+        except Exception as exc:
+            raise InsoReadError("BROWSER_FAILURE", current_url) from exc
+
+    @staticmethod
+    def _require_expected_host(url: str, expected_host: str | None) -> None:
+        if urlsplit(url).hostname != expected_host:
+            raise InsoReadError("UNEXPECTED_NAVIGATION_HOST", url)
+
+    @staticmethod
+    def _reject_challenge(html: str, url: str) -> None:
+        folded = html.casefold()
+        if any(
+            marker in folded
+            for marker in ("captcha", "验证码", "安全验证", "一次性密码", "otp")
+        ):
+            raise InsoReadError("INTERACTIVE_CHALLENGE_REQUIRED", url)
+
+
+_INSO_TABLE_READER = """
+({priceHeader, dateHeaders}) => {
+  const clean = (value) => (value || '').replace(/\\s+/g, ' ').trim();
+  for (const table of document.querySelectorAll('table')) {
+    const headers = Array.from(table.querySelectorAll('thead th')).map(
+      (cell) => clean(cell.innerText)
+    );
+    const priceIndex = headers.indexOf(priceHeader);
+    const dateIndex = headers.findIndex((header) => dateHeaders.includes(header));
+    if (priceIndex < 0) continue;
+    if (dateIndex < 0) throw new Error('INSO_DATE_COLUMN_MISSING');
+    return Array.from(table.querySelectorAll('tbody tr')).map((row) => {
+      const cells = Array.from(row.querySelectorAll('td'));
+      return {
+        observed_at: clean(cells[dateIndex]?.innerText),
+        supplier_untaxed_price: clean(cells[priceIndex]?.innerText),
+      };
+    });
+  }
+  throw new Error('INSO_HISTORY_TABLE_MISSING');
+}
+"""
+
+
+def parse_inso_history_rows(rows: object) -> tuple[InsoHistoryRecord, ...]:
+    """Parse only date and 供方未税价 from an already-scoped result table."""
+
+    if not isinstance(rows, list):
+        raise InsoReadError("HISTORY_ROWS_UNPARSEABLE")
+    records: list[InsoHistoryRecord] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise InsoReadError("HISTORY_ROWS_UNPARSEABLE")
+        raw_date = row.get("observed_at")
+        raw_price = row.get("supplier_untaxed_price")
+        if not isinstance(raw_date, str) or not isinstance(raw_price, str):
+            raise InsoReadError("HISTORY_ROWS_UNPARSEABLE")
+        try:
+            price = Decimal(
+                raw_price.strip().replace(",", "").removeprefix("$").strip()
+            )
+        except InvalidOperation as exc:
+            raise InsoReadError("SUPPLIER_UNTAXED_PRICE_UNPARSEABLE") from exc
+        observed_at = _parse_inso_datetime(raw_date)
+        records.append(InsoHistoryRecord(price, observed_at))
+    return tuple(records)
+
+
+def _parse_inso_datetime(value: str) -> datetime:
+    raw = value.strip()
+    for pattern in (
+        "%Y-%m-%d %H:%M:%S",
+        "%Y/%m/%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y/%m/%d %H:%M",
+        "%Y-%m-%d",
+    ):
+        try:
+            parsed = datetime.strptime(raw, pattern).replace(
+                tzinfo=timezone(timedelta(hours=8))
+            )
+            return parsed.astimezone(UTC)
+        except ValueError:
+            continue
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise InsoReadError("HISTORY_DATE_UNPARSEABLE") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone(timedelta(hours=8)))
+    return parsed.astimezone(UTC)
 
 
 class InsoHistoryClient(Protocol):

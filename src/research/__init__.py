@@ -11,7 +11,6 @@ from .bom_ai import (
     BomAiPriceRecord,
     BomAiRawPage,
     calendar_month_cutoff,
-    select_bom_ai_price,
 )
 from .contracts import ResearchInput, ResearchReasonCode, ResearchResult, ResearchStatus
 from .ecb_fx import EcbDailyUsdRmbProvider, EcbFxError
@@ -41,6 +40,7 @@ from .icnet import (
     sum_certified_stock,
 )
 from .inso_history import (
+    InsoBrowserConfig,
     InsoCredentialedClient,
     InsoCredentialProvider,
     InsoHistoryAdapter,
@@ -49,8 +49,9 @@ from .inso_history import (
     InsoLogin,
     InsoReadError,
     InsoReadOnlyBrowser,
+    PlaywrightInsoReadOnlyBrowser,
 )
-from .lcsc import LcscAdapter, LcscHttpClient
+from .lcsc import LcscAdapter, LcscBrowserClient, LcscHttpClient
 from .service import ResearchExecution, ResearchService
 
 __all__ = [
@@ -80,6 +81,7 @@ __all__ = [
     "IcNetParseError",
     "IcNetResult",
     "IcNetRow",
+    "InsoBrowserConfig",
     "InsoCredentialProvider",
     "InsoCredentialedClient",
     "InsoHistoryAdapter",
@@ -89,7 +91,9 @@ __all__ = [
     "InsoReadError",
     "InsoReadOnlyBrowser",
     "LcscAdapter",
+    "LcscBrowserClient",
     "LcscHttpClient",
+    "PlaywrightInsoReadOnlyBrowser",
     "PriceAggregation",
     "ResearchExcelOutput",
     "ResearchExecution",
@@ -105,7 +109,6 @@ __all__ = [
     "classify_stock",
     "extract_manufacturer_display",
     "parse_icnet_rows",
-    "select_bom_ai_price",
     "select_brand_by_frequency",
     "sum_certified_stock",
 ]

@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import pytest
 
+from src import research
 from src.research.bom_ai import (
     BomAiAdapter,
     BomAiCapture,
@@ -142,3 +143,7 @@ def test_login_repr_hides_secret_and_client_only_exposes_read_capture() -> None:
     )
     assert credentials.seen_site_id == "bom.ai"
     assert capture.records[0].unit_price_rmb == Decimal("1.25")
+
+
+def test_raw_currency_selector_is_not_a_package_public_api() -> None:
+    assert not hasattr(research, "select_bom_ai_price")
