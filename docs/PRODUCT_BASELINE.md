@@ -53,7 +53,8 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 - Brand may be written to column F only when F remains empty immediately before the write. Sheets must re-read F; if a human has populated it, Sheets returns a conflict and does not overwrite it.
 - Every write must be a targeted field update; updating one field must not overwrite an entire row.
 - The preferred V1 integration is Google Sheets API with OAuth User Authorization.
-- Spreadsheet/worksheet configuration, identifying-snapshot fields, relocation and matching details, OAuth token storage, OAuth scopes, consent/refresh behavior, and any writable fields beyond the confirmed Brand rule remain `UNKNOWN` for implementation tasks.
+- The Sheets read-only production runtime loads the OAuth client-secret file path, one spreadsheet identity, and a complete ordered worksheet-title list from an explicitly selected local JSON file through `INSO_SHEETS_READ_CONFIG_FILE`; missing or invalid configuration fails closed, `*.local.json` is Git ignored, and no production values are committed.
+- Identifying-snapshot fields, relocation and matching details, OAuth token storage, consent/refresh behavior, support for multiple production spreadsheets, and any writable fields beyond the confirmed Brand rule remain `UNKNOWN` for implementation tasks.
 
 ## Workflow V1 architecture
 
@@ -105,7 +106,7 @@ For V1, `COMPLETED` therefore means that a `SUCCESS` result, or a `PARTIAL_SUCCE
 - Quotation formulas, rounding, margins, approvals, and validity periods: `UNKNOWN`
 - Quotation output formats and recipients: `UNKNOWN`
 - Workflow implementation details not confirmed above, including SQLite schema/migrations, duplicate-prevention key/algorithm, detailed state-transition guards, scheduling mechanism, Research completion-confirmation contract, and operational recovery details: `UNKNOWN`
-- Google Sheet spreadsheet/worksheet configuration, identifying-snapshot fields, record-relocation matching algorithm, OAuth details, and writable fields beyond the confirmed Brand rule: `UNKNOWN`
+- Google Sheet support for multiple production spreadsheets, identifying-snapshot fields, record-relocation matching algorithm, OAuth consent/refresh behavior, and writable fields beyond the confirmed Brand rule: `UNKNOWN`
 - Research input normalization/validation rules beyond the confirmed `importance_raw` display mapping, price-item schema, status-specific field requirements, and reason-code catalog beyond confirmed cases: `UNKNOWN`
 - Research Excel business columns beyond hidden `_inquiry_id` and confirmed visible `重要等级` / `备注`, workbook layout/update/locking mechanics, and retention policy: `UNKNOWN`
 

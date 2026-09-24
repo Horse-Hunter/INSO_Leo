@@ -55,6 +55,13 @@ INSO, Quotation, the final customer quotation, and final quotation write-back to
 - Write authorization uses only `https://www.googleapis.com/auth/spreadsheets`.
 - Sheets does not request a Google Drive scope.
 - Current OAuth helpers do not persist tokens.
+- Read-only runtime configuration is selected explicitly by
+  `INSO_SHEETS_READ_CONFIG_FILE` and loaded from a local JSON file containing
+  the OAuth client-secret file path, spreadsheet ID, and complete ordered
+  worksheet-title list. Missing, malformed, blank, duplicate, or unexpected
+  configuration fails closed.
+- `*.local.json` runtime configuration is Git ignored. Production identities,
+  OAuth client files, tokens, and Sheet contents remain local runtime data.
 - Live reading of worksheet 2026 has been validated.
 - Live Brand writing has not been validated because no safe production candidate was available. This is an operational validation limitation, not a V1 implementation blocker.
 - Allowed dependency: `core` and explicitly approved Google Sheets adapters.
@@ -63,6 +70,6 @@ INSO, Quotation, the final customer quotation, and final quotation write-back to
 ## Remaining UNKNOWN
 
 - Long-term OAuth token persistence, consent, and refresh behavior.
-- A general spreadsheet and worksheet configuration mechanism.
+- Whether V1 production will require more than one spreadsheet per runtime.
 - Google API atomic compare-and-set or transaction capability across precondition reads and writes.
 - Writable fields beyond Brand in column F.
