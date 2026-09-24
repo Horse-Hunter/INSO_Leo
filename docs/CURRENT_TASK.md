@@ -28,14 +28,14 @@ Done:
 - CEO 已根据 Owner 真实运行反馈定义本阶段与 Acceptance。
 - Owner 已明确批准新的价格源 MPN 规范化/<=6 suffix 规则。
 - Sheets OAuth 首次授权后将 refresh grant 以 Windows CurrentUser DPAPI 加密保存到仓库外；第二次真实构建 Sheets service 未调用授权流程。
-- Findchips 现按逐档可见币种和价格采集、分别换算 RMB 后比较。URAM3T21 当前页面的 `1059.68` 链为 USD 157.9875（无库存）× ECB 2026-09-23 6.707387608447988782753483481 = RMB 1059.683399789676627815265971；用户报告的 HKD/ USD 另一页面版本已覆盖回归测试。
+- Findchips 现按逐档可见币种和价格采集、分别换算 RMB 后比较。复核发现先前 `1059.68` 来自专用 CDP Chrome 旧 Cookie 会话返回的 Avnet USD 157.9875（无库存），并非 Owner 截图所见报价。同一 URL 不带 Cookie 时返回 DigiKey HKD 1855.5900（库存 8）和 Mouser USD 227.5800/225.7000（库存 0）。Findchips CDP 查询已改用临时无 Cookie browser context，关闭后不留会话状态。
 - 四个网页价格源统一使用去连字符/空白、忽略大小写、最多 6 个尾随字符的匹配；IC.net 严格规则保持不变。
 - LCSC 真实失败码 `AUTHENTICATED_SESSION_REQUIRED`；页面先到已登录 JLC passport，进入搜索页后合作库存卡片无“更新时间”使原 parser 报 `COOPERATION_CARD_UNPARSEABLE`。会话与卡片解析已修复，URAM3T21 真实返回库存 2、CNY 1870.683574。
 - 后台 CDP 新标签页不激活浏览器窗口；最终 smoke 后专用 Chrome 仍为 minimized。
-- 最终只读 V1 live smoke：2026 pending 2、shahab pending 1、入队 3、二次 poll 0、处理 3、Excel 业务行 2；2026 第 91 行空型号/空数量留在 `RETRY_WAIT`，无伪正常结果。URAM3T21 的立创列为 1870.68、Findchips 为 1059.68（无库存）、最低参考价 1800、总价 36000。
-- Full pytest 311 passed / 10 skipped；ruff、secret scan、git diff check 通过。
+- 修正后只读 V1 live smoke 写入新 Git 忽略目录 `runtime/followup_findchips_0924/`：入队 3、二次 poll 0、处理 3、Excel 业务行 2。URAM3T21 的 Findchips 列为 1586.74（HKD 有库存）/1513.86（USD 无库存），立创 1870.68，市场最低参考价 1586.74，预估订单总价 31734.89。换算使用 ECB 2026-09-23 HKD/RMB 0.8551158581547605747100753022、USD/RMB 6.707387608447988782753483481。Google OAuth 全程未再提示授权。
+- Full pytest 312 passed / 10 skipped；ruff、secret scan、git diff check 通过。
 
-Current: 开发分支实现和验证完成，等待 CEO Final Review。
+Current: Owner 指出 Findchips 实际页面与 CDP 旧会话不符；已修正并重新完成真实 smoke，等待 CEO Final Review。
 
 Next: CEO Final Review；由 CEO 决定是否进入 `main`。
 

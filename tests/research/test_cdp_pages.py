@@ -53,6 +53,24 @@ def test_new_cdp_page_stays_in_background_and_detaches_session() -> None:
     assert session.detached
 
 
+def test_new_cdp_page_targets_isolated_browser_context() -> None:
+    session = Session()
+    new_background_page(
+        SimpleNamespace(new_browser_cdp_session=lambda: session),
+        Context(), timeout_ms=1234, browser_context_id="ephemeral-context",
+    )
+    assert session.calls == [
+        (
+            "Target.createTarget",
+            {
+                "url": "about:blank",
+                "background": True,
+                "browserContextId": "ephemeral-context",
+            },
+        )
+    ]
+
+
 def test_failed_page_creation_closes_its_target() -> None:
     session = Session()
     with pytest.raises(TimeoutError):

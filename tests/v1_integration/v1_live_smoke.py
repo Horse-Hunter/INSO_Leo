@@ -15,6 +15,7 @@ Optional env overrides:
     WORKSHEET_TITLES     — comma-separated list, e.g. "2026,shahab"
     INSO_SITE_ID=yingsuo.alperp.cn
     BRAND_UPDATER=noop   — always disabled for V1 smoke (no write-back)
+    V1_SMOKE_OUTPUT_NAME — new simple subdirectory under runtime/ for a repeat smoke
 
 Run from the worktree root:
 
@@ -25,7 +26,9 @@ Run from the worktree root:
 from __future__ import annotations
 
 import os
+import re
 import sys
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -77,6 +80,12 @@ def main() -> int:
 
     config = load_runtime_config()
     runtime_dir = ROOT / "runtime"
+    smoke_name = os.environ.get("V1_SMOKE_OUTPUT_NAME", "").strip()
+    if smoke_name:
+        if re.fullmatch(r"[A-Za-z0-9_-]+", smoke_name) is None:
+            raise SystemExit("V1_SMOKE_OUTPUT_NAME must be a simple directory name")
+        runtime_dir /= smoke_name
+        config = replace(config, excel_output_path=runtime_dir / "调研价格.xlsx")
     runtime_dir.mkdir(parents=True, exist_ok=True)
     db_path = runtime_dir / "v1_live.sqlite"
     if db_path.exists():
