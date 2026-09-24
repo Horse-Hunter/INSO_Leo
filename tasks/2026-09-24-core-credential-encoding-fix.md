@@ -10,7 +10,7 @@
 | 直属上级 | CEO / Architecture Chat |
 | Module | core |
 | Execution Mode | FAST_V1 |
-| Status | in_progress |
+| Status | complete |
 | Branch | `buddy/core-credential-encoding-fix` |
 | Worktree | `D:/Program_Leo/INSO_Leo/.worktrees/core-credential-encoding-fix` |
 | Base | `origin/main` @ `73520c170f12a5c5054211c3e6f38da119ad3fbf` |
@@ -141,14 +141,66 @@ diagnosis（已在本 Packet 完成）
 
 ## 最终验证清单
 
-- [ ] Core Python tests
-- [ ] PowerShell CredentialVault tests
-- [ ] full pytest
-- [ ] Ruff
-- [ ] non-ASCII synthetic regression
-- [ ] bounded real-vault readiness (bom.ai: PASS)
-- [ ] secret scan
-- [ ] git diff review
+- [x] Core Python tests
+- [x] PowerShell CredentialVault tests
+- [x] full pytest
+- [x] Ruff
+- [x] non-ASCII synthetic regression
+- [x] bounded real-vault readiness (bom.ai: PASS)
+- [x] secret scan
+- [x] git diff review
+
+## Final Result / Verification
+
+**根因**：`_vault_backend.py` 用 `subprocess.run(text=True)`，Python 端用
+`locale.getpreferredencoding()`（zh-CN 上 cp936/gbk）解码；PowerShell 5.1
+`[Console]::Out.WriteLine` 实际按 UTF-8 写出字节，两侧编码不一致 →
+`subprocess._readerthread` 抛 `UnicodeDecodeError` → `CompletedProcess.stdout`
+被留为 `None` → `completed.stdout.strip()` 抛 `AttributeError`，从 Provider 中
+以非 typed 异常逃逸。
+
+**修复**（最小且确定性的进程间文本编码协议）：
+
+- PowerShell 端：`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`，
+  try/catch 包裹，失败映射为 exit code 33 (`_BackendUnavailableError`)。
+- Python 端：`subprocess.run(text=False)`，新增 `_decode_strict_utf8`
+  helper，按 `'utf-8', errors='strict'` 解码 stdout/stderr；
+  解码失败 → typed Core exception
+  （stdout → `_VaultMalformedError`，stderr → `_BackendUnavailableError`）。
+  Provider 不再见到 `UnicodeDecodeError` / `AttributeError`。
+
+**Public Contract**：完全不变。`from src.core import get_login, Login,
+CredentialError` 与 v1 完全相同；`docs/modules/CORE.md` 无需改动。
+
+**验证证据**：
+
+| 项 | 结果 |
+| --- | --- |
+| `py -3.12 -m pytest -q` | **257 passed in 7.34s**（v1: 240；新增 17 个编码相关测试） |
+| `py -3.12 -m ruff check src/core tests/core` | **All checks passed** |
+| `tests\core\CredentialVault.Tests.ps1` | **PASS**（既有 PowerShell Vault 行为不回归） |
+| `tests/core/test_vault_backend_encoding.py` | **17 / 17 PASS**：非 ASCII username / company / password / URL round-trip，`repr(Login)` 仍 redact，exception 不泄露 credential value，malformed stream → typed exception，embedded script 显式 `[Console]::OutputEncoding = UTF8` |
+| 真实 Vault readiness | **bom.ai configured login retrieval: PASS**（仅报告 PASS/FAIL；未打印 username / password / company / URL / Vault 内容；未进行真实网站登录） |
+| Secret scan (`git diff`) | **clean**（无真实 username / URL / password / token / cookie；测试值 100% synthetic） |
+
+**Commit / Push**：
+
+- Branch: `buddy/core-credential-encoding-fix`
+- Commit: `9001f86d22c25f6cf08a04847d1cad5a46c11689`
+- Subject: `CORE: fix UTF-8 encoding protocol for non-ASCII credential data`
+- Author: `Horse-Hunter <86754027+Horse-Hunter@users.noreply.github.com>`
+- Diff scope: `src/core/_vault_backend.py` (+90/-5) +
+  `tests/core/test_vault_backend_encoding.py` (新增, +402) +
+  本 Task Packet
+- Base: `origin/main` @ `73520c170f12a5c5054211c3e6f38da119ad3fbf`
+- Tracking: `origin/buddy/core-credential-encoding-fix`
+- Status: pushed
+
+**Remaining**：NONE in task scope。
+
+合入 canonical main 是独立后续 Task；Research / Workflow V1 production
+runtime 切到消费 `from src.core import get_login` 是独立后续 Task；
+本 Task scope 已完全结束。
 
 ## STOP 条件
 
