@@ -70,7 +70,9 @@ class InsoDashboardApp:
         self._events = MainThreadEventQueue()
         self._main_thread_id = threading.get_ident()
         self._after_id: str | None = None
+        self._close_after_id: str | None = None
         self._closing = False
+        self._close_finalized = False
 
         self._root = ctk.CTk()
         self._root.title("INSO_V1.0")
@@ -577,19 +579,59 @@ class InsoDashboardApp:
         self._root.mainloop()
 
     def _on_close(self) -> None:
+        """Request a graceful backend stop and keep Tk responsive while it drains."""
         if self._closing:
             return
+        self._assert_main_thread()
         self._closing = True
-        if self._after_id is not None:
-            try:
-                self._root.after_cancel(self._after_id)
-            except Exception as exc:  # noqa: BLE001 - root may already be closing
-                logger.debug("Could not cancel Tk callback during close: %s", exc)
-            self._after_id = None
+        self._cancel_after(self._after_id)
+        self._after_id = None
+
+        status = self._backend.get_status()
+        if status.state is RunState.RUNNING:
+            self._backend.request_stop_after_cycle()
+
+        self._status_badge.configure(text="正在退出", fg_color=_YELLOW)
+        self._action_button.configure(text="正在退出", fg_color=_GRAY, state="disabled")
+        self._check_close_complete()
+
+    def _check_close_complete(self) -> None:
+        self._assert_main_thread()
+        self._close_after_id = None
+        if self._backend_stopped():
+            self._finish_close()
+            return
+        self._close_after_id = self._root.after(100, self._check_close_complete)
+
+    def _backend_stopped(self) -> bool:
+        status = self._backend.get_status()
+        if status.state not in {RunState.STOPPED, RunState.MANUAL_REVIEW}:
+            return False
+        diagnostics = self._backend.get_diagnostics()
+        return diagnostics.worker_state.casefold() in {"stopped", "已停止"}
+
+    def _finish_close(self) -> None:
+        if self._close_finalized:
+            return
+        self._close_finalized = True
+        self._cancel_after(self._close_after_id)
+        self._close_after_id = None
+        self._cancel_after(self._after_id)
+        self._after_id = None
         self._backend.on_status_change(None)
         self._backend.on_log(None)
         try:
+            # Diagnostics confirm all backend threads have already exited.
             self._backend.shutdown()
-        except Exception as exc:  # noqa: BLE001 - defensive close path
+        except Exception as exc:  # noqa: BLE001 - always destroy after safe shutdown attempt
             logger.error("Backend shutdown error: %s", exc)
-        self._root.destroy()
+        finally:
+            self._root.destroy()
+
+    def _cancel_after(self, callback_id: str | None) -> None:
+        if callback_id is None:
+            return
+        try:
+            self._root.after_cancel(callback_id)
+        except Exception as exc:  # noqa: BLE001 - root may already be closing
+            logger.debug("Could not cancel Tk callback during close: %s", exc)
