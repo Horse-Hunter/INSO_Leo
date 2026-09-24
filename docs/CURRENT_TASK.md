@@ -1,6 +1,6 @@
 # Current Task
 
-Status: ACTIVE
+Status: READY_FOR_LIVE_SMOKE
 
 Goal: 交付 INSO_V1.0 Production Launcher + ProductionBackend，使 Owner 可以从 Windows GUI 一键启动现有 V1 真实自动调研、查看本次运行真实结果，并安全停止；不改变已验收的 V1 业务规则。
 
@@ -76,4 +76,4 @@ Owner Decisions:
 
 Branch: feature/v1-production-launcher
 
-Last Good Commit: df39b45e96431a948885542849c91f112489c52f
+Last Good Commit: 1d2b3fe42c50d0751bcf6eb1d39ae4812f940ea0
