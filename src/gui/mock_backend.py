@@ -16,7 +16,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 from decimal import Decimal
 from random import choice, randint, uniform
-from time import monotonic, sleep
+from time import sleep
 from typing import Any
 
 from .contracts import (
@@ -50,15 +50,7 @@ _MOCK_MODELS = (
 
 _MOCK_BRANDS = ("TI", "ST", "Espressif", "Microchip", "ADI", "ON", "Nexperia", None)
 
-_SOURCE_NAMES = ("INSO", "Findchips", "华强", "立创", "Bom.Ai")
-
-_SOURCE_STATUSES = {
-    "INSO": "正常",
-    "Findchips": "正常",
-    "华强": "正常",
-    "立创": "正常",
-    "Bom.Ai": "需要登录",
-}
+_SOURCE_NAMES = ("INSO", "Findchips", "华强", "立创", "正能量")
 
 
 class MockBackend(GuiBackend):
@@ -77,6 +69,8 @@ class MockBackend(GuiBackend):
         self._next_poll_at: datetime | None = None
         self._orders: list[Order] = []
         self._stop_requested = False
+        self._stop_event = threading.Event()
+        self._cycle_active = False
         self._worker: threading.Thread | None = None
         self._worker_active = False
         self._memory_mb = 0.0
@@ -128,23 +122,33 @@ class MockBackend(GuiBackend):
         self._resources.add_thread(self._worker, "mock-backend-worker")
 
     def start(self) -> None:
+        already_running = False
         with self._lock:
             if self._shutdown:
                 return
             if self._state in {RunState.RUNNING, RunState.STOPPING_AFTER_CYCLE} or (
                 self._worker is not None and self._worker.is_alive()
             ):
-                self._log("已经在运行中，忽略重复启动")
-                return
-            self._run_id = f"run_{uuid.uuid4().hex[:8]}"
-            self._state = RunState.RUNNING
-            self._started_at = utc_now()
-            self._stopped_at = None
-            self._orders = []
-            self._stop_requested = False
-            self._memory_mb = get_process_memory_mb()
-            self._next_poll_at = utc_now() + timedelta(seconds=self._cycle_seconds)
-            self._log(f"启动新运行会话: {self._run_id}")
+                already_running = True
+            else:
+                self._run_id = f"run_{uuid.uuid4().hex[:8]}"
+                self._state = RunState.RUNNING
+                self._started_at = utc_now()
+                self._stopped_at = None
+                self._orders = []
+                self._stop_requested = False
+                self._stop_event.clear()
+                self._cycle_active = False
+                self._memory_mb = get_process_memory_mb()
+                self._next_poll_at = utc_now() + timedelta(
+                    seconds=self._cycle_seconds
+                )
+                run_id = self._run_id
+
+        if already_running:
+            self._log("已经在运行中，忽略重复启动")
+            return
+        self._log(f"启动新运行会话: {run_id}")
 
         self._notify_status()
         self._spawn_worker()
@@ -157,31 +161,47 @@ class MockBackend(GuiBackend):
                 return
             self._stop_requested = True
             self._state = RunState.STOPPING_AFTER_CYCLE
-            self._log("已请求本轮结束后停止")
+
+        self._stop_event.set()
+        self._log("已请求本轮结束后停止")
 
         self._notify_status()
 
     def _worker_loop(self) -> None:
         self._log("后台 worker 启动")
         while True:
+            stop_before_cycle = False
             with self._lock:
                 active = self._state in {
                     RunState.RUNNING,
                     RunState.STOPPING_AFTER_CYCLE,
                 }
+                if active and self._stop_requested and not self._cycle_active:
+                    self._state = RunState.STOPPED
+                    self._stopped_at = utc_now()
+                    self._next_poll_at = None
+                    self._worker_active = False
+                    stop_before_cycle = True
+                elif active:
+                    self._cycle_active = True
 
             if not active:
+                break
+            if stop_before_cycle:
+                self._log("等待期间收到停止请求，未启动下一轮")
+                self._notify_status()
                 break
 
             self._run_cycle()
 
             with self._lock:
-                if self._stop_requested:
+                self._cycle_active = False
+                stop_after_cycle = self._stop_requested
+                if stop_after_cycle:
                     self._state = RunState.STOPPED
                     self._stopped_at = utc_now()
                     self._next_poll_at = None
                     self._worker_active = False
-                    self._log("本轮完成，安全停止")
                 else:
                     self._next_poll_at = utc_now() + timedelta(
                         seconds=self._cycle_seconds
@@ -189,16 +209,13 @@ class MockBackend(GuiBackend):
 
             self._notify_status()
 
-            if self._stop_requested:
+            if stop_after_cycle:
+                self._log("本轮完成，安全停止")
                 break
 
-            # Sleep in small increments so shutdown is responsive.
-            deadline = monotonic() + self._cycle_seconds
-            while monotonic() < deadline:
-                sleep(0.2)
-                with self._lock:
-                    if self._stop_requested:
-                        break
+            # A stop request wakes an idle worker immediately. The next loop
+            # observes it before marking a new cycle active.
+            self._stop_event.wait(timeout=self._cycle_seconds)
 
         self._log("后台 worker 退出")
 
@@ -290,34 +307,14 @@ class MockBackend(GuiBackend):
         with self._lock:
             running = self._state == RunState.RUNNING
 
-        items = []
-        overall = "正常"
-        for component, base_status in _SOURCE_STATUSES.items():
-            if running and base_status == "正常":
-                status = "正在运行"
-            elif base_status == "需要登录":
-                status = "需要登录"
-                if overall == "正常":
-                    overall = "需要登录"
-            else:
-                status = base_status
-            items.append(HealthItem(component=component, status=status))
-
-        # Map GUI-level health names requested by the product spec.
-        mapped_items = [
-            HealthItem(component="Google Sheets", status=items[0].status),
-            HealthItem(component="Browser/CDP", status=items[1].status),
+        active_status = "正在运行" if running else "正常"
+        items = (
+            HealthItem(component="Google Sheets", status=active_status),
+            HealthItem(component="Browser/CDP", status=active_status),
             HealthItem(component="Credential", status="正常"),
-            HealthItem(component="Research", status=items[4].status),
-        ]
-        if any(item.status == "异常" for item in mapped_items):
-            overall = "异常"
-        elif any(item.status == "需要登录" for item in mapped_items):
-            overall = "需要登录"
-        else:
-            overall = "正常"
-
-        return HealthReport(items=tuple(mapped_items), overall=overall)
+            HealthItem(component="Research", status=active_status),
+        )
+        return HealthReport(items=items, overall="正常")
 
     def get_logs(self) -> tuple[LogEntry, ...]:
         return self._ring_log.snapshot()
@@ -381,6 +378,7 @@ class MockBackend(GuiBackend):
             if self._state != RunState.STOPPED:
                 self._state = RunState.STOPPING_AFTER_CYCLE
 
+        self._stop_event.set()
         self._notify_status()
 
         if self._worker is not None and self._worker.is_alive():
