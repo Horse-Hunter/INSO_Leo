@@ -1,0 +1,5 @@
+# Dependencies for the INSO_V1.0 Windows GUI shell.
+# Install into an isolated virtual environment:
+#   python -m pip install -r requirements-gui.txt
+
+customtkinter>=6.0.0

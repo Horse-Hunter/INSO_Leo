@@ -7,6 +7,7 @@
 | module_id | display_name | module_chat_role | module_codex_role | code_path | Public Contract / module doc |
 | --- | --- | --- | --- | --- | --- |
 | `core` | Core | 当前不设常驻角色 | 按具体 Task 由 CEO 分配 Architecture Codex 或 Utility Codex | `src/core/` | `docs/modules/CORE.md` |
+| `gui` | GUI | 当前不设常驻角色 | Independent Programmer / 按具体 Task 分配 | `src/gui/` | `src/gui/README.md` |
 | `sheets` | Sheets | Sheets Module Chat | Sheets Module Codex | `src/sheets/` | `docs/modules/SHEETS.md` |
 | `research` | Research | Research Module Chat | Research Module Codex | `src/research/` | `docs/modules/RESEARCH.md` |
 | `workflow` | Workflow | Workflow Module Chat | Workflow Module Codex | `src/workflow/` | `docs/modules/WORKFLOW.md` |
@@ -22,6 +23,7 @@
 | module_id | responsibility | allowed dependencies | forbidden dependencies |
 | --- | --- | --- | --- |
 | `core` | 公共基础类型与基础设施能力，包括 Credential Provider 边界 | 标准库；已批准的通用库 | 所有业务模块；业务规则 |
+| `gui` | INSO_V1.0 Windows GUI Shell；负责操作员 Dashboard、运行状态展示、与后端通过 `GuiBackend` 契约交互 | `core`；`customtkinter` 等 UI 库 | `sheets`、`research`、`workflow`、`inso`、`quotation` 内部实现；直接浏览器/Excel/外部 API |
 | `sheets` | 单次 Google Sheets 读取、待处理查询、Record identity 和明确命令下的安全字段更新 | `core`；已批准 Google adapter | `research`、`workflow`、`inso`、`quotation`；polling、全局状态、业务规则 |
 | `research` | read-only 市场调研、evidence、价格聚合和 Research 自有本地 Excel 输出；可直接使用已批准的 INSO read-only Research adapter | `core`；已批准网页/Excel/INSO read-only Research adapter | `sheets`、`workflow`、`inso`、`quotation`；Google Sheet 访问；主动采购行为 |
 | `workflow` | Scheduler、全局流程状态、retry、duplicate prevention 和模块衔接 | `core`、`sheets`、`research`、`inso`、`quotation` Public Contract | 模块内部业务逻辑；直接外部 adapter |
@@ -30,6 +32,7 @@
 
 ```text
 workflow -> core, sheets, research, inso, quotation
+gui -> core
 sheets | research | inso | quotation -> core
 ```
 
