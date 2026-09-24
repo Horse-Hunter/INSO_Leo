@@ -3,8 +3,9 @@
 The ``Stock_VenQuote`` endpoint exposes supplier quote history for an MPN
 through the Owner-authorised ordinary Chrome session. The history records
 carry ``CreateTime``, ``InPrice`` (supplier untaxed price) and ``CurrencyID``
-(``RMB`` / ``USD``); price values in ``RMB`` are normalised to ``USD`` using
-the shared FX quote before ``InsoHistoryAdapter`` emits the ``PriceCandidate``.
+(``RMB`` / ``USD``). RMB records are kept as-is; USD records are converted to
+RMB using the shared USD/RMB FX quote, so the emitted
+``PriceCandidate.normalized_rmb_price`` is always in RMB.
 """
 
 from __future__ import annotations
