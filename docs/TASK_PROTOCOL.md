@@ -74,11 +74,19 @@ Scope 内连续完成 diagnosis → implementation → tests → fix → smoke �
 
 ## 汇报模板
 
+凡需 Owner 查看、转交或执行动作的阶段报告，`需要决定` 与 `你要做什么` 必须相邻：前者只写业务、架构、授权或方案选择，后者写当前人工动作。`需要决定: NONE` 不代表 `你要做什么: NONE`。
+
 Codex → 上级：
 
 ```text
 状态：
 DONE / BLOCKED
+
+需要决定：
+NONE / 一个明确决定
+
+你要做什么：
+NONE / 一个明确动作
 
 完成：
 - 核心结果
@@ -97,9 +105,6 @@ Commit：
 
 Push：
 SUCCESS / NOT PUSHED
-
-需要决定：
-NONE / 一个明确问题
 ```
 
 Module Chat → CEO：
@@ -108,14 +113,17 @@ Module Chat → CEO：
 状态：
 DONE / CONTINUE / BLOCKED / ESCALATE
 
+需要决定：
+NONE / 一个明确决定
+
+你要做什么：
+NONE / 一个明确动作
+
 完成：
 <1-3 句>
 
 跨模块影响：
 NONE / 具体影响
-
-需要 CEO 决定：
-NONE / 一个明确问题
 
 下一步：
 <准备做什么>
@@ -127,17 +135,20 @@ Commit：
 CEO → Owner：
 
 ```text
-结论：
-一句话。
+状态：
+DONE / CONTINUE / BLOCKED / ESCALATE
+
+需要决定：
+NONE / 一个明确决定
+
+你要做什么：
+NONE / 一个明确动作
 
 进展：
 重要变化。
 
 问题：
 NONE / 真问题。
-
-需要你决定：
-NONE / 明确选项。
 
 下一步：
 谁做什么。
@@ -154,6 +165,9 @@ Codex 或下级机构必须向 Owner 提问时，第一屏使用：
 
 真实效果：
 <业务影响>
+
+需要决定：
+<一个明确决定 / NONE>
 
 你要做什么：
 <一个明确动作 / A 或 B>

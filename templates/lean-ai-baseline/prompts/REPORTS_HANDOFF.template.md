@@ -6,15 +6,15 @@
 
 ```text
 请按 canonical Executor Final Report 输出，仅包含：
-状态 / 完成 / 验证 / 真实效果 / 剩余 / Commit / Push / 需要决定。
+状态 / 需要决定 / 你要做什么 / 完成 / 验证 / 真实效果 / 剩余 / Commit / Push。
 结论优先，不搬运开发过程、长日志或大段代码。
 ```
 
 ## 管理层汇报
 
 ```text
-Module Chat → CEO：状态 / 完成 / 跨模块影响 / 需要 CEO 决定 / 下一步 / Commit。
-CEO → Owner：结论 / 进展 / 问题 / 需要你决定 / 下一步。
+Module Chat → CEO：状态 / 需要决定 / 你要做什么 / 完成 / 跨模块影响 / 下一步 / Commit。
+CEO → Owner：状态 / 需要决定 / 你要做什么 / 进展 / 问题 / 下一步。
 ```
 
 ## 向 Owner 提问
@@ -23,6 +23,7 @@ CEO → Owner：结论 / 进展 / 问题 / 需要你决定 / 下一步。
 以前：<OLD_STATE>
 现在：<CURRENT_PROBLEM>
 真实效果：<BUSINESS_IMPACT>
+需要决定：<ONE_DECISION_OR_NONE>
 你要做什么：<ONE_ACTION_OR_A_B>
 还有什么没解决：NONE / <GAP>
 建议：<A_OR_B>

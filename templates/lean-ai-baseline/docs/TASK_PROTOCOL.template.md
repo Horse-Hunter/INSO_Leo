@@ -74,10 +74,12 @@ Scope 内连续完成 diagnosis → implementation → tests → fix → smoke �
 
 ## 标准报告
 
-- Coding Executor → 上级：状态、完成、验证、真实效果、剩余、Commit、Push、需要决定。
-- Module Chat → CEO：状态、完成、跨模块影响、需要 CEO 决定、下一步、Commit。
-- CEO → Owner：结论、进展、问题、需要你决定、下一步。
-- 向 Owner 提问第一屏：以前、现在、真实效果、你要做什么、还有什么没解决、建议、原因。
+凡需 Owner 查看、转交或执行动作的阶段报告，`需要决定` 与 `你要做什么` 必须相邻：前者只写业务、架构、授权或方案选择，后者写当前人工动作。`需要决定: NONE` 不代表 `你要做什么: NONE`。
+
+- Coding Executor → 上级：状态、需要决定、你要做什么、完成、验证、真实效果、剩余、Commit、Push。
+- Module Chat → CEO：状态、需要决定、你要做什么、完成、跨模块影响、下一步、Commit。
+- CEO → Owner：状态、需要决定、你要做什么、进展、问题、下一步。
+- 向 Owner 提问：以前、现在、真实效果、需要决定、你要做什么、还有什么没解决、建议、原因。
 
 可复制格式和 Handoff 见 `prompts/REPORTS_HANDOFF.template.md`；保持结论优先，不搬运过程。
 
