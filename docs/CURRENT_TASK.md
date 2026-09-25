@@ -1,8 +1,8 @@
 # Current Task
 
-Status: ACTIVE
+Status: NONE
 
-Goal: 交付 INSO_V1.1 Windows 可发布版本：从已验收 main 生产基线构建可双击启动的 Windows 桌面包，解决 frozen runtime 路径、配置发现、单实例、日志/启动错误、CDP Chrome 启动/复用与发布包 smoke；不改变已验收业务规则。
+Goal: INSO_V1.1 Windows release stage 已完成并关闭；等待下一阶段任务。
 
 Business Outcome:
 - Owner 不再需要打开终端执行 `python -m src.gui.main`，可从 Windows 发布目录双击 `INSO_V1.1.exe` 启动。
@@ -174,6 +174,13 @@ CEO Final Review:
 Blockers:
 - NONE.
 
+CEO Closure:
+- Final review passed. Branch is ahead of `main` with no divergence and no remaining release blocker.
+- Windows onedir/windowed release, frozen runtime paths, single-instance guard, safe startup diagnostics, CDP ownership/bootstrap, SHAHAB compatibility, lazy-CDP fail-closed semantics, reproducible build, artifact scan, process lifecycle, and storage no-growth safeguards are accepted.
+- Final local cleanup reduced the project root to 1.781515 GB while preserving deployed release, fixed BuildOnly staging, .venv-release, runtime/Vault/OAuth/profile data, SQLite/Excel/customer data, and all worktrees.
+- No further V1.1 code change is required. Long soak remains a subsequent validation stage and does not block this merge.
+- Next product work may proceed from updated `main`; V1.2 requirements/design is the next planned development stage.
+
 Owner Decisions:
 - 发布名称：INSO_V1.1。
 - 首版 Windows 打包采用 PyInstaller onedir + windowed。
@@ -183,4 +190,4 @@ Owner Decisions:
 
 Branch: feature/v1-1-windows-release
 
-Last Good Commit: 1184ba2940dd49b1afb802b832ba6ea54299f350
+Last Good Commit: 71c616a3a25e9bf0ff31b343d4d14a2df518444c
