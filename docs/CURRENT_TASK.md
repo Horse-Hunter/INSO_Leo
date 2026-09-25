@@ -1,6 +1,6 @@
 # Current Task
 
-Status: READY_FOR_CEO_REVIEW
+Status: ACTIVE
 
 Goal: 交付 INSO_V1.1 Windows 可发布版本：从已验收 main 生产基线构建可双击启动的 Windows 桌面包，解决 frozen runtime 路径、配置发现、单实例、日志/启动错误、CDP Chrome 启动/复用与发布包 smoke；不改变已验收业务规则。
 
@@ -162,10 +162,18 @@ Closeout:
 
 CEO Final Review:
 - `884a08b611a94bf733e170ff4370512cd084ce08` build-script fix accepted. CEO sync commit `0a83109fa5d830ef7f4bc9e219a54105bd2f6d37` is preserved.
-- Local-only classification is complete. Ambiguous full onedir snapshots remain preserved for CEO decision; there is no code blocker.
+- Local-only classification is complete. Based on the recorded evidence, CEO now classifies the remaining 17 `KEEP_UNKNOWN` entries as `DELETE_SAFE_OLD_RELEASE_SNAPSHOT` for local storage purposes:
+  * every entry is a complete PyInstaller onedir-style release snapshot under the active release worktree's ignored `build/`;
+  * every entry passed `RELEASE_SCAN_OK`;
+  * none contains runtime/config/Vault/OAuth/profile/cookie/SQLite/Excel/customer data, Git metadata, reparse points, or unknown top-level operator/source files;
+  * none is a Git worktree, active fixed BuildOnly stage, current deployed `dist/INSO_V1.1`, or canonical source tree;
+  * canonical source/version history is retained in Git and the current reproducible release recipe/locked requirements are retained in the repo, so these binary snapshots are not required as the source of truth.
+- Therefore delete all 17 remaining old release/recovery snapshots listed above from the local ignored `build/` area. Do not touch the fixed `build/windows-release-stage`, deployed `dist/INSO_V1.1`, any worktree, runtime, Vault/OAuth/profile, SQLite/Excel/customer data, or `.venv-release`.
+- Before deletion confirm zero `INSO_V1.1.exe` processes. Delete only the exact 17 previously classified paths; do not use wildcard cleanup beyond that reviewed set.
+- After deletion report project BEFORE/AFTER/RECLAIMED and verify the 17 exact paths are absent while protected paths remain. No real Sheets/Research run is required. Then update this task to `READY_FOR_CEO_REVIEW`, commit/push, and return for final merge decision.
 
 Blockers:
-- NONE. Seventeen `KEEP_UNKNOWN` release snapshots remain intentionally preserved; CEO/Owner may decide their retention later.
+- Final local deletion of the 17 CEO-approved old release snapshots is pending. No code blocker remains.
 
 Owner Decisions:
 - 发布名称：INSO_V1.1。
