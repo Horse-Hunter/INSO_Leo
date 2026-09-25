@@ -10,7 +10,6 @@ import sys
 import threading
 import uuid
 from dataclasses import replace
-from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -28,6 +27,7 @@ from src.gui.contracts import (
 )
 from src.gui.state import utc_now
 from src.research import ResearchInput, ResearchResult
+from src.research.excel_output import ResearchExcelOutput
 from src.research.runtime import (
     ResearchRuntimeConfigError,
     assess_readiness,
@@ -96,8 +96,11 @@ class ProductionBackend(GuiBackend):
         self._run_id = None
         self._state = RunState.STOPPED
         self._started = self._stopped = self._last_poll = None
+        self._next_poll_at = None
         self._inquiries = []
         self._results = ()
+        self._history = ()
+        self._history_fingerprint = None
         self._store = None
         self._excel = None
         self._manual_inquiries = set()
@@ -110,6 +113,7 @@ class ProductionBackend(GuiBackend):
             )
         except ResearchRuntimeConfigError as exc:
             log.debug("Research output path unavailable (%s)", type(exc).__name__)
+        self._refresh_history(force=True)
         self._logs = []
         self._status_callbacks = []
         self._log_callbacks = []
@@ -142,6 +146,7 @@ class ProductionBackend(GuiBackend):
             self._manual_inquiries.clear()
             self._results = ()
             self._last_poll = None
+            self._next_poll_at = None
             self._stop.clear()
             self._drain_due_on_stop.clear()
             self._poll_idle.set()
@@ -156,6 +161,7 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             if self._state is RunState.RUNNING:
                 self._state = RunState.STOPPING_AFTER_CYCLE
+                self._next_poll_at = None
                 with self._poll_gate:
                     self._drain_due_on_stop.set()
                     self._stop.set()
@@ -204,6 +210,7 @@ class ProductionBackend(GuiBackend):
             runtime = WorkflowRuntime(
                 WorkflowPoller(self._store, reader), worker, worksheets
             )
+            self._refresh_history(force=True)
             self._set_health(("正常", "已连接", "正常", "正常"), "正常")
 
             def poll_loop():
@@ -216,6 +223,9 @@ class ProductionBackend(GuiBackend):
                         try:
                             self._last_poll = utc_now()
                             runtime.run_poll(now=self._last_poll)
+                            with self._lock:
+                                if self._state is RunState.RUNNING:
+                                    self._next_poll_at = utc_now() + runtime.poll_interval
                             self._set_health(("正常", "已连接", "正常", "正常"), "正常")
                         finally:
                             self._poll_idle.set()
@@ -282,6 +292,7 @@ class ProductionBackend(GuiBackend):
         log.warning("Production runtime worker failed (%s)", type(exc).__name__)
         with self._lock:
             self._state = RunState.MANUAL_REVIEW
+            self._next_poll_at = None
             self._drain_due_on_stop.clear()
             with self._poll_gate:
                 self._stop.set()
@@ -301,6 +312,7 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             self._manual_inquiries.add(inquiry_id)
             self._state = RunState.MANUAL_REVIEW
+            self._next_poll_at = None
             self._drain_due_on_stop.clear()
             with self._poll_gate:
                 self._stop.set()
@@ -322,27 +334,14 @@ class ProductionBackend(GuiBackend):
     def _refresh(self):
         if not self._store:
             return
-        from openpyxl import load_workbook
-
+        self._refresh_history()
         items = {i.inquiry_id: i for i in self._store.all_items()}
         ids = [i for i in self._inquiries if i in items]
-        rows = {}
-        if self._excel and self._excel.is_file() and ids:
-            wb = load_workbook(self._excel, read_only=True, data_only=True)
-            try:
-                ws = wb.active
-                cols = {ws.cell(1, c).value: c - 1 for c in range(1, ws.max_column + 1)}
-                for vals in ws.iter_rows(min_row=2, values_only=True):
-                    key = vals[cols["_inquiry_id"]] if "_inquiry_id" in cols else None
-                    if key in ids:
-                        rows[key] = {h: vals[c] for h, c in cols.items()}
-            finally:
-                wb.close()
-        source_names = ("INSO", "Findchips", "华强", "立创", "正能量")
+        history_by_id = {order.inquiry_id: order for order in self._history}
         results = []
         for key in ids:
             item = items[key]
-            row = rows.get(key, {})
+            historical = history_by_id.get(key)
             status = {
                 WorkflowStatus.COMPLETED: (
                     OrderStatus.PARTIAL
@@ -357,23 +356,67 @@ class ProductionBackend(GuiBackend):
             results.append(
                 Order(
                     key,
-                    str(row.get("型号") or item.mpn),
-                    row.get("品牌") or item.brand,
-                    _integer(row.get("数量"), item.quantity),
-                    str(row.get("货量标识") or "待验证"),
-                    _decimal(row.get("市场最低参考价")),
-                    _decimal(row.get("预估订单总价")),
+                    historical.model if historical else item.mpn,
+                    historical.brand if historical else item.brand,
+                    historical.quantity if historical else item.quantity,
+                    historical.stock_label if historical else "待验证",
+                    historical.min_reference_price if historical else None,
+                    historical.total_price if historical else None,
                     status,
-                    tuple(
-                        SourceDetail(n, str(row.get(n) or "无结果"))
-                        for n in source_names
-                    ),
-                    str(row.get("备注") or item.last_error or ""),
+                    historical.sources if historical else (),
+                    historical.remark if historical else (item.last_error or ""),
                     self._run_id or "",
+                    historical.importance if historical else item.importance_raw,
+                    historical.processed_at if historical else None,
                 )
             )
         with self._lock:
             self._results = tuple(results)
+
+    def _refresh_history(self, *, force=False):
+        if not self._excel:
+            return
+        try:
+            stat = self._excel.stat() if self._excel.is_file() else None
+            fingerprint = (stat.st_mtime_ns, stat.st_size) if stat else None
+        except OSError:
+            fingerprint = None
+        with self._lock:
+            if not force and fingerprint == self._history_fingerprint:
+                return
+        try:
+            records = ResearchExcelOutput(self._excel).read_history()
+        except Exception as exc:  # noqa: BLE001 - history display must not stop runtime
+            log.warning("Research history unavailable (%s)", type(exc).__name__)
+            with self._lock:
+                self._history_fingerprint = fingerprint
+            return
+        status_map = {
+            "SUCCESS": OrderStatus.COMPLETED,
+            "PARTIAL_SUCCESS": OrderStatus.PARTIAL,
+            "MANUAL_REVIEW_REQUIRED": OrderStatus.MANUAL_REVIEW,
+            "RETRYABLE_FAILURE": OrderStatus.ERROR,
+        }
+        orders = tuple(
+            Order(
+                inquiry_id=record.inquiry_id,
+                model=record.mpn or "",
+                brand=record.brand,
+                quantity=_integer(record.quantity, 0),
+                stock_label=record.stock_label or "待验证",
+                min_reference_price=_decimal(record.market_reference),
+                total_price=_decimal(record.estimated_total),
+                status=status_map.get(record.research_status, OrderStatus.UNKNOWN),
+                sources=tuple(SourceDetail(name, value) for name, value in record.source_values),
+                remark=record.remarks or "",
+                importance=record.importance_raw,
+                processed_at=record.processed_at,
+            )
+            for record in records
+        )
+        with self._lock:
+            self._history = orders
+            self._history_fingerprint = fingerprint
 
     def get_status(self):
         with self._lock:
@@ -394,12 +437,16 @@ class ProductionBackend(GuiBackend):
                     i.status in (WorkflowStatus.QUEUED, WorkflowStatus.RETRY_WAIT)
                     for i in items
                 ),
-                self._last_poll + timedelta(minutes=15) if self._last_poll else None,
+                self._next_poll_at if self._state is RunState.RUNNING else None,
             )
 
     def get_current_run_results(self):
         with self._lock:
             return self._results
+
+    def get_result_history(self):
+        with self._lock:
+            return self._history
 
     def get_health(self):
         return self._health

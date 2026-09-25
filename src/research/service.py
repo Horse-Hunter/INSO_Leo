@@ -102,6 +102,7 @@ class ResearchService:
                 market_reference=aggregation.market_reference,
                 source_values=source_values,
                 remarks=remarks,
+                research_status=status.value,
             )
         except ExcelOutputError:
             result = ResearchResult(

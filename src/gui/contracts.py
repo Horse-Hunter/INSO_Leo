@@ -31,6 +31,8 @@ class OrderStatus(str, Enum):
     PARTIAL = "部分成功"
     PENDING = "待处理"
     MANUAL_REVIEW = "待人工处理"
+    ERROR = "异常"
+    UNKNOWN = "历史记录"
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +60,8 @@ class Order:
     sources: tuple[SourceDetail, ...] = ()
     remark: str = ""
     run_id: str = ""
+    importance: str | None = None
+    processed_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +143,10 @@ class GuiBackend(ABC):
     @abstractmethod
     def get_current_run_results(self) -> tuple[Order, ...]:
         """Return orders processed since the current GUI run started."""
+
+    @abstractmethod
+    def get_result_history(self) -> tuple[Order, ...]:
+        """Return Research-owned persisted results, newest processed first."""
 
     @abstractmethod
     def get_health(self) -> HealthReport:

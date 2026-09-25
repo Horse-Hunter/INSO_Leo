@@ -16,4 +16,4 @@ Create Git-ignored `runtime/production.json` with non-secret values:
 
 Provide the existing non-secret Research settings in `runtime/research.json`. OAuth refresh grants remain in the protected local store. The production SQLite file is stable across launches. Sheet Brand updates are disabled. Missing config, authorization, credentials, CDP, or human-verification challenges fail closed and appear as “需要人工处理”.
 
-The backend observes Research execution by `inquiry_id` and reads only canonical Research workbook display cells for this session. It does not derive inquiry membership from row counts or implement business rules.
+`GuiBackend.get_current_run_results()` and run metrics describe only the current run. `get_result_history()` separately exposes the cached Research-owned Excel history for the results table. GUI code consumes only `GuiBackend` and does not parse Excel. History cache refresh is owned by the launcher at workbook-change and Research completion boundaries.

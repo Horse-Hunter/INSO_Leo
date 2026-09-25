@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from src.research.excel_output import (
     ESTIMATED_TOTAL_HEADER,
     IMPORTANCE_HEADER,
     INQUIRY_ID_HEADER,
+    PROCESSED_AT_HEADER,
     ExcelConsistencyError,
     ExcelWriteError,
     ResearchExcelOutput,
@@ -137,13 +139,15 @@ def test_duplicate_identity_anywhere_fails_closed(tmp_path: Path) -> None:
     workbook = Workbook()
     worksheet = workbook.active
     worksheet.append(CANONICAL_HEADERS)
-    worksheet.append([None] * 13 + ["duplicate"])
-    worksheet.append([None] * 13 + ["duplicate"])
+    worksheet.append([None] * (len(CANONICAL_HEADERS) - 1) + ["duplicate"])
+    worksheet.append([None] * (len(CANONICAL_HEADERS) - 1) + ["duplicate"])
     workbook.save(path)
     workbook.close()
 
     with pytest.raises(ExcelConsistencyError, match="duplicate"):
         ResearchExcelOutput(path).upsert("new", importance_raw="A")
+    with pytest.raises(ExcelConsistencyError, match="duplicate"):
+        ResearchExcelOutput(path).read_history()
 
 
 def test_unknown_or_ambiguous_schema_fails_closed(tmp_path: Path) -> None:
@@ -226,3 +230,67 @@ def test_save_failure_is_wrapped_and_does_not_create_target(
     with pytest.raises(ExcelWriteError, match="unable to save"):
         ResearchExcelOutput(path).upsert("inq_1", importance_raw="A")
     assert not path.exists()
+
+
+def test_processed_at_is_written_as_utc_iso8601_and_history_is_sorted(tmp_path: Path):
+    path = tmp_path / "research.xlsx"
+    output = ResearchExcelOutput(path)
+    output.upsert(
+        "older", importance_raw="A",
+        processed_at=datetime(2026, 1, 1, 8, tzinfo=timezone.utc),
+        mpn="OLD",
+    )
+    output.upsert(
+        "newer", importance_raw="D",
+        processed_at=datetime(2026, 1, 2, 8, tzinfo=timezone.utc),
+        mpn="NEW",
+    )
+    sheet = load_workbook(path, data_only=True).active
+    cols = _columns(path)
+    assert sheet.cell(2, cols[PROCESSED_AT_HEADER]).value == "2026-01-01T08:00:00+00:00"
+    history = output.read_history()
+    assert [row.inquiry_id for row in history] == ["newer", "older"]
+    assert history[0].processed_at == datetime(2026, 1, 2, 8, tzinfo=timezone.utc)
+
+
+def test_legacy_history_has_no_inferred_time_and_migrates_without_losing_values(tmp_path: Path):
+    path = tmp_path / "legacy.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append([INQUIRY_ID_HEADER, IMPORTANCE_HEADER, "备注"])
+    sheet.append(["inq_legacy", "C", "keep this"])
+    workbook.save(path)
+    workbook.close()
+
+    output = ResearchExcelOutput(path)
+    legacy = output.read_history()
+    assert len(legacy) == 1 and legacy[0].processed_at is None
+    output.upsert("inq_new", importance_raw="A", processed_at=datetime(2026, 3, 1, tzinfo=timezone.utc))
+    migrated = output.read_history()
+    old = next(row for row in migrated if row.inquiry_id == "inq_legacy")
+    assert old.processed_at is None
+    assert old.importance_raw == "C"
+    assert old.remarks == "keep this"
+
+
+def test_history_keeps_legacy_rows_stable_after_timestamped_rows(tmp_path: Path):
+    path = tmp_path / "legacy-order.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append([INQUIRY_ID_HEADER, IMPORTANCE_HEADER, "备注"])
+    sheet.append(["legacy-first", "A", "first"])
+    sheet.append(["legacy-second", "B", "second"])
+    sheet.append(["dated", "D", "dated"])
+    workbook.save(path)
+    workbook.close()
+
+    output = ResearchExcelOutput(path)
+    output.upsert(
+        "dated", importance_raw="D",
+        processed_at=datetime(2026, 7, 1, tzinfo=timezone.utc),
+    )
+    history = output.read_history()
+    assert [row.inquiry_id for row in history] == [
+        "dated", "legacy-first", "legacy-second"
+    ]
+    assert [row.processed_at for row in history[1:]] == [None, None]

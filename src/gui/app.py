@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from tkinter import ttk
 from typing import Any
@@ -29,6 +29,10 @@ _GREEN = "#10B981"
 _YELLOW = "#F59E0B"
 _RED = "#EF4444"
 _BLUE = "#3B82F6"
+_RECENT_BLUE = "#93C5FD"
+_HISTORY_WHITE = "#FFFFFF"
+_WARNING_BG = "#FDE68A"
+_ERROR_BG = "#FCA5A5"
 _GRAY = "#6B7280"
 _BORDER = "#2E2E2E"
 
@@ -36,13 +40,6 @@ _FONT_TITLE = ("Microsoft YaHei UI", 22, "bold")
 _FONT_LABEL = ("Microsoft YaHei UI", 12)
 _FONT_SMALL = ("Microsoft YaHei UI", 10)
 _FONT_NUMBER = ("Microsoft YaHei UI", 20, "bold")
-
-
-def _format_time(value: datetime | None) -> str:
-    if value is None:
-        return "--"
-    local = value.astimezone(timezone.utc).astimezone()
-    return local.strftime("%H:%M:%S")
 
 
 def _status_color(status: str) -> str:
@@ -56,6 +53,30 @@ def _status_color(status: str) -> str:
     return _TEXT_SECONDARY
 
 
+def _order_row_style(order: Order, now: datetime | None = None) -> str:
+    status = order.status.value.casefold()
+    if any(word in status for word in ("人工", "warning", "警告", "部分成功")):
+        return "warning"
+    if any(word in status for word in ("error", "failed", "异常", "错误")):
+        return "error"
+    timestamp = order.processed_at
+    if timestamp is None or timestamp.tzinfo is None or timestamp.utcoffset() is None:
+        return "legacy"
+    now = now or datetime.now(timezone.utc)
+    age = now.astimezone(timezone.utc) - timestamp.astimezone(timezone.utc)
+    return "recent" if timedelta(0) <= age <= timedelta(hours=24) else "legacy"
+
+
+def _countdown_text(status: RunSession, now: datetime | None = None) -> str:
+    if status.state is not RunState.RUNNING:
+        return "00:00"
+    if status.next_poll_at is None:
+        return "即将轮询"
+    now = now or datetime.now(timezone.utc)
+    seconds = max(0, int((status.next_poll_at - now).total_seconds() + 0.999))
+    return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+
 class InsoDashboardApp:
     """Single-page INSO_V1.0 operator dashboard."""
 
@@ -67,6 +88,7 @@ class InsoDashboardApp:
         self._status: RunSession = backend.get_status()
         self._selected_order: Order | None = None
         self._displayed_orders: dict[str, Order] = {}
+        self._displayed_order_ids: tuple[str, ...] = ()
         self._events = MainThreadEventQueue()
         self._main_thread_id = threading.get_ident()
         self._after_id: str | None = None
@@ -154,7 +176,7 @@ class InsoDashboardApp:
 
         self._action_button = ctk.CTkButton(
             card,
-            text="启动自动调研",
+            text="开始询价",
             font=("Microsoft YaHei UI", 14, "bold"),
             fg_color=_GREEN,
             hover_color="#059669",
@@ -185,7 +207,7 @@ class InsoDashboardApp:
             ("已完成", "0"),
             ("正在处理", "0"),
             ("待处理", "0"),
-            ("下次轮询时间", "--"),
+            ("下轮询价倒计时", "00:00"),
         ]
         positions = [(1, 0), (1, 1), (1, 2), (2, 0), (2, 1)]
         for (label_text, value), (row, col) in zip(info_items, positions, strict=True):
@@ -217,11 +239,17 @@ class InsoDashboardApp:
 
         header = ctk.CTkLabel(
             frame,
-            text="本次运行结果",
+            text="询价结果",
             font=_FONT_LABEL,
             text_color=_TEXT_SECONDARY,
         )
         header.grid(row=0, column=0, sticky="w", pady=(0, 8))
+        ctk.CTkLabel(
+            frame,
+            text="蓝色：24小时内｜白色：历史",
+            font=_FONT_SMALL,
+            text_color=_TEXT_SECONDARY,
+        ).grid(row=0, column=0, sticky="w", padx=(82, 0), pady=(0, 8))
 
         toolbar = ctk.CTkFrame(frame, fg_color="transparent")
         toolbar.grid(row=0, column=1, sticky="e", pady=(0, 8))
@@ -257,6 +285,7 @@ class InsoDashboardApp:
             "model",
             "brand",
             "quantity",
+            "importance",
             "stock",
             "min_price",
             "total",
@@ -271,6 +300,7 @@ class InsoDashboardApp:
         self._tree.heading("model", text="型号")
         self._tree.heading("brand", text="品牌")
         self._tree.heading("quantity", text="数量")
+        self._tree.heading("importance", text="重要程度")
         self._tree.heading("stock", text="货量")
         self._tree.heading("min_price", text="市场最低参考价")
         self._tree.heading("total", text="总价")
@@ -278,6 +308,7 @@ class InsoDashboardApp:
         self._tree.column("model", width=160, anchor="w")
         self._tree.column("brand", width=80, anchor="w")
         self._tree.column("quantity", width=60, anchor="e")
+        self._tree.column("importance", width=80, anchor="center")
         self._tree.column("stock", width=80, anchor="e")
         self._tree.column("min_price", width=100, anchor="e")
         self._tree.column("total", width=100, anchor="e")
@@ -307,7 +338,11 @@ class InsoDashboardApp:
             borderwidth=0,
             font=_FONT_SMALL,
         )
-        style.map("Treeview", background=[("selected", _CARD_BG_HOVER)])
+        style.map("Treeview", background=[("selected", "#334155")], foreground=[("selected", "#FFFFFF")])
+        self._tree.tag_configure("recent", background=_RECENT_BLUE, foreground="#111827")
+        self._tree.tag_configure("legacy", background=_HISTORY_WHITE, foreground="#111827")
+        self._tree.tag_configure("warning", background=_WARNING_BG, foreground="#111827")
+        self._tree.tag_configure("error", background=_ERROR_BG, foreground="#111827")
         style.configure(
             "Vertical.TScrollbar",
             background=_CARD_BG,
@@ -415,6 +450,7 @@ class InsoDashboardApp:
             self._backend.start()
         elif self._status.state == RunState.RUNNING:
             self._backend.request_stop_after_cycle()
+            self._update_status(self._backend.get_status())
         else:
             logger.debug("忽略操作：当前状态 %s", self._status.state.value)
 
@@ -431,7 +467,7 @@ class InsoDashboardApp:
         # Action button
         if status.state == RunState.STOPPED:
             self._action_button.configure(
-                text="启动自动调研",
+                text="开始询价",
                 fg_color=_GREEN,
                 hover_color="#059669",
                 state="normal",
@@ -445,7 +481,7 @@ class InsoDashboardApp:
             )
         else:
             self._action_button.configure(
-                text=status.state.value,
+                text=("本轮订单处理中，正在安全结束…" if status.state is RunState.STOPPING_AFTER_CYCLE else status.state.value),
                 fg_color=_GRAY,
                 state="disabled",
             )
@@ -455,8 +491,8 @@ class InsoDashboardApp:
         self._run_info_labels["已完成"].configure(text=str(status.completed))
         self._run_info_labels["正在处理"].configure(text=str(status.in_progress))
         self._run_info_labels["待处理"].configure(text=str(status.pending))
-        self._run_info_labels["下次轮询时间"].configure(
-            text=_format_time(status.next_poll_at)
+        self._run_info_labels["下轮询价倒计时"].configure(
+            text=_countdown_text(status)
         )
 
         # Refresh results
@@ -472,11 +508,15 @@ class InsoDashboardApp:
     def _refresh_results(self) -> None:
         self._assert_main_thread()
         orders = {
-            order.inquiry_id: order for order in self._backend.get_current_run_results()
+            order.inquiry_id: order for order in self._backend.get_result_history()
         }
-        for inquiry_id in self._displayed_orders.keys() - orders.keys():
-            if self._tree.exists(inquiry_id):
-                self._tree.delete(inquiry_id)
+        order_ids = tuple(orders)
+        if order_ids != self._displayed_order_ids:
+            for inquiry_id in self._displayed_order_ids:
+                if self._tree.exists(inquiry_id):
+                    self._tree.delete(inquiry_id)
+            self._displayed_orders = {}
+            self._displayed_order_ids = order_ids
         for order in orders.values():
             if self._displayed_orders.get(order.inquiry_id) == order:
                 continue
@@ -484,14 +524,16 @@ class InsoDashboardApp:
                 order.model,
                 order.brand or "--",
                 order.quantity,
+                order.importance or "--",
                 order.stock_label,
                 self._format_money(order.min_reference_price),
                 self._format_money(order.total_price),
                 order.status.value,
             )
+            tag = _order_row_style(order)
             if self._tree.exists(order.inquiry_id):
                 self._tree.item(
-                    order.inquiry_id, values=values, tags=(order.status.value,)
+                    order.inquiry_id, values=values, tags=(tag,)
                 )
             else:
                 self._tree.insert(
@@ -499,7 +541,7 @@ class InsoDashboardApp:
                     "end",
                     iid=order.inquiry_id,
                     values=values,
-                    tags=(order.status.value,),
+                    tags=(tag,),
                 )
         self._displayed_orders = orders
 

@@ -13,7 +13,7 @@ import subprocess
 import threading
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from random import choice, randint, uniform
 from time import sleep
@@ -68,6 +68,24 @@ class MockBackend(GuiBackend):
         self._last_poll_at: datetime | None = None
         self._next_poll_at: datetime | None = None
         self._orders: list[Order] = []
+        self._history: list[Order] = [
+            Order(
+                inquiry_id="mock-legacy-history",
+                model="LEGACY-DEMO-001",
+                brand="演示历史品牌",
+                quantity=100,
+                stock_label="货多",
+                min_reference_price=Decimal("12.50"),
+                total_price=Decimal("1250.00"),
+                status=OrderStatus.UNKNOWN,
+                sources=tuple(
+                    SourceDetail(source, "无结果") for source in _SOURCE_NAMES
+                ),
+                remark="仅用于界面演示，无处理时间的历史记录",
+                importance="C",
+                processed_at=None,
+            )
+        ]
         self._stop_requested = False
         self._stop_event = threading.Event()
         self._cycle_active = False
@@ -140,9 +158,7 @@ class MockBackend(GuiBackend):
                 self._stop_event.clear()
                 self._cycle_active = False
                 self._memory_mb = get_process_memory_mb()
-                self._next_poll_at = utc_now() + timedelta(
-                    seconds=self._cycle_seconds
-                )
+                self._next_poll_at = None
                 run_id = self._run_id
 
         if already_running:
@@ -232,6 +248,7 @@ class MockBackend(GuiBackend):
         order = self._generate_order()
         with self._lock:
             self._orders.append(order)
+            self._history.append(order)
             self._memory_mb = get_process_memory_mb()
 
         self._log(f"订单 {order.inquiry_id} 处理完成: {order.status.value}")
@@ -275,6 +292,8 @@ class MockBackend(GuiBackend):
             sources=tuple(source_details),
             remark=remark,
             run_id=run_id,
+            importance=choice(("A", "B", "C", "D")),
+            processed_at=datetime.now(timezone.utc),
         )
 
     def get_status(self) -> RunSession:
@@ -302,6 +321,14 @@ class MockBackend(GuiBackend):
     def get_current_run_results(self) -> tuple[Order, ...]:
         with self._lock:
             return tuple(self._orders)
+
+    def get_result_history(self) -> tuple[Order, ...]:
+        with self._lock:
+            return tuple(sorted(
+                self._history,
+                key=lambda order: order.processed_at or datetime.min.replace(tzinfo=timezone.utc),
+                reverse=True,
+            ))
 
     def get_health(self) -> HealthReport:
         with self._lock:

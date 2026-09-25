@@ -7,8 +7,7 @@ from openpyxl import load_workbook
 from src.research.aggregation import aggregate_price_results
 from src.research.contracts import ResearchInput, ResearchReasonCode, ResearchStatus
 from src.research.excel_output import (
-    INQUIRY_ID_HEADER,
-    VISIBLE_HEADERS,
+    CANONICAL_HEADERS,
     ExcelWriteError,
     ResearchExcelOutput,
 )
@@ -250,7 +249,7 @@ def test_icnet_challenge_is_visible_in_excel_remarks(tmp_path: Path) -> None:
     assert load_workbook(path).active["M2"].value == result.remarks
 
 
-def test_service_writes_13_column_idempotent_full_snapshot(tmp_path: Path) -> None:
+def test_service_writes_canonical_idempotent_full_snapshot(tmp_path: Path) -> None:
     path = tmp_path / "调研价格.xlsx"
     sources = _complete(
         {
@@ -276,7 +275,7 @@ def test_service_writes_13_column_idempotent_full_snapshot(tmp_path: Path) -> No
         headers[index - 1]: worksheet.cell(2, index).value
         for index in range(1, worksheet.max_column + 1)
     }
-    assert headers == [*VISIBLE_HEADERS, INQUIRY_ID_HEADER]
+    assert headers == [*CANONICAL_HEADERS]
     assert worksheet.max_row == 2
     assert row["重要等级"] == "A"
     assert row["预估订单总价"] == "80"

@@ -19,6 +19,7 @@ class FailingOutput:
         *,
         importance_raw: str | None,
         remarks: str | None = None,
+        research_status: str | None = None,
     ) -> None:
         raise ExcelWriteError("synthetic failure")
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from decimal import Decimal
 from threading import Event, Lock
 from time import monotonic, sleep
@@ -10,6 +11,7 @@ from src.gui.contracts import RunState
 from src.launcher import backend as launcher
 from src.launcher.backend import ProductionBackend, _decimal
 from src.research import ResearchInput, ResearchResult, ResearchStatus
+from src.research.excel_output import ResearchExcelOutput
 from src.research.service import ResearchService
 from src.workflow import WorkflowStatus, WorkflowWorker
 
@@ -259,6 +261,63 @@ def test_missing_runtime_fails_closed_to_manual_review(tmp_path):
     assert backend.get_status().state is RunState.MANUAL_REVIEW
     assert backend.get_health().overall == "需要人工处理"
     assert "需要人工处理" in backend.get_logs()[-1].message
+    backend.shutdown()
+
+
+def test_history_is_cached_and_uses_research_owned_excel(tmp_path, monkeypatch):
+    path = tmp_path / "results.xlsx"
+    output = ResearchExcelOutput(path)
+    output.upsert(
+        "older", importance_raw="C", mpn="OLD", quantity=4,
+        estimated_total=Decimal("12.50"), market_reference="3.125",
+        research_status="SUCCESS",
+        processed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    output.upsert(
+        "newer", importance_raw="A", mpn="NEW", quantity=2,
+        estimated_total=Decimal(8), market_reference="4",
+        research_status="MANUAL_REVIEW_REQUIRED",
+        processed_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+    )
+    backend = ProductionBackend(
+        config_path=tmp_path / "missing-research.json",
+        production_config_path=tmp_path / "missing-production.json",
+    )
+    backend._excel = path
+    reads = 0
+    real_read = ResearchExcelOutput.read_history
+
+    def count_reads(self):
+        nonlocal reads
+        reads += 1
+        return real_read(self)
+
+    monkeypatch.setattr(ResearchExcelOutput, "read_history", count_reads)
+    backend._refresh_history(force=True)
+    snapshot = backend.get_result_history()
+    assert reads == 1
+    assert [order.inquiry_id for order in snapshot] == ["newer", "older"]
+    assert snapshot[0].importance == "A"
+    assert snapshot[0].status.value == "待人工处理"
+    assert snapshot[1].total_price == Decimal("12.50")
+    backend.get_result_history()
+    backend._refresh_history()
+    assert reads == 1
+
+
+def test_next_poll_deadline_is_explicit_and_cleared_on_stop(tmp_path):
+    backend = ProductionBackend(
+        config_path=tmp_path / "missing-research.json",
+        production_config_path=tmp_path / "missing-production.json",
+    )
+    backend._state = RunState.RUNNING
+    assert backend.get_status().next_poll_at is None
+    deadline = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    backend._next_poll_at = deadline
+    assert backend.get_status().next_poll_at == deadline
+    backend.request_stop_after_cycle()
+    assert backend.get_status().next_poll_at is None
+    assert backend.get_status().state is RunState.STOPPING_AFTER_CYCLE
     backend.shutdown()
 
 

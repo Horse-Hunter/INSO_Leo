@@ -1,8 +1,18 @@
+from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from threading import Thread, get_ident
 from typing import get_type_hints
 
-from src.gui.app import InsoDashboardApp
+from src.gui.app import (
+    _ERROR_BG,
+    _HISTORY_WHITE,
+    _RECENT_BLUE,
+    _WARNING_BG,
+    InsoDashboardApp,
+    _countdown_text,
+    _order_row_style,
+)
 from src.gui.contracts import LogEntry, Order, OrderStatus, RunState, SourceDetail
 from src.gui.mock_backend import MockBackend
 from src.gui.resources import BackendEvent, MainThreadEventQueue
@@ -64,6 +74,7 @@ def test_backend_callbacks_only_enqueue_events_from_worker_thread():
 class _Tree:
     def __init__(self):
         self.rows = {}
+        self.tags = {}
         self.mutations = []
 
     def exists(self, iid):
@@ -71,14 +82,17 @@ class _Tree:
 
     def delete(self, iid):
         self.rows.pop(iid)
+        self.tags.pop(iid, None)
         self.mutations.append(("delete", iid))
 
     def item(self, iid, **kwargs):
         self.rows[iid] = kwargs["values"]
+        self.tags[iid] = kwargs.get("tags", ())
         self.mutations.append(("update", iid))
 
     def insert(self, _parent, _index, *, iid, values, tags):
         self.rows[iid] = values
+        self.tags[iid] = tags
         self.mutations.append(("insert", iid))
 
 
@@ -88,15 +102,17 @@ def test_results_are_not_redrawn_when_snapshot_is_unchanged():
         model="ABC-123",
         brand="Acme",
         quantity=2,
+        importance="B",
         stock_label="待验证",
         min_reference_price=Decimal("1586.74"),
         total_price=Decimal("3173.48"),
         status=OrderStatus.COMPLETED,
         sources=(SourceDetail("INSO", "1800（ABC-123-T）"),),
+        processed_at=utc_now(),
     )
 
     class _Backend:
-        def get_current_run_results(self):
+        def get_result_history(self):
             return (order,)
 
     app = InsoDashboardApp.__new__(InsoDashboardApp)
@@ -104,14 +120,123 @@ def test_results_are_not_redrawn_when_snapshot_is_unchanged():
     app._backend = _Backend()
     app._tree = _Tree()
     app._displayed_orders = {}
+    app._displayed_order_ids = ()
     app._refresh_results()
     first_mutations = tuple(app._tree.mutations)
     app._refresh_results()
 
     assert first_mutations == (("insert", "inq-1"),)
     assert tuple(app._tree.mutations) == first_mutations
-    assert app._tree.rows["inq-1"][3] == "待验证"
-    assert app._tree.rows["inq-1"][4] == "¥1586.74"
+    assert app._tree.rows["inq-1"][3] == "B"
+    assert app._tree.rows["inq-1"][4] == "待验证"
+    assert app._tree.rows["inq-1"][5] == "¥1586.74"
+    assert app._tree.tags["inq-1"] == ("recent",)
+    assert _RECENT_BLUE == "#93C5FD"
+    assert _HISTORY_WHITE == "#FFFFFF"
+    assert _WARNING_BG != _ERROR_BG
+
+
+def test_history_row_color_window_and_warning_override():
+    now = datetime(2026, 5, 1, tzinfo=timezone.utc)
+    base = Order("inq", "MPN", None, 1, "货多", None, None, OrderStatus.COMPLETED)
+    assert _order_row_style(base, now) == "legacy"
+    assert _order_row_style(
+        replace(base, processed_at=now - timedelta(hours=24)), now
+    ) == "recent"
+    assert _order_row_style(
+        replace(base, processed_at=now - timedelta(hours=24, seconds=1)), now
+    ) == "legacy"
+    manual = Order(
+        "inq", "MPN", None, 1, "货多", None, None, OrderStatus.MANUAL_REVIEW,
+        processed_at=now,
+    )
+    partial = Order(
+        "inq", "MPN", None, 1, "货多", None, None, OrderStatus.PARTIAL,
+        processed_at=now,
+    )
+    assert _order_row_style(manual, now) == "warning"
+    assert _order_row_style(partial, now) == "warning"
+    error = replace(base, status=OrderStatus.ERROR, processed_at=now)
+    assert _order_row_style(error, now) == "error"
+
+
+def test_countdown_uses_backend_deadline_and_stopped_states_are_zero():
+    from src.gui.contracts import RunSession
+
+    now = datetime(2026, 5, 1, tzinfo=timezone.utc)
+    running = RunSession(None, RunState.RUNNING, None, None, next_poll_at=now + timedelta(minutes=14, seconds=59))
+    reset_after_poll = RunSession(None, RunState.RUNNING, None, None, next_poll_at=now + timedelta(minutes=15))
+    first_poll = RunSession(None, RunState.RUNNING, None, None)
+    stopping = RunSession(None, RunState.STOPPING_AFTER_CYCLE, None, None, next_poll_at=now + timedelta(minutes=1))
+    stopped = RunSession(None, RunState.STOPPED, None, None)
+    assert _countdown_text(running, now) == "14:59"
+    assert _countdown_text(reset_after_poll, now) == "15:00"
+    assert _countdown_text(reset_after_poll, now + timedelta(seconds=1)) == "14:59"
+    assert _countdown_text(first_poll, now) == "即将轮询"
+    assert _countdown_text(stopping, now) == "00:00"
+    assert _countdown_text(stopped, now) == "00:00"
+
+
+def test_stopping_state_keeps_action_disabled_until_backend_stopped():
+    from src.gui.contracts import HealthReport, RunSession
+
+    class _Widget:
+        def __init__(self):
+            self.values = {}
+
+        def configure(self, **kwargs):
+            self.values.update(kwargs)
+
+    class _Backend:
+        def get_health(self):
+            return HealthReport((), "正常")
+
+    app = InsoDashboardApp.__new__(InsoDashboardApp)
+    app._main_thread_id = get_ident()
+    app._status_badge = _Widget()
+    app._action_button = _Widget()
+    app._run_info_labels = {key: _Widget() for key in (
+        "本轮发现订单", "已完成", "正在处理", "待处理", "下轮询价倒计时"
+    )}
+    app._health_labels = {}
+    app._backend = _Backend()
+    app._refresh_results = lambda: None
+
+    app._update_status(RunSession(None, RunState.STOPPING_AFTER_CYCLE, None, None))
+    assert app._action_button.values == {
+        "text": "本轮订单处理中，正在安全结束…",
+        "fg_color": "#6B7280",
+        "state": "disabled",
+    }
+    assert app._run_info_labels["下轮询价倒计时"].values["text"] == "00:00"
+
+    app._update_status(RunSession(None, RunState.STOPPED, None, None))
+    assert app._action_button.values["text"] == "开始询价"
+    assert app._action_button.values["state"] == "normal"
+
+
+def test_stop_button_requests_backend_and_applies_stopping_snapshot_immediately():
+    from src.gui.contracts import RunSession
+
+    class _Backend:
+        def __init__(self):
+            self.stop_calls = 0
+
+        def request_stop_after_cycle(self):
+            self.stop_calls += 1
+
+        def get_status(self):
+            return RunSession(None, RunState.STOPPING_AFTER_CYCLE, None, None)
+
+    backend = _Backend()
+    app = InsoDashboardApp.__new__(InsoDashboardApp)
+    app._backend = backend
+    app._status = RunSession(None, RunState.RUNNING, None, None)
+    applied = []
+    app._update_status = applied.append
+    app._on_action()
+    assert backend.stop_calls == 1
+    assert applied == [backend.get_status()]
 
 
 class _CloseRoot:

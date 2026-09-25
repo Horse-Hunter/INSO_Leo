@@ -43,6 +43,7 @@ def finalize_research_result(
             inquiry_id,
             importance_raw=importance_raw,
             remarks=remarks,
+            research_status=status.value,
         )
     except ExcelOutputError:
         return ResearchResult(

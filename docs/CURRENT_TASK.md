@@ -1,6 +1,6 @@
 # Current Task
 
-Status: ACTIVE
+Status: READY_FOR_CEO_REVIEW
 
 Goal: 交付 INSO_V1.1 GUI usability 修正：补齐重要程度、展示 Excel 历史询价结果、按 24 小时区分新旧记录、改进 stop-after-cycle 按钮语义，并把下一轮询价改为 15 分钟倒计时。
 
@@ -77,11 +77,15 @@ Architecture Decision:
 - Research 继续拥有 Excel schema；若增加 read-only history reader，优先放在 Research 模块 Public 边界或 launcher 的窄适配层，不把 Excel 解析塞进 GUI。
 - Current-run metrics 与历史结果展示分离，避免因为“显示历史”污染 run_id/session 统计。
 
-Done: NONE
+Done:
+- GUI 表格展示 Research Excel 全历史结果；当前 run metrics/results 保持独立 Contract。
+- Research canonical Excel 新增 UTC ISO-8601“处理时间”和隐藏状态元数据；旧 schema 无损迁移，legacy 时间不推断。
+- launcher 提供带 mtime/size 缓存的历史 snapshot 与真实 next-poll deadline；GUI 倒计时、颜色优先级和 stop-after-cycle 状态已适配。
+- MockBackend 提供独立历史示例；ruff、完整 deterministic pytest、diff 检查与 Windows mock GUI 目视 smoke 完成。
 
-Current: 等待 Main Programmer 开发。
+Current: 实现、自审和验收完成；Owner 已目视确认 Windows mock GUI smoke 符合要求。
 
-Next: Main Programmer 实现 -> deterministic tests -> Windows GUI smoke -> self-review -> commit/push -> CEO Final Review。
+Next: commit/push 当前 feature branch -> CEO Final Review。
 
 Blockers: NONE
 
@@ -94,4 +98,4 @@ Owner Decisions:
 
 Branch: feature/v1-1-gui-usability
 
-Last Good Commit: 3788a6b795a26c8e1945dedfc08f14e01be18d04
+Last Good Commit: PENDING_COMMIT

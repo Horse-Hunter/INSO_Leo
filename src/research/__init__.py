@@ -30,6 +30,7 @@ from .excel_output import (
     ExcelOutputError,
     ExcelWriteError,
     ResearchExcelOutput,
+    ResearchHistoryRecord,
 )
 from .findchips import FindchipsAdapter, FindchipsHttpClient
 from .fx import UsdRmbProvider, UsdRmbQuote
@@ -139,6 +140,7 @@ __all__ = [
     "PriceAggregation",
     "ResearchExcelOutput",
     "ResearchExecution",
+    "ResearchHistoryRecord",
     "ResearchInput",
     "ResearchReasonCode",
     "ResearchResult",

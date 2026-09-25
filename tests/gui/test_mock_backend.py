@@ -23,6 +23,14 @@ def test_backend_initial_state_is_stopped(backend):
     assert status.run_id is None
 
 
+def test_mock_history_is_separate_and_contains_a_legacy_demo_row(backend):
+    history = backend.get_result_history()
+    assert [order.inquiry_id for order in history] == ["mock-legacy-history"]
+    assert history[0].processed_at is None
+    assert history[0].importance == "C"
+    assert backend.get_current_run_results() == ()
+
+
 def test_start_creates_run_id(backend):
     backend.start()
     assert backend.run_id is not None

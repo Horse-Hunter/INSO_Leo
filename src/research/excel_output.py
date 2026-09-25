@@ -6,6 +6,8 @@ import os
 import tempfile
 from collections.abc import Mapping
 from copy import copy
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Final
@@ -29,7 +31,9 @@ HQEW_HEADER = "华强"
 LCSC_HEADER = "立创"
 BOM_AI_HEADER = "正能量"
 REMARKS_HEADER = "备注"
+PROCESSED_AT_HEADER = "处理时间"
 INQUIRY_ID_HEADER = "_inquiry_id"
+RESEARCH_STATUS_HEADER = "_research_status"
 VISIBLE_HEADERS = (
     MPN_HEADER,
     BRAND_HEADER,
@@ -44,8 +48,9 @@ VISIBLE_HEADERS = (
     LCSC_HEADER,
     BOM_AI_HEADER,
     REMARKS_HEADER,
+    PROCESSED_AT_HEADER,
 )
-CANONICAL_HEADERS = (*VISIBLE_HEADERS, INQUIRY_ID_HEADER)
+CANONICAL_HEADERS = (*VISIBLE_HEADERS, RESEARCH_STATUS_HEADER, INQUIRY_ID_HEADER)
 DEFAULT_SHEET_TITLE = "Research"
 SOURCE_HEADERS: Mapping[ResearchSource, str] = {
     ResearchSource.INSO: INSO_HEADER,
@@ -56,6 +61,11 @@ SOURCE_HEADERS: Mapping[ResearchSource, str] = {
 }
 
 _OLD_TOTAL_HEADER = "预计订单总价"
+_OLD_CANONICAL_HEADERS = (
+    MPN_HEADER, BRAND_HEADER, QUANTITY_HEADER, IMPORTANCE_HEADER, STOCK_HEADER,
+    ESTIMATED_TOTAL_HEADER, MARKET_REFERENCE_HEADER, INSO_HEADER, FINDCHIPS_HEADER,
+    HQEW_HEADER, LCSC_HEADER, BOM_AI_HEADER, REMARKS_HEADER, INQUIRY_ID_HEADER,
+)
 _PREVIOUS_HEADERS = (
     MPN_HEADER,
     BRAND_HEADER,
@@ -89,6 +99,22 @@ class ExcelWriteError(ExcelOutputError):
     """The workbook could not be atomically saved."""
 
 
+@dataclass(frozen=True, slots=True)
+class ResearchHistoryRecord:
+    inquiry_id: str
+    mpn: str | None
+    brand: str | None
+    quantity: object | None
+    importance_raw: str | None
+    stock_label: str | None
+    estimated_total: object | None
+    market_reference: str | None
+    source_values: tuple[tuple[str, str], ...]
+    remarks: str | None
+    processed_at: datetime | None
+    research_status: str | None
+
+
 def importance_display_value(importance_raw: str | None) -> str | None:
     """The canonical workbook displays the normalized raw grade unchanged."""
 
@@ -120,6 +146,8 @@ class ResearchExcelOutput:
         estimated_total: Decimal | None | _UnsetType = _UNSET,
         market_reference: str | None | _UnsetType = _UNSET,
         source_values: Mapping[ResearchSource, str] | _UnsetType = _UNSET,
+        research_status: str | None | _UnsetType = _UNSET,
+        processed_at: datetime | None = None,
     ) -> None:
         workbook: OpenpyxlWorkbook | None = None
         try:
@@ -144,6 +172,8 @@ class ResearchExcelOutput:
                 ),
                 MARKET_REFERENCE_HEADER: market_reference,
                 REMARKS_HEADER: remarks,
+                PROCESSED_AT_HEADER: _iso_timestamp(processed_at or datetime.now(timezone.utc)),
+                RESEARCH_STATUS_HEADER: research_status,
             }
             if not isinstance(source_values, _UnsetType):
                 values.update(
@@ -166,6 +196,76 @@ class ResearchExcelOutput:
             raise
         except Exception as exc:
             raise ExcelOutputError("unable to update Research workbook") from exc
+        finally:
+            if workbook is not None:
+                workbook.close()
+
+    def read_history(self) -> tuple[ResearchHistoryRecord, ...]:
+        """Read recognized workbook rows without migrating or modifying the file."""
+        if not self.path.is_file():
+            return ()
+        workbook = None
+        try:
+            workbook = load_workbook(self.path, read_only=True, data_only=True)
+            worksheet = workbook.active
+            headers = tuple(cell.value for cell in next(worksheet.iter_rows(min_row=1, max_row=1)))
+            if len(set(headers)) != len(headers):
+                raise ExcelConsistencyError("duplicate Excel header")
+            recognized = {
+                frozenset(CANONICAL_HEADERS),
+                frozenset(_OLD_CANONICAL_HEADERS),
+                frozenset(_PREVIOUS_HEADERS),
+                frozenset(_LEGACY_HEADERS),
+            }
+            if frozenset(headers) not in recognized:
+                raise ExcelConsistencyError("unrecognized Research workbook schema")
+            columns = {header: index for index, header in enumerate(headers) if header is not None}
+            if INQUIRY_ID_HEADER not in columns:
+                raise ExcelConsistencyError("Research workbook has no inquiry identity")
+            records = []
+            inquiry_ids = set()
+            for values in worksheet.iter_rows(min_row=2, values_only=True):
+                inquiry_id = _cell(values, columns.get(INQUIRY_ID_HEADER))
+                if not isinstance(inquiry_id, str) or not inquiry_id.strip():
+                    continue
+                if inquiry_id in inquiry_ids:
+                    raise ExcelConsistencyError(
+                        f"duplicate {INQUIRY_ID_HEADER} rows for inquiry_id"
+                    )
+                inquiry_ids.add(inquiry_id)
+                sources = tuple(
+                    (header, str(_cell(values, columns.get(header)) or "无结果"))
+                    for header in SOURCE_HEADERS.values()
+                )
+                records.append(ResearchHistoryRecord(
+                    inquiry_id=inquiry_id,
+                    mpn=_string(_cell(values, columns.get(MPN_HEADER))),
+                    brand=_string(_cell(values, columns.get(BRAND_HEADER))),
+                    quantity=_cell(values, columns.get(QUANTITY_HEADER)),
+                    importance_raw=_string(_cell(values, columns.get(IMPORTANCE_HEADER))),
+                    stock_label=_string(_cell(values, columns.get(STOCK_HEADER))),
+                    estimated_total=_cell(values, columns.get(ESTIMATED_TOTAL_HEADER, columns.get(_OLD_TOTAL_HEADER))),
+                    market_reference=_string(_cell(values, columns.get(MARKET_REFERENCE_HEADER))),
+                    source_values=sources,
+                    remarks=_string(_cell(values, columns.get(REMARKS_HEADER))),
+                    processed_at=_parse_timestamp(_cell(values, columns.get(PROCESSED_AT_HEADER))),
+                    research_status=_string(_cell(values, columns.get(RESEARCH_STATUS_HEADER))),
+                ))
+            ordered = sorted(
+                enumerate(records),
+                key=lambda pair: (
+                    pair[1].processed_at is None,
+                    -pair[1].processed_at.timestamp()
+                    if pair[1].processed_at
+                    else 0,
+                    pair[0],
+                ),
+            )
+            return tuple(record for _, record in ordered)
+        except ExcelOutputError:
+            raise
+        except Exception as exc:
+            raise ExcelOutputError("unable to read Research history") from exc
         finally:
             if workbook is not None:
                 workbook.close()
@@ -213,11 +313,13 @@ class ResearchExcelOutput:
                 raise ExcelConsistencyError("duplicate Excel header")
             known_sets = {
                 frozenset(CANONICAL_HEADERS),
+                frozenset(_OLD_CANONICAL_HEADERS),
                 frozenset(_PREVIOUS_HEADERS),
                 frozenset(_LEGACY_HEADERS),
             }
             if frozenset(headers) not in known_sets or len(headers) not in {
                 len(CANONICAL_HEADERS),
+                len(_OLD_CANONICAL_HEADERS),
                 len(_PREVIOUS_HEADERS),
                 len(_LEGACY_HEADERS),
             }:
@@ -239,6 +341,9 @@ class ResearchExcelOutput:
             ].hidden = False
         worksheet.column_dimensions[
             worksheet.cell(row=1, column=columns[INQUIRY_ID_HEADER]).column_letter
+        ].hidden = True
+        worksheet.column_dimensions[
+            worksheet.cell(row=1, column=columns[RESEARCH_STATUS_HEADER]).column_letter
         ].hidden = True
         return columns
 
@@ -306,3 +411,33 @@ class ResearchExcelOutput:
                 except OSError:
                     pass
             raise ExcelWriteError("unable to save Research workbook") from exc
+
+
+def _cell(values, index):
+    return values[index] if index is not None and index < len(values) else None
+
+
+def _string(value):
+    return value if isinstance(value, str) else (str(value) if value is not None else None)
+
+
+def _iso_timestamp(value: datetime) -> str:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("processed_at must be timezone-aware")
+    return value.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
+def _parse_timestamp(value) -> datetime | None:
+    if isinstance(value, datetime):
+        if value.tzinfo is None or value.utcoffset() is None:
+            return None
+        return value.astimezone(timezone.utc)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.astimezone(timezone.utc)
