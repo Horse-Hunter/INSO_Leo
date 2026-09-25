@@ -1,6 +1,6 @@
 # Current Task
 
-Status: READY_FOR_LIVE_SMOKE
+Status: READY_FOR_CEO_REVIEW
 
 Goal: 交付 INSO_V1.0 Production Launcher + ProductionBackend，使 Owner 可以从 Windows GUI 一键启动现有 V1 真实自动调研、查看本次运行真实结果，并安全停止；不改变已验收的 V1 业务规则。
 
@@ -55,28 +55,31 @@ Done:
 - stop-after-cycle 现在先封闭后续 poll admission，等待当前 poll 完成，再 drain 所有当前已到期 work；未来 retry 不等待。
 - 新增真实 production `_run` composition seam 的离线 deterministic test，校验合法配置、readiness、Sheets reader、Research service、SQLite store、Workflow runtime 与 Observer wiring。
 - 新增三条入队 work 的 stop/drain test，验证所有 due item 落盘和线程退出。
-- `ruff check src tests`、launcher tests 与完整 deterministic pytest 通过；未运行 live smoke（本轮明确不要求）。
+- `ruff check src tests`、GUI/launcher tests 与完整 deterministic pytest 通过；最终 rerun 记录见本轮验收提交。
 - GUI 窗口关闭现请求 stop-after-cycle，并用 Tk `after()` 等待 backend terminal state 和 worker thread 退出后再 shutdown/destroy；关闭期间按钮进入“正在退出”状态且不会阻塞 Tk 主线程。
 - GUI deterministic tests 覆盖运行中关闭、cycle 多条 due work drain、等待 worker 退出后 destroy，以及 STOPPED 立即关闭。
+- Human-assisted live smoke：在 clean feature worktree 从 `python -m src.gui.main` 启动 production GUI，Owner 点击 Start / stop-after-cycle / 第二次 Start / 窗口 X；没有使用 MockBackend。
+- 使用既有授权 Chrome profile 的 localhost CDP；Research readiness 与本机 Research credential prerequisites 通过。只读 Sheets OAuth 受保护 refresh grant 有效；未观察到 OAuth consent/login target，也未报告重复 OAuth 弹窗。
+- production config 精确使用获批的 Spreadsheet ID、`2026` / `SHAHAB`、本机 OAuth client JSON、`runtime/production/workflow.sqlite3`；Brand updater 仍 disabled。SQLite/Excel 在 smoke 前不存在，本轮由正式路径新建，未覆盖既有生产文件。
+- 真实 poll 使用配置的 `2026` / `SHAHAB` 两个 worksheet，创建 2 条持久 Workflow 记录；其中有待调研项的记录来自 `2026`。Research 完成 1 条，另一条为 future `RETRY_WAIT`。Excel 有 1 行，与 completed SQLite inquiry ID 对应；型号、数量一致，canonical 展示列存在且有值。GUI 从 backend current-run `Order` 渲染该同一 inquiry 的表格字段，详情源自同一 Excel display row。
+- stop-after-cycle 后 SQLite 无 `QUEUED` / `RESEARCHING` work，保留 1 条 future retry。第二次 GUI Start 后 backend 线程恢复运行，SQLite 总记录仍为 2、inquiry ID 无重复，completed row 未重复创建。
+- Owner 在第二次运行期间关闭窗口；production GUI 进程退出，无 launcher/poller/worker ghost process。SQLite `integrity_check` 正常，Excel completed row 仍在。浏览器 target 检查未发现 OAuth 登录/consent 页；Research CDP adapter 通过 background target 创建采集页，不调用前台激活。
 
 Current:
-- CEO 最终代码复审通过：production composition、stop-after-cycle drain、fail-closed runtime handling 与 GUI non-blocking graceful close 均满足本阶段代码验收。
-- deterministic verification：GUI + launcher 36 passed；full deterministic pytest 358 passed；ruff 与 diff-check 通过。
-- 进入真实 Windows GUI/live smoke；尚未 merge main。
+- CEO 最终代码复审通过：production composition、stop-after-cycle drain、fail-closed runtime handling 与 GUI non-blocking graceful close 均满足代码验收。
+- Human-assisted Windows GUI/V1 live smoke 已执行；SQLite/Excel 结果完整性与 close 后进程退出已核实，未启用 Sheet Brand 写回。
+- 最终 deterministic verification 和 self-review 完成；尚未 merge main。
 
 Next:
-1. 从历史 Research runtime worktree 只读恢复本机 Git-ignored runtime/research.json 到当前 feature worktree；不得修改、reset、clean 或删除历史 worktree。
-2. 新建 Git-ignored runtime/production.json，使用已知生产 Spreadsheet / worksheet / OAuth client 路径与独立 production SQLite。
-3. 启动已授权 CDP Chrome，先做 readiness，再从 GUI production mode 执行真实 poll。
-4. 验证：GUI 可启动；真实 Sheets poll；有 pending 时 Excel/GUI 同 inquiry 一致；stop-after-cycle；第二次 Start dedup；OAuth 不重复弹窗；正常采集不主动抢前台。
-5. 若当前 Codex 无法控制 Windows 原生窗口，采用 human-assisted smoke：Main Programmer 启动/监控生产 GUI，并明确告诉 Owner 何时只点击 Start、Stop-after-cycle 或窗口 X；其余技术验证仍由 Main Programmer完成，不要求恢复 Computer Use RPC。
-6. live smoke 通过后更新 Current Task -> READY_FOR_CEO_REVIEW，commit/push，再由 CEO 决定 merge main。
+1. Main Programmer 完成最终 diff/self-review 与 Git-ignored runtime 确认。
+2. commit/push `feature/v1-production-launcher`，提交 CEO Review。
+3. CEO Review 后决定是否 merge main；本阶段不自行 merge。
 
-Blockers: NONE。当前 Codex 会话缺少 Windows native Computer Use RPC 不是产品 blocker；本轮 live smoke 允许 Owner 仅负责 GUI 物理点击，Main Programmer 继续通过进程、日志、SQLite、Excel 和 runtime 状态做技术验收。该人工辅助仅用于验收，不改变产品“一键 GUI 运行”的要求。
+Blockers: NONE。
 Owner Decisions:
 - Production GUI 第一阶段默认保持 Google Sheet Brand 写回 disabled/no-op，不新增真实 Sheet 写副作用。
 - 当前阶段目标是先让 GUI 真正跑 V1；EXE 打包与开机自启放在后续阶段。
 
 Branch: feature/v1-production-launcher
 
-Last Good Commit: 1d2b3fe42c50d0751bcf6eb1d39ae4812f940ea0
+Last Good Commit: b14b9409104a7ed912cd8a2a0ca80bef7db5d8cc
