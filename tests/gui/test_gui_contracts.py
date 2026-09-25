@@ -260,7 +260,7 @@ def test_stopping_state_keeps_action_disabled_until_backend_stopped():
     app._status_badge = _Widget()
     app._action_button = _Widget()
     app._run_info_labels = {key: _Widget() for key in (
-        "本轮发现订单", "已完成", "正在处理", "待处理", "下轮询价倒计时"
+        "本轮发现订单", "已完成", "正在处理", "下轮询价倒计时"
     )}
     app._health_labels = {}
     app._backend = _Backend()

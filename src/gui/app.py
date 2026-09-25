@@ -208,10 +208,9 @@ class InsoDashboardApp:
             ("本轮发现订单", "0"),
             ("已完成", "0"),
             ("正在处理", "0"),
-            ("待处理", "0"),
             ("下轮询价倒计时", "00:00"),
         ]
-        positions = [(1, 0), (1, 1), (1, 2), (2, 0), (2, 1)]
+        positions = [(1, 0), (1, 1), (1, 2), (2, 0)]
         for (label_text, value), (row, col) in zip(info_items, positions, strict=True):
             cell = ctk.CTkFrame(card, fg_color="transparent")
             cell.grid(row=row, column=col, sticky="nsew", padx=8, pady=8)
@@ -492,7 +491,6 @@ class InsoDashboardApp:
         self._run_info_labels["本轮发现订单"].configure(text=str(status.orders_found))
         self._run_info_labels["已完成"].configure(text=str(status.completed))
         self._run_info_labels["正在处理"].configure(text=str(status.in_progress))
-        self._run_info_labels["待处理"].configure(text=str(status.pending))
         self._run_info_labels["下轮询价倒计时"].configure(
             text=_countdown_text(status)
         )

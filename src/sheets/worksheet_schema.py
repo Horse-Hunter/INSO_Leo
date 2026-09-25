@@ -42,4 +42,8 @@ SHAHAB_SCHEMA = WorksheetSchema(
 def worksheet_schema(worksheet_title: str) -> WorksheetSchema:
     """Return the confirmed V1 mapping for a worksheet title."""
 
-    return SHAHAB_SCHEMA if worksheet_title == "shahab" else STANDARD_SCHEMA
+    # Google Sheets worksheet titles are passed through unchanged for every
+    # API operation and identity.  Schema selection alone is case-insensitive
+    # so the confirmed production title ``SHAHAB`` receives its B/D/E/F
+    # mapping just like the historical lower-case spelling.
+    return SHAHAB_SCHEMA if worksheet_title.casefold() == "shahab" else STANDARD_SCHEMA

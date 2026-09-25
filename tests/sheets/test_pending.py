@@ -197,3 +197,24 @@ def test_shahab_pending_status_comparison_is_exact() -> None:
     records = query_pending_records(reader, worksheet)
 
     assert [record.row_position for record in records] == [5]
+
+
+def test_uppercase_shahab_title_uses_shahab_schema_without_changing_identity() -> None:
+    worksheet = WorksheetIdentity(spreadsheet="supplier-sheet", worksheet="SHAHAB")
+    reader = FakeWorksheetRowReader(
+        [
+            shahab_row(
+                8,
+                status="未发",
+                model="SHAHAB-MPN",
+                brand="Source Brand",
+                quantity=40,
+            )
+        ]
+    )
+
+    records = query_pending_records(reader, worksheet)
+
+    assert [record.model for record in records] == ["SHAHAB-MPN"]
+    assert records[0].importance_raw == "A"
+    assert records[0].record_identity.worksheet == worksheet

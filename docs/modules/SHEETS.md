@@ -11,7 +11,7 @@ Sheets 执行 Workflow 明确调用的单次操作：按 worksheet-specific sche
 | 标准表 | A | C | E | F | G | A 严格等于 `未发` |
 | `shahab` | B | 无源字段；标准化为 `A` | D | E | F | B 严格等于 `未发` |
 
-SHAHAB 的默认 `importance_raw = "A"` 只属于标准化输出，不代表源 worksheet 字段，也不得进入 source snapshot 或 relocation。
+SHAHAB 的默认 `importance_raw = "A"` 只属于标准化输出，不代表源 worksheet 字段，也不得进入 source snapshot 或 relocation。Schema 选择对已确认的 `SHAHAB` 标题不区分大小写；Google Sheets API 读取、record identity 和所有引用仍保留配置中的原始 worksheet 标题。
 
 实现中的 source snapshot 继续使用统一语义字段承载源值：标准表的
 `importance_raw` 保存 C；SHAHAB 的 snapshot `importance_raw` 为 `None`，
