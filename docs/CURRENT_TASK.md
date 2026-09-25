@@ -128,12 +128,20 @@ Current:
 - Owner completed the approved dedicated-profile login and latest packaged smoke. Production collection has no visible Chrome or PowerShell interruption, and the latest SHAHAB pending-order discovery and GUI changes were confirmed.
 - CEO Final Review's lazy-CDP retry regression is fixed. A narrow `ResearchPreparationError` now identifies failures before `ResearchService.execute()`. Workflow rolls back the transient claim and its attempt count, then lets launcher enter `MANUAL_REVIEW` and stop polling/worker without creating `RETRY_WAIT` or spending a business retry. Generic Research exceptions and `RETRYABLE_FAILURE` remain on their unchanged 15/30/60 retry path.
 - Browser acquisition failure is fail-closed. If readiness cannot be proven after an owned browser is acquired, launcher closes that owned handle before entering manual handling. A packaged negative-path smoke used an isolated runtime with an unreachable CDP and no bootstrap config; the GUI showed “需要人工处理”, did not start Chrome, and its isolated queue retained zero attempts and no Research status.
+- CEO Final Review found one release-build hygiene blocker that also explains the Owner-observed project growth from roughly 5 GB to 8 GB during repeated package testing. `scripts/build_windows_release.ps1` creates fresh GUID paths `build/release-dist-<id>` and `build/pyinstaller-<id>` for every build. `$stageWork` is never deleted, and `-BuildOnly` also leaves every `$stageDist` behind. Repeated clean builds therefore accumulate large PyInstaller staging trees indefinitely.
 
 Next:
-CEO Final Review and merge decision. The follow-on soak phase remains separate.
+1. Fix `scripts/build_windows_release.ps1` so repeated builds do not monotonically grow the repo/worktree.
+2. Preserve the safety rule that an existing deployed `dist/INSO_V1.1` containing local runtime data is never deleted or overwritten automatically.
+3. Recommended simple design: use a stable throwaway staging area under `build/` (or unique temp dirs with a guaranteed `finally` cleanup). Always remove PyInstaller work files after the build. `-BuildOnly` may retain at most one current staging artifact for scan/self-check, but starting the next BuildOnly must safely replace only that known throwaway staging path.
+4. Never clean `runtime/`, Vault, browser profiles, SQLite, Excel, `.venv-release`, or any worktree. Do not generic-recursively clean `build/` if unknown operator files may exist; target only paths owned by the release script.
+5. Add a deterministic/manual build verification: run two consecutive clean `-BuildOnly` builds and confirm the number/size of release staging directories does not grow per run; run artifact scan/self-check on the retained current staging artifact.
+6. After the script fix is proven, it is acceptable to remove only stale directories matching the old script-owned patterns `build/release-dist-*` and `build/pyinstaller-*`, report reclaimed size, and leave all runtime/data/profile/worktree content untouched.
+7. Re-run ruff/full deterministic pytest/diff-check only if Python code changes; otherwise PowerShell build/self-check/artifact scan plus the two-build no-growth verification is sufficient.
+8. commit/push current branch and return to CEO Final Review; do not merge main.
 
 Blockers:
-NONE.
+- Release build script leaks per-build PyInstaller staging directories under `build/`, causing multi-GB disk growth during repeated packaging.
 
 Owner Decisions:
 - 发布名称：INSO_V1.1。
