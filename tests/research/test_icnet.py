@@ -60,15 +60,26 @@ class FakeLocator:
 
 
 class FakeCdpPage:
-    def __init__(self, url: str, html: str, *, has_body: bool = True) -> None:
+    def __init__(
+        self,
+        url: str,
+        html: str,
+        *,
+        has_body: bool = True,
+        response_status: int | None = None,
+    ) -> None:
         self.url = url
         self.html = html
         self.has_body = has_body
+        self.response_status = response_status
         self.goto_calls: list[tuple[str, str, int]] = []
 
-    def goto(self, url: str, *, wait_until: str, timeout: int) -> None:
+    def goto(self, url: str, *, wait_until: str, timeout: int):
         self.goto_calls.append((url, wait_until, timeout))
         self.url = url
+        if self.response_status is None:
+            return None
+        return type("Response", (), {"status": self.response_status})()
 
     def wait_for_load_state(self, state: str, *, timeout: int) -> None:
         assert state == "load"
@@ -409,6 +420,20 @@ def test_cdp_client_navigation_reuses_attached_normal_chrome_page() -> None:
     target_url = "https://www.ic.net.cn/search/ABC-123.html"
     assert captured.url == target_url
     assert page.goto_calls == [(target_url, "domcontentloaded", 1234)]
+
+
+def test_cdp_client_classifies_http_forbidden_before_parser() -> None:
+    page = FakeCdpPage(
+        "https://www.ic.net.cn/",
+        "<html><body>forbidden</body></html>",
+        response_status=403,
+    )
+    client, _ = _cdp_client([page], navigate=True)
+
+    with pytest.raises(IcNetPageUnavailable, match="HTTP_STATUS_403") as caught:
+        client.fetch_first_page("ABC-123")
+
+    assert caught.value.source_url == "https://www.ic.net.cn/search/ABC-123.html"
 
 
 def test_cdp_client_spaces_queries_to_the_same_site(

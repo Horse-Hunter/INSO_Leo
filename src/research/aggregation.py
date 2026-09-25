@@ -59,6 +59,8 @@ def _failure_reason(code: str) -> str:
         return "需要人工验证"
     if "FX" in upper:
         return "汇率不可用"
+    if "HTTP_STATUS_403" in upper:
+        return "访问被站点拒绝"
     if any(word in upper for word in ("PARSE", "UNPARSEABLE", "MISSING")):
         return "结果解析失败"
     if (

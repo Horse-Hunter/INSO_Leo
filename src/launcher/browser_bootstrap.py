@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -24,27 +25,93 @@ class BrowserHandle:
     owned: bool
     process: object | None = None
     close_fn: Callable[[], None] | None = None
+    cleanup_fn: Callable[[], None] | None = None
 
     def close(self) -> None:
-        if self.owned and self.close_fn:
-            self.close_fn()
+        if not self.owned:
+            return
+        try:
+            if self.close_fn:
+                self.close_fn()
+        finally:
+            if self.cleanup_fn:
+                self.cleanup_fn()
+
+
+def _hide_owned_windows(process_id: int) -> None:
+    """Hide top-level windows owned by this app-launched Chrome process only."""
+
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        callback_type = ctypes.WINFUNCTYPE(
+            wintypes.BOOL, wintypes.HWND, wintypes.LPARAM
+        )
+
+        @callback_type
+        def hide_if_owned(hwnd, _lparam):
+            owner_pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner_pid))
+            if owner_pid.value == process_id:
+                user32.ShowWindow(hwnd, 0)  # SW_HIDE
+            return True
+
+        user32.EnumWindows(hide_if_owned, 0)
+    except (AttributeError, OSError):
+        # This optional UI hygiene guard must never affect collection.
+        return
+
+
+def _start_owned_window_hider(process: object) -> Callable[[], None]:
+    """Continuously hide only windows belonging to the owned Chrome process."""
+
+    process_id = getattr(process, "pid", None)
+    if os.name != "nt" or not isinstance(process_id, int) or process_id <= 0:
+        return lambda: None
+    stopped = threading.Event()
+
+    def run() -> None:
+        while not stopped.wait(0.02):
+            _hide_owned_windows(process_id)
+
+    _hide_owned_windows(process_id)
+    threading.Thread(
+        target=run,
+        name="owned-chrome-window-hider",
+        daemon=True,
+    ).start()
+    return stopped.set
 
 
 def _launch(executable: Path, profile: Path, port: int):
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    startupinfo = None
+    if os.name == "nt":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
     return subprocess.Popen(
         [
             str(executable),
             f"--user-data-dir={profile}",
             f"--remote-debugging-port={port}",
             "--remote-debugging-address=127.0.0.1",
-            "--headless=new",
-            "--disable-gpu",
+            # Several authenticated supplier sites reject a headless Chrome
+            # session even when the approved profile is valid.  A normal
+            # Chrome session keeps those site checks intact. Do not create an
+            # initial browser window: CDP creates research targets in the
+            # background, so collection cannot steal desktop focus.
+            "--no-startup-window",
             "--no-first-run",
             "--no-default-browser-check",
         ],
         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         creationflags=flags,
+        startupinfo=startupinfo,
     )
 
 
@@ -142,6 +209,7 @@ def acquire_cdp_browser(
     handle = BrowserHandle(
         owned=True, process=process,
         close_fn=lambda: _close_owned_process(process, cdp_url),
+        cleanup_fn=_start_owned_window_hider(process),
     )
     deadline = monotonic() + timeout
     try:

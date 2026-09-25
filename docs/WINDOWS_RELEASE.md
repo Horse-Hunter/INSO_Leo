@@ -34,11 +34,14 @@ include an explicit approved Chrome bootstrap section:
 The profile directory must already exist. The application never guesses or
 creates it. If configured CDP is reachable, the app reuses it and does not close
 it. Otherwise, Chrome is launched only with this explicit configuration and is
-closed after the backend has drained and stopped. INSO starts owned Chrome with
-`--headless=new`; routine collection does not open a visible browser or take the
-foreground. Login, CAPTCHA, OTP, and device verification remain fail-closed and
-require a separate human action. Do not use a profile that is also used by an
-ordinary Chrome session.
+closed after the backend has drained and stopped. INSO starts owned Chrome as a
+normal Chrome process without an initial window, while CDP creates research
+targets in the background. Authenticated supplier sites therefore receive a
+regular session without taking the Owner's foreground or display space. It
+closes an app-owned session after the current due-work batch drains; the next
+due inquiry starts it again. Login, CAPTCHA, OTP, and device verification remain
+fail-closed and require a separate human action. Do not use a profile that is
+also used by an ordinary Chrome session.
 
 Startup and sanitized launcher diagnostics are written to
 `runtime/logs/INSO_V1.1.log` with three 1 MB backups. The release directory must

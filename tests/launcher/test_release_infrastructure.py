@@ -129,7 +129,7 @@ def test_cdp_reachable_reuses_without_launch_or_close(tmp_path):
     assert launches == []
 
 
-def test_owned_chrome_bootstrap_is_headless_and_never_shows_foreground(monkeypatch, tmp_path):
+def test_owned_chrome_bootstrap_uses_windowless_normal_chrome(monkeypatch, tmp_path):
     import src.launcher.browser_bootstrap as browser_module
 
     executable = tmp_path / "chrome.exe"
@@ -144,25 +144,42 @@ def test_owned_chrome_bootstrap_is_headless_and_never_shows_foreground(monkeypat
     monkeypatch.setattr(browser_module.subprocess, "Popen", fake_popen)
     browser_module._launch(executable, profile, 9222)
 
-    assert "--headless=new" in captured["args"]
-    assert "--disable-gpu" in captured["args"]
+    assert "--no-startup-window" in captured["args"]
+    assert "--start-minimized" not in captured["args"]
+    assert "--headless=new" not in captured["args"]
     assert "--remote-debugging-address=127.0.0.1" in captured["args"]
     kwargs = captured["kwargs"]
     assert kwargs["stdin"] is browser_module.subprocess.DEVNULL
     assert kwargs["stdout"] is browser_module.subprocess.DEVNULL
     assert kwargs["stderr"] is browser_module.subprocess.DEVNULL
+    assert kwargs["startupinfo"] is not None
+    assert (
+        kwargs["startupinfo"].dwFlags
+        & browser_module.subprocess.STARTF_USESHOWWINDOW
+    )
+    assert kwargs["startupinfo"].wShowWindow == browser_module.subprocess.SW_HIDE
     assert not kwargs["creationflags"] & getattr(
         browser_module.subprocess, "DETACHED_PROCESS", 0
     )
 
 
-def test_cdp_launches_only_explicit_existing_profile_and_closes_owned(tmp_path):
+def test_cdp_launches_only_explicit_existing_profile_and_closes_owned(
+    tmp_path, monkeypatch
+):
+    import src.launcher.browser_bootstrap as browser_module
+
     executable = tmp_path / "chrome.exe"
     executable.touch()
     profile = tmp_path / "approved-profile"
     profile.mkdir()
     calls = []
+    hider_stopped = []
     process = _Process()
+    monkeypatch.setattr(
+        browser_module,
+        "_start_owned_window_hider",
+        lambda candidate: (lambda: hider_stopped.append(candidate)),
+    )
     probes = iter((False, True))
     handle = acquire_cdp_browser(
         "http://127.0.0.1:9222", tmp_path,
@@ -178,6 +195,7 @@ def test_cdp_launches_only_explicit_existing_profile_and_closes_owned(tmp_path):
     assert calls == [(executable, profile, 9222)]
     handle.close()
     assert process.terminated
+    assert hider_stopped == [process]
 
 
 def test_cdp_missing_or_invalid_bootstrap_fails_closed(tmp_path):
@@ -272,23 +290,25 @@ def test_backend_closes_only_owned_browser_after_runtime_thread_exits(tmp_path, 
     # Reuse the deterministic test config seam from the launcher suite.
     from tests.launcher.test_backend import _SheetsService, _write_runtime_configs
 
-    production, research, rows = _write_runtime_configs(tmp_path)
+    production, research, rows = _write_runtime_configs(tmp_path, pending_count=1)
     poll_called = threading.Event()
+    browser_acquired = threading.Event()
     closed = []
     browser = BrowserHandle(owned=owned, close_fn=lambda: closed.append(threading.current_thread().name))
     monkeypatch.setattr(backend_module, "build_read_only_google_sheets_service", lambda _path: _SheetsService(rows, poll_called))
-    monkeypatch.setattr(backend_module, "assess_readiness", lambda *_a, **_k: type("Ready", (), {"ready": True})())
+    monkeypatch.setattr(backend_module, "assess_readiness", lambda *_a, **_k: type("Ready", (), {"ready": True, "missing_site_ids": ()})())
     monkeypatch.setattr(research_runtime, "assess_readiness", lambda *_a, **_k: type("Ready", (), {"ready": True})())
-    monkeypatch.setattr(backend_module, "build_production_research_service", lambda *_a, **_k: type("Research", (), {"execute": lambda self, item: ResearchResult(item.inquiry_id, ResearchStatus.SUCCESS)})())
+    monkeypatch.setattr(backend_module, "build_research_service", lambda *_a, **_k: type("Research", (), {"execute": lambda self, item: ResearchResult(item.inquiry_id, ResearchStatus.SUCCESS)})())
     backend = ProductionBackend(
         config_path=research, production_config_path=production,
         cdp_probe=lambda _url: True,
-        browser_acquirer=lambda *_args, **_kwargs: browser,
+        browser_acquirer=lambda *_args, **_kwargs: (browser_acquired.set() or browser),
     )
     backend.start()
     assert poll_called.wait(5)
+    assert browser_acquired.wait(5)
     backend.request_stop_after_cycle()
     backend._thread.join(5)
     assert not backend._thread.is_alive()
     assert backend.get_status().state is RunState.STOPPED
-    assert closed == (["production-launcher"] if owned else [])
+    assert closed == (["production-research-worker"] if owned else [])

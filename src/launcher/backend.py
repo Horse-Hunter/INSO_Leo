@@ -32,7 +32,7 @@ from src.research.excel_output import ResearchExcelOutput
 from src.research.runtime import (
     ResearchRuntimeConfigError,
     assess_readiness,
-    build_production_research_service,
+    build_research_service,
     load_runtime_config,
     probe_loopback_endpoint,
 )
@@ -63,13 +63,16 @@ class _Observer:
         "登录不可用",
     )
 
-    def __init__(self, service, seen, manual_review):
+    def __init__(self, service, seen, manual_review, prepare=None):
         self.service = service
         self.seen = seen
         self.manual_review = manual_review
+        self.prepare = prepare
 
     def execute(self, item: ResearchInput) -> ResearchResult:
         self.seen(item.inquiry_id)
+        if self.prepare is not None:
+            self.prepare()
         result = self.service.execute(item)
         remarks = (result.remarks or "").casefold()
         if any(marker in remarks for marker in self._HUMAN_ACTION_MARKERS):
@@ -90,6 +93,8 @@ class ProductionBackend(GuiBackend):
         self.cdp_probe = cdp_probe
         self._browser_acquirer = browser_acquirer
         self._browser_handle: BrowserHandle | None = None
+        self._research_ready = False
+        self._research_gate = threading.Lock()
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._drain_due_on_stop = threading.Event()
@@ -154,6 +159,7 @@ class ProductionBackend(GuiBackend):
             self._next_poll_at = None
             self._stop.clear()
             self._drain_due_on_stop.clear()
+            self._research_ready = False
             self._poll_idle.set()
             self._state = RunState.RUNNING
             self._thread = threading.Thread(
@@ -186,16 +192,15 @@ class ProductionBackend(GuiBackend):
             rc = load_runtime_config(self.config_path)
             if not rc.excel_output_path.is_absolute():
                 rc = replace(rc, excel_output_path=resolve_app_path(rc.excel_output_path, root=self.root))
-            probe = self.cdp_probe or probe_loopback_endpoint
-            try:
-                self._browser_handle = self._browser_acquirer(
-                    rc.cdp.cdp_url, self.root, cfg, probe=probe
-                )
-            except Exception as exc:
-                raise RuntimeError("CDP browser requires manual handling") from exc
-            readiness = assess_readiness(rc.cdp.cdp_url, cdp_probe=probe)
-            if not readiness.ready:
-                raise RuntimeError("Research readiness requires manual handling")
+            # Credential configuration can be checked before polling, while the
+            # browser itself stays dormant until a due inquiry needs Research.
+            # This keeps empty 15-minute Sheets polls from launching Chrome.
+            credential_readiness = assess_readiness(
+                rc.cdp.cdp_url,
+                cdp_probe=lambda _url: True,
+            )
+            if credential_readiness.missing_site_ids:
+                raise RuntimeError("Research credential readiness requires manual handling")
             client = Path(cfg["client_secret_file"])
             client = resolve_app_path(client, root=self.root)
             reader = GoogleSheetsRowReader(
@@ -213,17 +218,26 @@ class ProductionBackend(GuiBackend):
                 else resolve_app_path(rc.excel_output_path, root=self.root)
             )
             self._store = WorkflowStateStore(db)
-            research = build_production_research_service(rc, cdp_probe=self.cdp_probe)
+            research = build_research_service(rc)
+
+            def prepare_research() -> None:
+                self._ensure_research_ready(rc, cfg)
+
             worker = WorkflowWorker(
                 self._store,
-                _Observer(research, self._seen, self._manual_review),
+                _Observer(
+                    research,
+                    self._seen,
+                    self._manual_review,
+                    prepare=prepare_research,
+                ),
                 brand_updater=None,
             )
             runtime = WorkflowRuntime(
                 WorkflowPoller(self._store, reader), worker, worksheets
             )
             self._refresh_history(force=True)
-            self._set_health(("正常", "已连接", "正常", "正常"), "正常")
+            self._set_health(("正常", "待命", "正常", "正常"), "正常")
 
             def poll_loop():
                 try:
@@ -238,7 +252,8 @@ class ProductionBackend(GuiBackend):
                             with self._lock:
                                 if self._state is RunState.RUNNING:
                                     self._next_poll_at = utc_now() + runtime.poll_interval
-                            self._set_health(("正常", "已连接", "正常", "正常"), "正常")
+                            browser_state = "已连接" if self._research_ready else "待命"
+                            self._set_health(("正常", browser_state, "正常", "正常"), "正常")
                         finally:
                             self._poll_idle.set()
                         if self._stop.wait(runtime.poll_interval.total_seconds()):
@@ -255,6 +270,7 @@ class ProductionBackend(GuiBackend):
                         self._refresh()
                         if processed is not None:
                             continue
+                        self._release_idle_browser()
                         if self._stop.is_set() and self._drain_due_on_stop.is_set():
                             if self._poll_idle.is_set():
                                 return
@@ -305,6 +321,53 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             if inquiry not in self._inquiries:
                 self._inquiries.append(inquiry)
+
+    def _ensure_research_ready(self, research_config, production_config) -> None:
+        """Start or reuse CDP only for a due inquiry, then verify readiness."""
+
+        with self._research_gate:
+            if self._research_ready:
+                return
+            probe = self.cdp_probe or probe_loopback_endpoint
+            try:
+                self._browser_handle = self._browser_acquirer(
+                    research_config.cdp.cdp_url,
+                    self.root,
+                    production_config,
+                    probe=probe,
+                )
+            except Exception as exc:
+                raise RuntimeError("CDP browser requires manual handling") from exc
+            readiness = assess_readiness(
+                research_config.cdp.cdp_url,
+                cdp_probe=probe,
+            )
+            if not readiness.ready:
+                if self._browser_handle is not None:
+                    self._browser_handle.close()
+                    self._browser_handle = None
+                raise RuntimeError("Research readiness requires manual handling")
+            self._research_ready = True
+        self._set_health(("正常", "已连接", "正常", "正常"), "正常")
+
+    def _release_idle_browser(self) -> None:
+        """Release an app-owned browser after this due-work batch is drained."""
+
+        with self._research_gate:
+            if not self._research_ready:
+                return
+            handle = self._browser_handle
+            self._browser_handle = None
+            self._research_ready = False
+        if handle is not None:
+            try:
+                handle.close()
+            except Exception as exc:  # noqa: BLE001 - cleanup boundary
+                log.warning("Idle browser shutdown failed (%s)", type(exc).__name__)
+        with self._lock:
+            running = self._state is RunState.RUNNING
+        if running:
+            self._set_health(("正常", "待命", "正常", "正常"), "正常")
 
     def _runtime_error(self, exc):
         log.warning("Production runtime worker failed (%s)", type(exc).__name__)

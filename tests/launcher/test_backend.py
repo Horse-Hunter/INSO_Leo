@@ -134,7 +134,8 @@ def test_production_composition_builds_real_seams_without_network(
         launcher,
         "assess_readiness",
         lambda *_args, **_kwargs: (
-            readiness_calls.append(True) or SimpleNamespace(ready=True)
+            readiness_calls.append(True)
+            or SimpleNamespace(ready=True, missing_site_ids=())
         ),
     )
 
@@ -143,7 +144,7 @@ def test_production_composition_builds_real_seams_without_network(
     monkeypatch.setattr(
         research_runtime,
         "assess_readiness",
-        lambda *_args, **_kwargs: SimpleNamespace(ready=True),
+        lambda *_args, **_kwargs: SimpleNamespace(ready=True, missing_site_ids=()),
     )
     captured = {}
     real_worker = WorkflowWorker
@@ -190,6 +191,48 @@ def test_production_composition_builds_real_seams_without_network(
     backend.shutdown()
 
 
+def test_empty_poll_defers_browser_bootstrap_until_an_inquiry_is_due(
+    tmp_path, monkeypatch
+):
+    production, research_config, rows = _write_runtime_configs(tmp_path)
+    sheets_called = Event()
+    browser_calls = []
+    monkeypatch.setattr(
+        launcher,
+        "build_read_only_google_sheets_service",
+        lambda _path: _SheetsService(rows, sheets_called),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "assess_readiness",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            ready=True, missing_site_ids=()
+        ),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "build_research_service",
+        lambda *_args, **_kwargs: SimpleNamespace(execute=lambda _item: None),
+    )
+    backend = ProductionBackend(
+        config_path=research_config,
+        production_config_path=production,
+        cdp_probe=lambda _url: True,
+        browser_acquirer=lambda *_args, **_kwargs: browser_calls.append(True),
+    )
+
+    backend.start()
+    assert sheets_called.wait(5)
+    assert _wait_until(lambda: backend.get_health().overall == "正常")
+    assert browser_calls == []
+    backend.request_stop_after_cycle()
+    backend._thread.join(timeout=5)
+
+    assert backend._thread is not None and not backend._thread.is_alive()
+    assert backend.get_status().state is RunState.STOPPED
+    backend.shutdown()
+
+
 def test_stop_after_cycle_drains_every_due_item_from_current_poll(
     tmp_path, monkeypatch
 ):
@@ -209,7 +252,7 @@ def test_stop_after_cycle_drains_every_due_item_from_current_poll(
     monkeypatch.setattr(
         launcher,
         "assess_readiness",
-        lambda *_args, **_kwargs: SimpleNamespace(ready=True),
+        lambda *_args, **_kwargs: SimpleNamespace(ready=True, missing_site_ids=()),
     )
 
     class _Research:
@@ -223,7 +266,7 @@ def test_stop_after_cycle_drains_every_due_item_from_current_poll(
             return ResearchResult(item.inquiry_id, ResearchStatus.SUCCESS)
 
     monkeypatch.setattr(
-        launcher, "build_production_research_service", lambda *_a, **_kw: _Research()
+        launcher, "build_research_service", lambda *_a, **_kw: _Research()
     )
     backend = ProductionBackend(
         config_path=research_config, production_config_path=production,

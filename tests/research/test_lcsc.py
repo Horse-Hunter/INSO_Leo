@@ -5,6 +5,7 @@ from typing import Self
 
 from src.research.fx import UsdRmbQuote
 from src.research.lcsc import (
+    CdpLcscClient,
     LcscAdapter,
     LcscBrowserClient,
     LcscPage,
@@ -299,3 +300,103 @@ def test_browser_client_uses_chinese_search_then_verified_product_page() -> None
     assert capture.product is not None
     assert capture.product.mpn == "ADXL355BEZ-RL7"
     assert browser.closed
+
+
+class _CdpLocator:
+    def __init__(self, text: str = "", count: int = 0) -> None:
+        self._text = text
+        self._count = count
+
+    def inner_text(self) -> str:
+        return self._text
+
+    def count(self) -> int:
+        return self._count
+
+    def all(self) -> list[object]:
+        return []
+
+
+class _CdpPage:
+    def __init__(self) -> None:
+        self.url = "about:blank"
+        self.goto_calls: list[str] = []
+        self.closed = False
+
+    def goto(self, url: str, *, wait_until: str, timeout: int) -> None:
+        assert wait_until == "domcontentloaded"
+        assert timeout > 0
+        self.goto_calls.append(url)
+        self.url = url
+
+    def wait_for_timeout(self, timeout: int) -> None:
+        assert timeout >= 0
+
+    def locator(self, selector: str) -> _CdpLocator:
+        if selector == "body":
+            return _CdpLocator("search page")
+        return _CdpLocator()
+
+    def get_by_text(self, _text: str, *, exact: bool) -> _CdpLocator:
+        assert exact
+        return _CdpLocator()
+
+    def content(self) -> str:
+        return _cn_search_html()
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _CdpContext:
+    def __init__(self, page: _CdpPage) -> None:
+        self.pages = [page]
+
+
+class _CdpBrowser:
+    def __init__(self, context: _CdpContext) -> None:
+        self.contexts = [context]
+
+
+class _CdpChromium:
+    def __init__(self, browser: _CdpBrowser) -> None:
+        self.browser = browser
+
+    def connect_over_cdp(self, _url: str, *, timeout: int) -> _CdpBrowser:
+        assert timeout > 0
+        return self.browser
+
+
+class _CdpPlaywright:
+    def __init__(self, chromium: _CdpChromium) -> None:
+        self.chromium = chromium
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+
+def test_cdp_client_initializes_lcsc_sso_before_background_search(
+    monkeypatch,
+) -> None:
+    page = _CdpPage()
+    chromium = _CdpChromium(_CdpBrowser(_CdpContext(page)))
+    monkeypatch.setattr(
+        "src.research.lcsc.new_background_page",
+        lambda _browser, _context, **_kwargs: page,
+    )
+    client = CdpLcscClient(
+        timeout_ms=1234,
+        playwright_factory=lambda: _CdpPlaywright(chromium),
+    )
+
+    capture = client.fetch_product_page("ADXL355BEZ-RL7")
+
+    assert page.goto_calls == [
+        "https://www.szlcsc.com/",
+        "https://so.szlcsc.com/global.html?k=ADXL355BEZ-RL7",
+    ]
+    assert capture.product is not None
+    assert page.closed

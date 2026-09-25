@@ -112,6 +112,22 @@ def test_normal_pool_20_percent_and_partial_failure() -> None:
     ]
 
 
+def test_http_forbidden_is_not_reported_as_a_parse_failure() -> None:
+    results = _complete(
+        {
+            ResearchSource.HQEW: _result(
+                ResearchSource.HQEW,
+                SourceOutcome.SOURCE_UNAVAILABLE,
+                failure_code="HTTP_STATUS_403",
+            ),
+        }
+    )
+
+    aggregation = aggregate_price_results(results, 10)
+
+    assert aggregation.remarks == "华强：访问被站点拒绝"
+
+
 def test_no_normal_price_with_technical_failure_is_retryable_not_fallback() -> None:
     results = _complete(
         {

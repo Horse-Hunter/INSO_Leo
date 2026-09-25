@@ -56,7 +56,7 @@ def _status_color(status: str) -> str:
 
 def _order_row_style(order: Order, now: datetime | None = None) -> str:
     status = order.status.value.casefold()
-    if any(word in status for word in ("warning", "警告", "部分成功")):
+    if any(word in status for word in ("warning", "警告")):
         return "warning"
     if any(word in status for word in ("error", "failed", "异常", "错误")):
         return "error"

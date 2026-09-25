@@ -28,6 +28,7 @@ from .source_contracts import (
 )
 
 LCSC_USER_AGENT = "INSO-Leo-Research/1.0 (read-only LCSC adapter)"
+LCSC_HOME_URL = "https://www.szlcsc.com/"
 
 
 class LcscError(RuntimeError):
@@ -256,20 +257,30 @@ def parse_lcsc_cooperation_card(text: str, target_mpn: str) -> LcscProduct | Non
 class CdpLcscClient:
     """Read LCSC search results in an authenticated Owner Chrome session."""
 
-    def __init__(self, *, cdp_url: str = "http://127.0.0.1:9222", timeout_ms: int = 45_000) -> None:
+    def __init__(
+        self,
+        *,
+        cdp_url: str = "http://127.0.0.1:9222",
+        timeout_ms: int = 45_000,
+        playwright_factory: Callable[[], object] | None = None,
+    ) -> None:
         if urlsplit(cdp_url).hostname not in {"127.0.0.1", "localhost", "::1"}:
             raise ValueError("LCSC CDP endpoint must be loopback")
         self._cdp_url = cdp_url
         self._timeout_ms = timeout_ms
+        self._playwright_factory = playwright_factory
 
     def fetch_product_page(self, mpn: str) -> LcscPage:
         search_url = "https://so.szlcsc.com/global.html?" + urlencode({"k": mpn.strip()})
+        factory = self._playwright_factory
+        if factory is None:
+            try:
+                from playwright.sync_api import sync_playwright
+            except ImportError as exc:
+                raise LcscPageUnavailable("PLAYWRIGHT_NOT_INSTALLED") from exc
+            factory = sync_playwright
         try:
-            from playwright.sync_api import sync_playwright
-        except ImportError as exc:
-            raise LcscPageUnavailable("PLAYWRIGHT_NOT_INSTALLED") from exc
-        try:
-            with sync_playwright() as playwright:
+            with factory() as playwright:  # type: ignore[attr-defined]
                 browser = playwright.chromium.connect_over_cdp(
                     self._cdp_url, timeout=self._timeout_ms
                 )
@@ -278,6 +289,15 @@ class CdpLcscClient:
                     browser, context, timeout_ms=self._timeout_ms
                 )
                 try:
+                    # LCSC's SSO may only complete after its home page has
+                    # initialized the already-authorized profile. This is a
+                    # read-only navigation in the same background CDP target.
+                    page.goto(
+                        LCSC_HOME_URL,
+                        wait_until="domcontentloaded",
+                        timeout=self._timeout_ms,
+                    )
+                    page.wait_for_timeout(1_000)
                     page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
                     page.wait_for_timeout(3_000)
                     if urlsplit(page.url).hostname == "passport.jlc.com":

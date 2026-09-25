@@ -599,7 +599,7 @@ class CdpIcNetClient:
                         if remaining > 0:
                             time.sleep(remaining)
                     self._last_navigation_at = time.monotonic()
-                    page.goto(
+                    response = page.goto(
                         target_url,
                         wait_until="domcontentloaded",
                         timeout=self._timeout_ms,
@@ -611,6 +611,12 @@ class CdpIcNetClient:
                     page.wait_for_timeout(self._settle_ms)
 
                 current_url = page.url
+                status = getattr(response, "status", None) if self._navigate else None
+                if isinstance(status, int) and status >= 400:
+                    raise IcNetPageUnavailable(
+                        f"HTTP_STATUS_{status}",
+                        current_url,
+                    )
                 if page.locator("body").count() == 0:
                     raise IcNetPageUnavailable(
                         "RESULT_PAGE_BLOCKED",

@@ -217,7 +217,7 @@ def test_history_row_color_window_and_warning_override():
         processed_at=now,
     )
     assert _order_row_style(exception_order, now) == "error"
-    assert _order_row_style(partial, now) == "warning"
+    assert _order_row_style(partial, now) == "recent"
     error = replace(base, status=OrderStatus.ERROR, processed_at=now)
     assert _order_row_style(error, now) == "error"
     assert error.status.value == "异常"
