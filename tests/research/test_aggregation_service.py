@@ -8,6 +8,8 @@ from src.research.aggregation import aggregate_price_results
 from src.research.contracts import ResearchInput, ResearchReasonCode, ResearchStatus
 from src.research.excel_output import (
     CANONICAL_HEADERS,
+    PROCESSED_AT_HEADER,
+    RESEARCH_STATUS_HEADER,
     ExcelWriteError,
     ResearchExcelOutput,
 )
@@ -283,6 +285,8 @@ def test_service_writes_canonical_idempotent_full_snapshot(tmp_path: Path) -> No
     assert row["Findchips"] == "8\n7（无库存）"
     assert row["华强"] == "无结果"
     assert row["备注"] is None
+    assert row[RESEARCH_STATUS_HEADER] == ResearchStatus.SUCCESS.value
+    assert row[PROCESSED_AT_HEADER].endswith("+00:00")
     inquiry_letter = worksheet.cell(1, worksheet.max_column).column_letter
     assert worksheet.column_dimensions[inquiry_letter].hidden is True
 

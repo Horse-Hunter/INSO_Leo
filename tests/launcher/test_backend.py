@@ -279,6 +279,16 @@ def test_history_is_cached_and_uses_research_owned_excel(tmp_path, monkeypatch):
         research_status="MANUAL_REVIEW_REQUIRED",
         processed_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
     )
+    output.upsert(
+        "partial", importance_raw="B", mpn="PARTIAL", quantity=1,
+        research_status="PARTIAL_SUCCESS",
+        processed_at=datetime(2026, 1, 3, tzinfo=timezone.utc),
+    )
+    output.upsert(
+        "retryable", importance_raw="D", mpn="RETRYABLE", quantity=1,
+        research_status="RETRYABLE_FAILURE",
+        processed_at=datetime(2026, 1, 4, tzinfo=timezone.utc),
+    )
     backend = ProductionBackend(
         config_path=tmp_path / "missing-research.json",
         production_config_path=tmp_path / "missing-production.json",
@@ -296,10 +306,14 @@ def test_history_is_cached_and_uses_research_owned_excel(tmp_path, monkeypatch):
     backend._refresh_history(force=True)
     snapshot = backend.get_result_history()
     assert reads == 1
-    assert [order.inquiry_id for order in snapshot] == ["newer", "older"]
-    assert snapshot[0].importance == "A"
-    assert snapshot[0].status.value == "待人工处理"
-    assert snapshot[1].total_price == Decimal("12.50")
+    assert [order.inquiry_id for order in snapshot] == [
+        "retryable", "partial", "newer", "older"
+    ]
+    assert [order.status.value for order in snapshot] == [
+        "异常", "部分成功", "待人工处理", "已完成"
+    ]
+    assert snapshot[2].importance == "A"
+    assert snapshot[3].total_price == Decimal("12.50")
     backend.get_result_history()
     backend._refresh_history()
     assert reads == 1
