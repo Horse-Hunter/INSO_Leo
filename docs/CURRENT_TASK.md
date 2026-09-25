@@ -55,4 +55,4 @@ Owner Decisions:
 
 Branch: feature/v1-1-gui-usability
 
-Last Good Commit: cde0b7374636c6d2750d49a850e11f3df9e95749
+Last Good Commit: 5bc988e
