@@ -1,6 +1,6 @@
 # Current Task
 
-Status: READY_FOR_CEO_REVIEW
+Status: BLOCKED
 
 Goal: 交付 INSO_V1.1 Windows 可发布版本：从已验收 main 生产基线构建可双击启动的 Windows 桌面包，解决 frozen runtime 路径、配置发现、单实例、日志/启动错误、CDP Chrome 启动/复用与发布包 smoke；不改变已验收业务规则。
 
@@ -124,11 +124,25 @@ Architecture Decision:
 
 Done: Runtime root, single-instance guard, safe startup logging, CDP ownership and onedir packaging are implemented. The frozen Core Provider bundles only its canonical PowerShell module, never Vault data; the packaged read-only diagnostic confirms the required Site IDs without exposing credentials. Vault subprocesses remain hidden. Explorer-launched production GUI successfully polled the configured Sheets with OAuth silent reuse, wrote terminal results to matching SQLite/Excel history, displayed countdown and history, rejected a second instance, drained stop-after-cycle, preserved dedup, and closed safely on X. Dedicated-profile authenticated collection now uses normal Chrome only for due work, creates no visible startup window, keeps owned windows hidden, and closes its owned browser after the due batch drains. It does not close a reused browser. IC.net HTTP rejection is classified explicitly. LCSC initializes its authenticated home session before search, preventing a false temporary-unavailable result. `SHAHAB` schema selection is case-insensitive while the original worksheet title remains the API and identity value, so the confirmed production title reads B/D/E/F correctly. The GUI no longer displays the unreliable pending count; partial success uses normal 24-hour blue/history white coloring and exceptions remain red. No price, MPN, stock, FX, retry or Google Sheet Brand-write rule changed.
 
-Current: Owner completed the approved dedicated-profile login and latest packaged smoke. Production collection has no visible Chrome or PowerShell interruption, and the latest SHAHAB pending-order discovery and GUI changes were confirmed.
+Current:
+- Owner completed the approved dedicated-profile login and latest packaged smoke. Production collection has no visible Chrome or PowerShell interruption, and the latest SHAHAB pending-order discovery and GUI changes were confirmed.
+- CEO Final Review found one failure-path regression in the lazy CDP bootstrap integration. `_Observer.execute()` calls `prepare()` before Research, but `WorkflowWorker.process_due_one()` treats any exception from the Research executor as a retryable Research exception. Therefore `ProductionBackend._ensure_research_ready()` failures such as missing browser bootstrap config, Chrome launch failure, or CDP readiness timeout are currently converted into Workflow retry / retry-budget consumption instead of launcher `MANUAL_REVIEW` / “需要人工处理”.
+- This violates the release acceptance that local CDP/bootstrap failures must fail closed as an operator action and must not be mistaken for a business Research retry. The successful packaged smoke does not exercise this negative path.
 
-Next: CEO final review, then merge decision. The follow-on soak phase remains separate.
+Next:
+1. Main Programmer separate infrastructure-preparation failures from Research retryable failures. A CDP/bootstrap/readiness failure before `ResearchService.execute` must transition the launcher to `MANUAL_REVIEW` / stop polling-worker safely, surface sanitized “需要人工处理”, and must not consume the inquiry retry budget.
+2. Do not change genuine `RETRYABLE_FAILURE` behavior from Research; those still use 15/30/60 retry.
+3. Add deterministic integration regression at ProductionBackend/Workflow boundary:
+   - one due inquiry + browser_acquirer raises `BrowserBootstrapError` -> launcher enters `MANUAL_REVIEW`;
+   - work item must not be advanced as a Research retry because Research never started;
+   - no repeated browser launch loop;
+   - owned/reused browser semantics remain unchanged.
+4. Also cover CDP readiness failure after acquisition with the same operator-action semantics and owned handle cleanup.
+5. rerun relevant tests, full deterministic pytest, ruff, diff-check, rebuild only if runtime code changed (it will), then one short packaged negative-path smoke plus the already-passing happy-path smoke as needed.
+6. commit/push current branch and return to CEO Final Review; do not merge main.
 
-Blockers: NONE.
+Blockers:
+- Lazy CDP/bootstrap infrastructure failures are currently swallowed by WorkflowWorker's generic Research-exception retry path, so local browser startup/readiness problems can consume business retry budget instead of entering launcher MANUAL_REVIEW.
 
 Owner Decisions:
 - 发布名称：INSO_V1.1。
