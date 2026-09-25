@@ -1,193 +1,42 @@
 # Current Task
 
-Status: NONE
+Status: READY_FOR_CEO_REVIEW
 
-Goal: INSO_V1.1 Windows release stage 已完成并关闭；等待下一阶段任务。
+Goal: Deliver the V1.2 architecture/design spike for seven-day INSO duplicate detection, post-Research routing, notifications/retry/alerts, controlled purchase-draft entry, GUI history, SQLite evolution, and explicit browser/session ownership. Do not implement production behavior in this stage.
 
 Business Outcome:
-- Owner 不再需要打开终端执行 `python -m src.gui.main`，可从 Windows 发布目录双击 `INSO_V1.1.exe` 启动。
-- 发布版继续使用同一 ProductionBackend / Workflow / Research，不出现“打包后另一套逻辑”。
-- 发布版能稳定找到本机 Git-ignored runtime 配置、SQLite、Excel 与 OAuth client；不会把 secret/token/cookie/browser profile 打进 EXE 或提交 Git。
-- 若已授权 CDP Chrome 正在运行则安全复用；若未运行且本机配置了批准的 Chrome executable/profile，则由应用启动专用 CDP Chrome。应用只关闭自己启动的浏览器，不关闭用户预先存在的 Chrome/CDP。
-- 同一 Windows 用户同时只允许运行一个 INSO_V1.1 实例；第二次双击给出明确提示并退出。
-- windowed EXE 没有控制台时，启动失败仍有可理解的弹窗与本地滚动日志可查。
+- Give CEO and Safety Supervisor a reviewable design and stable public-contract proposal before implementation.
+- Preserve V1.1 Research business rules and keep `release/v1.1` independently recoverable.
 
 Acceptance:
-1. 版本与入口
-   - Windows 窗口标题、发布目录、EXE 名统一为 `INSO_V1.1` / `INSO_V1.1.exe`。
-   - Python 开发入口 `python -m src.gui.main` 继续可用，`--mock` 继续仅用于开发/演示。
-   - 发布版默认 Production，不得因打包变成 Mock。
-2. frozen-aware 路径
-   - 新增单一 Public runtime/app-root resolver（建议 core/launcher infrastructure seam），repo 模式保持当前 repo root 语义；PyInstaller frozen 模式以 EXE 所在发布目录为 app root。
-   - ProductionBackend 不再直接依赖 `Path(__file__).resolve().parents[2]` 作为唯一生产路径来源。
-   - 默认配置仍为 `<app_root>/runtime/research.json` 与 `<app_root>/runtime/production.json`。
-   - production/research config 内现有相对路径保持相对 app_root 解析，避免破坏已验收的 `runtime/production/workflow.sqlite3` 等配置。
-   - 可选支持明确环境变量覆盖（例如 `INSO_RUNTIME_DIR`），但若实现必须有文档、测试和 fail-closed 行为；不要为了“灵活”引入复杂配置系统。
-3. 发布目录
-   - 首版采用 PyInstaller `onedir + windowed`，优先稳定、可排障；本阶段不追求 onefile。
-   - 目标结构至少：
-     `dist/INSO_V1.1/INSO_V1.1.exe`
-     `dist/INSO_V1.1/_internal/...`
-     `dist/INSO_V1.1/runtime/`（本地部署时创建；通用 Git/build artifact 不包含真实 secret/config/runtime 数据）
-   - `dist/`、`build/`、本地 release runtime、日志继续 Git-ignored。
-   - 提交可复现的 PyInstaller spec/build script（例如 `packaging/INSO_V1.1.spec` + `scripts/build_windows_release.ps1` 或等价结构）。
-4. 依赖与 PyInstaller
-   - 明确发布构建所需直接依赖，新增 release/build requirements 或等价可复现说明；不要只依赖某台机器“碰巧已装”。
-   - spec 正确收集 customtkinter 所需 data、Google OAuth/Sheets、openpyxl、Playwright Python runtime 等实际使用依赖。
-   - 不捆绑 Chromium/Chrome 浏览器二进制；Research 继续连接外部批准的本机 Chrome/CDP。
-   - 不捆绑 OAuth token、client secret、credential、cookie、storage state、SQLite、Excel、browser profile。
-5. 单实例
-   - Windows 发布版使用 OS 级可靠 single-instance guard（优先 named mutex；可等价实现）。
-   - guard 必须在 ProductionBackend/browser bootstrap 之前取得。
-   - 第二实例不得启动第二套 poller/worker/CDP；显示“INSO_V1.1 已在运行”之类明确提示后退出。
-   - 正常退出和异常退出后锁应由 OS 自动释放，不依赖脆弱的 stale lock file 清理。
-   - Python 单元测试需能通过 injectable seam / fake 验证，不要求 CI 真创建 Windows mutex。
-6. 启动错误与日志
-   - windowed EXE 顶层启动异常不得静默消失；显示非敏感中文错误提示和日志位置。
-   - 新增本地滚动日志（建议 RotatingFileHandler，有限大小/数量）到发布 app root 下可写的 runtime/logs 或等价路径。
-   - 日志不得输出 secret/token/cookie/profile 内容；继续沿用现有 sanitized runtime errors。
-   - 如果 app root 不可写，必须 fail closed 并给出可操作提示；不要偷偷写到未知目录。
-7. CDP Chrome bootstrap / ownership
-   - 在 Production Launcher 的基础设施边界实现，不放进 GUI，不复制 Research 浏览器逻辑。
-   - 启动时先 probe 已配置 CDP URL：
-     * reachable：attach/reuse，标记 `owned=False`，应用退出时绝不关闭它。
-     * unreachable：若 production config 明确提供批准的 Chrome executable + user-data/profile dir + debug port，则启动该专用 CDP Chrome，等待 readiness，标记 `owned=True`。
-     * 缺配置、启动失败或 readiness 超时：fail closed -> GUI/启动提示“需要人工处理”，不猜路径、不创建未知 profile。
-   - 不硬编码 Owner 当前机器的绝对 Chrome/profile 路径进 Git；这些只存在于 Git-ignored production config。
-   - 不删除、不复制、不重置现有 browser profile。
-   - owned browser 在应用最终 graceful shutdown 后应尽量正常关闭并确认无残留；不得 kill 用户已有浏览器。若实现正常关闭需要 CDP Browser.close 或等价安全机制，必须只对 owned session 生效。
-   - CAPTCHA / OTP / 登录 / 设备验证仍由人工完成，不自动绕过。
-8. production config 扩展
-   - 允许向 Git-ignored `runtime/production.json` 增加 browser bootstrap 非 secret 字段，例如 executable/profile/debug-port/timeout；命名由实现决定。
-   - 旧 production.json 在 CDP 已经 reachable 的情况下仍可工作，避免无必要的强制迁移。
-   - 若 CDP 不 reachable 且缺 bootstrap 字段，应明确人工处理，而不是异常 traceback。
-9. 应用图标
-   - 添加一个简单原创的 INSO V1.1 Windows app icon 作为发布资产；不使用第三方商标/受版权图片。
-   - 本阶段图标只要求清晰、专业、在任务栏/Explorer 可识别，不做品牌设计项目。
-   - icon 源资产与 `.ico` 可提交；不要把字体文件等无关大资产提交仓库。
-10. 发布包运行
-   - 双击 EXE 后 GUI 正常出现，无 console window。
-   - GUI 的 V1.1 历史结果、重要程度、颜色、倒计时、stop-after-cycle、graceful X close 与 Python 模式一致。
-   - “打开 Excel”“打开结果目录”在 frozen 模式指向发布 runtime 配置定义的真实路径。
-   - OAuth protected refresh grant 继续使用 Windows CurrentUser DPAPI / LocalAppData，不因 EXE 路径变化重复 consent；client secret 路径仍由本机 config 提供。
-11. 资源/退出
-   - 退出时先沿用现有 GUI graceful close：当前 cycle 安全收尾、worker/poller 退出。
-   - 再释放 owned browser / single-instance resources；不得先杀浏览器导致正在执行 Research 中断。
-   - 关闭后无 INSO launcher/poller/worker ghost process；owned CDP Chrome 无残留；reused Chrome 不受影响。
-12. deterministic tests 至少覆盖：
-   - repo vs frozen app-root/runtime path resolver；
-   - relative production/research paths；
-   - single-instance acquire/fail/release seam；
-   - second instance 不构造 ProductionBackend；
-   - CDP reachable -> reuse/no close；
-   - CDP unreachable + valid bootstrap -> launch/wait/owned；
-   - missing bootstrap / launch timeout -> fail closed；
-   - shutdown 只关闭 owned browser；
-   - startup exception -> sanitized user-facing message/log path seam；
-   - existing GUI/launcher/research/workflow regressions。
-13. Windows release smoke
-   - 在 clean release worktree 构建 `dist/INSO_V1.1/`。
-   - 使用本机 Git-ignored runtime 配置完成本地部署；不得把配置提交或放入可分享的 generic artifact。
-   - 从 Explorer/双击方式启动 EXE，不通过 Python。
-   - 验证 production GUI、history display、runtime config discovery、OAuth silent reuse、CDP attach/launch、真实 Sheets poll 至少一轮。
-   - 若有 due inquiry，允许完整处理；如没有，则真实 poll 成功即可，不伪造。
-   - 测 stop-after-cycle、再次启动 dedup、运行中 X graceful close。
-   - 测第二次双击只提示已有实例，不创建第二套 runtime。
-   - 测 app-owned Chrome 与 pre-existing Chrome 两种 ownership：owned 随 app 安全退出；pre-existing 不被关闭。
-14. soak 准备
-   - 本阶段只需提供可执行的 soak checklist/命令与 diagnostics 观察点，不要求一次性跑 8/24 小时。
-   - 下一阶段再执行长时间 soak：内存稳定平台、线程/handle、Excel/SQLite、CDP pages/contexts、15 分钟周期。
-15. 验证
-   - `ruff check src tests`
-   - release/launcher/gui relevant tests
-   - full deterministic pytest
-   - `git diff --check`
-   - PyInstaller clean build success
-   - Windows packaged smoke success
-   - 对 build/dist 做 secret/config/runtime 扫描，确认无 token/client secret/cookie/profile/sqlite/xlsx 泄漏。
+- [x] `docs/V1_2_ARCHITECTURE.md` defines state/routing, DuplicateCheckResult, notification and purchase contracts, events/alerts, Sheets customer schema, browser/session lifecycle, WRITE ALLOWLIST, GUI seam, additive SQLite strategy, evidence path, test matrix, implementation plan and approval gates.
+- [x] Design records confirmed Owner rules and exposes unresolved items as decisions/UNKNOWN.
+- [x] No V1.2 runtime behavior, production access, real Sheet write, INSO action or business email was performed.
+- [x] Design and task record are committed and pushed on `feature/v1-2`; no merge to main.
 
 Constraints:
-- 不修改已验收 Research/Workflow/Sheets 业务规则。
-- 不开启 Google Sheet Brand 写回；ProductionBackend 继续 `brand_updater=None`。
-- 不把实际 production config、Spreadsheet ID、OAuth client JSON、token、browser profile、SQLite、Excel、credential 写入 Git/spec/dist generic release。
-- 不下载或捆绑 Chrome/Chromium。
-- 不绕过 CAPTCHA/OTP/设备验证。
-- 不 reset/clean/delete历史 Research worktree。
-- 不做 installer/MSI、自动更新、代码签名、开机自启；这些属于后续发布增强。
-- 不为了打包把 GUI/launcher/research 业务代码复制到另一个 entrypoint。
+- Keep V1.1 Research price, MPN, stock, FX, retry and output rules unchanged.
+- Do not operate a real INSO page, create/save/send a purchase inquiry, send business email, or modify Google Sheets.
+- `保存并发送` is prohibited. Production Brand write stays disabled.
+- Runtime evidence remains Git-ignored; no secrets or production data in Git, logs, or fixtures.
 
-Architecture Decision:
-- 新增 release/runtime infrastructure 只负责 app-root、single-instance、browser ownership、logging/startup boundary、PyInstaller packaging。
-- GUI 继续只依赖 GuiBackend contract；launcher 继续是 production composition root。
-- Python mode 与 frozen EXE 必须使用同一 ProductionBackend 与业务模块。
-- 首版选择 onedir，不选择 onefile；先保证银行内网环境下稳定、可审计、可排障。
-
-Done: Runtime root, single-instance guard, safe startup logging, CDP ownership and onedir packaging are implemented. The frozen Core Provider bundles only its canonical PowerShell module, never Vault data; the packaged read-only diagnostic confirms the required Site IDs without exposing credentials. Vault subprocesses remain hidden. Explorer-launched production GUI successfully polled the configured Sheets with OAuth silent reuse, wrote terminal results to matching SQLite/Excel history, displayed countdown and history, rejected a second instance, drained stop-after-cycle, preserved dedup, and closed safely on X. Dedicated-profile authenticated collection now uses normal Chrome only for due work, creates no visible startup window, keeps owned windows hidden, and closes its owned browser after the due batch drains. It does not close a reused browser. IC.net HTTP rejection is classified explicitly. LCSC initializes its authenticated home session before search, preventing a false temporary-unavailable result. `SHAHAB` schema selection is case-insensitive while the original worksheet title remains the API and identity value, so the confirmed production title reads B/D/E/F correctly. The GUI no longer displays the unreliable pending count; partial success uses normal 24-hour blue/history white coloring and exceptions remain red. No price, MPN, stock, FX, retry or Google Sheet Brand-write rule changed.
+Done:
+- Confirmed `origin/main`, `origin/release/v1.1`, and `origin/feature/v1-2` initially pointed to `be9d0a51d0375884dfa3e5e9e4317958899fdc75`; target branch included latest main.
+- Built an isolated `feature/v1-2` worktree to protect unrelated dirty files in the original checkout.
+- Read relevant V1.1 workflow, Research/INSO history, Sheets schema, launcher/CDP, GUI contracts and safety docs.
+- Wrote the V1.2 architecture proposal and this task record.
 
 Current:
-- Owner completed the approved dedicated-profile login and latest packaged smoke. Production collection has no visible Chrome or PowerShell interruption, and the latest SHAHAB pending-order discovery and GUI changes were confirmed.
-- CEO Final Review's lazy-CDP retry regression is fixed. A narrow `ResearchPreparationError` now identifies failures before `ResearchService.execute()`. Workflow rolls back the transient claim and its attempt count, then lets launcher enter `MANUAL_REVIEW` and stop polling/worker without creating `RETRY_WAIT` or spending a business retry. Generic Research exceptions and `RETRYABLE_FAILURE` remain on their unchanged 15/30/60 retry path.
-- Browser acquisition failure is fail-closed. If readiness cannot be proven after an owned browser is acquired, launcher closes that owned handle before entering manual handling. A packaged negative-path smoke used an isolated runtime with an unreachable CDP and no bootstrap config; the GUI showed “需要人工处理”, did not start Chrome, and its isolated queue retained zero attempts and no Research status.
-- CEO accepted the build-script no-growth repair in `884a08b611a94bf733e170ff4370512cd084ce08`; two consecutive `-BuildOnly` builds reused the marked staging root without growth. The final local storage classification is complete below.
+- Design is ready for CEO and Safety Supervisor review.
+- CEO decisions and remaining UNKNOWN items are listed at the end of `docs/V1_2_ARCHITECTURE.md`.
 
-Closeout:
-- The accepted build-script no-growth repair remains unchanged: one marked `build/windows-release-stage`, guaranteed PyInstaller work cleanup, `-BuildOnly` retains at most one artifact, runtime-bearing staging is protected, and deployed `dist/INSO_V1.1` is never replaced. The two accepted consecutive BuildOnly builds, frozen self-checks, `RELEASE_SCAN_OK`, and lifecycle smoke remain as recorded above. The lifecycle smoke log under the fixed stage's `runtime/logs` was retained.
-- Classified all 18 old release/recovery candidates in the active release worktree's `build/`. All passed `scripts/scan_release_artifact.py`; all had zero reparse points, Git metadata, runtime/config/credential data, browser profile paths, SQLite/Excel/customer-data file types, or unknown top-level source/operator files. All matched known PyInstaller onedir or extracted `_internal` layouts.
-- Deleted only `build/release-internal-backup-5b913b70e83b4ade806009e7f3f8771f` (257,760,781 bytes / 245.80 MiB). Its 2,174-file payload was byte-for-byte identical to the retained `release-program-backup-35bb323de96c4ad882eb0986c7064ce6/_internal`; it had no EXE or unique files. It was a direct child of the active worktree's `build/`, not a Git worktree, active stage, or deployed release. No process was running and no protected data was touched.
-- At the initial audit, the following 17 complete onedir snapshots were `KEEP_UNKNOWN`. CEO subsequently approved their removal because the canonical source/version history and reproducible build recipe are retained. All 17 exact paths have now been deleted. Per-candidate non-sensitive inventory recorded before deletion (relative category/name, size, modified time, top-level shape and layout):
+Next:
+- CEO resolves product/business contract decisions; Safety Supervisor reviews production write and browser/session risks before any live write implementation or smoke.
 
-| Candidate under `build/` | Size | Modified (local) | First-level shape | Classification |
-|---|---:|---|---|---|
-| `deployed-backup-66c368a40e044b41a482944fc22af1f9` | 251.91 MiB | 2026-09-25 16:59 | 1 EXE + `_internal/`; 2,170 files | DELETED, CEO-approved onedir snapshot |
-| `deployed-backup-e8f8f5ae474a4b11accdf26a27cab668` | 252.18 MiB | 2026-09-25 16:32 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
-| `release-internal-backup-5b913b70e83b4ade806009e7f3f8771f` | 245.80 MiB | 2026-09-25 15:25 | 98 top-level `_internal` payload entries; 2,174 files | DELETED, earlier exact duplicate |
-| `release-old-package-196f282695c04d98afe3fcbfdc566830` | 252.16 MiB | 2026-09-25 13:23 | 1 EXE + `_internal/`; 2,174 files | DELETED, CEO-approved onedir snapshot |
-| `release-old-package-a5146bb39fed4040bc176a116ef1efc5` | 252.16 MiB | 2026-09-25 13:32 | 1 EXE + `_internal/`; 2,174 files | DELETED, CEO-approved onedir snapshot |
-| `release-old-package-af8878a830024ecb925381d9e2eb50f1` | 252.17 MiB | 2026-09-25 13:55 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
-| `release-old-package-b3437d38a8d8445c94d777729071268d` | 252.16 MiB | 2026-09-25 13:14 | 1 EXE + `_internal/`; 2,174 files | DELETED, CEO-approved onedir snapshot |
-| `release-old-package-b98987c0a3e542bda93ab1c8356c9e7a` | 252.16 MiB | 2026-09-25 13:50 | 1 EXE + `_internal/`; 2,174 files | DELETED, CEO-approved onedir snapshot |
-| `release-program-backup-35bb323de96c4ad882eb0986c7064ce6` | 252.17 MiB | 2026-09-25 15:33 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
-| `release-program-backup-6cc5edd74f2a401e8df3ea4ba2b9637a` | 252.18 MiB | 2026-09-25 16:09 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
-| `release-program-backup-937696ed6e164879ae81e91917444f49` | 252.17 MiB | 2026-09-25 15:15 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
-| `release-program-backup-a39bdba5107c4f5db5fe8555947c6815` | 252.18 MiB | 2026-09-25 15:42 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
-| `release-program-backup-e5aa4a0c77b64897baa81ca06ac3cc73` | 252.17 MiB | 2026-09-25 15:07 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
-| `release-program-backup-e753939cffe34fe796ac4cb9a02c8d18` | 252.18 MiB | 2026-09-25 16:01 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
-| `release-program-backup-eec25bd81642445391317cd67ad8f31d` | 250.91 MiB | 2026-09-25 15:25 | 1 EXE + `_internal/`; 2,174 files | DELETED, CEO-approved onedir snapshot |
-| `replaced-release-69b43485062b4fda9dc525ea721297a6` | 252.17 MiB | 2026-09-25 14:28 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
-| `replaced-release-ac9fabf9317a4aaa96a9da695fca47ef` | 244.47 MiB | 2026-09-25 14:12 | 1 EXE + `_internal/`; 1,245 files | DELETED, CEO-approved onedir snapshot |
-| `replaced-release-ee01dc2443114a8aa800b66715f0010f` | 252.17 MiB | 2026-09-25 14:06 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
+Blockers: NONE for this design spike.
 
-- For this CEO-approved 17-path deletion: `BEFORE_TOTAL_GB=6.266973` (6,266,973,161 bytes); `AFTER_TOTAL_GB=1.781515` (1,781,515,244 bytes); `RECLAIMED_GB=4.485458` (4,485,457,917 bytes). All 17 exact paths are absent. Across the original 18 classified candidates, DELETE_SAFE=18 and KEEP_UNKNOWN=0. The deployed `dist/INSO_V1.1`, fixed `build/windows-release-stage`, `.venv-release`, all 19 Git worktrees, runtime/Vault/OAuth/profile data, SQLite/Excel/customer data were preserved. INSO process count was 0 before and after deletion.
-- Only this task document changed in Git; no Python/business code or build script changed. Validation: all 18 artifact scans reported `RELEASE_SCAN_OK`; `git diff --check` passed. No real Sheets/Research smoke was run.
+Owner Decisions: Review the decisions listed in `docs/V1_2_ARCHITECTURE.md`; no runtime/production action requested in this stage.
 
-CEO Final Review:
-- `884a08b611a94bf733e170ff4370512cd084ce08` build-script fix accepted. CEO sync commit `0a83109fa5d830ef7f4bc9e219a54105bd2f6d37` is preserved.
-- Local-only classification is complete. Based on the recorded evidence, CEO classified the remaining 17 entries as `DELETE_SAFE_OLD_RELEASE_SNAPSHOT` for local storage purposes:
-  * every entry is a complete PyInstaller onedir-style release snapshot under the active release worktree's ignored `build/`;
-  * every entry passed `RELEASE_SCAN_OK`;
-  * none contains runtime/config/Vault/OAuth/profile/cookie/SQLite/Excel/customer data, Git metadata, reparse points, or unknown top-level operator/source files;
-  * none is a Git worktree, active fixed BuildOnly stage, current deployed `dist/INSO_V1.1`, or canonical source tree;
-  * canonical source/version history is retained in Git and the current reproducible release recipe/locked requirements are retained in the repo, so these binary snapshots are not required as the source of truth.
-- The 17 exact paths listed above were deleted individually after confirming zero `INSO_V1.1.exe` processes. Verification confirmed every target absent, protected paths present, all 19 worktrees unchanged, and process count still zero. No wildcard build cleanup was used.
-- No real Sheets/Research run was required. This task is READY_FOR_CEO_REVIEW; return for final merge decision.
+Branch: `feature/v1-2`
 
-Blockers:
-- NONE.
-
-CEO Closure:
-- Final review passed. Branch is ahead of `main` with no divergence and no remaining release blocker.
-- Windows onedir/windowed release, frozen runtime paths, single-instance guard, safe startup diagnostics, CDP ownership/bootstrap, SHAHAB compatibility, lazy-CDP fail-closed semantics, reproducible build, artifact scan, process lifecycle, and storage no-growth safeguards are accepted.
-- Final local cleanup reduced the project root to 1.781515 GB while preserving deployed release, fixed BuildOnly staging, .venv-release, runtime/Vault/OAuth/profile data, SQLite/Excel/customer data, and all worktrees.
-- No further V1.1 code change is required. Long soak remains a subsequent validation stage and does not block this merge.
-- Next product work may proceed from updated `main`; V1.2 requirements/design is the next planned development stage.
-
-Owner Decisions:
-- 发布名称：INSO_V1.1。
-- 首版 Windows 打包采用 PyInstaller onedir + windowed。
-- 发布版需要单实例、可诊断启动错误、runtime 配置发现与 CDP Chrome ownership。
-- 不做 MSI/installer、自动更新、签名、开机自启；先完成稳定可双击运行的发布目录。
-- packaged smoke 通过后再进入长时间 soak。
-
-Branch: feature/v1-1-windows-release
-
-Last Good Commit: 71c616a3a25e9bf0ff31b343d4d14a2df518444c
+Last Good Commit: `be9d0a51d0375884dfa3e5e9e4317958899fdc75` (sealed V1.1 release baseline)
