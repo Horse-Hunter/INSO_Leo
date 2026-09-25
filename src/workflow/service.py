@@ -33,6 +33,10 @@ class ResearchExecutor(Protocol):
     def execute(self, research_input: ResearchInput) -> ResearchResult: ...
 
 
+class ResearchPreparationError(RuntimeError):
+    """Infrastructure failed before Research began; it is not a retryable result."""
+
+
 class CompletionChecker(Protocol):
     """Temporary seam until Research defines completion confirmation."""
 
@@ -111,6 +115,13 @@ class WorkflowWorker:
                 return None
             try:
                 result = self._research.execute(_research_input(item))
+            except ResearchPreparationError:
+                # Claiming increments an attempt before the executor runs. A
+                # launcher preparation failure happened before Research, so
+                # restore the queue state and let the composition root enter
+                # manual handling without spending the business retry budget.
+                self._store.release_unprepared(item.id, now=now)
+                raise
             except Exception as exc:  # noqa: BLE001 - collaborator failures are retryable
                 self._store.schedule_retry(
                     item.id,

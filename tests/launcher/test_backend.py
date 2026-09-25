@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from src.gui.contracts import RunState
 from src.launcher import backend as launcher
 from src.launcher.backend import ProductionBackend, _decimal
+from src.launcher.browser_bootstrap import BrowserBootstrapError, BrowserHandle
 from src.research import ResearchInput, ResearchResult, ResearchStatus
 from src.research.excel_output import ResearchExcelOutput
 from src.research.service import ResearchService
@@ -230,6 +231,114 @@ def test_empty_poll_defers_browser_bootstrap_until_an_inquiry_is_due(
 
     assert backend._thread is not None and not backend._thread.is_alive()
     assert backend.get_status().state is RunState.STOPPED
+    backend.shutdown()
+
+
+def test_browser_bootstrap_failure_enters_manual_review_without_research_retry(
+    tmp_path, monkeypatch
+):
+    production, research_config, rows = _write_runtime_configs(
+        tmp_path, pending_count=1
+    )
+    sheets_called = Event()
+    browser_calls = []
+    research_calls = []
+    monkeypatch.setattr(
+        launcher,
+        "build_read_only_google_sheets_service",
+        lambda _path: _SheetsService(rows, sheets_called),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "assess_readiness",
+        lambda *_args, **_kwargs: SimpleNamespace(ready=True, missing_site_ids=()),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "build_research_service",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            execute=lambda item: research_calls.append(item)
+        ),
+    )
+
+    def fail_browser(*_args, **_kwargs):
+        browser_calls.append(True)
+        raise BrowserBootstrapError("synthetic bootstrap failure")
+
+    backend = ProductionBackend(
+        config_path=research_config,
+        production_config_path=production,
+        cdp_probe=lambda _url: True,
+        browser_acquirer=fail_browser,
+    )
+    backend.start()
+    assert sheets_called.wait(5)
+    assert _wait_until(lambda: backend.get_status().state is RunState.MANUAL_REVIEW)
+    backend._thread.join(timeout=5)
+
+    item = backend._store.all_items()[0]
+    assert browser_calls == [True]
+    assert research_calls == []
+    assert item.status is WorkflowStatus.QUEUED
+    assert item.attempt_count == 0
+    assert item.next_attempt_at is not None
+    assert item.research_status is None
+    backend.shutdown()
+
+
+def test_readiness_failure_closes_owned_browser_without_research_retry(
+    tmp_path, monkeypatch
+):
+    production, research_config, rows = _write_runtime_configs(
+        tmp_path, pending_count=1
+    )
+    sheets_called = Event()
+    closed = Event()
+    browser_calls = []
+    research_calls = []
+    monkeypatch.setattr(
+        launcher,
+        "build_read_only_google_sheets_service",
+        lambda _path: _SheetsService(rows, sheets_called),
+    )
+
+    def readiness(_url, *, cdp_probe):
+        return SimpleNamespace(
+            ready=cdp_probe("http://127.0.0.1:9222"),
+            missing_site_ids=(),
+        )
+
+    monkeypatch.setattr(launcher, "assess_readiness", readiness)
+    monkeypatch.setattr(
+        launcher,
+        "build_research_service",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            execute=lambda item: research_calls.append(item)
+        ),
+    )
+
+    def acquire_browser(*_args, **_kwargs):
+        browser_calls.append(True)
+        return BrowserHandle(owned=True, close_fn=closed.set)
+
+    backend = ProductionBackend(
+        config_path=research_config,
+        production_config_path=production,
+        cdp_probe=lambda _url: False,
+        browser_acquirer=acquire_browser,
+    )
+    backend.start()
+    assert sheets_called.wait(5)
+    assert _wait_until(lambda: backend.get_status().state is RunState.MANUAL_REVIEW)
+    backend._thread.join(timeout=5)
+
+    item = backend._store.all_items()[0]
+    assert browser_calls == [True]
+    assert closed.is_set()
+    assert research_calls == []
+    assert item.status is WorkflowStatus.QUEUED
+    assert item.attempt_count == 0
+    assert item.next_attempt_at is not None
     backend.shutdown()
 
 

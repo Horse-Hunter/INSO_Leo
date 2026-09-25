@@ -40,6 +40,7 @@ from src.sheets import WorksheetIdentity
 from src.sheets.google_oauth import build_read_only_google_sheets_service
 from src.sheets.google_reader import GoogleSheetsRowReader
 from src.workflow import (
+    ResearchPreparationError,
     WorkflowPoller,
     WorkflowRuntime,
     WorkflowStateStore,
@@ -47,7 +48,7 @@ from src.workflow import (
     WorkflowWorker,
 )
 
-from .browser_bootstrap import BrowserHandle, acquire_cdp_browser
+from .browser_bootstrap import BrowserBootstrapError, BrowserHandle, acquire_cdp_browser
 
 log = logging.getLogger(__name__)
 
@@ -72,7 +73,12 @@ class _Observer:
     def execute(self, item: ResearchInput) -> ResearchResult:
         self.seen(item.inquiry_id)
         if self.prepare is not None:
-            self.prepare()
+            try:
+                self.prepare()
+            except BrowserBootstrapError as exc:
+                raise ResearchPreparationError(
+                    "CDP browser requires manual handling"
+                ) from exc
         result = self.service.execute(item)
         remarks = (result.remarks or "").casefold()
         if any(marker in remarks for marker in self._HUMAN_ACTION_MARKERS):
@@ -279,6 +285,8 @@ class ProductionBackend(GuiBackend):
                             )
                             continue
                         self._stop.wait(runtime.worker_idle_interval.total_seconds())
+                except ResearchPreparationError as exc:
+                    self._preparation_error(exc)
                 except Exception as exc:  # noqa: BLE001 - fail closed at runtime boundary
                     self._runtime_error(exc)
 
@@ -336,19 +344,37 @@ class ProductionBackend(GuiBackend):
                     production_config,
                     probe=probe,
                 )
+            except BrowserBootstrapError:
+                raise
             except Exception as exc:
-                raise RuntimeError("CDP browser requires manual handling") from exc
-            readiness = assess_readiness(
-                research_config.cdp.cdp_url,
-                cdp_probe=probe,
-            )
+                raise BrowserBootstrapError(
+                    "approved CDP browser could not be acquired"
+                ) from exc
+            try:
+                readiness = assess_readiness(
+                    research_config.cdp.cdp_url,
+                    cdp_probe=probe,
+                )
+            except Exception as exc:
+                self._discard_unready_browser()
+                raise BrowserBootstrapError("CDP research readiness failed") from exc
             if not readiness.ready:
-                if self._browser_handle is not None:
-                    self._browser_handle.close()
-                    self._browser_handle = None
-                raise RuntimeError("Research readiness requires manual handling")
+                self._discard_unready_browser()
+                raise BrowserBootstrapError("CDP research readiness failed")
             self._research_ready = True
         self._set_health(("正常", "已连接", "正常", "正常"), "正常")
+
+    def _discard_unready_browser(self) -> None:
+        """Close a just-acquired owned browser when readiness cannot be proven."""
+
+        handle = self._browser_handle
+        self._browser_handle = None
+        self._research_ready = False
+        if handle is not None:
+            try:
+                handle.close()
+            except Exception as exc:  # noqa: BLE001 - cleanup boundary
+                log.warning("Unready browser shutdown failed (%s)", type(exc).__name__)
 
     def _release_idle_browser(self) -> None:
         """Release an app-owned browser after this due-work batch is drained."""
@@ -388,6 +414,12 @@ class ProductionBackend(GuiBackend):
             "ERROR", f"需要人工处理：{type(exc).__name__}；检查本地运行状态"
         )
         self._notify()
+
+    def _preparation_error(self, exc: ResearchPreparationError) -> None:
+        """Fail closed for CDP setup without consuming a Research retry."""
+
+        self._runtime_error(exc)
+        self._release_idle_browser()
 
     def _manual_review(self, inquiry_id):
         with self._lock:

@@ -248,6 +248,32 @@ class WorkflowStateStore:
             )
         return target
 
+    def release_unprepared(
+        self,
+        item_id: int,
+        *,
+        now: datetime | None = None,
+    ) -> None:
+        """Undo a claim when launcher setup failed before Research executed."""
+
+        changed_at = _as_utc(now or datetime.now(UTC))
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE workflow_items
+                SET status = 'QUEUED',
+                    attempt_count = CASE
+                        WHEN attempt_count > 0 THEN attempt_count - 1
+                        ELSE 0
+                    END,
+                    next_attempt_at = ?,
+                    last_error = 'Research preparation requires manual handling',
+                    updated_at = ?
+                WHERE id = ? AND status = 'RESEARCHING'
+                """,
+                (_time_to_text(changed_at), _time_to_text(changed_at), item_id),
+            )
+
     def record_brand_update(
         self,
         item_id: int,

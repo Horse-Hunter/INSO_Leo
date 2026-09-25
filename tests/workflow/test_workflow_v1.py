@@ -17,6 +17,7 @@ from src.sheets import (
 )
 from src.sheets.brand_write import SheetRecordConflict
 from src.workflow import (
+    ResearchPreparationError,
     SheetsSafeBrandUpdater,
     WorkflowPoller,
     WorkflowRuntime,
@@ -228,6 +229,27 @@ def test_retry_schedule_is_15_30_60_then_failed(tmp_path: Path) -> None:
     assert fourth.status is WorkflowStatus.FAILED
     assert fourth.next_attempt_at is None
     assert fourth.attempt_count == 4
+
+
+def test_preparation_failure_restores_claim_without_spending_retry_budget(
+    tmp_path: Path,
+) -> None:
+    store = WorkflowStateStore(tmp_path / "workflow.db")
+    enqueue_one(store)
+
+    class PreparationFailure:
+        def execute(self, _research_input: ResearchInput) -> ResearchResult:
+            raise ResearchPreparationError("CDP browser requires manual handling")
+
+    worker = WorkflowWorker(store, PreparationFailure())
+    with pytest.raises(ResearchPreparationError):
+        worker.process_due_one(now=NOW)
+
+    item = store.all_items()[0]
+    assert item.status is WorkflowStatus.QUEUED
+    assert item.attempt_count == 0
+    assert item.next_attempt_at == NOW
+    assert item.research_status is None
 
 
 def test_no_quote_exception_fails_without_retry(tmp_path: Path) -> None:
