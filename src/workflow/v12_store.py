@@ -16,6 +16,8 @@ from contextlib import AbstractContextManager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from src.sheets import CustomerNameSource
+
 from .v12_contracts import (
     ActiveAlertDTO,
     AlertType,
@@ -296,6 +298,48 @@ class V12Store:
                 event_id=event.event_id,
                 at=at,
             )
+
+    def record_customer_snapshot(
+        self,
+        inquiry_id: str,
+        customer_name: str | None,
+        source: CustomerNameSource,
+        *,
+        at: datetime,
+    ) -> None:
+        """Persist the observed value and its worksheet-defined provenance."""
+
+        if not isinstance(source, CustomerNameSource):
+            raise TypeError("customer source must be a Sheets allowlisted value")
+        customer_name = customer_name.strip() if customer_name and customer_name.strip() else None
+        if source is CustomerNameSource.SHAHAB_FIXED and customer_name != "SHAHAB":
+            raise ValueError("SHAHAB fixed customer snapshot is invalid")
+        if source is CustomerNameSource.UNCONFIGURED and customer_name is not None:
+            raise ValueError("unconfigured worksheet cannot provide a customer name")
+
+        with _transaction(self.database_path) as connection:
+            cursor = connection.execute(
+                "UPDATE workflow_v12_inquiry_state SET customer_name=?, "
+                "customer_name_source=?, updated_at=? WHERE inquiry_id=?",
+                (customer_name, source.value, _time_text(at), inquiry_id),
+            )
+            if cursor.rowcount != 1:
+                raise V12DatabaseError("business state must exist before customer snapshot")
+            if customer_name is None:
+                event = WorkflowEvent(
+                    _new_id("evt"), inquiry_id,
+                    EventType.DATA_QUALITY_MISSING_CUSTOMER, at, "sheets",
+                    reason_code=ReasonCode.CUSTOMER_NAME_MISSING,
+                )
+                _insert_event(connection, event)
+                _raise_alert(
+                    connection,
+                    alert_id=_new_id("alt"), inquiry_id=inquiry_id,
+                    alert_type=AlertType.DATA_QUALITY,
+                    reason_code=ReasonCode.CUSTOMER_NAME_MISSING,
+                    event_id=event.event_id, at=at,
+                    deduplicate_by_type=True, scope_key="customer-name",
+                )
 
     def record_duplicate_result(self, result: DuplicateCheckResult) -> None:
         evidence_ref = (
@@ -663,14 +707,17 @@ class V12Store:
                 "SELECT outcome FROM workflow_v12_purchase_state WHERE inquiry_id=?",
                 (inquiry_id,),
             ).fetchone()
-            if current is not None and current["outcome"] in {
-                PurchaseOutcome.UNKNOWN_WRITE_OUTCOME.value,
-                PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED.value,
-                PurchaseOutcome.SAVED.value,
-                PurchaseOutcome.CONFIRMED_NOT_SAVED.value,
-                PurchaseOutcome.MANUAL_REVIEW.value,
-            }:
-                raise V12DatabaseError("purchase state requires reconciliation")
+            if current is None:
+                allowed = {PurchaseOutcome.PRE_SAVE_READY.value}
+            elif current["outcome"] == PurchaseOutcome.PRE_SAVE_READY.value:
+                allowed = {
+                    PurchaseOutcome.AI_RECOGNIZED.value,
+                    PurchaseOutcome.VALIDATION_FAILED.value,
+                }
+            else:
+                allowed = set()
+            if outcome.value not in allowed:
+                raise V12DatabaseError("purchase state transition is not allowed")
             connection.execute(
                 "INSERT INTO workflow_v12_purchase_state "
                 "(inquiry_id, command_id, outcome, reason_code, saved_record_ref, updated_at) "
@@ -715,11 +762,8 @@ class V12Store:
                 "SELECT command_id, outcome FROM workflow_v12_purchase_state WHERE inquiry_id=?",
                 (inquiry_id,),
             ).fetchone()
-            if row is None or row["outcome"] not in {
-                PurchaseOutcome.PRE_SAVE_READY.value,
-                PurchaseOutcome.AI_RECOGNIZED.value,
-            }:
-                raise V12DatabaseError("purchase state is not eligible for dispatch arming")
+            if row is None or row["outcome"] != PurchaseOutcome.AI_RECOGNIZED.value:
+                raise V12DatabaseError("AI recognition is required before Save Data")
             connection.execute(
                 "UPDATE workflow_v12_purchase_state SET outcome=?, reason_code=?, "
                 "saved_record_ref=NULL, updated_at=? WHERE inquiry_id=?",
@@ -843,7 +887,7 @@ class V12Store:
             connection.execute(
                 "UPDATE workflow_v12_purchase_state SET outcome=?, reason_code=NULL, updated_at=? "
                 "WHERE inquiry_id=?",
-                (PurchaseOutcome.PRE_SAVE_READY.value, _time_text(at), inquiry_id),
+                (PurchaseOutcome.AI_RECOGNIZED.value, _time_text(at), inquiry_id),
             )
             _insert_event(connection, event)
             _recover_alerts(
@@ -980,7 +1024,8 @@ def _create_v12_schema(connection: sqlite3.Connection) -> None:
             applied_at TEXT NOT NULL)""",
         """CREATE TABLE workflow_v12_inquiry_state (
             inquiry_id TEXT PRIMARY KEY REFERENCES workflow_items(inquiry_id) ON DELETE RESTRICT,
-            business_state TEXT NOT NULL, updated_at TEXT NOT NULL)""",
+            business_state TEXT NOT NULL, customer_name TEXT,
+            customer_name_source TEXT, updated_at TEXT NOT NULL)""",
         """CREATE TABLE workflow_v12_events (
             event_id TEXT PRIMARY KEY,
             inquiry_id TEXT NOT NULL REFERENCES workflow_items(inquiry_id) ON DELETE RESTRICT,
@@ -1088,6 +1133,12 @@ def _verify_v12_schema(connection: sqlite3.Connection) -> None:
     }
     if not required.issubset(present):
         raise V12SchemaMismatch("V1.2 schema is incomplete")
+    inquiry_columns = {
+        row[1]
+        for row in connection.execute("PRAGMA table_info(workflow_v12_inquiry_state)")
+    }
+    if not {"customer_name", "customer_name_source"}.issubset(inquiry_columns):
+        raise V12SchemaMismatch("V1.2 customer snapshot columns are missing")
     triggers = {
         row[0]
         for row in connection.execute(

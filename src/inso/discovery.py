@@ -26,6 +26,7 @@ class SafePageMetadata:
 
 @dataclass(frozen=True, slots=True)
 class SafeControlMetadata:
+    control_id: str
     role: str
     accessible_name: str
     stable_attribute_names: tuple[str, ...]
@@ -61,7 +62,12 @@ class ReadOnlyDiscoverySession(Protocol):
 
 
 class ReadOnlyDiscoveryInspector:
-    def inspect(self, session: ReadOnlyDiscoverySession) -> DiscoveryReport:
+    def inspect(
+        self,
+        session: ReadOnlyDiscoverySession,
+        *,
+        required_control_ids: frozenset[str],
+    ) -> DiscoveryReport:
         """Inspect an explicitly provided safe session; caller must authorize run."""
 
         page = session.read_page_metadata()
@@ -79,7 +85,20 @@ class ReadOnlyDiscoveryInspector:
             and bool(page.page.target_id)
             and page.ownership in {"APP_OWNED", "REUSED"}
         )
-        unique = all(control.selector_uniqueness in {0, 1} for control in controls)
+        control_counts = {
+            control_id: sum(control.control_id == control_id for control in controls)
+            for control_id in required_control_ids
+        }
+        required_unique = bool(required_control_ids) and all(
+            count == 1
+            and next(
+                control.selector_uniqueness
+                for control in controls
+                if control.control_id == control_id
+            ) == 1
+            for control_id, count in control_counts.items()
+        )
+        unique = all(0 <= control.selector_uniqueness <= 1 for control in controls)
         if not identity_safe:
             raise SecurityViolation("read-only inspector identity is not verified")
-        return DiscoveryReport(page, controls, capabilities, safe=unique)
+        return DiscoveryReport(page, controls, capabilities, safe=unique and required_unique)

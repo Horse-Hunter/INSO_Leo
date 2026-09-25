@@ -28,7 +28,7 @@ class FakeReadOnlySession:
 
     def read_control_metadata(self) -> tuple[SafeControlMetadata, ...]:
         self.calls.append("controls")
-        return (SafeControlMetadata("button", "保存数据", ("data-action",), 1),)
+        return (SafeControlMetadata("save-data", "button", "保存数据", ("data-action",), 1),)
 
     def read_capabilities(self) -> ReadCapabilityMetadata:
         self.calls.append("capabilities")
@@ -39,7 +39,7 @@ def test_inspector_is_prepare_only_and_reads_fake_metadata() -> None:
     inspector = ReadOnlyDiscoveryInspector()
     session = FakeReadOnlySession()
 
-    report = inspector.inspect(session)
+    report = inspector.inspect(session, required_control_ids=frozenset({"save-data"}))
 
     assert report.safe
     assert [control.selector_uniqueness for control in report.controls] == [1]
@@ -48,3 +48,33 @@ def test_inspector_is_prepare_only_and_reads_fake_metadata() -> None:
     assert not hasattr(inspector, "fill")
     assert not hasattr(inspector, "save_data")
     assert not hasattr(inspector, "send")
+
+
+def test_missing_or_ambiguous_required_controls_keep_report_not_ready() -> None:
+    class ControlsSession(FakeReadOnlySession):
+        controls = ()
+
+        def read_control_metadata(self):
+            self.calls.append("controls")
+            return self.controls
+
+    inspector = ReadOnlyDiscoveryInspector()
+    session = ControlsSession()
+    assert not inspector.inspect(
+        session, required_control_ids=frozenset({"save-data"})
+    ).safe
+
+    session.controls = (
+        SafeControlMetadata("save-data", "button", "保存数据", (), 1),
+        SafeControlMetadata("save-data", "button", "保存数据", (), 1),
+    )
+    assert not inspector.inspect(
+        session, required_control_ids=frozenset({"save-data"})
+    ).safe
+
+    session.controls = (
+        SafeControlMetadata("save-data", "button", "保存数据", (), 0),
+    )
+    assert not inspector.inspect(
+        session, required_control_ids=frozenset({"save-data"})
+    ).safe

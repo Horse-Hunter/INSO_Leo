@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from src.sheets import CustomerNameSource
 from src.workflow import WorkflowStateStore
 from src.workflow.v12_contracts import (
     AlertType,
@@ -60,6 +61,41 @@ def migrate(path: Path, backups: Path, **kwargs) -> Path | None:
         quiesce=lambda: nullcontext(),
         **kwargs,
     )
+
+
+def set_ai_recognized(store: V12Store) -> None:
+    store.set_purchase_state(INQUIRY, "purchase-command", PurchaseOutcome.PRE_SAVE_READY, at=NOW)
+    store.set_purchase_state(
+        INQUIRY, "purchase-command", PurchaseOutcome.AI_RECOGNIZED,
+        at=NOW + timedelta(milliseconds=1),
+    )
+
+
+def test_save_dispatch_requires_ai_recognition_and_validation_failure_cannot_rearm(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "workflow.sqlite3"
+    make_v1_database(database)
+    migrate(database, tmp_path / "backups")
+    store = V12Store(database)
+    store.set_purchase_state(
+        INQUIRY, "purchase-command", PurchaseOutcome.PRE_SAVE_READY, at=NOW
+    )
+    with pytest.raises(V12DatabaseError):
+        store.begin_save_dispatch(INQUIRY, at=NOW + timedelta(seconds=1))
+
+    store.set_purchase_state(
+        INQUIRY, "purchase-command", PurchaseOutcome.VALIDATION_FAILED,
+        at=NOW + timedelta(seconds=2), reason_code=ReasonCode.AI_RECOGNITION_MISMATCH,
+    )
+    for attempted in (PurchaseOutcome.PRE_SAVE_READY, PurchaseOutcome.AI_RECOGNIZED):
+        with pytest.raises(V12DatabaseError):
+            store.set_purchase_state(
+                INQUIRY, "purchase-command", attempted, at=NOW + timedelta(seconds=3)
+            )
+    with pytest.raises(V12DatabaseError):
+        store.begin_save_dispatch(INQUIRY, at=NOW + timedelta(seconds=4))
+    assert store.purchase_state(INQUIRY) is PurchaseOutcome.VALIDATION_FAILED
 
 
 def test_consistent_online_backup_includes_committed_wal_activity(tmp_path: Path) -> None:
@@ -233,6 +269,39 @@ def test_additive_state_event_alert_and_missing_customer_are_transactional(tmp_p
         assert payload == '{"attempt":null,"evidence_ref":null,"reason_code":null}'
 
 
+def test_customer_snapshot_persists_value_source_and_missing_alert(tmp_path: Path) -> None:
+    database = tmp_path / "workflow.sqlite3"
+    make_v1_database(database)
+    migrate(database, tmp_path / "backups")
+    store = V12Store(database)
+    store.set_business_state(
+        INQUIRY,
+        BusinessState.QUEUED,
+        WorkflowEvent("evt_customer_1", INQUIRY, EventType.RESEARCH_STARTED, NOW, "workflow"),
+    )
+    store.record_customer_snapshot(
+        INQUIRY, "Customer Example", CustomerNameSource.WORKSHEET_COLUMN_D,
+        at=NOW + timedelta(seconds=1),
+    )
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT customer_name, customer_name_source FROM workflow_v12_inquiry_state "
+            "WHERE inquiry_id=?", (INQUIRY,),
+        ).fetchone() == ("Customer Example", "WORKSHEET_COLUMN_D")
+
+    store.record_customer_snapshot(
+        INQUIRY, None, CustomerNameSource.WORKSHEET_COLUMN_D,
+        at=NOW + timedelta(seconds=2),
+    )
+    assert store.latest_active_alert(INQUIRY).alert_type is AlertType.DATA_QUALITY
+    assert store.event_history(INQUIRY)[-1].event_type is EventType.DATA_QUALITY_MISSING_CUSTOMER
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT customer_name, customer_name_source FROM workflow_v12_inquiry_state "
+            "WHERE inquiry_id=?", (INQUIRY,),
+        ).fetchone() == (None, "WORKSHEET_COLUMN_D")
+
+
 def test_v12_event_history_is_database_enforced_append_only(tmp_path: Path) -> None:
     database = tmp_path / "workflow.sqlite3"
     make_v1_database(database)
@@ -339,7 +408,7 @@ def test_unknown_write_outcome_reconciles_without_automatic_second_save(
     make_v1_database(database)
     migrate(database, tmp_path / "backups")
     store = V12Store(database)
-    store.set_purchase_state(INQUIRY, "purchase-command", PurchaseOutcome.PRE_SAVE_READY, at=NOW)
+    set_ai_recognized(store)
 
     # This is the durable pre-dispatch boundary. No Save Data adapter is called.
     store.begin_save_dispatch(INQUIRY, at=NOW + timedelta(seconds=1))
@@ -374,7 +443,7 @@ def test_authoritative_absence_requires_explicit_operator_rearm(tmp_path: Path) 
     make_v1_database(database)
     migrate(database, tmp_path / "backups")
     store = V12Store(database)
-    store.set_purchase_state(INQUIRY, "purchase-command", PurchaseOutcome.PRE_SAVE_READY, at=NOW)
+    set_ai_recognized(store)
     store.begin_save_dispatch(INQUIRY, at=NOW + timedelta(seconds=1))
     absence = ReconciliationResult(
         ReconciliationOutcome.CONFIRMED_NOT_SAVED,
@@ -398,7 +467,7 @@ def test_reconciler_exception_canary_is_not_persisted_or_exposed(tmp_path: Path)
     make_v1_database(database)
     migrate(database, tmp_path / "backups")
     store = V12Store(database)
-    store.set_purchase_state(INQUIRY, "purchase-command", PurchaseOutcome.PRE_SAVE_READY, at=NOW)
+    set_ai_recognized(store)
     store.begin_save_dispatch(INQUIRY, at=NOW + timedelta(seconds=1))
     result = store.reconcile_unknown_save(
         INQUIRY,

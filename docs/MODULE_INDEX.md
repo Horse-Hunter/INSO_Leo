@@ -31,7 +31,7 @@
 
 ```text
 workflow -> core, sheets, research, inso, quotation
-launcher -> gui (contract), workflow, sheets, research
+launcher -> gui (contract), workflow, sheets, research, inso (Research session lease)
 gui -> core
 sheets | research | inso | quotation -> core
 ```

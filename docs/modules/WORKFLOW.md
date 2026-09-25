@@ -86,6 +86,26 @@ Notification failure alerts are scoped per command and recover only after every
 intended recipient for that command is confirmed SENT. Notification failure does
 not gate purchase state.
 
+The transport Public Contract is `NotificationTransportResult(outcome,
+reason_code)`, where `outcome` is one of SENT, RETRYABLE_FAILURE,
+PERMANENT_FAILURE or UNKNOWN and `reason_code` is a `ReasonCode`. The transport
+adapter owns provider-specific classification. An unexpected exception at the
+Workflow boundary is recorded as UNKNOWN and is never guessed to be transient.
+Only a typed RETRYABLE_FAILURE is scheduled again.
+
+Purchase routing returns INDETERMINATE with no quotation type or purchaser when
+a B/C tier needs a threshold decision but `estimated_total` is missing. Save
+dispatch is accepted only from AI_RECOGNIZED. The ordinary purchase-state
+setter permits PRE_SAVE_READY to move to AI_RECOGNIZED or VALIDATION_FAILED;
+VALIDATION_FAILED cannot be reset through that setter. After authoritative
+absence and human acknowledgement, the validated AI state is retained for a
+controlled later attempt.
+
+`workflow_v12_inquiry_state` stores the observed `customer_name` and the Sheets
+`CustomerNameSource` value together. A missing name records the existing data
+quality event/alert in the same transaction. Production orchestration is not
+yet wired to this additive V1.2 snapshot API.
+
 `v12_rules.py` contains deterministic pure decisions: exact `dup-mpn-v1`
 rolling-168-hour duplicate evaluation (latest timestamp only, unresolved tie is
 ambiguous), post-Research routing that blocks on an unconfirmed duplicate

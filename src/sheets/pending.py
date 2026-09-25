@@ -2,11 +2,18 @@
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Protocol, TypeAlias
 
 from .worksheet_schema import WorksheetSchema, worksheet_schema
 
 CellValue: TypeAlias = str | int | float | bool | None
+
+
+class CustomerNameSource(StrEnum):
+    SHAHAB_FIXED = "SHAHAB_FIXED"
+    WORKSHEET_COLUMN_D = "WORKSHEET_COLUMN_D"
+    UNCONFIGURED = "UNCONFIGURED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +74,7 @@ class PendingSheetRecord:
     row_position: int
     record_identity: SheetRecordIdentity
     customer_name: str | None = None
+    customer_name_source: CustomerNameSource = CustomerNameSource.UNCONFIGURED
 
 
 def query_pending_records(
@@ -102,6 +110,13 @@ def query_pending_records(
                 row_position=row.row_position,
                 record_identity=identity,
                 customer_name=_customer_name(row, schema),
+                customer_name_source=(
+                    CustomerNameSource.SHAHAB_FIXED
+                    if schema.fixed_customer_name is not None
+                    else CustomerNameSource.WORKSHEET_COLUMN_D
+                    if schema.customer_name_column == "D"
+                    else CustomerNameSource.UNCONFIGURED
+                ),
             )
         )
 

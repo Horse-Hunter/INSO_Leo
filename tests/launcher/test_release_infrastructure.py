@@ -288,7 +288,11 @@ def test_backend_closes_only_owned_browser_after_runtime_thread_exits(tmp_path, 
     import src.research.runtime as research_runtime
 
     # Reuse the deterministic test config seam from the launcher suite.
-    from tests.launcher.test_backend import _SheetsService, _write_runtime_configs
+    from tests.launcher.test_backend import (
+        _FakeInsoSession,
+        _SheetsService,
+        _write_runtime_configs,
+    )
 
     production, research, rows = _write_runtime_configs(tmp_path, pending_count=1)
     poll_called = threading.Event()
@@ -297,6 +301,7 @@ def test_backend_closes_only_owned_browser_after_runtime_thread_exits(tmp_path, 
     browser = BrowserHandle(owned=owned, close_fn=lambda: closed.append(threading.current_thread().name))
     monkeypatch.setattr(backend_module, "build_read_only_google_sheets_service", lambda _path: _SheetsService(rows, poll_called))
     monkeypatch.setattr(backend_module, "assess_readiness", lambda *_a, **_k: type("Ready", (), {"ready": True, "missing_site_ids": ()})())
+    monkeypatch.setattr(backend_module, "attach_inso_research_session", lambda _endpoint, handle, **_kw: _FakeInsoSession(handle))
     monkeypatch.setattr(research_runtime, "assess_readiness", lambda *_a, **_k: type("Ready", (), {"ready": True})())
     monkeypatch.setattr(backend_module, "build_research_service", lambda *_a, **_k: type("Research", (), {"execute": lambda self, item: ResearchResult(item.inquiry_id, ResearchStatus.SUCCESS)})())
     backend = ProductionBackend(

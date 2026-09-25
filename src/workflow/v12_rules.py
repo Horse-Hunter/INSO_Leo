@@ -27,6 +27,11 @@ class Purchaser(StrEnum):
     ORDINARY = "陈熙"
 
 
+class PurchaseRoutingOutcome(StrEnum):
+    READY = "READY"
+    INDETERMINATE = "INDETERMINATE"
+
+
 class PostResearchRoute(StrEnum):
     DUPLICATE_STOP = "DUPLICATE_STOP"
     PURCHASE_ELIGIBLE = "PURCHASE_ELIGIBLE"
@@ -35,8 +40,9 @@ class PostResearchRoute(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class PurchaseRoutingDecision:
-    quotation_type: QuotationType
-    purchaser: Purchaser
+    outcome: PurchaseRoutingOutcome
+    quotation_type: QuotationType | None
+    purchaser: Purchaser | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +90,9 @@ def purchase_routing_decision(
 ) -> PurchaseRoutingDecision:
     """Apply procurement quotation rules independently from email decisions."""
 
+    if tier in {"B", "C"} and estimated_total is None:
+        return PurchaseRoutingDecision(PurchaseRoutingOutcome.INDETERMINATE, None, None)
+
     full_price = tier == "A" or (
         tier == "B"
         and estimated_total is not None
@@ -94,8 +103,12 @@ def purchase_routing_decision(
         and estimated_total > Decimal(300000)
     )
     if full_price:
-        return PurchaseRoutingDecision(QuotationType.FULL_PRICE, Purchaser.FULL_PRICE)
-    return PurchaseRoutingDecision(QuotationType.ORDINARY, Purchaser.ORDINARY)
+        return PurchaseRoutingDecision(
+            PurchaseRoutingOutcome.READY, QuotationType.FULL_PRICE, Purchaser.FULL_PRICE
+        )
+    return PurchaseRoutingDecision(
+        PurchaseRoutingOutcome.READY, QuotationType.ORDINARY, Purchaser.ORDINARY
+    )
 
 
 def evaluate_duplicate_history(

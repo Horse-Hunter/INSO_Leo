@@ -9,18 +9,20 @@ registry for production controls, Save Data writer, or Save-and-Send capability.
 
 ## Session ownership contract
 
-The launcher/composition root creates one `InsoSessionLease` for a cycle and
-supplies explicit endpoint, browser, context, and page identity probes. The lease
-records `APP_OWNED` or `REUSED`, the cycle ID, and each operation-owned child
-page. Adapters receive only `InsoOperationAccess`; they can open and close their
-own child page and cannot close the browser. Stale/mismatched endpoint, browser,
-context, or child identity fails closed. An app-owned browser can close only
-after child pages drain and the composition root confirms that the complete
-cycle has drained. A reused browser is never closed by this module.
+The launcher/composition root attaches Research to the configured CDP endpoint
+and proceeds only when it exposes exactly one context. It never enumerates or
+selects an existing tab. The root creates an `InsoSessionLease` with explicit
+endpoint, browser, context and operation-page identities, and records
+`APP_OWNED` or `REUSED`. Research receives only `InsoOperationAccess` and uses
+lease-created child pages. A reused browser is disconnected from Playwright
+after the cycle but is never closed; an app-owned browser closes only after its
+child pages drain and the launcher confirms the cycle is drained. Stale or
+mismatched identity fails closed.
 
-Production wiring is not present. Research's INSO history source requires an
-injected verified operation lease and otherwise returns a fail-closed result.
-Do not restore arbitrary CDP context/page enumeration to regain availability.
+This wiring restores the existing V1.1 INSO read-only Research source. It does
+not add an INSO purchase writer, live discovery selectors, or any new external
+write capability. Do not restore arbitrary CDP context/page enumeration to
+regain availability.
 
 ## Write safety seam
 
@@ -47,5 +49,7 @@ Only deterministic fake input has been used; live discovery is not authorized.
 Live endpoint/account/company/context identity, selectors, stable history record
 identity and timestamp-tie policy, saved-record identity/read-back fields, AI
 recognition page readiness/result DOM, and screenshot crop/redaction safety are
-still `UNKNOWN`. These require separately approved read-only discovery before
-live-capable work can be considered.
+still `UNKNOWN`. Required control IDs must be named by an explicitly authorized
+inspector call; missing, duplicate, or non-unique required controls keep its
+report non-ready. The inspector remains fake-only and has not been run against
+a browser or INSO.

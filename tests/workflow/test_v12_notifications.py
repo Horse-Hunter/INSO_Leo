@@ -16,6 +16,7 @@ from src.workflow.v12_contracts import (
     NotificationCommand,
     NotificationKind,
     NotificationRecipient,
+    NotificationTransportResult,
     PurchaseOutcome,
     ReasonCode,
 )
@@ -142,6 +143,33 @@ def test_permanent_and_unknown_delivery_are_not_retried(tmp_path: Path) -> None:
     }
 
 
+def test_transport_result_is_typed_and_workflow_does_not_classify_exceptions(
+    tmp_path: Path,
+) -> None:
+    store = prepared_store(tmp_path)
+    store.enqueue_notification(command())
+    worker = V12NotificationWorker(
+        store,
+        FakeNotificationTransport(
+            {
+                "a": (
+                    NotificationTransportResult(
+                        DeliveryOutcome.RETRYABLE_FAILURE,
+                        ReasonCode.NOTIFICATION_TRANSIENT,
+                    ),
+                ),
+                "b": (DeliveryOutcome.SENT,),
+            }
+        ),
+    )
+    worker.run_due(now=NOW)
+    results = {item.recipient_id: item for item in store.recipient_results("cmd-notify-1")}
+    assert results["a"].outcome is DeliveryOutcome.RETRYABLE_FAILURE
+    assert results["a"].reason_code is ReasonCode.NOTIFICATION_TRANSIENT
+    assert results["b"].outcome is DeliveryOutcome.SENT
+    assert results["b"].reason_code is ReasonCode.NOTIFICATION_SENT
+
+
 def test_unknown_inflight_after_restart_is_never_retried(tmp_path: Path) -> None:
     store = prepared_store(tmp_path)
     store.enqueue_notification(command())
@@ -163,7 +191,12 @@ class CanaryTransport:
 def test_notification_exception_canary_never_reaches_database_or_dto(tmp_path: Path) -> None:
     store = prepared_store(tmp_path)
     store.enqueue_notification(command())
-    V12NotificationWorker(store, CanaryTransport()).run_due(now=NOW)
+    worker = V12NotificationWorker(store, CanaryTransport())
+    worker.run_due(now=NOW)
+    assert store.recipient_results("cmd-notify-1")[0].outcome is DeliveryOutcome.UNKNOWN
+    assert store.recipient_results("cmd-notify-1")[0].reason_code is ReasonCode.NOTIFICATION_UNKNOWN
+    assert store.recipient_results("cmd-notify-1")[0].next_attempt_at is None
+    assert worker.run_due(now=NOW + timedelta(days=1)) == 0
     assert "SECRET_CANARY" not in repr(store.active_alerts(INQUIRY))
     assert "SECRET_CANARY" not in repr(store.event_history(INQUIRY))
     with sqlite3.connect(store.database_path) as connection:

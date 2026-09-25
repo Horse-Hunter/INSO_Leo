@@ -13,6 +13,7 @@ from src.workflow.v12_rules import (
     HistoricalInquiryRecord,
     PostResearchRoute,
     Purchaser,
+    PurchaseRoutingOutcome,
     QuotationType,
     build_ai_input,
     duplicate_notification_required,
@@ -136,8 +137,18 @@ def test_purchase_full_price_policy_ignores_stock_and_uses_confirmed_purchasers(
     )
     for tier, total, quotation, purchaser in decisions:
         actual = purchase_routing_decision(tier=tier, estimated_total=total)
+        assert actual.outcome is PurchaseRoutingOutcome.READY
         assert actual.quotation_type is quotation
         assert actual.purchaser is purchaser
+
+
+@pytest.mark.parametrize("tier", ["B", "C"])
+def test_missing_b_or_c_estimated_total_is_indeterminate(tier: str) -> None:
+    decision = purchase_routing_decision(tier=tier, estimated_total=None)
+
+    assert decision.outcome is PurchaseRoutingOutcome.INDETERMINATE
+    assert decision.quotation_type is None
+    assert decision.purchaser is None
 
 
 def test_ai_input_uses_exact_six_space_delimiters() -> None:

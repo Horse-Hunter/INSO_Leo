@@ -11,9 +11,9 @@ from .v12_contracts import (
     DeliveryOutcome,
     NotificationCommand,
     NotificationRecipient,
+    NotificationTransportResult,
     ReasonCode,
 )
-from .v12_safety import sanitize_external_error
 from .v12_store import V12Store
 
 
@@ -22,13 +22,18 @@ class NotificationTransport(Protocol):
         self,
         command: NotificationCommand,
         recipient: NotificationRecipient,
-    ) -> DeliveryOutcome: ...
+    ) -> NotificationTransportResult: ...
 
 
 class FakeNotificationTransport:
     """Deterministic test adapter; has no SMTP or credential dependency."""
 
-    def __init__(self, outcomes: Mapping[str, tuple[DeliveryOutcome, ...]] = ()) -> None:
+    def __init__(
+        self,
+        outcomes: Mapping[
+            str, tuple[DeliveryOutcome | NotificationTransportResult, ...]
+        ] = (),
+    ) -> None:
         self._outcomes = {key: deque(value) for key, value in dict(outcomes).items()}
         self.calls: list[tuple[str, str]] = []
 
@@ -36,12 +41,13 @@ class FakeNotificationTransport:
         self,
         command: NotificationCommand,
         recipient: NotificationRecipient,
-    ) -> DeliveryOutcome:
+    ) -> NotificationTransportResult:
         self.calls.append((command.command_id, recipient.recipient_id))
         queue = self._outcomes.get(recipient.recipient_id)
         if not queue:
-            return DeliveryOutcome.UNKNOWN
-        return queue.popleft()
+            return _transport_result(DeliveryOutcome.UNKNOWN)
+        result = queue.popleft()
+        return result if isinstance(result, NotificationTransportResult) else _transport_result(result)
 
 
 class V12NotificationWorker:
@@ -56,33 +62,29 @@ class V12NotificationWorker:
         sent_attempts = 0
         for command in commands:
             for recipient in command.recipients:
-                reason_code: ReasonCode | None = None
                 try:
-                    outcome = self._transport.send_one(command, recipient)
-                    if not isinstance(outcome, DeliveryOutcome):
-                        outcome = DeliveryOutcome.UNKNOWN
-                        reason_code = ReasonCode.NOTIFICATION_UNKNOWN
-                except Exception as exc:  # noqa: BLE001 - external adapter boundary
-                    safe = sanitize_external_error(exc, subsystem="notification")
-                    del exc
-                    outcome = (
-                        DeliveryOutcome.RETRYABLE_FAILURE
-                        if safe.category.value == "TRANSIENT"
-                        else DeliveryOutcome.UNKNOWN
-                    )
-                    reason_code = safe.reason_code
-                if outcome is DeliveryOutcome.UNKNOWN and reason_code is None:
-                    reason_code = ReasonCode.NOTIFICATION_UNKNOWN
-                elif outcome is DeliveryOutcome.RETRYABLE_FAILURE and reason_code is None:
-                    reason_code = ReasonCode.NOTIFICATION_TRANSIENT
-                elif outcome is DeliveryOutcome.PERMANENT_FAILURE and reason_code is None:
-                    reason_code = ReasonCode.NOTIFICATION_PERMANENT
+                    result = self._transport.send_one(command, recipient)
+                    if not isinstance(result, NotificationTransportResult):
+                        result = _transport_result(DeliveryOutcome.UNKNOWN)
+                except Exception:  # noqa: BLE001 - unexpected adapter errors are UNKNOWN
+                    # Only the transport adapter can classify provider-specific errors.
+                    result = _transport_result(DeliveryOutcome.UNKNOWN)
                 self._store.record_notification_result(
                     command_id=command.command_id,
                     recipient_id=recipient.recipient_id,
-                    outcome=outcome,
+                    outcome=result.outcome,
                     at=now,
-                    reason_code=reason_code,
+                    reason_code=result.reason_code,
                 )
                 sent_attempts += 1
         return sent_attempts
+
+
+def _transport_result(outcome: DeliveryOutcome) -> NotificationTransportResult:
+    reason = {
+        DeliveryOutcome.SENT: ReasonCode.NOTIFICATION_SENT,
+        DeliveryOutcome.RETRYABLE_FAILURE: ReasonCode.NOTIFICATION_TRANSIENT,
+        DeliveryOutcome.PERMANENT_FAILURE: ReasonCode.NOTIFICATION_PERMANENT,
+        DeliveryOutcome.UNKNOWN: ReasonCode.NOTIFICATION_UNKNOWN,
+    }[outcome]
+    return NotificationTransportResult(outcome, reason)

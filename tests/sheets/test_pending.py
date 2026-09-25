@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 
 from src.sheets import (
+    CustomerNameSource,
     IdentifyingSnapshot,
     WorksheetIdentity,
     WorksheetRow,
@@ -241,6 +242,7 @@ def test_exact_2026_worksheet_reads_customer_from_column_d() -> None:
     record = query_pending_records(reader, worksheet)[0]
 
     assert record.customer_name == "Customer B"
+    assert record.customer_name_source is CustomerNameSource.WORKSHEET_COLUMN_D
     assert record.importance_raw == "B"
     assert record.record_identity.worksheet.worksheet == "2026"
 
@@ -260,7 +262,9 @@ def test_2026_blank_customer_is_explicitly_missing_and_other_sheets_are_unknown(
     )[0]
 
     assert blank_record.customer_name is None
+    assert blank_record.customer_name_source is CustomerNameSource.WORKSHEET_COLUMN_D
     assert other_record.customer_name is None
+    assert other_record.customer_name_source is CustomerNameSource.UNCONFIGURED
     assert other_record.importance_raw == "C"
 
 
@@ -272,4 +276,5 @@ def test_shahab_customer_name_is_fixed_value_without_tier_inference() -> None:
     )[0]
 
     assert record.customer_name == "SHAHAB"
+    assert record.customer_name_source is CustomerNameSource.SHAHAB_FIXED
     assert record.importance_raw == "A"

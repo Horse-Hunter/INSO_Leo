@@ -32,6 +32,7 @@ class ReasonCode(StrEnum):
     RECONCILIATION_UNREADABLE = "RECONCILIATION_UNREADABLE"
     NOTIFICATION_TRANSIENT = "NOTIFICATION_TRANSIENT"
     NOTIFICATION_PERMANENT = "NOTIFICATION_PERMANENT"
+    NOTIFICATION_SENT = "NOTIFICATION_SENT"
     NOTIFICATION_UNKNOWN = "NOTIFICATION_UNKNOWN"
     CUSTOMER_NAME_MISSING = "CUSTOMER_NAME_MISSING"
     EVIDENCE_PATH_UNSAFE = "EVIDENCE_PATH_UNSAFE"
@@ -223,6 +224,25 @@ class RecipientDeliveryResult:
             raise ValueError("delivery attempt and completion time are invalid")
         if self.next_attempt_at is not None and self.next_attempt_at.tzinfo is None:
             raise ValueError("next_attempt_at must be timezone-aware")
+
+
+@dataclass(frozen=True, slots=True)
+class NotificationTransportResult:
+    """One adapter attempt with a closed outcome and safe reason code."""
+
+    outcome: DeliveryOutcome
+    reason_code: ReasonCode
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.outcome, DeliveryOutcome) or self.outcome not in {
+            DeliveryOutcome.SENT,
+            DeliveryOutcome.RETRYABLE_FAILURE,
+            DeliveryOutcome.PERMANENT_FAILURE,
+            DeliveryOutcome.UNKNOWN,
+        }:
+            raise ValueError("transport result outcome must be terminal")
+        if not isinstance(self.reason_code, ReasonCode):
+            raise TypeError("transport reason code must be allowlisted")
 
 
 @dataclass(frozen=True, slots=True)

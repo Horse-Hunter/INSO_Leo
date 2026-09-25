@@ -19,6 +19,12 @@ missing data for Workflow data-quality handling. Customer name never determines
 customer tier. Customer mapping is implemented in the pure pending-record
 contract and does not put customer rules in GUI code.
 
+`PendingSheetRecord.customer_name_source` carries the allowlisted
+`CustomerNameSource` (`SHAHAB_FIXED`, `WORKSHEET_COLUMN_D` or `UNCONFIGURED`).
+The additive V1.2 inquiry-state store can persist the observed name and source
+together; a missing value remains explicit and raises the Workflow data-quality
+event/alert. The production workflow is not yet wired to this snapshot API.
+
 SHAHAB 的默认 `importance_raw = "A"` 只属于标准化输出，不代表源 worksheet 字段，也不得进入 source snapshot 或 relocation。Schema 选择对已确认的 `SHAHAB` 标题不区分大小写；Google Sheets API 读取、record identity 和所有引用仍保留配置中的原始 worksheet 标题。
 
 实现中的 source snapshot 继续使用统一语义字段承载源值：标准表的

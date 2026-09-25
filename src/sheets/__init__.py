@@ -1,6 +1,7 @@
 """Public contract for one-shot pending Google Sheet record reads."""
 
 from .pending import (
+    CustomerNameSource,
     IdentifyingSnapshot,
     PendingSheetRecord,
     SheetRecordIdentity,
@@ -11,6 +12,7 @@ from .pending import (
 )
 
 __all__ = [
+    "CustomerNameSource",
     "IdentifyingSnapshot",
     "PendingSheetRecord",
     "SheetRecordIdentity",

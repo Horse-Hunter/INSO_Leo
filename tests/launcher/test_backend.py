@@ -7,6 +7,8 @@ from threading import Event, Lock
 from time import monotonic, sleep
 from types import SimpleNamespace
 
+import pytest
+
 from src.gui.contracts import RunState
 from src.launcher import backend as launcher
 from src.launcher.backend import ProductionBackend, _decimal
@@ -15,6 +17,27 @@ from src.research import ResearchInput, ResearchResult, ResearchStatus
 from src.research.excel_output import ResearchExcelOutput
 from src.research.service import ResearchService
 from src.workflow import WorkflowStatus, WorkflowWorker
+
+
+class _FakeInsoSession:
+    def __init__(self, browser_handle):
+        self.browser_handle = browser_handle
+
+    def operation_access(self):
+        return object()
+
+    def close_after_drain(self):
+        if self.browser_handle.owned:
+            self.browser_handle.close()
+
+
+@pytest.fixture(autouse=True)
+def fake_inso_session_attachment(monkeypatch):
+    monkeypatch.setattr(
+        launcher,
+        "attach_inso_research_session",
+        lambda _endpoint, browser_handle, **_kwargs: _FakeInsoSession(browser_handle),
+    )
 
 
 def test_login_unavailable_result_requests_manual_handling():
@@ -353,6 +376,7 @@ def test_stop_after_cycle_drains_every_due_item_from_current_poll(
     release_first = Event()
     count_lock = Lock()
     calls = []
+    research_builder_kwargs = []
     monkeypatch.setattr(
         launcher,
         "build_read_only_google_sheets_service",
@@ -374,9 +398,11 @@ def test_stop_after_cycle_drains_every_due_item_from_current_poll(
                 assert release_first.wait(5)
             return ResearchResult(item.inquiry_id, ResearchStatus.SUCCESS)
 
-    monkeypatch.setattr(
-        launcher, "build_research_service", lambda *_a, **_kw: _Research()
-    )
+    def build_research(_config, **kwargs):
+        research_builder_kwargs.append(kwargs)
+        return _Research()
+
+    monkeypatch.setattr(launcher, "build_research_service", build_research)
     backend = ProductionBackend(
         config_path=research_config, production_config_path=production,
         cdp_probe=lambda _url: True,
@@ -390,6 +416,7 @@ def test_stop_after_cycle_drains_every_due_item_from_current_poll(
 
     assert backend._thread is not None and not backend._thread.is_alive()
     assert len(calls) == 3
+    assert callable(research_builder_kwargs[0]["inso_operation_access"])
     assert len(set(calls)) == 3
     assert len(backend._store.all_items()) == 3
     assert all(

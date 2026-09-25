@@ -49,6 +49,7 @@ from src.workflow import (
 )
 
 from .browser_bootstrap import BrowserBootstrapError, BrowserHandle, acquire_cdp_browser
+from .inso_session import InsoResearchSession, attach_inso_research_session
 
 log = logging.getLogger(__name__)
 
@@ -99,7 +100,9 @@ class ProductionBackend(GuiBackend):
         self.cdp_probe = cdp_probe
         self._browser_acquirer = browser_acquirer
         self._browser_handle: BrowserHandle | None = None
+        self._inso_session: InsoResearchSession | None = None
         self._research_ready = False
+        self._research_cycle_drained = True
         self._research_gate = threading.Lock()
         self._lock = threading.RLock()
         self._stop = threading.Event()
@@ -224,7 +227,9 @@ class ProductionBackend(GuiBackend):
                 else resolve_app_path(rc.excel_output_path, root=self.root)
             )
             self._store = WorkflowStateStore(db)
-            research = build_research_service(rc)
+            research = build_research_service(
+                rc, inso_operation_access=self._inso_operation_access
+            )
 
             def prepare_research() -> None:
                 self._ensure_research_ready(rc, cfg)
@@ -314,11 +319,8 @@ class ProductionBackend(GuiBackend):
         finally:
             self._refresh()
             if self._browser_handle is not None:
-                try:
-                    self._browser_handle.close()
-                except Exception as exc:  # noqa: BLE001 - cleanup boundary
-                    log.warning("Owned browser shutdown failed (%s)", type(exc).__name__)
-                self._browser_handle = None
+                self._research_cycle_drained = True
+                self._release_idle_browser()
             with self._lock:
                 if self._state is not RunState.MANUAL_REVIEW:
                     self._state = RunState.STOPPED
@@ -361,6 +363,19 @@ class ProductionBackend(GuiBackend):
             if not readiness.ready:
                 self._discard_unready_browser()
                 raise BrowserBootstrapError("CDP research readiness failed")
+            try:
+                self._research_cycle_drained = False
+                self._inso_session = attach_inso_research_session(
+                    research_config.cdp.cdp_url,
+                    self._browser_handle,
+                    cycle_id=self._run_id or "research-cycle",
+                    cycle_is_drained=lambda _cycle: self._research_cycle_drained,
+                )
+            except Exception as exc:
+                self._discard_unready_browser()
+                raise BrowserBootstrapError(
+                    "INSO research session identity could not be verified"
+                ) from exc
             self._research_ready = True
         self._set_health(("正常", "已连接", "正常", "正常"), "正常")
 
@@ -368,9 +383,17 @@ class ProductionBackend(GuiBackend):
         """Close a just-acquired owned browser when readiness cannot be proven."""
 
         handle = self._browser_handle
+        session = self._inso_session
         self._browser_handle = None
+        self._inso_session = None
         self._research_ready = False
-        if handle is not None:
+        if session is not None:
+            try:
+                self._research_cycle_drained = True
+                session.close_after_drain()
+            except Exception as exc:  # noqa: BLE001 - cleanup boundary
+                log.warning("Unready INSO session shutdown failed (%s)", type(exc).__name__)
+        if handle is not None and session is None:
             try:
                 handle.close()
             except Exception as exc:  # noqa: BLE001 - cleanup boundary
@@ -382,10 +405,18 @@ class ProductionBackend(GuiBackend):
         with self._research_gate:
             if not self._research_ready:
                 return
+            self._research_cycle_drained = True
             handle = self._browser_handle
+            session = self._inso_session
             self._browser_handle = None
+            self._inso_session = None
             self._research_ready = False
-        if handle is not None:
+        if session is not None:
+            try:
+                session.close_after_drain()
+            except Exception as exc:  # noqa: BLE001 - cleanup boundary
+                log.warning("INSO session shutdown failed (%s)", type(exc).__name__)
+        if handle is not None and session is None:
             try:
                 handle.close()
             except Exception as exc:  # noqa: BLE001 - cleanup boundary
@@ -394,6 +425,12 @@ class ProductionBackend(GuiBackend):
             running = self._state is RunState.RUNNING
         if running:
             self._set_health(("正常", "待命", "正常", "正常"), "正常")
+
+    def _inso_operation_access(self):
+        session = self._inso_session
+        if session is None:
+            raise BrowserBootstrapError("verified INSO Research session is unavailable")
+        return session.operation_access()
 
     def _runtime_error(self, exc):
         log.warning("Production runtime worker failed (%s)", type(exc).__name__)
