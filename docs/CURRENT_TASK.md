@@ -1,6 +1,6 @@
 # Current Task
 
-Status: READY_FOR_CEO_REVIEW
+Status: ACTIVE
 
 Goal: 交付 INSO_V1.1 Windows 可发布版本：从已验收 main 生产基线构建可双击启动的 Windows 桌面包，解决 frozen runtime 路径、配置发现、单实例、日志/启动错误、CDP Chrome 启动/复用与发布包 smoke；不改变已验收业务规则。
 
@@ -140,13 +140,20 @@ Closeout:
 - Only PowerShell build script and this task document changed; no Python runtime/business code changed. Validation: PowerShell parser, `git diff --check`, two consecutive clean Windows PyInstaller builds with stable staging size and no work tree, frozen self-check, and `RELEASE_SCAN_OK`. Full Python test suite was not rerun because Python source was unchanged.
 - No live Research smoke or production Sheets poll was run as part of this storage/build-maintenance task.
 
-Remaining review notes:
-- `UNKNOWN_LARGE_DIRECTORIES`: 18 old-release/recovery entries totaling 4.41 GiB remain because their contents may be useful and were not approved for deletion.
-- The successful lifecycle smoke left a sanitized local startup log inside the fixed BuildOnly staging artifact. It was kept as runtime data; a later clean BuildOnly replacement will fail closed until that local runtime directory is reviewed.
-- Commit/push this branch for CEO review; do not merge main.
+CEO Final Review:
+- Commit `884a08b611a94bf733e170ff4370512cd084ce08` is accepted for the build-script fix. The fixed owned staging root, marker validation, artifact scan, finally-cleaned PyInstaller work tree, and refusal to overwrite deployed `dist/INSO_V1.1` satisfy the no-growth and fail-closed release requirements.
+- The Windows release code path remains accepted; no new Python blocker was found in this review.
+- Before final merge/closure, perform one last **local-only classification and safe cleanup** of the 18 `UNKNOWN_LARGE_DIRECTORIES` (4.41 GiB), because this is most of the remaining project footprint and the Owner explicitly requested whole-folder slimming.
+- This cleanup is not permission for blanket deletion. For each of the 18 entries, record only non-sensitive metadata: relative category/name, size, modified time, immediate structure, and whether it matches a known PyInstaller/release/recovery layout. Run the generic release artifact scanner against any candidate release tree.
+- A directory may be deleted only when all are true: it is not a Git worktree/current release/deployed release; contains no `runtime/`, Vault/OAuth/profile/cookie/SQLite/Excel/customer data; passes the generic artifact safety scan; and its contents are demonstrably rebuildable release/recovery copies with no unique source or operator files.
+- Any directory with runtime data, unknown custom files, a reparse point, Git metadata, or ambiguous purpose remains `KEEP_UNKNOWN`. Do not optimize for reclaimed GB.
+- The current fixed BuildOnly staging contains a sanitized smoke log under local `runtime/logs`; keep it unless explicitly replacing that staging after review. Do not weaken the build script's runtime-data refusal just to make cleanup easier.
+- After classification, delete only the proven-safe subset, then report: 18 total candidates, DELETE_SAFE count/size, KEEP_UNKNOWN count/size, project BEFORE/AFTER/RECLAIMED. If all 18 cannot be proven safe, retain the rest and proceed; this is not a code blocker.
+- No real Research/Sheets run is required for this local storage cleanup. Do not modify Python/business code. Do not merge main until this final local cleanup report is returned to CEO.
 
 Blockers:
-- No remaining code blocker. The retained unknown backups and process-held staging copies are conservative cleanup boundaries documented above for CEO/Owner review.
+- No remaining code blocker.
+- Final local cleanup classification of the 18 unknown release/recovery directories is pending CEO-directed execution; ambiguous entries must be retained rather than forced deleted.
 
 Owner Decisions:
 - 发布名称：INSO_V1.1。
