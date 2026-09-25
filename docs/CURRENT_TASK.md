@@ -137,8 +137,17 @@ Next:
 4. Never clean `runtime/`, Vault, browser profiles, SQLite, Excel, `.venv-release`, or any worktree. Do not generic-recursively clean `build/` if unknown operator files may exist; target only paths owned by the release script.
 5. Add a deterministic/manual build verification: run two consecutive clean `-BuildOnly` builds and confirm the number/size of release staging directories does not grow per run; run artifact scan/self-check on the retained current staging artifact.
 6. After the script fix is proven, it is acceptable to remove only stale directories matching the old script-owned patterns `build/release-dist-*` and `build/pyinstaller-*`, report reclaimed size, and leave all runtime/data/profile/worktree content untouched.
-7. Re-run ruff/full deterministic pytest/diff-check only if Python code changes; otherwise PowerShell build/self-check/artifact scan plus the two-build no-growth verification is sufficient.
-8. commit/push current branch and return to CEO Final Review; do not merge main.
+7. 完成 release-script 修复后，对整个项目根目录做一次磁盘占用审计并安全瘦身，而不只清理本轮 build staging：
+   - 先按顶层目录、`.worktrees/` 子目录、`build/`、`dist/`、虚拟环境和常见 cache 分别统计实际占用并记录清理前大小；
+   - 可删除：确认可重建且不含业务数据的旧 PyInstaller staging、`__pycache__`、`.pytest_cache`、`.ruff_cache`、临时测试/构建缓存，以及已确认废弃且干净的 release artifact；
+   - 对 Git worktree 只能先用 `git worktree list` / status 核实。仅对已经完成、干净、无保留价值的旧开发 worktree 使用正规的 `git worktree remove`；不得直接资源管理器删除；
+   - 明确保留历史 Research runtime worktree，以及任何仍有未提交改动、runtime 数据或后续可能继续使用的 worktree；
+   - `.venv-release` / 其他虚拟环境先统计。若仍用于可复现构建则默认保留；只有明确存在重复/废弃环境并确认可重建时才删；
+   - 不得删除或迁移 `runtime/`、Vault、OAuth grant/client、browser profile、SQLite、Excel、credential/cookie、`.git/`、当前 active release worktree 或任何客户数据；
+   - 不使用“按文件大小盲删”或整个项目递归清空 cache 之外的未知目录。遇到用途不明的大目录先报告 CEO/Owner。
+8. 瘦身完成后再次统计顶层及主要子目录大小，报告总项目目录“清理前 / 清理后 / 释放空间”，并列出实际删除的目录类型；不得在报告中泄露 secret/path 中的敏感内容。
+9. Re-run ruff/full deterministic pytest/diff-check only if Python code changes; otherwise PowerShell build/self-check/artifact scan plus the two-build no-growth verification is sufficient.
+10. commit/push current branch and return to CEO Final Review; do not merge main.
 
 Blockers:
 - Release build script leaks per-build PyInstaller staging directories under `build/`, causing multi-GB disk growth during repeated packaging.
