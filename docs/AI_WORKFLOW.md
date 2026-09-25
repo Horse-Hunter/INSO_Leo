@@ -1,5 +1,15 @@
 # AI 开发工作流
 
+## 全局默认：简单优先
+
+这是所有角色和所有阶段的默认规则，优先级高于“做得更完整”“更通用”“更漂亮”。
+
+- 先做当前 Acceptance 真正需要的最小方案；不要为未来假设提前设计。
+- 两个方案都可行时，优先概念更少、改动更小、依赖更少、状态更少、路径更直接的方案。
+- 不因为“可能以后复用”就新建 framework、service、manager、registry、layer 或复杂状态机；只有重复和维护成本已经真实出现时才抽象。
+- Review、Specialist、文档、测试和安全控制都保持最低充分，不把建议项不断升级成新 gate。
+- 新复杂度必须能回答“它正在解决哪个具体问题”；答不出来就不加，已经加重了就优先删减。
+
 ## 原则与团队
 
 软件保持模块化，AI 团队保持扁平化；组织复杂度必须低于问题复杂度。默认常驻团队只有 Human Owner（Leo）→ CEO → 一名 Main Programmer。角色不等于工具：Codex、WorkBuddy 或未来 Coding Agent 都可执行 Main Programmer；换工具不改变职位、权限、边界或架构。
@@ -10,7 +20,7 @@ Main Programmer 对阶段结果负责，拥有跨模块开发自主权：可修 
 
 ## 临时角色与并行
 
-- **Security Specialist：**仅在新增高风险能力时由 CEO 临时创建，例如真实外部写入/删除/覆盖、ERP 写入、表单或订单提交、主动发消息、支付、Credential 新能力。负责安全边界、Public API 和 tests，完成即退出。已批准且稳定的安全 Public API 可由 Main Programmer 正常调用，无需每次重启 Specialist。
+- **Security Specialist：**仅在新增高风险能力时由 CEO 临时创建，例如真实外部写入/删除/覆盖、ERP 写入、表单或订单提交、主动发消息、支付、Credential 新能力。只审查能导致真实高影响事故的具体风险，给出最低充分保护后退出；不为理论完备性扩展安全体系。已批准且稳定的安全 Public API 可由 Main Programmer 正常调用，无需每次重启 Specialist。
 - **Architecture Specialist：**仅在大版本架构重构、模块职责重大改变、Public Contract 大规模变化、Repo 总体结构重构或 AI 治理重大变化时临时创建。普通局部重构不需要。
 - **Independent Programmer：**默认零个；仅在功能边界明确、可独立测试、与主程序员修改文件重叠很少三项同时满足时并行，最多两个。各自使用独立 branch/worktree 与明确的写入范围；不为表面并行拆任务。
 - **Utility Programmer：**一次性处理环境、Git/worktree、PowerShell、浏览器/CDP、依赖、脚本或调试工具问题，解决后退出，不占用主程序员长期上下文。

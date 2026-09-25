@@ -1,6 +1,6 @@
 # 安全边界
 
-本文件是安全规则的 canonical owner。目标、身份或权限不确定时 fail closed。新增高风险能力由 CEO 临时创建 Security Specialist，完成安全边界、Public API 和 tests；Main Programmer 可正常调用已批准且稳定的安全 Public API。
+本文件是安全规则的 canonical owner。安全同样遵循“简单优先、最低充分”：只为能够具体说明的高影响事故增加必要保护，优先精确校验、窄权限和 fail closed；没有明确故障场景的额外 hardening 默认是 recommendation，不得不断叠加 gate、抽象或流程。目标、身份或权限不确定时 fail closed。新增高风险能力由 CEO 按需临时创建 Security Specialist，完成最小必要边界和 tests 后退出；Main Programmer 可正常调用已批准且稳定的安全 Public API。
 
 ## GREEN — 可自主执行
 
@@ -14,7 +14,7 @@
 - 提交表单、发送消息、下单、报价提交、支付以及其他外部高风险副作用。
 - 新增或改变 Credential 行为；可能影响用户工作的高风险 Git 操作。
 
-一次有边界的 Owner 授权可覆盖当前阶段明确限定的重复机械操作，不必逐条询问；目标、范围、身份或风险变化才重新授权。新增此类能力须先经 CEO 判断并由临时 Security Specialist 建立安全边界、Public API 和 tests。调用已批准、稳定的安全 API 不等于重新新增能力；调用时仍遵守该 API 的授权与目标校验。
+一次有边界的 Owner 授权可覆盖当前阶段明确限定的重复机械操作，不必逐条询问；目标、范围、身份或风险变化才重新授权。新增此类能力只建立与实际风险直接对应的最低必要保护，不为理论完备性增加额外层。调用已批准、稳定的安全 API 不等于重新新增能力；调用时仍遵守该 API 的授权与目标校验。
 
 ## RED — 禁止
 
