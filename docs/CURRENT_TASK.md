@@ -1,8 +1,8 @@
 # Current Task
 
-Status: ACTIVE
+Status: READY_FOR_CEO_REVIEW
 
-Goal: Deliver the V1.2 architecture/design spike for seven-day INSO duplicate detection, post-Research routing, notifications/retry/alerts, controlled purchase-draft entry, GUI history, SQLite evolution, and explicit browser/session ownership. Do not implement production behavior in this stage.
+Goal: Complete the V1.2 architecture/design spike and independent static Safety Review for seven-day INSO duplicate detection, post-Research routing, notifications/retry/alerts, controlled purchase-draft entry, GUI history, SQLite evolution, and explicit browser/session ownership. Do not implement production behavior in this stage.
 
 Business Outcome:
 - Give CEO and Safety Supervisor a reviewable design and stable public-contract proposal before implementation.
@@ -29,17 +29,22 @@ Done:
 Current:
 - CEO architecture review passed on commit `60d6a84214389d09d1d566087711b619f520fbaf`.
 - CEO product decisions are frozen in `docs/V1_2_ARCHITECTURE.md` by commit `763ffc0e7045eaee59f793cb09b58b5a246cc74d`.
-- Remaining unknowns are live INSO selector/page identity, stable record identity, Save Data read-back identity, shared-session feasibility, and safe screenshot regions. These require Safety Supervisor review/read-only discovery, not product guessing.
+- Independent static Safety Review is recorded in `docs/V1_2_SAFETY_REVIEW.md`.
+- Safety verdict: `DESIGN_SAFE` approved for fake-only additive contracts/persistence. Blockers B1–B4 prevent live-capable browser/write/notification paths: unsafe CDP page/browser ownership; no proven Save Data unknown-outcome reconciliation identity; no layered Save-and-Send prohibition yet; raw exception text can reach durable state/GUI.
+- Approved gate: `DESIGN_SAFE` only. The bounded `READ_ONLY_DISCOVERY_PLAN` is documented, but discovery execution is not approved in this stage and needs separate CEO/Owner authorization. `WRITE_IMPLEMENTATION_ALLOWED`, `REAL_SAVE_DATA_SMOKE_ALLOWED`, and `REAL_NOTIFICATION_SMOKE_ALLOWED` are not approved.
+- Remaining UNKNOWNs include live INSO page/account/company/context identities and selectors; stable history and saved-record identity/read-back fields; lease compatibility with Research adapters; safe screenshot/redaction regions; AI-recognition MPN comparator; and backup/restore operator details.
 
 Next:
-- Safety Supervisor independently reviews the approved architecture, WRITE ALLOWLIST, browser/session ownership, selector/identity rules, Save Data boundary, Save-and-Send prohibition, unknown-write recovery, evidence handling, migration/rollback safety, and production smoke gates.
-- Safety Supervisor may propose a bounded read-only discovery plan for the remaining live-page UNKNOWNs, but must not perform any write or real notification delivery without a later explicit CEO/Owner gate.
-- After Safety review, Main Programmer may implement pure contracts, persistence/event/alert services and fake adapters; WorkBuddy notification implementation starts only against the frozen Notification contract.
+- Main Programmer required changes: resolve B1–B4 in the safety review; specify/test a SQLite-consistent timestamped backup and recovery procedure before migration implementation; explicitly define the AI-recognition MPN comparator. Keep V1.1 behavior and table semantics unchanged.
+- Proposed discovery scope is restricted to read-only page/browser/context metadata, page identity, control semantics/safe selector candidates, history stable-ID/tie behavior, saved-draft identity/read-back feasibility, and screenshot crop/redaction feasibility. No clicks, field entry, AI action, save/send, Sheet write, SMTP, or data export. CEO/Owner must separately authorize target, session, and scope before execution.
+- After CEO review, fake-only contract/persistence work may proceed under `DESIGN_SAFE`; live discovery, write implementation and either real smoke remain separately gated.
 
-Blockers: Safety Supervisor review required before any real INSO write implementation, real notification delivery, or production smoke.
+Blockers: B1–B4 in `docs/V1_2_SAFETY_REVIEW.md` block live-capable INSO/browser/write/notification implementation. Live saved-record identity/read-back and screenshot safety remain UNKNOWN. No production smoke is approved.
 
-Owner Decisions: Business rules from the V1.2 requirement discussion are frozen; CEO technical/product decisions are recorded in `docs/V1_2_ARCHITECTURE.md`. No runtime/production action is authorized in this stage.
+Owner Decisions: Business rules from the V1.2 requirement discussion are frozen; CEO technical/product decisions are recorded in `docs/V1_2_ARCHITECTURE.md`. Save-and-Send remains prohibited in every stage. No live discovery or runtime/production action is authorized by this stage.
 
 Branch: `feature/v1-2`
 
 Last Good Commit: `be9d0a51d0375884dfa3e5e9e4317958899fdc75` (sealed V1.1 release baseline)
+
+Safety Review handoff: `f38fc73cf788b818351db107c2e91e23503eabe9`; pending CEO review of `docs/V1_2_SAFETY_REVIEW.md` and its blockers/gates.
