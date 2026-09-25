@@ -66,6 +66,7 @@ class PendingSheetRecord:
     quantity: CellValue
     row_position: int
     record_identity: SheetRecordIdentity
+    customer_name: str | None = None
 
 
 def query_pending_records(
@@ -100,10 +101,22 @@ def query_pending_records(
                 quantity=snapshot.quantity,
                 row_position=row.row_position,
                 record_identity=identity,
+                customer_name=_customer_name(row, schema),
             )
         )
 
     return tuple(pending)
+
+
+def _customer_name(row: WorksheetRow, schema: WorksheetSchema) -> str | None:
+    if schema.fixed_customer_name is not None:
+        return schema.fixed_customer_name
+    if schema.customer_name_column is None:
+        return None
+    value = row.cells.get(schema.customer_name_column)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()
 
 
 def _source_snapshot(

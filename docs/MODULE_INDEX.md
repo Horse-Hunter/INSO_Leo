@@ -7,12 +7,12 @@
 | module_id | display_name | code_path | Public Contract / module doc | status |
 | --- | --- | --- | --- | --- |
 | `core` | Core | `src/core/` | `docs/modules/CORE.md` | V1 |
-| `gui` | GUI | `src/gui/` | `src/gui/README.md` | V1 Shell |
+| `gui` | GUI | `src/gui/` | `src/gui/README.md` | V1 Shell + V1.2 DTO seam |
 | `launcher` | Production Launcher | `src/launcher/` | `src/launcher/README.md` | V1 |
 | `sheets` | Sheets | `src/sheets/` | `docs/modules/SHEETS.md` | V1 |
-| `research` | Research | `src/research/` | `docs/modules/RESEARCH.md` | V1 |
-| `workflow` | Workflow | `src/workflow/` | `docs/modules/WORKFLOW.md` | V1 |
-| `inso` | INSO | `src/inso/` | Future Version Contract：`UNKNOWN` | Future Version |
+| `research` | Research | `src/research/` | `docs/modules/RESEARCH.md` | V1 rules + V1.2 session seam |
+| `workflow` | Workflow | `src/workflow/` | `docs/modules/WORKFLOW.md` | V1 + V1.2 additive fake-only persistence |
+| `inso` | INSO | `src/inso/` | `docs/modules/INSO.md` | V1.2 Stage 2A fake-only contracts |
 | `quotation` | Quotation | `src/quotation/` | Future Version Contract：`UNKNOWN` | Future Version |
 
 测试按 `tests/<module>/` 镜像模块归属。

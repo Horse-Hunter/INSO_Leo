@@ -218,3 +218,58 @@ def test_uppercase_shahab_title_uses_shahab_schema_without_changing_identity() -
     assert [record.model for record in records] == ["SHAHAB-MPN"]
     assert records[0].importance_raw == "A"
     assert records[0].record_identity.worksheet == worksheet
+
+
+def test_exact_2026_worksheet_reads_customer_from_column_d() -> None:
+    worksheet = WorksheetIdentity(spreadsheet="supplier-sheet", worksheet="2026")
+    reader = FakeWorksheetRowReader(
+        [
+            WorksheetRow(
+                row_position=9,
+                cells={
+                    "A": "未发",
+                    "C": "B",
+                    "D": "  Customer B  ",
+                    "E": "MPN-2026",
+                    "F": "Brand",
+                    "G": 12,
+                },
+            )
+        ]
+    )
+
+    record = query_pending_records(reader, worksheet)[0]
+
+    assert record.customer_name == "Customer B"
+    assert record.importance_raw == "B"
+    assert record.record_identity.worksheet.worksheet == "2026"
+
+
+def test_2026_blank_customer_is_explicitly_missing_and_other_sheets_are_unknown() -> None:
+    blank_2026 = WorksheetIdentity(spreadsheet="supplier-sheet", worksheet="2026")
+    other = WorksheetIdentity(spreadsheet="supplier-sheet", worksheet="requests")
+    blank_record = query_pending_records(
+        FakeWorksheetRowReader(
+            [WorksheetRow(3, {"A": "未发", "C": "C", "D": "  ", "E": "X", "F": "Y", "G": 1})]
+        ),
+        blank_2026,
+    )[0]
+    other_record = query_pending_records(
+        FakeWorksheetRowReader([row(3, status="未发", importance="C", model="X")]),
+        other,
+    )[0]
+
+    assert blank_record.customer_name is None
+    assert other_record.customer_name is None
+    assert other_record.importance_raw == "C"
+
+
+def test_shahab_customer_name_is_fixed_value_without_tier_inference() -> None:
+    worksheet = WorksheetIdentity(spreadsheet="supplier-sheet", worksheet="SHAHAB")
+    record = query_pending_records(
+        FakeWorksheetRowReader([shahab_row(4, status="未发", model="X")]),
+        worksheet,
+    )[0]
+
+    assert record.customer_name == "SHAHAB"
+    assert record.importance_raw == "A"

@@ -62,6 +62,7 @@ from urllib.parse import urlsplit
 
 from src.core import CredentialProvider
 from src.core.app_paths import runtime_config_path
+from src.inso.session import InsoOperationAccess
 
 from .bom_ai import (
     BomAiAdapter,
@@ -369,6 +370,7 @@ def build_research_service(
     lcsc_client: LcscPageClient | None = None,
     bom_ai_browser: BomAiAuthenticatedBrowser | None = None,
     inso_browser: InsoReadOnlyBrowser | None = None,
+    inso_operation_access: InsoOperationAccess | Callable[[], InsoOperationAccess] | None = None,
 ) -> ResearchService:
     """Compose the canonical ``ResearchService`` from validated runtime config.
 
@@ -407,6 +409,7 @@ def build_research_service(
         config.inso,
         timeout_ms=browser.timeout_ms,
         settle_ms=browser.settle_ms,
+        operation_access=inso_operation_access,
     )
 
     return ResearchService(

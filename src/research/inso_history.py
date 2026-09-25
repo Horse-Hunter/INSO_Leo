@@ -16,8 +16,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from ipaddress import ip_address
-from typing import Any, Protocol
+from typing import Protocol
 from urllib.parse import urlsplit
+
+from src.inso.session import InsoOperationAccess
 
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .source_contracts import (
@@ -227,7 +229,12 @@ def _parse_inso_datetime(value: str) -> datetime:
 
 
 class PlaywrightInsoReadOnlyBrowser:
-    """Concrete CDP-attached acquisition of Stock_VenQuote history."""
+    """Read history through an explicitly leased, operation-owned child page.
+
+    This adapter no longer attaches to CDP, searches arbitrary contexts/pages,
+    or closes a browser. A composition-root supplied operation capability is
+    required; absent identity/lease fails closed.
+    """
 
     def __init__(
         self,
@@ -235,27 +242,26 @@ class PlaywrightInsoReadOnlyBrowser:
         *,
         timeout_ms: int = 45_000,
         settle_ms: int = 2_000,
-        playwright_factory: Callable[[], object] | None = None,
+        operation_access: InsoOperationAccess
+        | Callable[[], InsoOperationAccess]
+        | None = None,
     ) -> None:
         self._config = config
         self._timeout_ms = timeout_ms
         self._settle_ms = settle_ms
-        self._playwright_factory = playwright_factory
+        self._operation_access = operation_access
 
     def fetch_procurement_temporary_inquiry_history(
         self, mpn: str, login: InsoLogin
     ) -> InsoHistoryCapture:
         del login  # CDP session is already authenticated by the Owner
-        factory = self._playwright_factory
-        timeout_error: type[Exception] = TimeoutError
-        if factory is None:
-            try:
-                from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-                from playwright.sync_api import sync_playwright
-            except ImportError as exc:
-                raise InsoReadError("PLAYWRIGHT_NOT_INSTALLED") from exc
-            factory = sync_playwright
-            timeout_error = PlaywrightTimeoutError
+        if self._operation_access is None:
+            raise InsoReadError("VERIFIED_SESSION_LEASE_REQUIRED")
+        access = (
+            self._operation_access()
+            if callable(self._operation_access)
+            else self._operation_access
+        )
 
         mpn_clean = mpn.strip()
         url = (
@@ -270,62 +276,44 @@ class PlaywrightInsoReadOnlyBrowser:
         body = build_inso_stock_venquote_form(mpn_clean)
 
         try:
-            with factory() as playwright:  # type: ignore[attr-defined]
-                browser = playwright.chromium.connect_over_cdp(
-                    self._config.cdp_url,
+            with access.open_operation_page() as operation_page:
+                page = operation_page.page
+                response = page.request.post(
+                    url,
+                    headers={
+                        "Content-Type": (
+                            "application/x-www-form-urlencoded; charset=UTF-8"
+                        ),
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Referer": (
+                            f"{self._config.login_url.rstrip('/')}"
+                            "/skins/etaoerp//InnerEnquiry/YeWuXJ/List.aspx"
+                        ),
+                        "Accept": "application/json, text/javascript, */*; q=0.01",
+                    },
+                    data=body,
                     timeout=self._timeout_ms,
                 )
+                text = response.text()
+                if not text or text.strip() in {"{}", ""}:
+                    raise InsoReadError("AUTHENTICATED_READ_EMPTY", url)
                 try:
-                    pages: list[Any] = []
-                    for ctx in browser.contexts:
-                        pages.extend(ctx.pages)
-                    page = next((p for p in pages if not p.is_closed()), None)
-                    if page is None:
-                        raise InsoReadError("CDP_NO_AVAILABLE_PAGE", url)
-                    response = page.request.post(
-                        url,
-                        headers={
-                            "Content-Type": (
-                                "application/x-www-form-urlencoded; "
-                                "charset=UTF-8"
-                            ),
-                            "X-Requested-With": "XMLHttpRequest",
-                            "Referer": (
-                                f"{self._config.login_url.rstrip('/')}"
-                                "/skins/etaoerp//InnerEnquiry/YeWuXJ/List.aspx"
-                            ),
-                            "Accept": "application/json, text/javascript, */*; q=0.01",
-                        },
-                        data=body,
-                        timeout=self._timeout_ms,
-                    )
-                    text = response.text()
-                    if not text or text.strip() in {"{}", ""}:
-                        raise InsoReadError("AUTHENTICATED_READ_EMPTY", url)
-                    try:
-                        payload = json.loads(text)
-                    except json.JSONDecodeError as exc:
-                        raise InsoReadError("RESPONSE_NOT_JSON", url) from exc
-                    rows = payload.get("rows") if isinstance(payload, dict) else None
-                    if rows is None:
-                        if (
-                            isinstance(payload, dict)
-                            and str(payload.get("isLogin")).strip().casefold()
-                            in {"false", "0", "no"}
-                        ):
-                            raise InsoReadError(
-                                "AUTHENTICATED_SESSION_REQUIRED", url
-                            )
-                        raise InsoReadError("RESPONSE_ROWS_MISSING", url)
-                    records = parse_inso_history_rows(rows)
-                finally:
-                    try:
-                        browser.close()
-                    except (OSError, RuntimeError):
-                        pass
+                    payload = json.loads(text)
+                except json.JSONDecodeError as exc:
+                    raise InsoReadError("RESPONSE_NOT_JSON", url) from exc
+                rows = payload.get("rows") if isinstance(payload, dict) else None
+                if rows is None:
+                    if (
+                        isinstance(payload, dict)
+                        and str(payload.get("isLogin")).strip().casefold()
+                        in {"false", "0", "no"}
+                    ):
+                        raise InsoReadError("AUTHENTICATED_SESSION_REQUIRED", url)
+                    raise InsoReadError("RESPONSE_ROWS_MISSING", url)
+                records = parse_inso_history_rows(rows)
         except InsoReadError:
             raise
-        except timeout_error as exc:
+        except TimeoutError as exc:
             raise InsoReadError("CDP_TIMEOUT", url) from exc
         except Exception as exc:
             raise InsoReadError("CDP_FAILURE", url) from exc

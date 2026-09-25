@@ -1,52 +1,57 @@
 # Current Task
 
-Status: ACTIVE
+Status: READY_FOR_CEO_REVIEW
 
-Goal: Complete the V1.2 architecture/design spike and independent static Safety Review for seven-day INSO duplicate detection, post-Research routing, notifications/retry/alerts, controlled purchase-draft entry, GUI history, SQLite evolution, and explicit browser/session ownership. Do not implement production behavior in this stage.
+Goal: Complete V1.2 Stage 2A fake-only safety and persistence seams without connecting to production systems. Keep the accepted V1.1 Research rules and `workflow_items` semantics unchanged.
 
 Business Outcome:
-- Give CEO and Safety Supervisor a reviewable design and stable public-contract proposal before implementation.
-- Preserve V1.1 Research business rules and keep `release/v1.1` independently recoverable.
+- Deliver deterministic contracts, persistence, browser ownership and write guards ready for CEO and Safety Supervisor review.
+- Preserve `release/v1.1` as the independent rollback baseline.
 
 Acceptance:
-- [x] `docs/V1_2_ARCHITECTURE.md` defines state/routing, DuplicateCheckResult, notification and purchase contracts, events/alerts, Sheets customer schema, browser/session lifecycle, WRITE ALLOWLIST, GUI seam, additive SQLite strategy, evidence path, test matrix, implementation plan and approval gates.
-- [x] Design records confirmed Owner rules and exposes unresolved items as decisions/UNKNOWN.
-- [x] No V1.2 runtime behavior, production access, real Sheet write, INSO action or business email was performed.
-- [x] Design and task record are committed and pushed on `feature/v1-2`; no merge to main.
+- [x] Implement B1–B4 mitigations at fake-only seams; retain live identity, selectors and saved-record identity as UNKNOWN.
+- [x] Add V1.2 contracts, append-only events, active alerts, recipient ledger, purchase state and safe GUI DTO seam.
+- [x] Add exact duplicate/research routing rules, separate important-mail vs full-price purchasing decisions, and AI recognition verification.
+- [x] Add consistent SQLite online backup and additive transactional migration against synthetic V1.1-shaped databases.
+- [x] Add `dup-mpn-v1` / `ai-mpn-v1`, Sheets customer mapping, read-only inspector skeleton and evidence path helpers.
+- [x] Run Ruff and full deterministic suite; no live system, real write, SMTP or production data used.
+- [x] Commit and push this Stage 2A result to `feature/v1-2`; no merge to main.
 
 Constraints:
-- Keep V1.1 Research price, MPN, stock, FX, retry and output rules unchanged.
-- Do not operate a real INSO page, create/save/send a purchase inquiry, send business email, or modify Google Sheets.
-- `保存并发送` is prohibited. Production Brand write stays disabled.
-- Runtime evidence remains Git-ignored; no secrets or production data in Git, logs, or fixtures.
+- No live INSO discovery/control, Save Data, Save-and-Send, production smoke, real SMTP, Google Sheets read/write, or production DB migration.
+- Production writer feature gate remains unconditionally closed. Production Brand write remains disabled.
+- Preserve V1.1 Research canonical rules and the meaning/schema constraints of `workflow_items`.
+- Evidence stays under ignored `runtime/evidence/`; no secrets, customer production data, raw exception text or screenshots in Git.
 
 Done:
-- Confirmed `origin/main`, `origin/release/v1.1`, and `origin/feature/v1-2` initially pointed to `be9d0a51d0375884dfa3e5e9e4317958899fdc75`; target branch included latest main.
-- Built an isolated `feature/v1-2` worktree to protect unrelated dirty files in the original checkout.
-- Read relevant V1.1 workflow, Research/INSO history, Sheets schema, launcher/CDP, GUI contracts and safety docs.
-- Wrote the V1.2 architecture proposal and this task record.
+- Fast-forwarded isolated `feature/v1-2` worktree to `e711e06cb1bdaf8fd7da3a26f2aa590999359b4b`, preserving the authorized latest branch state.
+- Added explicit `InsoSessionLease` with endpoint/browser/context/page identity, `APP_OWNED`/`REUSED`, child-page ownership, cycle-drain guard and fail-closed stale checks. Research INSO history no longer enumerates arbitrary pages or closes attached browsers.
+- Added closed write action enum, narrow business methods, selector allow/deny registry, pre-dispatch semantic deny and production gate fixed closed. There is no Save-and-Send action or coordinate path.
+- Added durable pre-dispatch `UNKNOWN_WRITE_OUTCOME`, restart lockout, read-only reconciliation contract/fake, manual review for ambiguous/unreadable results, and explicit human acknowledgement after authoritative absence.
+- Added allowlisted reason codes, exception type-only classification, V1.2 event/DTO payload sanitization, recipient-scoped notification ledger/retries, and synthetic canary checks.
+- Added V1.2 SQLite state/events/alerts/duplicate/notification/purchase tables, DB-enforced append-only event triggers, consistent online backup verification and atomic additive migration.
+- Added separate `dup-mpn-v1` and `ai-mpn-v1` policies, Sheets `SHAHAB` / exact `2026` customer mapping, GUI DTO seam, fake-only read-only inspector and evidence path helpers.
+
+Verification:
+- `python -m ruff check src tests` — passed.
+- `python -m pytest --basetemp .tmp/pytest-v12 -q` — 459 passed, 11 skipped.
+- `git diff --check` — passed.
 
 Current:
-- CEO architecture review passed on commit `60d6a84214389d09d1d566087711b619f520fbaf`.
-- CEO product decisions are frozen in `docs/V1_2_ARCHITECTURE.md` by commit `763ffc0e7045eaee59f793cb09b58b5a246cc74d`.
-- Independent static Safety Review is recorded in `docs/V1_2_SAFETY_REVIEW.md` and accepted by CEO at commit `72b60c72738ed19c05e010bb592d9301a6af74d3`.
-- Safety verdict: `DESIGN_SAFE` approved for fake-only additive contracts/persistence. Blockers B1–B4 prevent live-capable browser/write/notification paths: unsafe CDP page/browser ownership; no proven Save Data unknown-outcome reconciliation identity; no layered Save-and-Send prohibition yet; raw exception text can reach durable state/GUI.
-- Approved gate: `DESIGN_SAFE` only. The bounded `READ_ONLY_DISCOVERY_PLAN` is documented, but discovery execution is not approved in this stage and needs separate CEO/Owner authorization. `WRITE_IMPLEMENTATION_ALLOWED`, `REAL_SAVE_DATA_SMOKE_ALLOWED`, and `REAL_NOTIFICATION_SMOKE_ALLOWED` are not approved.
-- Remaining UNKNOWNs include live INSO page/account/company/context identities and selectors; stable history and saved-record identity/read-back fields; lease compatibility with Research adapters; safe screenshot/redaction regions; AI-recognition MPN comparator; and backup/restore operator details.
+- Prior gate remains `DESIGN_SAFE` only. This implementation does not grant `READ_ONLY_DISCOVERY_ALLOWED`, `WRITE_IMPLEMENTATION_ALLOWED`, `REAL_SAVE_DATA_SMOKE_ALLOWED`, or `REAL_NOTIFICATION_SMOKE_ALLOWED`.
+- The inspector was exercised only with a deterministic fake, never against a browser or INSO.
+- Runtime composition does not yet provide a verified session lease to Research. The Research INSO source consequently fails closed until the composition root is safely wired; no V1.1 price/MPN/stock/FX/retry rule changed.
+
+UNKNOWN / Blockers:
+- Live endpoint, browser, account, company, context, page and selectors remain UNKNOWN; no discovery has been run.
+- Stable history identity and timestamp tie policy, live saved-record identity/read-back fields, AI result DOM contract, evidence crop/redaction viability, live notification provider idempotency and restore operator procedure remain UNKNOWN.
+- B1–B4 code seams are implemented but still require independent Safety Supervisor review before any live-capable implementation. Live Save Data remains unavailable until B2 identity is established; Save-and-Send stays prohibited at all stages.
 
 Next:
-- Main Programmer stage 2A is authorized for fake-only/additive implementation: resolve B1, B3 and B4; implement the durable B2 UNKNOWN_WRITE_OUTCOME/reconciliation state without enabling live Save Data; implement/test SQLite-consistent timestamped backup + additive migration on synthetic databases; implement contracts/events/alerts and deterministic safety tests. Keep V1.1 behavior and table semantics unchanged.
-- AI-recognition comparator is frozen as `ai-mpn-v1`: Unicode NFKC + outer trim + ASCII uppercase, exact equality while preserving all internal separators/punctuation/whitespace; distinct policy name/version from `dup-mpn-v1`.
-- Main may prepare, but must not execute, the bounded read-only discovery inspector/plan.
-- Proposed discovery scope is restricted to read-only page/browser/context metadata, page identity, control semantics/safe selector candidates, history stable-ID/tie behavior, saved-draft identity/read-back feasibility, and screenshot crop/redaction feasibility. No clicks, field entry, AI action, save/send, Sheet write, SMTP, or data export. CEO/Owner must separately authorize target, session, and scope before execution.
-- After CEO review, fake-only contract/persistence work may proceed under `DESIGN_SAFE`; live discovery, write implementation and either real smoke remain separately gated.
-
-Blockers: B1–B4 remain blockers for live-capable behavior until resolved and independently re-reviewed. Stable live saved-record identity/read-back and screenshot safety remain UNKNOWN. No live discovery, live write, real SMTP delivery, or production smoke is approved.
-
-Owner Decisions: Business rules and CEO architecture/safety decisions are frozen in `docs/V1_2_ARCHITECTURE.md`. Save-and-Send remains prohibited in every stage. Stage 2A fake-only/additive implementation is authorized; no live discovery or runtime/production action is authorized.
+- CEO reviews the Stage 2A implementation and current diff. Safety Supervisor independently reviews session identity/ownership, all write hard guards, unknown-save reconciliation, event/alert scoping, notification recipient retry/recovery, sanitized persistence, and backup/restore failure paths.
+- Only after separate gate changes may the project prepare/execute read-only discovery or implement live writes/notifications. This task does not authorize those steps.
 
 Branch: `feature/v1-2`
 
-Last Good Commit: `be9d0a51d0375884dfa3e5e9e4317958899fdc75` (sealed V1.1 release baseline)
-
-Safety Review handoff: `f38fc73cf788b818351db107c2e91e23503eabe9`; pending CEO review of `docs/V1_2_SAFETY_REVIEW.md` and its blockers/gates.
+Stage 2A base commit: `e711e06cb1bdaf8fd7da3a26f2aa590999359b4b`
+V1.1 rollback baseline: `be9d0a51d0375884dfa3e5e9e4317958899fdc75`

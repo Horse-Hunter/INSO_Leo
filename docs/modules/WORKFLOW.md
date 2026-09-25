@@ -64,3 +64,34 @@ UUID、Google Sheet 状态写回与正式订单生命周期属于 V2，本模块
 Research completion-confirmation Public Contract 仍为 `UNKNOWN`。当前 Workflow
 只提供窄的可注入 completion-check seam，并可用 test double 验证完整恢复逻辑；
 真实 Research wiring 必须等待 Research 模块未来确认该跨模块 Contract。
+
+## V1.2 additive seam (Stage 2A)
+
+`src/workflow/v12_contracts.py` defines the V1.2 contracts and enums. `v12_store.py`
+adds an independent SQLite persistence surface for business state, append-only
+events, multiple scoped active alerts, duplicate results, notification recipient
+delivery ledger, and durable purchase state. Existing `workflow_items` meanings
+and CHECK constraints remain unchanged. State/event/alert mutations share one
+transaction; event update/delete is rejected by SQLite triggers.
+
+`UNKNOWN_WRITE_OUTCOME` is persisted before a future Save Data dispatch boundary.
+Restart cannot dispatch again. Only typed read-only reconciliation can move it;
+ambiguous/unreadable outcomes require manual review, and confirmed absence needs
+explicit human acknowledgement before rearming. No Save Data adapter is wired.
+
+The Stage 2A worker is transport-injected and tested only with a fake. Delivery
+is recipient-scoped with at most four attempts (initial plus 1/5/15 minute
+retries); SENT, PERMANENT_FAILURE and UNKNOWN are never automatically retried.
+Notification failure alerts are scoped per command and recover only after every
+intended recipient for that command is confirmed SENT. Notification failure does
+not gate purchase state.
+
+`v12_rules.py` contains deterministic pure decisions: exact `dup-mpn-v1`
+rolling-168-hour duplicate evaluation (latest timestamp only, unresolved tie is
+ambiguous), post-Research routing that blocks on an unconfirmed duplicate
+result, important-order notification eligibility, independent full-price
+procurement routing/purchaser selection, six-space AI input formatting, and
+exact AI recognition verification under `ai-mpn-v1`.
+
+These seams are not wired into the production launcher. They do not authorize
+live INSO, SMTP, Sheets, or production database activity.

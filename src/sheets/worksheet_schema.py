@@ -11,6 +11,8 @@ class WorksheetSchema:
     brand_column: str
     quantity_column: str
     default_importance: str | None = None
+    customer_name_column: str | None = None
+    fixed_customer_name: str | None = None
 
     @property
     def relocation_columns(self) -> tuple[str, ...]:
@@ -36,6 +38,16 @@ SHAHAB_SCHEMA = WorksheetSchema(
     brand_column="E",
     quantity_column="F",
     default_importance="A",
+    fixed_customer_name="SHAHAB",
+)
+
+YEAR_2026_SCHEMA = WorksheetSchema(
+    status_column="A",
+    importance_column="C",
+    model_column="E",
+    brand_column="F",
+    quantity_column="G",
+    customer_name_column="D",
 )
 
 
@@ -46,4 +58,8 @@ def worksheet_schema(worksheet_title: str) -> WorksheetSchema:
     # API operation and identity.  Schema selection alone is case-insensitive
     # so the confirmed production title ``SHAHAB`` receives its B/D/E/F
     # mapping just like the historical lower-case spelling.
-    return SHAHAB_SCHEMA if worksheet_title.casefold() == "shahab" else STANDARD_SCHEMA
+    if worksheet_title.casefold() == "shahab":
+        return SHAHAB_SCHEMA
+    if worksheet_title == "2026":
+        return YEAR_2026_SCHEMA
+    return STANDARD_SCHEMA

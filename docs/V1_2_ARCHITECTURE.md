@@ -1,6 +1,6 @@
 # INSO V1.2 Architecture Spike
 
-Status: CEO-approved architecture baseline; pending Safety Supervisor review. No V1.2 runtime behavior is implemented by this document.
+Status: CEO-approved architecture baseline; `DESIGN_SAFE` authorizes fake-only additive Stage 2A contracts/persistence. Live discovery, writes, notifications, and production smoke remain gated.
 
 ## Scope and verified seams
 
@@ -182,11 +182,11 @@ Extend `WorksheetSchema` with a customer source strategy, not GUI conditionals. 
 
 Duplicate check and Research use the same authenticated browser/context/session lease. Purchase entry reuses it only if the lease remains healthy and the expected authenticated page identity is proven. Each operation owns only its background child page and closes that child in `finally`; it does not close the user's original tab. A session-level close is allowed only for a browser explicitly launched/owned by this application; never close a reused browser. If an adapter cannot operate over an explicit shared lease, do not claim page reuse: reconnect only to the verified same endpoint/context and fail closed if identity cannot be proven. Login expiration, page closure, context ambiguity, changed DOM, or unknown ownership stops the operation, records a sanitized security event and captures evidence where safe. No CAPTCHA/OTP bypass.
 
-This is a design seam: current Research adapters independently attach to CDP and some own their child pages. A bounded integration change is required so V1.2 can share explicit ownership without changing Research's business rules. Safety Supervisor must review browser identity, ownership, target selection, page cleanup and restart recovery before any live use.
+Stage 2A implements the explicit lease and operation-owned child-page seam and removes Research's arbitrary page selection/browser close. The production composition root does not yet provide the verified lease, so the Research INSO source fails closed until a separately reviewed wiring change. Research business rules remain unchanged. Safety Supervisor must review browser identity, ownership, target selection, page cleanup and restart recovery before any live use.
 
 ## 7. WRITE ALLOWLIST — initial proposal
 
-No write code is authorized by this spike. Before a future operation is allowed, its Safety-reviewed allowlist must bind each action to an authorized page, current `inquiry_id`, uniquely verified control, expected current value, desired value and post-action read-back.
+No live write implementation is authorized by this stage. Stage 2A contains only a fake-dispatch seam with a closed action enum, selector registry, semantic deny guard and a production gate fixed closed. Before a future live operation is allowed, its Safety-reviewed allowlist must bind each action to an authorized page, current `inquiry_id`, uniquely verified control, expected current value, desired value and post-action read-back.
 
 | Area | Allowlisted when separately approved | Explicitly forbidden |
 | --- | --- | --- |
@@ -205,9 +205,9 @@ Preserve existing `GuiBackend` methods and V1 result-history behavior. Add optio
 
 ## 9. SQLite and migration strategy
 
-V1.1 `workflow_items` schema has no explicit migration registry/version marker and its status CHECK constraint must not be widened in place. Keep its rows and semantics intact. Add a transactionally-created additive V1.2 schema, tracked with `PRAGMA user_version` after first detecting/recording the existing schema baseline. Candidate tables: `inquiry_v2_state` (one row per existing workflow item), `duplicate_check_results`, `workflow_events`, `active_alerts`, `notification_commands`, `notification_recipient_deliveries`, `purchase_drafts`, and optional `schema_migrations`. Use foreign keys where reliable; unique keys for inquiry/command/recipient idempotency; UTC ISO timestamps; JSON only for versioned extensible payloads, not as a substitute for queryable state.
+V1.1 `workflow_items` schema has no explicit migration registry/version marker and its status CHECK constraint must not be widened in place. Keep its rows and semantics intact. Stage 2A implements additive `workflow_v12_*` tables for inquiry state, duplicate results, append-only events, active alerts, notification commands/recipient ledger, and durable purchase state. `PRAGMA user_version` and the migration record commit in the same explicit transaction after SQLite online backup verification. Use foreign keys, unique keys for inquiry/command/recipient idempotency, UTC ISO timestamps, and JSON only for the sanitized event payload.
 
-Migration is additive and transactional, repeatable, and backed up through the existing runtime backup policy once defined. Preserve every V1 row and status. Existing terminal V1 rows are never reprocessed or retroactively given duplicate/purchase actions. Existing queued items enter the new gate only after the V1.2 feature is explicitly enabled; interrupted V1 `RESEARCHING` rows follow the existing Research completion-confirmation behavior before any V1.2 routing. Never drop/rewrite tables during upgrade. Rollback disables V1.2 orchestration while preserving its audit tables; V1.1 source remains recoverable at `release/v1.1` (`be9d0a51d0375884dfa3e5e9e4317958899fdc75`). Backup/restore and downgrade mechanics remain for implementation design.
+Migration is additive and transactional, repeatable, and preceded by a verified SQLite online backup published with an atomic timestamped name. Preserve every V1 row and status. Existing terminal V1 rows are never reprocessed or retroactively given duplicate/purchase actions. Existing queued items enter the new gate only after the V1.2 feature is explicitly enabled; interrupted V1 `RESEARCHING` rows follow the existing Research completion-confirmation behavior before any V1.2 routing. Never drop/rewrite tables during upgrade. Rollback disables V1.2 orchestration while preserving its audit tables; V1.1 source remains recoverable at `release/v1.1` (`be9d0a51d0375884dfa3e5e9e4317958899fdc75`). Backup/restore operator procedure remains UNKNOWN; no downgrade path may drop data automatically.
 
 ## 10. Notification integration seam
 

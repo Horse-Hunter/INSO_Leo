@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Self
@@ -215,48 +217,37 @@ class FakeRequest:
 
 
 class FakePage:
+    context_id = "ctx-verified"
+
     def __init__(self, response_text: str, captured: dict) -> None:
+        self.target_id = "target-operation-child"
         self.request = FakeRequest(response_text, captured)
-        self._closed = False
+        self.closed = False
 
     def is_closed(self) -> bool:
-        return self._closed
-
-
-class FakeContext:
-    def __init__(self, pages: list) -> None:
-        self.pages = pages
-
-
-class FakeBrowser:
-    def __init__(self, page: FakePage | None) -> None:
-        self.contexts = [] if page is None else [FakeContext([page])]
-        self.closed = False
-        self._page = page
+        return self.closed
 
     def close(self) -> None:
         self.closed = True
 
 
-class FakeChromium:
-    def __init__(self, browser: FakeBrowser) -> None:
-        self.browser = browser
-
-    def connect_over_cdp(self, cdp_url: str, *, timeout: int) -> FakeBrowser:
-        self.cdp_url = cdp_url
-        self.timeout = timeout
-        return self.browser
-
-
-class FakePlaywright:
-    def __init__(self, chromium: FakeChromium) -> None:
-        self.chromium = chromium
+class FakeOperationPage:
+    def __init__(self, page: FakePage) -> None:
+        self.page = page
 
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *args: object) -> None:
-        return None
+    def __exit__(self, *_args: object) -> None:
+        self.page.close()
+
+
+class FakeOperationAccess:
+    def __init__(self, page: FakePage) -> None:
+        self.page = page
+
+    def open_operation_page(self) -> FakeOperationPage:
+        return FakeOperationPage(self.page)
 
 
 def test_concrete_browser_uses_cdp_and_posts_stock_venquote() -> None:
@@ -275,14 +266,13 @@ def test_concrete_browser_uses_cdp_and_posts_stock_venquote() -> None:
 
     captured: dict = {}
     page = FakePage(_json.dumps(payload), captured)
-    browser = FakeBrowser(page)
     acquisition = PlaywrightInsoReadOnlyBrowser(
         InsoBrowserConfig(
             login_url="https://inso.example/",
             cdp_url="http://127.0.0.1:9222",
         ),
         settle_ms=0,
-        playwright_factory=lambda: FakePlaywright(FakeChromium(browser)),
+        operation_access=FakeOperationAccess(page),
     )
 
     capture = acquisition.fetch_procurement_temporary_inquiry_history(
@@ -297,7 +287,8 @@ def test_concrete_browser_uses_cdp_and_posts_stock_venquote() -> None:
     assert "DetailField=PartNo" in captured["url"]
     assert capture.records[0].price == Decimal("1.25")
     assert capture.records[0].currency == "USD"
-    assert browser.closed
+    assert page.closed
+    assert not hasattr(acquisition, "close_browser")
     assert not hasattr(acquisition, "submit")
     assert not hasattr(acquisition, "create_order")
 
@@ -305,11 +296,10 @@ def test_concrete_browser_uses_cdp_and_posts_stock_venquote() -> None:
 def test_concrete_browser_empty_response_is_fail_closed() -> None:
     captured: dict = {}
     page = FakePage("{}", captured)
-    browser = FakeBrowser(page)
     acquisition = PlaywrightInsoReadOnlyBrowser(
         InsoBrowserConfig(login_url="https://inso.example/"),
         settle_ms=0,
-        playwright_factory=lambda: FakePlaywright(FakeChromium(browser)),
+        operation_access=FakeOperationAccess(page),
     )
 
     try:
@@ -325,11 +315,10 @@ def test_concrete_browser_empty_response_is_fail_closed() -> None:
 def test_concrete_browser_expired_session_is_identified_without_rows() -> None:
     captured: dict = {}
     page = FakePage('{"isLogin":"false"}', captured)
-    browser = FakeBrowser(page)
     acquisition = PlaywrightInsoReadOnlyBrowser(
         InsoBrowserConfig(login_url="https://inso.example/"),
         settle_ms=0,
-        playwright_factory=lambda: FakePlaywright(FakeChromium(browser)),
+        operation_access=FakeOperationAccess(page),
     )
 
     with pytest.raises(InsoReadError) as caught:
@@ -337,25 +326,20 @@ def test_concrete_browser_expired_session_is_identified_without_rows() -> None:
             "ABC", InsoLogin("u", "p")
         )
     assert caught.value.code == "AUTHENTICATED_SESSION_REQUIRED"
-    assert browser.closed
+    assert page.closed
 
 
-def test_concrete_browser_no_page_is_fail_closed() -> None:
-    browser = FakeBrowser(None)
+def test_concrete_browser_without_explicit_lease_fails_closed() -> None:
     acquisition = PlaywrightInsoReadOnlyBrowser(
         InsoBrowserConfig(login_url="https://inso.example/"),
         settle_ms=0,
-        playwright_factory=lambda: FakePlaywright(FakeChromium(browser)),
     )
 
-    try:
+    with pytest.raises(InsoReadError) as caught:
         acquisition.fetch_procurement_temporary_inquiry_history(
             "ABC", InsoLogin("u", "p")
         )
-    except InsoReadError as exc:
-        assert exc.code == "CDP_NO_AVAILABLE_PAGE"
-    else:
-        raise AssertionError("missing CDP page must fail closed")
+    assert caught.value.code == "VERIFIED_SESSION_LEASE_REQUIRED"
 
 
 def test_browser_config_validates_https_and_loopback_cdp() -> None:

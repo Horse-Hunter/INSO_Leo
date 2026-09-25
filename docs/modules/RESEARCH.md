@@ -65,3 +65,12 @@ HKD/RMB 同样使用 ECB 同日 daily reference：`CNY per HKD = CNY per EUR / H
 Research 不访问 Google Sheets、不调度流程、不执行主动 INSO 采购、不计算 Quotation。它可直接使用已批准的 INSO read-only Research adapter，但不依赖 `inso` 模块；本地 Excel 是 V1 唯一写入。
 
 仍为 `UNKNOWN`：完整 reason-code catalog、额外输入校验、Excel 保留/并发锁策略，以及 Future INSO Module 的重要性规则。Selector、XPath、session、workaround 和 Task 历史不属于长期 Contract。
+
+## V1.2 shared-session safety seam
+
+Research 的价格选择、MPN、stock、FX、retry 和输出规则没有改变。其 INSO
+history browser adapter 已移除任意 first-page 选择及 attached-browser close；
+必须注入经 composition root 验证的 `InsoOperationAccess`，每次只打开并关闭
+自己的 child page。当前 production composition root 尚未提供该 lease，故该
+Research source 在未接线时 fail-closed。不得通过恢复旧 CDP page enumeration
+绕过此要求；真实兼容验证须等待单独授权的只读 discovery。
