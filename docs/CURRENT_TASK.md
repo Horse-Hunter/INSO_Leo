@@ -1,6 +1,6 @@
 # Current Task
 
-Status: READY_FOR_CEO_REVIEW
+Status: ACTIVE
 
 Goal: Deliver the V1.2 architecture/design spike for seven-day INSO duplicate detection, post-Research routing, notifications/retry/alerts, controlled purchase-draft entry, GUI history, SQLite evolution, and explicit browser/session ownership. Do not implement production behavior in this stage.
 
@@ -27,15 +27,18 @@ Done:
 - Wrote the V1.2 architecture proposal and this task record.
 
 Current:
-- Design is ready for CEO and Safety Supervisor review.
-- CEO decisions and remaining UNKNOWN items are listed at the end of `docs/V1_2_ARCHITECTURE.md`.
+- CEO architecture review passed on commit `60d6a84214389d09d1d566087711b619f520fbaf`.
+- CEO product decisions are frozen in `docs/V1_2_ARCHITECTURE.md` by commit `763ffc0e7045eaee59f793cb09b58b5a246cc74d`.
+- Remaining unknowns are live INSO selector/page identity, stable record identity, Save Data read-back identity, shared-session feasibility, and safe screenshot regions. These require Safety Supervisor review/read-only discovery, not product guessing.
 
 Next:
-- CEO resolves product/business contract decisions; Safety Supervisor reviews production write and browser/session risks before any live write implementation or smoke.
+- Safety Supervisor independently reviews the approved architecture, WRITE ALLOWLIST, browser/session ownership, selector/identity rules, Save Data boundary, Save-and-Send prohibition, unknown-write recovery, evidence handling, migration/rollback safety, and production smoke gates.
+- Safety Supervisor may propose a bounded read-only discovery plan for the remaining live-page UNKNOWNs, but must not perform any write or real notification delivery without a later explicit CEO/Owner gate.
+- After Safety review, Main Programmer may implement pure contracts, persistence/event/alert services and fake adapters; WorkBuddy notification implementation starts only against the frozen Notification contract.
 
-Blockers: NONE for this design spike.
+Blockers: Safety Supervisor review required before any real INSO write implementation, real notification delivery, or production smoke.
 
-Owner Decisions: Review the decisions listed in `docs/V1_2_ARCHITECTURE.md`; no runtime/production action requested in this stage.
+Owner Decisions: Business rules from the V1.2 requirement discussion are frozen; CEO technical/product decisions are recorded in `docs/V1_2_ARCHITECTURE.md`. No runtime/production action is authorized in this stage.
 
 Branch: `feature/v1-2`
 
