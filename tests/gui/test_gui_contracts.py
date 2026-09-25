@@ -18,6 +18,8 @@ from src.gui.contracts import LogEntry, Order, OrderStatus, RunState, SourceDeta
 from src.gui.mock_backend import MockBackend
 from src.gui.resources import BackendEvent, MainThreadEventQueue
 from src.gui.state import make_empty_session, utc_now
+from src.launcher.backend import ProductionBackend
+from src.research.excel_output import ResearchExcelOutput
 
 
 def test_mock_amounts_are_decimal_and_stock_is_a_label():
@@ -87,9 +89,11 @@ class _Tree:
         self.mutations.append(("delete", iid))
 
     def item(self, iid, **kwargs):
-        self.rows[iid] = kwargs["values"]
-        self.tags[iid] = kwargs.get("tags", ())
-        self.mutations.append(("update", iid))
+        if "values" in kwargs:
+            self.rows[iid] = kwargs["values"]
+        if "tags" in kwargs:
+            self.tags[iid] = kwargs["tags"]
+        self.mutations.append(("update" if "values" in kwargs else "tag", iid))
 
     def insert(self, _parent, _index, *, iid, values, tags):
         self.rows[iid] = values
@@ -121,6 +125,7 @@ def test_results_are_not_redrawn_when_snapshot_is_unchanged():
     app._backend = _Backend()
     app._tree = _Tree()
     app._displayed_orders = {}
+    app._displayed_order_styles = {}
     app._displayed_order_ids = ()
     app._refresh_results()
     first_mutations = tuple(app._tree.mutations)
@@ -135,6 +140,62 @@ def test_results_are_not_redrawn_when_snapshot_is_unchanged():
     assert _RECENT_BLUE == "#93C5FD"
     assert _HISTORY_WHITE == "#FFFFFF"
     assert _WARNING_BG != _ERROR_BG
+
+
+def test_unchanged_history_order_expires_to_legacy_without_excel_reload(
+    tmp_path, monkeypatch
+):
+    processed_at = datetime(2026, 5, 1, tzinfo=timezone.utc)
+    path = tmp_path / "history.xlsx"
+    ResearchExcelOutput(path).upsert(
+        "inq-aging",
+        importance_raw=None,
+        mpn="ABC-123",
+        quantity=2,
+        research_status="SUCCESS",
+        processed_at=processed_at,
+    )
+    backend = ProductionBackend(
+        config_path=tmp_path / "missing-research.json",
+        production_config_path=tmp_path / "missing-production.json",
+    )
+    backend._excel = path
+    reads = 0
+    read_history = ResearchExcelOutput.read_history
+
+    def count_reads(self):
+        nonlocal reads
+        reads += 1
+        return read_history(self)
+
+    monkeypatch.setattr(ResearchExcelOutput, "read_history", count_reads)
+    backend._refresh_history(force=True)
+    original_snapshot = backend.get_result_history()
+    assert reads == 1
+
+    app = InsoDashboardApp.__new__(InsoDashboardApp)
+    app._main_thread_id = get_ident()
+    app._backend = backend
+    app._tree = _Tree()
+    app._displayed_orders = {}
+    app._displayed_order_styles = {}
+    app._displayed_order_ids = ()
+    row_values: dict[str, tuple[object, ...]] = {}
+
+    app._refresh_results(now=processed_at + timedelta(hours=23, minutes=59))
+    row_values["recent"] = app._tree.rows["inq-aging"]
+    assert app._tree.tags["inq-aging"] == ("recent",)
+
+    app._refresh_results(now=processed_at + timedelta(hours=24, minutes=1))
+
+    assert backend.get_result_history() == original_snapshot
+    assert reads == 1
+    assert app._tree.tags["inq-aging"] == ("legacy",)
+    assert app._tree.rows["inq-aging"] == row_values["recent"]
+    assert app._tree.mutations == [
+        ("insert", "inq-aging"),
+        ("tag", "inq-aging"),
+    ]
 
 
 def test_history_row_color_window_and_warning_override():

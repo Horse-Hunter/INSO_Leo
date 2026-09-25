@@ -89,6 +89,7 @@ class InsoDashboardApp:
         self._status: RunSession = backend.get_status()
         self._selected_order: Order | None = None
         self._displayed_orders: dict[str, Order] = {}
+        self._displayed_order_styles: dict[str, str] = {}
         self._displayed_order_ids: tuple[str, ...] = ()
         self._events = MainThreadEventQueue()
         self._main_thread_id = threading.get_ident()
@@ -506,7 +507,7 @@ class InsoDashboardApp:
             if lbl is not None:
                 lbl.configure(text=item.status, text_color=_status_color(item.status))
 
-    def _refresh_results(self) -> None:
+    def _refresh_results(self, now: datetime | None = None) -> None:
         self._assert_main_thread()
         orders = {
             order.inquiry_id: order for order in self._backend.get_result_history()
@@ -517,9 +518,16 @@ class InsoDashboardApp:
                 if self._tree.exists(inquiry_id):
                     self._tree.delete(inquiry_id)
             self._displayed_orders = {}
+            self._displayed_order_styles = {}
             self._displayed_order_ids = order_ids
         for order in orders.values():
-            if self._displayed_orders.get(order.inquiry_id) == order:
+            inquiry_id = order.inquiry_id
+            tag = _order_row_style(order, now)
+            unchanged = self._displayed_orders.get(inquiry_id) == order
+            if unchanged and self._tree.exists(inquiry_id):
+                if self._displayed_order_styles.get(inquiry_id) != tag:
+                    self._tree.item(inquiry_id, tags=(tag,))
+                    self._displayed_order_styles[inquiry_id] = tag
                 continue
             values = (
                 order.model,
@@ -531,19 +539,17 @@ class InsoDashboardApp:
                 self._format_money(order.total_price),
                 order.status.value,
             )
-            tag = _order_row_style(order)
-            if self._tree.exists(order.inquiry_id):
-                self._tree.item(
-                    order.inquiry_id, values=values, tags=(tag,)
-                )
+            if self._tree.exists(inquiry_id):
+                self._tree.item(inquiry_id, values=values, tags=(tag,))
             else:
                 self._tree.insert(
                     "",
                     "end",
-                    iid=order.inquiry_id,
+                    iid=inquiry_id,
                     values=values,
                     tags=(tag,),
                 )
+            self._displayed_order_styles[inquiry_id] = tag
         self._displayed_orders = orders
 
     @staticmethod

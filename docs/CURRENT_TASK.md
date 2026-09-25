@@ -1,6 +1,6 @@
 # Current Task
 
-Status: BLOCKED
+Status: READY_FOR_CEO_REVIEW
 
 Goal: 移除 Research 的订单人工复核结果。调研有报价时归为成功或部分成功；五个价格来源均完成但完全无报价时归为异常；仅技术失败且无报价时继续 Workflow retry。
 
@@ -35,23 +35,20 @@ Done:
 - Research 无库存报价聚合映射为 PARTIAL_SUCCESS。
 - 全部价格源无报价且无技术失败映射为 EXCEPTION；Workflow terminal FAILED 分支已实现。
 - Research/Workflow/launcher 历史展示已统一；旧 Excel 与 SQLite MANUAL_REVIEW 数据兼容。
-- `ruff check --no-cache src tests`、完整 deterministic pytest（360 passed, 10 skipped）、`git diff --check` 通过。
-- Self-review 完成；未执行 live Research 或 GUI smoke（改动限于 Research/Workflow 状态契约，deterministic evidence 覆盖新路径）。
+- GUI 每秒按缓存的 Research history snapshot 重算 row style；仅 style tag 改变时只更新对应 Treeview tag。
+- deterministic regression 覆盖固定 history snapshot 从 recent 到 legacy 的 24h 边界迁移，并确认 Excel reader 只读取一次。
+- `ruff check src tests`、GUI tests（36 passed）、完整 deterministic pytest（361 passed, 10 skipped）、`git diff --check` 通过。
+- Self-review 完成；未执行 live Research smoke。
 
 Current:
 - CEO 对 commits 5bc988e / 4d75c96 的 Research / Workflow 状态契约复审通过：SUCCESS/PARTIAL_SUCCESS/EXCEPTION/RETRYABLE_FAILURE 映射、无库存兜底、无报价 terminal FAILED、技术失败 retry、旧 MANUAL_REVIEW 兼容均与已确认业务语义一致。
-- 但在同一 feature branch 的 V1.1 GUI 最终复审中发现 1 个 blocker：src/gui/app.py 的 _refresh_results() 在 Order 对象未变化时直接 continue，因此行样式不会随时间重新计算。某条记录初次以“24小时内”浅蓝显示后，即使跨过 24 小时边界，只要 history snapshot 内容没变化，该行仍会保持浅蓝，违反“24小时外白色”的已确认规则。
-- 这不是 Research/Workflow contract blocker，但会阻止整个 V1.1 branch 合入 main。
+- CEO 指出的 GUI 24h 颜色过期 blocker 已修复并新增 deterministic regression；history getter 仍使用轻量内存缓存。
 
 Next:
-1. Main Programmer 修复历史行 24h 颜色随时间边界自动从 recent -> legacy 更新，不能通过每秒重读 Excel 实现。
-2. 建议仅在 GUI 内缓存/比较 row style tag：即使 Order snapshot 相同，也重新计算轻量 _order_row_style；只有 tag 变化时更新 Treeview row tag，避免整行无意义 redraw。
-3. 新增 deterministic regression：同一 Order / 同一 history snapshot 内容不变，仅“当前时间”跨过 24h，第二次 refresh 后 tag 必须从 recent 变为 legacy。
-4. rerun ruff、GUI relevant tests、full deterministic pytest、git diff --check；Windows mock GUI 目视 smoke 可复用/补一次。
-5. commit/push 后交 CEO Final Review；不要 merge main。
+CEO Final Review；不要 merge main。
 
 Blockers:
-- GUI 24h 行颜色不会在 snapshot 不变时自动过期；需修复后才能合入 main。
+NONE
 
 Owner Decisions:
 - 24 小时内普通记录使用浅蓝色强调；24 小时外及无时间 legacy 记录使用白色。
