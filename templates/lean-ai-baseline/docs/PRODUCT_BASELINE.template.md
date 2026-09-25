@@ -1,6 +1,6 @@
 # 产品基线
 
-本文件只记录当前仍成立的产品范围和跨模块业务规则。模块详细规则归 `modules/<MODULE>.md`，安全归 `SAFETY.md`，依赖归 `MODULE_INDEX.md`；当前阶段归 `CURRENT_TASK.md`，实现以 Git 当前代码和测试为准。
+本文件由 Main Programmer 随真实实现维护，只记录当前仍成立的产品范围和跨模块业务规则。项目级治理规则见 `PROJECT_BASELINE.md`；模块详细规则归 `modules/<MODULE>.md`，当前阶段归 `CURRENT_TASK.md`。
 
 ## 产品目标
 
@@ -29,4 +29,4 @@
 
 - `<PRODUCT_LEVEL_UNKNOWN 或 NONE>`
 
-不把愿望当成已验证事实；模块局部 UNKNOWN 留在对应 module doc，阶段临时问题留在 `CURRENT_TASK.md`。
+不把愿望当成事实；不复制项目治理规则；模块局部 UNKNOWN 留在对应 module doc，阶段临时问题留在 `CURRENT_TASK.md`。

@@ -1,35 +1,25 @@
-# 安全边界
+# 通用安全边界
 
-目标、身份或权限不确定时 fail closed。新增高风险能力由 CEO 临时创建 Security Specialist，完成安全边界、Public API 和 tests 后退出；已批准且稳定的安全 API 可由 Main Programmer 正常调用。
+本文件由 CEO 维护，只定义项目级通用安全规则。原则：**最低充分安全**。只为具体高影响事故增加必要保护；没有明确风险场景的额外 hardening 默认不是 blocker。
 
-## GREEN — 自主执行
+## GREEN
 
-- 读取 Repo 和当前阶段相关资料，在 Scope 内开发、测试、用 synthetic/fake 数据验证。
-- 对已批准来源 read-only 浏览与读取，生成安全本地输出。
-- 正常 `git status`、`diff`、`log`、开发 branch commit/push。
+- Repo / 文档 / 代码读取。
+- synthetic / fake 测试。
+- 已授权的只读操作。
+- 普通开发 branch commit/push。
 
-## YELLOW — 需要明确 Owner 授权
+## YELLOW
 
-- 真实外部写入、删除、覆盖、迁移、用户数据修改。
-- 表单提交、主动消息、订单/报价提交、采购、付款。
-- 新增或改变 Credential 行为；可能影响用户工作的高风险 Git 操作。
+需要明确 Owner 授权：真实外部写入/删除/覆盖/迁移；提交/发送/下单/付款等真实副作用；新增或改变 Credential 行为；可能影响用户工作的高风险 Git 操作。
+一次明确且有边界的授权可覆盖同一阶段内的重复机械操作；目标、范围或风险变化时再升级。
 
-一次 bounded Owner authorization 可覆盖当前阶段明确限定的重复机械操作，不需逐条再问；目标、范围、身份或风险变化时重新授权。调用已批准的稳定安全 API 仍要遵守其目标校验和授权边界。
+## RED
 
-## RED — 禁止
-
-- 泄露或提交 secret、token、cookie、vault value、客户数据到 Git、文档、log、fixture、evidence 或截图。
+- 将 password、secret、token、cookie、vault value 等写入 Git、文档、日志、fixture 或证据文件。
 - 绕过 CAPTCHA、OTP、设备验证或其他安全挑战。
-- 目标不确定时猜测真实写入，或安全检查失败后 silent fallback。
-- 删除未知 untracked 内容、覆盖未知用户工作、`reset --hard`/`clean -fd` 清除未知内容、force push 主分支、删除未知 branch/worktree。
-- 未经授权执行真实订单、支付、发送或其他生产副作用。
+- 目标不确定时猜测写入，或安全检查失败后静默降级。
+- 未经授权修改真实订单、客户记录、支付或其他外部系统。
+- 删除未知用户工作、强制清理未知文件、force push 主分支。
 
-## 项目规则
-
-- 外部写入前唯一定位目标、重读关键状态、只改必要字段；冲突则不写。
-- 浏览器可已授权登录、搜索、只读访问；真实提交属于 YELLOW，安全挑战由 Owner 完成。
-- runtime/data 与源码、Git 分离；不移动或覆盖未知文件。
-- 凭据仅通过项目已批准的 Provider 使用，不打印、复制、持久化或提交返回值。
-- 正常开发 branch commit/push 属于 GREEN；可能影响他人工作的 merge/rebase/dirty switching 需谨慎并取得相应授权。
-
-启用模板时仅添加经证据确认的项目专项规则，不削弱以上最低边界。
+安全机制本身也保持简单；能用一个明确校验解决的，不增加一套框架。

@@ -1,7 +1,8 @@
 # Agent 入口
 
-- 默认角色为 Main Programmer；只有 prompt 明确指定时担任临时 Specialist。组织与权限见 `docs/AI_WORKFLOW.md`，安全见 `docs/SAFETY.md`。
-- 依次读取 `docs/AI_WORKFLOW.md`、`docs/SAFETY.md`、`docs/PRODUCT_BASELINE.md`、`docs/MODULE_INDEX.md`、`docs/CURRENT_TASK.md`；再检查 `git status`、`git diff`、近期 `git log`。只读当前阶段相关的 module docs/code，不扫描全 Repo。
-- Known Facts Must Not Be Re-Asked：先查 canonical docs、runtime 文档、当前代码/配置及已记录的 Owner Decision。缺证据写 `UNKNOWN`，不猜业务规则。
-- 业务语义、长期规则、模块职责、跨模块 Public Contract、高风险新能力、安全降级、稳定生产能力、人工验证或不可逆真实操作升级 CEO。
-- Git + canonical docs 是共享事实源；不依赖隐藏聊天上下文。当前阶段只记 `docs/CURRENT_TASK.md`，汇报见 `docs/REPORTING.md`。
+- **全局默认：简单优先。** 先用满足当前目标的最简单方案；没有当前需求、已发生问题或明确高影响风险，不提前增加复杂度。
+- 项目治理基线先读 `docs/PROJECT_BASELINE.md`；团队规则见 `docs/AI_WORKFLOW.md`，安全见 `docs/SAFETY.md`，答复模板见 `docs/REPORTING.md`。
+- 上述治理文档由 CEO 维护；Main Programmer 除非 CEO 明确要求，不修改。
+- Main Programmer 维护实现侧事实：`PRODUCT_BASELINE.md`、`MODULE_INDEX.md`、`CURRENT_TASK.md`、module/runtime 文档和代码。
+- 只读取当前任务真正需要的文档和代码；已知事实从 Git 与 canonical docs 恢复，缺证据写 `UNKNOWN`，不猜。
+- Git + canonical docs 是共享事实源，不依赖隐藏聊天上下文。
