@@ -1,6 +1,6 @@
 # INSO V1.2 Architecture Spike
 
-Status: design proposal for CEO and Safety Supervisor review. No V1.2 runtime behavior is implemented by this document.
+Status: CEO-approved architecture baseline; pending Safety Supervisor review. No V1.2 runtime behavior is implemented by this document.
 
 ## Scope and verified seams
 
@@ -26,7 +26,7 @@ QUEUED
                       | verified save-data result -> PURCHASE_RECORDED (GUI business label: 已发采购单)
 ```
 
-Duplicate check precedes Research. For either confirmed duplicate outcome, Research runs unchanged before routing. A duplicate-check failure is not a negative result: it is retried or held for manual review and cannot route to purchase. CEO decision required: whether Research should be allowed to proceed while the duplicate check is unavailable (the fail-closed default here is to wait for a confirmed check, then always run Research even for duplicates).
+Duplicate check is attempted before Research. For either confirmed duplicate outcome, Research runs unchanged before routing. If duplicate lookup is temporarily unavailable, that failure is not a negative result: Research is still allowed to run unchanged, but post-Research routing is blocked until a confirmed duplicate result exists. Purchase must never proceed from an unavailable/ambiguous duplicate result.
 
 After Research completes, duplicate orders stop before purchase and create an unconditional duplicate-notification command. Non-duplicates evaluate the important-order rule, enqueue any resulting command, and continue purchase entry without waiting for notification delivery. A failed or pending notification does not block purchase. Notification work can finish or recover after the purchase business state has advanced.
 
@@ -57,9 +57,9 @@ DuplicateCheckResult {
 }
 ```
 
-The INSO adapter returns only the newest qualifying same-model record. It does not return a hit count. `quantity_equal` compares the current integer order quantity with the historical integer quantity. Date window semantics (rolling 168 hours versus local calendar dates, inclusive boundary, and site timezone) need CEO confirmation before implementation. MPN matching uses a duplicate-specific, versioned canonical normalizer followed by exact equality; it must not call Research's broader source matcher, accept suffixes, or guess. The precise canonical normalization is `UNKNOWN` until approved and tested against synthetic examples.
+The INSO adapter returns only the newest qualifying same-model record. It does not return a hit count. `quantity_equal` compares the current integer order quantity with the historical integer quantity. The seven-day window is a rolling 168-hour interval in the INSO site timezone (Asia/Shanghai, UTC+8), inclusive at the lower boundary: `record_time >= now_site - 168h` and `record_time <= now_site`. Persist/compare timezone-aware timestamps. MPN matching uses duplicate normalizer version `dup-mpn-v1`: Unicode NFKC, trim leading/trailing whitespace, and ASCII case normalization to uppercase, followed by exact equality. Do not remove or rewrite internal separators/punctuation, internal whitespace, suffixes, prefixes, slashes, hyphens, dots, or other model characters; do not call Research's broader source matcher or guess.
 
-No confirmed exact match means `repeated=false`; a technical failure, missing required fields, or more than one indistinguishable latest record is not a negative result and must fail closed. Where latest timestamps tie, implementation must either deterministically disambiguate using an approved stable record identity or return `AMBIGUOUS`; it must never choose an arbitrary row.
+No confirmed exact match means `repeated=false`; a technical failure, missing required fields, or more than one indistinguishable latest record is not a negative result and must fail closed. Where latest timestamps tie, use an INSO-provided stable record identity only if the read-only discovery proves one exists and is stable. If no such identity is available, return `AMBIGUOUS`; never use row order, DOM order, API response order, or an arbitrary first row as the tie-breaker.
 
 ### `NotificationCommand`, recipient, result and event
 
@@ -162,7 +162,7 @@ Keep three separately queryable concepts:
 - **Event history:** append-only, timestamped order events, including workflow transitions, security events, every notification attempt/retry/result, and recovery. Never overwrite old events.
 - **Active alerts:** keyed open alerts with `alert_id`, `inquiry_id`, `alert_type`, `raised_event_id`, `active`, `raised_at`, optional `recovered_at`, and `recovered_by_event_id`. Multiple alerts can be active for one order.
 
-Examples: `DUPLICATE_ORDER` remains active after a duplicate notification failure is recovered; `NOTIFICATION_FAILED` closes only after all recipients for that command reach the accepted recovery condition. Preserve failure → retry → retry success events even after alert recovery. `PURCHASE_EXCEPTION` raises `采购录单异常` and remains until an explicit human resolution event.
+Examples: `DUPLICATE_ORDER` remains active after a duplicate notification failure is recovered; `NOTIFICATION_FAILED` closes only when every intended recipient for that command has a confirmed `SENT` result. If any recipient ends in `PERMANENT_FAILURE` or unresolved `UNKNOWN`, the notification alert remains active even though the business/purchase flow is non-blocking. A later explicitly approved/manual resend that produces `SENT` for the remaining recipient may recover the alert; prior failure events stay in history. Preserve failure → retry → retry success events even after alert recovery. `PURCHASE_EXCEPTION` raises `采购录单异常` and remains until an explicit human resolution event.
 
 Dashboard contract: for each inquiry, show the newest still-active red alert by `(raised_at, alert_id)`; if none remains, show the normal business label. Detail view returns the complete event history, including recovered alerts. Do not collapse active alert list or event history into one `status` string.
 
@@ -174,7 +174,7 @@ Each event has a stable event ID, inquiry ID, event type, occurred-at timestamp,
 
 ## 5. Sheets customer schema without GUI business logic
 
-Extend `WorksheetSchema` with a customer source strategy, not GUI conditionals. Proposed strategies: `FIXED_VALUE("SHAHAB")` for the confirmed SHAHAB worksheet and `COLUMN("D")` for the 2026 worksheet. Normalize customer name into the public `PendingSheetRecord` while retaining original worksheet identity and raw provenance. Schema selection belongs in `src/sheets/worksheet_schema.py`; workflow rules consume `customer_name` and tier inputs; GUI displays returned data only. Preserve the configured original worksheet title and the existing case-insensitive SHAHAB schema selection. The 2026 title/schema matching convention and handling of blank/unknown D values require confirmation; unknown customer must not be guessed into A/B/C.
+Extend `WorksheetSchema` with a customer source strategy, not GUI conditionals. Proposed strategies: `FIXED_VALUE("SHAHAB")` for the confirmed SHAHAB worksheet and `COLUMN("D")` for the 2026 worksheet. Normalize customer name into the public `PendingSheetRecord` while retaining original worksheet identity and raw provenance. Schema selection belongs in `src/sheets/worksheet_schema.py`; workflow rules consume `customer_name` and tier inputs; GUI displays returned data only. Preserve the configured original worksheet title and the existing case-insensitive SHAHAB schema selection. Customer source is enabled only for the exact worksheet identity `2026` (preserving the original API title) and case-insensitive `SHAHAB`. Other worksheet titles remain V1-compatible but have no V1.2 customer source unless explicitly added later. For `2026`, D-column blank/unknown customer names are never guessed; use an explicit missing-value marker for notification rendering, raise a data-quality event/alert, and do not infer tier from customer name. Tier continues to come from the existing importance field. Missing customer name does not invalidate Research; purchase/notification routing may continue only where the required business inputs are otherwise determinate and any outward content explicitly shows the customer as missing rather than inventing a value.
 
 ## 6. INSO page/session lifecycle
 
@@ -215,7 +215,7 @@ Workflow creates and persists a finalized `NotificationCommand` and schedules re
 
 ## 11. Evidence path and data handling
 
-Failure screenshots are written only beneath Git-ignored `runtime/evidence/<inquiry_id>/`, with opaque validated path components and collision-safe filenames. Store only a relative evidence reference in SQLite. Capture only the relevant page/region when possible, redact credentials, tokens, unrelated customer/order rows and personal data before persistence, and never put evidence in tests, Git, logs, or release artifacts. If safe redaction cannot be guaranteed, record the failure code without a screenshot and require human review. Retention and deletion policy is `UNKNOWN` and requires Owner decision before production retention is enabled.
+Failure screenshots are written only beneath Git-ignored `runtime/evidence/<inquiry_id>/`, with opaque validated path components and collision-safe filenames. Store only a relative evidence reference in SQLite. Capture only the relevant page/region when possible, redact credentials, tokens, unrelated customer/order rows and personal data before persistence, and never put evidence in tests, Git, logs, or release artifacts. If safe redaction cannot be guaranteed, record the failure code without a screenshot and require human review. Default evidence retention is 30 days, but V1.2 must not perform automatic destructive deletion in the first production release. Evidence cleanup is a separate explicit/manual maintenance action after review. SQLite migration must create a timestamped backup of the workflow database before the first V1.2 schema change, keep the original file intact until migration succeeds, and use additive/repeatable changes only. V1.1 rollback ignores V1.2 audit tables; no downgrade path may drop data automatically.
 
 ## 12. V1.2 verification matrix
 
@@ -250,11 +250,21 @@ Safety Supervisor must approve before any real INSO write, `保存数据` click,
 
 ## CEO decisions and remaining UNKNOWN
 
-- Seven-day boundary: rolling 168 hours or local calendar days; inclusive boundary and timezone.
-- Exact duplicate-specific MPN canonical normalization and versioning.
-- Which worksheet titles count as the 2026 schema; blank/unknown customer-name behavior.
-- Whether Research waits for a confirmed duplicate lookup (fail-closed proposal) or can proceed independently while lookup retries.
-- Duplicate latest-row tie resolution policy.
-- Durable notification terminal condition for partial permanent-recipient failure and when a multi-recipient `NOTIFICATION_FAILED` alert recovers.
-- Evidence redaction/retention period and runtime backup/restore plan.
-- INSO live DOM/control identities, row identity/read-back fields, and whether the existing authenticated context exposes the required same page/session semantics: `UNKNOWN` pending approved read-only discovery.
+CEO decisions are now frozen for implementation:
+- Seven-day duplicate window: rolling 168 hours, inclusive lower boundary, INSO site timezone Asia/Shanghai (UTC+8), timezone-aware comparisons.
+- Duplicate MPN normalizer: `dup-mpn-v1` = Unicode NFKC + outer trim + ASCII uppercase, then exact equality; preserve all internal separators/punctuation/whitespace and never fuzzy-match.
+- Customer source: exact worksheet `2026` -> D column; case-insensitive `SHAHAB` -> fixed `SHAHAB`. Unknown/blank customer is explicit missing data, never guessed.
+- Duplicate lookup failure does not prevent unchanged V1.1 Research from running, but post-Research routing/purchase remains blocked until duplicate result is confirmed.
+- Latest-history tie: stable INSO record ID if proven by read-only discovery; otherwise `AMBIGUOUS`.
+- Notification alert recovers only after every intended recipient is confirmed `SENT`; permanent/unknown recipient failure remains an active notification alert but never blocks purchase.
+- Evidence: Git-ignored `runtime/evidence/<inquiry_id>/`; 30-day default retention policy, with no automatic destructive cleanup in initial V1.2.
+- SQLite: additive transactional migration with a timestamped pre-migration database backup; no automatic downgrade/drop.
+
+Remaining UNKNOWN requiring Safety-reviewed read-only discovery, not CEO product invention:
+- INSO live DOM/control identities and unique selectors.
+- Stable historical record identity available for timestamp ties.
+- Exact saved-draft identity/read-back fields after `保存数据`.
+- Whether the authenticated CDP context can support the proposed explicit shared session lease without weakening V1.1 Research isolation.
+- Screenshot regions/redaction masks that are actually safe on the live page.
+
+No real write, real notification delivery, or production smoke is authorized by this architecture approval.
