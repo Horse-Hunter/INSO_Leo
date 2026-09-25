@@ -126,23 +126,14 @@ Done: Runtime root, single-instance guard, safe startup logging, CDP ownership a
 
 Current:
 - Owner completed the approved dedicated-profile login and latest packaged smoke. Production collection has no visible Chrome or PowerShell interruption, and the latest SHAHAB pending-order discovery and GUI changes were confirmed.
-- CEO Final Review found one failure-path regression in the lazy CDP bootstrap integration. `_Observer.execute()` calls `prepare()` before Research, but `WorkflowWorker.process_due_one()` treats any exception from the Research executor as a retryable Research exception. Therefore `ProductionBackend._ensure_research_ready()` failures such as missing browser bootstrap config, Chrome launch failure, or CDP readiness timeout are currently converted into Workflow retry / retry-budget consumption instead of launcher `MANUAL_REVIEW` / “需要人工处理”.
-- This violates the release acceptance that local CDP/bootstrap failures must fail closed as an operator action and must not be mistaken for a business Research retry. The successful packaged smoke does not exercise this negative path.
+- CEO Final Review's lazy-CDP retry regression is fixed. A narrow `ResearchPreparationError` now identifies failures before `ResearchService.execute()`. Workflow rolls back the transient claim and its attempt count, then lets launcher enter `MANUAL_REVIEW` and stop polling/worker without creating `RETRY_WAIT` or spending a business retry. Generic Research exceptions and `RETRYABLE_FAILURE` remain on their unchanged 15/30/60 retry path.
+- Browser acquisition failure is fail-closed. If readiness cannot be proven after an owned browser is acquired, launcher closes that owned handle before entering manual handling. A packaged negative-path smoke used an isolated runtime with an unreachable CDP and no bootstrap config; the GUI showed “需要人工处理”, did not start Chrome, and its isolated queue retained zero attempts and no Research status.
 
 Next:
-1. Main Programmer separate infrastructure-preparation failures from Research retryable failures. A CDP/bootstrap/readiness failure before `ResearchService.execute` must transition the launcher to `MANUAL_REVIEW` / stop polling-worker safely, surface sanitized “需要人工处理”, and must not consume the inquiry retry budget.
-2. Do not change genuine `RETRYABLE_FAILURE` behavior from Research; those still use 15/30/60 retry.
-3. Add deterministic integration regression at ProductionBackend/Workflow boundary:
-   - one due inquiry + browser_acquirer raises `BrowserBootstrapError` -> launcher enters `MANUAL_REVIEW`;
-   - work item must not be advanced as a Research retry because Research never started;
-   - no repeated browser launch loop;
-   - owned/reused browser semantics remain unchanged.
-4. Also cover CDP readiness failure after acquisition with the same operator-action semantics and owned handle cleanup.
-5. rerun relevant tests, full deterministic pytest, ruff, diff-check, rebuild only if runtime code changed (it will), then one short packaged negative-path smoke plus the already-passing happy-path smoke as needed.
-6. commit/push current branch and return to CEO Final Review; do not merge main.
+CEO Final Review and merge decision. The follow-on soak phase remains separate.
 
 Blockers:
-- Lazy CDP/bootstrap infrastructure failures are currently swallowed by WorkflowWorker's generic Research-exception retry path, so local browser startup/readiness problems can consume business retry budget instead of entering launcher MANUAL_REVIEW.
+NONE.
 
 Owner Decisions:
 - 发布名称：INSO_V1.1。
@@ -153,4 +144,4 @@ Owner Decisions:
 
 Branch: feature/v1-1-windows-release
 
-Last Good Commit: a01d627c
+Last Good Commit: cee7804

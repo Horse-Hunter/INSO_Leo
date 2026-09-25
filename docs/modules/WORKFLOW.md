@@ -43,6 +43,10 @@ duplicate prevention 和模块衔接。只消费模块 Public Contract，不承�
   SHM 与其他 runtime 文件不得进入 Git。
 - 默认共四次执行机会：initial attempt，失败后分别等待 15、30、60 分钟；
   第四次仍失败则转为 `FAILED`。
+- Launcher 在 `ResearchService.execute()` 前的 CDP/bootstrap/readiness 准备失败使用
+  独立的 preparation error：Workflow 撤销该 transient claim 和 attempt，不创建
+  `RETRY_WAIT`，再由 launcher fail closed 到人工处理。此路径不属于 Research retry；
+  真正的 Research exception 与 `RETRYABLE_FAILURE` 继续使用 15/30/60 retry。
 - 单进程重启后，遗留 `RESEARCHING` 表示上次执行被中断，不使用 stale
   timeout。恢复必须先按 `inquiry_id` 调用 completion-confirmation seam：确认
   已完成则恢复相应最终流程状态，未确认完成才消费 retry budget 并进入
