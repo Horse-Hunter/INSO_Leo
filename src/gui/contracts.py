@@ -32,7 +32,7 @@ class OrderStatus(str, Enum):
     PENDING = "待处理"
     MANUAL_REVIEW = "待人工处理"
     ERROR = "异常"
-    UNKNOWN = "历史记录"
+    UNKNOWN = "--"
 
 
 @dataclass(frozen=True, slots=True)

@@ -305,6 +305,20 @@ def test_history_is_cached_and_uses_research_owned_excel(tmp_path, monkeypatch):
     assert reads == 1
 
 
+def test_legacy_history_without_saved_status_does_not_claim_history_as_outcome(tmp_path):
+    path = tmp_path / "legacy-results.xlsx"
+    ResearchExcelOutput(path).upsert(
+        "legacy", importance_raw="B", mpn="LEGACY", processed_at=None
+    )
+    backend = ProductionBackend(
+        config_path=tmp_path / "missing-research.json",
+        production_config_path=tmp_path / "missing-production.json",
+    )
+    backend._excel = path
+    backend._refresh_history(force=True)
+    assert backend.get_result_history()[0].status.value == "--"
+
+
 def test_next_poll_deadline_is_explicit_and_cleared_on_stop(tmp_path):
     backend = ProductionBackend(
         config_path=tmp_path / "missing-research.json",

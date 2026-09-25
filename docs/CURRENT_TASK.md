@@ -80,6 +80,7 @@ Architecture Decision:
 Done:
 - GUI 表格展示 Research Excel 全历史结果；当前 run metrics/results 保持独立 Contract。
 - Research canonical Excel 新增 UTC ISO-8601“处理时间”和隐藏状态元数据；旧 schema 无损迁移，legacy 时间不推断。
+- 有持久化状态的记录展示真实 Research 结果状态；旧记录缺少状态时显示“--”，不以历史标签或推断值替代。
 - launcher 提供带 mtime/size 缓存的历史 snapshot 与真实 next-poll deadline；GUI 倒计时、颜色优先级和 stop-after-cycle 状态已适配。
 - MockBackend 提供独立历史示例；ruff、完整 deterministic pytest、diff 检查与 Windows mock GUI 目视 smoke 完成。
 

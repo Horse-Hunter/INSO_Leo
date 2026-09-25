@@ -56,7 +56,7 @@ HKD/RMB 同样使用 ECB 同日 daily reference：`CNY per HKD = CNY per EUR / H
 
 `型号 | 品牌 | 数量 | 重要等级 | 货量标识 | 预估订单总价 | 市场最低参考价 | INSO | Findchips | 华强 | 立创 | 正能量 | 备注 | 处理时间`
 
-隐藏 `_inquiry_id` 作为幂等键；隐藏 `_research_status` 保存正式 Research 结果状态。`处理时间` 为带 UTC offset 的 ISO-8601 更新时间；retry/crash 不得产生重复正常行。已存在历史行迁移时处理时间保持空值，不推断时间。`ResearchExcelOutput.read_history()` 是 Research-owned、只读、不迁移的历史读取 Contract；按处理时间新到旧返回，缺失/无效时间记录在后并维持原 Excel 行序。必要落盘成功后才能返回 `SUCCESS` 或 `PARTIAL_SUCCESS`；`MANUAL_REVIEW_REQUIRED` 也保留该笔结果与备注，然后停止自动推进。Excel load/schema/save 失败按 `RETRYABLE_FAILURE` fail closed。
+隐藏 `_inquiry_id` 作为幂等键；隐藏 `_research_status` 保存正式 Research 结果状态。`处理时间` 为带 UTC offset 的 ISO-8601 更新时间；retry/crash 不得产生重复正常行。已存在历史行迁移时处理时间保持空值，不推断时间。`ResearchExcelOutput.read_history()` 是 Research-owned、只读、不迁移的历史读取 Contract；按处理时间新到旧返回，缺失/无效时间记录在后并维持原 Excel 行序。未保存 Research 状态的旧行不推断结果状态。必要落盘成功后才能返回 `SUCCESS` 或 `PARTIAL_SUCCESS`；`MANUAL_REVIEW_REQUIRED` 也保留该笔结果与备注，然后停止自动推进。Excel load/schema/save 失败按 `RETRYABLE_FAILURE` fail closed。
 
 五个来源列只显示业务结果：价格；价格加 `（无库存）`、实际后缀型号或 `（两个月）`/`（三个月）`；同一来源有库存/无库存价可分行；无业务结果或技术失败均显示 `无结果`。技术失败详情只写备注，格式为“网站名称 + 简洁失败原因”。
 
