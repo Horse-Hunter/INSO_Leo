@@ -1,6 +1,6 @@
 # Current Task
 
-Status: BLOCKED
+Status: READY_FOR_CEO_REVIEW
 
 Goal: 移除 Research 的订单人工复核结果。调研有报价时归为成功或部分成功；五个价格来源均完成但完全无报价时归为异常；仅技术失败且无报价时继续 Workflow retry。
 
@@ -34,26 +34,31 @@ Architecture Decision:
 Done:
 - Research 无库存报价聚合映射为 PARTIAL_SUCCESS。
 - 全部价格源无报价且无技术失败映射为 EXCEPTION；Workflow terminal FAILED 分支已实现。
+- SUCCESS / PARTIAL_SUCCESS / terminal EXCEPTION 均进入既有 safe Brand updater；EXCEPTION 保持 FAILED，updater conflict/failure 不改变终态；RETRYABLE_FAILURE（包括第四次耗尽）不触发 Brand write。
 - Research/Workflow/launcher 历史展示已统一；旧 Excel 与 SQLite MANUAL_REVIEW 数据兼容。
 - GUI 每秒按缓存的 Research history snapshot 重算 row style；仅 style tag 改变时只更新对应 Treeview tag。
 - deterministic regression 覆盖固定 history snapshot 从 recent 到 legacy 的 24h 边界迁移，并确认 Excel reader 只读取一次。
-- `ruff check src tests`、GUI tests（36 passed）、完整 deterministic pytest（361 passed, 10 skipped）、`git diff --check` 通过。
+- `ruff check src tests`、workflow/research/gui tests（277 passed）、完整 deterministic pytest（365 passed, 10 skipped）、`git diff --check` 通过。
 - Self-review 完成；未执行 live Research smoke。
 
 Current:
 - CEO 已确认 GUI 24h 颜色过期 blocker 修复正确：同一缓存 snapshot 跨 24h 时只更新 Treeview tag，不重读 Excel、不重绘整行；对应 regression test 覆盖有效。
 - Final Review 发现 1 个 Research/Workflow 状态迁移回归：WorkflowWorker._finish() 仍只在 final_status 为 COMPLETED 或旧 MANUAL_REVIEW 时执行 resolved_brand 的安全 Brand updater。旧行为下，“五源无报价 -> MANUAL_REVIEW_REQUIRED -> Workflow MANUAL_REVIEW”仍会尝试安全 Brand 写回；改成 EXCEPTION -> Workflow FAILED 后，同一业务场景不再执行 Brand updater。
 - 当前任务明确要求 Brand 写回安全边界/既有行为不变，因此这是状态重命名/映射带来的行为回归。Production launcher 当前 brand_updater=None，所以 live GUI 不会产生额外外部写，但 canonical Workflow Contract 仍需保持。
+- 已按 Research result status 修复：EXCEPTION 仍执行 safe Brand updater，保持 FAILED；冲突/失败不覆盖 Workflow 终态，RETRYABLE_FAILURE 及第四次 retry exhaustion 不执行 Brand write。
 
-Next:
+Completed follow-up requirements:
 1. Main Programmer 修复 EXCEPTION terminal 的 resolved_brand 安全写回语义，不要把“所有 FAILED”都加入 Brand write。
 2. 推荐按 Research result status 决定是否进入 Brand updater：SUCCESS / PARTIAL_SUCCESS / EXCEPTION 可以进入既有 safe Brand updater；RETRYABLE_FAILURE 及 retry 最终失败不得写 Brand。也可采用等价实现，但必须只恢复旧 no-quote/manual-review 场景原有行为。
 3. 增加 deterministic regression：EXCEPTION + resolved_brand 时 Workflow 最终状态仍为 FAILED、无 retry，但安全 Brand updater 会被调用；Brand conflict/失败不得改变 FAILED terminal 状态。另验证纯 RETRYABLE_FAILURE 第四次失败不会触发 Brand updater。
 4. 更新 WORKFLOW / PRODUCT_BASELINE（如需要）明确 terminal EXCEPTION 与 Brand updater 的关系，避免以后再次丢失该语义。
 5. rerun workflow/research/gui relevant tests、full deterministic pytest、ruff、git diff --check；commit/push 后再交 CEO Final Review，不 merge main。
 
+Next:
+CEO Final Review；不要 merge main。
+
 Blockers:
-- EXCEPTION 替代旧 MANUAL_REVIEW_REQUIRED 后，resolved_brand 的既有安全写回路径被意外跳过；需恢复后才能合入 main。
+- NONE
 
 Owner Decisions:
 - 24 小时内普通记录使用浅蓝色强调；24 小时外及无时间 legacy 记录使用白色。

@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
-from src.research import ResearchInput, ResearchResult
+from src.research import ResearchInput, ResearchResult, ResearchStatus
 from src.sheets import (
     PendingSheetRecord,
     SheetRecordIdentity,
@@ -167,10 +167,16 @@ class WorkflowWorker:
             now=now,
             retry_delays=self._retry_delays,
         )
-        if final_status not in {
-            WorkflowStatus.COMPLETED,
-            WorkflowStatus.MANUAL_REVIEW,
-        } or not result.resolved_brand:
+        allowed_final_status = {
+            ResearchStatus.SUCCESS: WorkflowStatus.COMPLETED,
+            ResearchStatus.PARTIAL_SUCCESS: WorkflowStatus.COMPLETED,
+            ResearchStatus.EXCEPTION: WorkflowStatus.FAILED,
+        }.get(result.status)
+        if (
+            allowed_final_status is None
+            or final_status is not allowed_final_status
+            or not result.resolved_brand
+        ):
             return
         if self._brand_updater is None:
             self._store.record_brand_update(item.id, "NOT_CONFIGURED", now=now)

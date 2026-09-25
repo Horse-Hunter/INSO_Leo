@@ -31,6 +31,10 @@ duplicate prevention 和模块衔接。只消费模块 Public Contract，不承�
 - `resolved_brand` 存在时，Workflow 把原始 opaque identity 和 Brand 交给
   Sheets safe Brand update。Brand conflict 不覆盖人工值，也不撤销已经完成的
   Research 状态。
+- Research 的 `SUCCESS`、`PARTIAL_SUCCESS` 和 terminal `EXCEPTION` 都保留既有
+  safe Brand update 行为；`EXCEPTION` 仍保持 Workflow `FAILED`，Brand updater
+  的 conflict/failure 不改写该终态。`RETRYABLE_FAILURE` 不执行 Brand update，
+  即使 retry budget 最终耗尽并进入 `FAILED` 也不执行。
 
 ## SQLite、Retry 与恢复
 

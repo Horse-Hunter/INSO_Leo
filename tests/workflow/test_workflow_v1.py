@@ -244,6 +244,94 @@ def test_no_quote_exception_fails_without_retry(tmp_path: Path) -> None:
     assert result.last_error == ResearchStatus.EXCEPTION.value
 
 
+def test_no_quote_exception_still_uses_safe_brand_update(tmp_path: Path) -> None:
+    store = WorkflowStateStore(tmp_path / "workflow.db")
+    enqueue_one(store)
+    updater = RecordingBrandUpdater()
+    worker = WorkflowWorker(
+        store,
+        ResultResearch(ResearchStatus.EXCEPTION, resolved_brand="Resolved Maker"),
+        brand_updater=updater,
+    )
+
+    result = worker.process_due_one(now=NOW)
+
+    assert result is not None
+    assert result.status is WorkflowStatus.FAILED
+    assert result.next_attempt_at is None
+    assert result.brand_update_status == "UPDATED"
+    assert updater.calls == [(result.record_identity, "Resolved Maker")]
+
+
+def test_no_quote_exception_brand_conflict_preserves_failed_terminal_state(
+    tmp_path: Path,
+) -> None:
+    store = WorkflowStateStore(tmp_path / "workflow.db")
+    enqueue_one(store)
+    updater = RecordingBrandUpdater(SheetRecordConflict("human value exists"))
+    worker = WorkflowWorker(
+        store,
+        ResultResearch(ResearchStatus.EXCEPTION, resolved_brand="Resolved Maker"),
+        brand_updater=updater,
+    )
+
+    result = worker.process_due_one(now=NOW)
+
+    assert result is not None
+    assert result.status is WorkflowStatus.FAILED
+    assert result.next_attempt_at is None
+    assert result.brand_update_status == "CONFLICT"
+    assert updater.calls == [(result.record_identity, "Resolved Maker")]
+
+
+def test_no_quote_exception_brand_failure_preserves_failed_terminal_state(
+    tmp_path: Path,
+) -> None:
+    store = WorkflowStateStore(tmp_path / "workflow.db")
+    enqueue_one(store)
+    updater = RecordingBrandUpdater(RuntimeError("synthetic write failure"))
+    worker = WorkflowWorker(
+        store,
+        ResultResearch(ResearchStatus.EXCEPTION, resolved_brand="Resolved Maker"),
+        brand_updater=updater,
+    )
+
+    result = worker.process_due_one(now=NOW)
+
+    assert result is not None
+    assert result.status is WorkflowStatus.FAILED
+    assert result.next_attempt_at is None
+    assert result.brand_update_status == "FAILED"
+    assert updater.calls == [(result.record_identity, "Resolved Maker")]
+
+
+def test_retryable_failure_exhaustion_never_updates_brand(tmp_path: Path) -> None:
+    store = WorkflowStateStore(tmp_path / "workflow.db")
+    enqueue_one(store)
+    updater = RecordingBrandUpdater()
+    worker = WorkflowWorker(
+        store,
+        ResultResearch(
+            ResearchStatus.RETRYABLE_FAILURE, resolved_brand="Resolved Maker"
+        ),
+        brand_updater=updater,
+    )
+    attempt_times = (
+        NOW,
+        NOW + timedelta(minutes=15),
+        NOW + timedelta(minutes=45),
+        NOW + timedelta(minutes=105),
+    )
+
+    results = [worker.process_due_one(now=attempt_time) for attempt_time in attempt_times]
+
+    assert all(result is not None for result in results)
+    assert results[-1] is not None
+    assert results[-1].status is WorkflowStatus.FAILED
+    assert results[-1].attempt_count == 4
+    assert updater.calls == []
+
+
 def test_restart_recovery_confirms_completion_before_transition(tmp_path: Path) -> None:
     database = tmp_path / "workflow.db"
     store = WorkflowStateStore(database)
