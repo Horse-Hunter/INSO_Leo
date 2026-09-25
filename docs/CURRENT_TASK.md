@@ -1,6 +1,6 @@
 # Current Task
 
-Status: ACTIVE
+Status: READY_FOR_CEO_REVIEW
 
 Goal: 交付 INSO_V1.1 Windows 可发布版本：从已验收 main 生产基线构建可双击启动的 Windows 桌面包，解决 frozen runtime 路径、配置发现、单实例、日志/启动错误、CDP Chrome 启动/复用与发布包 smoke；不改变已验收业务规则。
 
@@ -128,32 +128,44 @@ Current:
 - Owner completed the approved dedicated-profile login and latest packaged smoke. Production collection has no visible Chrome or PowerShell interruption, and the latest SHAHAB pending-order discovery and GUI changes were confirmed.
 - CEO Final Review's lazy-CDP retry regression is fixed. A narrow `ResearchPreparationError` now identifies failures before `ResearchService.execute()`. Workflow rolls back the transient claim and its attempt count, then lets launcher enter `MANUAL_REVIEW` and stop polling/worker without creating `RETRY_WAIT` or spending a business retry. Generic Research exceptions and `RETRYABLE_FAILURE` remain on their unchanged 15/30/60 retry path.
 - Browser acquisition failure is fail-closed. If readiness cannot be proven after an owned browser is acquired, launcher closes that owned handle before entering manual handling. A packaged negative-path smoke used an isolated runtime with an unreachable CDP and no bootstrap config; the GUI showed “需要人工处理”, did not start Chrome, and its isolated queue retained zero attempts and no Research status.
-- CEO Final Review found one release-build hygiene blocker that also explains the Owner-observed project growth from roughly 5 GB to 8 GB during repeated package testing. `scripts/build_windows_release.ps1` creates fresh GUID paths `build/release-dist-<id>` and `build/pyinstaller-<id>` for every build. `$stageWork` is never deleted, and `-BuildOnly` also leaves every `$stageDist` behind. Repeated clean builds therefore accumulate large PyInstaller staging trees indefinitely.
+- CEO accepted the build-script no-growth repair in `884a08b611a94bf733e170ff4370512cd084ce08`; two consecutive `-BuildOnly` builds reused the marked staging root without growth. The final local storage classification is complete below.
 
 Closeout:
-- `scripts/build_windows_release.ps1` now uses the single marked staging root `build/windows-release-stage`; each next build replaces only this verified script-owned root. PyInstaller work is removed in `finally`; the root is retained only for a successful `-BuildOnly` artifact. A previous stage with missing ownership marker, unexpected children, a leftover work tree, or runtime-data scan findings is preserved and causes a fail-closed error. An existing deployed `dist/INSO_V1.1` is still never replaced.
-- Two consecutive final-version `-BuildOnly` builds succeeded. Each passed frozen `--self-check` and `RELEASE_SCAN_OK`; after each, exactly one fixed BuildOnly artifact remained at 0.246 GiB and no work directory remained. The second build did not add a staging tree or increase staging size.
-- Pre-clean project root: 12,868,357,503 bytes / 11.985 GiB. Post-clean: 6,521,603,147 bytes / 6.074 GiB. Net project-root reduction: 6,346,754,356 bytes / 5.911 GiB. `.worktrees/` went from 11.970 GiB to 6.056 GiB; active release `build/` is 4.939 GiB, deployed `dist/` is 0.246 GiB, and `.venv-release` is 0.260 GiB.
-- Removed all 23 old GUID PyInstaller work trees and all 23 old GUID release staging trees after a clean artifact scan. Removed 17 source/test standard cache directories (1.61 MiB). The first cleanup attempt met a Windows access denial on DLLs loaded from two old release staging copies. No process was terminated. After Owner confirmed there was no GUI or real Research, the read-only process snapshot showed zero `INSO_V1.1.exe` processes; both remaining trees were rescanned and safely removed.
-- Latest packaged process-lifecycle smoke: started the current BuildOnly EXE with `--mock` (no Sheets poll or Research), confirmed its GUI window appeared, sent the normal window-close message, observed exit code 0, waited seven seconds, then observed zero `INSO_V1.1.exe` processes. No ghost process remained. The smoke generated a sanitized startup log under the staging app's local `runtime/logs`; it was retained. The build script now refuses to replace any existing staging artifact that contains a `runtime` directory, preserving local runtime data.
-- Preserved 18 ambiguous old-release/recovery entries totaling 4.41 GiB (`UNKNOWN_LARGE_DIRECTORIES`) for CEO/Owner classification. Also preserved the real deployed release, all worktrees (including the protected Research runtime worktree), `.venv-release` and its caches, generic temporary Tcl/Tk copies, test SQLite/Excel data, runtime/Vault/OAuth/profile data, and every other unknown item. No worktree was removed.
-- Only PowerShell build script and this task document changed; no Python runtime/business code changed. Validation: PowerShell parser, `git diff --check`, two consecutive clean Windows PyInstaller builds with stable staging size and no work tree, frozen self-check, and `RELEASE_SCAN_OK`. Full Python test suite was not rerun because Python source was unchanged.
-- No live Research smoke or production Sheets poll was run as part of this storage/build-maintenance task.
+- The accepted build-script no-growth repair remains unchanged: one marked `build/windows-release-stage`, guaranteed PyInstaller work cleanup, `-BuildOnly` retains at most one artifact, runtime-bearing staging is protected, and deployed `dist/INSO_V1.1` is never replaced. The two accepted consecutive BuildOnly builds, frozen self-checks, `RELEASE_SCAN_OK`, and lifecycle smoke remain as recorded above. The lifecycle smoke log under the fixed stage's `runtime/logs` was retained.
+- Classified all 18 old release/recovery candidates in the active release worktree's `build/`. All passed `scripts/scan_release_artifact.py`; all had zero reparse points, Git metadata, runtime/config/credential data, browser profile paths, SQLite/Excel/customer-data file types, or unknown top-level source/operator files. All matched known PyInstaller onedir or extracted `_internal` layouts.
+- Deleted only `build/release-internal-backup-5b913b70e83b4ade806009e7f3f8771f` (257,760,781 bytes / 245.80 MiB). Its 2,174-file payload was byte-for-byte identical to the retained `release-program-backup-35bb323de96c4ad882eb0986c7064ce6/_internal`; it had no EXE or unique files. It was a direct child of the active worktree's `build/`, not a Git worktree, active stage, or deployed release. No process was running and no protected data was touched.
+- The other 17 complete onedir snapshots remain `KEEP_UNKNOWN`: their full package fingerprints differ, and their exact source/version recovery value is not proven. They total 4,485,457,917 bytes / 4.177 GiB. Per-candidate non-sensitive inventory (relative category/name, size, modified time, top-level shape, layout and scan result):
+
+| Candidate under `build/` | Size | Modified (local) | First-level shape | Classification |
+|---|---:|---|---|---|
+| `deployed-backup-66c368a40e044b41a482944fc22af1f9` | 251.91 MiB | 2026-09-25 16:59 | 1 EXE + `_internal/`; 2,170 files | KEEP_UNKNOWN, onedir |
+| `deployed-backup-e8f8f5ae474a4b11accdf26a27cab668` | 252.18 MiB | 2026-09-25 16:32 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
+| `release-internal-backup-5b913b70e83b4ade806009e7f3f8771f` | 245.80 MiB | 2026-09-25 15:25 | 98 top-level `_internal` payload entries; 2,174 files | DELETE_SAFE, exact duplicate |
+| `release-old-package-196f282695c04d98afe3fcbfdc566830` | 252.16 MiB | 2026-09-25 13:23 | 1 EXE + `_internal/`; 2,174 files | KEEP_UNKNOWN, onedir |
+| `release-old-package-a5146bb39fed4040bc176a116ef1efc5` | 252.16 MiB | 2026-09-25 13:32 | 1 EXE + `_internal/`; 2,174 files | KEEP_UNKNOWN, onedir |
+| `release-old-package-af8878a830024ecb925381d9e2eb50f1` | 252.17 MiB | 2026-09-25 13:55 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
+| `release-old-package-b3437d38a8d8445c94d777729071268d` | 252.16 MiB | 2026-09-25 13:14 | 1 EXE + `_internal/`; 2,174 files | KEEP_UNKNOWN, onedir |
+| `release-old-package-b98987c0a3e542bda93ab1c8356c9e7a` | 252.16 MiB | 2026-09-25 13:50 | 1 EXE + `_internal/`; 2,174 files | KEEP_UNKNOWN, onedir |
+| `release-program-backup-35bb323de96c4ad882eb0986c7064ce6` | 252.17 MiB | 2026-09-25 15:33 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
+| `release-program-backup-6cc5edd74f2a401e8df3ea4ba2b9637a` | 252.18 MiB | 2026-09-25 16:09 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
+| `release-program-backup-937696ed6e164879ae81e91917444f49` | 252.17 MiB | 2026-09-25 15:15 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
+| `release-program-backup-a39bdba5107c4f5db5fe8555947c6815` | 252.18 MiB | 2026-09-25 15:42 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
+| `release-program-backup-e5aa4a0c77b64897baa81ca06ac3cc73` | 252.17 MiB | 2026-09-25 15:07 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
+| `release-program-backup-e753939cffe34fe796ac4cb9a02c8d18` | 252.18 MiB | 2026-09-25 16:01 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
+| `release-program-backup-eec25bd81642445391317cd67ad8f31d` | 250.91 MiB | 2026-09-25 15:25 | 1 EXE + `_internal/`; 2,174 files | KEEP_UNKNOWN, onedir |
+| `replaced-release-69b43485062b4fda9dc525ea721297a6` | 252.17 MiB | 2026-09-25 14:28 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
+| `replaced-release-ac9fabf9317a4aaa96a9da695fca47ef` | 244.47 MiB | 2026-09-25 14:12 | 1 EXE + `_internal/`; 1,245 files | KEEP_UNKNOWN, onedir |
+| `replaced-release-ee01dc2443114a8aa800b66715f0010f` | 252.17 MiB | 2026-09-25 14:06 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
+
+- Project-root storage immediately before this deletion: 6,524,709,436 bytes / 6.077 GiB. After: 6,266,948,655 bytes / 5.837 GiB. Reclaimed: 257,760,781 bytes / 0.240 GiB. Candidate totals: 18; DELETE_SAFE 1 / 245.80 MiB; KEEP_UNKNOWN 17 / 4.177 GiB. The separate deployed `dist/INSO_V1.1`, all worktrees, `.venv-release`, runtime/Vault/OAuth/profile data, SQLite/Excel/customer data, and the fixed BuildOnly staging runtime log were preserved.
+- Only this task document changed in Git; no Python/business code or build script changed. Validation: all 18 artifact scans reported `RELEASE_SCAN_OK`; `git diff --check` is run for this closeout. No real Sheets/Research smoke was run.
 
 CEO Final Review:
-- Commit `884a08b611a94bf733e170ff4370512cd084ce08` is accepted for the build-script fix. The fixed owned staging root, marker validation, artifact scan, finally-cleaned PyInstaller work tree, and refusal to overwrite deployed `dist/INSO_V1.1` satisfy the no-growth and fail-closed release requirements.
-- The Windows release code path remains accepted; no new Python blocker was found in this review.
-- Before final merge/closure, perform one last **local-only classification and safe cleanup** of the 18 `UNKNOWN_LARGE_DIRECTORIES` (4.41 GiB), because this is most of the remaining project footprint and the Owner explicitly requested whole-folder slimming.
-- This cleanup is not permission for blanket deletion. For each of the 18 entries, record only non-sensitive metadata: relative category/name, size, modified time, immediate structure, and whether it matches a known PyInstaller/release/recovery layout. Run the generic release artifact scanner against any candidate release tree.
-- A directory may be deleted only when all are true: it is not a Git worktree/current release/deployed release; contains no `runtime/`, Vault/OAuth/profile/cookie/SQLite/Excel/customer data; passes the generic artifact safety scan; and its contents are demonstrably rebuildable release/recovery copies with no unique source or operator files.
-- Any directory with runtime data, unknown custom files, a reparse point, Git metadata, or ambiguous purpose remains `KEEP_UNKNOWN`. Do not optimize for reclaimed GB.
-- The current fixed BuildOnly staging contains a sanitized smoke log under local `runtime/logs`; keep it unless explicitly replacing that staging after review. Do not weaken the build script's runtime-data refusal just to make cleanup easier.
-- After classification, delete only the proven-safe subset, then report: 18 total candidates, DELETE_SAFE count/size, KEEP_UNKNOWN count/size, project BEFORE/AFTER/RECLAIMED. If all 18 cannot be proven safe, retain the rest and proceed; this is not a code blocker.
-- No real Research/Sheets run is required for this local storage cleanup. Do not modify Python/business code. Do not merge main until this final local cleanup report is returned to CEO.
+- `884a08b611a94bf733e170ff4370512cd084ce08` build-script fix accepted. CEO sync commit `0a83109fa5d830ef7f4bc9e219a54105bd2f6d37` is preserved.
+- Local-only classification is complete. Ambiguous full onedir snapshots remain preserved for CEO decision; there is no code blocker.
 
 Blockers:
-- No remaining code blocker.
-- Final local cleanup classification of the 18 unknown release/recovery directories is pending CEO-directed execution; ambiguous entries must be retained rather than forced deleted.
+- NONE. Seventeen `KEEP_UNKNOWN` release snapshots remain intentionally preserved; CEO/Owner may decide their retention later.
 
 Owner Decisions:
 - 发布名称：INSO_V1.1。
@@ -164,4 +176,4 @@ Owner Decisions:
 
 Branch: feature/v1-1-windows-release
 
-Last Good Commit: cee7804
+Last Good Commit: 0a83109fa5d830ef7f4bc9e219a54105bd2f6d37
