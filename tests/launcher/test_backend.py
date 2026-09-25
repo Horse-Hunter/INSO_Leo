@@ -16,6 +16,23 @@ from src.research.service import ResearchService
 from src.workflow import WorkflowStatus, WorkflowWorker
 
 
+def test_login_unavailable_result_requests_manual_handling():
+    seen = []
+    manual = []
+    result = ResearchResult(
+        "synthetic-inquiry", ResearchStatus.PARTIAL_SUCCESS,
+        remarks="立创：登录不可用",
+    )
+    observer = launcher._Observer(
+        SimpleNamespace(execute=lambda _item: result), seen.append, manual.append
+    )
+    item = ResearchInput("synthetic-inquiry", "TEST-1", None, 1, None)
+
+    assert observer.execute(item) is result
+    assert seen == ["synthetic-inquiry"]
+    assert manual == ["synthetic-inquiry"]
+
+
 class _Request:
     def __init__(self, values, called):
         self.values, self.called = values, called
@@ -137,7 +154,8 @@ def test_production_composition_builds_real_seams_without_network(
 
     monkeypatch.setattr(launcher, "WorkflowWorker", capture_worker)
     backend = ProductionBackend(
-        config_path=research_config, production_config_path=production
+        config_path=research_config, production_config_path=production,
+        cdp_probe=lambda _url: True,
     )
     backend.start()
     assert sheets_called.wait(5), "production Sheets reader was not composed/called"
@@ -208,7 +226,8 @@ def test_stop_after_cycle_drains_every_due_item_from_current_poll(
         launcher, "build_production_research_service", lambda *_a, **_kw: _Research()
     )
     backend = ProductionBackend(
-        config_path=research_config, production_config_path=production
+        config_path=research_config, production_config_path=production,
+        cdp_probe=lambda _url: True,
     )
     backend.start()
     assert sheets_called.wait(5)

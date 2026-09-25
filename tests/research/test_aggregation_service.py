@@ -158,6 +158,20 @@ def test_multiple_failure_remarks_follow_canonical_source_order() -> None:
     assert aggregation.remarks == "Findchips：暂时不可用；INSO：登录不可用"
 
 
+def test_authenticated_session_failure_is_reported_as_login_unavailable() -> None:
+    results = _complete(
+        {
+            ResearchSource.LCSC: _result(
+                ResearchSource.LCSC,
+                SourceOutcome.SOURCE_UNAVAILABLE,
+                failure_code="AUTHENTICATED_SESSION_REQUIRED",
+            ),
+        }
+    )
+    aggregation = aggregate_price_results(tuple(results), 1)
+    assert aggregation.remarks == "立创：登录不可用"
+
+
 def test_out_of_stock_fallback_is_partial_and_uses_20_percent_rule() -> None:
     results = _complete(
         {

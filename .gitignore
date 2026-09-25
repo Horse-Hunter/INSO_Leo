@@ -50,6 +50,7 @@ browser-captures/
 
 # Local worktrees and transient files
 .worktrees/
+.venv-release/
 .tmp/
 tmp/
 *.tmp

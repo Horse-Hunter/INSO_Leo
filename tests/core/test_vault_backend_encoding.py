@@ -83,6 +83,28 @@ def test_decode_helper_maps_none_stderr_to_backend_unavailable():
         _decode_strict_utf8(None, kind="stderr")
 
 
+def test_vault_powershell_runs_without_visible_console(monkeypatch, tmp_path):
+    module = tmp_path / "CredentialVault.psm1"
+    module.write_text("", encoding="utf-8")
+    backend = _PowerShellVaultBackend(
+        pwsh_executable="powershell.exe", module_path=str(module), vault_path=None
+    )
+    captured = {}
+
+    def fake_run(args, **kwargs):
+        captured.update(kwargs)
+        return subprocess.CompletedProcess(args, 30, b"", b"BACKEND:SiteNotFound")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(cp.CredentialSiteNotFoundError):
+        cp._WindowsCredentialVaultProvider(backend=backend).get_login(
+            "synthetic.example"
+        )
+    assert captured["creationflags"] == getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    assert captured["capture_output"] is True
+    assert captured["text"] is False
+
+
 # ---------------------------------------------------------------------------
 # End-to-end synthetic round-trip. Skipped on hosts without PowerShell +
 # Windows DPAPI so it remains CI-friendly.

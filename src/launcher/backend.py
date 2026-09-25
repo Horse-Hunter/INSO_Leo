@@ -13,6 +13,7 @@ from dataclasses import replace
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from src.core.app_paths import app_root, resolve_app_path, runtime_config_path
 from src.gui.contracts import (
     DiagnosticSnapshot,
     GuiBackend,
@@ -33,6 +34,7 @@ from src.research.runtime import (
     assess_readiness,
     build_production_research_service,
     load_runtime_config,
+    probe_loopback_endpoint,
 )
 from src.sheets import WorksheetIdentity
 from src.sheets.google_oauth import build_read_only_google_sheets_service
@@ -44,6 +46,8 @@ from src.workflow import (
     WorkflowStatus,
     WorkflowWorker,
 )
+
+from .browser_bootstrap import BrowserHandle, acquire_cdp_browser
 
 log = logging.getLogger(__name__)
 
@@ -77,14 +81,15 @@ class ProductionBackend(GuiBackend):
     """Own one GUI run session and stop it only at safe Workflow boundaries."""
 
     def __init__(
-        self, config_path=None, production_config_path=None, *, cdp_probe=None
+        self, config_path=None, production_config_path=None, *, cdp_probe=None,
+        root=None, browser_acquirer=acquire_cdp_browser,
     ):
-        self.root = Path(__file__).resolve().parents[2]
-        self.config_path = Path(config_path or self.root / "runtime/research.json")
-        self.production_path = Path(
-            production_config_path or self.root / "runtime/production.json"
-        )
+        self.root = Path(root) if root is not None else app_root()
+        self.config_path = Path(config_path) if config_path is not None else runtime_config_path("research.json", root=self.root)
+        self.production_path = Path(production_config_path) if production_config_path is not None else runtime_config_path("production.json", root=self.root)
         self.cdp_probe = cdp_probe
+        self._browser_acquirer = browser_acquirer
+        self._browser_handle: BrowserHandle | None = None
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._drain_due_on_stop = threading.Event()
@@ -109,7 +114,7 @@ class ProductionBackend(GuiBackend):
             self._excel = (
                 configured_excel
                 if configured_excel.is_absolute()
-                else self.root / configured_excel
+                else resolve_app_path(configured_excel, root=self.root)
             )
         except ResearchRuntimeConfigError as exc:
             log.debug("Research output path unavailable (%s)", type(exc).__name__)
@@ -180,12 +185,19 @@ class ProductionBackend(GuiBackend):
                 )
             rc = load_runtime_config(self.config_path)
             if not rc.excel_output_path.is_absolute():
-                rc = replace(rc, excel_output_path=self.root / rc.excel_output_path)
-            readiness = assess_readiness(rc.cdp.cdp_url, cdp_probe=self.cdp_probe)
+                rc = replace(rc, excel_output_path=resolve_app_path(rc.excel_output_path, root=self.root))
+            probe = self.cdp_probe or probe_loopback_endpoint
+            try:
+                self._browser_handle = self._browser_acquirer(
+                    rc.cdp.cdp_url, self.root, cfg, probe=probe
+                )
+            except Exception as exc:
+                raise RuntimeError("CDP browser requires manual handling") from exc
+            readiness = assess_readiness(rc.cdp.cdp_url, cdp_probe=probe)
             if not readiness.ready:
                 raise RuntimeError("Research readiness requires manual handling")
             client = Path(cfg["client_secret_file"])
-            client = client if client.is_absolute() else self.root / client
+            client = resolve_app_path(client, root=self.root)
             reader = GoogleSheetsRowReader(
                 build_read_only_google_sheets_service(client)
             )
@@ -194,11 +206,11 @@ class ProductionBackend(GuiBackend):
                 for title in cfg["worksheet_titles"]
             )
             db = Path(cfg.get("sqlite_path", "runtime/production/workflow.sqlite3"))
-            db = db if db.is_absolute() else self.root / db
+            db = resolve_app_path(db, root=self.root)
             self._excel = (
                 rc.excel_output_path
                 if rc.excel_output_path.is_absolute()
-                else self.root / rc.excel_output_path
+                else resolve_app_path(rc.excel_output_path, root=self.root)
             )
             self._store = WorkflowStateStore(db)
             research = build_production_research_service(rc, cdp_probe=self.cdp_probe)
@@ -277,6 +289,12 @@ class ProductionBackend(GuiBackend):
                 self._state = RunState.MANUAL_REVIEW
         finally:
             self._refresh()
+            if self._browser_handle is not None:
+                try:
+                    self._browser_handle.close()
+                except Exception as exc:  # noqa: BLE001 - cleanup boundary
+                    log.warning("Owned browser shutdown failed (%s)", type(exc).__name__)
+                self._browser_handle = None
             with self._lock:
                 if self._state is not RunState.MANUAL_REVIEW:
                     self._state = RunState.STOPPED

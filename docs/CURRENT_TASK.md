@@ -122,13 +122,13 @@ Architecture Decision:
 - Python mode 与 frozen EXE 必须使用同一 ProductionBackend 与业务模块。
 - 首版选择 onedir，不选择 onefile；先保证银行内网环境下稳定、可审计、可排障。
 
-Done: NONE
+Done: Runtime root, single-instance guard, safe startup logging, CDP ownership, headless Chrome bootstrap and onedir packaging implemented. Frozen Core Provider bundles its canonical CredentialVault.psm1; the packaged read-only diagnostic confirms all three required Site IDs available without bundling Vault data. Vault PowerShell subprocesses now keep their console hidden. Build preflight initializes Tcl and the frozen EXE self-check verifies bundled GUI dependencies, preventing a package without tkinter. Clean build and generic artifact scan pass. Explorer-launched production GUI successfully polled the configured Sheets, silently reused OAuth, processed two real inquiries to terminal PARTIAL_SUCCESS, wrote matching SQLite/Excel rows, displayed history and countdown, rejected a second instance, drained stop-after-cycle, preserved one-attempt dedup, and closed gracefully on X. Owned CDP closed after stop; a pre-existing test CDP remained reachable after X. Owner confirmed no visible Chrome or PowerShell window in normal collection.
 
-Current: 等待 Main Programmer 开发 Windows release stage。
+Current: Owner found results in ordinary Chrome that background Research marked unavailable, and requires authenticated site readiness before model collection. A read-only diagnostic in the dedicated CDP profile found IC.net RESULT_CONTAINER_MISSING, HQEW RESULT_NAVIGATION_FAILED, LCSC AUTHENTICATED_SESSION_REQUIRED, and INSO RESPONSE_ROWS_MISSING; the INSO response carried a false login-state flag. Ordinary Chrome and the dedicated CDP profile are separate sessions. Non-secret Vault inventory confirms configured records also exist for HQEW, LCSC and Findchips, but the current HQEW/LCSC CDP adapters do not consume them, while IC.net CDP and INSO CDP do not establish a session from their Vault records. Vault presence is therefore not proof of authenticated CDP readiness. Research now classifies confirmed LCSC/INSO expired-session signals as login unavailable, so launcher can fail closed for human handling rather than continue polling with a misleading temporary-unavailable remark. No price, MPN, stock, FX or retry rule changed. The latest rebuilt EXE includes these fixes and passed frozen GUI self-check.
 
-Next: Main Programmer 实现 deterministic seams -> build packaged EXE -> Windows packaged production smoke -> self-review -> commit/push -> CEO Final Review。
+Next: Define and verify site-specific authenticated readiness for the required sources before model collection, using the existing Core Provider only within approved login flows and failing closed on CAPTCHA/OTP/device checks. Owner agreed to perform legitimate manual login in the approved dedicated CDP profile at a later time. Recheck IC.net/HQEW/LCSC/INSO outcomes after that login without exposing credentials or page data, then finish packaged smoke and CEO review.
 
-Blockers: NONE
+Blockers: Authenticated readiness is not yet proven for all required sites. Owner deferred the necessary dedicated-profile manual login. IC.net/HQEW behavior after that login remains UNKNOWN. Do not put credential values in this task file or Git.
 
 Owner Decisions:
 - 发布名称：INSO_V1.1。

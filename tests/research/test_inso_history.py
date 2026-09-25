@@ -2,6 +2,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Self
 
+import pytest
+
 from src.research.fx import UsdRmbQuote
 from src.research.inso_history import (
     INSO_SITE_ID,
@@ -318,6 +320,24 @@ def test_concrete_browser_empty_response_is_fail_closed() -> None:
         assert exc.code == "AUTHENTICATED_READ_EMPTY"
     else:
         raise AssertionError("empty response must fail closed")
+
+
+def test_concrete_browser_expired_session_is_identified_without_rows() -> None:
+    captured: dict = {}
+    page = FakePage('{"isLogin":"false"}', captured)
+    browser = FakeBrowser(page)
+    acquisition = PlaywrightInsoReadOnlyBrowser(
+        InsoBrowserConfig(login_url="https://inso.example/"),
+        settle_ms=0,
+        playwright_factory=lambda: FakePlaywright(FakeChromium(browser)),
+    )
+
+    with pytest.raises(InsoReadError) as caught:
+        acquisition.fetch_procurement_temporary_inquiry_history(
+            "ABC", InsoLogin("u", "p")
+        )
+    assert caught.value.code == "AUTHENTICATED_SESSION_REQUIRED"
+    assert browser.closed
 
 
 def test_concrete_browser_no_page_is_fail_closed() -> None:

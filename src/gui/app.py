@@ -1,4 +1,4 @@
-"""INSO_V1.0 single-page Dashboard implemented with customtkinter.
+"""INSO_V1.1 single-page Dashboard implemented with customtkinter.
 
 The app owns no automation logic; it consumes a GuiBackend implementation and
 updates its widgets from the main thread via tkinter.after.
@@ -79,7 +79,7 @@ def _countdown_text(status: RunSession, now: datetime | None = None) -> str:
 
 
 class InsoDashboardApp:
-    """Single-page INSO_V1.0 operator dashboard."""
+    """Single-page INSO_V1.1 operator dashboard."""
 
     def __init__(self, backend: GuiBackend) -> None:
         global ctk
@@ -99,7 +99,7 @@ class InsoDashboardApp:
         self._close_finalized = False
 
         self._root = ctk.CTk()
-        self._root.title("INSO_V1.0")
+        self._root.title("INSO_V1.1")
         self._root.geometry("1200x800")
         self._root.configure(fg_color=_BG)
         self._root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -145,7 +145,7 @@ class InsoDashboardApp:
 
         title = ctk.CTkLabel(
             frame,
-            text="INSO_V1.0",
+            text="INSO_V1.1",
             font=_FONT_TITLE,
             text_color=_TEXT,
         )

@@ -61,7 +61,11 @@ def _failure_reason(code: str) -> str:
         return "汇率不可用"
     if any(word in upper for word in ("PARSE", "UNPARSEABLE", "MISSING")):
         return "结果解析失败"
-    if "CREDENTIAL" in upper or "LOGIN" in upper:
+    if (
+        "CREDENTIAL" in upper
+        or "LOGIN" in upper
+        or "AUTHENTICATED_SESSION_REQUIRED" in upper
+    ):
         return "登录不可用"
     return "暂时不可用"
 

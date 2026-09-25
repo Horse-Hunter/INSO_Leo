@@ -308,6 +308,14 @@ class PlaywrightInsoReadOnlyBrowser:
                         raise InsoReadError("RESPONSE_NOT_JSON", url) from exc
                     rows = payload.get("rows") if isinstance(payload, dict) else None
                     if rows is None:
+                        if (
+                            isinstance(payload, dict)
+                            and str(payload.get("isLogin")).strip().casefold()
+                            in {"false", "0", "no"}
+                        ):
+                            raise InsoReadError(
+                                "AUTHENTICATED_SESSION_REQUIRED", url
+                            )
                         raise InsoReadError("RESPONSE_ROWS_MISSING", url)
                     records = parse_inso_history_rows(rows)
                 finally:

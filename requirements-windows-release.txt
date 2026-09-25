@@ -1,0 +1,9 @@
+# Validated release dependency set for CPython 3.12 / Windows x64.
+# Rebuild with: python -m pip install -r requirements-windows-release.txt
+customtkinter==6.0.0
+google-api-python-client==2.200.0
+google-auth-oauthlib==1.4.1
+openpyxl==3.1.5
+playwright==1.63.0
+websocket-client==1.9.0
+pyinstaller==6.16.0

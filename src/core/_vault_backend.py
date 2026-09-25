@@ -270,6 +270,10 @@ class _PowerShellVaultBackend:
                     timeout=20,
                     check=False,
                     env=env,
+                    # The windowed release calls the Vault for each site.
+                    # Keep its PowerShell console hidden while preserving
+                    # captured stdout/stderr and the existing DPAPI protocol.
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
             except FileNotFoundError as exc:
                 raise _BackendUnavailableError(

@@ -61,6 +61,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from src.core import CredentialProvider
+from src.core.app_paths import runtime_config_path
 
 from .bom_ai import (
     BomAiAdapter,
@@ -251,9 +252,7 @@ def _is_loopback_hostname(hostname: str) -> bool:
 def default_runtime_config_path() -> Path:
     """Return the default Git-ignored runtime configuration path."""
 
-    return (
-        Path(__file__).resolve().parents[2] / DEFAULT_RUNTIME_CONFIG_RELATIVE_PATH
-    )
+    return runtime_config_path("research.json")
 
 
 def load_runtime_config(path: str | Path | None = None) -> ResearchRuntimeConfig:
