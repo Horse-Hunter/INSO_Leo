@@ -74,7 +74,7 @@ def test_orders_appear_after_cycle(backend):
     assert order.status in {
         OrderStatus.COMPLETED,
         OrderStatus.PARTIAL,
-        OrderStatus.MANUAL_REVIEW,
+        OrderStatus.ERROR,
     }
 
 

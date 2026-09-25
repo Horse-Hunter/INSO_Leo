@@ -33,6 +33,7 @@ _RECENT_BLUE = "#93C5FD"
 _HISTORY_WHITE = "#FFFFFF"
 _WARNING_BG = "#FDE68A"
 _ERROR_BG = "#FCA5A5"
+_ERROR_TEXT = "#B91C1C"
 _GRAY = "#6B7280"
 _BORDER = "#2E2E2E"
 
@@ -55,7 +56,7 @@ def _status_color(status: str) -> str:
 
 def _order_row_style(order: Order, now: datetime | None = None) -> str:
     status = order.status.value.casefold()
-    if any(word in status for word in ("人工", "warning", "警告", "部分成功")):
+    if any(word in status for word in ("warning", "警告", "部分成功")):
         return "warning"
     if any(word in status for word in ("error", "failed", "异常", "错误")):
         return "error"
@@ -342,7 +343,7 @@ class InsoDashboardApp:
         self._tree.tag_configure("recent", background=_RECENT_BLUE, foreground="#111827")
         self._tree.tag_configure("legacy", background=_HISTORY_WHITE, foreground="#111827")
         self._tree.tag_configure("warning", background=_WARNING_BG, foreground="#111827")
-        self._tree.tag_configure("error", background=_ERROR_BG, foreground="#111827")
+        self._tree.tag_configure("error", background=_ERROR_BG, foreground=_ERROR_TEXT)
         style.configure(
             "Vertical.TScrollbar",
             background=_CARD_BG,

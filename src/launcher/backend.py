@@ -348,11 +348,11 @@ class ProductionBackend(GuiBackend):
                     if item.research_status == "PARTIAL_SUCCESS"
                     else OrderStatus.COMPLETED
                 ),
-                WorkflowStatus.MANUAL_REVIEW: OrderStatus.MANUAL_REVIEW,
-                WorkflowStatus.FAILED: OrderStatus.MANUAL_REVIEW,
+                WorkflowStatus.MANUAL_REVIEW: OrderStatus.ERROR,
+                WorkflowStatus.FAILED: OrderStatus.ERROR,
             }.get(item.status, OrderStatus.PENDING)
             if key in self._manual_inquiries:
-                status = OrderStatus.MANUAL_REVIEW
+                status = OrderStatus.ERROR
             results.append(
                 Order(
                     key,
@@ -394,7 +394,7 @@ class ProductionBackend(GuiBackend):
         status_map = {
             "SUCCESS": OrderStatus.COMPLETED,
             "PARTIAL_SUCCESS": OrderStatus.PARTIAL,
-            "MANUAL_REVIEW_REQUIRED": OrderStatus.MANUAL_REVIEW,
+            "MANUAL_REVIEW_REQUIRED": OrderStatus.ERROR,
             "RETRYABLE_FAILURE": OrderStatus.ERROR,
         }
         orders = tuple(

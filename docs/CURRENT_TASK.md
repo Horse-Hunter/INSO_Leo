@@ -7,7 +7,7 @@ Goal: 交付 INSO_V1.1 GUI usability 修正：补齐重要程度、展示 Excel 
 Business Outcome:
 - 操作员打开 GUI 即可看到调研结果 Excel 中的历史订单，而不只看到当前 run。
 - 表格补充“重要程度”，与 Research Excel 的“重要等级”原样一致。
-- 最近 24 小时处理/更新的结果以浅蓝色强调；24 小时以外或没有处理时间的旧历史记录使用白色。人工处理/异常的警示语义优先于新旧颜色。
+- 最近 24 小时处理/更新的结果以浅蓝色强调；24 小时以外或没有处理时间的旧历史记录使用白色。结果状态显示成功、部分成功或异常；异常状态使用红色字体。
 - 点击“本轮结束后停止”后，在本轮 due work 安全闭环期间按钮保持灰色禁用并显示“本轮订单处理中，正在安全结束…”，只有 backend 真正 STOPPED 后才恢复“开始询价”。
 - “下次轮询时间”改为“下轮询价倒计时”，运行时按 15 分钟周期实时显示 mm:ss；停止请求后立即归零，STOPPED 保持 00:00。
 
@@ -28,7 +28,7 @@ Acceptance:
 7. 颜色语义：
    - 最近 24h 且无警示状态：浅蓝色，推荐 #93C5FD 或与当前 dark theme 等价的高可读浅蓝；
    - >24h 或 processed_at 缺失：白色；
-   - MANUAL_REVIEW / error / warning 继续使用既有黄色/红色警示语义，并优先于 24h 浅蓝色；
+   - 部分成功使用警示色；所有失败及 Research 的人工复核结果在订单表显示为“异常”，使用红色字体；
    - 选中行仍必须清晰可读；
    - 在“询价结果”标题附近增加简洁图例：蓝色：24小时内｜白色：历史。
 8. stop-after-cycle UI：
@@ -80,7 +80,7 @@ Architecture Decision:
 Done:
 - GUI 表格展示 Research Excel 全历史结果；当前 run metrics/results 保持独立 Contract。
 - Research canonical Excel 新增 UTC ISO-8601“处理时间”和隐藏状态元数据；旧 schema 无损迁移，legacy 时间不推断。
-- 有持久化状态的记录展示真实 Research 结果状态；旧记录缺少状态时显示“--”，不以历史标签或推断值替代。
+- 有持久化状态的记录展示“成功 / 部分成功 / 异常”三类结果状态；Research 的 MANUAL_REVIEW_REQUIRED 映射为订单结果“异常”，运行级 MANUAL_REVIEW 仍保留用于人工验证流程提示。旧记录缺少状态时显示“--”，不以历史标签或推断值替代。
 - launcher 提供带 mtime/size 缓存的历史 snapshot 与真实 next-poll deadline；GUI 倒计时、颜色优先级和 stop-after-cycle 状态已适配。
 - MockBackend 提供独立历史示例；ruff、完整 deterministic pytest、diff 检查与 Windows mock GUI 目视 smoke 完成。
 
@@ -94,6 +94,7 @@ Owner Decisions:
 - 24 小时内普通记录使用浅蓝色强调；24 小时外及无时间 legacy 记录使用白色。
 - stop-after-cycle 灰色文案采用“本轮订单处理中，正在安全结束…”。
 - 结果区标题改为“询价结果”，图例显示“蓝色：24小时内｜白色：历史”。
+- 订单结果表状态只显示“成功 / 部分成功 / 异常”；异常使用红色字体。
 - 下轮轮询使用 mm:ss 倒计时；首次 poll 未建立 deadline 时显示“即将轮询”；停止后归零。
 - V1.1 完成后再做 EXE/Windows 发布。
 

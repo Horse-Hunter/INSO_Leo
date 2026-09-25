@@ -27,10 +27,9 @@ class RunState(str, Enum):
 class OrderStatus(str, Enum):
     """Per-order outcome as understood by the GUI."""
 
-    COMPLETED = "已完成"
+    COMPLETED = "成功"
     PARTIAL = "部分成功"
     PENDING = "待处理"
-    MANUAL_REVIEW = "待人工处理"
     ERROR = "异常"
     UNKNOWN = "--"
 

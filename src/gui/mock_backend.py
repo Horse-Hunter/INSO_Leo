@@ -273,9 +273,9 @@ class MockBackend(GuiBackend):
         min_price = Decimal(randint(50, 5_000)) / Decimal(100)
         total = (min_price * quantity).quantize(Decimal("0.01"))
         status = choice(
-            (OrderStatus.COMPLETED, OrderStatus.PARTIAL, OrderStatus.MANUAL_REVIEW)
+            (OrderStatus.COMPLETED, OrderStatus.PARTIAL, OrderStatus.ERROR)
         )
-        remark = "模拟结果，供界面演示" if status == OrderStatus.MANUAL_REVIEW else ""
+        remark = "模拟结果，供界面演示" if status == OrderStatus.ERROR else ""
 
         with self._lock:
             run_id = self._run_id or ""
@@ -301,8 +301,8 @@ class MockBackend(GuiBackend):
             orders = self._orders
             completed = sum(1 for o in orders if o.status == OrderStatus.COMPLETED)
             partial = sum(1 for o in orders if o.status == OrderStatus.PARTIAL)
-            manual = sum(1 for o in orders if o.status == OrderStatus.MANUAL_REVIEW)
-            pending = len(orders) - completed - partial - manual
+            errors = sum(1 for o in orders if o.status == OrderStatus.ERROR)
+            pending = len(orders) - completed - partial - errors
 
             return RunSession(
                 run_id=self._run_id,

@@ -6,6 +6,7 @@ from typing import get_type_hints
 
 from src.gui.app import (
     _ERROR_BG,
+    _ERROR_TEXT,
     _HISTORY_WHITE,
     _RECENT_BLUE,
     _WARNING_BG,
@@ -146,18 +147,20 @@ def test_history_row_color_window_and_warning_override():
     assert _order_row_style(
         replace(base, processed_at=now - timedelta(hours=24, seconds=1)), now
     ) == "legacy"
-    manual = Order(
-        "inq", "MPN", None, 1, "货多", None, None, OrderStatus.MANUAL_REVIEW,
+    exception_order = Order(
+        "inq", "MPN", None, 1, "货多", None, None, OrderStatus.ERROR,
         processed_at=now,
     )
     partial = Order(
         "inq", "MPN", None, 1, "货多", None, None, OrderStatus.PARTIAL,
         processed_at=now,
     )
-    assert _order_row_style(manual, now) == "warning"
+    assert _order_row_style(exception_order, now) == "error"
     assert _order_row_style(partial, now) == "warning"
     error = replace(base, status=OrderStatus.ERROR, processed_at=now)
     assert _order_row_style(error, now) == "error"
+    assert error.status.value == "异常"
+    assert _ERROR_TEXT == "#B91C1C"
 
 
 def test_countdown_uses_backend_deadline_and_stopped_states_are_zero():

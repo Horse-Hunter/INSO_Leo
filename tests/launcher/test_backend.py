@@ -310,7 +310,7 @@ def test_history_is_cached_and_uses_research_owned_excel(tmp_path, monkeypatch):
         "retryable", "partial", "newer", "older"
     ]
     assert [order.status.value for order in snapshot] == [
-        "异常", "部分成功", "待人工处理", "已完成"
+        "异常", "部分成功", "异常", "成功"
     ]
     assert snapshot[2].importance == "A"
     assert snapshot[3].total_price == Decimal("12.50")
