@@ -69,9 +69,10 @@ Next:
 2. 新建 Git-ignored runtime/production.json，使用已知生产 Spreadsheet / worksheet / OAuth client 路径与独立 production SQLite。
 3. 启动已授权 CDP Chrome，先做 readiness，再从 GUI production mode 执行真实 poll。
 4. 验证：GUI 可启动；真实 Sheets poll；有 pending 时 Excel/GUI 同 inquiry 一致；stop-after-cycle；第二次 Start dedup；OAuth 不重复弹窗；正常采集不主动抢前台。
-5. live smoke 通过后更新 Current Task -> READY_FOR_CEO_REVIEW，commit/push，再由 CEO 决定 merge main。
+5. 若当前 Codex 无法控制 Windows 原生窗口，采用 human-assisted smoke：Main Programmer 启动/监控生产 GUI，并明确告诉 Owner 何时只点击 Start、Stop-after-cycle 或窗口 X；其余技术验证仍由 Main Programmer完成，不要求恢复 Computer Use RPC。
+6. live smoke 通过后更新 Current Task -> READY_FOR_CEO_REVIEW，commit/push，再由 CEO 决定 merge main。
 
-Blockers: NONE。
+Blockers: NONE。当前 Codex 会话缺少 Windows native Computer Use RPC 不是产品 blocker；本轮 live smoke 允许 Owner 仅负责 GUI 物理点击，Main Programmer 继续通过进程、日志、SQLite、Excel 和 runtime 状态做技术验收。该人工辅助仅用于验收，不改变产品“一键 GUI 运行”的要求。
 Owner Decisions:
 - Production GUI 第一阶段默认保持 Google Sheet Brand 写回 disabled/no-op，不新增真实 Sheet 写副作用。
 - 当前阶段目标是先让 GUI 真正跑 V1；EXE 打包与开机自启放在后续阶段。
