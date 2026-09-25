@@ -1,6 +1,6 @@
 # Current Task
 
-Status: READY_FOR_CEO_REVIEW
+Status: BLOCKED
 
 Goal: 移除 Research 的订单人工复核结果。调研有报价时归为成功或部分成功；五个价格来源均完成但完全无报价时归为异常；仅技术失败且无报价时继续 Workflow retry。
 
@@ -41,14 +41,19 @@ Done:
 - Self-review 完成；未执行 live Research smoke。
 
 Current:
-- CEO 对 commits 5bc988e / 4d75c96 的 Research / Workflow 状态契约复审通过：SUCCESS/PARTIAL_SUCCESS/EXCEPTION/RETRYABLE_FAILURE 映射、无库存兜底、无报价 terminal FAILED、技术失败 retry、旧 MANUAL_REVIEW 兼容均与已确认业务语义一致。
-- CEO 指出的 GUI 24h 颜色过期 blocker 已修复并新增 deterministic regression；history getter 仍使用轻量内存缓存。
+- CEO 已确认 GUI 24h 颜色过期 blocker 修复正确：同一缓存 snapshot 跨 24h 时只更新 Treeview tag，不重读 Excel、不重绘整行；对应 regression test 覆盖有效。
+- Final Review 发现 1 个 Research/Workflow 状态迁移回归：WorkflowWorker._finish() 仍只在 final_status 为 COMPLETED 或旧 MANUAL_REVIEW 时执行 resolved_brand 的安全 Brand updater。旧行为下，“五源无报价 -> MANUAL_REVIEW_REQUIRED -> Workflow MANUAL_REVIEW”仍会尝试安全 Brand 写回；改成 EXCEPTION -> Workflow FAILED 后，同一业务场景不再执行 Brand updater。
+- 当前任务明确要求 Brand 写回安全边界/既有行为不变，因此这是状态重命名/映射带来的行为回归。Production launcher 当前 brand_updater=None，所以 live GUI 不会产生额外外部写，但 canonical Workflow Contract 仍需保持。
 
 Next:
-CEO Final Review；不要 merge main。
+1. Main Programmer 修复 EXCEPTION terminal 的 resolved_brand 安全写回语义，不要把“所有 FAILED”都加入 Brand write。
+2. 推荐按 Research result status 决定是否进入 Brand updater：SUCCESS / PARTIAL_SUCCESS / EXCEPTION 可以进入既有 safe Brand updater；RETRYABLE_FAILURE 及 retry 最终失败不得写 Brand。也可采用等价实现，但必须只恢复旧 no-quote/manual-review 场景原有行为。
+3. 增加 deterministic regression：EXCEPTION + resolved_brand 时 Workflow 最终状态仍为 FAILED、无 retry，但安全 Brand updater 会被调用；Brand conflict/失败不得改变 FAILED terminal 状态。另验证纯 RETRYABLE_FAILURE 第四次失败不会触发 Brand updater。
+4. 更新 WORKFLOW / PRODUCT_BASELINE（如需要）明确 terminal EXCEPTION 与 Brand updater 的关系，避免以后再次丢失该语义。
+5. rerun workflow/research/gui relevant tests、full deterministic pytest、ruff、git diff --check；commit/push 后再交 CEO Final Review，不 merge main。
 
 Blockers:
-NONE
+- EXCEPTION 替代旧 MANUAL_REVIEW_REQUIRED 后，resolved_brand 的既有安全写回路径被意外跳过；需恢复后才能合入 main。
 
 Owner Decisions:
 - 24 小时内普通记录使用浅蓝色强调；24 小时外及无时间 legacy 记录使用白色。
