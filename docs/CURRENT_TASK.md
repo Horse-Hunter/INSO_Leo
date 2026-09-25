@@ -1,6 +1,6 @@
 # Current Task
 
-Status: ACTIVE
+Status: READY_FOR_CEO_REVIEW
 
 Goal: 交付 INSO_V1.1 Windows 可发布版本：从已验收 main 生产基线构建可双击启动的 Windows 桌面包，解决 frozen runtime 路径、配置发现、单实例、日志/启动错误、CDP Chrome 启动/复用与发布包 smoke；不改变已验收业务规则。
 
@@ -122,13 +122,13 @@ Architecture Decision:
 - Python mode 与 frozen EXE 必须使用同一 ProductionBackend 与业务模块。
 - 首版选择 onedir，不选择 onefile；先保证银行内网环境下稳定、可审计、可排障。
 
-Done: Runtime root, single-instance guard, safe startup logging, CDP ownership, headless Chrome bootstrap and onedir packaging implemented. Frozen Core Provider bundles its canonical CredentialVault.psm1; the packaged read-only diagnostic confirms all three required Site IDs available without bundling Vault data. Vault PowerShell subprocesses now keep their console hidden. Build preflight initializes Tcl and the frozen EXE self-check verifies bundled GUI dependencies, preventing a package without tkinter. Clean build and generic artifact scan pass. Explorer-launched production GUI successfully polled the configured Sheets, silently reused OAuth, processed two real inquiries to terminal PARTIAL_SUCCESS, wrote matching SQLite/Excel rows, displayed history and countdown, rejected a second instance, drained stop-after-cycle, preserved one-attempt dedup, and closed gracefully on X. Owned CDP closed after stop; a pre-existing test CDP remained reachable after X. Owner confirmed no visible Chrome or PowerShell window in normal collection.
+Done: Runtime root, single-instance guard, safe startup logging, CDP ownership and onedir packaging are implemented. The frozen Core Provider bundles only its canonical PowerShell module, never Vault data; the packaged read-only diagnostic confirms the required Site IDs without exposing credentials. Vault subprocesses remain hidden. Explorer-launched production GUI successfully polled the configured Sheets with OAuth silent reuse, wrote terminal results to matching SQLite/Excel history, displayed countdown and history, rejected a second instance, drained stop-after-cycle, preserved dedup, and closed safely on X. Dedicated-profile authenticated collection now uses normal Chrome only for due work, creates no visible startup window, keeps owned windows hidden, and closes its owned browser after the due batch drains. It does not close a reused browser. IC.net HTTP rejection is classified explicitly. LCSC initializes its authenticated home session before search, preventing a false temporary-unavailable result. `SHAHAB` schema selection is case-insensitive while the original worksheet title remains the API and identity value, so the confirmed production title reads B/D/E/F correctly. The GUI no longer displays the unreliable pending count; partial success uses normal 24-hour blue/history white coloring and exceptions remain red. No price, MPN, stock, FX, retry or Google Sheet Brand-write rule changed.
 
-Current: Owner found results in ordinary Chrome that background Research marked unavailable, and requires authenticated site readiness before model collection. A read-only diagnostic in the dedicated CDP profile found IC.net RESULT_CONTAINER_MISSING, HQEW RESULT_NAVIGATION_FAILED, LCSC AUTHENTICATED_SESSION_REQUIRED, and INSO RESPONSE_ROWS_MISSING; the INSO response carried a false login-state flag. Ordinary Chrome and the dedicated CDP profile are separate sessions. Non-secret Vault inventory confirms configured records also exist for HQEW, LCSC and Findchips, but the current HQEW/LCSC CDP adapters do not consume them, while IC.net CDP and INSO CDP do not establish a session from their Vault records. Vault presence is therefore not proof of authenticated CDP readiness. Research now classifies confirmed LCSC/INSO expired-session signals as login unavailable, so launcher can fail closed for human handling rather than continue polling with a misleading temporary-unavailable remark. No price, MPN, stock, FX or retry rule changed. The latest rebuilt EXE includes these fixes and passed frozen GUI self-check.
+Current: Owner completed the approved dedicated-profile login and latest packaged smoke. Production collection has no visible Chrome or PowerShell interruption, and the latest SHAHAB pending-order discovery and GUI changes were confirmed.
 
-Next: Define and verify site-specific authenticated readiness for the required sources before model collection, using the existing Core Provider only within approved login flows and failing closed on CAPTCHA/OTP/device checks. Owner agreed to perform legitimate manual login in the approved dedicated CDP profile at a later time. Recheck IC.net/HQEW/LCSC/INSO outcomes after that login without exposing credentials or page data, then finish packaged smoke and CEO review.
+Next: CEO final review, then merge decision. The follow-on soak phase remains separate.
 
-Blockers: Authenticated readiness is not yet proven for all required sites. Owner deferred the necessary dedicated-profile manual login. IC.net/HQEW behavior after that login remains UNKNOWN. Do not put credential values in this task file or Git.
+Blockers: NONE.
 
 Owner Decisions:
 - 发布名称：INSO_V1.1。
@@ -139,4 +139,4 @@ Owner Decisions:
 
 Branch: feature/v1-1-windows-release
 
-Last Good Commit: ed27a0dcd0a4b9ece353f996ab85ed350f97913c
+Last Good Commit: a01d627c
