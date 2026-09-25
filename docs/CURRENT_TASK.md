@@ -1,6 +1,6 @@
 # Current Task
 
-Status: BLOCKED
+Status: READY_FOR_CEO_REVIEW
 
 Goal: 交付 INSO_V1.1 Windows 可发布版本：从已验收 main 生产基线构建可双击启动的 Windows 桌面包，解决 frozen runtime 路径、配置发现、单实例、日志/启动错误、CDP Chrome 启动/复用与发布包 smoke；不改变已验收业务规则。
 
@@ -130,27 +130,23 @@ Current:
 - Browser acquisition failure is fail-closed. If readiness cannot be proven after an owned browser is acquired, launcher closes that owned handle before entering manual handling. A packaged negative-path smoke used an isolated runtime with an unreachable CDP and no bootstrap config; the GUI showed “需要人工处理”, did not start Chrome, and its isolated queue retained zero attempts and no Research status.
 - CEO Final Review found one release-build hygiene blocker that also explains the Owner-observed project growth from roughly 5 GB to 8 GB during repeated package testing. `scripts/build_windows_release.ps1` creates fresh GUID paths `build/release-dist-<id>` and `build/pyinstaller-<id>` for every build. `$stageWork` is never deleted, and `-BuildOnly` also leaves every `$stageDist` behind. Repeated clean builds therefore accumulate large PyInstaller staging trees indefinitely.
 
-Next:
-1. Fix `scripts/build_windows_release.ps1` so repeated builds do not monotonically grow the repo/worktree.
-2. Preserve the safety rule that an existing deployed `dist/INSO_V1.1` containing local runtime data is never deleted or overwritten automatically.
-3. Recommended simple design: use a stable throwaway staging area under `build/` (or unique temp dirs with a guaranteed `finally` cleanup). Always remove PyInstaller work files after the build. `-BuildOnly` may retain at most one current staging artifact for scan/self-check, but starting the next BuildOnly must safely replace only that known throwaway staging path.
-4. Never clean `runtime/`, Vault, browser profiles, SQLite, Excel, `.venv-release`, or any worktree. Do not generic-recursively clean `build/` if unknown operator files may exist; target only paths owned by the release script.
-5. Add a deterministic/manual build verification: run two consecutive clean `-BuildOnly` builds and confirm the number/size of release staging directories does not grow per run; run artifact scan/self-check on the retained current staging artifact.
-6. After the script fix is proven, it is acceptable to remove only stale directories matching the old script-owned patterns `build/release-dist-*` and `build/pyinstaller-*`, report reclaimed size, and leave all runtime/data/profile/worktree content untouched.
-7. 完成 release-script 修复后，对整个项目根目录做一次磁盘占用审计并安全瘦身，而不只清理本轮 build staging：
-   - 先按顶层目录、`.worktrees/` 子目录、`build/`、`dist/`、虚拟环境和常见 cache 分别统计实际占用并记录清理前大小；
-   - 可删除：确认可重建且不含业务数据的旧 PyInstaller staging、`__pycache__`、`.pytest_cache`、`.ruff_cache`、临时测试/构建缓存，以及已确认废弃且干净的 release artifact；
-   - 对 Git worktree 只能先用 `git worktree list` / status 核实。仅对已经完成、干净、无保留价值的旧开发 worktree 使用正规的 `git worktree remove`；不得直接资源管理器删除；
-   - 明确保留历史 Research runtime worktree，以及任何仍有未提交改动、runtime 数据或后续可能继续使用的 worktree；
-   - `.venv-release` / 其他虚拟环境先统计。若仍用于可复现构建则默认保留；只有明确存在重复/废弃环境并确认可重建时才删；
-   - 不得删除或迁移 `runtime/`、Vault、OAuth grant/client、browser profile、SQLite、Excel、credential/cookie、`.git/`、当前 active release worktree 或任何客户数据；
-   - 不使用“按文件大小盲删”或整个项目递归清空 cache 之外的未知目录。遇到用途不明的大目录先报告 CEO/Owner。
-8. 瘦身完成后再次统计顶层及主要子目录大小，报告总项目目录“清理前 / 清理后 / 释放空间”，并列出实际删除的目录类型；不得在报告中泄露 secret/path 中的敏感内容。
-9. Re-run ruff/full deterministic pytest/diff-check only if Python code changes; otherwise PowerShell build/self-check/artifact scan plus the two-build no-growth verification is sufficient.
-10. commit/push current branch and return to CEO Final Review; do not merge main.
+Closeout:
+- `scripts/build_windows_release.ps1` now uses the single marked staging root `build/windows-release-stage`; each next build replaces only this verified script-owned root. PyInstaller work is removed in `finally`; the root is retained only for a successful `-BuildOnly` artifact. A previous stage with missing ownership marker, unexpected children, a leftover work tree, or runtime-data scan findings is preserved and causes a fail-closed error. An existing deployed `dist/INSO_V1.1` is still never replaced.
+- Two consecutive final-version `-BuildOnly` builds succeeded. Each passed frozen `--self-check` and `RELEASE_SCAN_OK`; after each, exactly one fixed BuildOnly artifact remained at 0.246 GiB and no work directory remained. The second build did not add a staging tree or increase staging size.
+- Pre-clean project root: 12,868,357,503 bytes / 11.985 GiB. Post-clean: 6,521,603,147 bytes / 6.074 GiB. Net project-root reduction: 6,346,754,356 bytes / 5.911 GiB. `.worktrees/` went from 11.970 GiB to 6.056 GiB; active release `build/` is 4.939 GiB, deployed `dist/` is 0.246 GiB, and `.venv-release` is 0.260 GiB.
+- Removed all 23 old GUID PyInstaller work trees and all 23 old GUID release staging trees after a clean artifact scan. Removed 17 source/test standard cache directories (1.61 MiB). The first cleanup attempt met a Windows access denial on DLLs loaded from two old release staging copies. No process was terminated. After Owner confirmed there was no GUI or real Research, the read-only process snapshot showed zero `INSO_V1.1.exe` processes; both remaining trees were rescanned and safely removed.
+- Latest packaged process-lifecycle smoke: started the current BuildOnly EXE with `--mock` (no Sheets poll or Research), confirmed its GUI window appeared, sent the normal window-close message, observed exit code 0, waited seven seconds, then observed zero `INSO_V1.1.exe` processes. No ghost process remained. The smoke generated a sanitized startup log under the staging app's local `runtime/logs`; it was retained. The build script now refuses to replace any existing staging artifact that contains a `runtime` directory, preserving local runtime data.
+- Preserved 18 ambiguous old-release/recovery entries totaling 4.41 GiB (`UNKNOWN_LARGE_DIRECTORIES`) for CEO/Owner classification. Also preserved the real deployed release, all worktrees (including the protected Research runtime worktree), `.venv-release` and its caches, generic temporary Tcl/Tk copies, test SQLite/Excel data, runtime/Vault/OAuth/profile data, and every other unknown item. No worktree was removed.
+- Only PowerShell build script and this task document changed; no Python runtime/business code changed. Validation: PowerShell parser, `git diff --check`, two consecutive clean Windows PyInstaller builds with stable staging size and no work tree, frozen self-check, and `RELEASE_SCAN_OK`. Full Python test suite was not rerun because Python source was unchanged.
+- No live Research smoke or production Sheets poll was run as part of this storage/build-maintenance task.
+
+Remaining review notes:
+- `UNKNOWN_LARGE_DIRECTORIES`: 18 old-release/recovery entries totaling 4.41 GiB remain because their contents may be useful and were not approved for deletion.
+- The successful lifecycle smoke left a sanitized local startup log inside the fixed BuildOnly staging artifact. It was kept as runtime data; a later clean BuildOnly replacement will fail closed until that local runtime directory is reviewed.
+- Commit/push this branch for CEO review; do not merge main.
 
 Blockers:
-- Release build script leaks per-build PyInstaller staging directories under `build/`, causing multi-GB disk growth during repeated packaging.
+- No remaining code blocker. The retained unknown backups and process-held staging copies are conservative cleanup boundaries documented above for CEO/Owner review.
 
 Owner Decisions:
 - 发布名称：INSO_V1.1。
