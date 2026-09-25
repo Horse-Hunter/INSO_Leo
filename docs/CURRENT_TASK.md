@@ -134,46 +134,45 @@ Closeout:
 - The accepted build-script no-growth repair remains unchanged: one marked `build/windows-release-stage`, guaranteed PyInstaller work cleanup, `-BuildOnly` retains at most one artifact, runtime-bearing staging is protected, and deployed `dist/INSO_V1.1` is never replaced. The two accepted consecutive BuildOnly builds, frozen self-checks, `RELEASE_SCAN_OK`, and lifecycle smoke remain as recorded above. The lifecycle smoke log under the fixed stage's `runtime/logs` was retained.
 - Classified all 18 old release/recovery candidates in the active release worktree's `build/`. All passed `scripts/scan_release_artifact.py`; all had zero reparse points, Git metadata, runtime/config/credential data, browser profile paths, SQLite/Excel/customer-data file types, or unknown top-level source/operator files. All matched known PyInstaller onedir or extracted `_internal` layouts.
 - Deleted only `build/release-internal-backup-5b913b70e83b4ade806009e7f3f8771f` (257,760,781 bytes / 245.80 MiB). Its 2,174-file payload was byte-for-byte identical to the retained `release-program-backup-35bb323de96c4ad882eb0986c7064ce6/_internal`; it had no EXE or unique files. It was a direct child of the active worktree's `build/`, not a Git worktree, active stage, or deployed release. No process was running and no protected data was touched.
-- The other 17 complete onedir snapshots remain `KEEP_UNKNOWN`: their full package fingerprints differ, and their exact source/version recovery value is not proven. They total 4,485,457,917 bytes / 4.177 GiB. Per-candidate non-sensitive inventory (relative category/name, size, modified time, top-level shape, layout and scan result):
+- At the initial audit, the following 17 complete onedir snapshots were `KEEP_UNKNOWN`. CEO subsequently approved their removal because the canonical source/version history and reproducible build recipe are retained. All 17 exact paths have now been deleted. Per-candidate non-sensitive inventory recorded before deletion (relative category/name, size, modified time, top-level shape and layout):
 
 | Candidate under `build/` | Size | Modified (local) | First-level shape | Classification |
 |---|---:|---|---|---|
-| `deployed-backup-66c368a40e044b41a482944fc22af1f9` | 251.91 MiB | 2026-09-25 16:59 | 1 EXE + `_internal/`; 2,170 files | KEEP_UNKNOWN, onedir |
-| `deployed-backup-e8f8f5ae474a4b11accdf26a27cab668` | 252.18 MiB | 2026-09-25 16:32 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
-| `release-internal-backup-5b913b70e83b4ade806009e7f3f8771f` | 245.80 MiB | 2026-09-25 15:25 | 98 top-level `_internal` payload entries; 2,174 files | DELETE_SAFE, exact duplicate |
-| `release-old-package-196f282695c04d98afe3fcbfdc566830` | 252.16 MiB | 2026-09-25 13:23 | 1 EXE + `_internal/`; 2,174 files | KEEP_UNKNOWN, onedir |
-| `release-old-package-a5146bb39fed4040bc176a116ef1efc5` | 252.16 MiB | 2026-09-25 13:32 | 1 EXE + `_internal/`; 2,174 files | KEEP_UNKNOWN, onedir |
-| `release-old-package-af8878a830024ecb925381d9e2eb50f1` | 252.17 MiB | 2026-09-25 13:55 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
-| `release-old-package-b3437d38a8d8445c94d777729071268d` | 252.16 MiB | 2026-09-25 13:14 | 1 EXE + `_internal/`; 2,174 files | KEEP_UNKNOWN, onedir |
-| `release-old-package-b98987c0a3e542bda93ab1c8356c9e7a` | 252.16 MiB | 2026-09-25 13:50 | 1 EXE + `_internal/`; 2,174 files | KEEP_UNKNOWN, onedir |
-| `release-program-backup-35bb323de96c4ad882eb0986c7064ce6` | 252.17 MiB | 2026-09-25 15:33 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
-| `release-program-backup-6cc5edd74f2a401e8df3ea4ba2b9637a` | 252.18 MiB | 2026-09-25 16:09 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
-| `release-program-backup-937696ed6e164879ae81e91917444f49` | 252.17 MiB | 2026-09-25 15:15 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
-| `release-program-backup-a39bdba5107c4f5db5fe8555947c6815` | 252.18 MiB | 2026-09-25 15:42 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
-| `release-program-backup-e5aa4a0c77b64897baa81ca06ac3cc73` | 252.17 MiB | 2026-09-25 15:07 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
-| `release-program-backup-e753939cffe34fe796ac4cb9a02c8d18` | 252.18 MiB | 2026-09-25 16:01 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
-| `release-program-backup-eec25bd81642445391317cd67ad8f31d` | 250.91 MiB | 2026-09-25 15:25 | 1 EXE + `_internal/`; 2,174 files | KEEP_UNKNOWN, onedir |
-| `replaced-release-69b43485062b4fda9dc525ea721297a6` | 252.17 MiB | 2026-09-25 14:28 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
-| `replaced-release-ac9fabf9317a4aaa96a9da695fca47ef` | 244.47 MiB | 2026-09-25 14:12 | 1 EXE + `_internal/`; 1,245 files | KEEP_UNKNOWN, onedir |
-| `replaced-release-ee01dc2443114a8aa800b66715f0010f` | 252.17 MiB | 2026-09-25 14:06 | 1 EXE + `_internal/`; 2,175 files | KEEP_UNKNOWN, onedir |
+| `deployed-backup-66c368a40e044b41a482944fc22af1f9` | 251.91 MiB | 2026-09-25 16:59 | 1 EXE + `_internal/`; 2,170 files | DELETED, CEO-approved onedir snapshot |
+| `deployed-backup-e8f8f5ae474a4b11accdf26a27cab668` | 252.18 MiB | 2026-09-25 16:32 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
+| `release-internal-backup-5b913b70e83b4ade806009e7f3f8771f` | 245.80 MiB | 2026-09-25 15:25 | 98 top-level `_internal` payload entries; 2,174 files | DELETED, earlier exact duplicate |
+| `release-old-package-196f282695c04d98afe3fcbfdc566830` | 252.16 MiB | 2026-09-25 13:23 | 1 EXE + `_internal/`; 2,174 files | DELETED, CEO-approved onedir snapshot |
+| `release-old-package-a5146bb39fed4040bc176a116ef1efc5` | 252.16 MiB | 2026-09-25 13:32 | 1 EXE + `_internal/`; 2,174 files | DELETED, CEO-approved onedir snapshot |
+| `release-old-package-af8878a830024ecb925381d9e2eb50f1` | 252.17 MiB | 2026-09-25 13:55 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
+| `release-old-package-b3437d38a8d8445c94d777729071268d` | 252.16 MiB | 2026-09-25 13:14 | 1 EXE + `_internal/`; 2,174 files | DELETED, CEO-approved onedir snapshot |
+| `release-old-package-b98987c0a3e542bda93ab1c8356c9e7a` | 252.16 MiB | 2026-09-25 13:50 | 1 EXE + `_internal/`; 2,174 files | DELETED, CEO-approved onedir snapshot |
+| `release-program-backup-35bb323de96c4ad882eb0986c7064ce6` | 252.17 MiB | 2026-09-25 15:33 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
+| `release-program-backup-6cc5edd74f2a401e8df3ea4ba2b9637a` | 252.18 MiB | 2026-09-25 16:09 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
+| `release-program-backup-937696ed6e164879ae81e91917444f49` | 252.17 MiB | 2026-09-25 15:15 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
+| `release-program-backup-a39bdba5107c4f5db5fe8555947c6815` | 252.18 MiB | 2026-09-25 15:42 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
+| `release-program-backup-e5aa4a0c77b64897baa81ca06ac3cc73` | 252.17 MiB | 2026-09-25 15:07 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
+| `release-program-backup-e753939cffe34fe796ac4cb9a02c8d18` | 252.18 MiB | 2026-09-25 16:01 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
+| `release-program-backup-eec25bd81642445391317cd67ad8f31d` | 250.91 MiB | 2026-09-25 15:25 | 1 EXE + `_internal/`; 2,174 files | DELETED, CEO-approved onedir snapshot |
+| `replaced-release-69b43485062b4fda9dc525ea721297a6` | 252.17 MiB | 2026-09-25 14:28 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
+| `replaced-release-ac9fabf9317a4aaa96a9da695fca47ef` | 244.47 MiB | 2026-09-25 14:12 | 1 EXE + `_internal/`; 1,245 files | DELETED, CEO-approved onedir snapshot |
+| `replaced-release-ee01dc2443114a8aa800b66715f0010f` | 252.17 MiB | 2026-09-25 14:06 | 1 EXE + `_internal/`; 2,175 files | DELETED, CEO-approved onedir snapshot |
 
-- Project-root storage immediately before this deletion: 6,524,709,436 bytes / 6.077 GiB. After: 6,266,948,655 bytes / 5.837 GiB. Reclaimed: 257,760,781 bytes / 0.240 GiB. Candidate totals: 18; DELETE_SAFE 1 / 245.80 MiB; KEEP_UNKNOWN 17 / 4.177 GiB. The separate deployed `dist/INSO_V1.1`, all worktrees, `.venv-release`, runtime/Vault/OAuth/profile data, SQLite/Excel/customer data, and the fixed BuildOnly staging runtime log were preserved.
-- Only this task document changed in Git; no Python/business code or build script changed. Validation: all 18 artifact scans reported `RELEASE_SCAN_OK`; `git diff --check` is run for this closeout. No real Sheets/Research smoke was run.
+- For this CEO-approved 17-path deletion: `BEFORE_TOTAL_GB=6.266973` (6,266,973,161 bytes); `AFTER_TOTAL_GB=1.781515` (1,781,515,244 bytes); `RECLAIMED_GB=4.485458` (4,485,457,917 bytes). All 17 exact paths are absent. Across the original 18 classified candidates, DELETE_SAFE=18 and KEEP_UNKNOWN=0. The deployed `dist/INSO_V1.1`, fixed `build/windows-release-stage`, `.venv-release`, all 19 Git worktrees, runtime/Vault/OAuth/profile data, SQLite/Excel/customer data were preserved. INSO process count was 0 before and after deletion.
+- Only this task document changed in Git; no Python/business code or build script changed. Validation: all 18 artifact scans reported `RELEASE_SCAN_OK`; `git diff --check` passed. No real Sheets/Research smoke was run.
 
 CEO Final Review:
 - `884a08b611a94bf733e170ff4370512cd084ce08` build-script fix accepted. CEO sync commit `0a83109fa5d830ef7f4bc9e219a54105bd2f6d37` is preserved.
-- Local-only classification is complete. Based on the recorded evidence, CEO now classifies the remaining 17 `KEEP_UNKNOWN` entries as `DELETE_SAFE_OLD_RELEASE_SNAPSHOT` for local storage purposes:
+- Local-only classification is complete. Based on the recorded evidence, CEO classified the remaining 17 entries as `DELETE_SAFE_OLD_RELEASE_SNAPSHOT` for local storage purposes:
   * every entry is a complete PyInstaller onedir-style release snapshot under the active release worktree's ignored `build/`;
   * every entry passed `RELEASE_SCAN_OK`;
   * none contains runtime/config/Vault/OAuth/profile/cookie/SQLite/Excel/customer data, Git metadata, reparse points, or unknown top-level operator/source files;
   * none is a Git worktree, active fixed BuildOnly stage, current deployed `dist/INSO_V1.1`, or canonical source tree;
   * canonical source/version history is retained in Git and the current reproducible release recipe/locked requirements are retained in the repo, so these binary snapshots are not required as the source of truth.
-- Therefore delete all 17 remaining old release/recovery snapshots listed above from the local ignored `build/` area. Do not touch the fixed `build/windows-release-stage`, deployed `dist/INSO_V1.1`, any worktree, runtime, Vault/OAuth/profile, SQLite/Excel/customer data, or `.venv-release`.
-- Before deletion confirm zero `INSO_V1.1.exe` processes. Delete only the exact 17 previously classified paths; do not use wildcard cleanup beyond that reviewed set.
-- After deletion report project BEFORE/AFTER/RECLAIMED and verify the 17 exact paths are absent while protected paths remain. No real Sheets/Research run is required. Then update this task to `READY_FOR_CEO_REVIEW`, commit/push, and return for final merge decision.
+- The 17 exact paths listed above were deleted individually after confirming zero `INSO_V1.1.exe` processes. Verification confirmed every target absent, protected paths present, all 19 worktrees unchanged, and process count still zero. No wildcard build cleanup was used.
+- No real Sheets/Research run was required. This task is READY_FOR_CEO_REVIEW; return for final merge decision.
 
 Blockers:
-- Final local deletion of the 17 CEO-approved old release snapshots is pending. No code blocker remains.
+- NONE.
 
 Owner Decisions:
 - 发布名称：INSO_V1.1。
@@ -184,4 +183,4 @@ Owner Decisions:
 
 Branch: feature/v1-1-windows-release
 
-Last Good Commit: 0a83109fa5d830ef7f4bc9e219a54105bd2f6d37
+Last Good Commit: 1184ba2940dd49b1afb802b832ba6ea54299f350
