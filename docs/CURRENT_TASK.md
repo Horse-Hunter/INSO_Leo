@@ -1,6 +1,6 @@
 # Current Task
 
-Status: READY_FOR_CEO_REVIEW
+Status: BLOCKED
 
 Goal: 移除 Research 的订单人工复核结果。调研有报价时归为成功或部分成功；五个价格来源均完成但完全无报价时归为异常；仅技术失败且无报价时继续 Workflow retry。
 
@@ -38,11 +38,20 @@ Done:
 - `ruff check --no-cache src tests`、完整 deterministic pytest（360 passed, 10 skipped）、`git diff --check` 通过。
 - Self-review 完成；未执行 live Research 或 GUI smoke（改动限于 Research/Workflow 状态契约，deterministic evidence 覆盖新路径）。
 
-Current: 实现、自审和 deterministic 验收完成；等待 CEO Review。
+Current:
+- CEO 对 commits 5bc988e / 4d75c96 的 Research / Workflow 状态契约复审通过：SUCCESS/PARTIAL_SUCCESS/EXCEPTION/RETRYABLE_FAILURE 映射、无库存兜底、无报价 terminal FAILED、技术失败 retry、旧 MANUAL_REVIEW 兼容均与已确认业务语义一致。
+- 但在同一 feature branch 的 V1.1 GUI 最终复审中发现 1 个 blocker：src/gui/app.py 的 _refresh_results() 在 Order 对象未变化时直接 continue，因此行样式不会随时间重新计算。某条记录初次以“24小时内”浅蓝显示后，即使跨过 24 小时边界，只要 history snapshot 内容没变化，该行仍会保持浅蓝，违反“24小时外白色”的已确认规则。
+- 这不是 Research/Workflow contract blocker，但会阻止整个 V1.1 branch 合入 main。
 
-Next: CEO Review；通过后再进入 main。
+Next:
+1. Main Programmer 修复历史行 24h 颜色随时间边界自动从 recent -> legacy 更新，不能通过每秒重读 Excel 实现。
+2. 建议仅在 GUI 内缓存/比较 row style tag：即使 Order snapshot 相同，也重新计算轻量 _order_row_style；只有 tag 变化时更新 Treeview row tag，避免整行无意义 redraw。
+3. 新增 deterministic regression：同一 Order / 同一 history snapshot 内容不变，仅“当前时间”跨过 24h，第二次 refresh 后 tag 必须从 recent 变为 legacy。
+4. rerun ruff、GUI relevant tests、full deterministic pytest、git diff --check；Windows mock GUI 目视 smoke 可复用/补一次。
+5. commit/push 后交 CEO Final Review；不要 merge main。
 
-Blockers: NONE
+Blockers:
+- GUI 24h 行颜色不会在 snapshot 不变时自动过期；需修复后才能合入 main。
 
 Owner Decisions:
 - 24 小时内普通记录使用浅蓝色强调；24 小时外及无时间 legacy 记录使用白色。
