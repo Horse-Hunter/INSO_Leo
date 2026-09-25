@@ -268,3 +268,22 @@ Remaining UNKNOWN requiring Safety-reviewed read-only discovery, not CEO product
 - Screenshot regions/redaction masks that are actually safe on the live page.
 
 No real write, real notification delivery, or production smoke is authorized by this architecture approval.
+
+
+## CEO Safety Review decisions
+
+Safety commit `72b60c72738ed19c05e010bb592d9301a6af74d3` is accepted. B1-B4 are implementation blockers for any live-capable path and are mandatory Main Programmer work, not optional recommendations.
+
+Frozen implementation decision for AI-recognition MPN comparison:
+- define a separate policy/version `ai-mpn-v1`;
+- normalization semantics are Unicode NFKC + outer trim + ASCII uppercase, then exact equality;
+- preserve every internal separator, punctuation mark and whitespace character;
+- no fuzzy/suffix/prefix guessing;
+- it may share low-level normalization primitives with `dup-mpn-v1`, but it remains a distinct named/versioned contract so either policy can evolve independently.
+
+Approved development scope after this review:
+- fake-only/public contracts, additive SQLite persistence, event/alert state, migration/backup implementation against synthetic databases, deterministic safety guards/tests, and browser/session ownership refactoring are allowed;
+- B2 may implement the durable `UNKNOWN_WRITE_OUTCOME` state and reconciliation interface, but no live Save Data implementation can be enabled until discovery proves a stable saved-record identity/read-back contract;
+- no live INSO write, no real SMTP delivery, no production smoke, and no live read-only discovery is authorized by this decision.
+
+A future read-only discovery execution remains a separate gate. Main may prepare the inspector and deterministic tests, but must not run it against production until CEO/Owner explicitly authorizes the target/session/scope.
