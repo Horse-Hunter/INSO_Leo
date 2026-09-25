@@ -32,7 +32,7 @@ def test_status_catalog_is_exact() -> None:
     assert {status.value for status in ResearchStatus} == {
         "SUCCESS",
         "PARTIAL_SUCCESS",
-        "MANUAL_REVIEW_REQUIRED",
+        "EXCEPTION",
         "RETRYABLE_FAILURE",
     }
 

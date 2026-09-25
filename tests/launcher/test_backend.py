@@ -285,9 +285,14 @@ def test_history_is_cached_and_uses_research_owned_excel(tmp_path, monkeypatch):
         processed_at=datetime(2026, 1, 3, tzinfo=timezone.utc),
     )
     output.upsert(
+        "exception", importance_raw="D", mpn="NO-QUOTE", quantity=1,
+        research_status="EXCEPTION",
+        processed_at=datetime(2026, 1, 4, 12, tzinfo=timezone.utc),
+    )
+    output.upsert(
         "retryable", importance_raw="D", mpn="RETRYABLE", quantity=1,
         research_status="RETRYABLE_FAILURE",
-        processed_at=datetime(2026, 1, 4, tzinfo=timezone.utc),
+        processed_at=datetime(2026, 1, 5, tzinfo=timezone.utc),
     )
     backend = ProductionBackend(
         config_path=tmp_path / "missing-research.json",
@@ -307,13 +312,13 @@ def test_history_is_cached_and_uses_research_owned_excel(tmp_path, monkeypatch):
     snapshot = backend.get_result_history()
     assert reads == 1
     assert [order.inquiry_id for order in snapshot] == [
-        "retryable", "partial", "newer", "older"
+        "retryable", "exception", "partial", "newer", "older"
     ]
     assert [order.status.value for order in snapshot] == [
-        "异常", "部分成功", "异常", "成功"
+        "异常", "异常", "部分成功", "异常", "成功"
     ]
-    assert snapshot[2].importance == "A"
-    assert snapshot[3].total_price == Decimal("12.50")
+    assert snapshot[3].importance == "A"
+    assert snapshot[4].total_price == Decimal("12.50")
     backend.get_result_history()
     backend._refresh_history()
     assert reads == 1

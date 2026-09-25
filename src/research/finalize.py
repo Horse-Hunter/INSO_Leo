@@ -31,13 +31,6 @@ def finalize_research_result(
             remarks=remarks,
         )
 
-    if status is ResearchStatus.MANUAL_REVIEW_REQUIRED and not (
-        remarks and remarks.strip()
-    ):
-        raise ValueError(
-            "MANUAL_REVIEW_REQUIRED requires a persisted human-intervention reason"
-        )
-
     try:
         output.upsert(
             inquiry_id,

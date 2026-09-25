@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import pytest
 from openpyxl import load_workbook
 
 from src.research.contracts import ResearchStatus
@@ -57,27 +56,14 @@ def test_excel_failure_becomes_retryable_failure() -> None:
     assert result.inquiry_id == "inq_1"
 
 
-def test_manual_review_requires_non_blank_reason(tmp_path: Path) -> None:
-    output = ResearchExcelOutput(tmp_path / "调研价格.xlsx")
-
-    with pytest.raises(ValueError):
-        finalize_research_result(
-            output=output,
-            inquiry_id="inq_1",
-            importance_raw="A",
-            status=ResearchStatus.MANUAL_REVIEW_REQUIRED,
-            remarks=" ",
-        )
-
-
-def test_manual_review_reason_and_importance_are_persisted(tmp_path: Path) -> None:
+def test_exception_reason_and_importance_are_persisted(tmp_path: Path) -> None:
     path = tmp_path / "调研价格.xlsx"
     result = finalize_research_result(
         output=ResearchExcelOutput(path),
         inquiry_id="inq_1",
         importance_raw="C",
-        status=ResearchStatus.MANUAL_REVIEW_REQUIRED,
-        remarks="需要人工介入",
+        status=ResearchStatus.EXCEPTION,
+        remarks="所有价格来源均无报价",
     )
 
     worksheet = load_workbook(path).active
@@ -86,6 +72,6 @@ def test_manual_review_reason_and_importance_are_persisted(tmp_path: Path) -> No
         for column in range(1, worksheet.max_column + 1)
     }
 
-    assert result.status is ResearchStatus.MANUAL_REVIEW_REQUIRED
+    assert result.status is ResearchStatus.EXCEPTION
     assert worksheet.cell(2, headers[IMPORTANCE_HEADER]).value == "C"
-    assert worksheet.cell(2, headers["备注"]).value == "需要人工介入"
+    assert worksheet.cell(2, headers["备注"]).value == "所有价格来源均无报价"

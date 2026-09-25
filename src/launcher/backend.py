@@ -394,6 +394,7 @@ class ProductionBackend(GuiBackend):
         status_map = {
             "SUCCESS": OrderStatus.COMPLETED,
             "PARTIAL_SUCCESS": OrderStatus.PARTIAL,
+            "EXCEPTION": OrderStatus.ERROR,
             "MANUAL_REVIEW_REQUIRED": OrderStatus.ERROR,
             "RETRYABLE_FAILURE": OrderStatus.ERROR,
         }

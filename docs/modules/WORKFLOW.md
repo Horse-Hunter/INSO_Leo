@@ -21,12 +21,13 @@ duplicate prevention 和模块衔接。只消费模块 Public Contract，不承�
 - V1 不使用 UUID。`inquiry_id` 使用由 dedup identity 确定性派生的非 UUID
   内部格式，持久化到本地 SQLite 并传给 Research，不写入 Google Sheets。
 - 状态仅为：`QUEUED`、`RESEARCHING`、`RETRY_WAIT`、`COMPLETED`、
-  `MANUAL_REVIEW`、`FAILED`。
+  `FAILED`；旧 SQLite 记录中的 `MANUAL_REVIEW` 仅保留兼容读取。
 - ResearchInput 使用 canonical 字段：`inquiry_id`、`mpn`、`brand`、
   `quantity`、`importance_raw`；其中 Sheets 提供的 `importance_raw` 原样透传。
 - `SUCCESS` 和 `PARTIAL_SUCCESS` 映射为 `COMPLETED`；
-  `MANUAL_REVIEW_REQUIRED` 映射为 `MANUAL_REVIEW`；
+  `EXCEPTION` 映射为 `FAILED` 且不 retry；
   `RETRYABLE_FAILURE` 进入 retry。
+- 已有 SQLite 中的 `MANUAL_REVIEW` 状态继续兼容读取，但新 Research 结果不再映射到该状态。
 - `resolved_brand` 存在时，Workflow 把原始 opaque identity 和 Brand 交给
   Sheets safe Brand update。Brand conflict 不覆盖人工值，也不撤销已经完成的
   Research 状态。

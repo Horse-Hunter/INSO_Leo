@@ -184,7 +184,7 @@ def test_worker_processes_one_item_at_a_time_and_passes_canonical_input(
     [
         (ResearchStatus.SUCCESS, WorkflowStatus.COMPLETED),
         (ResearchStatus.PARTIAL_SUCCESS, WorkflowStatus.COMPLETED),
-        (ResearchStatus.MANUAL_REVIEW_REQUIRED, WorkflowStatus.MANUAL_REVIEW),
+        (ResearchStatus.EXCEPTION, WorkflowStatus.FAILED),
     ],
 )
 def test_terminal_research_results_map_to_workflow_states(
@@ -228,6 +228,20 @@ def test_retry_schedule_is_15_30_60_then_failed(tmp_path: Path) -> None:
     assert fourth.status is WorkflowStatus.FAILED
     assert fourth.next_attempt_at is None
     assert fourth.attempt_count == 4
+
+
+def test_no_quote_exception_fails_without_retry(tmp_path: Path) -> None:
+    store = WorkflowStateStore(tmp_path / "workflow.db")
+    enqueue_one(store)
+    worker = WorkflowWorker(store, ResultResearch(ResearchStatus.EXCEPTION))
+
+    result = worker.process_due_one(now=NOW)
+
+    assert result is not None
+    assert result.status is WorkflowStatus.FAILED
+    assert result.research_status == ResearchStatus.EXCEPTION.value
+    assert result.next_attempt_at is None
+    assert result.last_error == ResearchStatus.EXCEPTION.value
 
 
 def test_restart_recovery_confirms_completion_before_transition(tmp_path: Path) -> None:

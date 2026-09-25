@@ -177,9 +177,9 @@ def aggregate_price_results(
             show_second,
             lowest.normalized_rmb_price * Decimal(quantity),
             market,
-            ResearchStatus.MANUAL_REVIEW_REQUIRED,
+            ResearchStatus.PARTIAL_SUCCESS,
             None,
-            "仅有无库存价格，需人工介入",
+            "仅找到无库存报价",
             True,
         )
 
@@ -190,7 +190,7 @@ def aggregate_price_results(
         False,
         None,
         None,
-        ResearchStatus.MANUAL_REVIEW_REQUIRED,
+        ResearchStatus.EXCEPTION,
         ResearchReasonCode.NO_MATCHING_PRODUCT,
-        "疑似客户报错型号",
+        "五个价格来源均无报价，可能是客户填写的型号有误",
     )

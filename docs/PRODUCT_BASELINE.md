@@ -24,7 +24,7 @@ Workflow Scheduler（每 15 分钟）
 - Workflow identity/state、duplicate prevention、retry 和 Sheets → Research 编排。
 - IC.net Brand/货量调研，以及 Findchips、HQEW、LCSC、Bom.Ai、INSO 五个价格源；INSO 仅作 read-only 历史市场价格查询。
 - 只有必要的 inquiry-idempotent Excel 落盘成功后，`SUCCESS` 或合格的 `PARTIAL_SUCCESS` 才转为 Workflow `COMPLETED`。
-- `MANUAL_REVIEW_REQUIRED` 停止自动推进并等待人工；`RETRYABLE_FAILURE` 不生成伪正常价格，由 Workflow retry。
+- Research 不产生 `MANUAL_REVIEW_REQUIRED` 结果状态：五个价格来源都完成但没有任何报价时返回 `EXCEPTION`，Workflow 记为 `FAILED`；至少有报价则返回 `SUCCESS` 或 `PARTIAL_SUCCESS`。报价源技术失败且没有正常报价时返回 `RETRYABLE_FAILURE`，由 Workflow retry。运行环境的登录/CAPTCHA 等安全验证仍由 launcher fail closed 并提示人工处理。
 - Sheets 标准化的 `importance_raw` 由 Workflow 原样透传，只影响 Research Excel 展示，不改变调研行为，也不定义 Future INSO Module 的重要性。
 - Research 可返回 `resolved_brand`；Sheets 安全写回发生 Brand conflict 时，不撤销已完成的 Research。
 

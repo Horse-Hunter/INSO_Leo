@@ -174,8 +174,12 @@ class WorkflowStateStore:
             )
         if result.status in {ResearchStatus.SUCCESS, ResearchStatus.PARTIAL_SUCCESS}:
             target = WorkflowStatus.COMPLETED
-        elif result.status is ResearchStatus.MANUAL_REVIEW_REQUIRED:
-            target = WorkflowStatus.MANUAL_REVIEW
+            last_error = None
+        elif result.status is ResearchStatus.EXCEPTION:
+            target = WorkflowStatus.FAILED
+            last_error = str(
+                result.remarks or result.reason_code or result.status.value
+            )
         else:
             detail = result.remarks or result.reason_code or result.status.value
             return self.schedule_retry(
@@ -191,13 +195,14 @@ class WorkflowStateStore:
                 """
                 UPDATE workflow_items
                 SET status = ?, research_status = ?, resolved_brand = ?,
-                    next_attempt_at = NULL, last_error = NULL, updated_at = ?
+                    next_attempt_at = NULL, last_error = ?, updated_at = ?
                 WHERE id = ? AND status = 'RESEARCHING'
                 """,
                 (
                     target.value,
                     result.status.value,
                     result.resolved_brand,
+                    last_error,
                     _time_to_text(changed_at),
                     item_id,
                 ),

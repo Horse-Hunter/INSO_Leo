@@ -2,91 +2,45 @@
 
 Status: READY_FOR_CEO_REVIEW
 
-Goal: 交付 INSO_V1.1 GUI usability 修正：补齐重要程度、展示 Excel 历史询价结果、按 24 小时区分新旧记录、改进 stop-after-cycle 按钮语义，并把下一轮询价改为 15 分钟倒计时。
+Goal: 移除 Research 的订单人工复核结果。调研有报价时归为成功或部分成功；五个价格来源均完成但完全无报价时归为异常；仅技术失败且无报价时继续 Workflow retry。
 
 Business Outcome:
-- 操作员打开 GUI 即可看到调研结果 Excel 中的历史订单，而不只看到当前 run。
-- 表格补充“重要程度”，与 Research Excel 的“重要等级”原样一致。
-- 最近 24 小时处理/更新的结果以浅蓝色强调；24 小时以外或没有处理时间的旧历史记录使用白色。结果状态显示成功、部分成功或异常；异常状态使用红色字体。
-- 点击“本轮结束后停止”后，在本轮 due work 安全闭环期间按钮保持灰色禁用并显示“本轮订单处理中，正在安全结束…”，只有 backend 真正 STOPPED 后才恢复“开始询价”。
-- “下次轮询时间”改为“下轮询价倒计时”，运行时按 15 分钟周期实时显示 mm:ss；停止请求后立即归零，STOPPED 保持 00:00。
+- GUI 和持久化 Excel 对每笔调研展示真实结果状态：成功、部分成功、异常。
+- 无库存报价可作为部分成功的兜底报价；五个价格来源都完成但无任何报价时记为异常并停止该 inquiry，不等待人工复核。
+- 报价来源技术失败且无正常报价时仍由 Workflow 按现有策略重试。
+- 登录、CAPTCHA、OTP 等安全挑战继续由 launcher fail closed 并提示人工处理，不作为 Research 结果状态。
 
 Acceptance:
-1. GUI 订单表列顺序固定为：型号 / 品牌 / 数量 / 重要程度 / 货量 / 市场最低参考价 / 总价 / 状态。
-2. Order 展示 Contract 增加至少 importance 与 processed_at（或语义等价字段）；金额仍为 Decimal，GUI 不自行重算业务价格。
-3. Research Excel canonical schema 增加可可靠判断 24 小时窗口的“处理时间”字段：
-   - 新写入/更新的 inquiry 记录明确的处理/更新时间；
-   - 使用无歧义、可稳定解析的时间格式（优先 ISO-8601，含时区/UTC 语义）；
-   - 旧 workbook 自动兼容/迁移，不删除或重写已有业务值；
-   - 旧历史行没有处理时间时保持空值，并在 GUI 中按历史记录白色显示，禁止使用文件 mtime、row number 或其他猜测方式推断时间。
-4. 历史结果来源必须是 Research-owned canonical Excel，不从 Workflow SQLite 猜历史业务结果。GUI 不直接解析 Research Excel；由 launcher / Research-owned read-only seam 负责适配。
-5. 保留“当前 run 结果”与“历史展示”两个概念：
-   - 本轮发现/完成/处理中/待处理 metrics 仍只表达当前运行会话；
-   - 订单表改为“询价结果”，展示 Excel 中全部可识别历史结果；
-   - 建议新增 GuiBackend.get_result_history()（或语义等价的明确 contract），不要偷偷改变 get_current_run_results() 的既有语义。
-6. 历史列表默认按 processed_at 新到旧排序；无处理时间的 legacy rows 放在有时间记录之后，并保持稳定顺序。
-7. 颜色语义：
-   - 最近 24h 且无警示状态：浅蓝色，推荐 #93C5FD 或与当前 dark theme 等价的高可读浅蓝；
-   - >24h 或 processed_at 缺失：白色；
-   - 部分成功使用警示色；所有失败及 Research 的人工复核结果在订单表显示为“异常”，使用红色字体；
-   - 选中行仍必须清晰可读；
-   - 在“询价结果”标题附近增加简洁图例：蓝色：24小时内｜白色：历史。
-8. stop-after-cycle UI：
-   - RUNNING：按钮为“本轮结束后停止”；
-   - 点击后进入 STOPPING_AFTER_CYCLE：按钮立即灰色、disabled，文本为“本轮订单处理中，正在安全结束…”；
-   - 当前 cycle 的 due/claimed work 按既有 ProductionBackend 语义 drain；future RETRY_WAIT 不阻止结束；
-   - backend 真正 STOPPED 后按钮才恢复“开始询价”；
-   - 窗口 X graceful close 现有语义必须保留。
-9. 倒计时：
-   - UI label 改为“下轮询价倒计时”；
-   - RUNNING 且等待下一 poll：显示 mm:ss，按 backend 的真实 next poll deadline 计算，不在 GUI 另造 scheduler；
-   - 首次 Start 后、第一次 poll 尚未建立下一轮 deadline 时显示“即将轮询”；
-   - 每次 poll 完成/进入下一 interval 后重新显示接近 15:00 的倒计时；
-   - STOPPING_AFTER_CYCLE / STOPPED / MANUAL_REVIEW 显示 00:00；
-   - stop request 后倒计时立即归零；
-   - 不要求精确到毫秒，Tk 1 秒刷新即可，不能导致额外 backend poll。
-10. ProductionBackend 应显式维护真实 next-poll deadline（或等价可信状态），不得把“最后 poll 开始时间 + 15 分钟”在 stop/manual-review 后继续暴露为下一轮。
-11. 历史 Excel 读取需要缓存/增量策略：不得由 GUI 每秒完整 reload workbook。允许 launcher 在启动、workbook mtime/版本变化、Research 完成事件等边界刷新缓存；get_result_history() 应为轻量内存读取。
-12. 现有 Production Launcher、15 分钟 scheduler、SQLite dedup/retry、Research 价格/MPN/汇率/来源/货量规则、OAuth/CDP、Brand write disabled、安全边界全部保持不变。
-13. MockBackend 同步支持新 Contract，用于 GUI 演示和 deterministic tests；不要为 Mock 复制生产业务规则。
-14. deterministic tests 至少覆盖：
-   - importance 进入 GUI table；
-   - 新 canonical Excel schema 的处理时间写入、旧 schema 无损迁移、legacy processed_at=None；
-   - 历史全部展示、排序、新旧 24h 边界；
-   - 24h 浅蓝 / legacy 白色 / warning override；
-   - history getter 不导致 GUI tick 每秒 reload Excel；
-   - STOPPING button 灰色禁用且不提前恢复；
-   - stop 后 countdown=00:00；
-   - RUNNING countdown 随时间下降并在 poll interval reset；
-   - first poll“即将轮询”；
-   - existing graceful close / production launcher regressions。
-15. 运行 ruff check src tests、GUI/launcher/research relevant tests、完整 deterministic pytest、git diff --check。
-16. 在 Windows 上做一次 GUI smoke：至少目视确认新增列、历史列表、24h/legacy 颜色、stop 文案、倒计时。无需重新跑完整外部 Research live smoke，除非实现触及 production runtime 行为或 deterministic evidence 不足。
+1. Research public status 包含 SUCCESS、PARTIAL_SUCCESS、EXCEPTION、RETRYABLE_FAILURE，不再定义 MANUAL_REVIEW_REQUIRED。
+2. 五个价格来源完成且全无报价时，Research 持久化 EXCEPTION 和可理解的型号/无报价备注；Workflow 直接记 FAILED，不进入 retry 或 MANUAL_REVIEW。
+3. 只有无库存报价时继续使用原有兜底价格计算，并返回 PARTIAL_SUCCESS。
+4. 无正常报价且存在价格源技术失败时仍返回 RETRYABLE_FAILURE，沿用现有 15/30/60 分钟 retry。
+5. 成功/部分成功的价格算法、MPN、汇率、货量、来源、retry 与 Excel 幂等规则保持不变。
+6. launcher 历史读取将 EXCEPTION 显示为“异常”；已存在 Excel 的 MANUAL_REVIEW_REQUIRED 状态继续兼容为“异常”。
+7. Research deterministic tests 覆盖以上聚合、持久化与状态流转；Workflow tests 验证 EXCEPTION 直接 terminal FAILED 且无 retry；全量 ruff、deterministic pytest 与 diff check 通过。
 
 Constraints:
-- 不删除或覆盖现有 调研价格.xlsx；schema migration 必须向后兼容。
-- 不用 Excel 文件修改时间推断订单时间。
-- 不修改已验收的 Research 业务算法、Sheets pending 语义、Workflow dedup/retry。
-- 不开启 Google Sheet Brand 写回。
-- runtime 配置、OAuth grant、SQLite、browser profile、secret/token/cookie 保持 Git-ignored。
-- 不 reset/clean/delete 历史 Research runtime worktree。
-- 当前阶段不做 EXE/PyInstaller；V1.1 GUI 验收后再进入 Windows 发布阶段。
+- Research 调研结果不再要求人工复核；运行环境的身份验证和安全挑战仍须 fail closed。
+- 保持 Research 价格、MPN、汇率、货量、五源、Brand 写回安全边界不变。
+- Workflow dedup 与 retry 策略不变，除明确的 EXCEPTION terminal mapping。
+- 保留旧 Excel 状态和已有 SQLite MANUAL_REVIEW 记录的读取兼容性。
+- 不开启新的 Google Sheet 写入；不得提交 runtime 配置、OAuth grant、SQLite、browser profile 或 credential。
 
 Architecture Decision:
-- gui 仍只消费 GuiBackend/display contract。
-- Research 继续拥有 Excel schema；若增加 read-only history reader，优先放在 Research 模块 Public 边界或 launcher 的窄适配层，不把 Excel 解析塞进 GUI。
-- Current-run metrics 与历史结果展示分离，避免因为“显示历史”污染 run_id/session 统计。
+- `ResearchStatus.EXCEPTION` 是已完成调研、全部报价来源无有效报价的终态；Workflow 映射至 `FAILED`。
+- `MANUAL_REVIEW` 留作旧 SQLite 数据兼容状态，不由新的 Research result 产生。
+- OAuth/CAPTCHA/OTP 等运行安全状态继续由 launcher 管理，与订单结果 status 分离。
 
 Done:
-- GUI 表格展示 Research Excel 全历史结果；当前 run metrics/results 保持独立 Contract。
-- Research canonical Excel 新增 UTC ISO-8601“处理时间”和隐藏状态元数据；旧 schema 无损迁移，legacy 时间不推断。
-- 有持久化状态的记录展示“成功 / 部分成功 / 异常”三类结果状态；Research 的 MANUAL_REVIEW_REQUIRED 映射为订单结果“异常”，运行级 MANUAL_REVIEW 仍保留用于人工验证流程提示。旧记录缺少状态时显示“--”，不以历史标签或推断值替代。
-- launcher 提供带 mtime/size 缓存的历史 snapshot 与真实 next-poll deadline；GUI 倒计时、颜色优先级和 stop-after-cycle 状态已适配。
-- MockBackend 提供独立历史示例；ruff、完整 deterministic pytest、diff 检查与 Windows mock GUI 目视 smoke 完成。
+- Research 无库存报价聚合映射为 PARTIAL_SUCCESS。
+- 全部价格源无报价且无技术失败映射为 EXCEPTION；Workflow terminal FAILED 分支已实现。
+- Research/Workflow/launcher 历史展示已统一；旧 Excel 与 SQLite MANUAL_REVIEW 数据兼容。
+- `ruff check --no-cache src tests`、完整 deterministic pytest（360 passed, 10 skipped）、`git diff --check` 通过。
+- Self-review 完成；未执行 live Research 或 GUI smoke（改动限于 Research/Workflow 状态契约，deterministic evidence 覆盖新路径）。
 
-Current: 实现、自审和验收完成；Owner 已目视确认 Windows mock GUI smoke 符合要求。
+Current: 实现、自审和 deterministic 验收完成；等待 CEO Review。
 
-Next: commit/push 当前 feature branch -> CEO Final Review。
+Next: CEO Review；通过后再进入 main。
 
 Blockers: NONE
 
@@ -95,9 +49,10 @@ Owner Decisions:
 - stop-after-cycle 灰色文案采用“本轮订单处理中，正在安全结束…”。
 - 结果区标题改为“询价结果”，图例显示“蓝色：24小时内｜白色：历史”。
 - 订单结果表状态只显示“成功 / 部分成功 / 异常”；异常使用红色字体。
+- Research 不产生人工复核订单状态；只有全部五个价格源完成且无任何报价才返回异常。只找到无库存报价时返回部分成功；技术失败且无报价继续 retry。
 - 下轮轮询使用 mm:ss 倒计时；首次 poll 未建立 deadline 时显示“即将轮询”；停止后归零。
 - V1.1 完成后再做 EXE/Windows 发布。
 
 Branch: feature/v1-1-gui-usability
 
-Last Good Commit: 47652c9
+Last Good Commit: cde0b7374636c6d2750d49a850e11f3df9e95749

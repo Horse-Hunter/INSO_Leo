@@ -158,7 +158,7 @@ def test_multiple_failure_remarks_follow_canonical_source_order() -> None:
     assert aggregation.remarks == "Findchips：暂时不可用；INSO：登录不可用"
 
 
-def test_out_of_stock_fallback_has_manual_status_and_20_percent_rule() -> None:
+def test_out_of_stock_fallback_is_partial_and_uses_20_percent_rule() -> None:
     results = _complete(
         {
             ResearchSource.FINDCHIPS: _result(
@@ -176,20 +176,36 @@ def test_out_of_stock_fallback_has_manual_status_and_20_percent_rule() -> None:
 
     aggregation = aggregate_price_results(results, 3)
 
-    assert aggregation.status is ResearchStatus.MANUAL_REVIEW_REQUIRED
+    assert aggregation.status is ResearchStatus.PARTIAL_SUCCESS
     assert aggregation.used_out_of_stock_fallback is True
     assert aggregation.market_reference == "8\n11-立创"
     assert aggregation.estimated_total == Decimal(24)
-    assert aggregation.remarks == "仅有无库存价格，需人工介入"
+    assert aggregation.remarks == "仅找到无库存报价"
 
 
-def test_no_price_and_no_technical_failure_is_suspected_bad_mpn() -> None:
+def test_no_price_and_no_technical_failure_is_terminal_exception() -> None:
     aggregation = aggregate_price_results(_complete(), 1)
 
-    assert aggregation.status is ResearchStatus.MANUAL_REVIEW_REQUIRED
+    assert aggregation.status is ResearchStatus.EXCEPTION
     assert aggregation.reason_code is ResearchReasonCode.NO_MATCHING_PRODUCT
     assert aggregation.market_reference is None
-    assert aggregation.remarks == "疑似客户报错型号"
+    assert aggregation.remarks == "五个价格来源均无报价，可能是客户填写的型号有误"
+
+
+def test_no_quote_exception_is_persisted_in_research_history(tmp_path: Path) -> None:
+    path = tmp_path / "调研价格.xlsx"
+    result = _service(path, _complete()).execute(
+        ResearchInput("inq_no_quote", "UNKNOWN-MPN", None, 4, "B")
+    )
+
+    worksheet = load_workbook(path).active
+    headers = {
+        worksheet.cell(1, column).value: column
+        for column in range(1, worksheet.max_column + 1)
+    }
+    assert result.status is ResearchStatus.EXCEPTION
+    assert worksheet.cell(2, headers[RESEARCH_STATUS_HEADER]).value == "EXCEPTION"
+    assert "可能是客户填写的型号有误" in worksheet.cell(2, headers["备注"]).value
 
 
 class FakeIcNet:
@@ -247,7 +263,10 @@ def test_icnet_challenge_is_visible_in_excel_remarks(tmp_path: Path) -> None:
     service = _service(path, _complete())
     service._icnet = ChallengedIcNet()
     result = service.execute(ResearchInput("inq_challenge", "ABC", None, 10, "A"))
-    assert result.remarks == "疑似客户报错型号；IC.net：需要人工验证"
+    assert result.status is ResearchStatus.EXCEPTION
+    assert result.remarks == (
+        "五个价格来源均无报价，可能是客户填写的型号有误；IC.net：需要人工验证"
+    )
     assert load_workbook(path).active["M2"].value == result.remarks
 
 

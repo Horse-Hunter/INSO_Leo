@@ -5,7 +5,7 @@
 入口为 `ResearchService.execute(ResearchInput) -> ResearchResult`。
 
 - `ResearchInput`：`inquiry_id`、`mpn`、可选 `brand`、`quantity`、`importance_raw`。
-- `ResearchResult`：`inquiry_id`、`status`（`SUCCESS | PARTIAL_SUCCESS | MANUAL_REVIEW_REQUIRED | RETRYABLE_FAILURE`），以及可选 `resolved_brand`、`reason_code`、`remarks`；V1 不含 `output_ref`。
+- `ResearchResult`：`inquiry_id`、`status`（`SUCCESS | PARTIAL_SUCCESS | EXCEPTION | RETRYABLE_FAILURE`），以及可选 `resolved_brand`、`reason_code`、`remarks`；V1 不含 `output_ref`。
 - `importance_raw` 在 Excel 原样显示（预期 `A | B | C | D`），不得改变来源、顺序、选价、status、retry 或型号判断。
 
 ## 来源与共同规则
@@ -45,8 +45,8 @@ HKD/RMB 同样使用 ECB 同日 daily reference：`CNY per HKD = CNY per EUR / H
 - 有正常价格且五个价格源无技术失败：`SUCCESS`。
 - 有正常价格且任一价格源技术失败：`PARTIAL_SUCCESS`。
 - 无正常价格且任一价格源技术失败：`RETRYABLE_FAILURE`；不得提前判断客户型号错误。
-- 五个价格源均正常完成、无正常价格但有无库存价格：用无库存价格作为兜底池计算最低价与总价，返回 `MANUAL_REVIEW_REQUIRED`，备注 `仅有无库存价格，需人工介入`。
-- 五个价格源均正常完成且无任何有效价格：返回 `MANUAL_REVIEW_REQUIRED`，备注 `疑似客户报错型号`。
+- 五个价格源均正常完成、无正常价格但有无库存价格：用无库存价格作为兜底池计算最低价与总价，返回 `PARTIAL_SUCCESS`，备注 `仅找到无库存报价`。
+- 五个价格源均正常完成且无任何有效价格：返回 `EXCEPTION`，原因 `NO_MATCHING_PRODUCT`，备注说明五个来源均无报价，型号可能填写有误。Research 不产生等待人工复核状态。
 
 存在第二个正常或兜底 candidate 且 `lowest <= second × 0.80` 时，市场最低参考价换行附第二低价格及来源；否则只显示最低价。
 
@@ -56,7 +56,7 @@ HKD/RMB 同样使用 ECB 同日 daily reference：`CNY per HKD = CNY per EUR / H
 
 `型号 | 品牌 | 数量 | 重要等级 | 货量标识 | 预估订单总价 | 市场最低参考价 | INSO | Findchips | 华强 | 立创 | 正能量 | 备注 | 处理时间`
 
-隐藏 `_inquiry_id` 作为幂等键；隐藏 `_research_status` 保存正式 Research 结果状态。`处理时间` 为带 UTC offset 的 ISO-8601 更新时间；retry/crash 不得产生重复正常行。已存在历史行迁移时处理时间保持空值，不推断时间。`ResearchExcelOutput.read_history()` 是 Research-owned、只读、不迁移的历史读取 Contract；按处理时间新到旧返回，缺失/无效时间记录在后并维持原 Excel 行序。未保存 Research 状态的旧行不推断结果状态。必要落盘成功后才能返回 `SUCCESS` 或 `PARTIAL_SUCCESS`；`MANUAL_REVIEW_REQUIRED` 也保留该笔结果与备注，然后停止自动推进。Excel load/schema/save 失败按 `RETRYABLE_FAILURE` fail closed。
+隐藏 `_inquiry_id` 作为幂等键；隐藏 `_research_status` 保存正式 Research 结果状态。`处理时间` 为带 UTC offset 的 ISO-8601 更新时间；retry/crash 不得产生重复正常行。已存在历史行迁移时处理时间保持空值，不推断时间。`ResearchExcelOutput.read_history()` 是 Research-owned、只读、不迁移的历史读取 Contract；按处理时间新到旧返回，缺失/无效时间记录在后并维持原 Excel 行序。未保存 Research 状态的旧行不推断结果状态。必要落盘成功后才能返回 `SUCCESS`、`PARTIAL_SUCCESS` 或 `EXCEPTION`。Excel load/schema/save 失败按 `RETRYABLE_FAILURE` fail closed。旧文件中已保存的 `MANUAL_REVIEW_REQUIRED` 状态仍可作为历史记录兼容读取，并按异常展示；新执行不再写入该状态。
 
 五个来源列只显示业务结果：价格；价格加 `（无库存）`、实际后缀型号或 `（两个月）`/`（三个月）`；同一来源有库存/无库存价可分行；无业务结果或技术失败均显示 `无结果`。技术失败详情只写备注，格式为“网站名称 + 简洁失败原因”。
 
