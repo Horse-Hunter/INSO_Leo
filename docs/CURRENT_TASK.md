@@ -2,58 +2,43 @@
 
 Status: READY_FOR_CEO_REVIEW
 
-Goal: Resolve CEO Stage 2A findings C1–C4 and the two small follow-ups without connecting to production systems. Keep accepted V1.1 Research rules and `workflow_items` semantics unchanged.
-
-Business Outcome:
-- Deliver deterministic contracts, persistence, browser ownership and write guards ready for CEO and Safety Supervisor review.
-- Preserve `release/v1.1` as the independent rollback baseline.
+Goal: Integrate the V1.2 business flow on existing contracts and fake adapters while preserving V1.1 Research and keeping all live external actions disabled.
 
 Acceptance:
-- [x] C1: Launcher supplies Research an explicit lease-backed INSO access; no arbitrary tab selection or reused-browser close.
-- [x] C2: Save dispatch requires AI_RECOGNIZED; VALIDATION_FAILED cannot be reset through ordinary state mutation.
-- [x] C3: B/C with missing estimated total return INDETERMINATE with no purchase route.
-- [x] C4: Notification transport returns a typed outcome and allowlisted reason; unexpected Workflow-boundary exceptions become UNKNOWN.
-- [x] Discovery is non-ready when required controls are missing, duplicated or non-unique.
-- [x] V1.2 customer-name value and allowlisted source snapshot can be persisted together.
-- [x] Run full deterministic tests, Ruff and `git diff --check`; commit and push `feature/v1-2`.
+- [x] Sheets pending rows enter the existing V1.1 queue; V1.2 duplicate check runs before the unchanged Research worker.
+- [x] Research runs for duplicate and lookup-unavailable orders; final routing waits for a confirmed duplicate result.
+- [x] Confirmed duplicates stop purchase, raise a red alert, and enqueue an unconditional duplicate notification.
+- [x] Non-duplicates use canonical Research facts for important notification and purchase routing; B/C unknown totals remain INDETERMINATE.
+- [x] Notification delivery remains recipient-scoped, fake-only and independent from purchase draft processing.
+- [x] Fake purchase adapter validates AI recognition only and cannot save to INSO.
+- [x] GUI consumes optional V1.2 business state, latest active alert and event history while preserving the existing single-page layout.
+- [x] V1.1 exception / Research remark values are not persisted into `workflow_items.last_error`; canary is absent from SQLite and GUI remark.
+- [x] Deterministic tests, Ruff and `git diff --check` pass.
 
 Constraints:
-- No live INSO discovery/control, Save Data, Save-and-Send, production smoke, real SMTP, Google Sheets read/write, or production DB migration.
-- Production writer feature gate remains unconditionally closed. Production Brand write remains disabled.
-- Preserve V1.1 Research canonical rules and the meaning/schema constraints of `workflow_items`.
-- Evidence stays under ignored `runtime/evidence/`; no secrets, customer production data, raw exception text or screenshots in Git.
+- No live INSO discovery/control, Save Data, Save-and-Send, production smoke, SMTP, Sheets write, or production DB migration.
+- V1.1 Research business rules and `workflow_items` schema/semantics remain unchanged.
+- Production writer gate remains closed. No credentials, production data, raw external errors, or screenshots are added.
 
 Done:
-- Synced `feature/v1-2` to the requested `e3f58699bbb56a166e90c0620b224eaaf9fea199` before editing.
-- C1: Launcher lazily attaches Playwright to the configured CDP endpoint, requires exactly one context, opens only lease-owned child pages, and gives Research an operation access provider. Reused-browser cleanup disconnects Playwright without closing Chrome; app-owned Chrome closes only after the worker drains.
-- C2: `begin_save_dispatch()` accepts only AI_RECOGNIZED. State transitions from PRE_SAVE_READY are limited to AI_RECOGNIZED or VALIDATION_FAILED; ordinary updates cannot move a failed or recognized result back to a save-eligible state. Confirmed absence plus human acknowledgement retains AI_RECOGNIZED.
-- C3: `PurchaseRoutingDecision` now carries READY or INDETERMINATE; B/C without `estimated_total` has no quotation type or purchaser.
-- C4: `NotificationTransportResult` freezes the four transport outcomes and an allowlisted `ReasonCode`. The transport owns provider error classification; unexpected exceptions persist as UNKNOWN.
-- Discovery inspection requires explicit required-control IDs and reports non-ready if any is absent, duplicated or not uniquely resolved.
-- Sheets records `CustomerNameSource`; V1.2 inquiry state can persist the customer value/source and emits the data-quality event/alert for missing values.
-- V1.1 Research canonical rules, `workflow_items`, production Brand write boundary and the closed writer feature gate are unchanged. No live discovery, INSO write, production data, SMTP or Sheets write was performed.
+- Synced `feature/v1-2` to `ea2a9c61b1a98aa48498e9191a3d233746bd5755` before editing.
+- Added `V12WorkflowCoordinator` around the unchanged V1.1 `WorkflowWorker`; duplicate lookup is persisted before Research. An unconfirmed duplicate result leaves a durable ROUTING state, and a later confirmation resumes using the persisted V1 work item/customer snapshot without rerunning Research.
+- Duplicate orders stop before purchase and enqueue a repeat notification containing the latest history fields and quantity × INSO quote total. Non-duplicates independently enqueue important-order notifications and create a fake AI-validated purchase draft.
+- Notification commands can be delivered later; retry/failure/recovery stays in the existing recipient ledger and cannot alter purchase state.
+- GUI reads migrated V1.2 state read-only. The main table shows the newest active alert in red; order detail shows the business label and full event history.
+- V1.1 error persistence now stores Research reason/status, exception class name, or fixed Brand update codes; no exception message or Research remarks are stored.
+- No live Sheets, Research, INSO, SMTP, or production SQLite activity was performed.
 
 Verification:
 - `python -m ruff check src tests` — passed.
-- `python -m pytest --basetemp .tmp/pytest-v12-c1-c4-final -q` — 468 passed, 11 skipped.
+- `python -m pytest --basetemp .tmp/pytest-v12-final2 -q` — 473 passed, 11 skipped.
 - `git diff --check` — passed.
 
-Current:
-- C1–C4 and the two requested follow-ups are implemented at the existing additive seams. This work does not change any live-system authorization gate.
-- `READ_ONLY_DISCOVERY_ALLOWED`, `WRITE_IMPLEMENTATION_ALLOWED`, `REAL_SAVE_DATA_SMOKE_ALLOWED` and `REAL_NOTIFICATION_SMOKE_ALLOWED` remain ungranted. The inspector has not been run against a browser or INSO.
-
-UNKNOWN / Blockers:
-- No code blocker remains for the requested C1–C4 scope.
-- Live endpoint, account/company identity, selectors, stable history identity and timestamp tie policy, saved-record identity/read-back fields, AI result DOM contract, evidence crop/redaction viability, live notification idempotency and restore operator procedure remain UNKNOWN; no live discovery was run.
-- B1–B4 remain subject to the planned independent Safety re-review before any future live-capable implementation. The writer gate remains closed and Save-and-Send is prohibited.
-
-Next:
-- CEO reviews the Stage 2A implementation and current diff. Safety Supervisor independently reviews session identity/ownership, all write hard guards, unknown-save reconciliation, event/alert scoping, notification recipient retry/recovery, sanitized persistence, and backup/restore failure paths.
-- Only after separate gate changes may the project prepare/execute read-only discovery or implement live writes/notifications. This task does not authorize those steps.
+Remaining / UNKNOWN:
+- Production V1.2 orchestration, database migration, duplicate-history reader and purchase writer remain unconnected and gated. This integration is fake-only.
+- Live selectors/record identity, saved-record readback, notification provider behavior, and production smoke remain gated/unknown.
 
 Branch: `feature/v1-2`
-
-Stage 2A base commit: `e711e06cb1bdaf8fd7da3a26f2aa590999359b4b`
 V1.1 rollback baseline: `be9d0a51d0375884dfa3e5e9e4317958899fdc75`
 
 

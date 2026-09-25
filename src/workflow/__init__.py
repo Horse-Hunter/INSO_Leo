@@ -12,14 +12,24 @@ from .service import (
     WorkflowWorker,
 )
 from .store import DEFAULT_RETRY_DELAYS, WorkflowStateStore
+from .v12_flow import (
+    FakePurchaseDraftWriter,
+    ResearchBusinessFacts,
+    V12FlowResult,
+    V12WorkflowCoordinator,
+)
 
 __all__ = [
     "DEFAULT_RETRY_DELAYS",
     "BrandUpdater",
     "CompletionChecker",
+    "FakePurchaseDraftWriter",
+    "ResearchBusinessFacts",
     "ResearchExecutor",
     "ResearchPreparationError",
     "SheetsSafeBrandUpdater",
+    "V12FlowResult",
+    "V12WorkflowCoordinator",
     "WorkItem",
     "WorkflowPoller",
     "WorkflowRuntime",

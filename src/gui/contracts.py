@@ -82,6 +82,7 @@ class V12EventCode(StrEnum):
     DUPLICATE_CHECK_CONFIRMED = "DUPLICATE_CHECK_CONFIRMED"
     DUPLICATE_CHECK_FAILED = "DUPLICATE_CHECK_FAILED"
     RESEARCH_STARTED = "RESEARCH_STARTED"
+    RESEARCH_RETRY_SCHEDULED = "RESEARCH_RETRY_SCHEDULED"
     DUPLICATE_ORDER_DETECTED = "DUPLICATE_ORDER_DETECTED"
     IMPORTANT_ORDER_DECIDED = "IMPORTANT_ORDER_DECIDED"
     NOTIFICATION_COMMAND_CREATED = "NOTIFICATION_COMMAND_CREATED"
@@ -266,6 +267,11 @@ class GuiBackend(ABC):
     @abstractmethod
     def get_result_history(self) -> tuple[Order, ...]:
         """Return Research-owned persisted results, newest processed first."""
+
+    def get_v12_order_state(self, inquiry_id: str) -> V12OrderStateDTO | None:
+        """Return optional V1.2 state without changing the V1.1 dashboard contract."""
+
+        return None
 
     @abstractmethod
     def get_health(self) -> HealthReport:

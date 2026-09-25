@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -47,9 +48,11 @@ from src.workflow import (
     WorkflowStatus,
     WorkflowWorker,
 )
+from src.workflow.v12_store import V12_SCHEMA_VERSION, V12DatabaseError, V12Store
 
 from .browser_bootstrap import BrowserBootstrapError, BrowserHandle, acquire_cdp_browser
 from .inso_session import InsoResearchSession, attach_inso_research_session
+from .v12_gui import read_v12_order_state
 
 log = logging.getLogger(__name__)
 
@@ -121,6 +124,7 @@ class ProductionBackend(GuiBackend):
         self._history = ()
         self._history_fingerprint = None
         self._store = None
+        self._v12_store = None
         self._excel = None
         self._manual_inquiries = set()
         try:
@@ -227,6 +231,7 @@ class ProductionBackend(GuiBackend):
                 else resolve_app_path(rc.excel_output_path, root=self.root)
             )
             self._store = WorkflowStateStore(db)
+            self._v12_store = _open_v12_store_if_migrated(db)
             research = build_research_service(
                 rc, inso_operation_access=self._inso_operation_access
             )
@@ -599,6 +604,14 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             return self._history
 
+    def get_v12_order_state(self, inquiry_id):
+        if self._v12_store is None:
+            return None
+        try:
+            return read_v12_order_state(self._v12_store, inquiry_id)
+        except KeyError:
+            return None
+
     def get_health(self):
         return self._health
 
@@ -694,4 +707,13 @@ def _decimal(value):
     try:
         return Decimal(text) if text else None
     except InvalidOperation:
+        return None
+
+
+def _open_v12_store_if_migrated(database_path):
+    try:
+        with sqlite3.connect(database_path) as connection:
+            version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+        return V12Store(database_path) if version == V12_SCHEMA_VERSION else None
+    except (OSError, sqlite3.Error, ValueError, V12DatabaseError):
         return None

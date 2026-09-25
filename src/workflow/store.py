@@ -177,14 +177,15 @@ class WorkflowStateStore:
             last_error = None
         elif result.status is ResearchStatus.EXCEPTION:
             target = WorkflowStatus.FAILED
-            last_error = str(
-                result.remarks or result.reason_code or result.status.value
+            last_error = (
+                result.reason_code.value
+                if result.reason_code is not None
+                else result.status.value
             )
         else:
-            detail = result.remarks or result.reason_code or result.status.value
             return self.schedule_retry(
                 item_id,
-                error=detail,
+                error=result.reason_code or result.status,
                 now=changed_at,
                 retry_delays=retry_delays,
                 research_status=result.status.value,
@@ -241,7 +242,7 @@ class WorkflowStateStore:
                     _time_to_text(next_attempt_at),
                     research_status,
                     resolved_brand,
-                    str(error),
+                    _safe_last_error(error, research_status),
                     _time_to_text(changed_at),
                     item_id,
                 ),
@@ -293,7 +294,7 @@ class WorkflowStateStore:
                 """,
                 (
                     status,
-                    None if error is None else str(error),
+                    None if error is None else _safe_brand_error(status),
                     _time_to_text(changed_at),
                     item_id,
                 ),
@@ -306,6 +307,15 @@ class WorkflowStateStore:
             ).fetchone()
         if row is None:
             raise KeyError(item_id)
+        return _row_to_item(row)
+
+    def get_by_inquiry_id(self, inquiry_id: str) -> WorkItem:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM workflow_items WHERE inquiry_id = ?", (inquiry_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(inquiry_id)
         return _row_to_item(row)
 
     def all_items(self) -> tuple[WorkItem, ...]:
@@ -324,6 +334,23 @@ def _dedup_key(identity: SheetRecordIdentity) -> str:
             str(identity.row_position),
         )
     )
+
+
+def _safe_last_error(error: object, research_status: str | None) -> str:
+    """Persist only a fixed status or an exception class name, never its message."""
+
+    if research_status is not None:
+        return research_status
+    if isinstance(error, BaseException):
+        return type(error).__name__
+    return "WORKFLOW_RETRY"
+
+
+def _safe_brand_error(status: str) -> str:
+    return {
+        "CONFLICT": "BRAND_UPDATE_CONFLICT",
+        "FAILED": "BRAND_UPDATE_FAILED",
+    }.get(status, "BRAND_UPDATE_FAILED")
 
 
 def _inquiry_id(key: str) -> str:

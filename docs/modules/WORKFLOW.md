@@ -115,3 +115,21 @@ exact AI recognition verification under `ai-mpn-v1`.
 
 These seams are not wired into the production launcher. They do not authorize
 live INSO, SMTP, Sheets, or production database activity.
+
+V1.2 fake-flow integration adds `V12WorkflowCoordinator` around the unchanged
+V1.1 `WorkflowWorker`: it stores the duplicate check before calling the same
+Research executor, always lets Research run, and only routes after a confirmed
+duplicate result. If the duplicate read is unavailable, it leaves the completed
+order in `ROUTING`; `confirm_duplicate_and_route()` can resume from the persisted
+V1 work item and customer snapshot without re-running Research. The coordinator
+accepts injected Research business facts, duplicate checker, notification worker,
+and purchase draft writer. The included purchase writer only validates AI
+recognition and has no Save Data operation. Notification commands are queued
+before purchase work and can be delivered later by the recipient-scoped worker;
+delivery failure does not change purchase state.
+
+The launcher exposes persisted V1.2 business state and active alerts through the
+optional GUI DTO seam when the existing database is already at the V1.2 schema
+version. GUI detail shows event history and the results table shows the latest
+active alert. An unmigrated V1.1 database remains read-only to this seam and no
+migration or V1.2 production orchestration is performed here.

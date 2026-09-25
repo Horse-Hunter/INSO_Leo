@@ -13,7 +13,15 @@ from decimal import Decimal
 from tkinter import ttk
 from typing import Any
 
-from .contracts import GuiBackend, LogEntry, Order, RunSession, RunState
+from .contracts import (
+    GuiBackend,
+    LogEntry,
+    Order,
+    RunSession,
+    RunState,
+    V12AlertCode,
+    V12OrderStateDTO,
+)
 from .resources import BackendEvent, MainThreadEventQueue
 
 logger = logging.getLogger(__name__)
@@ -54,7 +62,13 @@ def _status_color(status: str) -> str:
     return _TEXT_SECONDARY
 
 
-def _order_row_style(order: Order, now: datetime | None = None) -> str:
+def _order_row_style(
+    order: Order,
+    now: datetime | None = None,
+    v12_state: V12OrderStateDTO | None = None,
+) -> str:
+    if v12_state is not None and v12_state.latest_active_alert is not None:
+        return "error"
     status = order.status.value.casefold()
     if any(word in status for word in ("warning", "警告")):
         return "warning"
@@ -78,6 +92,25 @@ def _countdown_text(status: RunSession, now: datetime | None = None) -> str:
     return f"{seconds // 60:02d}:{seconds % 60:02d}"
 
 
+def _v12_status_text(state: V12OrderStateDTO | None, fallback: str) -> str:
+    if state is None:
+        return fallback
+    if state.latest_active_alert is not None:
+        return {
+            V12AlertCode.DUPLICATE_ORDER: "重复订单",
+            V12AlertCode.NOTIFICATION_FAILED: "通知失败",
+            V12AlertCode.PURCHASE_EXCEPTION: "采购录单异常",
+            V12AlertCode.DATA_QUALITY: "资料待核对",
+            V12AlertCode.SECURITY_EVENT: "安全异常",
+        }[state.latest_active_alert.alert_type]
+    return state.business_label.value
+
+
+def _get_v12_state(backend: GuiBackend, inquiry_id: str) -> V12OrderStateDTO | None:
+    getter = getattr(backend, "get_v12_order_state", None)
+    return getter(inquiry_id) if callable(getter) else None
+
+
 class InsoDashboardApp:
     """Single-page INSO_V1.1 operator dashboard."""
 
@@ -90,6 +123,7 @@ class InsoDashboardApp:
         self._selected_order: Order | None = None
         self._displayed_orders: dict[str, Order] = {}
         self._displayed_order_styles: dict[str, str] = {}
+        self._displayed_v12_states: dict[str, V12OrderStateDTO | None] = {}
         self._displayed_order_ids: tuple[str, ...] = ()
         self._events = MainThreadEventQueue()
         self._main_thread_id = threading.get_ident()
@@ -517,11 +551,16 @@ class InsoDashboardApp:
                     self._tree.delete(inquiry_id)
             self._displayed_orders = {}
             self._displayed_order_styles = {}
+            self._displayed_v12_states = {}
             self._displayed_order_ids = order_ids
         for order in orders.values():
             inquiry_id = order.inquiry_id
-            tag = _order_row_style(order, now)
-            unchanged = self._displayed_orders.get(inquiry_id) == order
+            v12_state = _get_v12_state(self._backend, inquiry_id)
+            tag = _order_row_style(order, now, v12_state)
+            unchanged = (
+                self._displayed_orders.get(inquiry_id) == order
+                and self._displayed_v12_states.get(inquiry_id) == v12_state
+            )
             if unchanged and self._tree.exists(inquiry_id):
                 if self._displayed_order_styles.get(inquiry_id) != tag:
                     self._tree.item(inquiry_id, tags=(tag,))
@@ -535,7 +574,7 @@ class InsoDashboardApp:
                 order.stock_label,
                 self._format_money(order.min_reference_price),
                 self._format_money(order.total_price),
-                order.status.value,
+                _v12_status_text(v12_state, order.status.value),
             )
             if self._tree.exists(inquiry_id):
                 self._tree.item(inquiry_id, values=values, tags=(tag,))
@@ -548,6 +587,7 @@ class InsoDashboardApp:
                     tags=(tag,),
                 )
             self._displayed_order_styles[inquiry_id] = tag
+            self._displayed_v12_states[inquiry_id] = v12_state
         self._displayed_orders = orders
 
     @staticmethod
@@ -584,6 +624,37 @@ class InsoDashboardApp:
             text_color=_TEXT_SECONDARY,
         )
         sub.pack(anchor="w", pady=(0, 12))
+
+        v12_state = _get_v12_state(self._backend, order.inquiry_id)
+        if v12_state is not None:
+            status_text = _v12_status_text(v12_state, order.status.value)
+            ctk.CTkLabel(
+                self._detail_container,
+                text=f"业务状态: {status_text}",
+                font=_FONT_SMALL,
+                text_color=(
+                    _RED
+                    if v12_state.latest_active_alert is not None
+                    else _TEXT_SECONDARY
+                ),
+            ).pack(anchor="w", pady=(0, 8))
+            if v12_state.event_history:
+                ctk.CTkLabel(
+                    self._detail_container,
+                    text="事件历史",
+                    font=("Microsoft YaHei UI", 11, "bold"),
+                    text_color=_TEXT,
+                ).pack(anchor="w", pady=(2, 4))
+                for event in v12_state.event_history:
+                    reason = f" · {event.reason_code.value}" if event.reason_code else ""
+                    stamp = event.occurred_at.astimezone().strftime("%Y-%m-%d %H:%M")
+                    ctk.CTkLabel(
+                        self._detail_container,
+                        text=f"{stamp}  {event.event_type.value}{reason}",
+                        font=_FONT_SMALL,
+                        text_color=_TEXT_SECONDARY,
+                        wraplength=320,
+                    ).pack(anchor="w")
 
         for ev in order.sources:
             row = ctk.CTkFrame(self._detail_container, fg_color="transparent")

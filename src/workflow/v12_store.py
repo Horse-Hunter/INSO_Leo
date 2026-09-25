@@ -21,6 +21,7 @@ from src.sheets import CustomerNameSource
 from .v12_contracts import (
     ActiveAlertDTO,
     AlertType,
+    BusinessLabel,
     BusinessState,
     DeliveryOutcome,
     DuplicateCheckResult,
@@ -28,6 +29,7 @@ from .v12_contracts import (
     NotificationCommand,
     NotificationKind,
     NotificationRecipient,
+    OrderSummaryDTO,
     PurchaseOutcome,
     ReasonCode,
     RecipientDeliveryResult,
@@ -340,6 +342,17 @@ class V12Store:
                     event_id=event.event_id, at=at,
                     deduplicate_by_type=True, scope_key="customer-name",
                 )
+
+    def customer_snapshot(self, inquiry_id: str) -> tuple[str | None, CustomerNameSource]:
+        with _connect(self.database_path) as connection:
+            row = connection.execute(
+                "SELECT customer_name, customer_name_source FROM workflow_v12_inquiry_state "
+                "WHERE inquiry_id=?",
+                (inquiry_id,),
+            ).fetchone()
+        if row is None or row["customer_name_source"] is None:
+            raise KeyError(inquiry_id)
+        return row["customer_name"], CustomerNameSource(row["customer_name_source"])
 
     def record_duplicate_result(self, result: DuplicateCheckResult) -> None:
         evidence_ref = (
@@ -900,7 +913,7 @@ class V12Store:
             rows = connection.execute(
                 "SELECT alert_id, inquiry_id, alert_type, reason_code, raised_at, active "
                 "FROM workflow_v12_active_alerts WHERE inquiry_id=? AND active=1 "
-                "ORDER BY raised_at DESC, alert_id DESC",
+                "ORDER BY raised_at DESC, rowid DESC",
                 (inquiry_id,),
             ).fetchall()
         return tuple(
@@ -915,6 +928,25 @@ class V12Store:
     def latest_active_alert(self, inquiry_id: str) -> ActiveAlertDTO | None:
         rows = self.active_alerts(inquiry_id)
         return rows[0] if rows else None
+
+    def business_state(self, inquiry_id: str) -> BusinessState:
+        with _connect(self.database_path) as connection:
+            row = connection.execute(
+                "SELECT business_state FROM workflow_v12_inquiry_state WHERE inquiry_id=?",
+                (inquiry_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(inquiry_id)
+        return BusinessState(row["business_state"])
+
+    def order_summary(self, inquiry_id: str) -> OrderSummaryDTO:
+        state = self.business_state(inquiry_id)
+        return OrderSummaryDTO(
+            inquiry_id,
+            state,
+            _business_label(state),
+            self.latest_active_alert(inquiry_id),
+        )
 
     def event_history(self, inquiry_id: str) -> tuple[WorkflowEvent, ...]:
         with _connect(self.database_path) as connection:
@@ -1350,6 +1382,14 @@ def _safe_ref(value: str | None) -> str | None:
     if not _OPAQUE_REF.fullmatch(value):
         return None
     return value
+
+
+def _business_label(state: BusinessState) -> BusinessLabel:
+    return {
+        BusinessState.DUPLICATE_STOPPED: BusinessLabel.DUPLICATE_ORDER,
+        BusinessState.PURCHASE_EXCEPTION: BusinessLabel.PURCHASE_EXCEPTION,
+        BusinessState.PURCHASE_RECORDED: BusinessLabel.PURCHASE_SENT,
+    }.get(state, BusinessLabel.PROCESSING)
 
 
 def _fsync_file(path: Path) -> None:
