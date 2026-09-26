@@ -36,11 +36,15 @@ The AI preview reader requires `button#ai-recognize` text `重新识别`, one ro
 `input[data-f="PartNo"]`, `input[data-f="Brand"]`, and
 `input[data-f="Qty"]`. Workflow owns exact AI validation.
 
-Parent import is not verified. The AI panel showed a footer control labeled
-`保存数据`; static callback inspection was blocked by browser URL policy, so the
-control was not clicked. No selector or import method is inferred. Exact parent
-form model/brand/quantity read-back remains UNKNOWN. Therefore a live
-coordinator-compatible `PurchaseDraftWriter.prepare()` is still pending.
+Parent import is not verified. On a fresh blank form, the accessibility tree
+showed footer `button#win_btn__dialog11` with exact visible text `保存数据`.
+The available browser interface did not expose `onclick`, form/formaction/type
+attributes, or loaded JavaScript objects. No source-loading or alternate
+inspection path was used. Whether this button only transfers preview values to
+the parent form DOM remains UNKNOWN, so it was not clicked. Parent model/brand/
+quantity selectors and exact read-back remain UNKNOWN. Therefore a live
+coordinator-compatible `PurchaseDraftWriter.prepare()` is still pending; record
+this seam as `AI_IMPORT_SEMANTICS_UNCONFIRMED`.
 
 The existing gated Save boundary remains closed. If later authorized, it requires
 one visible, enabled `button#btnSave` with exact semantics `保存`, records durable

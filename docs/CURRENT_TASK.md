@@ -1,6 +1,7 @@
 # Current Task — V1.2 PRE_SAVE closeout
 
 Status: PRE_SAVE_READY / REAL_SAVE_GATED
+AI_IMPORT_SEMANTICS_UNCONFIRMED
 
 ## Done
 
@@ -14,15 +15,16 @@ Status: PRE_SAVE_READY / REAL_SAVE_GATED
 
 ## AI import and purchase prepare
 
-- The signed-in UI currently shows AI recognition ready for the public generic test values. The “保存数据” footer control's static callback could not be inspected: the browser security policy rejected `view-source:` and prohibits equivalent workarounds.
-- The control was not clicked. Parent-form import and exact parent model/brand/quantity read-back remain UNKNOWN. No import selector was guessed.
+- Opened and closed one blank form's AI panel without entering data or saving. The accessibility tree confirmed the footer as `button#win_btn__dialog11`, exact visible text `保存数据`.
+- The available browser interface exposed accessibility state but not `onclick`, form/formaction/type relationships, or loaded JavaScript objects. No source-loading or other inspection workaround was used. Whether this control only transfers preview values into the parent DOM remains UNKNOWN.
+- The control was not clicked. Parent-form import and exact parent model/brand/quantity selectors/read-back remain UNKNOWN. No import selector was guessed.
 - A coordinator-compatible production `PurchaseDraftWriter.prepare()` is not ready until that import/read-back path is verified. Current low-level `InsoPurchaseWriter` remains prepare-only in intent but has no verified parent import operation.
 
 ## Required acceptance before first real Save
 
 - Nonempty duplicate query settled signal, creator selector, and INSO quote selector.
 - Local CDP endpoint, browser/context and lease-owned operation-page identities; reused browser must remain open.
-- AI preview-to-parent import and exact parent read-back.
+- AI import semantics and exact parent form read-back (`LM358`, `Texas Instruments`, `123`).
 - Live `#btnSave` uniqueness/semantics and reliable read-only saved-record identity/reconciliation.
 - Owner's explicit authorization for the first real Save.
 
