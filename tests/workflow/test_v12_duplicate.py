@@ -8,6 +8,7 @@ failure into a "not a duplicate".
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -188,6 +189,42 @@ def test_ambiguous_read_maps_to_ambiguous_outcome(code: DuplicateHistoryFailure)
     assert result.outcome is DuplicateOutcome.AMBIGUOUS
     assert result.reason_code is ReasonCode.DUPLICATE_LOOKUP_AMBIGUOUS
     assert route_after_research(result) is PostResearchRoute.DUPLICATE_CONFIRMATION_REQUIRED
+
+
+def test_unconfirmed_settlement_is_unavailable_not_ambiguous() -> None:
+    checker, _ = checker_for(
+        InsoDuplicateHistoryError(DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED)
+    )
+
+    result = checker.check(INQUIRY, MPN, 10, at=NOW)
+
+    assert result.outcome is DuplicateOutcome.UNAVAILABLE
+    assert result.reason_code is ReasonCode.DUPLICATE_LOOKUP_UNAVAILABLE
+    assert result.repeated is None
+    assert route_after_research(result) is PostResearchRoute.DUPLICATE_CONFIRMATION_REQUIRED
+
+
+def test_creator_and_quote_flow_into_the_duplicate_result() -> None:
+    checker, _ = checker_for(
+        capture(
+            DuplicateHistoryRecord(
+                bill_id="7788",
+                mpn=MPN,
+                quantity=10,
+                quoted_at=NOW - timedelta(hours=2),
+                creator="制单人甲",
+                inso_quote=Decimal("12.50"),
+                currency="RMB",
+            )
+        )
+    )
+
+    result = checker.check(INQUIRY, MPN, 10, at=NOW)
+
+    assert result.repeated is True
+    assert result.creator == "制单人甲"
+    assert result.inso_quote == Decimal("12.50")
+    assert result.currency == "RMB"
 
 
 def test_session_lease_failure_is_unavailable() -> None:

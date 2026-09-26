@@ -6,11 +6,14 @@ read-only: it never saves, sends or mutates INSO data, and it owns no purchase,
 notification or retry behaviour.
 
 Only selectors verified during the 2026-09-26 read-only discovery are used; see
-`docs/modules/INSO.md`. The result rows' field layout is still `UNKNOWN`, so the
-per-record field extraction is an explicit injected seam
-(:meth:`DuplicateHistoryPage.read_row_values`) instead of a guessed column
-mapping. When a record cannot be opened or read safely, the adapter fails closed
-with a typed error; it never guesses a value.
+`docs/modules/INSO.md`. :class:`PlaywrightDuplicateHistoryPage` is the live
+read-only adapter over the verified `#_id_dg` table and its model/quantity/time
+cells. Two live facts are still unconfirmed, so they remain explicit seams
+instead of guesses: the completion signal for a nonempty query (the live adapter
+fails closed), and the 制单人 / INSO-quote selectors (the record's optional
+fields stay ``None`` until an operator confirms them). When a record cannot be
+opened or read safely, the adapter fails closed with a typed error and never
+guesses a value.
 
 Business rules -- canonical MPN, the rolling inclusive 168h window, latest-record
 selection and the equal-timestamp AMBIGUOUS rule -- are deliberately NOT
@@ -76,11 +79,30 @@ _INSO_TIMESTAMP_PATTERNS = (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class DuplicateHistoryFieldSelectors:
+    """Result-row cell selectors.
+
+    The three required cells are live-verified. ``creator`` (制单人) and
+    ``inso_quote`` are required by the duplicate notification contract but their
+    live cell/field selector is still unconfirmed, so they default to ``None``:
+    the adapter then never guesses a column and the record's optional fields come
+    back as ``None``. Set them only from a confirmed live observation.
+    """
+
+    model: str = RESULT_MODEL_CELL_SELECTOR
+    quantity: str = RESULT_QUANTITY_CELL_SELECTOR
+    quoted_at: str = RESULT_TIMESTAMP_CELL_SELECTOR
+    creator: str | None = None
+    inso_quote: str | None = None
+
+
 class DuplicateHistoryFailure(StrEnum):
     """Closed failure codes; a read failure is never a "not a duplicate"."""
 
     SESSION_LEASE_REQUIRED = "SESSION_LEASE_REQUIRED"
     HISTORY_LIST_UNAVAILABLE = "HISTORY_LIST_UNAVAILABLE"
+    QUERY_SETTLEMENT_UNCONFIRMED = "QUERY_SETTLEMENT_UNCONFIRMED"
     RESULT_ROW_UNREADABLE = "RESULT_ROW_UNREADABLE"
     RESULT_IDENTIFIER_AMBIGUOUS = "RESULT_IDENTIFIER_AMBIGUOUS"
     RECORD_FIELDS_UNAVAILABLE = "RECORD_FIELDS_UNAVAILABLE"
@@ -107,11 +129,15 @@ class DuplicateHistoryRowValues:
     """Raw values displayed for one result row, exactly as they appear.
 
     The page implementation must NOT canonicalize or reinterpret them.
+    ``creator`` and ``inso_quote_text`` are ``None`` while their live selector is
+    unconfirmed; they must never be filled from a guessed column.
     """
 
     model: str
     quantity_text: str
     quoted_at_text: str
+    creator: str | None = None
+    inso_quote_text: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,14 +271,16 @@ class InsoDuplicateHistoryReader:
                 )
         except InsoDuplicateHistoryError:
             raise
-        except SecurityViolation as exc:
+        except SecurityViolation:
+            # `from None`: the wrapped message must never surface raw page or
+            # provider text through a chained traceback.
             raise InsoDuplicateHistoryError(
                 DuplicateHistoryFailure.SESSION_LEASE_REQUIRED, url
-            ) from exc
-        except Exception as exc:
+            ) from None
+        except Exception:  # noqa: BLE001 - raw page/provider failures are sanitized
             raise InsoDuplicateHistoryError(
                 DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE, url
-            ) from exc
+            ) from None
         return DuplicateHistoryCapture(target, records, url, self._clock())
 
     # -- internals ---------------------------------------------------------
@@ -336,7 +364,138 @@ class InsoDuplicateHistoryReader:
             mpn=row.values.model,
             quantity=_parse_quantity(row.values.quantity_text),
             quoted_at=_parse_inso_timestamp(row.values.quoted_at_text),
+            creator=_optional_text(row.values.creator),
+            inso_quote=_parse_optional_quote(row.values.inso_quote_text),
         )
+
+
+def _optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = value.strip()
+    return text or None
+
+
+def _parse_optional_quote(value: str | None) -> Decimal | None:
+    """Parse an optional displayed INSO quote.
+
+    Absent/blank means the row showed no quote. A present value that is not a
+    plain non-negative decimal is a data error, not an invented amount.
+    """
+
+    text = _optional_text(value)
+    if text is None:
+        return None
+    try:
+        parsed = Decimal(text.replace(",", ""))
+    except ArithmeticError:
+        raise InsoDuplicateHistoryError(
+            DuplicateHistoryFailure.RECORD_FIELDS_INVALID
+        ) from None
+    if not parsed.is_finite() or parsed < 0:
+        raise InsoDuplicateHistoryError(
+            DuplicateHistoryFailure.RECORD_FIELDS_INVALID
+        ) from None
+    return parsed
+
+
+class PlaywrightDuplicateHistoryPage:
+    """Live read-only adapter over the INSO business-inquiry list DOM.
+
+    It maps the narrow :class:`DuplicateHistoryPage` capability onto a Playwright
+    ``Page`` or ``Frame`` object. That object is duck-typed, so this module does
+    not import Playwright and the same adapter serves either the embedded
+    ``iframe_YeWuXJ_frame`` or a directly opened list page, whichever hosts the
+    list DOM.
+
+    It navigates and reads only: there is no save, send or submit call, and no
+    such selector is registered.
+    """
+
+    def __init__(
+        self,
+        page: object,
+        *,
+        selectors: DuplicateHistoryFieldSelectors | None = None,
+        timeout_ms: int = 45_000,
+    ) -> None:
+        self._page = page
+        self._selectors = selectors or DuplicateHistoryFieldSelectors()
+        self._timeout_ms = timeout_ms
+
+    # -- DuplicateHistoryPage ----------------------------------------------
+
+    def goto(self, url: str) -> None:
+        self._page.goto(url, wait_until="domcontentloaded", timeout=self._timeout_ms)
+
+    def set_text(self, selector: str, value: str) -> None:
+        self._page.fill(selector, value, timeout=self._timeout_ms)
+
+    def ensure_checked(self, selector: str) -> None:
+        self._page.check(selector, timeout=self._timeout_ms)
+
+    def click(self, selector: str) -> None:
+        self._page.click(selector, timeout=self._timeout_ms)
+
+    def wait_for_query_settled(self, *, timeout_ms: int) -> None:
+        """Fail closed until a nonempty-query completion signal is confirmed live.
+
+        The empty-result state (``.layui-table-none``) is verified, but there is
+        no verified way to distinguish a settled nonempty grid from a stale or
+        partially rendered one, and a fixed sleep is explicitly not acceptable.
+        Every read therefore stops here until an operator confirms the signal on
+        the live page.
+        """
+
+        raise InsoDuplicateHistoryError(
+            DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+        )
+
+    def wait_for(self, selector: str, *, timeout_ms: int) -> None:
+        self._page.wait_for_selector(selector, state="visible", timeout=timeout_ms)
+
+    def attributes(self, selector: str, name: str) -> tuple[str | None, ...]:
+        values = self._page.eval_on_selector_all(
+            selector,
+            "(els, attr) => els.map((el) => el.getAttribute(attr))",
+            name,
+        )
+        if not isinstance(values, list):
+            return ()
+        return tuple(value if isinstance(value, str) else None for value in values)
+
+    def html(self, selector: str) -> str | None:
+        return self._element_text(selector, "el => el.outerHTML")
+
+    def read_row_values(self, row_id: str) -> DuplicateHistoryRowValues | None:
+        """Read the verified model/quantity/time cells, plus any confirmed extras."""
+
+        model = self._cell_text(row_id, self._selectors.model)
+        quantity_text = self._cell_text(row_id, self._selectors.quantity)
+        quoted_at_text = self._cell_text(row_id, self._selectors.quoted_at)
+        if model is None or quantity_text is None or quoted_at_text is None:
+            return None
+        return DuplicateHistoryRowValues(
+            model=model,
+            quantity_text=quantity_text,
+            quoted_at_text=quoted_at_text,
+            creator=self._cell_text(row_id, self._selectors.creator),
+            inso_quote_text=self._cell_text(row_id, self._selectors.inso_quote),
+        )
+
+    # -- internals ---------------------------------------------------------
+
+    def _cell_text(self, row_id: str, cell_selector: str | None) -> str | None:
+        if not cell_selector:
+            # The selector is still unconfirmed, so nothing is read or guessed.
+            return None
+        return self._element_text(f"#{row_id} {cell_selector}", "el => el.textContent")
+
+    def _element_text(self, selector: str, expression: str) -> str | None:
+        if int(self._page.locator(selector).count()) != 1:
+            return None
+        value = self._page.eval_on_selector(selector, expression)
+        return value if isinstance(value, str) else None
 
 
 def _parse_quantity(value: str) -> int:
@@ -361,10 +520,10 @@ def _parse_inso_timestamp(value: str) -> datetime:
             continue
     try:
         parsed = datetime.fromisoformat(text)
-    except ValueError as exc:
+    except ValueError:
         raise InsoDuplicateHistoryError(
             DuplicateHistoryFailure.RECORD_FIELDS_INVALID
-        ) from exc
+        ) from None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=_INSO_TIMEZONE)
     return parsed.astimezone(UTC)
@@ -385,9 +544,11 @@ __all__ = [
     "RESULT_TIMESTAMP_CELL_SELECTOR",
     "DuplicateHistoryCapture",
     "DuplicateHistoryFailure",
+    "DuplicateHistoryFieldSelectors",
     "DuplicateHistoryPage",
     "DuplicateHistoryRecord",
     "DuplicateHistoryRowValues",
     "InsoDuplicateHistoryError",
     "InsoDuplicateHistoryReader",
+    "PlaywrightDuplicateHistoryPage",
 ]
