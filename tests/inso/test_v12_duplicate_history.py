@@ -19,7 +19,10 @@ from src.inso.duplicate_history import (
     EXACT_MATCH_CHECKBOX,
     MODEL_QUERY_INPUT,
     QUERY_BUTTON,
+    RESULT_MODEL_CELL_SELECTOR,
+    RESULT_QUANTITY_CELL_SELECTOR,
     RESULT_ROW_SELECTOR,
+    RESULT_TIMESTAMP_CELL_SELECTOR,
     DuplicateHistoryFailure,
     DuplicateHistoryRowValues,
     InsoDuplicateHistoryError,
@@ -402,3 +405,10 @@ def test_adapter_exposes_no_write_capability() -> None:
     # The page capability it depends on is read-only too.
     assert not hasattr(module.DuplicateHistoryPage, "save")
     assert not hasattr(module.DuplicateHistoryPage, "send")
+
+
+def test_live_result_selectors_are_scoped_to_confirmed_history_table() -> None:
+    assert RESULT_ROW_SELECTOR == "#_id_dg tr[id$='_Main']"
+    assert RESULT_MODEL_CELL_SELECTOR == "td:nth-child(9)"
+    assert RESULT_QUANTITY_CELL_SELECTOR == "td:nth-child(11)"
+    assert RESULT_TIMESTAMP_CELL_SELECTOR == "td:nth-child(14)"

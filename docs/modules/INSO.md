@@ -2,11 +2,11 @@
 
 ## Scope
 
-`src/inso` contains the shared-session lease, allowlisted action boundary, a
-prepare-only read-only inspector, and a minimal live-capable purchase
-preparation adapter. The adapter uses exact observed selectors and defaults to
-the closed production gate. It has no Save Data or Send method, registers no
-Save selector, and leaves AI result selectors unimplemented until verified.
+`src/inso` contains the shared-session lease, read-only duplicate history
+adapter, prepare-only inspector, and minimal purchase preparation adapter.
+The purchase adapter uses exact observed selectors and defaults to the closed
+production gate. It has no Save Data or Send method and registers no Save
+selector.
 
 ## Session ownership contract
 
@@ -39,10 +39,21 @@ ambiguity. The production feature gate is unconditionally closed. The only
 dispatcher exercised by tests is fake.
 
 The current action boundary is not production Save Data authorization.
-`InsoPurchaseWriter` exposes only new draft, customer, purchaser, importance,
-AI input/recognition, and a read-result contract. The separate inquiry-type
-setter fails closed. `#btnSave`, `#btnSave2`, and `#bcSend` are denied in this
-writer. Save-and-Send and Send remain prohibited in every stage.
+`InsoPurchaseWriter` exposes new draft, customer, purchaser, quotation routing,
+AI input/recognition, and AI result reading. Business `quotation_type` maps to
+the observed `#ImpValueF` control, labeled `重要程度`. Its exact allowlist is
+`需要问全价格` and `普通询价`; both were selected and read back on separate
+blank forms. The writer rejects every other popup value. `#btnSave`,
+`#btnSave2`, and `#bcSend` are denied in this writer. Save-and-Send and Send
+remain prohibited in every stage.
+
+The verified AI result reader requires `button#ai-recognize` text
+`重新识别`, exactly one row under `#preview-body`, and one input per field:
+`input[data-f="PartNo"]`, `input[data-f="Brand"]`, and
+`input[data-f="Qty"]`. It returns raw model and brand strings plus a positive
+integer quantity; canonical equality checks remain in Workflow. No result is
+returned when the ready state, row count, field uniqueness, or quantity cannot
+be confirmed.
 
 ## Discovery and UNKNOWNs
 
@@ -113,8 +124,9 @@ Observed blank-add-form metadata (opened then closed without filling or saving):
 
 ### Final discovery follow-up — 2026-09-26
 
-The form and type checks used the explicitly selected Edge tab and a blank Add
-form. No real customer, model, or order data was entered.
+The form checks used the explicitly selected Edge tab and separate blank Add
+forms. The AI checks used only the authorized synthetic input and one public
+generic component string. No Save or Send action occurred.
 
 - The blank form labels `采购人员` beside text input `#UserName_text`
   (placeholder `请选择...`) with backing hidden input `#UserName`. The separate
@@ -122,27 +134,33 @@ form. No real customer, model, or order data was entered.
   not the purchaser field.
 - The form has label `重要程度` and text input `#ImpValueF` (placeholder
   `请输入或选择...`). No field or hidden field labeled `询价类型` was found.
-  Clicking the empty input opened its associated
-  `.select-menu-modal .select-menu-item` popup with exact options
-  `需要问全价格` and `普通询价`. This is confirmed as an `重要程度` field; the
-  UI label is not `询价类型`. The writer does not operate this field and
-  leaves `SET_QUOTATION_TYPE` fail-closed.
+  Clicking the empty input opened `.select-menu-modal .select-menu-item` with
+  six options. The two business routing values are `需要问全价格` and
+  `普通询价`. Each was selected on a different blank form and read back exactly
+  from `#ImpValueF`; the form was closed without saving. Other popup options
+  are not in the writer allowlist.
 - `#btnSave` is a visible button with exact text `保存`; `#btnSave2` is a
   visible button with exact text `保存并发送`. `#bcSend` is a separate send
   control observed on an existing record. None was activated. They remain
   forbidden except the specifically gated Save Data action in a future,
   separately reviewed writer; Save-and-Send and Send stay prohibited.
-- `#ai_import_` is a visible button with inline handler attribute
-  `ai_import()`. It did not leave the embedded AI dialog visible in this
-  session. The dedicated AI page was opened directly on an independent blank
-  tab; page load alone showed no persistent record or save action.
+- `#ai_import_` has inline handler attribute `ai_import()`. One click created
+  an embedded `Import_ai.aspx?BillPage=Enquiry&VendorID=&h=510` iframe but it
+  remained hidden. The form frame and its parent did not expose a readable
+  `ai_import` function in the discovery context. No repeated button attempts
+  were made.
 - On `/skins/etaoerp/product/Import_ai.aspx`, `textarea#paste-area` accepted
-  the exact authorized synthetic string `TEST-MPN-001      TEST-BRAND      123`.
-  `button#ai-recognize` had visible text `AI 智能识别` and was clicked once. A
-  JavaScript alert appeared; after dismissing it, the page still showed its
-  empty-result prompt, the button text had not changed to `重新识别`, and no
-  result fields were populated. Recognition therefore did not reach an
-  observable ready result. No retry was made.
+  `TEST-MPN-001      TEST-BRAND      123`; recognition returned an alert and
+  no results. With `LM358      Texas Instruments      123`,
+  `button#ai-recognize` changed to `重新识别` and the result row exposed fields
+  through `data-f="PartNo"`, `data-f="Brand"`, and `data-f="Qty"`. The result
+  fields read back as the same public test values. The result-ready button and
+  selectors are verified.
+- The AI page includes `pasteImport() { AiImport.doImport(); }` as a parent-call
+  hook. The discovery AI tab was opened independently and had no `window.opener`.
+  Its `导入到单据` action was not activated. Because the embedded AI frame stayed
+  hidden, AI-to-parent form propagation and parent model/brand/quantity read-back
+  remain `UNKNOWN`.
 - The earlier read-only history detail check compared one visible row's
   `<digits>_Main` DOM id and numeric `Bill_View_Open(...)` argument against its
   detail form's `BillID`. The row id differed from the argument, and the
@@ -163,6 +181,24 @@ form. No real customer, model, or order data was entered.
 No screenshot was captured. No Save, Save-and-Send, Send, SMTP, Sheets write,
 or persistent INSO operation occurred. Blank forms and the independent AI tab
 were closed.
+
+### Duplicate reader integration — 2026-09-26
+
+Cherry-picked `fafc6b7f3101ff0c69c1872a9f094e2148398903`. The public
+`InsoDuplicateHistoryReader` consumes `InsoOperationAccess`, and
+`InsoDuplicateHistoryChecker` implements the existing Workflow `DuplicateChecker`
+seam by delegating business rules to `evaluate_duplicate_history`. It can be
+injected into `V12WorkflowCoordinator`; the production backend has not composed
+that V1.2 path. The rules already return `AMBIGUOUS` when multiple latest
+records share a timestamp.
+
+Read-only DOM inspection of the rendered list found the result layout table
+`#_id_dg`; model, quantity, and time correspond to cells 9, 11, and 14
+(`td:nth-child(9/11/14)`). A search for the synthetic `TEST-MPN-001` in exact
+mode returned no results; the completed empty state showed `.layui-table-none`,
+no row nodes, and a zero count. This confirms the empty-query state only. A
+reliable completion signal for nonempty results and the concrete live row
+extractor are not yet implemented, so these seams remain fail-closed.
 
 Observed existing-record/read-back structure (opened read-only from the history
 list, then closed without changes):
@@ -190,13 +226,11 @@ safe crop/redaction feasibility remains `UNKNOWN`.
 - Final local-CDP lease acceptance before the first real Save. The current
   extension session did not expose lease identities; this does not block
   prepare-only coding.
-- No separate `询价类型` field exists in the observed form. The confirmed
-  choices live under `重要程度` / `#ImpValueF`; do not label that control as a
-  separate inquiry-type field.
-- AI result selectors/values and deterministic ready state. The single
-  synthetic recognition attempt did not produce an observable result. The
-  writer result reader therefore fails closed until a result selector is
-  verified.
+- `#ImpValueF` is labeled `重要程度` but has the two exact business routing
+  values. The writer maps quotation routing to this control by CEO decision.
+- AI result-to-parent-form import and read-back. AI result page selectors/readiness
+  are verified; callback propagation is not.
+- Reliable nonempty history-query settlement and concrete row extraction.
 - A newly saved draft's stable identity and post-save read-back of status/time.
 - Safe, repeatable screenshot crop/redaction.
 

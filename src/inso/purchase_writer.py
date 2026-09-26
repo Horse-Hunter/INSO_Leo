@@ -22,6 +22,7 @@ from .write_safety import (
 )
 
 AI_ENTRY_PATH = "/skins/etaoerp/product/Import_ai.aspx"
+_QUOTATION_TYPES = frozenset({"需要问全价格", "普通询价"})
 _CUSTOMERS = frozenset({"Win Source Elec. Tech. Ltd"})
 _PURCHASERS = frozenset({"颜浩坚", "陈熙"})
 
@@ -38,6 +39,43 @@ class AiRecognitionResult:
 
 class AiResultReader(Protocol):
     def read(self) -> AiRecognitionResult | None: ...
+
+
+class PlaywrightAiResultReader:
+    """Read the verified one-row AI preview and ready button state."""
+
+    def __init__(self, ai_page: OperationPage) -> None:
+        self._ai_page = ai_page
+
+    def read(self) -> AiRecognitionResult | None:
+        page = self._ai_page.page
+        _require_ai_page(page.url)
+        ready = page.locator("button#ai-recognize")
+        if ready.count() != 1 or ready.inner_text().strip() != "重新识别":
+            return None
+        rows = page.locator("#preview-body > tr")
+        if rows.count() != 1:
+            return None
+        row = rows.nth(0)
+        fields = {
+            name: row.locator(f'input[data-f="{field}"]')
+            for name, field in (
+                ("model", "PartNo"),
+                ("brand", "Brand"),
+                ("quantity", "Qty"),
+            )
+        }
+        if any(locator.count() != 1 for locator in fields.values()):
+            return None
+        model = fields["model"].input_value()
+        brand = fields["brand"].input_value()
+        quantity_text = fields["quantity"].input_value()
+        if not model or not brand or not quantity_text.isdecimal():
+            return None
+        quantity = int(quantity_text)
+        if quantity <= 0:
+            return None
+        return AiRecognitionResult(model, brand, quantity, ready=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +118,18 @@ _BINDINGS: dict[WriteAction, _Binding] = {
             "",
             "",
             (("id", "UserName_text"), ("type", "text")),
+        ),
+        "form",
+    ),
+    WriteAction.SET_QUOTATION_TYPE: _Binding(
+        "quotation-routing-input",
+        "purchase-form",
+        "input#ImpValueF",
+        ControlSemantics(
+            "textbox",
+            "",
+            "",
+            (("id", "ImpValueF"), ("type", "text")),
         ),
         "form",
     ),
@@ -130,31 +180,16 @@ class _PlaywrightActionPort:
             ).locator(binding.selector)
         if binding.frame == "ai":
             page = self._ai_page.page
-            parsed = urlsplit(page.url)
-            if (
-                parsed.scheme != "https"
-                or parsed.hostname != "yingsuo.alperp.cn"
-                or parsed.path != AI_ENTRY_PATH
-                or parsed.username
-                or parsed.password
-                or parsed.query
-                or parsed.fragment
-            ):
-                raise SecurityViolation("AI page identity is not verified")
+            _require_ai_page(page.url)
             return page.locator(binding.selector)
         raise SecurityViolation("unknown INSO selector scope")
 
     def _ai_page_is_ready(self) -> bool:
-        parsed = urlsplit(self._ai_page.page.url)
-        return (
-            parsed.scheme == "https"
-            and parsed.hostname == "yingsuo.alperp.cn"
-            and parsed.path == AI_ENTRY_PATH
-            and not parsed.username
-            and not parsed.password
-            and not parsed.query
-            and not parsed.fragment
-        )
+        try:
+            _require_ai_page(self._ai_page.page.url)
+        except SecurityViolation:
+            return False
+        return True
 
     def _candidate(self, action: WriteAction) -> tuple[ControlCandidate, ...]:
         binding = _BINDINGS[action]
@@ -238,6 +273,20 @@ class _PlaywrightActionPort:
                 if purchaser_id.count() != 1 or not purchaser_id.input_value():
                     raise SecurityViolation("purchaser selection was not confirmed")
             return
+        if action is WriteAction.SET_QUOTATION_TYPE:
+            if value not in _QUOTATION_TYPES:
+                raise SecurityViolation("quotation type is not allowlisted")
+            locator.click()
+            menu = self._form_page.page.frame_locator(
+                "iframe#winIframealert_enquiry"
+            ).locator(".select-menu-modal .select-menu-item")
+            matches = [item for item in menu.all() if item.inner_text().strip() == value]
+            if len(matches) != 1:
+                raise SecurityViolation("quotation option is missing or ambiguous")
+            matches[0].click()
+            if locator.input_value() != value:
+                raise SecurityViolation("quotation type read-back did not match")
+            return
         if action is WriteAction.RUN_AI_RECOGNITION:
             locator.click()
             return
@@ -258,7 +307,7 @@ class InsoPurchaseWriter:
         self._gate = gate or ProductionWriteGate()
         self._form_page = form_page
         self._ai_page = ai_page
-        self._ai_result_reader = ai_result_reader
+        self._ai_result_reader = ai_result_reader or PlaywrightAiResultReader(ai_page)
         self._port = _PlaywrightActionPort(form_page, ai_page)
         self._registry = SelectorRegistry()
         for action, binding in _BINDINGS.items():
@@ -297,7 +346,9 @@ class InsoPurchaseWriter:
         self._actions.set_purchaser(value)
 
     def set_quotation_type(self, _value: str) -> None:
-        raise SecurityViolation("no separate inquiry-type control is verified")
+        if _value not in _QUOTATION_TYPES:
+            raise SecurityViolation("quotation type is not allowlisted")
+        self._actions.set_quotation_type(_value)
 
     def open_ai_entry(self) -> None:
         self._gate.require_open()
@@ -335,3 +386,17 @@ def _require_inso_origin(url: str) -> None:
         or parsed.password
     ):
         raise SecurityViolation("INSO origin is not verified")
+
+
+def _require_ai_page(url: str) -> None:
+    parsed = urlsplit(url)
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != "yingsuo.alperp.cn"
+        or parsed.path != AI_ENTRY_PATH
+        or parsed.username
+        or parsed.password
+        or parsed.fragment
+        or parsed.query not in {"", "BillPage=Enquiry&VendorID=&h=510"}
+    ):
+        raise SecurityViolation("AI page identity is not verified")

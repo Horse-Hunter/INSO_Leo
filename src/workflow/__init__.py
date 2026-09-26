@@ -12,6 +12,7 @@ from .service import (
     WorkflowWorker,
 )
 from .store import DEFAULT_RETRY_DELAYS, WorkflowStateStore
+from .v12_duplicate import InsoDuplicateHistoryChecker
 from .v12_flow import (
     FakePurchaseDraftWriter,
     ResearchBusinessFacts,
@@ -24,6 +25,7 @@ __all__ = [
     "BrandUpdater",
     "CompletionChecker",
     "FakePurchaseDraftWriter",
+    "InsoDuplicateHistoryChecker",
     "ResearchBusinessFacts",
     "ResearchExecutor",
     "ResearchPreparationError",

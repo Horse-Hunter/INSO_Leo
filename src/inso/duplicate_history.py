@@ -45,10 +45,15 @@ EXACT_MATCH_CHECKBOX = "#nolike"
 #: ``查询`` button.
 QUERY_BUTTON = "#select_btns"
 
-#: Result row DOM ids are ``<digits>_Main``. The element tag is intentionally
-#: not guessed; only the verified id suffix is used.
+#: Result rows are scoped to the confirmed primary result table. Other
+#: expandable panels on the list also contain rows whose ids end in ``_Main``.
 RESULT_ROW_ID = re.compile(r"^\d+_Main$")
-RESULT_ROW_SELECTOR = "[id$='_Main']"
+RESULT_ROW_SELECTOR = "#_id_dg tr[id$='_Main']"
+
+#: Live header-to-cell mapping confirmed from the result table DOM.
+RESULT_MODEL_CELL_SELECTOR = "td:nth-child(9)"
+RESULT_QUANTITY_CELL_SELECTOR = "td:nth-child(11)"
+RESULT_TIMESTAMP_CELL_SELECTOR = "td:nth-child(14)"
 
 #: A detail link calls ``Bill_View_Open(<numeric>)``. The numeric argument is a
 #: different identifier from the row DOM id and must never be substituted for it.
@@ -183,10 +188,9 @@ class DuplicateHistoryPage(Protocol):
     def read_row_values(self, row_id: str) -> DuplicateHistoryRowValues | None:
         """Return one row's displayed model/quantity/time, or ``None``.
 
-        The concrete selectors for these three fields are not yet verified
-        (`docs/modules/INSO.md`), so they are supplied by the composition root
-        rather than guessed by this adapter. Keys, order and values must not be
-        reinterpreted here.
+        The verified cells are `td:nth-child(9)`, `td:nth-child(11)`, and
+        `td:nth-child(14)` within the row. Query settlement is still unresolved;
+        implementations must not return rows until they can prove it settled.
         """
         ...
 
@@ -374,8 +378,11 @@ __all__ = [
     "EXACT_MATCH_CHECKBOX",
     "MODEL_QUERY_INPUT",
     "QUERY_BUTTON",
+    "RESULT_MODEL_CELL_SELECTOR",
+    "RESULT_QUANTITY_CELL_SELECTOR",
     "RESULT_ROW_ID",
     "RESULT_ROW_SELECTOR",
+    "RESULT_TIMESTAMP_CELL_SELECTOR",
     "DuplicateHistoryCapture",
     "DuplicateHistoryFailure",
     "DuplicateHistoryPage",
