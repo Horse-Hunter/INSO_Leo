@@ -1,14 +1,15 @@
 # Current Task
 
-Status: READY_FOR_CEO_REVIEW
+Status: BLOCKED
 
-Goal: Complete bounded, strictly read-only interactive discovery of the live INSO inquiry history and purchase form. No persistent business action is authorized.
+Goal: Complete final bounded INSO discovery needed to prepare a minimal purchase writer. No persistent business action is authorized in this task.
 
 Acceptance:
-- [x] Synced `feature/v1-2` to `8c2a40eb58c2f0e57a600e81a4c9b827538cc290` before discovery.
+- [x] Synced `feature/v1-2` to `cf0ecc90098832cd59f4d1b5ca33dc8062bdcc58` before discovery.
 - [x] Reused the explicitly identified, already logged-in Edge tab; no arbitrary tab/context selection.
-- [x] Inspected exact/left-match history queries, opened and closed a blank Add form and AI dialog, and opened/closed one existing record detail read-only.
-- [x] Did not run AI recognition, save, send, write Sheets, or send SMTP.
+- [x] Rechecked purchase form fields and read-only history identity; opened and closed a blank Add form and existing detail.
+- [ ] Run one AI recognition using only the authorized synthetic input and record exact read-back fields/ready state. BLOCKED: AI dialog did not become visible.
+- [x] Did not save, send, write Sheets, or send SMTP.
 - [x] Recorded observed facts and unresolved UNKNOWNs in `docs/modules/INSO.md` without retaining customer/order row values.
 - [x] No screenshot or evidence image was captured.
 
@@ -18,24 +19,24 @@ Constraints:
 - Production writer gate remains closed. No credentials, customer/order values, authenticated URLs, raw page payloads, or screenshots are committed.
 
 Done:
-- The live app shell showed title `英索实业`; active embedded page was `1.业务询价` at the verified list path recorded in `docs/modules/INSO.md`.
-- Exact-mode full-model test results matched the queried model; the prefix test returned no final rows in exact mode and matches in left-match mode. This supports strict matching for tested examples only.
-- Result rows used unique numeric `_Main` ids in the observed set; numeric `Bill_View_Open(...)` arguments differed. Equal-timestamp tie behavior and stable identity remain UNKNOWN.
-- The blank Add form opened without an observed immediate record creation. Form, AI dialog, Save and Save-and-Send control metadata are recorded in `docs/modules/INSO.md`; no fields were filled and no business write action was used.
-- AI result values/readiness remain UNKNOWN because recognition was not run. An existing read-only detail exposed a populated `BillID` field and read-only `PENO`; linkage to a stable list identity and post-save read-back remain UNKNOWN.
-- The selected existing browser tab showed top title `英索实业`, origin `https://yingsuo.alperp.cn`, and the inquiry list iframe identity. `InsoSessionLease` endpoint/browser/context identity was not verified.
-- The live page contained unrelated business details. No screenshot was taken; crop/redaction feasibility remains UNKNOWN.
+- The blank form maps `采购人员` to `#UserName_text` (backing `#UserName`) and `业务员` to `#OwnerID_text` (backing `#OwnerID`). `重要程度` uses `#ImpValueF`; no separate `询价类型` label was found and option semantics remain unverified.
+- On one existing record, the detail `BillID` matched the numeric `Bill_View_Open(...)` argument; the `_Main` row id differed. A repeated open attempt timed out, so cross-open/query identity stability remains UNKNOWN.
+- `#btnSave` showed `保存`; `#btnSave2` showed `保存并发送`; `#bcSend` is a send control in an existing record. None was activated.
+- No AI recognition was run. `#ai_import_` did not leave `#winIframe_dialog1` visible during this attempt, so the authorized synthetic input and AI read-back remain unverified.
+- `runtime/research.json` is absent and the code-default loopback CDP endpoint on port 9222 is unreachable. The selected Edge extension tab cannot supply the launcher `InsoSessionLease` context/page identity.
+- No screenshot was taken; crop/redaction feasibility remains UNKNOWN.
 
 Verification:
 - Documentation-only change; `git diff --check` — passed.
 - No automated runtime or live workflow was run.
 
 Remaining / UNKNOWN:
-- Full exact-search semantics beyond the tested examples.
-- Stable history identity, list/detail identity mapping, and equal-timestamp tie-break.
-- Live `InsoSessionLease` endpoint/browser/context/page ownership verification.
-- Intended inquiry-type and purchaser controls; AI recognition output/readiness.
-- New saved-draft identity, status/time read-back; safe screenshot crop/redaction.
+- AI dialog and exact recognition-result/readiness selectors: live writer cannot safely compare recognized data before Save Data until this is verified.
+- Live `InsoSessionLease` endpoint/browser/context/operation-page identity: live writer cannot safely establish page ownership until configured CDP access is available.
+- Repeated stability of the observed history `BillID`/link mapping, inquiry-type option semantics, and new-draft status/time read-back.
+- Safe screenshot crop/redaction.
+
+No persistent INSO write, Save Data, Save-and-Send, Send, SMTP, or Sheets write occurred. Do not start a live purchase writer until the AI read-back and lease ownership blockers are resolved and separately reviewed.
 
 Branch: `feature/v1-2`
 V1.1 rollback baseline: `be9d0a51d0375884dfa3e5e9e4317958899fdc75`
