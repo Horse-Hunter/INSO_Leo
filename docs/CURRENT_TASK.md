@@ -2,41 +2,39 @@
 
 Status: READY_FOR_CEO_REVIEW
 
-Goal: Integrate the V1.2 business flow on existing contracts and fake adapters while preserving V1.1 Research and keeping all live external actions disabled.
+Goal: Complete bounded, strictly read-only discovery of the live INSO business inquiry page without opening forms or performing business actions.
 
 Acceptance:
-- [x] Sheets pending rows enter the existing V1.1 queue; V1.2 duplicate check runs before the unchanged Research worker.
-- [x] Research runs for duplicate and lookup-unavailable orders; final routing waits for a confirmed duplicate result.
-- [x] Confirmed duplicates stop purchase, raise a red alert, and enqueue an unconditional duplicate notification.
-- [x] Non-duplicates use canonical Research facts for important notification and purchase routing; B/C unknown totals remain INDETERMINATE.
-- [x] Notification delivery remains recipient-scoped, fake-only and independent from purchase draft processing.
-- [x] Fake purchase adapter validates AI recognition only and cannot save to INSO.
-- [x] GUI consumes optional V1.2 business state, latest active alert and event history while preserving the existing single-page layout.
-- [x] V1.1 exception / Research remark values are not persisted into `workflow_items.last_error`; canary is absent from SQLite and GUI remark.
-- [x] Deterministic tests, Ruff and `git diff --check` pass.
+- [x] Synced `feature/v1-2` to `9a156ba2406bde10132a451837cc300c50fce2b8` before discovery.
+- [x] Reused the explicitly identified, already logged-in browser tab; no arbitrary tab/context selection.
+- [x] Read the INSO page identity, business inquiry history list/query controls, and current result-row identity shape.
+- [x] Did not click `新增`, submit a query, open or execute AI entry, save, send, write Sheets, or send SMTP.
+- [x] Recorded observed facts and unresolved UNKNOWNs in `docs/modules/INSO.md` without retaining customer/order row values.
+- [x] No screenshot or evidence image was captured.
 
 Constraints:
-- No live INSO discovery/control, Save Data, Save-and-Send, production smoke, SMTP, Sheets write, or production DB migration.
-- V1.1 Research business rules and `workflow_items` schema/semantics remain unchanged.
-- Production writer gate remains closed. No credentials, production data, raw external errors, or screenshots are added.
+- Discovery only. No INSO mutation, Save Data, Save-and-Send, SMTP, Sheets write, production database write, or production smoke.
+- V1.1 Research rules and existing runtime behavior remain unchanged.
+- Production writer gate remains closed. No credentials, customer/order values, authenticated URLs, raw page payloads, or screenshots are committed.
 
 Done:
-- Synced `feature/v1-2` to `ea2a9c61b1a98aa48498e9191a3d233746bd5755` before editing.
-- Added `V12WorkflowCoordinator` around the unchanged V1.1 `WorkflowWorker`; duplicate lookup is persisted before Research. An unconfirmed duplicate result leaves a durable ROUTING state, and a later confirmation resumes using the persisted V1 work item/customer snapshot without rerunning Research.
-- Duplicate orders stop before purchase and enqueue a repeat notification containing the latest history fields and quantity × INSO quote total. Non-duplicates independently enqueue important-order notifications and create a fake AI-validated purchase draft.
-- Notification commands can be delivered later; retry/failure/recovery stays in the existing recipient ledger and cannot alter purchase state.
-- GUI reads migrated V1.2 state read-only. The main table shows the newest active alert in red; order detail shows the business label and full event history.
-- V1.1 error persistence now stores Research reason/status, exception class name, or fixed Brand update codes; no exception message or Research remarks are stored.
-- No live Sheets, Research, INSO, SMTP, or production SQLite activity was performed.
+- The live app shell showed title `英索实业`; active embedded page was `1.业务询价` at the verified list path recorded in `docs/modules/INSO.md`.
+- The list exposes one visible `新增` button and a model search field, query button, `左匹配` and `精确` options. No query was run; exact-match backend behavior remains unverified.
+- Visible list rows have unique numeric `_Main` DOM ids within the current table, but the row id differs from the detail-link argument. Stable persisted history identity is not established.
+- The purchase form was not opened. Purchase controls, AI results, Save Data target, and saved-record read-back were not inspected and remain UNKNOWN.
+- The current page contains unrelated business details. Full-page screenshot was unsafe; no screenshot was taken, and crop/redaction feasibility remains UNKNOWN.
+- The read-only browser inspection used the selected existing user tab; the application `InsoSessionLease` identity metadata was not available through that browser-control path. No new child page was opened.
 
 Verification:
-- `python -m ruff check src tests` — passed.
-- `python -m pytest --basetemp .tmp/pytest-v12-final2 -q` — 473 passed, 11 skipped.
-- `git diff --check` — passed.
+- Documentation-only change; `git diff --check` — passed.
+- No automated runtime or live workflow was run.
 
 Remaining / UNKNOWN:
-- Production V1.2 orchestration, database migration, duplicate-history reader and purchase writer remain unconnected and gated. This integration is fake-only.
-- Live selectors/record identity, saved-record readback, notification provider behavior, and production smoke remain gated/unknown.
+- Whether exact search performs strict server-side model equality.
+- Stable history record ID and deterministic timestamp tie-break.
+- Live account/company and lease-level browser/context/page identity verification.
+- Purchase-form metadata, AI recognition read-back fields, and saved draft identity/read-back.
+- Safe repeatable evidence crop/redaction.
 
 Branch: `feature/v1-2`
 V1.1 rollback baseline: `be9d0a51d0375884dfa3e5e9e4317958899fdc75`
