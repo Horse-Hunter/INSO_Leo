@@ -1,20 +1,24 @@
 from __future__ import annotations
 
 from datetime import UTC
+from decimal import Decimal
 
 import pytest
 
 from src.launcher.v12_composition import (
+    ResearchExcelFactsProvider,
     UnavailableReadOnlySaveReconciler,
     V12ProductionAdapters,
     compose_v12_production,
 )
+from src.research.excel_output import ResearchExcelOutput
 from src.workflow.v12_contracts import (
     DeliveryOutcome,
     NotificationRecipient,
     NotificationTransportResult,
     ReconciliationOutcome,
 )
+from src.workflow.v12_smtp_transport import QQSMTPConfig, QQSMTPTransport
 
 
 class _DuplicateChecker:
@@ -88,3 +92,61 @@ def test_unavailable_save_reader_only_returns_unknown() -> None:
     assert result.reconciled_at.tzinfo is UTC
     assert result.authoritative is False
     assert result.candidate_count is None
+
+
+def test_research_facts_provider_reads_only_persisted_canonical_snapshot(
+    tmp_path,
+) -> None:
+    output = ResearchExcelOutput(tmp_path / "research.xlsx")
+    output.upsert(
+        "inquiry-1",
+        mpn="LM358",
+        brand="Texas Instruments",
+        quantity=123,
+        importance_raw="A",
+        stock_label="货足",
+        estimated_total=Decimal("1234.56"),
+        market_reference="3.14\n4.00-HQEW",
+        research_status="SUCCESS",
+    )
+    provider = ResearchExcelFactsProvider(output)
+
+    facts = provider.get("inquiry-1")
+
+    assert facts is not None
+    assert facts.inventory_status == "货足"
+    assert facts.estimated_total == Decimal("1234.56")
+    assert facts.market_minimum_reference_price == Decimal("3.14")
+    assert provider.get("missing") is None
+
+
+def test_research_facts_provider_preserves_unknown_amounts(tmp_path) -> None:
+    output = ResearchExcelOutput(tmp_path / "research.xlsx")
+    output.upsert(
+        "inquiry-1",
+        importance_raw="B",
+        stock_label="货少",
+        estimated_total=None,
+        market_reference=None,
+        research_status="SUCCESS",
+    )
+
+    facts = ResearchExcelFactsProvider(output).get("inquiry-1")
+
+    assert facts is not None
+    assert facts.inventory_status == "货少"
+    assert facts.estimated_total is None
+    assert facts.market_minimum_reference_price is None
+
+
+def test_qq_smtp_factory_uses_the_explicit_sender_config() -> None:
+    adapters = V12ProductionAdapters.with_qq_smtp(
+        duplicate_checker=_DuplicateChecker(),
+        research_facts=_ResearchFacts(),
+        purchase_writer=_PurchaseWriter(),
+        smtp_config=QQSMTPConfig(sender_address="sender@example.invalid"),
+        recipients=(NotificationRecipient("owner", "owner@example.invalid"),),
+    )
+
+    assert isinstance(adapters.notification_transport, QQSMTPTransport)
+    assert adapters.notification_transport._config.sender_address == "sender@example.invalid"
