@@ -86,3 +86,22 @@ Complete one local runtime acceptance covering:
 No Save, Save-and-Send, Send, SMTP, Sheets write, or production migration was
 performed in this closeout. CEO performs the daily Safety Review; the production
 write gate remains CLOSED.
+
+## Final runtime acceptance — 2026-09-26
+
+`runtime/research.json` was absent and has been created locally using the
+current non-secret `ResearchRuntimeConfig` schema. It points to the existing
+project endpoint `http://127.0.0.1:9222` and is Git-ignored. The repository's
+`tests/v1_integration/write_runtime_config.py` is stale: it passes removed
+fields to `InsoBrowserConfig`, so it cannot generate the file as checked in.
+
+The local endpoint did not accept a connection. No browser, context, or lease
+was attached; no arbitrary tab/context was selected; and no INSO page was
+opened. Therefore no new live selectors or control semantics were verified.
+Parent product selectors and synthetic read-back, live prepare, duplicate
+settlement/creator/quote, live Save semantics, and saved-record reconciliation
+remain unaccepted. These are the specific runtime items preventing first-Save
+readiness. The production write gate remains CLOSED.
+
+No Save, Save-and-Send, Send, real SMTP, Sheets write, or production database
+migration occurred.

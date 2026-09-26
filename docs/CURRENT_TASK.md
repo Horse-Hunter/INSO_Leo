@@ -1,37 +1,33 @@
-# Current Task — V1.2 PRE_SAVE closeout
+# Current Task — V1.2 final runtime acceptance
 
-Status: PRE_SAVE_READY / REAL_SAVE_GATED
-CODE READY / LIVE FIELD SELECTORS PENDING
+Status: BLOCKED — LOCAL_CDP_UNREACHABLE
+Production write gate: CLOSED
 
-## Done
+## Code already accepted
 
 - WorkBuddy duplicate reader `441b984db4703deeae66bda2878398a3f01b92de` was cherry-picked as `9c7e621`.
 - The live duplicate adapter reads `#_id_dg` model/quantity/time cells 9/11/14 and verifies the detail `BillID` identity. It delegates all duplicate semantics to `evaluate_duplicate_history`.
 - Query settlement remains `QUERY_SETTLEMENT_UNCONFIRMED`; the live result therefore remains unavailable and cannot be treated as nonduplicate. Creator and INSO quote selectors default to `None`.
-- A launcher `ResearchExcelFactsProvider` now reads the persisted canonical Research workbook snapshot by inquiry identity. It does not run searches or recalculate Research rules; missing/unreadable facts return `None`.
-- V1.2 adapter construction can bind the existing `QQSMTPTransport` to an explicit `QQSMTPConfig.sender_address`, recipients and credential provider. This performs no SMTP operation. The production write gate remains closed.
+- `ResearchExcelFactsProvider` reads the persisted canonical Research workbook snapshot by inquiry identity; it does not re-search or recalculate Research rules.
+- V1.2 adapter construction can bind the existing `QQSMTPTransport` to explicit sender config and recipients. This performs no SMTP operation. Production write gate remains closed.
 - Existing exact quotation routing, purchaser allowlists, durable UNKNOWN-before-click Save path and UNKNOWN/manual reconciliation seam remain unchanged.
-- First real Save still requires explicit complete adapters. No production adapter is substituted with a fake.
+- `ParentProductFields` and coordinator-compatible `CoordinatorPurchaseDraftWriter.prepare()` exist. Prepare validates AI preview before touching parent fields, writes validated values, then validates parent read-back. Prepare exposes no Save or Send method and does not refer to `win_btn__dialog11`.
+- No production parent-field adapter exists because live model/brand/quantity selectors have not been verified; the production purchase prepare cannot be composed without it.
 
-## AI preview and parent product fields
+## Runtime acceptance attempt — 2026-09-26
 
-- `AI_IMPORT_SEMANTICS_UNCONFIRMED` remains recorded for `button#win_btn__dialog11` (“保存数据”). CEO's decision removes it from automation and the purchase prepare flow; it is not a blocker.
-- Added `ParentProductFields` with only model/brand/quantity set and read methods, plus a coordinator-compatible `CoordinatorPurchaseDraftWriter.prepare()`. It validates preview with the existing Workflow rule before writing parent fields, then reads back and validates again.
-- No production parent-field adapter is implemented because its selectors are UNKNOWN. `V12ProductionAdapters` requires the coordinator writer, which itself requires the explicit parent-field seam; without verified live fields no production purchase prepare can be composed.
-- Prepare does not expose Save or Send and does not refer to `win_btn__dialog11`.
-
-## Required acceptance before first real Save
-
-- Local CDP endpoint, intended browser/context, lease and operation-page identity; reused browser remains open.
-- Parent model/brand/quantity selectors are unique, visible/actionable, initially empty, and exact-read-back after synthetic fill.
-- Duplicate nonempty query settled signal, creator selector, and INSO quote selector.
-- Live `#btnSave` uniqueness and exact semantics, plus saved-record read-only identity/reconciliation.
-- Owner's explicit authorization for the first real Save.
+- `runtime/research.json` was absent. A valid non-secret file was created using the current `ResearchRuntimeConfig` schema and the existing loopback endpoint `http://127.0.0.1:9222`; it is Git-ignored. The checked-in `tests/v1_integration/write_runtime_config.py` helper is stale and fails because it passes removed INSO config fields.
+- The configured local CDP endpoint did not accept a connection. No browser was started and `attach_inso_research_session` was not called. Browser/context/lease/operation-page identity and reused-browser lifecycle were not accepted. No arbitrary tab or context was selected.
+- With no reachable authenticated session, no INSO page was opened or interacted with. Synthetic parent fields, complete purchase prepare, duplicate query/settlement/creator/quote, Save controls and existing-record reconciliation were not live-verified.
+- Specific remaining blockers before first Save authorization: a reachable intended local CDP session; verified parent model/brand/quantity fields and prepare dry-run; verified duplicate query settlement plus creator and INSO quote fields; live Save-control semantics; and a usable read-only saved-record reconciliation identity.
+- No production adapter was enabled or substituted with a fake. Production write gate remains CLOSED.
 
 ## Verification and side effects
 
-- No Save Data, Save-and-Send, Send, SMTP, Sheets write, production migration, or production smoke occurred.
-- Verification results for the current change are recorded in the delivery report.
+- No Save Data, Save-and-Send, Send, SMTP, Sheets write, production migration, or production smoke occurred. No INSO page interaction occurred.
+- `python -m ruff check src tests`: passed.
+- `python -m pytest tests/inso tests/workflow tests/launcher -q --tb=short --basetemp runtime/pytest-v12-acceptance-20260926`: 246 passed, 1 skipped. The default Windows pytest temp path was inaccessible; rerunning under a unique ignored workspace temp directory passed.
+- `git diff --check`: checked before delivery.
 - V1.1 Research behavior and its canonical rules are unchanged.
 
 CEO performs the daily Safety Review. Keep the production write gate CLOSED.
