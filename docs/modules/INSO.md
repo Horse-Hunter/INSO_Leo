@@ -89,24 +89,19 @@ write gate remains CLOSED.
 
 ## Final runtime acceptance — 2026-09-26
 
-Edge Stable was found at
-`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe` (version
-`153.0.4234.48`). The persistent `runtime/browser-profile`, ignored
-`runtime/production.json`, and validated `runtime/research.json` are prepared.
+The automated read-only CDP diagnostic passed on the persistent
+`runtime/browser-profile`: policy values were `RemoteDebuggingAllowed=NOT_SET`
+and `UserDataDir=NOT_SET`; the actual Edge process arguments and listener PID
+matched the dedicated profile. `/json/version`, `/json/list`, and Playwright
+`connect_over_cdp` passed. The diagnostic result is `EDGE_CDP_READY`.
 
-`acquire_cdp_browser` launched an owned Edge process, but stable attachment via
-`attach_inso_research_session` failed. The default TCP probe returned before
-Playwright could attach; a strict `/json/version` probe timed out for the default
-launcher. Omitting `--no-startup-window` for a diagnostic launch exposed the
-CDP version endpoint, but Playwright still received a connection reset. The
-owned launches were closed; the persistent profile remains. Existing user Edge
-processes were not closed.
+During Phase A, `acquire_cdp_browser` and `InsoSessionLease` passed with one
+APP_OWNED browser context and a lease-created operation page. Navigating to the
+known read-only history-list route redirected to `/login.aspx`, with one
+password input. The result is `OWNER_LOGIN_REQUIRED`; the Edge window/profile
+was left open. No credentials or verification challenge were entered.
 
-No lease or operation page was established, so no INSO page was opened and no
-login state was inspected. Parent synthetic read-back/prepare, duplicate
-settlement/creator/quote, live Save semantics, and saved-record reconciliation
-remain unaccepted. Stable Playwright attachment to the project Edge profile is
-the current blocker. The production write gate remains CLOSED.
-
-No Save, Save-and-Send, Send, real SMTP, Sheets write, or production database
-migration occurred.
+Because authentication was unavailable, no business-page DOM was inspected.
+Duplicate settlement/creator/quote, parent product selectors, purchase/AI
+controls, Save controls, and saved-record reconciliation remain UNKNOWN. No
+business query or mutation was performed. Production write gate remains CLOSED.

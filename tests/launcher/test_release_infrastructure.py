@@ -337,13 +337,17 @@ def test_cdp_launches_only_explicit_existing_profile_and_closes_owned(
 
 def test_cdp_missing_or_invalid_bootstrap_fails_closed(tmp_path):
     with pytest.raises(BrowserBootstrapError):
-        acquire_cdp_browser("http://127.0.0.1:9222", tmp_path, {}, probe=lambda _: False)
+        acquire_cdp_browser(
+            "http://127.0.0.1:9222", tmp_path, {},
+            probe=lambda _: False, version_reader=lambda _url: None,
+        )
 
     with pytest.raises(BrowserBootstrapError):
         acquire_cdp_browser(
             "http://127.0.0.1:9222", tmp_path,
             {"browser_bootstrap": {"executable": "absent.exe", "profile_dir": "unknown", "debug_port": 9222}},
             probe=lambda _: False,
+            version_reader=lambda _url: None,
         )
 
 

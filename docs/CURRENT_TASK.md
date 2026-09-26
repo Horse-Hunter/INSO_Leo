@@ -1,9 +1,10 @@
 # Current Task — V1.2 final runtime acceptance
 
-Status: PRE_SAVE_READY / REAL_SAVE_GATED
+Phase A: BLOCKED — OWNER_LOGIN_REQUIRED
+V1.2 status: PRE_SAVE_READY / REAL_SAVE_GATED
 Production write gate: CLOSED
 
-CDP diagnostic: EDGE_CDP_READY. Final runtime acceptance was not performed in this diagnostic task.
+CDP diagnostic: EDGE_CDP_READY. Lease attachment passed; live discovery stopped at the login boundary.
 
 ## Code already accepted
 
@@ -34,6 +35,13 @@ CDP diagnostic: EDGE_CDP_READY. Final runtime acceptance was not performed in th
 - Both diagnostic APP_OWNED Edge processes were closed through their own handles after verification. The persistent profile was retained. An isolated profile was not run because the current runtime profile passed; no INSO or business page was opened.
 - The earlier `EDGE_CDP_ATTACH_FAILED` was not reproducible in the authorized Windows diagnostic execution. Its original trigger remains UNKNOWN; no persistent policy, command-line, profile, port ownership, or Playwright attach failure was found.
 - Final Runtime Acceptance remains pending and was not run. Production write gate remains CLOSED; no Save, Send, SMTP, or Sheets write occurred.
+
+## Final Runtime Acceptance Phase A — 2026-09-26
+
+- Reused the configured CDP endpoint and project lease path. `acquire_cdp_browser` launched an APP_OWNED Edge; the browser was connected with exactly one context, and a lease-created operation page had a verified identity.
+- Navigating that operation page to the known read-only history-list route redirected to `yingsuo.alperp.cn/login.aspx`; one password input was present. Result: `OWNER_LOGIN_REQUIRED`. No credentials, OTP, or challenge were entered or bypassed. The dedicated Edge/profile was left open at the login page.
+- No authenticated INSO business page was reached. Duplicate settlement/creator/quote, parent product selectors, purchase/AI controls, Save controls, and saved-record reconciliation were not inspected and remain UNKNOWN.
+- No business-page click, query, form input, AI action, Save, Send, SMTP, or Sheets write occurred. Production write gate remains CLOSED.
 
 ## Verification and side effects
 
