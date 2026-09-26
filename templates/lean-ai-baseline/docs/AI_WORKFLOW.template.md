@@ -5,11 +5,11 @@
 ## 团队
 
 默认结构：Human Owner → CEO → Main Programmer。
-临时 Specialist 只在确有必要时加入，完成目标后退出。不要为了形式增加角色。
+CEO 默认兼任 Architecture 与日常 Safety Review。临时 Specialist 只在确有必要时加入，完成目标后退出。不要为了形式增加角色。
 
 ## CEO
 
-负责：阶段目标/边界/Acceptance；重大业务、架构、安全和版本决定；治理文档；关键阶段 Review；主动删减过度设计。
+负责：阶段目标/边界/Acceptance；重大业务、架构、安全和版本决定；项目架构与日常安全 Review；治理文档；关键阶段 Review；主动删减过度设计。
 不负责：函数级实现、模块进度管理、普通 bug 反复 Review、把治理文档写成业务说明或开发日志。
 
 ## Main Programmer
@@ -19,8 +19,8 @@
 
 ## Specialist
 
-- Security：只处理具体高影响风险。
-- Architecture：只处理真正的大架构问题。
+- Security：仅在首次真实高风险写入、不可逆操作或 CEO 对安全边界不确定时临时启用。
+- Architecture：仅在需要独立架构复核的大版本重构时临时启用。
 - Utility：只处理环境/工具问题。
 没有明确必要就不创建。
 
@@ -29,5 +29,6 @@
 - 简单优先，最小改动优先。
 - 结果导向，少过程控制。
 - 普通问题由 Main Programmer 自己解决。
-- 只对真实高风险或重大边界变化增加额外 Review。
+- 日常架构和安全 Review 由 CEO 一并完成。
+- 只对真实高风险或重大边界变化增加独立 Review。
 - 没有具体收益的抽象、流程、文档和 gate 不新增。

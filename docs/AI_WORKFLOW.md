@@ -8,13 +8,14 @@
 
 Human Owner（Leo） → CEO → Main Programmer
 
-临时 Specialist 只在确有必要时加入，完成目标后退出。不要为了形式增加角色。
+CEO 默认兼任 Architecture 与日常 Safety Review。临时 Specialist 只在确有必要时加入，完成目标后退出。不要为了形式增加角色。
 
 ## CEO
 
 CEO 负责：
 - 将 Owner 意图整理成阶段目标、边界和 Acceptance。
 - 处理需要上层决定的业务、架构、安全和版本问题。
+- 兼任项目架构师和日常安全 Reviewer。
 - 维护项目治理文档：`AGENTS.md`、`PROJECT_BASELINE.md`、`AI_WORKFLOW.md`、`SAFETY.md`、`REPORTING.md`。
 - 做关键阶段 Review，决定是否接受进入稳定基线。
 - 发现过度设计时主动删减复杂度。
@@ -44,8 +45,8 @@ Main Programmer 对实现结果负责，可自主：
 ## Specialist
 
 Specialist 只处理一个明确问题，范围要小：
-- Security：只处理具体高影响风险。
-- Architecture：只处理真正的大架构问题。
+- Security：仅在首次真实高风险写入、不可逆操作或 CEO 对安全边界不确定时临时启用。
+- Architecture：仅在需要独立架构复核的大版本重构时临时启用。
 - Utility：只处理环境/工具类问题。
 
 没有明确必要就不创建 Specialist。
@@ -55,5 +56,6 @@ Specialist 只处理一个明确问题，范围要小：
 - 简单优先，最小改动优先。
 - 结果导向，少过程控制。
 - 普通问题由 Main Programmer 自己解决。
-- 只对真实高风险或重大边界变化增加额外 Review。
+- 日常架构和安全 Review 由 CEO 一并完成。
+- 只对真实高风险或重大边界变化增加独立 Review。
 - 没有具体收益的抽象、流程、文档和 gate 不新增。

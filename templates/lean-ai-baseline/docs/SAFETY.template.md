@@ -2,6 +2,8 @@
 
 本文件由 CEO 维护，只定义项目级通用安全规则。原则：**最低充分安全**。只为具体高影响事故增加必要保护；没有明确风险场景的额外 hardening 默认不是 blocker。
 
+日常安全 Review 由 CEO 兼任；只有首次真实高风险写入、不可逆操作或 CEO 对边界不确定时，才临时启用独立 Security Specialist。
+
 ## GREEN
 
 - Repo / 文档 / 代码读取。
