@@ -1,6 +1,6 @@
 # Current Task — V1.2 final runtime acceptance
 
-Phase A: BLOCKED — CHROME_CDP_STARTUP_FAILED_GPU_PROCESS_ACCESS_DENIED
+Phase A: PENDING — DIAGNOSTIC_EXECUTION_CONTEXT_MISMATCH
 V1.2 status: PRE_SAVE_READY / REAL_SAVE_GATED
 Production write gate: CLOSED
 
@@ -32,13 +32,15 @@ Canonical browser baseline: Chrome (`browser.channel = "chrome"`). Edge is retai
 - The earlier `EDGE_CDP_ATTACH_FAILED` was not reproducible in the authorized Windows diagnostic execution. Its original trigger remains UNKNOWN; no persistent policy, command-line, profile, port ownership, or Playwright attach failure was found.
 - Final Runtime Acceptance remains pending and was not run. Production write gate remains CLOSED; no Save, Send, SMTP, or Sheets write occurred.
 
-## Chrome baseline restore and Phase A attempt — 2026-09-26
+## Chrome baseline parity investigation — 2026-09-26
 
 - V1.1's completed integration task identifies the dedicated Chrome profile as the existing Git-ignored `.browser-profile/cdp`; that directory still exists with Chrome `Local State` and `Default` profile data. It was not copied, cleared, migrated, or recreated.
 - The installed Chrome executable is `C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`. The ignored `runtime/production.json` now points to that executable, the existing `.browser-profile/cdp`, and port 9222. `runtime/research.json` was not changed and still targets `http://127.0.0.1:9222`.
 - Chrome RemoteDebuggingAllowed and UserDataDir policy values are NOT_SET in the checked HKLM/HKCU policy locations. No Chrome process was present before launch and no listener was present on 9222.
-- `acquire_cdp_browser` attempted to start Chrome with the configured original profile and expected CDP arguments. Chrome exited before `/json/version` or `DevToolsActivePort` became ready. Sanitized startup diagnostics identify repeated GPU child-process `ACCESS_DENIED` (`-1073741790`) followed by `GPU process isn't usable`; a single `--disable-gpu` diagnostic retry had the same result. The project bootstrap therefore closed only its own failed Chrome process.
-- The short-lived process prevented a verified live process command-line read and Playwright attach. No browser context, lease, operation page, or INSO page was established. INSO login status is UNKNOWN; this is not evidence that the original profile is logged out, so no login request is made.
+- The V1.1 packaged `--self-check` still passes, but it intentionally imports GUI dependencies only and never starts Chrome. Starting V1.1's exact `_launch()` code from the current diagnostic process used the same Chrome executable, original profile, port, remote-debugging address, startup-window flag, creation flags, startupinfo, and redirected standard handles as the historical V1.1 production boundary. It exited with `2147483651` before CDP became ready, exactly as the V1.2 diagnostic did.
+- The decisive difference is the process token: this diagnostic runs as `LEO229\CodexSandboxOffline` at Medium integrity, while the original profile and accepted V1.1 smoke are owned by `LEO229\Leo`. The sandbox process cannot reproduce the Owner's packaged Windows execution context. The observed GPU child-process access denial is therefore classified as `DIAGNOSTIC_EXECUTION_CONTEXT_MISMATCH`, not a V1.2 Chrome product blocker and not evidence that the profile or INSO login expired.
+- V1.1 and V1.2 use the same Chrome executable/profile/port. V1.1's configured readiness timeout is 45 seconds versus V1.2's 30 seconds; this does not explain a process that exits within seconds. No Chrome workaround flags, profile changes, or security-policy changes were made.
+- No browser context, lease, operation page, or INSO page was established in this sandbox. INSO login remains UNKNOWN. Resume Phase A directly from the Owner's known-good packaged Windows runtime; do not ask for another login unless that runtime actually redirects the original Chrome profile to `/login.aspx`.
 - No ordinary Chrome or Edge process was closed. The Edge backup profile remains untouched. No duplicate query, business-page inspection, Save, Send, SMTP, or Sheets write occurred.
 - Remaining Phase A work after Chrome can expose CDP: lease/context identity, read-only INSO discovery, duplicate settlement/creator/quote, purchase selectors, Save control semantics, and saved-record reconciliation.
 

@@ -99,17 +99,25 @@ was found and left in place without copying, clearing, or migrating it.
 The ignored `runtime/production.json` now points to the installed Chrome
 executable, that original profile, and port 9222. `runtime/research.json` remains
 unchanged. Chrome policy values `RemoteDebuggingAllowed` and `UserDataDir` were
-NOT_SET in the inspected HKLM/HKCU policy locations. Chrome exited before
-`/json/version` and `DevToolsActivePort` became ready; sanitized startup output
-reported GPU child-process `ACCESS_DENIED` and `GPU process isn't usable`. A
-single diagnostic retry with `--disable-gpu` failed the same way. Therefore no
-actual process command line, Playwright attach, context, lease, or operation
-page was verified. INSO login state is UNKNOWN, not `OWNER_LOGIN_REQUIRED`.
+NOT_SET in the inspected HKLM/HKCU policy locations. The V1.1 packaged
+`--self-check` passes but deliberately does not launch Chrome. Calling V1.1's
+exact `_launch()` from the current diagnostic process uses the same executable,
+profile, port, remote-debugging arguments, startupinfo, creation flags, and
+redirected standard handles as the V1.1 production boundary; it exits before
+CDP is ready in the same way as V1.2.
+
+The current diagnostic token is `LEO229\CodexSandboxOffline` at Medium
+integrity, whereas the original profile and accepted V1.1 smoke belong to
+`LEO229\Leo`. The sanitized GPU child-process access denial is classified as
+`DIAGNOSTIC_EXECUTION_CONTEXT_MISMATCH`, not as a V1.2 Chrome blocker or a
+profile/login failure. The owner-known packaged Windows runtime remains the
+acceptance environment. No Chrome workaround flags, security changes, or profile
+changes were made. INSO login state is UNKNOWN, not `OWNER_LOGIN_REQUIRED`.
 
 The earlier Edge CDP and `/login.aspx` observations are historical and do not
 establish Chrome authentication. Do not ask the Owner to log in until the
 original Chrome profile has actually been opened through a working Chrome CDP
-session and redirects to `/login.aspx`. Phase A remains pending Chrome startup
-and attach; duplicate settlement/creator/quote, purchase selectors, Save
-control semantics, and saved-record reconciliation remain UNKNOWN. Production
-write gate remains CLOSED.
+session and redirects to `/login.aspx`. Phase A remains pending in the
+Owner-known runtime; duplicate settlement/creator/quote, purchase selectors,
+Save control semantics, and saved-record reconciliation remain UNKNOWN.
+Production write gate remains CLOSED.
