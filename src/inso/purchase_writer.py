@@ -1,12 +1,13 @@
-"""Save-before purchase preparation using the existing INSO action boundary.
+"""Purchase draft preparation using the existing INSO action boundary.
 
-This adapter is live-capable but remains closed by ``ProductionWriteGate``.
-It deliberately has no Save Data or Send method and registers no Save selector.
+The Save Data path is durable-before-dispatch and remains closed by
+``ProductionWriteGate``. There is deliberately no Save-and-Send or Send path.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
@@ -29,7 +30,7 @@ _PURCHASERS = frozenset({"颜浩坚", "陈熙"})
 
 @dataclass(frozen=True, slots=True)
 class AiRecognitionResult:
-    """Read-only result shape; live result selectors are not yet verified."""
+    """Read-only value shape from the verified single-row AI result area."""
 
     model: str
     brand: str
@@ -39,6 +40,12 @@ class AiRecognitionResult:
 
 class AiResultReader(Protocol):
     def read(self) -> AiRecognitionResult | None: ...
+
+
+class SaveDispatchStore(Protocol):
+    """Narrow Workflow persistence seam; the INSO module owns no state rules."""
+
+    def begin_save_dispatch(self, inquiry_id: str, *, at: datetime) -> None: ...
 
 
 class PlaywrightAiResultReader:
@@ -157,6 +164,15 @@ _BINDINGS: dict[WriteAction, _Binding] = {
         ),
         "ai",
     ),
+    WriteAction.SAVE_DATA: _Binding(
+        "save-data-control",
+        "purchase-form",
+        "button#btnSave",
+        ControlSemantics(
+            "button", "保存", "保存", (("id", "btnSave"),)
+        ),
+        "form",
+    ),
 }
 
 
@@ -226,7 +242,9 @@ class _PlaywrightActionPort:
                     item["role"],
                     item["accessibleName"],
                     item["visibleText"],
-                    (("id", item["id"]), ("type", item["type"])),
+                    (("id", item["id"]),)
+                    if action is WriteAction.SAVE_DATA
+                    else (("id", item["id"]), ("type", item["type"])),
                 ),
                 enabled=item["enabled"],
                 visible=item["visible"],
@@ -290,11 +308,14 @@ class _PlaywrightActionPort:
         if action is WriteAction.RUN_AI_RECOGNITION:
             locator.click()
             return
+        if action is WriteAction.SAVE_DATA:
+            locator.click()
+            return
         raise SecurityViolation("action is not available in the purchase writer")
 
 
 class InsoPurchaseWriter:
-    """Save-before actions only; there is intentionally no Save or Send API."""
+    """Draft actions and one closed, durable-before-dispatch Save Data path."""
 
     def __init__(
         self,
@@ -317,8 +338,8 @@ class InsoPurchaseWriter:
                 binding.scope_id,
                 binding.semantics,
             )
-        # The writer has no route to any Save, Save-and-Send, or Send control.
-        for denied in ("#btnSave", "#btnSave2", "#bcSend"):
+        # Save-and-Send and Send have no action binding or dispatch path.
+        for denied in ("#btnSave2", "#bcSend"):
             self._registry.deny(denied)
         self._actions = InsoDraftActions(
             gate=self._gate,
@@ -375,6 +396,23 @@ class InsoPurchaseWriter:
         if result is None or not result.ready:
             raise SecurityViolation("AI recognition is not ready")
         return result
+
+    def save_data(
+        self, store: SaveDispatchStore, inquiry_id: str, *, at: datetime
+    ) -> None:
+        """Dispatch only after durable AI_RECOGNIZED state and exact Save control.
+
+        ``begin_save_dispatch`` persists UNKNOWN before the final semantic
+        re-check and private click. Any failure after that boundary stays
+        UNKNOWN and must be reconciled; this method never retries.
+        """
+
+        self._gate.require_open()
+        self._registry.resolve(WriteAction.SAVE_DATA, self._port.candidates())
+        # The store rejects every state except AI_RECOGNIZED, including a
+        # previous UNKNOWN outcome, before the private dispatcher can click.
+        store.begin_save_dispatch(inquiry_id, at=at)
+        self._actions.save_data()
 
 
 def _require_inso_origin(url: str) -> None:

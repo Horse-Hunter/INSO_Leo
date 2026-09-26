@@ -3,10 +3,10 @@
 ## Scope
 
 `src/inso` contains the shared-session lease, read-only duplicate history
-adapter, prepare-only inspector, and minimal purchase preparation adapter.
-The purchase adapter uses exact observed selectors and defaults to the closed
-production gate. It has no Save Data or Send method and registers no Save
-selector.
+adapter, prepare-only inspector, and minimal purchase adapter. The purchase
+adapter uses exact observed selectors and defaults to the closed production
+gate. It has one durable-before-dispatch Save Data path for the uniquely
+verified `#btnSave`; it has no Save-and-Send or Send path.
 
 ## Session ownership contract
 
@@ -40,12 +40,17 @@ dispatcher exercised by tests is fake.
 
 The current action boundary is not production Save Data authorization.
 `InsoPurchaseWriter` exposes new draft, customer, purchaser, quotation routing,
-AI input/recognition, and AI result reading. Business `quotation_type` maps to
+AI input/recognition, AI result reading, and the gated Save Data path. Business
+`quotation_type` maps to
 the observed `#ImpValueF` control, labeled `重要程度`. Its exact allowlist is
 `需要问全价格` and `普通询价`; both were selected and read back on separate
-blank forms. The writer rejects every other popup value. `#btnSave`,
-`#btnSave2`, and `#bcSend` are denied in this writer. Save-and-Send and Send
-remain prohibited in every stage.
+blank forms. The writer rejects every other popup value. Save Data is bound
+only to `button#btnSave` with exact button name and visible text `保存`; it must
+be unique, visible, and enabled. `V12Store.begin_save_dispatch()` runs after
+that preflight and before the private dispatch re-check/click, so any
+uncertainty after the boundary remains `UNKNOWN_WRITE_OUTCOME`. `#btnSave2`
+and `#bcSend` have no binding or action path. Save-and-Send and Send remain
+prohibited in every stage.
 
 The verified AI result reader requires `button#ai-recognize` text
 `重新识别`, exactly one row under `#preview-body`, and one input per field:
@@ -54,6 +59,34 @@ The verified AI result reader requires `button#ai-recognize` text
 integer quantity; canonical equality checks remain in Workflow. No result is
 returned when the ready state, row count, field uniqueness, or quantity cannot
 be confirmed.
+
+### AI result import to parent — 2026-09-26
+
+On a blank inquiry form, the embedded `AI录单` panel accepted the public
+generic input `LM358      Texas Instruments      123`. Recognition completed;
+the button changed to `重新识别`, and the one preview row read back those three
+values. The footer control was `保存数据` (`win_btn__dialog11`), not an observed
+`导入到单据` action. It was not clicked. The parent detail row remained blank,
+so the AI-to-parent import operation and exact parent read-back remain UNKNOWN.
+No import selector or method is enabled in the writer. The screenshot used to
+inspect the panel was not saved as evidence or committed.
+
+### Launcher composition and Save reconciliation
+
+`ProductionBackend` has an explicit V1.2 composition seam that wires
+`V12WorkflowCoordinator`, the duplicate checker, purchase draft adapter, and
+`V12NotificationWorker`/transport only when a complete live adapter bundle is
+provided. No fake adapters are substituted. This checkout has no
+coordinator-compatible live purchase `prepare` adapter (`InsoPurchaseWriter`
+still lacks the verified parent-import step), settled duplicate reader, or
+canonical research-facts provider;
+the V1.2 coordinator therefore remains uncomposed in the default production
+runtime, and the existing V1.1 poller/worker is unchanged. The production
+writer gate remains closed.
+
+The launcher calls the existing store reconciliation contract. Without a
+verified saved-record reader, the fallback returns typed `UNKNOWN`; the store
+records manual review. It never infers absence and never retries Save Data.
 
 ## Discovery and UNKNOWNs
 
@@ -188,9 +221,10 @@ Cherry-picked `fafc6b7f3101ff0c69c1872a9f094e2148398903`. The public
 `InsoDuplicateHistoryReader` consumes `InsoOperationAccess`, and
 `InsoDuplicateHistoryChecker` implements the existing Workflow `DuplicateChecker`
 seam by delegating business rules to `evaluate_duplicate_history`. It can be
-injected into `V12WorkflowCoordinator`; the production backend has not composed
-that V1.2 path. The rules already return `AMBIGUOUS` when multiple latest
-records share a timestamp.
+injected into `V12WorkflowCoordinator`; production composition accepts it only
+as an explicit adapter, but the current live reader remains unavailable because
+query settlement and row extraction are unresolved. The rules already return
+`AMBIGUOUS` when multiple latest records share a timestamp.
 
 Read-only DOM inspection of the rendered list found the result layout table
 `#_id_dg`; model, quantity, and time correspond to cells 9, 11, and 14
@@ -234,8 +268,8 @@ safe crop/redaction feasibility remains `UNKNOWN`.
 - A newly saved draft's stable identity and post-save read-back of status/time.
 - Safe, repeatable screenshot crop/redaction.
 
-Do not treat these observations as production writer approval. AI result
-read-back and saved-record reconciliation remain unresolved before any Save.
+Do not treat these observations as production writer approval. AI-to-parent
+import and saved-record reconciliation remain unresolved before any Save.
 Lease/CDP identity is a required runtime acceptance immediately before the
-first real Save, not a current coding blocker. No write gate is enabled. Save
-Data, Save-and-Send, and all send controls remain unavailable in this writer.
+first real Save, not a current coding blocker. The production gate remains
+closed. `#btnSave2` and all send controls remain unavailable in this writer.

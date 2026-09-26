@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from src.inso.purchase_writer import InsoPurchaseWriter, PlaywrightAiResultReader
 from src.inso.session import SecurityViolation
-from src.inso.write_safety import FakeWriteGate
+from src.inso.write_safety import FakeWriteGate, ProductionWriteGate
+
+NOW = datetime(2026, 9, 26, tzinfo=UTC)
 
 
 class _OperationPage:
@@ -24,6 +28,8 @@ class _Locator:
             return 1
         if self.selector == "button#ai-recognize":
             return 1
+        if self.selector == "button#btnSave":
+            return self.page.save_count
         if self.selector.startswith('input[data-f="'):
             return 1
         if self.selector == ".select-menu-modal .select-menu-item":
@@ -31,6 +37,19 @@ class _Locator:
         return 0
 
     def evaluate_all(self, _script):
+        if self.selector == "button#btnSave":
+            return [
+                {
+                    "role": "button",
+                    "accessibleName": self.page.save_text,
+                    "visibleText": self.page.save_text,
+                    "id": "btnSave",
+                    "type": "submit",
+                    "enabled": self.page.save_enabled,
+                    "visible": self.page.save_visible,
+                }
+                for _ in range(self.page.save_count)
+            ]
         if self.selector != "input#ImpValueF":
             return []
         return [
@@ -51,6 +70,8 @@ class _Locator:
         elif self.selector == ".select-menu-modal .select-menu-item":
             self.page.value = self.text
             self.page.menu_open = False
+        elif self.selector == "button#btnSave":
+            self.page.events.append("click")
 
     def input_value(self):
         if self.selector.startswith('input[data-f="'):
@@ -82,6 +103,11 @@ class _FakeFormPage:
     def __init__(self):
         self.value = ""
         self.menu_open = False
+        self.save_count = 1
+        self.save_text = "保存"
+        self.save_enabled = True
+        self.save_visible = True
+        self.events = []
 
     def frame_locator(self, _selector: str):
         return _Frame(self)
@@ -148,14 +174,15 @@ def test_quotation_type_rejects_values_outside_the_two_business_routes() -> None
         writer.set_quotation_type("意向单询价")
 
 
-def test_production_gate_is_closed_and_writer_has_no_save_or_send_method() -> None:
+def test_production_gate_is_closed_and_send_methods_do_not_exist() -> None:
     form_page = _FakeFormPage()
     writer = InsoPurchaseWriter(
         form_page=_OperationPage(form_page),
         ai_page=_OperationPage(_FakeAiPage()),
     )
 
-    assert not {"save_data", "save_and_send", "send", "submit"} & set(dir(writer))
+    assert hasattr(writer, "save_data")
+    assert not {"save_and_send", "send", "submit"} & set(dir(writer))
     with pytest.raises(SecurityViolation):
         writer.set_quotation_type("普通询价")
     assert form_page.value == ""
@@ -180,3 +207,86 @@ def test_ai_reader_fails_closed_until_ready_state() -> None:
     )
 
     assert reader.read() is None
+
+
+class _SaveStore:
+    def __init__(self, *, recognized: bool = True, events=None):
+        self.recognized = recognized
+        self.calls = []
+        self.events = events if events is not None else []
+
+    def begin_save_dispatch(self, inquiry_id: str, *, at: datetime) -> None:
+        self.events.append("begin")
+        self.calls.append((inquiry_id, at))
+        if not self.recognized:
+            raise RuntimeError("purchase is not AI_RECOGNIZED")
+
+
+def test_save_persists_unknown_before_the_only_fake_save_dispatch() -> None:
+    form = _FakeFormPage()
+    store = _SaveStore(events=form.events)
+    writer = InsoPurchaseWriter(
+        form_page=_OperationPage(form),
+        ai_page=_OperationPage(_FakeAiPage()),
+        gate=FakeWriteGate(enabled=True),
+    )
+
+    writer.save_data(store, "synthetic-inquiry", at=NOW)
+
+    assert store.calls == [("synthetic-inquiry", NOW)]
+    assert form.events == ["begin", "click"]
+
+
+def test_save_preflights_unique_visible_enabled_exact_control() -> None:
+    form = _FakeFormPage()
+    store = _SaveStore()
+    writer = InsoPurchaseWriter(
+        form_page=_OperationPage(form),
+        ai_page=_OperationPage(_FakeAiPage()),
+        gate=FakeWriteGate(enabled=True),
+    )
+
+    for attribute, value in (
+        ("save_count", 2),
+        ("save_visible", False),
+        ("save_enabled", False),
+        ("save_text", "保存并发送"),
+    ):
+        setattr(form, attribute, value)
+        with pytest.raises(SecurityViolation):
+            writer.save_data(store, "synthetic-inquiry", at=NOW)
+        assert store.calls == []
+        assert form.events == []
+        setattr(form, attribute, 1 if attribute == "save_count" else True if attribute in {"save_visible", "save_enabled"} else "保存")
+
+
+def test_closed_production_gate_never_reaches_store_or_save_control() -> None:
+    form = _FakeFormPage()
+    store = _SaveStore()
+    writer = InsoPurchaseWriter(
+        form_page=_OperationPage(form),
+        ai_page=_OperationPage(_FakeAiPage()),
+        gate=ProductionWriteGate(),
+    )
+
+    with pytest.raises(SecurityViolation):
+        writer.save_data(store, "synthetic-inquiry", at=NOW)
+
+    assert store.calls == []
+    assert form.events == []
+
+
+def test_non_ai_recognized_store_state_never_dispatches_save() -> None:
+    form = _FakeFormPage()
+    store = _SaveStore(recognized=False)
+    writer = InsoPurchaseWriter(
+        form_page=_OperationPage(form),
+        ai_page=_OperationPage(_FakeAiPage()),
+        gate=FakeWriteGate(enabled=True),
+    )
+
+    with pytest.raises(RuntimeError):
+        writer.save_data(store, "synthetic-inquiry", at=NOW)
+
+    assert form.events == []
+    assert not hasattr(writer, "save_and_send")

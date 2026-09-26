@@ -11,6 +11,7 @@ import sys
 import threading
 import uuid
 from dataclasses import replace
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -52,6 +53,12 @@ from src.workflow.v12_store import V12_SCHEMA_VERSION, V12DatabaseError, V12Stor
 
 from .browser_bootstrap import BrowserBootstrapError, BrowserHandle, acquire_cdp_browser
 from .inso_session import InsoResearchSession, attach_inso_research_session
+from .v12_composition import (
+    UnavailableReadOnlySaveReconciler,
+    V12ProductionAdapters,
+    V12ProductionComposition,
+    compose_v12_production,
+)
 from .v12_gui import read_v12_order_state
 
 log = logging.getLogger(__name__)
@@ -96,6 +103,7 @@ class ProductionBackend(GuiBackend):
     def __init__(
         self, config_path=None, production_config_path=None, *, cdp_probe=None,
         root=None, browser_acquirer=acquire_cdp_browser,
+        v12_adapters: V12ProductionAdapters | None = None,
     ):
         self.root = Path(root) if root is not None else app_root()
         self.config_path = Path(config_path) if config_path is not None else runtime_config_path("research.json", root=self.root)
@@ -125,6 +133,8 @@ class ProductionBackend(GuiBackend):
         self._history_fingerprint = None
         self._store = None
         self._v12_store = None
+        self._v12_adapters = v12_adapters
+        self._v12_composition: V12ProductionComposition | None = None
         self._excel = None
         self._manual_inquiries = set()
         try:
@@ -239,16 +249,26 @@ class ProductionBackend(GuiBackend):
             def prepare_research() -> None:
                 self._ensure_research_ready(rc, cfg)
 
-            worker = WorkflowWorker(
-                self._store,
-                _Observer(
-                    research,
-                    self._seen,
-                    self._manual_review,
-                    prepare=prepare_research,
-                ),
-                brand_updater=None,
+            research_observer = _Observer(
+                research,
+                self._seen,
+                self._manual_review,
+                prepare=prepare_research,
             )
+            worker = WorkflowWorker(
+                self._store, research_observer, brand_updater=None
+            )
+            if self._v12_store is not None and self._v12_adapters is not None:
+                self._v12_composition = compose_v12_production(
+                    workflow_store=self._store,
+                    v12_store=self._v12_store,
+                    research=research_observer,
+                    adapters=self._v12_adapters,
+                )
+            elif self._v12_store is not None:
+                # Missing live V1.2 adapters keep that flow disabled. The
+                # existing V1.1 poller/worker continues unchanged.
+                log.info("V1.2 composition unavailable: live adapters are missing")
             runtime = WorkflowRuntime(
                 WorkflowPoller(self._store, reader), worker, worksheets
             )
@@ -611,6 +631,24 @@ class ProductionBackend(GuiBackend):
             return read_v12_order_state(self._v12_store, inquiry_id)
         except KeyError:
             return None
+
+    def reconcile_v12_save(self, inquiry_id: str, *, at: datetime):
+        """Run only the existing read-only reconciliation contract.
+
+        Until a live record reader is supplied, this records an unreadable
+        result as manual review; it never infers absence or retries Save Data.
+        """
+
+        if self._v12_store is None:
+            raise V12DatabaseError("V1.2 persistence is unavailable")
+        reconciler = (
+            self._v12_composition.save_reconciler
+            if self._v12_composition is not None
+            else UnavailableReadOnlySaveReconciler()
+        )
+        return self._v12_store.reconcile_unknown_save(
+            inquiry_id, reconciler, at=at
+        )
 
     def get_health(self):
         return self._health
