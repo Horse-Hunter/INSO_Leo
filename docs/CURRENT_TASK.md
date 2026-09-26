@@ -1,6 +1,6 @@
 # Current Task — V1.2 final runtime acceptance
 
-Status: BLOCKED — LOCAL_CDP_UNREACHABLE
+Status: BLOCKED — EDGE_CDP_ATTACH_FAILED
 Production write gate: CLOSED
 
 ## Code already accepted
@@ -16,10 +16,11 @@ Production write gate: CLOSED
 
 ## Runtime acceptance attempt — 2026-09-26
 
-- `runtime/research.json` was absent. A valid non-secret file was created using the current `ResearchRuntimeConfig` schema and the existing loopback endpoint `http://127.0.0.1:9222`; it is Git-ignored. The checked-in `tests/v1_integration/write_runtime_config.py` helper is stale and fails because it passes removed INSO config fields.
-- The configured local CDP endpoint did not accept a connection. No browser was started and `attach_inso_research_session` was not called. Browser/context/lease/operation-page identity and reused-browser lifecycle were not accepted. No arbitrary tab or context was selected.
-- With no reachable authenticated session, no INSO page was opened or interacted with. Synthetic parent fields, complete purchase prepare, duplicate query/settlement/creator/quote, Save controls and existing-record reconciliation were not live-verified.
-- Specific remaining blockers before first Save authorization: a reachable intended local CDP session; verified parent model/brand/quantity fields and prepare dry-run; verified duplicate query settlement plus creator and INSO quote fields; live Save-control semantics; and a usable read-only saved-record reconciliation identity.
+- Edge Stable was found at `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe` (version `153.0.4234.48`). The persistent dedicated profile `runtime/browser-profile` and ignored `runtime/production.json` were created; `runtime/research.json` points to `http://127.0.0.1:9222`.
+- `acquire_cdp_browser` launched an APP_OWNED Edge process. The TCP-only readiness path returned before Playwright could attach (`ECONNREFUSED`). A stricter `/json/version` readiness attempt timed out with the default launcher. A diagnostic launch with the startup-window flag omitted exposed `/json/version`, but `attach_inso_research_session` still failed with a connection reset. No lease or operation page was established.
+- The app-owned launches were closed through their browser handles. The dedicated profile remains on disk for reuse; no process using that profile or CDP port remained after cleanup. Existing user Edge processes were left untouched.
+- No INSO page was opened, and no login state was inspected. Synthetic parent fields, complete purchase prepare, duplicate query/settlement/creator/quote, Save controls and existing-record reconciliation were not live-verified.
+- The current blocker is stable Playwright CDP attachment to the project Edge profile. After attachment is working, still-required acceptance is: Owner login if needed; parent field selectors and synthetic read-back plus prepare dry-run; duplicate settlement/creator/quote; live Save-control semantics; and read-only saved-record identity/reconciliation.
 - No production adapter was enabled or substituted with a fake. Production write gate remains CLOSED.
 
 ## Verification and side effects

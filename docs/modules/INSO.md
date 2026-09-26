@@ -89,19 +89,24 @@ write gate remains CLOSED.
 
 ## Final runtime acceptance — 2026-09-26
 
-`runtime/research.json` was absent and has been created locally using the
-current non-secret `ResearchRuntimeConfig` schema. It points to the existing
-project endpoint `http://127.0.0.1:9222` and is Git-ignored. The repository's
-`tests/v1_integration/write_runtime_config.py` is stale: it passes removed
-fields to `InsoBrowserConfig`, so it cannot generate the file as checked in.
+Edge Stable was found at
+`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe` (version
+`153.0.4234.48`). The persistent `runtime/browser-profile`, ignored
+`runtime/production.json`, and validated `runtime/research.json` are prepared.
 
-The local endpoint did not accept a connection. No browser, context, or lease
-was attached; no arbitrary tab/context was selected; and no INSO page was
-opened. Therefore no new live selectors or control semantics were verified.
-Parent product selectors and synthetic read-back, live prepare, duplicate
+`acquire_cdp_browser` launched an owned Edge process, but stable attachment via
+`attach_inso_research_session` failed. The default TCP probe returned before
+Playwright could attach; a strict `/json/version` probe timed out for the default
+launcher. Omitting `--no-startup-window` for a diagnostic launch exposed the
+CDP version endpoint, but Playwright still received a connection reset. The
+owned launches were closed; the persistent profile remains. Existing user Edge
+processes were not closed.
+
+No lease or operation page was established, so no INSO page was opened and no
+login state was inspected. Parent synthetic read-back/prepare, duplicate
 settlement/creator/quote, live Save semantics, and saved-record reconciliation
-remain unaccepted. These are the specific runtime items preventing first-Save
-readiness. The production write gate remains CLOSED.
+remain unaccepted. Stable Playwright attachment to the project Edge profile is
+the current blocker. The production write gate remains CLOSED.
 
 No Save, Save-and-Send, Send, real SMTP, Sheets write, or production database
 migration occurred.
