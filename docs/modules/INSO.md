@@ -87,21 +87,29 @@ No Save, Save-and-Send, Send, SMTP, Sheets write, or production migration was
 performed in this closeout. CEO performs the daily Safety Review; the production
 write gate remains CLOSED.
 
-## Final runtime acceptance — 2026-09-26
+## Runtime browser baseline — 2026-09-26
 
-The automated read-only CDP diagnostic passed on the persistent
-`runtime/browser-profile`: policy values were `RemoteDebuggingAllowed=NOT_SET`
-and `UserDataDir=NOT_SET`; the actual Edge process arguments and listener PID
-matched the dedicated profile. `/json/version`, `/json/list`, and Playwright
-`connect_over_cdp` passed. The diagnostic result is `EDGE_CDP_READY`.
+The canonical production browser is Chrome (`browser.channel = "chrome"`) as
+in V1.1 and V1.2. Edge and `runtime/browser-profile` were an accidental runtime
+drift and are retained only as a backup; they are not used for production
+acceptance. V1.1's final integration task identifies the existing dedicated
+Chrome CDP profile as Git-ignored `.browser-profile/cdp`. That original profile
+was found and left in place without copying, clearing, or migrating it.
 
-During Phase A, `acquire_cdp_browser` and `InsoSessionLease` passed with one
-APP_OWNED browser context and a lease-created operation page. Navigating to the
-known read-only history-list route redirected to `/login.aspx`, with one
-password input. The result is `OWNER_LOGIN_REQUIRED`; the Edge window/profile
-was left open. No credentials or verification challenge were entered.
+The ignored `runtime/production.json` now points to the installed Chrome
+executable, that original profile, and port 9222. `runtime/research.json` remains
+unchanged. Chrome policy values `RemoteDebuggingAllowed` and `UserDataDir` were
+NOT_SET in the inspected HKLM/HKCU policy locations. Chrome exited before
+`/json/version` and `DevToolsActivePort` became ready; sanitized startup output
+reported GPU child-process `ACCESS_DENIED` and `GPU process isn't usable`. A
+single diagnostic retry with `--disable-gpu` failed the same way. Therefore no
+actual process command line, Playwright attach, context, lease, or operation
+page was verified. INSO login state is UNKNOWN, not `OWNER_LOGIN_REQUIRED`.
 
-Because authentication was unavailable, no business-page DOM was inspected.
-Duplicate settlement/creator/quote, parent product selectors, purchase/AI
-controls, Save controls, and saved-record reconciliation remain UNKNOWN. No
-business query or mutation was performed. Production write gate remains CLOSED.
+The earlier Edge CDP and `/login.aspx` observations are historical and do not
+establish Chrome authentication. Do not ask the Owner to log in until the
+original Chrome profile has actually been opened through a working Chrome CDP
+session and redirects to `/login.aspx`. Phase A remains pending Chrome startup
+and attach; duplicate settlement/creator/quote, purchase selectors, Save
+control semantics, and saved-record reconciliation remain UNKNOWN. Production
+write gate remains CLOSED.

@@ -1,10 +1,10 @@
 # Current Task — V1.2 final runtime acceptance
 
-Phase A: BLOCKED — OWNER_LOGIN_REQUIRED
+Phase A: BLOCKED — CHROME_CDP_STARTUP_FAILED_GPU_PROCESS_ACCESS_DENIED
 V1.2 status: PRE_SAVE_READY / REAL_SAVE_GATED
 Production write gate: CLOSED
 
-CDP diagnostic: EDGE_CDP_READY. Lease attachment passed; live discovery stopped at the login boundary.
+Canonical browser baseline: Chrome (`browser.channel = "chrome"`). Edge is retained only as a backup and is not used for production acceptance.
 
 ## Code already accepted
 
@@ -17,16 +17,12 @@ CDP diagnostic: EDGE_CDP_READY. Lease attachment passed; live discovery stopped 
 - `ParentProductFields` and coordinator-compatible `CoordinatorPurchaseDraftWriter.prepare()` exist. Prepare validates AI preview before touching parent fields, writes validated values, then validates parent read-back. Prepare exposes no Save or Send method and does not refer to `win_btn__dialog11`.
 - No production parent-field adapter exists because live model/brand/quantity selectors have not been verified; the production purchase prepare cannot be composed without it.
 
-## Runtime acceptance attempt — 2026-09-26
+## Earlier Edge runtime drift — 2026-09-26
 
-- Edge Stable was found at `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe` (version `153.0.4234.48`). The persistent dedicated profile `runtime/browser-profile` and ignored `runtime/production.json` were created; `runtime/research.json` points to `http://127.0.0.1:9222`.
-- `acquire_cdp_browser` launched an APP_OWNED Edge process. The TCP-only readiness path returned before Playwright could attach (`ECONNREFUSED`). A stricter `/json/version` readiness attempt timed out with the default launcher. A diagnostic launch with the startup-window flag omitted exposed `/json/version`, but `attach_inso_research_session` still failed with a connection reset. No lease or operation page was established.
-- The app-owned launches were closed through their browser handles. The dedicated profile remains on disk for reuse; no process using that profile or CDP port remained after cleanup. Existing user Edge processes were left untouched.
-- No INSO page was opened, and no login state was inspected. Synthetic parent fields, complete purchase prepare, duplicate query/settlement/creator/quote, Save controls and existing-record reconciliation were not live-verified.
-- At the time of the original attempt, the blocker was Playwright CDP attachment. The controlled diagnostic below now passes. Still-required acceptance is: Owner login if needed; parent field selectors and synthetic read-back plus prepare dry-run; duplicate settlement/creator/quote; live Save-control semantics; and read-only saved-record identity/reconciliation.
-- No production adapter was enabled or substituted with a fake. Production write gate remains CLOSED.
+- The earlier attempt mistakenly configured Edge despite both V1.1 and V1.2 canonical runtime selecting Chrome. That Edge profile is retained as a backup and is not used for this acceptance.
+- Edge diagnostics below are historical only. They do not establish the current production browser baseline or Phase A readiness.
 
-## Automated Edge/CDP diagnostic — 2026-09-26
+## Historical automated Edge/CDP diagnostic — 2026-09-26
 
 - Read-only policy checks across HKLM/HKCU Edge policy keys, including WOW6432Node: `RemoteDebuggingAllowed=NOT_SET`; `UserDataDir=NOT_SET`. No registry values were changed.
 - Before the controlled launch, 32 Edge processes were visible to CIM, none matched `runtime/browser-profile` or `--remote-debugging-port=9222`; port 9222 had no listener. No user Edge process was closed.
@@ -36,18 +32,21 @@ CDP diagnostic: EDGE_CDP_READY. Lease attachment passed; live discovery stopped 
 - The earlier `EDGE_CDP_ATTACH_FAILED` was not reproducible in the authorized Windows diagnostic execution. Its original trigger remains UNKNOWN; no persistent policy, command-line, profile, port ownership, or Playwright attach failure was found.
 - Final Runtime Acceptance remains pending and was not run. Production write gate remains CLOSED; no Save, Send, SMTP, or Sheets write occurred.
 
-## Final Runtime Acceptance Phase A — 2026-09-26
+## Chrome baseline restore and Phase A attempt — 2026-09-26
 
-- Reused the configured CDP endpoint and project lease path. `acquire_cdp_browser` launched an APP_OWNED Edge; the browser was connected with exactly one context, and a lease-created operation page had a verified identity.
-- Navigating that operation page to the known read-only history-list route redirected to `yingsuo.alperp.cn/login.aspx`; one password input was present. Result: `OWNER_LOGIN_REQUIRED`. No credentials, OTP, or challenge were entered or bypassed. The dedicated Edge/profile was left open at the login page.
-- No authenticated INSO business page was reached. Duplicate settlement/creator/quote, parent product selectors, purchase/AI controls, Save controls, and saved-record reconciliation were not inspected and remain UNKNOWN.
-- No business-page click, query, form input, AI action, Save, Send, SMTP, or Sheets write occurred. Production write gate remains CLOSED.
+- V1.1's completed integration task identifies the dedicated Chrome profile as the existing Git-ignored `.browser-profile/cdp`; that directory still exists with Chrome `Local State` and `Default` profile data. It was not copied, cleared, migrated, or recreated.
+- The installed Chrome executable is `C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`. The ignored `runtime/production.json` now points to that executable, the existing `.browser-profile/cdp`, and port 9222. `runtime/research.json` was not changed and still targets `http://127.0.0.1:9222`.
+- Chrome RemoteDebuggingAllowed and UserDataDir policy values are NOT_SET in the checked HKLM/HKCU policy locations. No Chrome process was present before launch and no listener was present on 9222.
+- `acquire_cdp_browser` attempted to start Chrome with the configured original profile and expected CDP arguments. Chrome exited before `/json/version` or `DevToolsActivePort` became ready. Sanitized startup diagnostics identify repeated GPU child-process `ACCESS_DENIED` (`-1073741790`) followed by `GPU process isn't usable`; a single `--disable-gpu` diagnostic retry had the same result. The project bootstrap therefore closed only its own failed Chrome process.
+- The short-lived process prevented a verified live process command-line read and Playwright attach. No browser context, lease, operation page, or INSO page was established. INSO login status is UNKNOWN; this is not evidence that the original profile is logged out, so no login request is made.
+- No ordinary Chrome or Edge process was closed. The Edge backup profile remains untouched. No duplicate query, business-page inspection, Save, Send, SMTP, or Sheets write occurred.
+- Remaining Phase A work after Chrome can expose CDP: lease/context identity, read-only INSO discovery, duplicate settlement/creator/quote, purchase selectors, Save control semantics, and saved-record reconciliation.
 
 ## Verification and side effects
 
 - No Save Data, Save-and-Send, Send, SMTP, Sheets write, production migration, or production smoke occurred. No INSO page interaction occurred.
 - `python -m ruff check src tests`: passed.
-- `python -m pytest tests/inso tests/workflow tests/launcher -q --tb=short --basetemp runtime/pytest-v12-acceptance-20260926`: 246 passed, 1 skipped. The default Windows pytest temp path was inaccessible; rerunning under a unique ignored workspace temp directory passed.
+- `python -m pytest tests/launcher tests/inso tests/workflow -q --tb=short --basetemp runtime/pytest-chrome-baseline-20260926`: 252 passed, 1 skipped. Ruff and `git diff --check` passed.
 - `git diff --check`: checked before delivery.
 - V1.1 Research behavior and its canonical rules are unchanged.
 
