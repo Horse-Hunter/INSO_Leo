@@ -11,6 +11,7 @@ from .purchase_writer import (
     AiRecognitionResult,
     AiResultReader,
     InsoPurchaseWriter,
+    ParentProductFields,
     PlaywrightAiResultReader,
 )
 from .session import (
@@ -42,6 +43,7 @@ __all__ = [
     "LeaseState",
     "OperationPage",
     "PageIdentity",
+    "ParentProductFields",
     "PlaywrightAiResultReader",
     "SecurityViolation",
 ]

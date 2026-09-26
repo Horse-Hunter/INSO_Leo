@@ -1,7 +1,7 @@
 # Current Task — V1.2 PRE_SAVE closeout
 
 Status: PRE_SAVE_READY / REAL_SAVE_GATED
-AI_IMPORT_SEMANTICS_UNCONFIRMED
+CODE READY / LIVE FIELD SELECTORS PENDING
 
 ## Done
 
@@ -13,19 +13,19 @@ AI_IMPORT_SEMANTICS_UNCONFIRMED
 - Existing exact quotation routing, purchaser allowlists, durable UNKNOWN-before-click Save path and UNKNOWN/manual reconciliation seam remain unchanged.
 - First real Save still requires explicit complete adapters. No production adapter is substituted with a fake.
 
-## AI import and purchase prepare
+## AI preview and parent product fields
 
-- Opened and closed one blank form's AI panel without entering data or saving. The accessibility tree confirmed the footer as `button#win_btn__dialog11`, exact visible text `保存数据`.
-- The available browser interface exposed accessibility state but not `onclick`, form/formaction/type relationships, or loaded JavaScript objects. No source-loading or other inspection workaround was used. Whether this control only transfers preview values into the parent DOM remains UNKNOWN.
-- The control was not clicked. Parent-form import and exact parent model/brand/quantity selectors/read-back remain UNKNOWN. No import selector was guessed.
-- A coordinator-compatible production `PurchaseDraftWriter.prepare()` is not ready until that import/read-back path is verified. Current low-level `InsoPurchaseWriter` remains prepare-only in intent but has no verified parent import operation.
+- `AI_IMPORT_SEMANTICS_UNCONFIRMED` remains recorded for `button#win_btn__dialog11` (“保存数据”). CEO's decision removes it from automation and the purchase prepare flow; it is not a blocker.
+- Added `ParentProductFields` with only model/brand/quantity set and read methods, plus a coordinator-compatible `CoordinatorPurchaseDraftWriter.prepare()`. It validates preview with the existing Workflow rule before writing parent fields, then reads back and validates again.
+- No production parent-field adapter is implemented because its selectors are UNKNOWN. `V12ProductionAdapters` requires the coordinator writer, which itself requires the explicit parent-field seam; without verified live fields no production purchase prepare can be composed.
+- Prepare does not expose Save or Send and does not refer to `win_btn__dialog11`.
 
 ## Required acceptance before first real Save
 
-- Nonempty duplicate query settled signal, creator selector, and INSO quote selector.
-- Local CDP endpoint, browser/context and lease-owned operation-page identities; reused browser must remain open.
-- AI import semantics and exact parent form read-back (`LM358`, `Texas Instruments`, `123`).
-- Live `#btnSave` uniqueness/semantics and reliable read-only saved-record identity/reconciliation.
+- Local CDP endpoint, intended browser/context, lease and operation-page identity; reused browser remains open.
+- Parent model/brand/quantity selectors are unique, visible/actionable, initially empty, and exact-read-back after synthetic fill.
+- Duplicate nonempty query settled signal, creator selector, and INSO quote selector.
+- Live `#btnSave` uniqueness and exact semantics, plus saved-record read-only identity/reconciliation.
 - Owner's explicit authorization for the first real Save.
 
 ## Verification and side effects

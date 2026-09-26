@@ -36,15 +36,21 @@ The AI preview reader requires `button#ai-recognize` text `重新识别`, one ro
 `input[data-f="PartNo"]`, `input[data-f="Brand"]`, and
 `input[data-f="Qty"]`. Workflow owns exact AI validation.
 
-Parent import is not verified. On a fresh blank form, the accessibility tree
-showed footer `button#win_btn__dialog11` with exact visible text `保存数据`.
-The available browser interface did not expose `onclick`, form/formaction/type
-attributes, or loaded JavaScript objects. No source-loading or alternate
-inspection path was used. Whether this button only transfers preview values to
-the parent form DOM remains UNKNOWN, so it was not clicked. Parent model/brand/
-quantity selectors and exact read-back remain UNKNOWN. Therefore a live
-coordinator-compatible `PurchaseDraftWriter.prepare()` is still pending; record
-this seam as `AI_IMPORT_SEMANTICS_UNCONFIRMED`.
+`button#win_btn__dialog11` with text `保存数据` remains
+`AI_IMPORT_SEMANTICS_UNCONFIRMED`; it is not clicked, registered, or used by
+purchase automation. CEO's revised flow validates the AI preview, then writes
+the validated preview values into the blank parent form through the separate
+`ParentProductFields` seam and exact-reads them back. The seam exposes only
+`set_model`, `set_brand`, `set_quantity`, and matching read methods.
+
+`CoordinatorPurchaseDraftWriter.prepare()` now sequences draft/customer/routing/
+purchaser/AI recognition, uses Workflow's existing exact validator before
+touching parent product fields, writes the validated AI values, and validates
+the parent read-back with the same rule. It returns `AI_RECOGNIZED` only after
+both checks pass. It has no Save or Send method. Tests use a fake parent adapter;
+no live selector implementation exists. Parent model/brand/quantity selectors
+remain UNKNOWN, so status is `CODE READY / LIVE FIELD SELECTORS PENDING` and
+production composition requires the explicit parent-field seam to be supplied.
 
 The existing gated Save boundary remains closed. If later authorized, it requires
 one visible, enabled `button#btnSave` with exact semantics `保存`, records durable
@@ -72,7 +78,8 @@ Complete one local runtime acceptance covering:
 
 - CDP endpoint, exactly one intended context, lease and operation-page identity;
 - duplicate nonempty query settlement, creator selector, and INSO quote selector;
-- AI preview import into a blank parent form and exact parent read-back;
+- local-CDP lease identity and parent-field selectors with unique/visible/
+  actionable checks, empty initial state, and synthetic write/read-back;
 - unique live `#btnSave` semantics and saved-record read-only identity/reconciliation;
 - explicit Owner authorization for the first real Save.
 
