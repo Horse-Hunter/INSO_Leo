@@ -33,19 +33,8 @@ def build() -> ResearchRuntimeConfig:
         ),
         inso=InsoBrowserConfig(
             login_url="https://yingsuo.alperp.cn/",
-            username_selector='input[name="username"], input[name="userName"], input[type="text"]',
-            password_selector='input[name="password"], input[type="password"]',
-            login_button_selector='button[type="submit"], input[type="submit"], button',
-            mpn_selector='input[name="mpn"], input[name="model"], input[placeholder*="型号"], input[placeholder*="MPN"]',
-            query_button_selector='button[type="submit"], button',
-            company_selector=None,
-            date_headers=(
-                "询价时间",
-                "报价时间",
-                "更新时间",
-                "创建时间",
-                "日期",
-            ),
+            cdp_url="http://127.0.0.1:9222",
+            pagesize=30,
         ),
         browser=BrowserRuntimeConfig(
             channel="chrome",
@@ -83,13 +72,8 @@ def main() -> int:
         },
         "inso": {
             "login_url": cfg.inso.login_url,
-            "username_selector": cfg.inso.username_selector,
-            "password_selector": cfg.inso.password_selector,
-            "login_button_selector": cfg.inso.login_button_selector,
-            "mpn_selector": cfg.inso.mpn_selector,
-            "query_button_selector": cfg.inso.query_button_selector,
-            "company_selector": cfg.inso.company_selector,
-            "date_headers": list(cfg.inso.date_headers),
+            "cdp_url": cfg.inso.cdp_url,
+            "pagesize": cfg.inso.pagesize,
         },
     }
     path = runtime_dir / "research.json"

@@ -68,6 +68,7 @@ class InsoResearchSession:
 
     lease: InsoSessionLease
     _playwright: Any
+    _browser_handle: Any
     _ownership: BrowserOwnership
 
     def operation_access(self) -> InsoOperationAccess:
@@ -76,8 +77,10 @@ class InsoResearchSession:
     def close_after_drain(self) -> None:
         self.lease.close_after_drain()
         if self._ownership is BrowserOwnership.REUSED:
-            # Stop Playwright's CDP connection; this does not close the remote browser.
-            self._playwright.stop()
+            if hasattr(self._browser_handle, "disconnect"):
+                self._browser_handle.disconnect()
+            else:
+                self._playwright.stop()
 
 
 def attach_inso_research_session(
@@ -95,9 +98,14 @@ def attach_inso_research_session(
 
         playwright_factory = sync_playwright
 
-    playwright = playwright_factory().start()
+    playwright = getattr(browser_handle, "playwright", None)
+    browser = getattr(browser_handle, "browser", None)
+    acquired_here = playwright is None or browser is None
+    if acquired_here:
+        playwright = playwright_factory().start()
     try:
-        browser = playwright.chromium.connect_over_cdp(endpoint)
+        if acquired_here:
+            browser = playwright.chromium.connect_over_cdp(endpoint)
         contexts = tuple(browser.contexts)
         if not browser.is_connected() or len(contexts) != 1:
             raise SecurityViolation("INSO authenticated context is not unique")
@@ -110,10 +118,15 @@ def attach_inso_research_session(
         normalized_endpoint = endpoint.rstrip("/")
 
         def disconnect_and_close() -> None:
-            try:
+            if hasattr(browser_handle, "disconnect"):
+                if ownership is BrowserOwnership.APP_OWNED:
+                    browser_handle.close()
+                else:
+                    browser_handle.disconnect()
+            else:
                 playwright.stop()
-            finally:
-                browser_handle.close()
+                if ownership is BrowserOwnership.APP_OWNED:
+                    browser_handle.close()
 
         leased_browser = _BrowserHandle(browser, disconnect_and_close)
         leased_context = _ContextHandle(browser, context)
@@ -130,7 +143,10 @@ def attach_inso_research_session(
             cycle_id=cycle_id,
             cycle_is_drained=cycle_is_drained,
         )
-        return InsoResearchSession(lease, playwright, ownership)
+        return InsoResearchSession(lease, playwright, browser_handle, ownership)
     except Exception:
-        playwright.stop()
+        if acquired_here:
+            playwright.stop()
+        elif hasattr(browser_handle, "disconnect"):
+            browser_handle.disconnect()
         raise

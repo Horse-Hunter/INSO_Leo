@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import threading
@@ -19,6 +20,10 @@ from src.core.app_paths import resolve_app_path
 class BrowserBootstrapError(RuntimeError):
     """CDP is unavailable and an approved browser could not be started."""
 
+    def __init__(self, reason_code: str = "EDGE_CDP_ATTACH_FAILED") -> None:
+        super().__init__(reason_code)
+        self.reason_code = reason_code
+
 
 @dataclass
 class BrowserHandle:
@@ -26,16 +31,31 @@ class BrowserHandle:
     process: object | None = None
     close_fn: Callable[[], None] | None = None
     cleanup_fn: Callable[[], None] | None = None
+    playwright: object | None = None
+    browser: object | None = None
+
+    def disconnect(self) -> None:
+        playwright, self.playwright = self.playwright, None
+        self.browser = None
+        if playwright is not None:
+            playwright.stop()
 
     def close(self) -> None:
-        if not self.owned:
-            return
         try:
-            if self.close_fn:
-                self.close_fn()
+            try:
+                self.disconnect()
+            finally:
+                if self.owned and self.close_fn:
+                    self.close_fn()
         finally:
-            if self.cleanup_fn:
-                self.cleanup_fn()
+            if self.owned and self.cleanup_fn:
+                cleanup, self.cleanup_fn = self.cleanup_fn, None
+                cleanup()
+
+
+_LOG = logging.getLogger(__name__)
+_CDP_READY_TIMEOUT_SECONDS = 20.0
+_CDP_RETRY_INTERVAL_SECONDS = 0.4
 
 
 def _hide_owned_windows(process_id: int) -> None:
@@ -88,27 +108,26 @@ def _start_owned_window_hider(process: object) -> Callable[[], None]:
 
 
 def _launch(executable: Path, profile: Path, port: int):
-    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    is_edge = executable.name.casefold() == "msedge.exe"
+    flags = 0 if is_edge else getattr(subprocess, "CREATE_NO_WINDOW", 0)
     startupinfo = None
-    if os.name == "nt":
+    if os.name == "nt" and not is_edge:
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
+    args = [
+        str(executable),
+        f"--user-data-dir={profile}",
+        f"--remote-debugging-port={port}",
+        "--remote-debugging-address=127.0.0.1",
+        "--no-first-run",
+        "--no-default-browser-check",
+    ]
+    if not is_edge:
+        # Keep the stable V1.1 Chrome runtime windowless.
+        args.append("--no-startup-window")
     return subprocess.Popen(
-        [
-            str(executable),
-            f"--user-data-dir={profile}",
-            f"--remote-debugging-port={port}",
-            "--remote-debugging-address=127.0.0.1",
-            # Several authenticated supplier sites reject a headless Chrome
-            # session even when the approved profile is valid.  A normal
-            # Chrome session keeps those site checks intact. Do not create an
-            # initial browser window: CDP creates research targets in the
-            # background, so collection cannot steal desktop focus.
-            "--no-startup-window",
-            "--no-first-run",
-            "--no-default-browser-check",
-        ],
+        args,
         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         creationflags=flags,
         startupinfo=startupinfo,
@@ -170,9 +189,102 @@ def _close_owned_process(process, cdp_url: str) -> None:
                 stderr=subprocess.DEVNULL, check=False,
             )
             process.wait(timeout=5)
+
+
+def _read_cdp_version(cdp_url: str) -> str | None:
+    """Return the advertised websocket endpoint, or None until CDP is ready."""
+
+    try:
+        parsed = urlsplit(cdp_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            return None
+        with urlopen(cdp_url.rstrip("/") + "/json/version", timeout=1) as response:
+            payload = json.load(response)
+    except (OSError, UnicodeError, ValueError, TypeError):
+        return None
+    if not isinstance(payload, Mapping):
+        return None
+    websocket_url = payload.get("webSocketDebuggerUrl")
+    if not isinstance(websocket_url, str) or not websocket_url.strip():
+        return None
+    return websocket_url.strip()
+
+
+def _start_playwright(playwright_factory: Callable[[], object] | None):
+    if playwright_factory is None:
+        from playwright.sync_api import sync_playwright
+
+        playwright_factory = sync_playwright
+    return playwright_factory().start()
+
+
+def wait_for_cdp_ready(
+    cdp_url: str,
+    *,
+    process: object | None,
+    playwright_factory: Callable[[], object] | None = None,
+    version_reader: Callable[[str], str | None] = _read_cdp_version,
+    wait: Callable[[float], None] = time.sleep,
+    monotonic: Callable[[], float] = time.monotonic,
+    timeout_seconds: float = _CDP_READY_TIMEOUT_SECONDS,
+) -> tuple[object, object]:
+    """Wait for stable DevTools JSON and prove Playwright can attach.
+
+    TCP reachability is not a readiness signal. The browser must remain alive,
+    advertise its websocket endpoint twice consecutively, and accept a real
+    Playwright CDP connection before this returns.
+    """
+
+    deadline = monotonic() + min(timeout_seconds, _CDP_READY_TIMEOUT_SECONDS)
+    consecutive_versions = 0
+    while monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            raise BrowserBootstrapError("EDGE_CDP_ATTACH_FAILED")
+        websocket_url = version_reader(cdp_url)
+        if websocket_url:
+            consecutive_versions += 1
         else:
-            process.kill()
-            process.wait(timeout=5)
+            consecutive_versions = 0
+        if consecutive_versions >= 2:
+            playwright = None
+            try:
+                playwright = _start_playwright(playwright_factory)
+                browser = playwright.chromium.connect_over_cdp(
+                    cdp_url,
+                    timeout=max(1, int(min(3.0, deadline - monotonic()) * 1000)),
+                )
+                if (
+                    browser.is_connected()
+                    and (process is None or process.poll() is None)
+                ):
+                    return playwright, browser
+            except Exception as exc:  # noqa: BLE001 - classify only within deadline
+                _LOG.debug("CDP attach attempt failed (%s)", type(exc).__name__)
+            if playwright is not None:
+                try:
+                    playwright.stop()
+                except Exception as exc:  # noqa: BLE001 - teardown is best effort
+                    _LOG.debug("Playwright disconnect failed (%s)", type(exc).__name__)
+            consecutive_versions = 0
+        remaining = deadline - monotonic()
+        if remaining > 0:
+            wait(min(_CDP_RETRY_INTERVAL_SECONDS, remaining))
+    raise BrowserBootstrapError("EDGE_CDP_ATTACH_FAILED")
+
+
+def _devtools_active_port_status(
+    profile: Path, expected_port: int
+) -> tuple[bool, bool | None]:
+    """Read only the first DevToolsActivePort line for safe diagnostics."""
+
+    path = profile / "DevToolsActivePort"
+    try:
+        first_line = path.read_text(encoding="ascii").splitlines()[0].strip()
+    except FileNotFoundError:
+        return False, None
+    except (OSError, UnicodeError, IndexError):
+        return True, None
+    return True, first_line.isdecimal() and int(first_line) == expected_port
 
 
 def acquire_cdp_browser(
@@ -180,15 +292,30 @@ def acquire_cdp_browser(
     app_root: str | Path,
     config: Mapping[str, object],
     *,
-    probe: Callable[[str], bool],
+    probe: Callable[[str], bool] | None = None,
+    version_reader: Callable[[str], str | None] = _read_cdp_version,
+    playwright_factory: Callable[[], object] | None = None,
     launch: Callable[[Path, Path, int], object] = _launch,
     wait: Callable[[float], None] = time.sleep,
     monotonic: Callable[[], float] = time.monotonic,
 ) -> BrowserHandle:
-    """Reuse reachable CDP, otherwise launch only from explicit approved config."""
+    """Attach to verified CDP or launch only the explicitly configured browser."""
 
-    if probe(cdp_url):
-        return BrowserHandle(owned=False)
+    websocket_url = version_reader(cdp_url)
+    if websocket_url:
+        playwright, browser = wait_for_cdp_ready(
+            cdp_url,
+            process=None,
+            playwright_factory=playwright_factory,
+            version_reader=version_reader,
+            wait=wait,
+            monotonic=monotonic,
+        )
+        return BrowserHandle(owned=False, playwright=playwright, browser=browser)
+    if probe is not None and probe(cdp_url):
+        # A listener without a valid DevTools endpoint may belong to another
+        # process; never launch over it or treat it as ready.
+        raise BrowserBootstrapError("EDGE_CDP_ATTACH_FAILED")
     raw = config.get("browser_bootstrap")
     if not isinstance(raw, Mapping):
         raise BrowserBootstrapError("CDP unavailable and browser bootstrap is not configured")
@@ -200,27 +327,51 @@ def acquire_cdp_browser(
         parsed_port = urlsplit(cdp_url).port
     except (KeyError, TypeError, ValueError) as exc:
         raise BrowserBootstrapError("browser bootstrap config is invalid") from exc
-    if not executable.is_file() or not profile.is_dir() or not 1 <= port <= 65535 or parsed_port != port or not 0 < timeout <= 180:
+    if (
+        not executable.is_file()
+        or not profile.is_dir()
+        or not 1 <= port <= 65535
+        or parsed_port != port
+        or not 0 < timeout <= 180
+    ):
         raise BrowserBootstrapError("approved Chrome executable/profile/port is unavailable")
     try:
         process = launch(executable, profile, port)
     except Exception as exc:
         raise BrowserBootstrapError("approved Chrome failed to launch") from exc
+    is_edge = executable.name.casefold() == "msedge.exe"
     handle = BrowserHandle(
-        owned=True, process=process,
+        owned=True,
+        process=process,
         close_fn=lambda: _close_owned_process(process, cdp_url),
-        cleanup_fn=_start_owned_window_hider(process),
+        cleanup_fn=None if is_edge else _start_owned_window_hider(process),
     )
-    deadline = monotonic() + timeout
     try:
-        while monotonic() < deadline:
-            if process.poll() is not None:
-                break
-            if probe(cdp_url):
-                return handle
-            wait(min(0.2, max(0, deadline - monotonic())))
-    except Exception:
+        handle.playwright, handle.browser = wait_for_cdp_ready(
+            cdp_url,
+            process=process,
+            playwright_factory=playwright_factory,
+            version_reader=version_reader,
+            wait=wait,
+            monotonic=monotonic,
+            timeout_seconds=timeout,
+        )
+        exists, port_matches = _devtools_active_port_status(profile, port)
+        _LOG.info(
+            "CDP ready; DevToolsActivePort exists=%s port_matches=%s",
+            exists,
+            port_matches,
+        )
+        return handle
+    except BrowserBootstrapError:
+        exists, port_matches = _devtools_active_port_status(profile, port)
+        _LOG.warning(
+            "CDP attach failed; DevToolsActivePort exists=%s port_matches=%s",
+            exists,
+            port_matches,
+        )
         handle.close()
         raise
-    handle.close()
-    raise BrowserBootstrapError("approved Chrome CDP readiness timed out")
+    except Exception:  # noqa: BLE001 - expose only the stable reason code
+        handle.close()
+        raise BrowserBootstrapError("EDGE_CDP_ATTACH_FAILED") from None

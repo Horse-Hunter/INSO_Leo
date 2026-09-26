@@ -11,6 +11,7 @@ from src.launcher.browser_bootstrap import (
     BrowserBootstrapError,
     BrowserHandle,
     acquire_cdp_browser,
+    wait_for_cdp_ready,
 )
 from src.launcher.single_instance import ERROR_ALREADY_EXISTS, SingleInstanceGuard
 from src.research import ResearchResult, ResearchStatus
@@ -118,15 +119,121 @@ class _Process:
         return 0
 
 
-def test_cdp_reachable_reuses_without_launch_or_close(tmp_path):
+class _Clock:
+    def __init__(self):
+        self.now = 0.0
+
+    def monotonic(self):
+        return self.now
+
+    def wait(self, seconds):
+        self.now += seconds
+
+
+class _FakeBrowser:
+    def is_connected(self):
+        return True
+
+
+class _FakePlaywright:
+    def __init__(self, connect):
+        self.chromium = type("Chromium", (), {"connect_over_cdp": staticmethod(connect)})()
+        self.stop_count = 0
+
+    def start(self):
+        return self
+
+    def stop(self):
+        self.stop_count += 1
+
+
+def _factory_for(connect, started):
+    def factory():
+        instance = _FakePlaywright(connect)
+        started.append(instance)
+        return instance
+    return factory
+
+
+def test_tcp_open_but_cdp_version_not_ready_does_not_return_handle(tmp_path):
     launches = []
+    with pytest.raises(BrowserBootstrapError, match="EDGE_CDP_ATTACH_FAILED"):
+        acquire_cdp_browser(
+            "http://127.0.0.1:9222", tmp_path, {}, probe=lambda _url: True,
+            version_reader=lambda _url: None,
+            launch=lambda *_args: launches.append(True),
+        )
+    assert launches == []
+
+
+def test_version_without_websocket_is_not_ready():
+    clock = _Clock()
+    with pytest.raises(BrowserBootstrapError, match="EDGE_CDP_ATTACH_FAILED"):
+        wait_for_cdp_ready(
+            "http://127.0.0.1:9222", process=None,
+            version_reader=lambda _url: None,
+            monotonic=clock.monotonic, wait=clock.wait, timeout_seconds=1,
+        )
+
+
+def test_cdp_attach_retries_reset_then_returns_ready():
+    clock = _Clock()
+    started = []
+    attempts = []
+
+    def connect(_url, **_kwargs):
+        attempts.append(True)
+        if len(attempts) < 3:
+            raise ConnectionResetError("synthetic reset")
+        return _FakeBrowser()
+
+    playwright, browser = wait_for_cdp_ready(
+        "http://127.0.0.1:9222", process=None,
+        playwright_factory=_factory_for(connect, started),
+        version_reader=lambda _url: "ws://127.0.0.1/devtools/browser/test",
+        monotonic=clock.monotonic, wait=clock.wait, timeout_seconds=5,
+    )
+    assert browser.is_connected()
+    assert len(attempts) == 3
+    assert len(started) == 3
+    assert [item.stop_count for item in started] == [1, 1, 0]
+    assert playwright is started[-1]
+
+
+def test_cdp_attach_timeout_has_stable_reason_code():
+    clock = _Clock()
+    with pytest.raises(BrowserBootstrapError) as error:
+        wait_for_cdp_ready(
+            "http://127.0.0.1:9222", process=None,
+            version_reader=lambda _url: "ws://127.0.0.1/devtools/browser/test",
+            playwright_factory=_factory_for(
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionResetError()), []
+            ),
+            monotonic=clock.monotonic, wait=clock.wait, timeout_seconds=1,
+        )
+    assert error.value.reason_code == "EDGE_CDP_ATTACH_FAILED"
+
+
+def test_browser_process_exit_fails_immediately():
+    process = _Process()
+    process.ended = True
+    with pytest.raises(BrowserBootstrapError) as error:
+        wait_for_cdp_ready("http://127.0.0.1:9222", process=process)
+    assert error.value.reason_code == "EDGE_CDP_ATTACH_FAILED"
+
+
+def test_reused_browser_disconnect_does_not_close_remote_browser():
+    started = []
+    remote_browser = _FakeBrowser()
     handle = acquire_cdp_browser(
-        "http://127.0.0.1:9222", tmp_path, {}, probe=lambda _url: True,
-        launch=lambda *_args: launches.append(True),
+        "http://127.0.0.1:9222", ".", {},
+        version_reader=lambda _url: "ws://127.0.0.1/devtools/browser/test",
+        playwright_factory=_factory_for(lambda *_args, **_kwargs: remote_browser, started),
     )
     handle.close()
     assert handle.owned is False
-    assert launches == []
+    assert remote_browser.is_connected()
+    assert started[0].stop_count == 1
 
 
 def test_owned_chrome_bootstrap_uses_windowless_normal_chrome(monkeypatch, tmp_path):
@@ -163,6 +270,25 @@ def test_owned_chrome_bootstrap_uses_windowless_normal_chrome(monkeypatch, tmp_p
     )
 
 
+def test_owned_edge_bootstrap_is_visible_and_uses_persistent_profile(monkeypatch, tmp_path):
+    import src.launcher.browser_bootstrap as browser_module
+
+    executable = tmp_path / "msedge.exe"
+    profile = tmp_path / "browser-profile"
+    captured = {}
+    monkeypatch.setattr(
+        browser_module.subprocess,
+        "Popen",
+        lambda args, **kwargs: captured.update(args=args, kwargs=kwargs) or object(),
+    )
+    browser_module._launch(executable, profile, 9222)
+    assert f"--user-data-dir={profile}" in captured["args"]
+    assert "--remote-debugging-port=9222" in captured["args"]
+    assert "--remote-debugging-address=127.0.0.1" in captured["args"]
+    assert "--no-startup-window" not in captured["args"]
+    assert captured["kwargs"]["startupinfo"] is None
+
+
 def test_cdp_launches_only_explicit_existing_profile_and_closes_owned(
     tmp_path, monkeypatch
 ):
@@ -180,16 +306,27 @@ def test_cdp_launches_only_explicit_existing_profile_and_closes_owned(
         "_start_owned_window_hider",
         lambda candidate: (lambda: hider_stopped.append(candidate)),
     )
-    probes = iter((False, True))
+    started = []
+    launched = []
+
+    def launch(exe, prof, port):
+        launched.append(True)
+        return process
+
+    def version(_url):
+        return "ws://127.0.0.1/devtools/browser/test" if launched else None
+
     handle = acquire_cdp_browser(
         "http://127.0.0.1:9222", tmp_path,
         {"browser_bootstrap": {
             "executable": str(executable), "profile_dir": str(profile),
             "debug_port": 9222, "ready_timeout_seconds": 2,
         }},
-        probe=lambda _url: next(probes),
-        launch=lambda exe, prof, port: calls.append((exe, prof, port)) or process,
+        probe=lambda _url: False,
+        launch=lambda exe, prof, port: calls.append((exe, prof, port)) or launch(exe, prof, port),
         wait=lambda _seconds: None,
+        version_reader=version,
+        playwright_factory=_factory_for(lambda *_args, **_kwargs: _FakeBrowser(), started),
     )
     assert handle.owned is True
     assert calls == [(executable, profile, 9222)]
@@ -216,8 +353,21 @@ def test_cdp_timeout_closes_only_just_launched_process(tmp_path):
     profile = tmp_path / "profile"
     profile.mkdir()
     process = _Process()
-    ticker = iter((0.0, 0.2, 0.4, 0.6))
-    with pytest.raises(BrowserBootstrapError, match="timed out"):
+    unrelated_process = _Process()
+    clock = _Clock()
+    import src.launcher.browser_bootstrap as browser_module
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        browser_module,
+        "_close_owned_process",
+        lambda owned_process, _url: owned_process.terminate(),
+    )
+    launched = []
+
+    def version(_url):
+        return "ws://127.0.0.1/devtools/browser/test" if launched else None
+
+    with pytest.raises(BrowserBootstrapError, match="EDGE_CDP_ATTACH_FAILED"):
         acquire_cdp_browser(
             "http://127.0.0.1:9222", tmp_path,
             {"browser_bootstrap": {
@@ -225,11 +375,17 @@ def test_cdp_timeout_closes_only_just_launched_process(tmp_path):
                 "debug_port": 9222, "ready_timeout_seconds": 0.5,
             }},
             probe=lambda _: False,
-            launch=lambda *_: process,
-            wait=lambda _: None,
-            monotonic=lambda: next(ticker),
+            launch=lambda *_: (launched.append(True) or process),
+            version_reader=version,
+            playwright_factory=_factory_for(
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionResetError()), []
+            ),
+            wait=clock.wait,
+            monotonic=clock.monotonic,
         )
     assert process.terminated
+    assert unrelated_process.terminated is False
+    monkeypatch.undo()
 
 
 def test_windowed_startup_duplicate_does_not_construct_backend(tmp_path, monkeypatch):

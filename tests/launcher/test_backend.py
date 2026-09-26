@@ -181,6 +181,7 @@ def test_production_composition_builds_real_seams_without_network(
     backend = ProductionBackend(
         config_path=research_config, production_config_path=production,
         cdp_probe=lambda _url: True,
+        browser_acquirer=lambda *_args, **_kwargs: BrowserHandle(owned=False),
     )
     backend.start()
     assert sheets_called.wait(5), "production Sheets reader was not composed/called"
@@ -406,6 +407,7 @@ def test_stop_after_cycle_drains_every_due_item_from_current_poll(
     backend = ProductionBackend(
         config_path=research_config, production_config_path=production,
         cdp_probe=lambda _url: True,
+        browser_acquirer=lambda *_args, **_kwargs: BrowserHandle(owned=False),
     )
     backend.start()
     assert sheets_called.wait(5)
