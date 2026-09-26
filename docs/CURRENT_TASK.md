@@ -1,7 +1,9 @@
 # Current Task — V1.2 final runtime acceptance
 
-Status: BLOCKED — EDGE_CDP_ATTACH_FAILED
+Status: PRE_SAVE_READY / REAL_SAVE_GATED
 Production write gate: CLOSED
+
+CDP diagnostic: EDGE_CDP_READY. Final runtime acceptance was not performed in this diagnostic task.
 
 ## Code already accepted
 
@@ -20,8 +22,18 @@ Production write gate: CLOSED
 - `acquire_cdp_browser` launched an APP_OWNED Edge process. The TCP-only readiness path returned before Playwright could attach (`ECONNREFUSED`). A stricter `/json/version` readiness attempt timed out with the default launcher. A diagnostic launch with the startup-window flag omitted exposed `/json/version`, but `attach_inso_research_session` still failed with a connection reset. No lease or operation page was established.
 - The app-owned launches were closed through their browser handles. The dedicated profile remains on disk for reuse; no process using that profile or CDP port remained after cleanup. Existing user Edge processes were left untouched.
 - No INSO page was opened, and no login state was inspected. Synthetic parent fields, complete purchase prepare, duplicate query/settlement/creator/quote, Save controls and existing-record reconciliation were not live-verified.
-- The current blocker is stable Playwright CDP attachment to the project Edge profile. After attachment is working, still-required acceptance is: Owner login if needed; parent field selectors and synthetic read-back plus prepare dry-run; duplicate settlement/creator/quote; live Save-control semantics; and read-only saved-record identity/reconciliation.
+- At the time of the original attempt, the blocker was Playwright CDP attachment. The controlled diagnostic below now passes. Still-required acceptance is: Owner login if needed; parent field selectors and synthetic read-back plus prepare dry-run; duplicate settlement/creator/quote; live Save-control semantics; and read-only saved-record identity/reconciliation.
 - No production adapter was enabled or substituted with a fake. Production write gate remains CLOSED.
+
+## Automated Edge/CDP diagnostic — 2026-09-26
+
+- Read-only policy checks across HKLM/HKCU Edge policy keys, including WOW6432Node: `RemoteDebuggingAllowed=NOT_SET`; `UserDataDir=NOT_SET`. No registry values were changed.
+- Before the controlled launch, 32 Edge processes were visible to CIM, none matched `runtime/browser-profile` or `--remote-debugging-port=9222`; port 9222 had no listener. No user Edge process was closed.
+- Using the project `_launch` with the existing `runtime/browser-profile`, CIM observed a newly created Edge process whose actual command line contained the expected user-data-dir, `--remote-debugging-port=9222`, and `--remote-debugging-address=127.0.0.1`. The 9222 listener PID matched that process; no process reuse was observed.
+- `/json/version` returned a non-empty websocket URL on consecutive checks; `/json/list` returned successfully (target count only was recorded). Playwright `connect_over_cdp` passed; browser was connected with one context. The existing `acquire_cdp_browser` path also returned `owned=True` and one context.
+- Both diagnostic APP_OWNED Edge processes were closed through their own handles after verification. The persistent profile was retained. An isolated profile was not run because the current runtime profile passed; no INSO or business page was opened.
+- The earlier `EDGE_CDP_ATTACH_FAILED` was not reproducible in the authorized Windows diagnostic execution. Its original trigger remains UNKNOWN; no persistent policy, command-line, profile, port ownership, or Playwright attach failure was found.
+- Final Runtime Acceptance remains pending and was not run. Production write gate remains CLOSED; no Save, Send, SMTP, or Sheets write occurred.
 
 ## Verification and side effects
 
