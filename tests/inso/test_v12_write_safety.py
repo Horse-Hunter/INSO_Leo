@@ -67,9 +67,15 @@ def make_actions(candidates: tuple[ControlCandidate, ...], *, enabled: bool = Tr
 def test_closed_enum_and_public_api_have_no_send_or_generic_click_methods() -> None:
     names = {action.name for action in WriteAction}
     assert names == {
-        "OPEN_BUSINESS_INQUIRY", "NEW_DRAFT", "SET_CUSTOMER",
-        "SET_QUOTATION_TYPE", "SET_PURCHASER", "OPEN_AI_ENTRY",
-        "SET_AI_INPUT", "RUN_AI_RECOGNITION", "SAVE_DATA",
+        "OPEN_BUSINESS_INQUIRY",
+        "NEW_DRAFT",
+        "SET_CUSTOMER",
+        "SET_QUOTATION_TYPE",
+        "SET_PURCHASER",
+        "OPEN_AI_ENTRY",
+        "SET_AI_INPUT",
+        "RUN_AI_RECOGNITION",
+        "SAVE_DATA",
     }
     methods = set(dir(InsoDraftActions))
     assert not {"send", "submit", "final_submit", "click", "dispatch"} & methods

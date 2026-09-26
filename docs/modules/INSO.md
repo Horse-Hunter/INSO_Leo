@@ -2,10 +2,11 @@
 
 ## Scope
 
-`src/inso` now contains additive fake-only safety contracts for shared browser
-ownership, allowlisted purchase actions, and a separately bounded read-only
-discovery protocol. It contains no live duplicate-history adapter, selector
-registry for production controls, Save Data writer, or Save-and-Send capability.
+`src/inso` contains the shared-session lease, allowlisted action boundary, a
+prepare-only read-only inspector, and a minimal live-capable purchase
+preparation adapter. The adapter uses exact observed selectors and defaults to
+the closed production gate. It has no Save Data or Send method, registers no
+Save selector, and leaves AI result selectors unimplemented until verified.
 
 ## Session ownership contract
 
@@ -19,10 +20,12 @@ after the cycle but is never closed; an app-owned browser closes only after its
 child pages drain and the launcher confirms the cycle is drained. Stale or
 mismatched identity fails closed.
 
-This wiring restores the existing V1.1 INSO read-only Research source. It does
-not add an INSO purchase writer, live discovery selectors, or any new external
-write capability. Do not restore arbitrary CDP context/page enumeration to
-regain availability.
+This wiring restores the existing V1.1 INSO read-only Research source. The
+V1.2 preparation adapter requires explicit lease-created form and AI operation
+pages; it does not select arbitrary tabs or close the reused browser. The
+production gate remains closed. Before the first real Save, the final local CDP
+runtime must pass endpoint/browser/context/operation-page acceptance. That
+runtime acceptance is not a blocker for the current code preparation task.
 
 ## Write safety seam
 
@@ -35,10 +38,11 @@ attributes before dispatch, and raises `SecurityViolation` on drift or
 ambiguity. The production feature gate is unconditionally closed. The only
 dispatcher exercised by tests is fake.
 
-The current Stage 2A action boundary is not a production WRITE ALLOWLIST
-approval. Page/current-order identity, current/target values, approved selectors,
-read-back, Save Data recovery and evidence rules need independent Safety
-Supervisor review. Save-and-Send remains prohibited in every stage.
+The current action boundary is not production Save Data authorization.
+`InsoPurchaseWriter` exposes only new draft, customer, purchaser, importance,
+AI input/recognition, and a read-result contract. The separate inquiry-type
+setter fails closed. `#btnSave`, `#btnSave2`, and `#bcSend` are denied in this
+writer. Save-and-Send and Send remain prohibited in every stage.
 
 ## Discovery and UNKNOWNs
 
@@ -51,7 +55,8 @@ browser in the discovery below.
 
 Owner authorized non-persistent read-only interactions in the already signed-in
 browser. Inspection reused the explicitly selected Edge tab and read DOM
-metadata. It did not save, send, run AI recognition, or modify business data.
+metadata. It did not save, send, or modify business data. One AI recognition
+attempt using the authorized synthetic input is described below.
 The application `InsoSessionLease` browser/context identity was not available
 through the selected-tab inspection path; these are observed UI facts, not a
 live lease verification. Follow-up findings from the final discovery attempt
@@ -108,30 +113,36 @@ Observed blank-add-form metadata (opened then closed without filling or saving):
 
 ### Final discovery follow-up — 2026-09-26
 
-The following checks used the explicitly selected Edge tab and a blank Add
-form. No real order data was entered. The supplied synthetic AI string was not
-entered because the AI panel did not become visible; AI recognition was not
-executed.
+The form and type checks used the explicitly selected Edge tab and a blank Add
+form. No real customer, model, or order data was entered.
 
 - The blank form labels `采购人员` beside text input `#UserName_text`
   (placeholder `请选择...`) with backing hidden input `#UserName`. The separate
   `业务员` field is `#OwnerID_text` with backing hidden input `#OwnerID`; it is
   not the purchaser field.
 - The form has label `重要程度` and text input `#ImpValueF` (placeholder
-  `请输入或选择...`). No field labeled `询价类型` was found. The option list
-  and whether `#ImpValueF` contains the workflow's `需要问全价格` / `普通询价`
-  values were not confirmed. Do not assume the mapping for a writer.
+  `请输入或选择...`). No field or hidden field labeled `询价类型` was found.
+  Clicking the empty input opened its associated
+  `.select-menu-modal .select-menu-item` popup with exact options
+  `需要问全价格` and `普通询价`. This is confirmed as an `重要程度` field; the
+  UI label is not `询价类型`. The writer does not operate this field and
+  leaves `SET_QUOTATION_TYPE` fail-closed.
 - `#btnSave` is a visible button with exact text `保存`; `#btnSave2` is a
   visible button with exact text `保存并发送`. `#bcSend` is a separate send
   control observed on an existing record. None was activated. They remain
   forbidden except the specifically gated Save Data action in a future,
   separately reviewed writer; Save-and-Send and Send stay prohibited.
 - `#ai_import_` is a visible button with inline handler attribute
-  `ai_import()`. Clicking it did not leave the AI dialog visible: the
-  `#winIframe_dialog1` frame remained zero-sized/hidden. The AI input
-  `#paste-area`, recognition button `#ai-recognize`, result fields, and
-  `重新识别` ready state therefore could not be read in this attempt. No
-  synthetic input was entered and recognition did not run.
+  `ai_import()`. It did not leave the embedded AI dialog visible in this
+  session. The dedicated AI page was opened directly on an independent blank
+  tab; page load alone showed no persistent record or save action.
+- On `/skins/etaoerp/product/Import_ai.aspx`, `textarea#paste-area` accepted
+  the exact authorized synthetic string `TEST-MPN-001      TEST-BRAND      123`.
+  `button#ai-recognize` had visible text `AI 智能识别` and was clicked once. A
+  JavaScript alert appeared; after dismissing it, the page still showed its
+  empty-result prompt, the button text had not changed to `重新识别`, and no
+  result fields were populated. Recognition therefore did not reach an
+  observable ready result. No retry was made.
 - The earlier read-only history detail check compared one visible row's
   `<digits>_Main` DOM id and numeric `Bill_View_Open(...)` argument against its
   detail form's `BillID`. The row id differed from the argument, and the
@@ -142,15 +153,16 @@ executed.
 - The selected tab is controlled through the Edge extension path, not the
   launcher's CDP connection. `runtime/research.json` was absent, so no configured
   lease endpoint was available. The code default `http://127.0.0.1:9222` was
-  unreachable. No `InsoSessionLease` was created; browser/context/operation-page
-  lease identities remain `UNKNOWN`.
+  unreachable. No `InsoSessionLease` was created; this is a runtime acceptance
+  required before the first real Save, not a blocker for current coding.
 - Existing detail structure still offers a populated `BillID`, read-only
   `PENO`, and model/brand/quantity fields, while the list shows model, brand,
   quantity, and time. Save-after identity correlation, status, and creation
   time remain unverified.
 
 No screenshot was captured. No Save, Save-and-Send, Send, SMTP, Sheets write,
-or persistent INSO operation occurred. The blank form was closed.
+or persistent INSO operation occurred. Blank forms and the independent AI tab
+were closed.
 
 Observed existing-record/read-back structure (opened read-only from the history
 list, then closed without changes):
@@ -175,17 +187,21 @@ safe crop/redaction feasibility remains `UNKNOWN`.
   identifiers, and deterministic equal-timestamp tie-break.
 - Repeated stability of history row/link/`BillID` mapping across opens, queries,
   or reloads.
-- Live `InsoSessionLease` endpoint, browser, context, and operation-page
-  ownership verification; default CDP port is unreachable and runtime config
-  is absent in this checkout.
-- `#ImpValueF` option values and whether they implement the intended inquiry
-  type; no separate `询价类型` label was found. Purchaser is `#UserName_text`.
-- AI panel opening, recognition result selectors/values, and deterministic ready
-  state. Do not implement writer-side AI validation until this is resolved.
+- Final local-CDP lease acceptance before the first real Save. The current
+  extension session did not expose lease identities; this does not block
+  prepare-only coding.
+- No separate `询价类型` field exists in the observed form. The confirmed
+  choices live under `重要程度` / `#ImpValueF`; do not label that control as a
+  separate inquiry-type field.
+- AI result selectors/values and deterministic ready state. The single
+  synthetic recognition attempt did not produce an observable result. The
+  writer result reader therefore fails closed until a result selector is
+  verified.
 - A newly saved draft's stable identity and post-save read-back of status/time.
 - Safe, repeatable screenshot crop/redaction.
 
 Do not treat these observations as production writer approval. AI result
-read-back and lease ownership are unresolved blockers for live writer work. No
-write gate is enabled. Save Data, Save-and-Send, and all send controls remain
-prohibited.
+read-back and saved-record reconciliation remain unresolved before any Save.
+Lease/CDP identity is a required runtime acceptance immediately before the
+first real Save, not a current coding blocker. No write gate is enabled. Save
+Data, Save-and-Send, and all send controls remain unavailable in this writer.

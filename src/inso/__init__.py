@@ -1,5 +1,6 @@
-"""INSO V1.2 pure contracts and safety seams; no live writer is composed here."""
+"""INSO V1.2 contracts, safety seams, and closed-gate purchase preparation."""
 
+from .purchase_writer import AiRecognitionResult, AiResultReader, InsoPurchaseWriter
 from .session import (
     BrowserIdentity,
     BrowserOwnership,
@@ -13,10 +14,13 @@ from .session import (
 )
 
 __all__ = [
+    "AiRecognitionResult",
+    "AiResultReader",
     "BrowserIdentity",
     "BrowserOwnership",
     "ContextIdentity",
     "InsoOperationAccess",
+    "InsoPurchaseWriter",
     "InsoSessionLease",
     "LeaseState",
     "OperationPage",

@@ -1,7 +1,6 @@
-"""Layered fake-only allowlist and Save-and-Send prevention.
+"""Allowlisted INSO actions and Save-and-Send prevention.
 
-There is deliberately no live Playwright writer in this module. Production
-write gates default closed and are not read from runtime configuration.
+Production write gates default closed and are not read from runtime config.
 """
 
 from __future__ import annotations
