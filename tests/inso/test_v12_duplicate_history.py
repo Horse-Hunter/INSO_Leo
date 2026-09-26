@@ -7,6 +7,9 @@ link shape.
 
 from __future__ import annotations
 
+import re
+import traceback
+from decimal import Decimal
 from pathlib import Path
 from typing import Self
 
@@ -24,9 +27,11 @@ from src.inso.duplicate_history import (
     RESULT_ROW_SELECTOR,
     RESULT_TIMESTAMP_CELL_SELECTOR,
     DuplicateHistoryFailure,
+    DuplicateHistoryFieldSelectors,
     DuplicateHistoryRowValues,
     InsoDuplicateHistoryError,
     InsoDuplicateHistoryReader,
+    PlaywrightDuplicateHistoryPage,
 )
 from src.inso.session import SecurityViolation
 
@@ -155,8 +160,14 @@ def reader(
     )
 
 
-def values(model: str = MPN, quantity: str = "10", quoted: str = "2026-09-25 09:30:00"):
-    return DuplicateHistoryRowValues(model, quantity, quoted)
+def values(
+    model: str = MPN,
+    quantity: str = "10",
+    quoted: str = "2026-09-25 09:30:00",
+    creator: str | None = None,
+    inso_quote: str | None = None,
+):
+    return DuplicateHistoryRowValues(model, quantity, quoted, creator, inso_quote)
 
 
 def test_exact_query_uses_only_the_verified_selectors() -> None:
@@ -412,3 +423,306 @@ def test_live_result_selectors_are_scoped_to_confirmed_history_table() -> None:
     assert RESULT_MODEL_CELL_SELECTOR == "td:nth-child(9)"
     assert RESULT_QUANTITY_CELL_SELECTOR == "td:nth-child(11)"
     assert RESULT_TIMESTAMP_CELL_SELECTOR == "td:nth-child(14)"
+
+
+# --- live Playwright page adapter (fake Playwright surface) ----------------
+
+
+class FakeLocator:
+    def __init__(self, count: int) -> None:
+        self._count = count
+
+    def count(self) -> int:
+        return self._count
+
+
+class FakePlaywrightPage:
+    """Fake Playwright Page/Frame built from a selector -> value map.
+
+    A ``str`` value stands for the element's text/HTML, a ``list`` of dicts for
+    ``eval_on_selector_all`` with an attribute argument. Missing selectors behave
+    as absent elements.
+    """
+
+    def __init__(
+        self,
+        *,
+        elements: dict[str, object] | None = None,
+        goto_error: BaseException | None = None,
+    ) -> None:
+        self.elements = dict(elements or {})
+        self._goto_error = goto_error
+        self.calls: list[tuple] = []
+
+    def goto(self, url: str, **_: object) -> None:
+        self.calls.append(("goto", url))
+        if self._goto_error is not None:
+            raise self._goto_error
+
+    def fill(self, selector: str, value: str, **_: object) -> None:
+        self.calls.append(("fill", selector, value))
+
+    def check(self, selector: str, **_: object) -> None:
+        self.calls.append(("check", selector))
+
+    def click(self, selector: str, **_: object) -> None:
+        self.calls.append(("click", selector))
+
+    def wait_for_selector(self, selector: str, **_: object) -> None:
+        self.calls.append(("wait_for_selector", selector))
+        if self._count(selector) == 0:
+            raise TimeoutError(f"not visible: {selector}")
+
+    def locator(self, selector: str) -> FakeLocator:
+        self.calls.append(("locator", selector))
+        return FakeLocator(self._count(selector))
+
+    def eval_on_selector(self, selector: str, expression: str) -> object:
+        self.calls.append(("eval_on_selector", selector, expression))
+        value = self._value(selector)
+        if value is None:
+            raise RuntimeError(f"no element: {selector}")
+        return value
+
+    def eval_on_selector_all(
+        self, selector: str, _expression: str, arg: str | None = None
+    ) -> list:
+        self.calls.append(("eval_on_selector_all", selector, arg))
+        values = self._value(selector)
+        if not isinstance(values, list):
+            return []
+        if arg is None:
+            return list(values)
+        return [item.get(arg) if isinstance(item, dict) else None for item in values]
+
+    def _value(self, selector: str) -> object:
+        return self.elements.get(selector)
+
+    def _count(self, selector: str) -> int:
+        value = self.elements.get(selector)
+        if value is None:
+            return 0
+        return len(value) if isinstance(value, list) else 1
+
+
+def playwright_rows(
+    *,
+    row_id: str = "1001_Main",
+    bill_argument: str = "7788",
+    cells: dict[str, str] | None = None,
+) -> dict[str, object]:
+    table: dict[str, object] = {
+        RESULT_ROW_SELECTOR: [{"id": row_id}],
+        f"#{row_id}": row_html(bill_argument),
+        DETAIL_BILL_ID_SELECTOR: [{"value": bill_argument}],
+    }
+    resolved = {
+        RESULT_MODEL_CELL_SELECTOR: MPN,
+        RESULT_QUANTITY_CELL_SELECTOR: "10",
+        RESULT_TIMESTAMP_CELL_SELECTOR: "2026-09-25 09:30:00",
+    }
+    resolved.update(cells or {})
+    for cell_selector, text in resolved.items():
+        table[f"#{row_id} {cell_selector}"] = text
+    return table
+
+
+def playwright_adapter(
+    *,
+    elements: dict[str, object] | None = None,
+    selectors: DuplicateHistoryFieldSelectors | None = None,
+    goto_error: BaseException | None = None,
+) -> tuple[PlaywrightDuplicateHistoryPage, FakePlaywrightPage]:
+    page = FakePlaywrightPage(elements=elements, goto_error=goto_error)
+    return (
+        PlaywrightDuplicateHistoryPage(
+            page, selectors=selectors or DuplicateHistoryFieldSelectors()
+        ),
+        page,
+    )
+
+
+def test_playwright_row_extractor_uses_only_the_verified_cells() -> None:
+    adapter, page = playwright_adapter(elements=playwright_rows())
+
+    extracted = adapter.read_row_values("1001_Main")
+
+    assert extracted == DuplicateHistoryRowValues(
+        model=MPN, quantity_text="10", quoted_at_text="2026-09-25 09:30:00"
+    )
+    for cell_selector in (
+        RESULT_MODEL_CELL_SELECTOR,
+        RESULT_QUANTITY_CELL_SELECTOR,
+        RESULT_TIMESTAMP_CELL_SELECTOR,
+    ):
+        assert ("locator", f"#1001_Main {cell_selector}") in page.calls
+    assert ("eval_on_selector_all", RESULT_ROW_SELECTOR, "id") not in page.calls
+
+
+def test_playwright_reads_row_ids_and_html_from_the_verified_table() -> None:
+    adapter, _ = playwright_adapter(elements=playwright_rows())
+
+    assert adapter.attributes(RESULT_ROW_SELECTOR, "id") == ("1001_Main",)
+    assert adapter.html("#1001_Main") == row_html("7788")
+    assert adapter.html("#9999_Main") is None
+
+
+def test_playwright_missing_cell_yields_no_values() -> None:
+    elements = playwright_rows()
+    del elements[f"#1001_Main {RESULT_QUANTITY_CELL_SELECTOR}"]
+    adapter, _ = playwright_adapter(elements=elements)
+
+    assert adapter.read_row_values("1001_Main") is None
+
+
+def test_playwright_creator_and_quote_are_not_read_by_default() -> None:
+    adapter, page = playwright_adapter(elements=playwright_rows())
+
+    extracted = adapter.read_row_values("1001_Main")
+
+    assert extracted is not None
+    assert extracted.creator is None
+    assert extracted.inso_quote_text is None
+    # No unverified column may be touched.
+    assert sum(1 for call in page.calls if call[0] == "locator") == 3
+
+
+def test_playwright_reads_creator_and_quote_once_confirmed() -> None:
+    elements = playwright_rows()
+    elements["#1001_Main td:nth-child(6)"] = "制单人甲"
+    elements["#1001_Main td:nth-child(12)"] = "12.50"
+    adapter, _ = playwright_adapter(
+        elements=elements,
+        selectors=DuplicateHistoryFieldSelectors(
+            creator="td:nth-child(6)", inso_quote="td:nth-child(12)"
+        ),
+    )
+
+    extracted = adapter.read_row_values("1001_Main")
+
+    assert extracted is not None
+    assert extracted.creator == "制单人甲"
+    assert extracted.inso_quote_text == "12.50"
+
+
+def test_playwright_query_steps_use_the_verified_controls() -> None:
+    adapter, page = playwright_adapter(elements=playwright_rows())
+
+    adapter.goto(LIST_URL)
+    adapter.set_text(MODEL_QUERY_INPUT, MPN)
+    adapter.ensure_checked(EXACT_MATCH_CHECKBOX)
+    adapter.click(QUERY_BUTTON)
+
+    assert ("goto", LIST_URL) in page.calls
+    assert ("fill", MODEL_QUERY_INPUT, MPN) in page.calls
+    assert ("check", EXACT_MATCH_CHECKBOX) in page.calls
+    assert ("click", QUERY_BUTTON) in page.calls
+    assert not any("#leftlike" in repr(call) for call in page.calls)
+
+
+def test_playwright_settlement_is_fail_closed() -> None:
+    adapter, _ = playwright_adapter(
+        elements=playwright_rows(),
+        # The verified empty-state marker is present; it must still not be used
+        # as a nonempty completion signal.
+    )
+    adapter._page.elements[".layui-table-none"] = ""
+
+    with pytest.raises(InsoDuplicateHistoryError) as failure:
+        adapter.wait_for_query_settled(timeout_ms=1000)
+
+    assert failure.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+
+
+def test_reader_over_the_playwright_adapter_fails_closed_on_settlement() -> None:
+    adapter, _ = playwright_adapter(elements=playwright_rows())
+
+    with pytest.raises(InsoDuplicateHistoryError) as failure:
+        reader(adapter).read(MPN)  # type: ignore[arg-type]
+
+    assert failure.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+
+
+def test_no_settle_path_relies_on_a_fixed_sleep() -> None:
+    source = Path(module.__file__).read_text(encoding="utf-8")
+
+    assert not re.search(r"\bsleep\s*\(", source)
+    assert "wait_for_timeout" not in source
+
+
+# --- creator / quote data path --------------------------------------------
+
+
+def test_creator_and_quote_reach_the_record_when_supplied() -> None:
+    page = FakePage(
+        rows=(
+            (
+                "1001_Main",
+                row_html("7788"),
+                values(creator="制单人甲", inso_quote="12.50"),
+            ),
+        )
+    )
+
+    capture = reader(page).read(MPN)
+
+    assert capture.records[0].creator == "制单人甲"
+    assert capture.records[0].inso_quote == Decimal("12.50")
+
+
+def test_blank_creator_is_none_and_absent_quote_is_none() -> None:
+    page = FakePage(
+        rows=(("1001_Main", row_html("7788"), values(creator="   ", inso_quote="")),)
+    )
+
+    record = reader(page).read(MPN).records[0]
+
+    assert record.creator is None
+    assert record.inso_quote is None
+
+
+@pytest.mark.parametrize("quote", ["abc", "-1", "1,2,3.4.5"])
+def test_unusable_quote_is_invalid(quote: str) -> None:
+    page = FakePage(
+        rows=(("1001_Main", row_html("7788"), values(inso_quote=quote)),)
+    )
+
+    with pytest.raises(InsoDuplicateHistoryError) as failure:
+        reader(page).read(MPN)
+
+    assert failure.value.code is DuplicateHistoryFailure.RECORD_FIELDS_INVALID
+
+
+# --- sanitized wrapping ----------------------------------------------------
+
+
+def test_wrapped_page_failure_keeps_no_raw_cause() -> None:
+    raw = "raw page payload SECRET_CANARY_7788"
+    page = FakePage(goto_error=RuntimeError(raw))
+
+    with pytest.raises(InsoDuplicateHistoryError) as failure:
+        reader(page).read(MPN)
+
+    error = failure.value
+    assert error.__cause__ is None
+    assert error.__suppress_context__ is True
+    rendered = "".join(
+        traceback.format_exception(type(error), error, error.__traceback__)
+    )
+    assert "SECRET_CANARY" not in rendered
+    assert "raw page payload" not in rendered
+    assert raw not in str(error)
+
+
+def test_wrapped_parse_failure_keeps_no_raw_cause() -> None:
+    page = FakePage(
+        rows=(("1001_Main", row_html("7788"), values(quoted="2026-13-45 99:99:99")),)
+    )
+
+    with pytest.raises(InsoDuplicateHistoryError) as failure:
+        reader(page).read(MPN)
+
+    error = failure.value
+    assert error.code is DuplicateHistoryFailure.RECORD_FIELDS_INVALID
+    assert error.__cause__ is None
+    assert error.__suppress_context__ is True
