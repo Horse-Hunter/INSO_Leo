@@ -1,39 +1,31 @@
 # 模块注册表
 
-本文件只登记软件模块职责、Public Contract 与依赖方向，不定义 AI 岗位，也不记录模块内部算法。Main Programmer 可维护普通新增或实现变化；模块职责或跨模块 Public Contract 边界变化须升级 CEO。
+本文件只维护模块职责与跨模块依赖边界，由 CEO/架构师维护；模块内部实现写在各自 module doc。
 
-## 注册表
+| module | path | responsibility |
+| --- | --- | --- |
+| `core` | `src/core/` | 公共基础能力、Credential Provider |
+| `gui` | `src/gui/` | Dashboard / DTO 展示，不做业务计算 |
+| `launcher` | `src/launcher/` | Runtime 组装、Chrome/CDP 生命周期 |
+| `sheets` | `src/sheets/` | Google Sheets 读取与明确授权的安全写回 |
+| `research` | `src/research/` | 只读市场调研、价格聚合、Research Excel |
+| `workflow` | `src/workflow/` | Scheduler、状态、retry、跨模块编排 |
+| `inso` | `src/inso/` | V1.2 重复检查与受控采购草稿能力 |
+| `quotation` | `src/quotation/` | 后续报价模块，当前非主线 |
 
-| module_id | display_name | code_path | Public Contract / module doc | status |
-| --- | --- | --- | --- | --- |
-| `core` | Core | `src/core/` | `docs/modules/CORE.md` | V1 |
-| `gui` | GUI | `src/gui/` | `src/gui/README.md` | V1 Shell + V1.2 DTO seam |
-| `launcher` | Production Launcher | `src/launcher/` | `src/launcher/README.md` | V1 |
-| `sheets` | Sheets | `src/sheets/` | `docs/modules/SHEETS.md` | V1 |
-| `research` | Research | `src/research/` | `docs/modules/RESEARCH.md` | V1 rules + V1.2 session seam |
-| `workflow` | Workflow | `src/workflow/` | `docs/modules/WORKFLOW.md` | V1 + V1.2 additive fake-only persistence |
-| `inso` | INSO | `src/inso/` | `docs/modules/INSO.md` | V1.2 Stage 2A fake-only contracts |
-| `quotation` | Quotation | `src/quotation/` | Future Version Contract：`UNKNOWN` | Future Version |
-
-测试按 `tests/<module>/` 镜像模块归属。
-
-## 边界地图
-
-| module_id | responsibility | allowed dependencies | forbidden dependencies |
-| --- | --- | --- | --- |
-| `core` | 公共基础类型与基础设施能力，包括 Credential Provider 边界 | 标准库；已批准的通用库 | 所有业务模块；业务规则 |
-| `gui` | INSO_V1.0 Windows GUI Shell；负责操作员 Dashboard、运行状态展示、与后端通过 `GuiBackend` 契约交互 | `core`；`customtkinter` 等 UI 库 | `sheets`、`research`、`workflow`、`inso`、`quotation` 内部实现；直接浏览器/Excel/外部 API |
-| `sheets` | 单次 Google Sheets 读取、待处理查询、Record identity 和明确命令下的安全字段更新 | `core`；已批准 Google adapter | `research`、`workflow`、`inso`、`quotation`；polling、全局状态、业务规则 |
-| `research` | read-only 市场调研、evidence、价格聚合和 Research 自有本地 Excel 输出；可直接使用已批准的 INSO read-only Research adapter | `core`；已批准网页/Excel/INSO read-only Research adapter | `sheets`、`workflow`、`inso`、`quotation`；Google Sheet 访问；主动采购行为 |
-| `workflow` | Scheduler、全局流程状态、retry、duplicate prevention 和模块衔接 | `core`、`sheets`、`research`、`inso`、`quotation` Public Contract | 模块内部业务逻辑；直接外部 adapter |
-| `inso` | Future Version 的主动采购：发布采购需求、发起采购询价和获取采购报价；不承载 Research read-only 历史价格 | `core`；未来批准的主动采购 adapter | `sheets`、`research`、`workflow`、`quotation` |
-| `quotation` | Future Version 的报价规则、生成和结果输出 | `core`；显式输入 Contract | `sheets`、`research`、`workflow`、`inso`；直接外部访问 |
+依赖原则：
 
 ```text
 workflow -> core, sheets, research, inso, quotation
-launcher -> gui (contract), workflow, sheets, research, inso (Research session lease)
+launcher -> gui, workflow, sheets, research, inso
 gui -> core
 sheets | research | inso | quotation -> core
 ```
 
-跨模块调用只使用 Public Contract，不导入私有实现。普通注册和实现变化由 Main Programmer 维护；模块职责或有跨模块影响的 Public Contract、依赖边界变化须升级 CEO，详见 `AI_WORKFLOW.md`。
+规则：
+
+- 跨模块只通过 Public Contract；不导入其他模块私有实现。
+- GUI 不直接访问浏览器、Excel、Sheets 或业务模块内部实现。
+- Research 不承担主动采购。
+- INSO 主动采购不改写 Research 的价格/库存/MPN 规则。
+- 模块职责、依赖方向或跨模块 Public Contract 变化必须升级 CEO。
