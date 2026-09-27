@@ -66,62 +66,53 @@ def test_purchaser_and_salesperson_never_count_as_creator() -> None:
     )
 
 
-def test_quote_requires_response_grid_and_detail_mapping() -> None:
+def test_quote_requires_response_schema_and_grid_mapping_only() -> None:
     row_fields = {"BillID", "OfferPrice", "OfferCurrencyID"}
-    columns = [{"field": "OfferPrice", "label": "报价"}]
-    details = [
-        {"field": "OfferPrice", "label": "报价", "value": "23.50"},
-        {
-            "field": "OfferCurrencyID",
-            "label": "报价币种",
-            "value": "1",
-            "currency_display_readable": True,
-        },
+    columns = [
+        {"field": "OfferPrice", "label": "报价"},
+        {"field": "OfferCurrencyID", "label": "报价币种"},
     ]
 
-    assert _confirmed_duplicate_fields(row_fields, columns, details) == (
+    assert _confirmed_duplicate_fields(row_fields, columns, []) == (
         None,
         "OfferPrice",
         "OfferCurrencyID",
     )
-    assert _confirmed_duplicate_fields(row_fields, [], details) == (
+    assert _confirmed_duplicate_fields(row_fields, [], []) == (
         None,
         None,
-        "OfferCurrencyID",
+        None,
     )
 
 
-def test_quote_needs_matching_detail_currency_and_decimal() -> None:
+def test_quote_needs_same_billid_response_row_and_decimal_price() -> None:
     report = _empty_report()
-    fields = [
-        {"field": "OfferPrice", "label": "报价", "value": "23.50"},
-        {
-            "field": "OfferCurrencyID",
-            "label": "报价币种",
-            "value": "1",
-            "currency_display_readable": True,
-        },
-    ]
     _classify_duplicate_fields(
         report,
-        fields,
+        [],
         row_fields={"BillID", "OfferPrice", "OfferCurrencyID"},
-        columns=[{"field": "OfferPrice", "label": "报价"}],
+        columns=[
+            {"field": "OfferPrice", "label": "报价"},
+            {"field": "OfferCurrencyID", "label": "报价币种"},
+        ],
         bill_id="101",
         rows=[{"BillID": "101", "OfferPrice": "23.50", "OfferCurrencyID": "1"}],
     )
     assert report["inso_quote"]["status"] == "CONFIRMED"
-    assert report["inso_quote"]["row_detail_values_match"] is True
+    assert report["inso_quote"]["billid_response_row_unique"] is True
     assert "23.50" not in json.dumps(report)
 
     mismatch = _empty_report()
     _classify_duplicate_fields(
         mismatch,
-        fields,
+        [],
         row_fields={"BillID", "OfferPrice", "OfferCurrencyID"},
-        columns=[{"field": "OfferPrice", "label": "报价"}],
+        columns=[
+            {"field": "OfferPrice", "label": "报价"},
+            {"field": "OfferCurrencyID", "label": "报价币种"},
+        ],
         bill_id="101",
-        rows=[{"BillID": "101", "OfferPrice": "23.50", "OfferCurrencyID": "2"}],
+        rows=[{"BillID": "101", "OfferPrice": "not-a-decimal", "OfferCurrencyID": "2"}],
     )
     assert mismatch["inso_quote"]["status"] == "UNKNOWN"
 

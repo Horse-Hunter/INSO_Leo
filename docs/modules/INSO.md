@@ -340,3 +340,29 @@ selectors remain UNKNOWN. Save/Send/SMTP/Sheets were not used.
 - The AI dialog was closed through its visible cancel action. The untouched
   blank temporary inquiry remains open because its Back implementation was not
   verifiable in this frame. No Save or Send control was activated.
+
+## Owner-session closeout — 2026-09-27
+
+The previous bounded-follow-up notes above are superseded where they conflict
+with this live closeout. The authenticated shell's current business-list frame
+was re-enumerated and verified by host/path plus unique
+`#DetailFieldValue`, `#select_btns`, and `#_id_dg`; it contained real rows. The
+accepted exact-query adapter was called three times using in-memory existing
+PartNo values. All three returned `QUERY_SETTLEMENT_UNCONFIRMED`; the final
+request matched the native `searchData[...]` shape. The attempt limit is
+exhausted, so no non-empty exact response was obtained.
+
+The user-confirmed grid mapping is `OfferPrice` → `报价` and
+`OfferCurrencyID` → `报价币种`. The Phase A classifier no longer requires
+same-named detail fields; it requires both schema fields, matching grid labels,
+a unique same-BillID response row, a Decimal-readable price, and a nonempty
+currency. Live confirmation still awaits a nonempty exact response and
+same-BillID grid/cache comparison. Creator remains UNKNOWN because the exact
+response had no nonempty row schema to inspect; `UserName` and `OwnerID` remain
+purchaser and salesperson, not creator.
+
+One synthetic AI recognition containing only the authorized test text returned
+“未能识别出有效数据”. No preview or parent read-back was available, so import
+was not run. The recognition dialog remains open after the UI bridge timed out
+on alert dismissal; the parent form remained blank. No Save, Send, SMTP, Sheets
+write, or existing-record edit occurred. Production Write Gate remains CLOSED.

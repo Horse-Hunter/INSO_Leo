@@ -224,27 +224,16 @@ def _confirmed_duplicate_fields(
 
     price_key = schema_map.get("offerprice")
     currency_key = schema_map.get("offercurrencyid")
+    quote_fields_present = bool(price_key and currency_key)
     quote = (
         price_key
-        if price_key
+        if quote_fields_present
         and column_map.get("offerprice") == "报价"
-        and detail_map.get("offerprice") == "报价"
         else None
-    )
-    currency_detail = next(
-        (
-            item
-            for item in detail_fields
-            if _field_key(item["field"]) == "offercurrencyid"
-        ),
-        None,
     )
     currency = (
         currency_key
-        if currency_key
-        and detail_map.get("offercurrencyid") == "报价币种"
-        and currency_detail
-        and currency_detail.get("currency_display_readable") is True
+        if quote_fields_present and column_map.get("offercurrencyid") == "报价币种"
         else None
     )
     return creator, quote, currency
@@ -575,29 +564,21 @@ def _classify_duplicate_fields(
     ]
     if quote and currency and len(matching_rows) == 1:
         row = matching_rows[0]
-        detail_values = {
-            _field_key(item["field"]): item.get("value") for item in fields
-        }
         row_quote = row.get(quote)
-        detail_quote = detail_values.get("offerprice")
         row_currency = row.get(currency)
-        detail_currency = detail_values.get("offercurrencyid")
-        decimal_readable = _decimal_is_readable(row_quote) and _decimal_is_readable(
-            detail_quote
-        )
-        values_match = (
-            decimal_readable
-            and _decimal_values_equal(row_quote, detail_quote)
-            and row_currency is not None
-            and str(row_currency).strip() == str(detail_currency).strip()
+        decimal_readable = _decimal_is_readable(row_quote)
+        currency_nonempty = row_currency is not None and bool(
+            str(row_currency).strip()
         )
         report["inso_quote"] = {
-            "status": "CONFIRMED" if values_match else "UNKNOWN",
+            "status": "CONFIRMED"
+            if decimal_readable and currency_nonempty
+            else "UNKNOWN",
             "field": quote,
             "currency_field": currency,
             "decimal_readable": decimal_readable,
-            "currency_display_readable": True,
-            "row_detail_values_match": values_match,
+            "currency_nonempty": currency_nonempty,
+            "billid_response_row_unique": True,
         }
 
 
