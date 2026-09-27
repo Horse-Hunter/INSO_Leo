@@ -15,7 +15,7 @@ Acceptance:
 
 Current:
 - IC.net fix is committed and pushed: the parser accepts the current `#resultList` container, and the CDP client performs one Vault-backed relogin before re-running the search. Deterministic valid-session, expired-session and no-provider cases pass.
-- Live discovery: LCSC currently renders normal public search results while its visible login control remains present; the current client incorrectly treats that control as `AUTHENTICATED_SESSION_REQUIRED`.
+- LCSC repair is committed and pushed: reuse an existing LCSC/JLC CDP tab when present, do not close it, and do not mistake a public result page's visible login control for a failed search. A new background tab is still initialized and closed only when no site tab exists.
 - IC.net live recovery is now verified using the existing Vault login: LM358 returned 49 result rows after one normal relogin.
 - HQEW fix is committed and pushed: its verified same-site `/yunquote?toUrl=...` redirect is accepted only when the declared model URL is exact. Live LM358 smoke read 19 offers.
 
