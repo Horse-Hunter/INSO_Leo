@@ -5,6 +5,7 @@ import json
 
 from src.launcher.v12_phase_a_readonly import (
     _SAFE_BLANK_FORM_BACK,
+    _ai_dialog_frame,
     _classify_duplicate_fields,
     _confirmed_duplicate_fields,
     _decimal_is_readable,
@@ -136,6 +137,10 @@ def test_read_only_inspector_has_no_recognition_import_or_save_click() -> None:
     source = inspect.getsource(_inspect_blank_form)
 
     assert "ai_entry.click" in source  # opening the inspected panel only
+    assert "ai_frames = [" not in source
+    assert "dialog_result = _ai_dialog_frame(frame)" in source
+    assert "details-dialog._dialog1" in source
+    assert "iframe[src*='/product/Import_ai.aspx']" in source
     assert "recognize.click" not in source
     assert "pasteImport" in source  # function source is inspected, not invoked
     assert "doImport" in source
@@ -143,6 +148,133 @@ def test_read_only_inspector_has_no_recognition_import_or_save_click() -> None:
     assert "save_send.click" not in source
     assert "send.click" not in source
     assert "win_btn__dialog11" not in source
+
+
+def test_ai_iframe_is_resolved_through_the_confirmed_dialog_container() -> None:
+    class Frame:
+        url = "https://yingsuo.alperp.cn/skins/etaoerp/product/Import_ai.aspx"
+
+    class ElementHandle:
+        def content_frame(self):
+            return Frame()
+
+    class Iframe:
+        def __init__(self, src: str) -> None:
+            self.src = src
+
+        def count(self) -> int:
+            return 1
+
+        def is_visible(self) -> bool:
+            return True
+
+        def wait_for(self, **_: object) -> None:
+            return None
+
+        def get_attribute(self, name: str) -> str | None:
+            return self.src if name == "src" else None
+
+        def element_handle(self) -> ElementHandle:
+            return ElementHandle()
+
+    class Dialog:
+        def __init__(self, iframe: Iframe, count: int = 1) -> None:
+            self.iframe = iframe
+            self._count = count
+            self.selectors: list[str] = []
+
+        def count(self) -> int:
+            return self._count
+
+        def is_visible(self) -> bool:
+            return True
+
+        def wait_for(self, **_: object) -> None:
+            return None
+
+        def locator(self, selector: str) -> Iframe:
+            self.selectors.append(selector)
+            return self.iframe
+
+    class ShellFrame:
+        url = "https://yingsuo.alperp.cn/skins/etaoerp/InnerEnquiry/YeWuXJ/List.aspx"
+
+        def __init__(self, dialog: Dialog) -> None:
+            self.dialog = dialog
+            self.selectors: list[str] = []
+
+        def locator(self, selector: str) -> Dialog:
+            self.selectors.append(selector)
+            return self.dialog
+
+    iframe = Iframe("/skins/etaoerp/product/Import_ai.aspx?BillPage=YeWuXJ")
+    dialog = Dialog(iframe)
+    shell = ShellFrame(dialog)
+
+    result = _ai_dialog_frame(shell)
+
+    assert result is not None
+    assert result[0] is dialog
+    assert result[1] is iframe
+    assert isinstance(result[2], Frame)
+    assert shell.selectors == ["details-dialog._dialog1"]
+    assert dialog.selectors == [
+        "iframe[src*='/product/Import_ai.aspx']"
+    ]
+
+
+def test_ai_iframe_resolution_fails_closed_on_ambiguous_or_wrong_target() -> None:
+    class ElementHandle:
+        def content_frame(self):
+            return type(
+                "Frame",
+                (),
+                {"url": "https://yingsuo.alperp.cn/skins/etaoerp/login.aspx"},
+            )()
+
+    class Iframe:
+        def count(self) -> int:
+            return 1
+
+        def is_visible(self) -> bool:
+            return True
+
+        def wait_for(self, **_: object) -> None:
+            return None
+
+        def get_attribute(self, name: str) -> str | None:
+            return "/skins/etaoerp/product/Import_ai.aspx" if name == "src" else None
+
+        def element_handle(self) -> ElementHandle:
+            return ElementHandle()
+
+    class Dialog:
+        def __init__(self, count: int) -> None:
+            self.count_value = count
+
+        def count(self) -> int:
+            return self.count_value
+
+        def is_visible(self) -> bool:
+            return True
+
+        def wait_for(self, **_: object) -> None:
+            return None
+
+        def locator(self, _selector: str) -> Iframe:
+            return Iframe()
+
+    class ShellFrame:
+        url = "https://yingsuo.alperp.cn/skins/etaoerp/InnerEnquiry/YeWuXJ/List.aspx"
+
+        def __init__(self, dialog: Dialog) -> None:
+            self.dialog = dialog
+
+        def locator(self, _selector: str) -> Dialog:
+            return self.dialog
+
+    assert _ai_dialog_frame(ShellFrame(Dialog(count=2))) is None
+    assert _ai_dialog_frame(ShellFrame(Dialog(count=1))) is None
 
 
 def test_embedded_login_frame_does_not_mark_top_level_session_logged_out() -> None:

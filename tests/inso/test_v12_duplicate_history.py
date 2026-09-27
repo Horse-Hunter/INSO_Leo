@@ -21,7 +21,6 @@ from src.inso import duplicate_history as module
 from src.inso.duplicate_history import (
     BUSINESS_INQUIRY_LIST_PATH,
     DETAIL_BILL_ID_SELECTOR,
-    EXACT_HISTORY_REQUEST_URL,
     EXACT_MATCH_CHECKBOX,
     MODEL_QUERY_INPUT,
     QUERY_BUTTON,
@@ -35,6 +34,8 @@ from src.inso.duplicate_history import (
     InsoDuplicateHistoryError,
     InsoDuplicateHistoryReader,
     PlaywrightDuplicateHistoryPage,
+    _dup_mpn_key,
+    _exact_history_request_shape,
     _is_exact_history_request,
 )
 from src.inso.session import SecurityViolation
@@ -152,42 +153,10 @@ class FakeLease:
         return _FakeOperationPage(self._page)
 
 
-class FakeSameDocumentFrame:
-    def __init__(self, payload: dict[str, object] | None = None) -> None:
-        self.url = (
-            "https://yingsuo.alperp.cn/skins/etaoerp//InnerEnquiry/"
-            "YeWuXJ/List.aspx"
-        )
-        self.payload = payload or {
-            "total": 1,
-            "rows": [
-                {
-                    "BillID": 7788,
-                    "PartNo": "STM32F103C8T6",
-                    "Qty": 10,
-                    "PEDate": "2026-09-25 09:30:00",
-                }
-            ],
-        }
-        self.result_url = (
-            "https://yingsuo.alperp.cn" + EXACT_HISTORY_REQUEST_URL
-        )
-        self.calls: list[tuple[object, ...]] = []
-
-    def evaluate(self, script: str, argument: dict[str, str]):
-        self.calls.append((script, argument))
-        return {
-            "ok": True,
-            "status": 200,
-            "url": self.result_url,
-            "payload": self.payload,
-        }
-
-
 class FakeShellOperationPage:
-    def __init__(self, frame: FakeSameDocumentFrame) -> None:
+    def __init__(self, frame: object) -> None:
         self.shell_frame = frame
-        self.page = object()
+        self.page = frame
 
     def __enter__(self) -> Self:
         return self
@@ -197,7 +166,7 @@ class FakeShellOperationPage:
 
 
 class FakeShellOperationAccess:
-    def __init__(self, frame: FakeSameDocumentFrame) -> None:
+    def __init__(self, frame: object) -> None:
         self.frame = frame
 
     def operation_page(self) -> FakeShellOperationPage:
@@ -539,6 +508,7 @@ class FakePlaywrightPage:
         self,
         *,
         elements: dict[str, object] | None = None,
+        response_rows: list[dict[str, object]] | None = None,
         goto_error: BaseException | None = None,
     ) -> None:
         self.elements = dict(elements or {})
@@ -552,7 +522,9 @@ class FakePlaywrightPage:
         self._pending = False
         self._pending_value: bool | None = False
         self._response = None
-        self._response_rows = self._bill_ids_from_fixture()
+        self._response_rows = (
+            response_rows if response_rows is not None else self._bill_ids_from_fixture()
+        )
         self._cache_bill_ids = [row["BillID"] for row in self._response_rows]
         self._dom_bill_ids = [row["BillID"] for row in self._response_rows]
 
@@ -575,8 +547,12 @@ class FakePlaywrightPage:
             search_data = {
                 "DetailField": "PartNo",
                 "DetailFieldValue": self.elements[MODEL_QUERY_INPUT]["value"],
-                "nolike": "on",
+                "nolike": "on"
+                if self.elements[EXACT_MATCH_CHECKBOX].get("checked")
+                else "off",
             }
+            if self.elements.get("#leftlike", {}).get("checked"):
+                search_data["leftlike"] = "on"
             request = _FakeRequest(
                 "https://yingsuo.alperp.cn/services/innerEnquiry/yewuxj.ashx?action=List_Detail&BillPage=YeWuXJ",
                 urlencode({"searchData": json.dumps(search_data)}),
@@ -628,12 +604,22 @@ class FakePlaywrightPage:
         ):
             raise TimeoutError("grid did not settle")
 
-    def evaluate(self, _expression: str) -> dict[str, object]:
+    def evaluate(self, expression: str, *_: object) -> dict[str, object] | None:
+        self.calls.append(("evaluate", expression))
+        if "const forms = document.querySelectorAll('form#search_form')" in expression:
+            exact = self.elements.get(EXACT_MATCH_CHECKBOX)
+            left_like = self.elements.get("#leftlike")
+            if not isinstance(exact, dict) or not isinstance(left_like, dict):
+                return None
+            exact["checked"] = True
+            left_like["checked"] = False
+            return {"exact": True, "leftLike": False}
         checkbox = self.elements.get(EXACT_MATCH_CHECKBOX, {})
         return {
             "exact_checked": bool(checkbox.get("checked"))
             if isinstance(checkbox, dict)
             else False,
+            "left_like_checked": bool(self.elements.get("#leftlike", {}).get("checked")),
             "pending": self._pending_value,
             "sequence": self._sequence,
         }
@@ -685,7 +671,26 @@ class FakePlaywrightPage:
             html = self.elements.get(f"#{row_id}", "")
             match = re.search(r"Bill_View_Open\(\s*(\d+)", str(html))
             if match:
-                result.append({"BillID": match.group(1)})
+                result.append(
+                    {
+                        "BillID": match.group(1),
+                        "PartNo": str(
+                            self.elements.get(
+                                f"#{row_id} {RESULT_MODEL_CELL_SELECTOR}", ""
+                            )
+                        ),
+                        "Qty": str(
+                            self.elements.get(
+                                f"#{row_id} {RESULT_QUANTITY_CELL_SELECTOR}", ""
+                            )
+                        ),
+                        "PEDate": str(
+                            self.elements.get(
+                                f"#{row_id} {RESULT_TIMESTAMP_CELL_SELECTOR}", ""
+                            )
+                        ),
+                    }
+                )
         return result
 
 
@@ -717,6 +722,7 @@ def playwright_rows(
     table: dict[str, object] = {
         MODEL_QUERY_INPUT: {"value": ""},
         EXACT_MATCH_CHECKBOX: {"checked": False},
+        "#leftlike": {"checked": True},
         QUERY_BUTTON: {"text": "查询"},
         RESULT_ROW_SELECTOR: [{"id": row_id}],
         f"#{row_id}": row_html(bill_argument),
@@ -736,10 +742,15 @@ def playwright_rows(
 def playwright_adapter(
     *,
     elements: dict[str, object] | None = None,
+    response_rows: list[dict[str, object]] | None = None,
     selectors: DuplicateHistoryFieldSelectors | None = None,
     goto_error: BaseException | None = None,
 ) -> tuple[PlaywrightDuplicateHistoryPage, FakePlaywrightPage]:
-    page = FakePlaywrightPage(elements=elements, goto_error=goto_error)
+    page = FakePlaywrightPage(
+        elements=elements,
+        response_rows=response_rows,
+        goto_error=goto_error,
+    )
     return (
         PlaywrightDuplicateHistoryPage(
             page, selectors=selectors or DuplicateHistoryFieldSelectors()
@@ -822,9 +833,10 @@ def test_playwright_query_steps_use_the_verified_controls() -> None:
 
     assert ("goto", list_url) in page.calls
     assert ("fill", MODEL_QUERY_INPUT, MPN) in page.calls
-    assert ("check", EXACT_MATCH_CHECKBOX) in page.calls
+    assert not any(call[0] == "check" for call in page.calls)
+    assert page.elements[EXACT_MATCH_CHECKBOX]["checked"] is True
+    assert page.elements["#leftlike"]["checked"] is False
     assert ("click", QUERY_BUTTON) in page.calls
-    assert not any("#leftlike" in repr(call) for call in page.calls)
 
 
 def test_verified_live_settlement_requires_current_exact_request_and_grid() -> None:
@@ -900,6 +912,72 @@ def test_exact_request_preserves_plus_in_form_encoded_mpn() -> None:
     assert _is_exact_history_request(request, target)
 
 
+def test_duplicate_mpn_v1_normalizes_only_unicode_trim_and_ascii_case() -> None:
+    assert _dup_mpn_key("  ａｂｃ－123  ") == "ABC-123"
+    assert _dup_mpn_key(" abc-123 ") == _dup_mpn_key("ABC-123")
+    assert _dup_mpn_key("ABC-123") != _dup_mpn_key("ABC123")
+    assert _dup_mpn_key("ABC / 1") != _dup_mpn_key("ABC/1")
+    assert _dup_mpn_key("ABC-1") != _dup_mpn_key("ABC-2")
+
+
+def test_exact_request_accepts_dup_mpn_v1_normalization_without_fuzzy_match() -> None:
+    url = (
+        "https://yingsuo.alperp.cn/services/innerEnquiry/yewuxj.ashx"
+        "?action=List_Detail&BillPage=YeWuXJ"
+    )
+    normalized_request = _FakeRequest(
+        url,
+        urlencode(
+            {
+                "searchData": json.dumps(
+                    {
+                        "DetailField": "PartNo",
+                        "DetailFieldValue": "  ａｂｃ－123 ",
+                        "nolike": "on",
+                    }
+                )
+            }
+        ),
+    )
+    fuzzy_request = _FakeRequest(
+        url,
+        urlencode(
+            {
+                "searchData": json.dumps(
+                    {
+                        "DetailField": "PartNo",
+                        "DetailFieldValue": "ABC123",
+                        "nolike": "on",
+                    }
+                )
+            }
+        ),
+    )
+
+    assert _is_exact_history_request(normalized_request, "ABC-123")
+    assert not _is_exact_history_request(fuzzy_request, "ABC-123")
+
+
+def test_exact_request_shape_reports_only_serialized_keys() -> None:
+    request = _FakeRequest(
+        "https://yingsuo.alperp.cn/services/innerEnquiry/yewuxj.ashx",
+        urlencode(
+            {
+                "searchData[DetailField]": "PartNo",
+                "searchData[DetailFieldValue]": "SECRET_CANARY_MODEL",
+                "searchData[nolike]": "on",
+            }
+        ),
+    )
+
+    shape = _exact_history_request_shape(request)
+
+    assert shape == (
+        "searchData[fields]{DetailField,DetailFieldValue,nolike}"
+    )
+    assert "SECRET_CANARY" not in shape
+
+
 def test_settlement_fails_when_returned_billids_do_not_match_grid() -> None:
     adapter, page = playwright_adapter(elements=playwright_rows())
     page._response_rows = [{"BillID": "9999"}]
@@ -950,59 +1028,62 @@ def test_no_settle_path_relies_on_a_fixed_sleep() -> None:
 
 
 def test_same_document_exact_query_uses_only_confirmed_request_contract() -> None:
-    frame = FakeSameDocumentFrame()
-    adapter = PlaywrightDuplicateHistoryPage(frame)
+    adapter, page = playwright_adapter(elements=playwright_rows())
 
     payload = adapter.query_exact_response(MPN)
 
-    assert payload is frame.payload
-    script, argument = frame.calls[0]
-    assert argument == {"endpoint": EXACT_HISTORY_REQUEST_URL, "target": MPN}
-    assert "fetch(requestUrl.toString()" in script
-    assert "credentials: 'same-origin'" in script
-    assert "bill_get_pagesize('dg')" in script
-    assert "searchParams.set('pageindex', '1')" in script
-    assert "searchParams.set('pagesize', String(pageSize))" in script
-    assert "body.set('DetailField', 'PartNo')" in script
-    assert "body.set('DetailFieldValue', target)" in script
-    assert "body.set('nolike', 'on')" in script
-    assert "searchData[" not in script
-    assert "locator" not in repr(frame.calls).casefold()
-    assert "#nolike" not in script
+    assert payload["rows"] == page._response_rows
+    assert adapter.last_exact_request_shape == (
+        "searchData=JSON{DetailField,DetailFieldValue,nolike}"
+    )
+    assert page._response is not None
+    assert _is_exact_history_request(page._response.request, MPN)
+    assert any(call == ("click", QUERY_BUTTON) for call in page.calls)
+    assert not any(call[0] == "check" for call in page.calls)
+    assert not any("fetch(" in call[1] for call in page.calls if call[0] == "evaluate")
+
+
+def test_response_row_mpn_uses_dup_mpn_v1_not_raw_string_equality() -> None:
+    adapter, _ = playwright_adapter(
+        elements=playwright_rows(),
+        response_rows=[
+            {
+                "BillID": "7788",
+                "PartNo": "  ｓｔｍ32f103c8t6 ",
+                "Qty": "10",
+                "PEDate": "2026-09-25 09:30:00",
+            }
+        ],
+    )
+
+    payload = adapter.query_exact_response(MPN)
+
+    assert payload["rows"][0]["PartNo"] == "  ｓｔｍ32f103c8t6 "
 
 
 def test_same_document_query_fails_closed_for_wrong_mpn_or_duplicate_billid() -> None:
-    wrong_model = FakeSameDocumentFrame(
-        {
-            "rows": [
-                {
-                    "BillID": "7788",
-                    "PartNo": "STM32F103C8T6X",
-                    "Qty": 10,
-                    "PEDate": "2026-09-25 09:30:00",
-                }
-            ]
-        }
+    wrong_model, _ = playwright_adapter(
+        elements=playwright_rows(),
+        response_rows=[{"BillID": "7788", "PartNo": "STM32F103C8T6X"}],
     )
     with pytest.raises(InsoDuplicateHistoryError) as failure:
-        PlaywrightDuplicateHistoryPage(wrong_model).query_exact_response(MPN)
+        wrong_model.query_exact_response(MPN)
     assert failure.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
 
-    duplicate_ids = FakeSameDocumentFrame(
-        {
-            "rows": [
-                {"BillID": "7788", "PartNo": MPN, "Qty": 1, "PEDate": "2026-09-25"},
-                {"BillID": "7788", "PartNo": MPN, "Qty": 2, "PEDate": "2026-09-24"},
-            ]
-        }
+    duplicate_ids, _ = playwright_adapter(
+        elements=playwright_rows(),
+        response_rows=[
+            {"BillID": "7788", "PartNo": MPN},
+            {"BillID": "7788", "PartNo": MPN},
+        ],
     )
     with pytest.raises(InsoDuplicateHistoryError) as failure:
-        PlaywrightDuplicateHistoryPage(duplicate_ids).query_exact_response(MPN)
+        duplicate_ids.query_exact_response(MPN)
     assert failure.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
 
 
 def test_verified_shell_reader_uses_response_fields_and_billid() -> None:
-    frame = FakeSameDocumentFrame()
+    _, frame = playwright_adapter(elements=playwright_rows())
     capture = InsoDuplicateHistoryReader(
         list_url="https://yingsuo.alperp.cn",
         operation_access=FakeShellOperationAccess(frame),  # type: ignore[arg-type]

@@ -16,7 +16,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 from urllib.error import URLError
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 from urllib.request import urlopen
 
 from src.core.app_paths import resolve_app_path, runtime_config_path
@@ -108,6 +108,7 @@ def _empty_report() -> dict[str, Any]:
         "query": {
             "status": "UNKNOWN",
             "exact_request_matched": False,
+            "actual_request_shape": "UNKNOWN",
             "response_schema_fields": [],
             "response_rows": [],
             "grid_columns": [],
@@ -135,6 +136,8 @@ def _empty_report() -> dict[str, Any]:
             "recognition_handler_present": False,
             "recognition_handler_direct_save_call_absent": False,
             "callback_fields": [],
+            "dialog_selector": None,
+            "iframe_selector": None,
         },
         "parent_writer": {"status": "UNKNOWN", "fields": []},
         "save": {
@@ -422,7 +425,15 @@ def _inspect_history(
         verify_identity()
         payload = adapter.query_exact_response(_TARGET_MPN)
         report["query"]["status"] = "SETTLED"
-        report["query"]["exact_request_matched"] = True
+        report["query"]["exact_request_matched"] = (
+            adapter.last_exact_request_matched
+        )
+        report["query"]["actual_request_shape"] = (
+            adapter.last_exact_request_shape
+        )
+        if not adapter.last_exact_request_matched:
+            report["query"]["status"] = "UNKNOWN"
+            return
         report["query"]["grid_columns"] = _grid_columns(frame)
         top_level, row_shapes = _schema_summary(payload)
         report["query"]["response_schema_fields"] = top_level
@@ -441,7 +452,7 @@ def _inspect_history(
         }
         report["query"]["billid_identity"] = (
             "CONFIRMED"
-            if len(response_bill_ids) == len(response_rows)
+            if response_rows and len(response_bill_ids) == len(response_rows)
             else "UNKNOWN"
         )
         matching_links: list[tuple[str, str]] = []
@@ -451,7 +462,7 @@ def _inspect_history(
             values = adapter.read_row_values(row_id)
             if (
                 values is not None
-                and values.model == _TARGET_MPN
+                and values.model.strip()
                 and len(bill_arguments) == 1
                 and next(iter(bill_arguments)) in response_bill_ids
             ):
@@ -598,7 +609,9 @@ def _close_frame_dialog(
     try:
         parent = frame.parent_frame
         child_element = frame.frame_element()
-        dialogs = parent.locator(".layui-layer").filter(has=child_element)
+        dialogs = parent.locator("details-dialog._dialog1").filter(
+            has=child_element
+        )
         if dialogs.count() != 1:
             return False
         close = dialogs.locator(".layui-layer-close")
@@ -750,12 +763,40 @@ def _inspect_blank_form(
             form_frame,
             "() => typeof windows === 'function' ? Function.prototype.toString.call(windows) : ''",
         )
+        parent_windows_source = _function_source(
+            form_frame,
+            "() => typeof parent.windows === 'function' ? "
+            "Function.prototype.toString.call(parent.windows) : ''",
+        )
+        parent_open_source = _function_source(
+            form_frame,
+            "() => parent.alertbox && typeof parent.alertbox._open === 'function' ? "
+            "Function.prototype.toString.call(parent.alertbox._open) : ''",
+        )
+        parent_html_source = _function_source(
+            form_frame,
+            "() => parent.alertbox && typeof parent.alertbox._html === 'function' ? "
+            "Function.prototype.toString.call(parent.alertbox._html) : ''",
+        )
         static_open_only = (
             "Import_ai.aspx" in ai_source
             and "windows(" in ai_source
-            and bool(wrapper_source)
-            and not _WRITE_WORDS.search(ai_source)
-            and not _WRITE_WORDS.search(wrapper_source)
+            and "parent.windows" in wrapper_source
+            and "alertbox._open" in parent_windows_source
+            and "_init" in parent_open_source
+            and "details-dialog" in parent_html_source
+            and "iframe" in parent_html_source
+            and "src" in parent_html_source
+            and not any(
+                _WRITE_WORDS.search(source)
+                for source in (
+                    ai_source,
+                    wrapper_source,
+                    parent_windows_source,
+                    parent_open_source,
+                    parent_html_source,
+                )
+            )
         )
         if not static_open_only:
             report["ai"]["panel"] = "OPEN_SEMANTICS_UNKNOWN"
@@ -763,17 +804,19 @@ def _inspect_blank_form(
         report["ai"]["panel"] = "OPENING_READ_ONLY"
         verify_identity()
         ai_entry.click(timeout=10_000, no_wait_after=True)
-        ai_frames = [
-            candidate
-            for candidate in page.frames
-            if urlsplit(candidate.url)
-            .path.casefold()
-            .endswith("/product/import_ai.aspx")
-        ]
-        if len(ai_frames) != 1:
+        report["ai"]["dialog_selector"] = "details-dialog._dialog1"
+        report["ai"]["iframe_selector"] = (
+            "details-dialog._dialog1 iframe[src*='/product/Import_ai.aspx']"
+        )
+        dialog_result = _ai_dialog_frame(frame)
+        if dialog_result is None:
             report["ai"]["panel"] = "OPEN_FAILED_OR_AMBIGUOUS"
             return
-        ai_frame = ai_frames[0]
+        dialog, ai_iframe, ai_frame = dialog_result
+        if not dialog.is_visible() or not ai_iframe.is_visible():
+            report["ai"]["panel"] = "OPEN_FAILED_OR_AMBIGUOUS"
+            ai_frame = None
+            return
         report["ai"]["panel"] = "OPENED_READ_ONLY"
         recognize = ai_frame.locator("button#ai-recognize")
         report["ai"]["input_candidates"] = _visible_control_candidates(
@@ -873,6 +916,49 @@ def _inspect_blank_form(
                 ai_closed = True
         if not ai_closed:
             report["reason_codes"].append("AI_PANEL_CLOSE_UNCONFIRMED")
+
+
+def _ai_dialog_frame(shell_frame: object) -> tuple[object, object, object] | None:
+    """Resolve only the dialog and iframe emitted by the verified windows() UI."""
+
+    dialog_selector = "details-dialog._dialog1"
+    iframe_selector = "iframe[src*='/product/Import_ai.aspx']"
+    try:
+        dialog = shell_frame.locator(dialog_selector)
+        dialog.wait_for(state="visible", timeout=10_000)
+        if dialog.count() != 1 or not dialog.is_visible():
+            return None
+        iframe = dialog.locator(iframe_selector)
+        iframe.wait_for(state="visible", timeout=10_000)
+        if iframe.count() != 1 or not iframe.is_visible():
+            return None
+        src = iframe.get_attribute("src")
+        base = str(getattr(shell_frame, "url", ""))
+        target = urlsplit(urljoin(base, str(src or "")))
+        if (
+            target.scheme != "https"
+            or target.hostname != "yingsuo.alperp.cn"
+            or not target.path.casefold().endswith(
+                "/skins/etaoerp/product/import_ai.aspx"
+            )
+        ):
+            return None
+        element = iframe.element_handle()
+        child = element.content_frame() if element is not None else None
+        if child is None:
+            return None
+        child_url = urlsplit(str(getattr(child, "url", "")))
+        if (
+            child_url.scheme != "https"
+            or child_url.hostname != "yingsuo.alperp.cn"
+            or not child_url.path.casefold().endswith(
+                "/skins/etaoerp/product/import_ai.aspx"
+            )
+        ):
+            return None
+        return dialog, iframe, child
+    except Exception:  # noqa: BLE001 - ambiguous UI stays UNKNOWN
+        return None
 
 
 def _chrome_product(cdp_url: str) -> str | None:

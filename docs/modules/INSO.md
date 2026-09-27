@@ -12,14 +12,14 @@ the composition root after the full cycle drains.
 
 ## Duplicate history
 
-`PlaywrightDuplicateHistoryPage` performs a same-document read-only POST from
-the verified authenticated shell to the confirmed `List_Detail` endpoint using
-`DetailField=PartNo`, `DetailFieldValue=<MPN>`, and `nolike=on`. It does not
-touch the hidden `#nolike` checkbox or query button. It accepts only a
-structured response whose rows exactly match the requested MPN and contain
-unique numeric BillIDs. The current live attempt did not return a verifiable
-structured result and remains `QUERY_SETTLEMENT_UNCONFIRMED`; this is an
-adapter/result issue, not a reported login failure. The verified list fields
+`PlaywrightDuplicateHistoryPage` uses the visible `#select_btns` query button
+and the loaded native `search()`/form serializer in the verified authenticated
+shell. It sets `#nolike` checked and `#leftlike` unchecked as form state only;
+it never clicks either hidden control or hand-builds a request. The live
+request used bracket-encoded `searchData[<field>]` keys and matched
+`DetailField=PartNo`, the current target, and `nolike=on`. The response passed
+settlement and row validation with an empty `rows` array. A nonempty response
+is still needed to confirm creator and quote/currency. The verified list fields
 remain model `td:nth-child(9)`, quantity `td:nth-child(11)`, and time
 `td:nth-child(14)`. BillID remains the stable list-to-detail identity. No
 stable tie-break for equal timestamps has been verified.
@@ -32,8 +32,9 @@ exact MPN request with `nolike=on`; the `dg` request sequence must advance;
 `_select_pending` must be false; the query button must be enabled; and response,
 `table.cache.dg`, and `#_id_dg` BillIDs must agree. Any missing evidence fails
 closed as `QUERY_SETTLEMENT_UNCONFIRMED`. Deterministic fake tests cover this
-contract. A live exact-mode run from this execution context remains unverified,
-because the authenticated Chrome CDP endpoint was not safely attachable here.
+contract. Response and request MPN comparison use the exact `dup-mpn-v1`
+normalization (NFKC, trim, ASCII uppercase only); punctuation and internal
+spacing remain significant.
 
 Creator remains UNKNOWN. `#UserName_text` is the purchaser and
 `#OwnerID_text` is the salesperson; neither is treated as the record creator.
@@ -282,15 +283,20 @@ above. Chrome attached as `REUSED`, with exactly one context and the unique
 authenticated INSO shell/list frame. No child page was created and cleanup
 left the reused browser open.
 
-The direct same-document POST uses `DetailField=PartNo`,
-`DetailFieldValue=<MPN>`, and `nolike=on`. The live response did not satisfy the
-structured response/identity contract, so the reader remains
-`QUERY_SETTLEMENT_UNCONFIRMED` and cannot produce a nonduplicate result. No
-creator or quote value was inferred.
+The loaded list button calls `search()`, which runs the site's search
+preparation and serializer. One live query produced bracket-encoded
+`searchData[<field>]` fields. The adapter's `_is_exact_history_request()`
+matched the current MPN and exact-mode state, and the response settled as a
+valid empty result. This confirms the request/response path, but yields no
+creator or quote/currency data. None was inferred.
 
-`新增` opened the blank inquiry form on the same shell. Static inspection of
-`ai_import()` and its wrapper indicated a dialog route with no detected direct
-persistence call. The permitted AI-panel opener attempt did not expose one
-uniquely identified AI frame; recognition/import were not run. The form was
-hidden/closed. AI read-back and blank-form model/brand/quantity selectors remain
-UNKNOWN. Save controls were observed only; Save/Send/SMTP/Sheets were not used.
+`新增` opened the blank inquiry form on the same shell. Loaded code confirms
+`ai_import()` calls the page's `windows()` wrapper, which delegates to
+`alertbox._open()` and builds a `details-dialog` containing an iframe `src` for
+`product/Import_ai.aspx`; these functions contained no detected persistence
+call. The opener click was intercepted by an already-visible dialog before
+the handler ran, so the live AI iframe was not found. The code now locates it
+only as a unique `iframe[src*='/product/Import_ai.aspx']` inside the unique
+`details-dialog._dialog1`; it does not scan `page.frames` for a guess. No AI
+recognition/import ran. AI read-back and blank-form model/brand/quantity
+selectors remain UNKNOWN. Save/Send/SMTP/Sheets were not used.

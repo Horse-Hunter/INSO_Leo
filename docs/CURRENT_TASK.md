@@ -1,6 +1,6 @@
 # Current Task — V1.2 Phase A final
 
-Phase A FINAL: PARTIAL — authenticated-shell reuse passes; the read-only exact request and AI panel still fail closed pending verified responses/frames.
+Phase A FINAL: PARTIAL — native exact query is verified; its response was empty. AI dialog opening was intercepted by an existing modal, so its iframe remains unconfirmed.
 V1.2 status: PRE_SAVE_READY / REAL_SAVE_GATED
 Production write gate: CLOSED
 
@@ -11,14 +11,14 @@ Production write gate: CLOSED
   identity, origin, shell frame, and login path; it never creates or closes a
   child page. Reused Chrome remains open after lease cleanup.
 - Live attach through the existing Chrome CDP succeeded with one context and
-  one verified shell. `新增` opened one blank form. The AI opener's loaded
-  handler indicated a dialog-only route, but the click did not expose a unique
-  AI frame; recognition was not run. The blank form is hidden/closed.
-- The exact same-document POST now uses the confirmed flat fields
-  `DetailField=PartNo`, `DetailFieldValue=<MPN>`, and `nolike=on`. The live
-  response still cannot be validated as the expected structured result, so the
-  duplicate reader returns `QUERY_SETTLEMENT_UNCONFIRMED`; it never converts
-  unavailable data into nonduplicate.
+  one verified shell. `新增` opened one blank form. The AI opener and dialog
+  path are client-side only in the loaded code, but its click was intercepted
+  before dispatch by an already-visible dialog. Recognition was not run; blank
+  form close confirmation remains UNKNOWN.
+- Exact duplicate lookup now uses the visible query button and the page's loaded
+  `search()`/serializer path. It sets exact-match checkbox states without
+  clicking hidden controls. Response and cache/DOM settlement remain bound to
+  the same exact request.
 - Creator, quote/currency, AI read-back, and blank-form product-field writer
   remain UNKNOWN. No login failure is inferred from these adapter results.
 - No Save, Send, SMTP, or Sheets write occurred. Production Write Gate remains
@@ -162,15 +162,23 @@ CEO performs the daily Safety Review. Keep the production write gate CLOSED.
 - Authenticated Chrome attach passed with one context and the existing verified
   shell/list frame. The lease reused this page; no child page was created, and
   cleanup left the reused browser open.
-- Exact duplicate lookup now uses the confirmed same-document POST fields
-  `DetailField=PartNo`, `DetailFieldValue=<MPN>`, `nolike=on`. The response did
-  not pass structured schema/identity validation and remains
-  `QUERY_SETTLEMENT_UNCONFIRMED`; the workflow must not infer nonduplicate.
-- The blank form opened. Static `ai_import()`/wrapper inspection showed the
-  known dialog route without a detected persistence call. One click did not
-  yield a uniquely identifiable AI frame; recognition was not run. The blank
-  form is hidden/closed. AI and blank-form product-field read-back remain
-  UNKNOWN.
+- The loaded list button calls `search()`, which runs the site's search
+  preparation and form serializer. One live query produced the native
+  bracketed `searchData[<field>]` request; `_is_exact_history_request()` matched
+  its `DetailField=PartNo`, target MPN, and `nolike=on`. The structured response
+  settled with an empty `rows` list. No creator, quote, or currency values were
+  available to confirm; those remain UNKNOWN.
+- Loaded `ai_import()` and `windows()` sources confirm a client-side dialog
+  route. The dialog template has a `details-dialog` container and an iframe
+  `src`; the AI route is `product/Import_ai.aspx`. The `#ai_import_` click was
+  intercepted by an already-visible unrelated dialog before its handler ran.
+  No AI iframe was found, recognition did not run, and no AI request occurred.
+  The blank form close was attempted through its verified Back handler; close
+  confirmation remains UNKNOWN.
+- Code now locates the AI frame only inside the unique
+  `details-dialog._dialog1`, using a unique iframe whose `src` contains
+  `/product/Import_ai.aspx`; it does not guess across `page.frames`. The
+  generated iframe ID is not required by the locator.
 - Creator and INSO quote/currency remain UNKNOWN; no field is guessed. Equal
   timestamps remain `AMBIGUOUS` absent a proven ordering rule.
 - Save controls were only inspected. REAL SAVE: NO. REAL SEND: NO. REAL SMTP:
