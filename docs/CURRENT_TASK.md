@@ -1,6 +1,6 @@
 # Current Task — V1.2 final runtime acceptance
 
-Phase A: PARTIAL — authenticated Chrome live read-only discovery
+Phase A: PARTIAL — authenticated Chrome targeted contract discovery
 V1.2 status: PRE_SAVE_READY / REAL_SAVE_GATED
 Production write gate: CLOSED
 
@@ -10,7 +10,7 @@ Canonical browser baseline: Chrome (`browser.channel = "chrome"`). Edge is retai
 
 - WorkBuddy duplicate reader `441b984db4703deeae66bda2878398a3f01b92de` was cherry-picked as `9c7e621`.
 - The live duplicate adapter reads `#_id_dg` model/quantity/time cells 9/11/14 and verifies the detail `BillID` identity. It delegates all duplicate semantics to `evaluate_duplicate_history`.
-- Query settlement remains `QUERY_SETTLEMENT_UNCONFIRMED`; the live result therefore remains unavailable and cannot be treated as nonduplicate. Creator and INSO quote selectors default to `None`.
+- Query settlement has a verified browser contract, but the production adapter remains `QUERY_SETTLEMENT_UNCONFIRMED` until it can use that contract through its exact shell/frame boundary. Creator and INSO quote selectors default to `None`.
 - `ResearchExcelFactsProvider` reads the persisted canonical Research workbook snapshot by inquiry identity; it does not re-search or recalculate Research rules.
 - V1.2 adapter construction can bind the existing `QQSMTPTransport` to explicit sender config and recipients. This performs no SMTP operation. Production write gate remains closed.
 - Existing exact quotation routing, purchaser allowlists, durable UNKNOWN-before-click Save path and UNKNOWN/manual reconciliation seam remain unchanged.
@@ -21,12 +21,21 @@ Canonical browser baseline: Chrome (`browser.channel = "chrome"`). Edge is retai
 
 - The Owner-authenticated, dedicated Chrome CDP endpoint is reachable. It exposes one context and a reused browser; `InsoSessionLease` can create an operation-owned child page without closing the reused browser.
 - The authenticated application shell has one verified INSO root page and exactly one `main` frame at `InnerEnquiry/YeWuXJ/List.aspx`. This explicit frame identity was used only for read-only discovery; no production adapter selects an arbitrary existing tab.
-- The business-inquiry list has unique, visible `#DetailFieldValue`, `button#select_btns` (`查询`), `button#product_add_` (`新增`), and `#_id_dg`. The native `#nolike` exact-match checkbox is not actionable in this shell. No force or coordinate interaction was used, so a live nonempty exact-query settlement signal remains unverified.
-- The scoped history-grid headers confirm `PartNo` (`型号`), `Qty` (`数量`), and `PEDate` (`时间`). `OfferPrice` is labelled `报价`, but its equivalence to the required INSO quote has not been proven. No scoped `制单人` field or stable BillID/timestamp tie-break identity was confirmed.
+- The business-inquiry list has unique, visible `#DetailFieldValue`, `button#select_btns` (`查询`), `button#product_add_` (`新增`), and `#_id_dg`. The native `#nolike` exact-match checkbox is not actionable in this shell; no force or coordinate interaction was used.
+- The scoped history-grid headers confirm `PartNo` (`型号`), `Qty` (`数量`), and `PEDate` (`时间`). `OfferPrice` is labelled `报价`, but its equivalence to the required INSO quote has not been proven. BillID is verified as the list-to-detail identity; no scoped `制单人` field or timestamp tie-break is confirmed.
 - `新增` was statically verified to open the blank temporary-inquiry dialog only. The blank form was opened, inspected, and closed without filling or saving. Unique visible controls are `#CompanyName`, `#ImpValueF`, `#UserName_text`, `#ai_import_` (`AI录单`), `#btnSave` (`保存`), and `#btnSave2` (`保存并发送`). `#bcSend` exists with text `发送` and remains hard-forbidden.
-- The form starts with no product rows. Parent model/brand/quantity controls therefore remain unverified. The loaded `ai_import()` code only opens `product/Import_ai.aspx` and its parent callback updates the unsaved in-memory table cache, but AI-panel controls, AI recognition read-back, and parent product-field selectors were not exercised in this read-only pass.
-- The blank form exposes `BillID` and `PENO`, but no existing-record read-only examination established a saved-record reconciliation identity. Reconciliation remains UNKNOWN/manual review.
+- The blank form starts with no product rows. An existing read-only detail verifies parent product read-back cells, but no blank-form writer was exercised. The loaded `ai_import()` code has an in-memory callback; AI-panel controls and recognition read-back remain unverified after its runtime open failed safely.
+- Existing detail inspection verifies BillID/PENO and the relevant read-only fields, but no post-Save BillID return/read-back is known. Reconciliation remains UNKNOWN/manual review.
 - No Save Data, Save-and-Send, Send, SMTP, Sheets write, production migration, synthetic field input, AI recognition, or existing-record modification occurred.
+
+## Phase A-2 targeted contract discovery — 2026-09-27
+
+- **Query settlement is confirmed.** `search()` sends `POST /services/innerEnquiry/yewuxj.ashx?action=List_Detail&BillPage=YeWuXJ`; the current MPN is in `searchData`, and checked `#nolike` serializes as `nolike=on`. Settlement requires that matching response, an advanced `dg` request sequence, `_select_pending=false`, re-enabled `#select_btns`, and matching `table.cache.dg` plus `#_id_dg`. Empty and nonempty read-only queries passed this contract. The adapter stays fail-closed until its exact shell/frame path can execute the native checkbox action.
+- **BillID identity is confirmed.** `Bill_View_Open(BillID, ...)` opens a read-only detail whose `#BillID` matches the linked BillID. The detail exposes PENO, customer, purchaser, importance, inquiry time, and one MPN/brand/quantity row. The row DOM id is separate and cannot replace BillID. Equal-timestamp ordering by BillID remains unproven.
+- **Creator and INSO quote remain UNKNOWN.** `#UserName_text` is labelled purchaser and `#OwnerID_text` salesperson. `OfferPrice` is labelled `报价`, but its equivalence to the duplicate-notification INSO quote has not been proven.
+- **Parent product read-back is confirmed for an existing read-only detail:** `#_id_dg td[data-field="PartNo"]`, `Brand`, and `Qty` are each unique and visible. A blank form starts without a row, so no parent-field writer is enabled.
+- **AI panel/read-back remains UNKNOWN.** Static code is in-memory after the dialog returns, but opening the panel produced the form's generic submission-error dialog. It was cancelled immediately; there was no recognition, import, synthetic input, or retry.
+- **Reconciliation is PARTIAL:** BillID is a verified list-to-detail identity with the required read-only fields, but Save has no verified new-BillID return/read-back. Reconciliation therefore remains UNKNOWN/manual review after `UNKNOWN_WRITE_OUTCOME`.
 
 ## Earlier Edge runtime drift — 2026-09-26
 
