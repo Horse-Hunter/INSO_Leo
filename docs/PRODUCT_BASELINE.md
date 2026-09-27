@@ -1,48 +1,50 @@
 # 产品基线
 
-本文件只维护产品范围和长期跨模块业务规则。项目级治理规则见 `PROJECT_BASELINE.md`；模块规则归 `docs/modules/`，安全归 `SAFETY.md`，依赖归 `MODULE_INDEX.md`；实现状态以 Git `main`、`CURRENT_TASK.md` 和相关 module docs 为准。
+本文件只维护长期产品范围与跨模块业务规则；当前进度写在 `CURRENT_TASK.md`，实现细节写在 module docs。
 
-## 产品目标
+## V1.1
 
-- 项目：`INSO_Leo`。
-- 已确认 V1 结果：可重复执行“询价 → 市场调研”流程。
-- 更广泛的业务目标、主要用户和可衡量结果：`UNKNOWN`。
-
-## 当前 V1 用户流程
+稳定流程：
 
 ```text
-Workflow Scheduler（每 15 分钟）
--> Sheets 读取 Google Sheet 中状态为“未发”的记录
--> Workflow 创建或识别 inquiry
--> Research 执行市场调研
--> Research 将结果持久化到本地 `调研价格.xlsx`
+15 分钟 Scheduler
+→ Sheets 读取待处理记录
+→ Workflow 建立/恢复 inquiry
+→ Research 调研
+→ 写入 调研价格.xlsx
 ```
 
-## V1 包含
+Research 价格源：IC.net、Findchips、HQEW、LCSC、Bom.Ai、INSO（INSO 仅作只读历史价格源）。
 
-- Google Sheet 待处理记录读取，以及已确认的安全 Brand 写回路径。
-- Workflow identity/state、duplicate prevention、retry 和 Sheets → Research 编排。
-- IC.net Brand/货量调研，以及 Findchips、HQEW、LCSC、Bom.Ai、INSO 五个价格源；INSO 仅作 read-only 历史市场价格查询。
-- 只有必要的 inquiry-idempotent Excel 落盘成功后，`SUCCESS` 或合格的 `PARTIAL_SUCCESS` 才转为 Workflow `COMPLETED`。
-- Research 不产生 `MANUAL_REVIEW_REQUIRED` 结果状态：五个价格来源都完成但没有任何报价时返回 `EXCEPTION`，Workflow 记为 `FAILED`；至少有报价则返回 `SUCCESS` 或 `PARTIAL_SUCCESS`。报价源技术失败且没有正常报价时返回 `RETRYABLE_FAILURE`，由 Workflow retry。运行环境的登录/CAPTCHA 等安全验证仍由 launcher fail closed 并提示人工处理。
-- Sheets 标准化的 `importance_raw` 由 Workflow 原样透传，只影响 Research Excel 展示，不改变调研行为，也不定义 Future INSO Module 的重要性。
-- Research 可返回 `resolved_brand`；`SUCCESS`、`PARTIAL_SUCCESS` 和 terminal `EXCEPTION` 均继续使用既有 Sheets safe Brand updater。`EXCEPTION` 保持 Workflow `FAILED`，Brand conflict/failure 不改变其终态；`RETRYABLE_FAILURE` 不写 Brand，即使最终耗尽 retry。
+V1.1 Research Stability 已 CLOSED，稳定锚点：
+`release/v1.1 = 44cd4a4cdb05fc069189801d24c4710bfd9445f3`。
 
-Sheets、Research、Workflow 的详细 Contract 归各自 module doc。
+## V1.2
 
-## V1 不包含
+V1.2 在 V1.1 上增量加入：
 
-- INSO Module 的主动采购业务（发布采购需求、发起采购询价、获取采购报价）、Quotation、最终客户报价及其 Sheet 写回。
-- 共享 Excel/storage 模块。
-- Redis、Celery、Kafka、Docker 或大型 Workflow Engine。
+- INSO 近 7 天重复订单检查；
+- 重要订单 / 重复订单通知；
+- INSO 采购询价草稿录入；
+- GUI 业务状态、事件历史和异常提醒。
 
-`inso` 主动采购模块和 `quotation` 保留为 Future Version；Research 的 INSO read-only 价格源属于 V1 Research 内部能力。
+关键业务规则：
 
-## Future Scope / 产品级 UNKNOWN
+- 重复检查使用 rolling 168h（Asia/Shanghai），同型号按 `dup-mpn-v1` 精确比较；数量只比较，不参与型号匹配。
+- 重复订单仍先完成 Research，再发重复通知并停止采购。
+- 非重复订单：A 必发重要通知；B 总额 > 50,000 且货少；C 总额 > 300,000 且货少。
+- 采购类型与库存无关：A，或 B > 50,000，或 C > 300,000 → `需要问全价格`，否则 `普通询价`。
+- 全价格采购员：颜浩坚；普通询价采购员：陈熙。
+- AI 录单输入：`型号 + 6 个 ASCII 空格 + 品牌 + 6 个 ASCII 空格 + 数量`；型号/品牌/数量校验失败不得保存。
+- 最终业务动作只允许 `保存数据`；`保存并发送`、发送动作始终禁止。
+- Owner 指定：保存成功后的 GUI 业务文案为 `已发采购单`。
 
-- Future INSO Module 的主动采购流程、权限、结果 Contract 和重要性规则。
-- Quotation 公式、舍入、利润、审批、有效期、输出和接收方。
-- 产品/服务覆盖、市场、税务、地区、客户数据分类、保留、审计和监管要求。
-- 已确认流程之外的 V1 生产运行方式和成功指标。
+V1.2 Production Write Gate 当前 **CLOSED**。
 
-只影响单一模块的 UNKNOWN 留在对应 module doc 或 `CURRENT_TASK.md`，不写入本文件。
+## 长期边界
+
+- Chrome 为生产浏览器基线；Edge 仅备用。
+- Core Vault 是唯一凭据源。
+- LCSC credential SiteId = `szlcsc.com`；认证 host = `passport.jlc.com`。
+- CAPTCHA / OTP / 设备验证一律人工处理，不绕过。
+- 不引入 Redis、Celery、Kafka、Docker 或大型 Workflow Engine，除非出现真实需求。
