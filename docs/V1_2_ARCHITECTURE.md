@@ -182,7 +182,7 @@ Extend `WorksheetSchema` with a customer source strategy, not GUI conditionals. 
 
 Duplicate check and Research use the same authenticated browser/context/session lease. Purchase entry reuses it only if the lease remains healthy and the expected authenticated page identity is proven. Each operation owns only its background child page and closes that child in `finally`; it does not close the user's original tab. A session-level close is allowed only for a browser explicitly launched/owned by this application; never close a reused browser. If an adapter cannot operate over an explicit shared lease, do not claim page reuse: reconnect only to the verified same endpoint/context and fail closed if identity cannot be proven. Login expiration, page closure, context ambiguity, changed DOM, or unknown ownership stops the operation, records a sanitized security event and captures evidence where safe. No CAPTCHA/OTP bypass.
 
-Stage 2A implements the explicit lease and operation-owned child-page seam and removes Research's arbitrary page selection/browser close. The production composition root does not yet provide the verified lease, so the Research INSO source fails closed until a separately reviewed wiring change. Research business rules remain unchanged. Safety Supervisor must review browser identity, ownership, target selection, page cleanup and restart recovery before any live use.
+Stage 2A implements the explicit lease and operation-owned child-page seam and removes Research's arbitrary page selection/browser close. The production composition root does not yet provide the verified lease, so the Research INSO source fails closed until a separately reviewed wiring change. Research business rules remain unchanged. CEO/Safety must review browser identity, ownership, target selection, page cleanup and restart recovery before any live use.
 
 ## 7. WRITE ALLOWLIST — initial proposal
 
@@ -197,7 +197,7 @@ No live write implementation is authorized by this stage. Stage 2A contains only
 
 Before every write: verify page and authenticated context identity; current inquiry identity; unique control semantic/visible text; and determinate current/target values. After save, verify a unique saved record identity and field values. Any mismatch, duplicate candidate, DOM change or uncertain write outcome fails closed, stops that inquiry, captures evidence and raises `采购录单异常`. Never retry a save with unknown outcome until read-only reconciliation proves whether the first save created a record.
 
-The owner explicitly authorized `保存数据` for the stated current behavior, while `保存并发送` remains prohibited. This design still requires Safety Supervisor approval of the concrete selectors, identity guards, read-back, recovery and evidence implementation before the authorized control is used in production. Production Brand write remains disabled.
+The owner explicitly authorized `保存数据` for the stated current behavior, while `保存并发送` remains prohibited. This design still requires CEO/Safety approval of the concrete selectors, identity guards, read-back, recovery and evidence implementation before the authorized control is used in production. Production Brand write remains disabled.
 
 ## 8. GUI integration
 
@@ -236,7 +236,7 @@ All checks below are deterministic/fake-only until separately authorized smoke a
 ## 13. Implementation split and approval gates
 
 1. CEO reviews product decisions and approves the additive module/public-contract design; resolve date-window and MPN normalization choices, 2026 worksheet identification and unknown-customer handling, check-failure/Research ordering, latest-record tie behavior, and evidence retention.
-2. Safety Supervisor reviews `WRITE ALLOWLIST`, page/order identity, selector uniqueness, session lease/ownership, save boundary, forbidden action enforcement, read-back, unknown-outcome recovery and screenshot redaction. No live write implementation/smoke before approval.
+2. CEO/Safety reviews `WRITE ALLOWLIST`, page/order identity, selector uniqueness, session lease/ownership, save boundary, forbidden action enforcement, read-back, unknown-outcome recovery and screenshot redaction. No live write implementation/smoke before approval.
 3. Implement pure contracts/normalization and fake tests; no adapters or runtime wiring.
 4. Implement/additively migrate Workflow persistence and event/alert/retry services; verify V1 DB compatibility and V1 Research regression suite.
 5. Extend Sheets worksheet schema to return customer name and provenance; test 2026 D / SHAHAB fixed name / unknown handling.
@@ -246,7 +246,7 @@ All checks below are deterministic/fake-only until separately authorized smoke a
 9. Add GUI summary/alert/history DTOs and verify V1 display compatibility.
 10. Stage-gated synthetic integration, local fake-browser tests, review, then separately authorized production smoke. Do not merge `main` as part of this spike.
 
-Safety Supervisor must approve before any real INSO write, `保存数据` click, real production smoke, selector/allowlist rollout, live evidence retention, or real notification delivery. `保存并发送` is prohibited regardless of approval.
+CEO/Safety must approve before any real INSO write, `保存数据` click, real production smoke, selector/allowlist rollout, live evidence retention, or real notification delivery. `保存并发送` is prohibited regardless of approval.
 
 ## CEO decisions and remaining UNKNOWN
 
