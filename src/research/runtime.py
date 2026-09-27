@@ -349,6 +349,7 @@ def build_icnet_client(
             cdp_url=config.cdp.cdp_url,
             timeout_ms=browser.timeout_ms,
             settle_ms=browser.settle_ms,
+            login_provider=credentials.icnet,
         )
     return PlaywrightIcNetClient(
         credentials.icnet,
