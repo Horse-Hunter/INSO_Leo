@@ -1,6 +1,6 @@
 # Current Task — V1.2 final runtime acceptance
 
-Phase A: PARTIAL — authenticated Chrome targeted contract discovery
+Phase A-3: PARTIAL — confirmed duplicate settlement implemented; remaining live facts preserved as UNKNOWN
 V1.2 status: PRE_SAVE_READY / REAL_SAVE_GATED
 Production write gate: CLOSED
 
@@ -10,7 +10,7 @@ Canonical browser baseline: Chrome (`browser.channel = "chrome"`). Edge is retai
 
 - WorkBuddy duplicate reader `441b984db4703deeae66bda2878398a3f01b92de` was cherry-picked as `9c7e621`.
 - The live duplicate adapter reads `#_id_dg` model/quantity/time cells 9/11/14 and verifies the detail `BillID` identity. It delegates all duplicate semantics to `evaluate_duplicate_history`.
-- Query settlement has a verified browser contract, but the production adapter remains `QUERY_SETTLEMENT_UNCONFIRMED` until it can use that contract through its exact shell/frame boundary. Creator and INSO quote selectors default to `None`.
+- `PlaywrightDuplicateHistoryPage` now enforces exact current-MPN request matching (`nolike=on`), matching response, advanced `dg` sequence, idle state, enabled query button, and response/cache/DOM BillID agreement. Deterministic fake tests cover stale/malformed cases. Creator and quote selectors remain unset.
 - `ResearchExcelFactsProvider` reads the persisted canonical Research workbook snapshot by inquiry identity; it does not re-search or recalculate Research rules.
 - V1.2 adapter construction can bind the existing `QQSMTPTransport` to explicit sender config and recipients. This performs no SMTP operation. Production write gate remains closed.
 - Existing exact quotation routing, purchaser allowlists, durable UNKNOWN-before-click Save path and UNKNOWN/manual reconciliation seam remain unchanged.
@@ -30,12 +30,23 @@ Canonical browser baseline: Chrome (`browser.channel = "chrome"`). Edge is retai
 
 ## Phase A-2 targeted contract discovery — 2026-09-27
 
-- **Query settlement is confirmed.** `search()` sends `POST /services/innerEnquiry/yewuxj.ashx?action=List_Detail&BillPage=YeWuXJ`; the current MPN is in `searchData`, and checked `#nolike` serializes as `nolike=on`. Settlement requires that matching response, an advanced `dg` request sequence, `_select_pending=false`, re-enabled `#select_btns`, and matching `table.cache.dg` plus `#_id_dg`. Empty and nonempty read-only queries passed this contract. The adapter stays fail-closed until its exact shell/frame path can execute the native checkbox action.
+- **Settlement implementation is confirmed; live exact-mode execution is not.** The query contract binds the current MPN and `nolike=on` request to its response, advanced `dg` sequence, `_select_pending=false`, enabled `#select_btns`, and matching `table.cache.dg`/`#_id_dg` BillIDs. The adapter fails closed if any part is absent. Prior live discovery found `#nolike` not actionable and did not force it, so a live exact-mode query was not completed in this turn.
 - **BillID identity is confirmed.** `Bill_View_Open(BillID, ...)` opens a read-only detail whose `#BillID` matches the linked BillID. The detail exposes PENO, customer, purchaser, importance, inquiry time, and one MPN/brand/quantity row. The row DOM id is separate and cannot replace BillID. Equal-timestamp ordering by BillID remains unproven.
 - **Creator and INSO quote remain UNKNOWN.** `#UserName_text` is labelled purchaser and `#OwnerID_text` salesperson. `OfferPrice` is labelled `报价`, but its equivalence to the duplicate-notification INSO quote has not been proven.
 - **Parent product read-back is confirmed for an existing read-only detail:** `#_id_dg td[data-field="PartNo"]`, `Brand`, and `Qty` are each unique and visible. A blank form starts without a row, so no parent-field writer is enabled.
 - **AI panel/read-back remains UNKNOWN.** Static code is in-memory after the dialog returns, but opening the panel produced the form's generic submission-error dialog. It was cancelled immediately; there was no recognition, import, synthetic input, or retry.
-- **Reconciliation is PARTIAL:** BillID is a verified list-to-detail identity with the required read-only fields, but Save has no verified new-BillID return/read-back. Reconciliation therefore remains UNKNOWN/manual review after `UNKNOWN_WRITE_OUTCOME`.
+- **Reconciliation at Phase A-2 was PARTIAL:** BillID identity and required existing-detail fields were verified; new-BillID acquisition had not yet been established. Phase A-3's static handler inspection is recorded below.
+
+## Phase A-3 — 2026-09-27
+
+- **Query adapter:** implemented strict settlement in `PlaywrightDuplicateHistoryPage`; deterministic tests cover exact request binding and response/cache/DOM BillID agreement. Live exact-mode query was not repeated because this execution context could not safely attach to the authenticated Chrome CDP endpoint; the previously observed hidden `#nolike` control is never force-clicked.
+- **Creator:** UNKNOWN. The primary history schema does not establish a creator field. `#UserName_text` is purchaser and `#OwnerID_text` is salesperson, so neither is substituted.
+- **INSO quote:** UNKNOWN. `OfferPrice` is labelled `报价` and paired with `OfferCurrencyID` (`报价币种`), but the response-to-detail mapping and currency/decimal semantics remain unconfirmed. Research's supplier-side `InPrice` is not used.
+- **Timestamp tie-break:** AMBIGUOUS. BillID is stable identity, but no evidence ties its ordering to creation order; no tie-break was added.
+- **AI panel and parent writer:** UNKNOWN. No AI panel action, recognition, blank-form product field write, or import was attempted in this turn. Existing-detail read-back selectors do not establish blank-form write selectors.
+- **Save semantics/reconciliation:** static handler inspection identifies `#btnSave` → `bill_save_auto()` → `bill_save()`, separate from `bill_save_send()`/`#btnSave2` and `#bcSend`. Its success response returns BillID/PENO and routes to detail; no Save was clicked. The read-only reconciliation contract can verify the returned BillID and compare available detail fields. Actual post-save behavior still requires the authorized first Save gate.
+- **Browser boundary:** this execution context could not safely inspect/attach to the Owner-authenticated Chrome process; no Edge or new profile was substituted, and no business page was interacted with.
+- No Save, Send, real SMTP, or Sheets write occurred. Production Write Gate remains CLOSED.
 
 ## Earlier Edge runtime drift — 2026-09-26
 

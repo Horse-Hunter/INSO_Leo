@@ -19,14 +19,25 @@ opens. No stable tie-break for equal timestamps has been verified.
 
 `evaluate_duplicate_history` remains the only owner of canonical MPN matching,
 the inclusive 168-hour window, latest record selection, and equal-time
-`AMBIGUOUS` outcome. The browser settlement contract is verified: the matching
-`List_Detail` response completes, the `dg` request sequence advances,
-`_select_pending` is false, the query button is enabled, and both
-`table.cache.dg` and `#_id_dg` reflect that response. A checked native exact
-checkbox serializes as `nolike=on`. The production adapter still fails with
-`QUERY_SETTLEMENT_UNCONFIRMED` until it can execute this through the same
-verified shell/frame boundary. Creator and INSO quote selectors remain unset
-(`None`); no column is guessed.
+`AMBIGUOUS` outcome. `PlaywrightDuplicateHistoryPage` now enforces the confirmed
+settlement contract: the `List_Detail` response must correspond to the current
+exact MPN request with `nolike=on`; the `dg` request sequence must advance;
+`_select_pending` must be false; the query button must be enabled; and response,
+`table.cache.dg`, and `#_id_dg` BillIDs must agree. Any missing evidence fails
+closed as `QUERY_SETTLEMENT_UNCONFIRMED`. Deterministic fake tests cover this
+contract. A live exact-mode run from this execution context remains unverified,
+because the authenticated Chrome CDP endpoint was not safely attachable here.
+
+Creator remains UNKNOWN. `#UserName_text` is the purchaser and
+`#OwnerID_text` is the salesperson; neither is treated as the record creator.
+The primary history schema reviewed so far does not establish a creator field.
+`OfferPrice` is the history-grid field labelled `报价`, paired with
+`OfferCurrencyID` (`报价币种`); however the response-to-detail field mapping and
+currency semantics have not been closed end-to-end. It is not substituted from
+Research's supplier-side `InPrice`. No live selector is configured for either
+optional field. BillID is stable list-to-detail identity, but no ordering
+relationship that can break equal-time ties has been proven; equal timestamps
+remain `AMBIGUOUS`.
 
 ## Purchase draft and Save boundary
 
@@ -74,9 +85,16 @@ UNKNOWN/manual review and never infers “not saved” from absence.
 For an existing record, the list's `Bill_View_Open(BillID, ...)` link was
 verified against detail `#BillID`. The detail exposes PENO, customer, purchaser,
 importance, inquiry time, and product MPN/brand/quantity. The row DOM id is
-distinct from BillID and cannot substitute for it. This supports read-only
-inspection once an identity is known, but a newly saved record has no verified
-BillID return/read-back; post-Save reconciliation remains UNKNOWN/manual review.
+distinct from BillID and cannot substitute for it. Static inspection of the
+loaded Save handler showed `#btnSave` → `bill_save_auto()` → `bill_save()`, a
+server save request whose success response includes BillID/PENO, followed by
+the read-only detail view. This is distinct from `bill_save_send()` behind
+`#btnSave2` and the `#bcSend` action. No Save was clicked. Future reconciliation
+can use returned BillID, open that exact detail, verify `#BillID`, then compare
+MPN/Brand/Qty and available customer/purchaser/importance fields. If the server
+does not return a unique BillID or exact detail read-back is unavailable, the
+result is UNKNOWN/AMBIGUOUS; absence never means not-saved. Runtime confirmation
+after the first authorized Save is still pending.
 
 ## Production composition
 
@@ -103,6 +121,41 @@ Complete one local runtime acceptance covering:
 
 No Save, Save-and-Send, Send, SMTP, Sheets write, or production migration was
 performed in this closeout. CEO performs the daily Safety Review; the production
+write gate remains CLOSED.
+
+## Phase A-3 closeout — 2026-09-27
+
+- **Query settlement:** implemented in the existing production page adapter and
+  covered with deterministic fake tests. A query is settled only when the
+  current exact-MPN `List_Detail` request carries `nolike=on`, its matching
+  response completes, the `dg` sequence advances, `_select_pending` is false,
+  the query control is enabled, and response/cache/DOM BillIDs agree. A stale,
+  malformed, or ambiguous state maps to `QUERY_SETTLEMENT_UNCONFIRMED`.
+- **Creator:** UNKNOWN. The reviewed primary-list schema does not expose a
+  verified creator field. `#UserName_text` is purchaser and `#OwnerID_text` is
+  salesperson; neither is used as creator.
+- **INSO quote:** UNKNOWN. The history schema uses `OfferPrice`, displayed as
+  `报价`, with `OfferCurrencyID` displayed as `报价币种`. Its detail mapping and
+  currency/decimal semantics have not been confirmed end-to-end. Research's
+  supplier `InPrice` is not used.
+- **Timestamp tie-break:** AMBIGUOUS. BillID is stable identity only; no evidence
+  proves its numeric/lexical order tracks creation order. Equal timestamps stay
+  `AMBIGUOUS`.
+- **AI and parent writer:** UNKNOWN. Existing-detail read-back does not prove
+  blank-form product selectors. The prior AI entry attempt returned a generic
+  form error; no further AI entry, recognition, or parent-field write was
+  attempted.
+- **Save/reconciliation:** the loaded handler chain identifies `#btnSave` as
+  `bill_save_auto()` → `bill_save()`, distinct from `bill_save_send()` and
+  `#bcSend`; the success response includes BillID/PENO and routes to read-only
+  detail. No Save was clicked. This provides the reconciliation contract, but
+  actual post-save confirmation remains gated until a separately authorized
+  first Save.
+- **Runtime:** this execution context could not safely attach to the
+  authenticated Chrome CDP session, so no additional live query/detail
+  inspection was performed. No alternate browser profile was used.
+
+No Save, Save-and-Send, Send, real SMTP, or Sheets write occurred. Production
 write gate remains CLOSED.
 
 ## Live read-only facts — 2026-09-27

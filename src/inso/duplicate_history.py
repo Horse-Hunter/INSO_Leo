@@ -5,15 +5,13 @@ returns the matching historical records for the Workflow duplicate check. It is
 read-only: it never saves, sends or mutates INSO data, and it owns no purchase,
 notification or retry behaviour.
 
-Only selectors verified during the 2026-09-26 read-only discovery are used; see
+Only selectors verified during read-only discovery are used; see
 `docs/modules/INSO.md`. :class:`PlaywrightDuplicateHistoryPage` is the live
-read-only adapter over the verified `#_id_dg` table and its model/quantity/time
-cells. Two live facts are still unconfirmed, so they remain explicit seams
-instead of guesses: the completion signal for a nonempty query (the live adapter
-fails closed), and the 制单人 / INSO-quote selectors (the record's optional
-fields stay ``None`` until an operator confirms them). When a record cannot be
-opened or read safely, the adapter fails closed with a typed error and never
-guesses a value.
+read-only adapter over the verified `#_id_dg` table. Query completion requires
+the exact current-MPN response and matching request sequence, cache, and DOM.
+The 制单人 / INSO-quote selectors remain explicit optional seams and default to
+unset. When a record cannot be opened or read safely, the adapter fails closed
+with a typed error and never guesses a value.
 
 Business rules -- canonical MPN, the rolling inclusive 168h window, latest-record
 selection and the equal-timestamp AMBIGUOUS rule -- are deliberately NOT
@@ -23,6 +21,7 @@ layer applies those rules.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -30,7 +29,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from .session import InsoOperationAccess, SecurityViolation
 
@@ -198,10 +197,10 @@ class DuplicateHistoryPage(Protocol):
     def wait_for_query_settled(self, *, timeout_ms: int) -> None:
         """Block until the submitted search has finished.
 
-        The grid's settled/no-row indicator is not yet verified
-        (`docs/modules/INSO.md`), so the implementation owns that decision. It
-        MUST raise when it cannot establish that the search finished; an empty
-        result is only meaningful once this returns.
+        The live adapter requires a matching exact-MPN response, advanced grid
+        sequence, idle state, re-enabled query control, and matching response,
+        cache, and DOM BillIDs. It MUST raise when any part cannot be established;
+        an empty result is only meaningful once this returns.
         """
         ...
 
@@ -422,34 +421,215 @@ class PlaywrightDuplicateHistoryPage:
         self._page = page
         self._selectors = selectors or DuplicateHistoryFieldSelectors()
         self._timeout_ms = timeout_ms
+        self._target_mpn: str | None = None
+        self._sequence_before_query: int | None = None
+        self._sequence_after_dispatch: int | None = None
+        self._settled_response: object | None = None
+        self._response_listener: Callable[[object], None] | None = None
+        self._owner_page: object | None = None
 
     # -- DuplicateHistoryPage ----------------------------------------------
 
     def goto(self, url: str) -> None:
+        parsed = urlsplit(url)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "yingsuo.alperp.cn"
+            or not parsed.path.casefold().endswith("/innerenquiry/yewuxj/list.aspx")
+            or parsed.username
+            or parsed.password
+        ):
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE, url
+            )
         self._page.goto(url, wait_until="domcontentloaded", timeout=self._timeout_ms)
+        self._verify_list_identity(url)
 
     def set_text(self, selector: str, value: str) -> None:
-        self._page.fill(selector, value, timeout=self._timeout_ms)
+        if selector != MODEL_QUERY_INPUT or not isinstance(value, str) or not value.strip():
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            )
+        locator = self._unique_locator(selector)
+        if not locator.is_visible() or not locator.is_enabled():
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            )
+        locator.fill(value, timeout=self._timeout_ms)
+        if locator.input_value() != value:
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            )
+        self._target_mpn = value
 
     def ensure_checked(self, selector: str) -> None:
-        self._page.check(selector, timeout=self._timeout_ms)
+        if selector != EXACT_MATCH_CHECKBOX:
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            )
+        try:
+            locator = self._unique_locator(selector)
+            # A hidden checkbox may already be selected by the verified page
+            # state. Read that state first; only interact when the control itself
+            # is actionable. Never force-click an inaccessible control.
+            if not locator.is_checked():
+                if not locator.is_visible() or not locator.is_enabled():
+                    raise InsoDuplicateHistoryError(
+                        DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+                    )
+                locator.check(timeout=self._timeout_ms)
+            if not locator.is_checked():
+                raise InsoDuplicateHistoryError(
+                    DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+                )
+        except InsoDuplicateHistoryError:
+            raise
+        except Exception:  # noqa: BLE001 - selector failures are sanitized
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            ) from None
 
     def click(self, selector: str) -> None:
-        self._page.click(selector, timeout=self._timeout_ms)
+        detail_match = re.fullmatch(
+            r"\[onclick\*='Bill_View_Open\((\d+)\)'\]", selector
+        )
+        if detail_match is not None:
+            locator = self._unique_locator(selector)
+            if not locator.is_visible() or not locator.is_enabled():
+                raise InsoDuplicateHistoryError(
+                    DuplicateHistoryFailure.RESULT_IDENTIFIER_AMBIGUOUS
+                )
+            locator.click(timeout=self._timeout_ms)
+            return
+        if selector != QUERY_BUTTON or not self._target_mpn:
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            )
+        button = self._unique_locator(selector)
+        if (
+            not button.is_visible()
+            or not button.is_enabled()
+            or button.inner_text().strip() != "查询"
+        ):
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            )
+        state = self._query_state()
+        if (
+            state is None
+            or not state["exact_checked"]
+            or state.get("pending") is not False
+        ):
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            )
+        self._clear_query_listeners()
+        self._settled_response = None
+        self._sequence_before_query = state["sequence"]
+        owner = self._owner_page_for_events()
+        target = self._target_mpn
+
+        def matches_request(request: object) -> bool:
+            return _is_exact_history_request(request, target)
+
+        def on_response(response: object) -> None:
+            request = getattr(response, "request", None)
+            if request is not None and matches_request(request):
+                self._settled_response = response
+
+        self._owner_page = owner
+        self._response_listener = on_response
+        owner.on("response", on_response)
+        try:
+            button.click(timeout=self._timeout_ms)
+            after = self._query_state()
+            if after is None or after["sequence"] <= self._sequence_before_query:
+                raise InsoDuplicateHistoryError(
+                    DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+                )
+            self._sequence_after_dispatch = after["sequence"]
+        except InsoDuplicateHistoryError:
+            self._clear_query_listeners()
+            raise
+        except Exception:  # noqa: BLE001 - browser details are not persisted
+            self._clear_query_listeners()
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            ) from None
 
     def wait_for_query_settled(self, *, timeout_ms: int) -> None:
-        """Fail closed until a nonempty-query completion signal is confirmed live.
+        """Wait for this exact MPN response and prove its rows reached this grid."""
 
-        The empty-result state (``.layui-table-none``) is verified, but there is
-        no verified way to distinguish a settled nonempty grid from a stale or
-        partially rendered one, and a fixed sleep is explicitly not acceptable.
-        Every read therefore stops here until an operator confirms the signal on
-        the live page.
-        """
-
-        raise InsoDuplicateHistoryError(
-            DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
-        )
+        response = self._settled_response
+        owner = self._owner_page
+        target = self._target_mpn
+        sequence = self._sequence_after_dispatch
+        if owner is None or not target or sequence is None:
+            self._clear_query_listeners()
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            )
+        try:
+            if response is None:
+                response = owner.wait_for_event(
+                    "response",
+                    predicate=lambda candidate: _is_exact_history_request(
+                        getattr(candidate, "request", None), target
+                    ),
+                    timeout=timeout_ms,
+                )
+            status = getattr(response, "status", None)
+            if not isinstance(status, int) or not 200 <= status < 300:
+                raise ValueError
+            payload = response.json()
+            rows = payload.get("rows") if isinstance(payload, dict) else None
+            if not isinstance(rows, list):
+                raise TypeError("unexpected response shape")
+            bill_ids = [str(row.get("BillID", "")).strip() for row in rows]
+            if any(not bill_id.isdecimal() or int(bill_id) <= 0 for bill_id in bill_ids):
+                raise ValueError
+            if len(set(bill_ids)) != len(bill_ids):
+                raise ValueError
+            observation = {
+                "sequence": sequence,
+                "bill_ids": bill_ids,
+                "empty": not bill_ids,
+            }
+            self._page.wait_for_function(
+                """expected => {
+                    const button = document.querySelector('#select_btns');
+                    const cache = window.table && window.table.cache
+                        && window.table.cache.dg;
+                    const domRows = [...document.querySelectorAll(
+                        '#_id_dg tr[id$=\"_Main\"]')];
+                    const cacheIds = Array.isArray(cache)
+                        ? cache.map(row => String(row.BillID || '')) : null;
+                    const domIds = domRows.map(row => {
+                        const calls = [...row.querySelectorAll('[onclick]')]
+                            .map(el => (el.getAttribute('onclick') || '').match(
+                                /Bill_View_Open\\(\\s*(\\d+)/))
+                            .filter(Boolean).map(match => match[1]);
+                        return calls.length === 1 ? calls[0] : '';
+                    });
+                    return window._select_pending === false
+                        && (window._select_request_seq || {}).dg === expected.sequence
+                        && button && !button.disabled
+                        && cacheIds !== null
+                        && JSON.stringify(cacheIds) === JSON.stringify(expected.bill_ids)
+                        && JSON.stringify(domIds) === JSON.stringify(expected.bill_ids)
+                        && (expected.empty
+                            ? document.querySelectorAll('.layui-table-none').length > 0
+                            : domRows.length > 0);
+                }""",
+                arg=observation,
+                timeout=timeout_ms,
+            )
+        except Exception:  # noqa: BLE001 - raw network/page details never escape
+            self._clear_query_listeners()
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            ) from None
+        self._clear_query_listeners()
 
     def wait_for(self, selector: str, *, timeout_ms: int) -> None:
         self._page.wait_for_selector(selector, state="visible", timeout=timeout_ms)
@@ -483,6 +663,92 @@ class PlaywrightDuplicateHistoryPage:
             inso_quote_text=self._cell_text(row_id, self._selectors.inso_quote),
         )
 
+    def _unique_locator(self, selector: str) -> object:
+        locator = self._page.locator(selector)
+        if locator.count() != 1:
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            )
+        return locator
+
+    def _owner_page_for_events(self) -> object:
+        page = getattr(self._page, "page", None) or self._page
+        self._verify_list_identity()
+        return page
+
+    def _verify_list_identity(self, expected_url: str | None = None) -> None:
+        current_url = str(getattr(self._page, "url", ""))
+        current = urlsplit(current_url)
+        path_ok = current.path.casefold().endswith(
+            "/innerenquiry/yewuxj/list.aspx"
+        )
+        if (
+            current.scheme != "https"
+            or current.hostname != "yingsuo.alperp.cn"
+            or not path_ok
+            or current.username
+            or current.password
+        ):
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE,
+                expected_url or current_url,
+            )
+        page = getattr(self._page, "page", None)
+        if page is None:
+            frames = getattr(self._page, "frames", None)
+            main_frame = getattr(self._page, "main_frame", None)
+            if frames is not None and (
+                len(frames) != 1 or not frames or frames[0] is not main_frame
+            ):
+                raise InsoDuplicateHistoryError(
+                    DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE,
+                    expected_url or current_url,
+                )
+        else:
+            matches = [
+                frame
+                for frame in page.frames
+                if urlsplit(frame.url).path.casefold().endswith(
+                    "/innerenquiry/yewuxj/list.aspx"
+                )
+            ]
+            if len(matches) != 1 or matches[0] is not self._page:
+                raise InsoDuplicateHistoryError(
+                    DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE,
+                    expected_url or current_url,
+                )
+
+    def _query_state(self) -> dict[str, object] | None:
+        try:
+            state = self._page.evaluate(
+                """() => {
+                    const exact = document.querySelector('#nolike');
+                    const button = document.querySelector('#select_btns');
+                    const sequence = (window._select_request_seq || {}).dg;
+                    if (!exact || !button || !Number.isInteger(sequence)) return null;
+                    return {
+                        exact_checked: exact.checked === true,
+                        // Missing state is not evidence that the request is idle.
+                        pending: window._select_pending !== false,
+                        sequence,
+                    };
+                }"""
+            )
+            if not isinstance(state, dict):
+                return None
+            if not isinstance(state.get("sequence"), int):
+                return None
+            return state
+        except Exception:  # noqa: BLE001 - state reads fail closed
+            return None
+
+    def _clear_query_listeners(self) -> None:
+        owner, response_listener = self._owner_page, self._response_listener
+        if owner is not None and response_listener is not None:
+            owner.remove_listener("response", response_listener)
+        self._owner_page = None
+        self._response_listener = None
+
     # -- internals ---------------------------------------------------------
 
     def _cell_text(self, row_id: str, cell_selector: str | None) -> str | None:
@@ -496,6 +762,44 @@ class PlaywrightDuplicateHistoryPage:
             return None
         value = self._page.eval_on_selector(selector, expression)
         return value if isinstance(value, str) else None
+
+
+def _is_exact_history_request(request: object, target: str) -> bool:
+    """Match only the current exact-MPN List_Detail request, without logging it."""
+
+    try:
+        url = urlsplit(str(request.url))
+        query = parse_qs(url.query, keep_blank_values=True)
+        if (
+            url.scheme != "https"
+            or url.hostname != "yingsuo.alperp.cn"
+            or str(request.method).upper() != "POST"
+            or not url.path.casefold().endswith("/innerenquiry/yewuxj.ashx")
+            or query.get("action", [""])[0] != "List_Detail"
+            or query.get("BillPage", [""])[0] != "YeWuXJ"
+        ):
+            return False
+        body = str(getattr(request, "post_data", "") or "")
+        fields = parse_qs(body, keep_blank_values=True)
+        search_data: dict[str, object] = {}
+        raw_search_data = fields.get("searchData", [""])[0]
+        if raw_search_data:
+            # parse_qs already form-decodes the value. A second unquote would
+            # turn a literal MPN '+' into a space and misclassify the request.
+            parsed = json.loads(raw_search_data)
+            if isinstance(parsed, dict):
+                search_data.update(parsed)
+        for key, values in fields.items():
+            if key.startswith("searchData[") and key.endswith("]") and values:
+                search_data[key[len("searchData["):-1]] = values[0]
+        return (
+            search_data.get("DetailField") == "PartNo"
+            and search_data.get("DetailFieldValue") == target
+            and search_data.get("nolike") == "on"
+            and search_data.get("leftlike") != "on"
+        )
+    except Exception:  # noqa: BLE001 - malformed/unexpected request is not a match
+        return False
 
 
 def _parse_quantity(value: str) -> int:

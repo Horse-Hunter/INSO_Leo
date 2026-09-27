@@ -7,11 +7,13 @@ link shape.
 
 from __future__ import annotations
 
+import json
 import re
 import traceback
 from decimal import Decimal
 from pathlib import Path
 from typing import Self
+from urllib.parse import urlencode
 
 import pytest
 
@@ -32,6 +34,7 @@ from src.inso.duplicate_history import (
     InsoDuplicateHistoryError,
     InsoDuplicateHistoryReader,
     PlaywrightDuplicateHistoryPage,
+    _is_exact_history_request,
 )
 from src.inso.session import SecurityViolation
 
@@ -429,11 +432,46 @@ def test_live_result_selectors_are_scoped_to_confirmed_history_table() -> None:
 
 
 class FakeLocator:
-    def __init__(self, count: int) -> None:
-        self._count = count
+    def __init__(self, page: FakePlaywrightPage, selector: str) -> None:
+        self._page = page
+        self._selector = selector
+        self._count = page._count(selector)
 
     def count(self) -> int:
         return self._count
+
+    def is_visible(self) -> bool:
+        return self._count == 1
+
+    def is_enabled(self) -> bool:
+        return self._count == 1
+
+    def is_checked(self) -> bool:
+        value = self._page.elements.get(self._selector)
+        return bool(value.get("checked")) if isinstance(value, dict) else False
+
+    def check(self, **_: object) -> None:
+        value = self._page.elements.get(self._selector)
+        if isinstance(value, dict):
+            value["checked"] = True
+        self._page.calls.append(("check", self._selector))
+
+    def fill(self, value: str, **_: object) -> None:
+        current = self._page.elements.get(self._selector)
+        if isinstance(current, dict):
+            current["value"] = value
+        self._page.calls.append(("fill", self._selector, value))
+
+    def input_value(self) -> str:
+        value = self._page.elements.get(self._selector)
+        return str(value.get("value", "")) if isinstance(value, dict) else ""
+
+    def inner_text(self) -> str:
+        value = self._page.elements.get(self._selector)
+        return str(value.get("text", "")) if isinstance(value, dict) else ""
+
+    def click(self, **_: object) -> None:
+        self._page.click(self._selector)
 
 
 class FakePlaywrightPage:
@@ -453,9 +491,21 @@ class FakePlaywrightPage:
         self.elements = dict(elements or {})
         self._goto_error = goto_error
         self.calls: list[tuple] = []
+        self.url = "https://yingsuo.alperp.cn/skins/etaoerp//InnerEnquiry/YeWuXJ/List.aspx"
+        self.frames = [self]
+        self.main_frame = self
+        self._listeners: dict[str, list[object]] = {"request": [], "response": []}
+        self._sequence = 3
+        self._pending = False
+        self._pending_value: bool | None = False
+        self._response = None
+        self._response_rows = self._bill_ids_from_fixture()
+        self._cache_bill_ids = [row["BillID"] for row in self._response_rows]
+        self._dom_bill_ids = [row["BillID"] for row in self._response_rows]
 
     def goto(self, url: str, **_: object) -> None:
         self.calls.append(("goto", url))
+        self.url = url
         if self._goto_error is not None:
             raise self._goto_error
 
@@ -467,6 +517,73 @@ class FakePlaywrightPage:
 
     def click(self, selector: str, **_: object) -> None:
         self.calls.append(("click", selector))
+        if selector == QUERY_BUTTON:
+            self._sequence += 1
+            search_data = {
+                "DetailField": "PartNo",
+                "DetailFieldValue": self.elements[MODEL_QUERY_INPUT]["value"],
+                "nolike": "on",
+            }
+            request = _FakeRequest(
+                "https://yingsuo.alperp.cn/services/innerEnquiry/yewuxj.ashx?action=List_Detail&BillPage=YeWuXJ",
+                urlencode({"searchData": json.dumps(search_data)}),
+            )
+            response = _FakeResponse(request, self._response_rows)
+            self._response = response
+            for listener in tuple(self._listeners["request"]):
+                listener(request)
+            for listener in tuple(self._listeners["response"]):
+                listener(response)
+        elif selector.startswith("[onclick*='Bill_View_Open("):
+            self._open_argument = selector.split("(", 1)[1].split(")", 1)[0]
+
+    def _detail_locator_count(self, selector: str) -> int | None:
+        match = re.fullmatch(r"\[onclick\*='Bill_View_Open\((\d+)\)'\]", selector)
+        if match is None:
+            return None
+        argument = match.group(1)
+        return sum(
+            1
+            for key, value in self.elements.items()
+            if key.startswith("#")
+            and key.endswith("_Main")
+            and isinstance(value, str)
+            and len(re.findall(r"Bill_View_Open\(\s*" + argument + r"\s*\)", value)) == 1
+        )
+
+    def on(self, event: str, listener: object) -> None:
+        self._listeners[event].append(listener)
+
+    def remove_listener(self, event: str, listener: object) -> None:
+        self._listeners[event].remove(listener)
+
+    def wait_for_event(self, event: str, *, predicate, timeout: int):
+        del event, timeout
+        if self._response is None or not predicate(self._response):
+            raise TimeoutError("response not matched")
+        return self._response
+
+    def wait_for_function(self, _expression: str, *, arg, timeout: int) -> None:
+        del timeout
+        self.calls.append(("wait_for_function", arg))
+        if (
+            self._pending
+            or self._sequence != arg["sequence"]
+            or [row["BillID"] for row in self._response_rows] != arg["bill_ids"]
+            or self._cache_bill_ids != arg["bill_ids"]
+            or self._dom_bill_ids != arg["bill_ids"]
+        ):
+            raise TimeoutError("grid did not settle")
+
+    def evaluate(self, _expression: str) -> dict[str, object]:
+        checkbox = self.elements.get(EXACT_MATCH_CHECKBOX, {})
+        return {
+            "exact_checked": bool(checkbox.get("checked"))
+            if isinstance(checkbox, dict)
+            else False,
+            "pending": self._pending_value,
+            "sequence": self._sequence,
+        }
 
     def wait_for_selector(self, selector: str, **_: object) -> None:
         self.calls.append(("wait_for_selector", selector))
@@ -475,7 +592,7 @@ class FakePlaywrightPage:
 
     def locator(self, selector: str) -> FakeLocator:
         self.calls.append(("locator", selector))
-        return FakeLocator(self._count(selector))
+        return FakeLocator(self, selector)
 
     def eval_on_selector(self, selector: str, expression: str) -> object:
         self.calls.append(("eval_on_selector", selector, expression))
@@ -499,10 +616,43 @@ class FakePlaywrightPage:
         return self.elements.get(selector)
 
     def _count(self, selector: str) -> int:
+        detail_count = self._detail_locator_count(selector)
+        if detail_count is not None:
+            return detail_count
         value = self.elements.get(selector)
         if value is None:
             return 0
         return len(value) if isinstance(value, list) else 1
+
+    def _bill_ids_from_fixture(self) -> list[dict[str, str]]:
+        rows = self.elements.get(RESULT_ROW_SELECTOR, [])
+        result: list[dict[str, str]] = []
+        for row in rows if isinstance(rows, list) else []:
+            row_id = row.get("id", "") if isinstance(row, dict) else ""
+            html = self.elements.get(f"#{row_id}", "")
+            match = re.search(r"Bill_View_Open\(\s*(\d+)", str(html))
+            if match:
+                result.append({"BillID": match.group(1)})
+        return result
+
+
+class _FakeRequest:
+    method = "POST"
+
+    def __init__(self, url: str, post_data: str) -> None:
+        self.url = url
+        self.post_data = post_data
+
+
+class _FakeResponse:
+    status = 200
+
+    def __init__(self, request: _FakeRequest, rows: list[dict[str, str]]) -> None:
+        self.request = request
+        self._rows = rows
+
+    def json(self) -> dict[str, object]:
+        return {"rows": self._rows}
 
 
 def playwright_rows(
@@ -512,6 +662,9 @@ def playwright_rows(
     cells: dict[str, str] | None = None,
 ) -> dict[str, object]:
     table: dict[str, object] = {
+        MODEL_QUERY_INPUT: {"value": ""},
+        EXACT_MATCH_CHECKBOX: {"checked": False},
+        QUERY_BUTTON: {"text": "查询"},
         RESULT_ROW_SELECTOR: [{"id": row_id}],
         f"#{row_id}": row_html(bill_argument),
         DETAIL_BILL_ID_SELECTOR: [{"value": bill_argument}],
@@ -607,17 +760,105 @@ def test_playwright_reads_creator_and_quote_once_confirmed() -> None:
 
 def test_playwright_query_steps_use_the_verified_controls() -> None:
     adapter, page = playwright_adapter(elements=playwright_rows())
+    list_url = "https://yingsuo.alperp.cn" + BUSINESS_INQUIRY_LIST_PATH
 
-    adapter.goto(LIST_URL)
+    adapter.goto(list_url)
     adapter.set_text(MODEL_QUERY_INPUT, MPN)
     adapter.ensure_checked(EXACT_MATCH_CHECKBOX)
     adapter.click(QUERY_BUTTON)
 
-    assert ("goto", LIST_URL) in page.calls
+    assert ("goto", list_url) in page.calls
     assert ("fill", MODEL_QUERY_INPUT, MPN) in page.calls
     assert ("check", EXACT_MATCH_CHECKBOX) in page.calls
     assert ("click", QUERY_BUTTON) in page.calls
     assert not any("#leftlike" in repr(call) for call in page.calls)
+
+
+def test_verified_live_settlement_requires_current_exact_request_and_grid() -> None:
+    adapter, page = playwright_adapter(elements=playwright_rows())
+
+    adapter.goto("https://yingsuo.alperp.cn" + BUSINESS_INQUIRY_LIST_PATH)
+    adapter.set_text(MODEL_QUERY_INPUT, MPN)
+    adapter.ensure_checked(EXACT_MATCH_CHECKBOX)
+    adapter.click(QUERY_BUTTON)
+    adapter.wait_for_query_settled(timeout_ms=1000)
+
+    assert any(call[0] == "wait_for_function" for call in page.calls)
+    assert page._listeners == {"request": [], "response": []}
+
+
+def test_query_dispatch_fails_when_pending_state_is_not_explicitly_idle() -> None:
+    adapter, page = playwright_adapter(elements=playwright_rows())
+    page._pending_value = None
+
+    adapter.goto("https://yingsuo.alperp.cn" + BUSINESS_INQUIRY_LIST_PATH)
+    adapter.set_text(MODEL_QUERY_INPUT, MPN)
+    adapter.ensure_checked(EXACT_MATCH_CHECKBOX)
+    with pytest.raises(InsoDuplicateHistoryError) as failure:
+        adapter.click(QUERY_BUTTON)
+
+    assert failure.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+    assert not any(call == ("click", QUERY_BUTTON) for call in page.calls)
+
+
+def test_exact_request_matching_requires_current_mpn_and_nolike() -> None:
+    request = _FakeRequest(
+        "https://yingsuo.alperp.cn/services/innerEnquiry/yewuxj.ashx?action=List_Detail&BillPage=YeWuXJ",
+        urlencode(
+            {
+                "searchData": json.dumps(
+                    {"DetailField": "PartNo", "DetailFieldValue": MPN, "nolike": "on"}
+                )
+            }
+        ),
+    )
+
+    assert _is_exact_history_request(request, MPN)
+    request.url = request.url.replace("yingsuo.alperp.cn", "example.invalid")
+    assert not _is_exact_history_request(request, MPN)
+    request.url = request.url.replace("example.invalid", "yingsuo.alperp.cn")
+    request.post_data = urlencode(
+        {
+            "searchData": json.dumps(
+                {"DetailField": "PartNo", "DetailFieldValue": MPN, "leftlike": "on"}
+            )
+        }
+    )
+    assert not _is_exact_history_request(request, MPN)
+
+
+def test_exact_request_preserves_plus_in_form_encoded_mpn() -> None:
+    target = "LM+358"
+    request = _FakeRequest(
+        "https://yingsuo.alperp.cn/services/innerEnquiry/yewuxj.ashx?action=List_Detail&BillPage=YeWuXJ",
+        urlencode(
+            {
+                "searchData": json.dumps(
+                    {
+                        "DetailField": "PartNo",
+                        "DetailFieldValue": target,
+                        "nolike": "on",
+                    }
+                )
+            }
+        ),
+    )
+
+    assert _is_exact_history_request(request, target)
+
+
+def test_settlement_fails_when_returned_billids_do_not_match_grid() -> None:
+    adapter, page = playwright_adapter(elements=playwright_rows())
+    page._response_rows = [{"BillID": "9999"}]
+
+    adapter.goto("https://yingsuo.alperp.cn" + BUSINESS_INQUIRY_LIST_PATH)
+    adapter.set_text(MODEL_QUERY_INPUT, MPN)
+    adapter.ensure_checked(EXACT_MATCH_CHECKBOX)
+    adapter.click(QUERY_BUTTON)
+    with pytest.raises(InsoDuplicateHistoryError) as failure:
+        adapter.wait_for_query_settled(timeout_ms=1000)
+
+    assert failure.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
 
 
 def test_playwright_settlement_is_fail_closed() -> None:
@@ -634,13 +875,18 @@ def test_playwright_settlement_is_fail_closed() -> None:
     assert failure.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
 
 
-def test_reader_over_the_playwright_adapter_fails_closed_on_settlement() -> None:
+def test_reader_over_the_playwright_adapter_reads_only_settled_matching_rows() -> None:
     adapter, _ = playwright_adapter(elements=playwright_rows())
+    v12_reader = InsoDuplicateHistoryReader(
+        list_url="https://yingsuo.alperp.cn",
+        operation_access=FakeOperationAccess(adapter),  # type: ignore[arg-type]
+    )
 
-    with pytest.raises(InsoDuplicateHistoryError) as failure:
-        reader(adapter).read(MPN)  # type: ignore[arg-type]
+    capture = v12_reader.read(MPN)
 
-    assert failure.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+    assert capture.target_mpn == MPN
+    assert len(capture.records) == 1
+    assert capture.records[0].bill_id == "7788"
 
 
 def test_no_settle_path_relies_on_a_fixed_sleep() -> None:
