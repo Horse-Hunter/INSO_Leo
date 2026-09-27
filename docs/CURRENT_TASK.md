@@ -123,8 +123,9 @@ CEO performs the daily Safety Review. Keep the production write gate CLOSED.
   not closed or repurposed.
 - A direct read-only attempt on that unique shell page filled the authorized
   public query MPN, then stopped before dispatch. `#nolike` was unique and
-  enabled, but unchecked and invisible; `PlaywrightDuplicateHistoryPage`
-  returned `QUERY_SETTLEMENT_UNCONFIRMED`. No force/coordinate click was used.
+  enabled, but unchecked and invisible. Its unique associated `精确` label was
+  also invisible, so `PlaywrightDuplicateHistoryPage` returned
+  `QUERY_SETTLEMENT_UNCONFIRMED`. No force/coordinate click was used.
 - The current loaded grid had no cached result row or header metadata, so this
   session produced no creator, quote, or detail-schema evidence. The AI panel
   and blank form were not opened on the reused user tab because that page is

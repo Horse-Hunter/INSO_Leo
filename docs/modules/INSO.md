@@ -257,8 +257,9 @@ records `LEASE_CHILD_AUTH_NOT_SHARED`; it does not infer why the existing shell
 state is absent from the child page. It leaves the reused page/browser open.
 
 The unique existing shell's exact checkbox `#nolike` was unchecked, hidden, and
-enabled. The duplicate adapter therefore failed closed with
-`QUERY_SETTLEMENT_UNCONFIRMED` before dispatch; it was not force-clicked. The
-loaded grid had no cached result row/header metadata. Creator, quote, AI
+enabled; its unique associated `精确` label was also hidden. The duplicate
+adapter therefore failed closed with `QUERY_SETTLEMENT_UNCONFIRMED` before
+dispatch; neither control was force-clicked. The loaded grid had no cached
+result row/header metadata. Creator, quote, AI
 recognition/read-back, and blank-draft product writer remain UNKNOWN. The
 existing tab was not used to open forms or details outside the lease lifecycle.
