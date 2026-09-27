@@ -24,6 +24,7 @@ from src.inso.duplicate_history import (
     DETAIL_BILL_ID_SELECTOR,
     DETAIL_LINK_CALL,
     DETAIL_LINK_SELECTOR_TEMPLATE,
+    RESULT_ROW_ID,
     RESULT_ROW_SELECTOR,
     DuplicateHistoryFailure,
     InsoDuplicateHistoryError,
@@ -38,7 +39,6 @@ from src.launcher.inso_session import attach_inso_research_session
 from src.research.runtime import ResearchRuntimeConfigError, load_runtime_config
 
 _REPORT_RELATIVE_PATH = Path("runtime/evidence/v12-phase-a-final/report.json")
-_TARGET_MPN = "LM358"  # Public commodity part; never included in the report.
 _SAFE_SCHEMA_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 _SENSITIVE_SCHEMA_KEY = re.compile(
     r"password|passwd|secret|token|cookie|authorization|email|phone|address",
@@ -115,6 +115,7 @@ def _empty_report() -> dict[str, Any]:
             "billid_identity": "UNKNOWN",
             "grid_detail_identity": "UNKNOWN",
             "detail_readback_fields": [],
+            "settlement_diagnostics": {},
         },
         "creator": {"status": "UNKNOWN", "field": None},
         "inso_quote": {
@@ -239,6 +240,22 @@ def _confirmed_duplicate_fields(
     return creator, quote, currency
 
 
+def _creator_discovery_signal(
+    row_fields: set[str],
+    columns: list[dict[str, str]],
+    detail_fields: list[dict[str, str]],
+) -> bool:
+    """Whether one of the inspected surfaces mentions a plausible creator field."""
+
+    creator_keys = {_field_key(name) for name in _CREATOR_NAMES}
+    schema_signal = any(_field_key(key) in creator_keys for key in row_fields)
+    creator_labels = {"制单人", "创建人", "创建用户"}
+    label_signal = any(
+        item.get("label") in creator_labels for item in (*columns, *detail_fields)
+    )
+    return schema_signal or label_signal
+
+
 def _decimal_is_readable(value: object) -> bool:
     if isinstance(value, bool) or value is None:
         return False
@@ -274,9 +291,12 @@ def _function_source(frame: object, expression: str) -> str:
 
 def _grid_columns(frame: object) -> list[dict[str, str]]:
     try:
-        columns = frame.locator("#_id_dg thead th").evaluate_all(
-            "els => els.map(el => ({field: el.getAttribute('data-field') || '', "
-            "label: (el.innerText || el.textContent || '').trim()}))"
+        columns = frame.locator("#_id_dg").evaluate(
+            "body => { const view=body.closest('.layui-table-view'); "
+            "if (!view) return []; "
+            "return [...view.querySelectorAll('table thead th[data-field]')]"
+            ".map(el => ({field: el.getAttribute('data-field') || '', "
+            "label: (el.innerText || el.textContent || '').trim()})); }"
         )
     except Exception:  # noqa: BLE001 - page metadata is best effort
         return []
@@ -412,7 +432,26 @@ def _inspect_history(
     adapter = PlaywrightDuplicateHistoryPage(frame)
     try:
         verify_identity()
-        payload = adapter.query_exact_response(_TARGET_MPN)
+        initial_row_ids = _billid_rows(adapter)
+        target_mpn = next(
+            (
+                values.model
+                for row_id in initial_row_ids
+                if (values := adapter.read_row_values(row_id)) is not None
+                and values.model.strip()
+            ),
+            None,
+        )
+        if target_mpn is None:
+            report["query"]["status"] = "UNAVAILABLE"
+            report["query"]["settlement_diagnostics"] = {
+                "FAILED_STAGE": "EXISTING_ROW_PARTNO"
+            }
+            return
+        payload = adapter.query_exact_response(target_mpn)
+        report["query"]["settlement_diagnostics"] = (
+            adapter.last_settlement_evidence
+        )
         report["query"]["status"] = "SETTLED"
         report["query"]["exact_request_matched"] = (
             adapter.last_exact_request_matched
@@ -446,7 +485,7 @@ def _inspect_history(
         )
         matching_links: list[tuple[str, str]] = []
         for row_id in row_ids:
-            html = adapter.html(f"#{row_id}") or ""
+            html = adapter.html(f'tr[id="{row_id}"]') or ""
             bill_arguments = set(DETAIL_LINK_CALL.findall(html))
             values = adapter.read_row_values(row_id)
             if (
@@ -457,12 +496,12 @@ def _inspect_history(
             ):
                 matching_links.append((row_id, next(iter(bill_arguments)))
                 )
-        if len(matching_links) == 1:
+        if matching_links:
             _row_id, bill_id = matching_links[0]
             selector = DETAIL_LINK_SELECTOR_TEMPLATE.format(argument=bill_id)
             verify_identity()
             adapter.click(selector)
-            detail = _find_bill_detail_frame(page)
+            detail = _find_bill_detail_frame(page, bill_id)
             if detail is not None:
                 detail_bill_id = _billid_value(detail)
                 report["query"]["grid_detail_identity"] = (
@@ -489,6 +528,9 @@ def _inspect_history(
             report["reason_codes"].append("GRID_RESPONSE_IDENTITY_UNCONFIRMED")
     except InsoDuplicateHistoryError as exc:
         report["query"]["status"] = "UNAVAILABLE"
+        report["query"]["settlement_diagnostics"] = (
+            adapter.last_settlement_evidence
+        )
         report["reason_codes"].append(exc.code.value)
     except Exception:  # noqa: BLE001 - only stable reason codes are reported
         report["query"]["status"] = "UNAVAILABLE"
@@ -498,24 +540,48 @@ def _inspect_history(
 def _billid_rows(adapter: PlaywrightDuplicateHistoryPage) -> list[str]:
     values = adapter.attributes(RESULT_ROW_SELECTOR, "id")
     return [
-        value for value in values if isinstance(value, str) and value.endswith("_Main")
+        value
+        for value in values
+        if isinstance(value, str) and RESULT_ROW_ID.fullmatch(value)
     ]
 
 
-def _find_bill_detail_frame(page: object) -> object | None:
-    matches = []
-    for frame in page.frames:
-        try:
-            if frame.locator(DETAIL_BILL_ID_SELECTOR).count() == 1:
-                matches.append(frame)
-        except Exception:  # noqa: BLE001 - stale frame makes identity uncertain
-            return None
+def _find_bill_detail_frame(page: object, expected_bill_id: str) -> object | None:
+    matches = [
+        frame for frame in page.frames
+        if _detail_frame_matches(frame, expected_bill_id)
+    ]
     return matches[0] if len(matches) == 1 else None
+
+
+def _detail_frame_matches(frame: object, expected_bill_id: str) -> bool:
+    try:
+        if frame.locator(DETAIL_BILL_ID_SELECTOR).count() != 1:
+            return False
+        is_value_field = frame.locator(DETAIL_BILL_ID_SELECTOR).evaluate(
+            "field => ['INPUT','TEXTAREA'].includes(field.tagName)"
+        )
+        if is_value_field is not True:
+            return False
+        frame.wait_for_function(
+            """expected => {
+                const field = document.querySelector('#BillID');
+                return !!field && String(field.value || '') === expected;
+            }""",
+            arg=expected_bill_id,
+            timeout=5_000,
+        )
+    except Exception:  # noqa: BLE001 - stale/blank frame is not a match
+        return False
+    return _billid_value(frame) == expected_bill_id
 
 
 def _billid_value(frame: object) -> str | None:
     try:
-        value = frame.locator(DETAIL_BILL_ID_SELECTOR).get_attribute("value")
+        locator = frame.locator(DETAIL_BILL_ID_SELECTOR)
+        value = locator.input_value()
+        if not value:
+            value = locator.get_attribute("value")
     except Exception:  # noqa: BLE001
         return None
     return value if isinstance(value, str) else None
@@ -583,6 +649,11 @@ def _classify_duplicate_fields(
         for item in fields
     ):
         report["creator"] = {"status": "CONFIRMED", "field": creator}
+    elif not _creator_discovery_signal(row_fields, columns, fields):
+        report["creator"] = {
+            "status": "CREATOR_NOT_EXPOSED_BY_INSO",
+            "field": None,
+        }
     matching_rows = [
         row for row in rows if str(row.get("BillID", "")).strip() == bill_id
     ]

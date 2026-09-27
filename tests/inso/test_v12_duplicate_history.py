@@ -82,7 +82,8 @@ class FakePage:
     def click(self, selector: str) -> None:
         self.calls.append(("click", selector))
         if selector.startswith("[onclick*='Bill_View_Open("):
-            self._open_argument = selector.split("(", 1)[1].split(")", 1)[0]
+            match = re.search(r"Bill_View_Open\((\d+)", selector)
+            self._open_argument = match.group(1) if match else None
 
     def wait_for_query_settled(self, *, timeout_ms: int) -> None:
         self.calls.append(("wait_for_query_settled",))
@@ -231,7 +232,10 @@ def test_detail_is_verified_in_this_runtime_before_a_record_is_returned() -> Non
 
     reader(page).read(MPN)
 
-    assert ("click", "[onclick*='Bill_View_Open(7788)']") in page.calls
+    assert (
+        "click",
+        "[onclick*='Bill_View_Open(7788'], [href*='Bill_View_Open(7788']",
+    ) in page.calls
     assert ("attributes", DETAIL_BILL_ID_SELECTOR, "value") in page.calls
     # One query to enumerate, one more to re-open the record for verification.
     assert sum(1 for call in page.calls if call[0] == "goto") == 2
@@ -567,7 +571,11 @@ class FakePlaywrightPage:
             self._open_argument = selector.split("(", 1)[1].split(")", 1)[0]
 
     def _detail_locator_count(self, selector: str) -> int | None:
-        match = re.fullmatch(r"\[onclick\*='Bill_View_Open\((\d+)\)'\]", selector)
+        match = re.fullmatch(
+            r"\[onclick\*='Bill_View_Open\((\d+)'\], "
+            r"\[href\*='Bill_View_Open\(\1'\]",
+            selector,
+        )
         if match is None:
             return None
         argument = match.group(1)
@@ -595,13 +603,7 @@ class FakePlaywrightPage:
     def wait_for_function(self, _expression: str, *, arg, timeout: int) -> None:
         del timeout
         self.calls.append(("wait_for_function", arg))
-        if (
-            self._pending
-            or self._sequence != arg["sequence"]
-            or [row["BillID"] for row in self._response_rows] != arg["bill_ids"]
-            or self._cache_bill_ids != arg["bill_ids"]
-            or self._dom_bill_ids != arg["bill_ids"]
-        ):
+        if self._pending or self._sequence != arg:
             raise TimeoutError("grid did not settle")
 
     def evaluate(self, expression: str, *_: object) -> dict[str, object] | None:
@@ -614,6 +616,20 @@ class FakePlaywrightPage:
             exact["checked"] = True
             left_like["checked"] = False
             return {"exact": True, "leftLike": False}
+        if "const allRows = [...document.querySelectorAll('#_id_dg tr')]" in expression:
+            return {
+                "pendingFalse": not self._pending,
+                "sequence": self._sequence,
+                "buttonEnabled": True,
+                "cacheIds": [str(value) for value in self._cache_bill_ids],
+                "domIds": [str(value) for value in self._dom_bill_ids],
+                "domCount": len(self._dom_bill_ids),
+                "domOtherCount": 0,
+                "hiddenBusinessCount": 0,
+                "pageSize": 20,
+                "currentPage": 1,
+                "totalCount": len(self._cache_bill_ids),
+            }
         checkbox = self.elements.get(EXACT_MATCH_CHECKBOX, {})
         return {
             "exact_checked": bool(checkbox.get("checked"))
@@ -652,13 +668,19 @@ class FakePlaywrightPage:
         return [item.get(arg) if isinstance(item, dict) else None for item in values]
 
     def _value(self, selector: str) -> object:
+        match = re.match(r'tr\[id="(\d+_Main)"\](.*)$', selector)
+        if match:
+            row_id, suffix = match.groups()
+            key = f"#{row_id}{suffix}"
+            if key in self.elements:
+                return self.elements[key]
         return self.elements.get(selector)
 
     def _count(self, selector: str) -> int:
         detail_count = self._detail_locator_count(selector)
         if detail_count is not None:
             return detail_count
-        value = self.elements.get(selector)
+        value = self._value(selector)
         if value is None:
             return 0
         return len(value) if isinstance(value, list) else 1
@@ -772,7 +794,7 @@ def test_playwright_row_extractor_uses_only_the_verified_cells() -> None:
         RESULT_QUANTITY_CELL_SELECTOR,
         RESULT_TIMESTAMP_CELL_SELECTOR,
     ):
-        assert ("locator", f"#1001_Main {cell_selector}") in page.calls
+        assert ("locator", f'tr[id="1001_Main"] {cell_selector}') in page.calls
     assert ("eval_on_selector_all", RESULT_ROW_SELECTOR, "id") not in page.calls
 
 
@@ -780,8 +802,8 @@ def test_playwright_reads_row_ids_and_html_from_the_verified_table() -> None:
     adapter, _ = playwright_adapter(elements=playwright_rows())
 
     assert adapter.attributes(RESULT_ROW_SELECTOR, "id") == ("1001_Main",)
-    assert adapter.html("#1001_Main") == row_html("7788")
-    assert adapter.html("#9999_Main") is None
+    assert adapter.html('tr[id="1001_Main"]') == row_html("7788")
+    assert adapter.html('tr[id="9999_Main"]') is None
 
 
 def test_playwright_missing_cell_yields_no_values() -> None:
@@ -850,6 +872,24 @@ def test_verified_live_settlement_requires_current_exact_request_and_grid() -> N
 
     assert any(call[0] == "wait_for_function" for call in page.calls)
     assert page._listeners == {"request": [], "response": []}
+    evidence = adapter.last_settlement_evidence
+    assert evidence["REQUEST_MATCHED"] is True
+    assert evidence["HTTP_STATUS"] == 200
+    assert evidence["HTTP_OK"] is True
+    assert evidence["RESPONSE_JSON_OK"] is True
+    assert evidence["RESPONSE_ROWS_VALID"] is True
+    assert evidence["RESPONSE_ROW_COUNT"] == 1
+    assert evidence["SEQUENCE_ADVANCED"] is True
+    assert evidence["PENDING_FALSE"] is True
+    assert evidence["BUTTON_ENABLED"] is True
+    assert evidence["CACHE_PRESENT"] is True
+    assert evidence["CACHE_ROW_COUNT"] == 1
+    assert evidence["RESPONSE_CACHE_IDS_MATCH"] is True
+    assert evidence["DOM_ROW_COUNT"] == 1
+    assert evidence["RESPONSE_DOM_IDS_MATCH"] is True
+    assert evidence["FAILED_STAGE"] is None
+    assert "BillID" not in repr(evidence)
+    assert "PartNo" not in repr(evidence)
 
 
 def test_query_dispatch_fails_when_pending_state_is_not_explicitly_idle() -> None:
@@ -980,7 +1020,9 @@ def test_exact_request_shape_reports_only_serialized_keys() -> None:
 
 def test_settlement_fails_when_returned_billids_do_not_match_grid() -> None:
     adapter, page = playwright_adapter(elements=playwright_rows())
-    page._response_rows = [{"BillID": "9999"}]
+    page._response_rows = [
+        {**page._response_rows[0], "BillID": "9999"}
+    ]
 
     adapter.goto("https://yingsuo.alperp.cn" + BUSINESS_INQUIRY_LIST_PATH)
     adapter.set_text(MODEL_QUERY_INPUT, MPN)
@@ -990,6 +1032,12 @@ def test_settlement_fails_when_returned_billids_do_not_match_grid() -> None:
         adapter.wait_for_query_settled(timeout_ms=1000)
 
     assert failure.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+    evidence = adapter.last_settlement_evidence
+    assert evidence["REQUEST_MATCHED"] is True
+    assert evidence["HTTP_OK"] is True
+    assert evidence["RESPONSE_ROWS_VALID"] is True
+    assert evidence["CACHE_ID_SETS_MATCH"] is False
+    assert evidence["FAILED_STAGE"] == "RESPONSE_CACHE_IDS_MATCH"
 
 
 def test_playwright_settlement_is_fail_closed() -> None:

@@ -1,6 +1,6 @@
 # Task: V1.2 Phase A final contract discovery
 
-status: blocked
+status: complete
 owner: Main Programmer
 created: 2026-09-27
 updated: 2026-09-27
@@ -63,7 +63,7 @@ runner for remaining browser observations. Keep Production Write Gate CLOSED.
   AI/parent-field read-back. No Save or other business write is involved or
   authorized.
 
-## Owner-session closeout — 2026-09-27
+## Previous Owner-session report — superseded by CEO Review
 
 This closeout supersedes the earlier restrictions on reusing the authenticated
 shell and on one synthetic AI recognition.
@@ -94,12 +94,42 @@ shell and on one synthetic AI recognition.
 
 ## completion
 
-- status: blocked
-- changed: quote/currency schema/grid classifier and focused launcher tests
-- verified: authenticated list/frame identity; three bounded query attempts;
-  one synthetic AI recognition failure; `pytest tests/launcher/test_v12_phase_a_readonly.py -q`;
-  `ruff check` for touched Python files; `git diff --check`
-- limitations: non-empty exact response, live quote/cache comparison, creator
-  schema conclusion, AI preview success, and parent writer/read-back remain
-  unresolved. No further query or AI recognition attempt is authorized by this
-  task's attempt limits.
+- status: complete
+- changed: granular sanitized exact-query diagnostics; verified DOM detail-link
+  extraction from `href`; numeric-leading grid row selectors; same-BillID
+  response/cache quote comparison; settlement and DOM identity tests
+- verified: see the CEO Review closeout below
+
+## CEO Review closeout — Chrome — 2026-09-27
+
+- Browser: Owner-approved Chrome on the original `.browser-profile/cdp` CDP
+  endpoint `127.0.0.1:9222`; authenticated INSO shell reused, no Edge evidence.
+- `EXACT_QUERY: PASS`; `NONEMPTY_HISTORY_QUERY: PASS`. One existing list-row
+  PartNo was held only in memory and passed to `query_exact_response`. The
+  non-sensitive settlement evidence was: matched request; HTTP 200; JSON and
+  rows valid; response/cache/DOM counts each 2; sequence advanced; pending
+  false; query button enabled; response/cache and response/DOM BillID arrays
+  had equal sets and order. Page 1, size 20, total 2; no hidden business or
+  auxiliary rows. `FAILED_STAGE: NONE`.
+- Quote/currency: `CONFIRMED`. `OfferPrice` / `OfferCurrencyID` are the grid's
+  `报价` / `报价币种` fields, match the same BillID in response and grid cache,
+  and the non-empty price parses as Decimal.
+- Creator: `CREATOR_NOT_EXPOSED_BY_INSO`. The response schema, grid columns,
+  and detail metadata expose no explicit creator field. `UserName` and
+  `OwnerID` remain purchaser and salesperson respectively.
+- AI panel: `CONFIRMED`. One recognition request went to the client-defined
+  `/api/ai/extract-erp-table` endpoint as a POST containing only the authorized
+  synthetic text (JSON encoded); request fields contained no BillID, PENO,
+  customer, or business-record ID. Preview: PartNo `LM358`, Brand `TI`, Qty
+  `1`; recognition signal changed to `重新识别`.
+- Parent writer/read-back: `CONFIRMED`. Static callback inspection showed a
+  local update to the current unsaved form's grid cache/table only; no extra
+  callback or API request. One import produced parent values PartNo `LM358`,
+  Brand `TI`, Qty `1`. The new blank form was canceled and closed; the original
+  history list remained at 2 rows.
+- `REAL SAVE: NO`; `REAL SEND: NO`; `REAL SMTP: NO`; Sheets write: `NO`;
+  Production Write Gate: `CLOSED`.
+- Verification: changed-file Ruff clean; full Ruff reports four pre-existing
+  findings in untouched `scripts/scan_release_artifact.py` and
+  `scripts/windows_release_entry.py`; full deterministic suite `632 passed,
+  11 skipped`; `git diff --check` clean.

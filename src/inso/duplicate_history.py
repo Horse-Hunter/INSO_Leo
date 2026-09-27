@@ -64,10 +64,44 @@ RESULT_MODEL_CELL_SELECTOR = "td:nth-child(9)"
 RESULT_QUANTITY_CELL_SELECTOR = "td:nth-child(11)"
 RESULT_TIMESTAMP_CELL_SELECTOR = "td:nth-child(14)"
 
+
+def _empty_settlement_evidence() -> dict[str, object]:
+    """Status-only evidence for one exact-query settlement attempt."""
+
+    return {
+        "REQUEST_MATCHED": False,
+        "HTTP_STATUS": None,
+        "HTTP_OK": False,
+        "RESPONSE_JSON_OK": False,
+        "RESPONSE_ROWS_VALID": False,
+        "RESPONSE_ROW_COUNT": None,
+        "SEQUENCE_ADVANCED": False,
+        "PENDING_FALSE": None,
+        "BUTTON_ENABLED": None,
+        "CACHE_PRESENT": None,
+        "CACHE_ROW_COUNT": None,
+        "RESPONSE_CACHE_IDS_MATCH": None,
+        "CACHE_ID_SETS_MATCH": None,
+        "CACHE_ORDER_MATCH": None,
+        "DOM_ROW_COUNT": None,
+        "DOM_OTHER_ROW_COUNT": None,
+        "DOM_HIDDEN_BUSINESS_ROW_COUNT": None,
+        "RESPONSE_DOM_IDS_MATCH": None,
+        "DOM_ID_SETS_MATCH": None,
+        "DOM_ORDER_MATCH": None,
+        "PAGINATION_CURRENT_PAGE": None,
+        "PAGINATION_PAGE_SIZE": None,
+        "PAGINATION_TOTAL_COUNT": None,
+        "FAILED_STAGE": None,
+    }
+
 #: A detail link calls ``Bill_View_Open(<numeric>)``. The numeric argument is a
 #: different identifier from the row DOM id and must never be substituted for it.
-DETAIL_LINK_CALL = re.compile(r"Bill_View_Open\(\s*(\d+)\s*\)")
-DETAIL_LINK_SELECTOR_TEMPLATE = "[onclick*='Bill_View_Open({argument})']"
+DETAIL_LINK_CALL = re.compile(r"Bill_View_Open\(\s*(\d+)(?=\s*[,\)])")
+DETAIL_LINK_SELECTOR_TEMPLATE = (
+    "[onclick*='Bill_View_Open({argument}'], "
+    "[href*='Bill_View_Open({argument}']"
+)
 
 #: ``BillID`` is the documented detail field name. ``#<FieldName>`` matches the
 #: verified inputs on this page; confirm the selector on the live page before
@@ -513,6 +547,13 @@ class PlaywrightDuplicateHistoryPage:
         self._response_listener: Callable[[object], None] | None = None
         self._owner_page: object | None = None
         self._settled_request: object | None = None
+        self._settlement_evidence = _empty_settlement_evidence()
+
+    @property
+    def last_settlement_evidence(self) -> dict[str, object]:
+        """Sanitized booleans/counts/status only; never exposes business IDs."""
+
+        return dict(self._settlement_evidence)
 
     @property
     def last_exact_request_shape(self) -> str:
@@ -533,14 +574,20 @@ class PlaywrightDuplicateHistoryPage:
     def query_exact_response(self, target_mpn: str) -> dict[str, object]:
         """Run the verified native search and return its settled response."""
 
+        self._settlement_evidence = _empty_settlement_evidence()
         if not isinstance(target_mpn, str) or not target_mpn.strip():
+            self._settlement_evidence["FAILED_STAGE"] = "TARGET_MPN"
             raise InsoDuplicateHistoryError(
                 DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
             )
         target = target_mpn.strip()
+        self._settlement_evidence["FAILED_STAGE"] = "LIST_IDENTITY"
         self._verify_list_identity()
+        self._settlement_evidence["FAILED_STAGE"] = "QUERY_INPUT"
         self.set_text(MODEL_QUERY_INPUT, target)
+        self._settlement_evidence["FAILED_STAGE"] = "EXACT_FILTER"
         self.ensure_checked(EXACT_MATCH_CHECKBOX)
+        self._settlement_evidence["FAILED_STAGE"] = "QUERY_DISPATCH"
         self.click(QUERY_BUTTON)
         return self.wait_for_query_settled(timeout_ms=self._timeout_ms)
 
@@ -619,7 +666,9 @@ class PlaywrightDuplicateHistoryPage:
 
     def click(self, selector: str) -> None:
         detail_match = re.fullmatch(
-            r"\[onclick\*='Bill_View_Open\((\d+)\)'\]", selector
+            r"\[onclick\*='Bill_View_Open\((\d+)'\], "
+            r"\[href\*='Bill_View_Open\(\1'\]",
+            selector,
         )
         if detail_match is not None:
             locator = self._unique_locator(selector)
@@ -667,6 +716,7 @@ class PlaywrightDuplicateHistoryPage:
             if request is not None and matches_request(request):
                 self._settled_request = request
                 self._settled_response = response
+                self._settlement_evidence["REQUEST_MATCHED"] = True
 
         self._owner_page = owner
         self._response_listener = on_response
@@ -674,15 +724,25 @@ class PlaywrightDuplicateHistoryPage:
         try:
             button.click(timeout=self._timeout_ms)
             after = self._query_state()
-            if after is None or after["sequence"] <= self._sequence_before_query:
+            sequence_advanced = (
+                after is not None
+                and after["sequence"] > self._sequence_before_query
+            )
+            self._settlement_evidence["SEQUENCE_ADVANCED"] = sequence_advanced
+            if not sequence_advanced:
+                self._settlement_evidence["FAILED_STAGE"] = "SEQUENCE_ADVANCED"
                 raise InsoDuplicateHistoryError(
                     DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
                 )
             self._sequence_after_dispatch = after["sequence"]
         except InsoDuplicateHistoryError:
+            if self._settlement_evidence.get("FAILED_STAGE") is None:
+                self._settlement_evidence["FAILED_STAGE"] = "QUERY_DISPATCH"
             self._clear_query_listeners()
             raise
         except Exception:  # noqa: BLE001 - browser details are not persisted
+            if self._settlement_evidence.get("FAILED_STAGE") is None:
+                self._settlement_evidence["FAILED_STAGE"] = "QUERY_DISPATCH"
             self._clear_query_listeners()
             raise InsoDuplicateHistoryError(
                 DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
@@ -696,67 +756,177 @@ class PlaywrightDuplicateHistoryPage:
         target = self._target_mpn
         sequence = self._sequence_after_dispatch
         if owner is None or not target or sequence is None:
+            self._settlement_evidence["FAILED_STAGE"] = "QUERY_CONTEXT"
             self._clear_query_listeners()
             raise InsoDuplicateHistoryError(
                 DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
             )
         try:
             if response is None:
-                response = owner.wait_for_event(
-                    "response",
-                    predicate=lambda candidate: _is_exact_history_request(
-                        getattr(candidate, "request", None), target
-                    ),
-                    timeout=timeout_ms,
-                )
+                try:
+                    response = owner.wait_for_event(
+                        "response",
+                        predicate=lambda candidate: _is_exact_history_request(
+                            getattr(candidate, "request", None), target
+                        ),
+                        timeout=timeout_ms,
+                    )
+                    self._settled_response = response
+                    self._settled_request = getattr(response, "request", None)
+                    self._settlement_evidence["REQUEST_MATCHED"] = True
+                except Exception:
+                    self._settlement_evidence["FAILED_STAGE"] = "REQUEST_MATCHED"
+                    raise
             status = getattr(response, "status", None)
-            if not isinstance(status, int) or not 200 <= status < 300:
+            self._settlement_evidence["HTTP_STATUS"] = (
+                status if isinstance(status, int) else None
+            )
+            http_ok = isinstance(status, int) and 200 <= status < 300
+            self._settlement_evidence["HTTP_OK"] = http_ok
+            if not http_ok:
+                self._settlement_evidence["FAILED_STAGE"] = "HTTP_OK"
                 raise ValueError
-            payload = response.json()
+            try:
+                payload = response.json()
+                json_ok = isinstance(payload, dict)
+            except Exception:
+                self._settlement_evidence["FAILED_STAGE"] = "RESPONSE_JSON_OK"
+                raise
+            self._settlement_evidence["RESPONSE_JSON_OK"] = json_ok
+            if not json_ok:
+                self._settlement_evidence["FAILED_STAGE"] = "RESPONSE_JSON_OK"
+                raise TypeError
             rows = payload.get("rows") if isinstance(payload, dict) else None
             if not isinstance(rows, list):
+                self._settlement_evidence["FAILED_STAGE"] = "RESPONSE_ROWS_VALID"
                 raise TypeError("unexpected response shape")
-            _validate_exact_response_rows(rows, target)
+            self._settlement_evidence["RESPONSE_ROW_COUNT"] = len(rows)
+            try:
+                _validate_exact_response_rows(rows, target)
+            except Exception:
+                self._settlement_evidence["FAILED_STAGE"] = "RESPONSE_ROWS_VALID"
+                raise
             bill_ids = [str(row.get("BillID", "")).strip() for row in rows]
             if any(not bill_id.isdecimal() or int(bill_id) <= 0 for bill_id in bill_ids):
+                self._settlement_evidence["FAILED_STAGE"] = "RESPONSE_ROWS_VALID"
                 raise ValueError
             if len(set(bill_ids)) != len(bill_ids):
+                self._settlement_evidence["FAILED_STAGE"] = "RESPONSE_ROWS_VALID"
                 raise ValueError
-            observation = {
-                "sequence": sequence,
-                "bill_ids": bill_ids,
-                "empty": not bill_ids,
-            }
-            self._page.wait_for_function(
-                """expected => {
+            self._settlement_evidence["RESPONSE_ROWS_VALID"] = True
+
+            try:
+                self._page.wait_for_function(
+                    """expected => window._select_pending === false
+                        && (window._select_request_seq || {}).dg === expected""",
+                    arg=sequence,
+                    timeout=timeout_ms,
+                )
+            except Exception:
+                self._settlement_evidence["FAILED_STAGE"] = "PENDING_FALSE"
+                raise
+            snapshot = self._page.evaluate(
+                """() => {
                     const button = document.querySelector('#select_btns');
                     const cache = window.table && window.table.cache
                         && window.table.cache.dg;
-                    const domRows = [...document.querySelectorAll(
-                        '#_id_dg tr[id$=\"_Main\"]')];
+                    const allRows = [...document.querySelectorAll('#_id_dg tr')];
+                    const businessRows = allRows.filter(row => /_Main$/.test(row.id));
+                    const visibleBusinessRows = businessRows.filter(row =>
+                        !!(row.offsetWidth || row.offsetHeight || row.getClientRects().length));
+                    const domIds = businessRows.map(row => {
+                        const calls = [...row.querySelectorAll('[onclick],[href]')]
+                            .flatMap(el => [el.getAttribute('onclick'), el.getAttribute('href')])
+                            .filter(Boolean)
+                            .flatMap(value => [...value.matchAll(
+                                /Bill_View_Open\\s*\\(\\s*(\\d+)/g
+                            )].map(match => match[1]));
+                        const uniqueCalls = [...new Set(calls)];
+                        return uniqueCalls.length === 1 ? uniqueCalls[0] : '';
+                    });
                     const cacheIds = Array.isArray(cache)
                         ? cache.map(row => String(row.BillID || '')) : null;
-                    const domIds = domRows.map(row => {
-                        const calls = [...row.querySelectorAll('[onclick]')]
-                            .map(el => (el.getAttribute('onclick') || '').match(
-                                /Bill_View_Open\\(\\s*(\\d+)/))
-                            .filter(Boolean).map(match => match[1]);
-                        return calls.length === 1 ? calls[0] : '';
-                    });
-                    return window._select_pending === false
-                        && (window._select_request_seq || {}).dg === expected.sequence
-                        && button && !button.disabled
-                        && cacheIds !== null
-                        && JSON.stringify(cacheIds) === JSON.stringify(expected.bill_ids)
-                        && JSON.stringify(domIds) === JSON.stringify(expected.bill_ids)
-                        && (expected.empty
-                            ? document.querySelectorAll('.layui-table-none').length > 0
-                            : domRows.length > 0);
-                }""",
-                arg=observation,
-                timeout=timeout_ms,
+                    const pageSize = document.querySelector(
+                        '#_id_dg + .layui-table-page select, .layui-laypage select');
+                    const current = document.querySelector('.layui-laypage-curr em');
+                    const totalText = [...document.querySelectorAll('.layui-laypage-count')]
+                        .map(el => (el.textContent || '').match(/\\d+/)?.[0])
+                        .find(Boolean);
+                    return {
+                        pendingFalse: window._select_pending === false,
+                        sequence: (window._select_request_seq || {}).dg,
+                        buttonEnabled: !!button && !button.disabled,
+                        cacheIds,
+                        domIds,
+                        domCount: businessRows.length,
+                        domOtherCount: allRows.length - businessRows.length,
+                        hiddenBusinessCount: businessRows.length - visibleBusinessRows.length,
+                        pageSize: pageSize ? Number(pageSize.value) || null : null,
+                        currentPage: current ? Number(current.textContent) || null : null,
+                        totalCount: totalText ? Number(totalText) : null,
+                    };
+                }"""
             )
+            if not isinstance(snapshot, dict):
+                self._settlement_evidence["FAILED_STAGE"] = "CACHE_PRESENT"
+                raise TypeError
+            evidence = self._settlement_evidence
+            evidence["SEQUENCE_ADVANCED"] = (
+                isinstance(snapshot.get("sequence"), int)
+                and snapshot["sequence"] > self._sequence_before_query
+            )
+            evidence["PENDING_FALSE"] = snapshot.get("pendingFalse") is True
+            evidence["BUTTON_ENABLED"] = snapshot.get("buttonEnabled") is True
+            cache_ids = snapshot.get("cacheIds")
+            dom_ids = snapshot.get("domIds")
+            cache_present = isinstance(cache_ids, list)
+            evidence["CACHE_PRESENT"] = cache_present
+            evidence["CACHE_ROW_COUNT"] = len(cache_ids) if cache_present else None
+            evidence["DOM_ROW_COUNT"] = snapshot.get("domCount")
+            evidence["DOM_OTHER_ROW_COUNT"] = snapshot.get("domOtherCount")
+            evidence["DOM_HIDDEN_BUSINESS_ROW_COUNT"] = snapshot.get(
+                "hiddenBusinessCount"
+            )
+            evidence["PAGINATION_CURRENT_PAGE"] = snapshot.get("currentPage")
+            evidence["PAGINATION_PAGE_SIZE"] = snapshot.get("pageSize")
+            evidence["PAGINATION_TOTAL_COUNT"] = snapshot.get("totalCount")
+            if not cache_present:
+                evidence["FAILED_STAGE"] = "CACHE_PRESENT"
+                raise ValueError
+            response_set = set(bill_ids)
+            cache_set = {str(item) for item in cache_ids}
+            dom_set = {str(item) for item in dom_ids} if isinstance(dom_ids, list) else set()
+            cache_sets_match = (
+                len(bill_ids) == len(cache_ids)
+                and len(response_set) == len(cache_set)
+                and response_set == cache_set
+            )
+            evidence["CACHE_ID_SETS_MATCH"] = cache_sets_match
+            evidence["CACHE_ORDER_MATCH"] = cache_ids == bill_ids
+            evidence["RESPONSE_CACHE_IDS_MATCH"] = cache_ids == bill_ids
+            dom_sets_match = (
+                isinstance(dom_ids, list)
+                and len(bill_ids) == len(dom_ids)
+                and len(response_set) == len(dom_set)
+                and response_set == dom_set
+            )
+            evidence["DOM_ID_SETS_MATCH"] = dom_sets_match
+            evidence["DOM_ORDER_MATCH"] = dom_ids == bill_ids
+            evidence["RESPONSE_DOM_IDS_MATCH"] = dom_ids == bill_ids
+            required_stages = (
+                ("SEQUENCE_ADVANCED", evidence["SEQUENCE_ADVANCED"]),
+                ("PENDING_FALSE", evidence["PENDING_FALSE"]),
+                ("BUTTON_ENABLED", evidence["BUTTON_ENABLED"]),
+                ("RESPONSE_CACHE_IDS_MATCH", evidence["RESPONSE_CACHE_IDS_MATCH"]),
+                ("RESPONSE_DOM_IDS_MATCH", evidence["RESPONSE_DOM_IDS_MATCH"]),
+            )
+            failed = next((name for name, ok in required_stages if not ok), None)
+            evidence["FAILED_STAGE"] = failed
+            if failed:
+                raise ValueError
         except Exception:  # noqa: BLE001 - raw network/page details never escape
+            if self._settlement_evidence.get("FAILED_STAGE") is None:
+                self._settlement_evidence["FAILED_STAGE"] = "GRID_STATE_READ"
             self._clear_query_listeners()
             raise InsoDuplicateHistoryError(
                 DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
@@ -782,22 +952,28 @@ class PlaywrightDuplicateHistoryPage:
         return tuple(value if isinstance(value, str) else None for value in values)
 
     def html(self, selector: str) -> str | None:
+        row_id_match = re.fullmatch(r"#(\d+_Main)", selector)
+        if row_id_match is not None:
+            selector = f'tr[id="{row_id_match.group(1)}"]'
         return self._element_text(selector, "el => el.outerHTML")
 
     def read_row_values(self, row_id: str) -> DuplicateHistoryRowValues | None:
         """Read the verified model/quantity/time cells, plus any confirmed extras."""
 
-        model = self._cell_text(row_id, self._selectors.model)
-        quantity_text = self._cell_text(row_id, self._selectors.quantity)
-        quoted_at_text = self._cell_text(row_id, self._selectors.quoted_at)
+        row_selector = _history_row_selector(row_id)
+        if row_selector is None:
+            return None
+        model = self._cell_text(row_selector, self._selectors.model)
+        quantity_text = self._cell_text(row_selector, self._selectors.quantity)
+        quoted_at_text = self._cell_text(row_selector, self._selectors.quoted_at)
         if model is None or quantity_text is None or quoted_at_text is None:
             return None
         return DuplicateHistoryRowValues(
             model=model,
             quantity_text=quantity_text,
             quoted_at_text=quoted_at_text,
-            creator=self._cell_text(row_id, self._selectors.creator),
-            inso_quote_text=self._cell_text(row_id, self._selectors.inso_quote),
+            creator=self._cell_text(row_selector, self._selectors.creator),
+            inso_quote_text=self._cell_text(row_selector, self._selectors.inso_quote),
         )
 
     def _unique_locator(self, selector: str) -> object:
@@ -894,13 +1070,21 @@ class PlaywrightDuplicateHistoryPage:
         if not cell_selector:
             # The selector is still unconfirmed, so nothing is read or guessed.
             return None
-        return self._element_text(f"#{row_id} {cell_selector}", "el => el.textContent")
+        return self._element_text(f"{row_id} {cell_selector}", "el => el.textContent")
 
     def _element_text(self, selector: str, expression: str) -> str | None:
         if int(self._page.locator(selector).count()) != 1:
             return None
         value = self._page.eval_on_selector(selector, expression)
         return value if isinstance(value, str) else None
+
+
+def _history_row_selector(row_id: str) -> str | None:
+    """Build a safe selector for the verified numeric ``<id>_Main`` row id."""
+
+    if not isinstance(row_id, str) or RESULT_ROW_ID.fullmatch(row_id) is None:
+        return None
+    return f'tr[id="{row_id}"]'
 
 
 def _is_exact_history_request(request: object, target: str) -> bool:
