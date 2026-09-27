@@ -1,8 +1,4 @@
-"""Explicit browser/context/page ownership primitives for INSO operations.
-
-The root lease is held by the launcher. Module adapters receive only the
-operation-scoped capability and can close only pages they opened themselves.
-"""
+"""A lease for the already-authenticated INSO shell page."""
 
 from __future__ import annotations
 
@@ -52,15 +48,11 @@ class BrowserHandle(Protocol):
 
 
 class ContextHandle(Protocol):
-    def new_page(self) -> Any: ...
-
     def is_closed(self) -> bool: ...
 
 
 class PageHandle(Protocol):
     def is_closed(self) -> bool: ...
-
-    def close(self) -> None: ...
 
 
 class IdentityProbe(Protocol):
@@ -73,51 +65,40 @@ class IdentityProbe(Protocol):
     def page_identity(self, page: PageHandle) -> PageIdentity | None: ...
 
 
-@dataclass(slots=True)
-class _OwnedChild:
-    page: PageHandle
-    identity: PageIdentity
-    operation_id: str
-
-
 class OperationPage:
-    """Capability for one child page; it cannot release/close the browser."""
+    """Borrowed view of the pinned shell page; leaving it never closes it."""
 
-    __slots__ = ("_child", "_closed", "_lease")
+    __slots__ = ("_lease",)
 
-    def __init__(self, lease: InsoSessionLease, child: _OwnedChild) -> None:
+    def __init__(self, lease: InsoSessionLease) -> None:
         self._lease = lease
-        self._child = child
-        self._closed = False
 
     @property
     def page(self) -> PageHandle:
-        if self._closed:
-            raise SecurityViolation("operation page is already closed")
-        self._lease._validate_child(self._child)
-        return self._child.page
+        self._lease._assert_identity()
+        return self._lease._operation_page_handle
 
     @property
     def identity(self) -> PageIdentity:
-        self._lease._validate_child(self._child)
-        return self._child.identity
+        self._lease._assert_identity()
+        return self._lease.operation_page_identity
 
-    def close(self) -> None:
-        if self._closed:
-            return
-        self._lease._close_child(self._child)
-        self._closed = True
+    @property
+    def shell_frame(self) -> Any:
+        self._lease._assert_identity()
+        return self._lease._operation_frame
 
     def __enter__(self) -> Self:
         _ = self.page
         return self
 
     def __exit__(self, *_: object) -> None:
-        self.close()
+        # The page belongs to the authenticated session, not this operation.
+        self._lease._assert_identity()
 
 
 class InsoOperationAccess:
-    """Narrow adapter capability; intentionally has no browser close method."""
+    """Narrow capability to reuse the verified authenticated shell page."""
 
     __slots__ = ("_lease", "_operation_id")
 
@@ -125,12 +106,15 @@ class InsoOperationAccess:
         self._lease = lease
         self._operation_id = operation_id
 
-    def open_operation_page(self) -> OperationPage:
-        return self._lease._open_child(self._operation_id)
+    def operation_page(self) -> OperationPage:
+        if not self._operation_id:
+            raise SecurityViolation("operation identity is required")
+        self._lease._assert_identity()
+        return OperationPage(self._lease)
 
 
 class InsoSessionLease:
-    """Composition-root-owned lease over explicit verified handles/identity."""
+    """Composition-root-owned lease pinned to one verified shell page."""
 
     def __init__(
         self,
@@ -138,22 +122,29 @@ class InsoSessionLease:
         ownership: BrowserOwnership,
         browser: BrowserHandle,
         context: ContextHandle,
+        operation_page: PageHandle,
+        operation_frame: Any,
         browser_identity: BrowserIdentity,
         context_identity: ContextIdentity,
+        operation_page_identity: PageIdentity,
         identity_probe: IdentityProbe,
+        operation_page_is_valid: Callable[[PageHandle], bool],
         cycle_id: str,
         cycle_is_drained: Callable[[str], bool],
     ) -> None:
         self.ownership = BrowserOwnership(ownership)
         self.browser_identity = browser_identity
         self.context_identity = context_identity
+        self.operation_page_identity = operation_page_identity
         self.cycle_id = cycle_id
         self._cycle_is_drained = cycle_is_drained
         self._browser = browser
         self._context = context
+        self._operation_page_handle = operation_page
+        self._operation_frame = operation_frame
         self._identity_probe = identity_probe
+        self._operation_page_is_valid = operation_page_is_valid
         self._state = LeaseState.ACTIVE
-        self._children: dict[str, _OwnedChild] = {}
         self._assert_identity()
 
     @property
@@ -171,10 +162,8 @@ class InsoSessionLease:
             self._state = LeaseState.INVALIDATED
 
     def close_after_drain(self) -> None:
-        """Launcher-only lifecycle call; refuses release while children exist."""
+        """Launcher-only lifecycle call after the full workflow cycle drains."""
 
-        if self._children:
-            raise SecurityViolation("cannot release session with active child pages")
         if self.ownership is BrowserOwnership.APP_OWNED and not self._cycle_is_drained(
             self.cycle_id
         ):
@@ -183,7 +172,7 @@ class InsoSessionLease:
             return
         if self.ownership is BrowserOwnership.APP_OWNED:
             self._browser.close()
-        # A reused browser is deliberately never closed by this lease.
+        # A reused browser and its authenticated shell page remain open.
         self._state = LeaseState.RELEASED
 
     def _assert_identity(self) -> None:
@@ -204,52 +193,32 @@ class InsoSessionLease:
         if self._identity_probe.context_id(self._context) != self.context_identity.context_id:
             self.invalidate()
             raise SecurityViolation("context identity changed")
-
-    def _open_child(self, operation_id: str) -> OperationPage:
-        self._assert_identity()
-        page = self._context.new_page()
-        identity = self._identity_probe.page_identity(page)
+        if self._operation_page_handle.is_closed():
+            self.invalidate()
+            raise SecurityViolation("verified shell page is closed")
         if (
-            identity is None
-            or identity.context_id != self.context_identity.context_id
-            or not identity.target_id
-            or page.is_closed()
+            self._identity_probe.page_identity(self._operation_page_handle)
+            != self.operation_page_identity
         ):
-            # This page was created by this operation, so it is the only target
-            # that may be closed on failed verification.
-            try:
-                page.close()
-            finally:
-                raise SecurityViolation("new page identity could not be verified")
-        if identity.target_id in self._children:
-            try:
-                page.close()
-            finally:
-                raise SecurityViolation("duplicate child page identity")
-        child = _OwnedChild(page, identity, operation_id)
-        self._children[identity.target_id] = child
-        return OperationPage(self, child)
-
-    def _validate_child(self, child: _OwnedChild) -> None:
-        self._assert_identity()
-        current = self._children.get(child.identity.target_id)
-        if current is not child or child.page.is_closed():
             self.invalidate()
-            raise SecurityViolation("operation page is stale or not owned")
-        identity = self._identity_probe.page_identity(child.page)
-        if identity != child.identity or identity.context_id != self.context_identity.context_id:
+            raise SecurityViolation("verified shell page identity changed")
+        try:
+            valid_shell = self._operation_page_is_valid(self._operation_page_handle)
+        except Exception:  # noqa: BLE001 - validation failures close the lease
+            valid_shell = False
+        if not valid_shell:
             self.invalidate()
-            raise SecurityViolation("operation page identity changed")
+            raise SecurityViolation("verified INSO shell identity is stale")
 
-    def _close_child(self, child: _OwnedChild) -> None:
-        tracked = self._children.get(child.identity.target_id)
-        if tracked is not child:
-            raise SecurityViolation("operation page is not owned by this lease")
-        if child.page.is_closed():
-            # The operation-owned target is already gone; remove only its lease
-            # bookkeeping entry without touching any other page or context.
-            del self._children[child.identity.target_id]
-            return
-        self._validate_child(child)
-        child.page.close()
-        del self._children[child.identity.target_id]
+
+__all__ = [
+    "BrowserIdentity",
+    "BrowserOwnership",
+    "ContextIdentity",
+    "InsoOperationAccess",
+    "InsoSessionLease",
+    "LeaseState",
+    "OperationPage",
+    "PageIdentity",
+    "SecurityViolation",
+]

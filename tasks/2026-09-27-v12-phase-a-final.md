@@ -1,6 +1,6 @@
 # Task: V1.2 Phase A final contract discovery
 
-status: blocked_on_runtime_contract
+status: partial_live_acceptance
 owner: Main Programmer
 created: 2026-09-27
 updated: 2026-09-27
@@ -21,8 +21,11 @@ runner for remaining browser observations. Keep Production Write Gate CLOSED.
 
 - Reuse current Chrome bootstrap and `InsoSessionLease`; validate configured
   executable/profile/endpoint before attach and require one verified context.
-- Use the production duplicate page adapter for one exact public-part query;
-  record schema and approved labels only.
+  The lease uses the unique authenticated shell page directly; it creates no
+  child page.
+- Use a same-document POST through the authenticated shell with the exact
+  `List_Detail` contract; record schema and approved labels only. Do not touch
+  the hidden `#nolike` control.
 - Inspect at most one unambiguous detail and a blank temporary form/AI panel.
 - Do not run AI recognition, import a row, fill product fields, or click Save or
   Send controls.
@@ -39,10 +42,11 @@ runner for remaining browser observations. Keep Production Write Gate CLOSED.
 - [x] AI recognition/import are not executed by the runner.
 - [x] The local one-click command is Git-ignored.
 - [x] Owner-session runner executed; report records current read-only result.
-- [ ] Lease child shares the authenticated shell session, or an approved
-  explicit verified-page read-only path is available.
-- [ ] Exact query control becomes safely actionable; never force the hidden
-  `#nolike` checkbox.
+- [x] Lease reuses the unique verified authenticated shell; no child page.
+- [x] Same-document exact request path avoids the hidden `#nolike` control.
+- [ ] Exact query response is a verifiable structured result.
+- [ ] Creator and quote/currency semantics are confirmed from response/detail.
+- [ ] AI frame/read-back and blank-form product-field selectors are confirmed.
 
 ## verification
 
@@ -52,9 +56,9 @@ runner for remaining browser observations. Keep Production Write Gate CLOSED.
 
 ## completion
 
-- status: blocked_on_runtime_contract
+- status: partial_live_acceptance
 - changed: bounded read-only runner, deterministic report/classifier tests,
-  current task and INSO module docs
-- remaining: authenticated shell page and lease child session boundary, plus
-  safe exact-query control access. No Save or other business write is involved
-  or authorized.
+  direct exact-query adapter, shell-page lease, current task and INSO module docs
+- remaining: structured exact-query response, creator/quote semantics, and
+  AI/parent-field read-back. No Save or other business write is involved or
+  authorized.

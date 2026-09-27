@@ -246,7 +246,7 @@ class FakeOperationAccess:
     def __init__(self, page: FakePage) -> None:
         self.page = page
 
-    def open_operation_page(self) -> FakeOperationPage:
+    def operation_page(self) -> FakeOperationPage:
         return FakeOperationPage(self.page)
 
 

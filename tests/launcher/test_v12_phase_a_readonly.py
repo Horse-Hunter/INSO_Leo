@@ -4,6 +4,7 @@ import inspect
 import json
 
 from src.launcher.v12_phase_a_readonly import (
+    _SAFE_BLANK_FORM_BACK,
     _classify_duplicate_fields,
     _confirmed_duplicate_fields,
     _decimal_is_readable,
@@ -167,3 +168,13 @@ def test_top_level_login_redirect_is_reported() -> None:
         main_frame = Frame()
 
     assert _top_level_login_redirect(Page()) is True
+
+
+def test_blank_form_back_handler_allows_only_the_observed_close_callback() -> None:
+    assert _SAFE_BLANK_FORM_BACK.fullmatch(
+        "function goback() {\n parent.main_alertbox_close('alert_enquiry');\n}"
+    )
+    assert not _SAFE_BLANK_FORM_BACK.fullmatch(
+        "function goback() { parent.main_alertbox_close('alert_enquiry'); "
+        "bill_save(); }"
+    )

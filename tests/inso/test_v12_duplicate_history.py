@@ -21,6 +21,7 @@ from src.inso import duplicate_history as module
 from src.inso.duplicate_history import (
     BUSINESS_INQUIRY_LIST_PATH,
     DETAIL_BILL_ID_SELECTOR,
+    EXACT_HISTORY_REQUEST_URL,
     EXACT_MATCH_CHECKBOX,
     MODEL_QUERY_INPUT,
     QUERY_BUTTON,
@@ -134,7 +135,7 @@ class FakeOperationAccess:
         self._page = page
         self.opened = 0
 
-    def open_operation_page(self) -> _FakeOperationPage:
+    def operation_page(self) -> _FakeOperationPage:
         self.opened += 1
         if self._page is None:
             raise SecurityViolation("session lease is not active")
@@ -147,8 +148,60 @@ class FakeLease:
     def __init__(self, page: FakePage) -> None:
         self._page = page
 
-    def open_operation_page(self) -> _FakeOperationPage:
+    def operation_page(self) -> _FakeOperationPage:
         return _FakeOperationPage(self._page)
+
+
+class FakeSameDocumentFrame:
+    def __init__(self, payload: dict[str, object] | None = None) -> None:
+        self.url = (
+            "https://yingsuo.alperp.cn/skins/etaoerp//InnerEnquiry/"
+            "YeWuXJ/List.aspx"
+        )
+        self.payload = payload or {
+            "total": 1,
+            "rows": [
+                {
+                    "BillID": 7788,
+                    "PartNo": "STM32F103C8T6",
+                    "Qty": 10,
+                    "PEDate": "2026-09-25 09:30:00",
+                }
+            ],
+        }
+        self.result_url = (
+            "https://yingsuo.alperp.cn" + EXACT_HISTORY_REQUEST_URL
+        )
+        self.calls: list[tuple[object, ...]] = []
+
+    def evaluate(self, script: str, argument: dict[str, str]):
+        self.calls.append((script, argument))
+        return {
+            "ok": True,
+            "status": 200,
+            "url": self.result_url,
+            "payload": self.payload,
+        }
+
+
+class FakeShellOperationPage:
+    def __init__(self, frame: FakeSameDocumentFrame) -> None:
+        self.shell_frame = frame
+        self.page = object()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+
+class FakeShellOperationAccess:
+    def __init__(self, frame: FakeSameDocumentFrame) -> None:
+        self.frame = frame
+
+    def operation_page(self) -> FakeShellOperationPage:
+        return FakeShellOperationPage(self.frame)
 
 
 def reader(
@@ -894,6 +947,72 @@ def test_no_settle_path_relies_on_a_fixed_sleep() -> None:
 
     assert not re.search(r"\bsleep\s*\(", source)
     assert "wait_for_timeout" not in source
+
+
+def test_same_document_exact_query_uses_only_confirmed_request_contract() -> None:
+    frame = FakeSameDocumentFrame()
+    adapter = PlaywrightDuplicateHistoryPage(frame)
+
+    payload = adapter.query_exact_response(MPN)
+
+    assert payload is frame.payload
+    script, argument = frame.calls[0]
+    assert argument == {"endpoint": EXACT_HISTORY_REQUEST_URL, "target": MPN}
+    assert "fetch(requestUrl.toString()" in script
+    assert "credentials: 'same-origin'" in script
+    assert "bill_get_pagesize('dg')" in script
+    assert "searchParams.set('pageindex', '1')" in script
+    assert "searchParams.set('pagesize', String(pageSize))" in script
+    assert "body.set('DetailField', 'PartNo')" in script
+    assert "body.set('DetailFieldValue', target)" in script
+    assert "body.set('nolike', 'on')" in script
+    assert "searchData[" not in script
+    assert "locator" not in repr(frame.calls).casefold()
+    assert "#nolike" not in script
+
+
+def test_same_document_query_fails_closed_for_wrong_mpn_or_duplicate_billid() -> None:
+    wrong_model = FakeSameDocumentFrame(
+        {
+            "rows": [
+                {
+                    "BillID": "7788",
+                    "PartNo": "STM32F103C8T6X",
+                    "Qty": 10,
+                    "PEDate": "2026-09-25 09:30:00",
+                }
+            ]
+        }
+    )
+    with pytest.raises(InsoDuplicateHistoryError) as failure:
+        PlaywrightDuplicateHistoryPage(wrong_model).query_exact_response(MPN)
+    assert failure.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+
+    duplicate_ids = FakeSameDocumentFrame(
+        {
+            "rows": [
+                {"BillID": "7788", "PartNo": MPN, "Qty": 1, "PEDate": "2026-09-25"},
+                {"BillID": "7788", "PartNo": MPN, "Qty": 2, "PEDate": "2026-09-24"},
+            ]
+        }
+    )
+    with pytest.raises(InsoDuplicateHistoryError) as failure:
+        PlaywrightDuplicateHistoryPage(duplicate_ids).query_exact_response(MPN)
+    assert failure.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+
+
+def test_verified_shell_reader_uses_response_fields_and_billid() -> None:
+    frame = FakeSameDocumentFrame()
+    capture = InsoDuplicateHistoryReader(
+        list_url="https://yingsuo.alperp.cn",
+        operation_access=FakeShellOperationAccess(frame),  # type: ignore[arg-type]
+    ).read(MPN)
+
+    assert capture.target_mpn == MPN
+    assert len(capture.records) == 1
+    assert capture.records[0].bill_id == "7788"
+    assert capture.records[0].mpn == MPN
+    assert capture.records[0].quantity == 10
 
 
 # --- creator / quote data path --------------------------------------------

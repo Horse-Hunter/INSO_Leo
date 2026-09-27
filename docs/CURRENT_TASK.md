@@ -1,8 +1,28 @@
 # Current Task — V1.2 Phase A final
 
-Phase A FINAL: BLOCKED — the Owner-authenticated shell is present in the reused tab, but the lease child redirects to login; exact query is also unavailable because `#nolike` is hidden and unchecked.
+Phase A FINAL: PARTIAL — authenticated-shell reuse passes; the read-only exact request and AI panel still fail closed pending verified responses/frames.
 V1.2 status: PRE_SAVE_READY / REAL_SAVE_GATED
 Production write gate: CLOSED
+
+## Current Owner-session correction — 2026-09-27
+
+- The lease now pins the unique already-authenticated INSO shell page and its
+  verified list frame as the operation page. It rechecks browser/context/page
+  identity, origin, shell frame, and login path; it never creates or closes a
+  child page. Reused Chrome remains open after lease cleanup.
+- Live attach through the existing Chrome CDP succeeded with one context and
+  one verified shell. `新增` opened one blank form. The AI opener's loaded
+  handler indicated a dialog-only route, but the click did not expose a unique
+  AI frame; recognition was not run. The blank form is hidden/closed.
+- The exact same-document POST now uses the confirmed flat fields
+  `DetailField=PartNo`, `DetailFieldValue=<MPN>`, and `nolike=on`. The live
+  response still cannot be validated as the expected structured result, so the
+  duplicate reader returns `QUERY_SETTLEMENT_UNCONFIRMED`; it never converts
+  unavailable data into nonduplicate.
+- Creator, quote/currency, AI read-back, and blank-form product-field writer
+  remain UNKNOWN. No login failure is inferred from these adapter results.
+- No Save, Send, SMTP, or Sheets write occurred. Production Write Gate remains
+  CLOSED.
 
 Canonical browser baseline: Chrome (`browser.channel = "chrome"`). Edge is retained only as a backup and is not used for production acceptance.
 
@@ -106,13 +126,13 @@ CEO performs the daily Safety Review. Keep the production write gate CLOSED.
   entry `runtime/run_v12_phase_a_readonly.cmd` is available for one double-click
   in the normal Owner Windows session. It requires configured Chrome, the
   original `.browser-profile/cdp`, and port 9222; it uses a one-context lease
-  and operation-owned pages. A sanitized report will be written to
+  pinned to the existing authenticated shell page. A sanitized report will be written to
   `runtime/evidence/v12-phase-a-final/report.json`.
 - No Save, Send, SMTP, Sheets write, or existing-record modification occurred.
   Production write gate remains CLOSED. The runner has since been executed;
   the remaining runtime findings are recorded below.
 
-## Owner session follow-up — 2026-09-27
+## Historical Owner session follow-up — superseded by shell reuse — 2026-09-27
 
 - The runner was executed after the Owner reported login complete. CDP was
   READY, with one context and a reused Chrome browser. It found exactly one
@@ -136,3 +156,22 @@ CEO performs the daily Safety Review. Keep the production write gate CLOSED.
   fail closed rather than invoking a hidden control or guessed JavaScript path.
 - No Save, Send, SMTP, Sheets write, AI recognition, or existing-record
   modification occurred. Production write gate remains CLOSED.
+
+## Current shell reuse follow-up — 2026-09-27
+
+- Authenticated Chrome attach passed with one context and the existing verified
+  shell/list frame. The lease reused this page; no child page was created, and
+  cleanup left the reused browser open.
+- Exact duplicate lookup now uses the confirmed same-document POST fields
+  `DetailField=PartNo`, `DetailFieldValue=<MPN>`, `nolike=on`. The response did
+  not pass structured schema/identity validation and remains
+  `QUERY_SETTLEMENT_UNCONFIRMED`; the workflow must not infer nonduplicate.
+- The blank form opened. Static `ai_import()`/wrapper inspection showed the
+  known dialog route without a detected persistence call. One click did not
+  yield a uniquely identifiable AI frame; recognition was not run. The blank
+  form is hidden/closed. AI and blank-form product-field read-back remain
+  UNKNOWN.
+- Creator and INSO quote/currency remain UNKNOWN; no field is guessed. Equal
+  timestamps remain `AMBIGUOUS` absent a proven ordering rule.
+- Save controls were only inspected. REAL SAVE: NO. REAL SEND: NO. REAL SMTP:
+  NO. Sheets write: NO. Production Write Gate: CLOSED.

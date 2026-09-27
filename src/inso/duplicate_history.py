@@ -6,12 +6,12 @@ read-only: it never saves, sends or mutates INSO data, and it owns no purchase,
 notification or retry behaviour.
 
 Only selectors verified during read-only discovery are used; see
-`docs/modules/INSO.md`. :class:`PlaywrightDuplicateHistoryPage` is the live
-read-only adapter over the verified `#_id_dg` table. Query completion requires
-the exact current-MPN response and matching request sequence, cache, and DOM.
-The 制单人 / INSO-quote selectors remain explicit optional seams and default to
-unset. When a record cannot be opened or read safely, the adapter fails closed
-with a typed error and never guesses a value.
+`docs/modules/INSO.md`. :class:`PlaywrightDuplicateHistoryPage` sends the
+verified exact `List_Detail` request from the authenticated shell and validates
+the returned MPNs and unique BillIDs. It does not rely on the hidden `#nolike`
+control or stale grid state. The 制单人 / INSO-quote fields remain optional and
+unset until their response semantics are confirmed. An unverifiable response
+fails closed with a typed error.
 
 Business rules -- canonical MPN, the rolling inclusive 168h window, latest-record
 selection and the equal-timestamp AMBIGUOUS rule -- are deliberately NOT
@@ -46,6 +46,12 @@ MODEL_QUERY_INPUT = "#DetailFieldValue"
 EXACT_MATCH_CHECKBOX = "#nolike"
 #: ``查询`` button.
 QUERY_BUTTON = "#select_btns"
+
+# Exact, read-only request confirmed in the authenticated INSO shell.
+EXACT_HISTORY_REQUEST_URL = (
+    "/services/innerEnquiry/yewuxj.ashx"
+    "?action=List_Detail&BillPage=YeWuXJ"
+)
 
 #: Result rows are scoped to the confirmed primary result table. Other
 #: expandable panels on the list also contain rows whose ids end in ``_Main``.
@@ -94,6 +100,19 @@ class DuplicateHistoryFieldSelectors:
     quoted_at: str = RESULT_TIMESTAMP_CELL_SELECTOR
     creator: str | None = None
     inso_quote: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DuplicateHistoryResponseFields:
+    """Confirmed List_Detail JSON keys; optional business fields stay unset."""
+
+    bill_id: str = "BillID"
+    model: str = "PartNo"
+    quantity: str = "Qty"
+    quoted_at: str = "PEDate"
+    creator: str | None = None
+    inso_quote: str | None = None
+    currency: str | None = None
 
 
 class DuplicateHistoryFailure(StrEnum):
@@ -221,7 +240,7 @@ class DuplicateHistoryPage(Protocol):
 
 
 class InsoDuplicateHistoryReader:
-    """Read the exact-model history for one MPN through a leased child page."""
+    """Read exact-model history through the leased authenticated shell page."""
 
     def __init__(
         self,
@@ -232,6 +251,7 @@ class InsoDuplicateHistoryReader:
         | None = None,
         timeout_ms: int = 45_000,
         detail_bill_id_selector: str = DETAIL_BILL_ID_SELECTOR,
+        response_fields: DuplicateHistoryResponseFields | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         parsed = urlsplit(list_url)
@@ -241,6 +261,7 @@ class InsoDuplicateHistoryReader:
         self._operation_access = operation_access
         self._timeout_ms = timeout_ms
         self._detail_bill_id_selector = detail_bill_id_selector
+        self._response_fields = response_fields or DuplicateHistoryResponseFields()
         self._clock = clock or (lambda: datetime.now(UTC))
 
     @property
@@ -262,12 +283,21 @@ class InsoDuplicateHistoryReader:
         url = self.list_url
         access = self._resolve_access()
         try:
-            with access.open_operation_page() as operation_page:
-                page: DuplicateHistoryPage = operation_page.page  # type: ignore[assignment]
-                rows = self._read_rows(page, target)
-                records = tuple(
-                    self._verify_and_build(page, target, row) for row in rows
-                )
+            with access.operation_page() as operation_page:
+                if hasattr(operation_page, "shell_frame"):
+                    live_page = PlaywrightDuplicateHistoryPage(
+                        operation_page.shell_frame, timeout_ms=self._timeout_ms
+                    )
+                    payload = live_page.query_exact_response(target)
+                    records = self._records_from_response(payload)
+                else:
+                    # Deterministic fake/page adapters can keep the narrow
+                    # DuplicateHistoryPage test seam.
+                    page: DuplicateHistoryPage = operation_page.page  # type: ignore[assignment]
+                    rows = self._read_rows(page, target)
+                    records = tuple(
+                        self._verify_and_build(page, target, row) for row in rows
+                    )
         except InsoDuplicateHistoryError:
             raise
         except SecurityViolation:
@@ -281,6 +311,61 @@ class InsoDuplicateHistoryReader:
                 DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE, url
             ) from None
         return DuplicateHistoryCapture(target, records, url, self._clock())
+
+    def _records_from_response(
+        self, payload: dict[str, object]
+    ) -> tuple[DuplicateHistoryRecord, ...]:
+        rows = payload.get("rows")
+        fields = self._response_fields
+        if not isinstance(rows, list):
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            )
+        records: list[DuplicateHistoryRecord] = []
+        seen_bill_ids: set[str] = set()
+        try:
+            for row in rows:
+                if not isinstance(row, dict):
+                    raise TypeError
+                bill_id = str(row.get(fields.bill_id, "")).strip()
+                mpn = row.get(fields.model)
+                if (
+                    not bill_id.isdecimal()
+                    or bill_id in seen_bill_ids
+                    or not isinstance(mpn, str)
+                    or not mpn.strip()
+                ):
+                    raise ValueError
+                seen_bill_ids.add(bill_id)
+                quantity_text = str(row.get(fields.quantity, ""))
+                quoted_at_text = str(row.get(fields.quoted_at, ""))
+                quote_raw = row.get(fields.inso_quote) if fields.inso_quote else None
+                currency_raw = row.get(fields.currency) if fields.currency else None
+                creator_raw = row.get(fields.creator) if fields.creator else None
+                records.append(
+                    DuplicateHistoryRecord(
+                        bill_id=bill_id,
+                        mpn=mpn,
+                        quantity=_parse_quantity(quantity_text),
+                        quoted_at=_parse_inso_timestamp(quoted_at_text),
+                        creator=_optional_text(
+                            creator_raw if isinstance(creator_raw, str) else None
+                        ),
+                        inso_quote=_parse_optional_quote(
+                            str(quote_raw) if quote_raw is not None else None
+                        ),
+                        currency=_optional_text(
+                            str(currency_raw) if currency_raw is not None else None
+                        ),
+                    )
+                )
+        except InsoDuplicateHistoryError:
+            raise
+        except (TypeError, ValueError):
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.RECORD_FIELDS_INVALID
+            ) from None
+        return tuple(records)
 
     # -- internals ---------------------------------------------------------
 
@@ -399,13 +484,12 @@ def _parse_optional_quote(value: str | None) -> Decimal | None:
 
 
 class PlaywrightDuplicateHistoryPage:
-    """Live read-only adapter over the INSO business-inquiry list DOM.
+    """Live read-only adapter over the INSO business-inquiry list frame.
 
-    It maps the narrow :class:`DuplicateHistoryPage` capability onto a Playwright
-    ``Page`` or ``Frame`` object. That object is duck-typed, so this module does
-    not import Playwright and the same adapter serves either the embedded
-    ``iframe_YeWuXJ_frame`` or a directly opened list page, whichever hosts the
-    list DOM.
+    The exact query uses a same-document POST in the already authenticated shell.
+    It does not navigate, toggle the hidden exact checkbox, or click the query
+    button. A valid response must contain only the requested MPN and unique
+    numeric BillIDs; missing or non-JSON response data fails closed.
 
     It navigates and reads only: there is no save, send or submit call, and no
     such selector is registered.
@@ -427,6 +511,94 @@ class PlaywrightDuplicateHistoryPage:
         self._settled_response: object | None = None
         self._response_listener: Callable[[object], None] | None = None
         self._owner_page: object | None = None
+
+    def query_exact_response(self, target_mpn: str) -> dict[str, object]:
+        """POST the confirmed exact query from the authenticated list frame."""
+
+        if not isinstance(target_mpn, str) or not target_mpn.strip():
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            )
+        target = target_mpn.strip()
+        self._verify_list_identity()
+        try:
+            result = self._page.evaluate(
+                """async ({endpoint, target}) => {
+                    if (location.origin !== 'https://yingsuo.alperp.cn' ||
+                        !location.pathname.toLowerCase().endsWith(
+                            '/innerenquiry/yewuxj/list.aspx')) return null;
+                    if (typeof bill_get_pagesize !== 'function') return null;
+                    const pageSize = Number(bill_get_pagesize('dg'));
+                    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 1000) return null;
+                    const requestUrl = new URL(endpoint, location.origin);
+                    requestUrl.searchParams.set('pageindex', '1');
+                    requestUrl.searchParams.set('pagesize', String(pageSize));
+                    const body = new URLSearchParams();
+                    body.set('DetailField', 'PartNo');
+                    body.set('DetailFieldValue', target);
+                    body.set('nolike', 'on');
+                    const response = await fetch(requestUrl.toString(), {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json, text/javascript, */*; q=0.01'
+                        },
+                        body: body.toString()
+                    });
+                    return {
+                        ok: response.ok,
+                        status: response.status,
+                        url: response.url,
+                        payload: await response.json()
+                    };
+                }""",
+                {"endpoint": EXACT_HISTORY_REQUEST_URL, "target": target},
+            )
+        except Exception:  # noqa: BLE001 - raw browser errors are not exposed
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            ) from None
+        if not isinstance(result, dict) or result.get("ok") is not True:
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            )
+        response_url = urlsplit(str(result.get("url", "")))
+        response_query = parse_qs(response_url.query, keep_blank_values=True)
+        if (
+            response_url.scheme != "https"
+            or response_url.hostname != "yingsuo.alperp.cn"
+            or not response_url.path.casefold().endswith("/innerenquiry/yewuxj.ashx")
+            or response_query.get("action") != ["List_Detail"]
+            or response_query.get("BillPage") != ["YeWuXJ"]
+        ):
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            )
+        payload = result.get("payload")
+        rows = payload.get("rows") if isinstance(payload, dict) else None
+        if not isinstance(payload, dict) or not isinstance(rows, list):
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            )
+        seen_bill_ids: set[str] = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                raise InsoDuplicateHistoryError(
+                    DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+                )
+            bill_id = str(row.get("BillID", "")).strip()
+            if (
+                row.get("PartNo") != target
+                or not bill_id.isdecimal()
+                or bill_id in seen_bill_ids
+            ):
+                raise InsoDuplicateHistoryError(
+                    DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+                )
+            seen_bill_ids.add(bill_id)
+        return payload
 
     # -- DuplicateHistoryPage ----------------------------------------------
 
@@ -838,6 +1010,7 @@ __all__ = [
     "DETAIL_BILL_ID_SELECTOR",
     "DETAIL_LINK_CALL",
     "DETAIL_LINK_SELECTOR_TEMPLATE",
+    "EXACT_HISTORY_REQUEST_URL",
     "EXACT_MATCH_CHECKBOX",
     "MODEL_QUERY_INPUT",
     "QUERY_BUTTON",
@@ -851,6 +1024,7 @@ __all__ = [
     "DuplicateHistoryFieldSelectors",
     "DuplicateHistoryPage",
     "DuplicateHistoryRecord",
+    "DuplicateHistoryResponseFields",
     "DuplicateHistoryRowValues",
     "InsoDuplicateHistoryError",
     "InsoDuplicateHistoryReader",

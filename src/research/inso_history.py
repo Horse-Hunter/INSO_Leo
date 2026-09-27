@@ -229,7 +229,7 @@ def _parse_inso_datetime(value: str) -> datetime:
 
 
 class PlaywrightInsoReadOnlyBrowser:
-    """Read history through an explicitly leased, operation-owned child page.
+    """Read history through the explicitly leased authenticated shell page.
 
     This adapter no longer attaches to CDP, searches arbitrary contexts/pages,
     or closes a browser. A composition-root supplied operation capability is
@@ -276,7 +276,7 @@ class PlaywrightInsoReadOnlyBrowser:
         body = build_inso_stock_venquote_form(mpn_clean)
 
         try:
-            with access.open_operation_page() as operation_page:
+            with access.operation_page() as operation_page:
                 page = operation_page.page
                 response = page.request.post(
                     url,

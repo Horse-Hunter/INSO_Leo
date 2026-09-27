@@ -4,6 +4,7 @@ from .duplicate_history import (
     DuplicateHistoryCapture,
     DuplicateHistoryFailure,
     DuplicateHistoryRecord,
+    DuplicateHistoryResponseFields,
     DuplicateHistoryRowValues,
     InsoDuplicateHistoryReader,
 )
@@ -35,6 +36,7 @@ __all__ = [
     "DuplicateHistoryCapture",
     "DuplicateHistoryFailure",
     "DuplicateHistoryRecord",
+    "DuplicateHistoryResponseFields",
     "DuplicateHistoryRowValues",
     "InsoDuplicateHistoryReader",
     "InsoOperationAccess",

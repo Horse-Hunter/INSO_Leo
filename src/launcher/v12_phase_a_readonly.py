@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -23,13 +24,10 @@ from src.inso.duplicate_history import (
     DETAIL_BILL_ID_SELECTOR,
     DETAIL_LINK_CALL,
     DETAIL_LINK_SELECTOR_TEMPLATE,
-    EXACT_MATCH_CHECKBOX,
-    MODEL_QUERY_INPUT,
-    QUERY_BUTTON,
     RESULT_ROW_SELECTOR,
+    DuplicateHistoryFailure,
     InsoDuplicateHistoryError,
     PlaywrightDuplicateHistoryPage,
-    _is_exact_history_request,
 )
 from src.launcher.browser_bootstrap import (
     BrowserBootstrapError,
@@ -78,6 +76,11 @@ _WRITE_WORDS = re.compile(
     r"\.(?:ajax|get|post)\s*\(|form\.submit|submit\s*\(",
     re.IGNORECASE,
 )
+_SAFE_BLANK_FORM_BACK = re.compile(
+    r"^function\s+goback\s*\(\s*\)\s*\{\s*"
+    r"parent\.main_alertbox_close\(\s*(['\"])alert_enquiry\1\s*\)\s*;?\s*\}$",
+    re.DOTALL,
+)
 _CURRENCY_DISPLAY = frozenset(
     {"CNY", "RMB", "人民币", "USD", "美元", "HKD", "港币", "HKD港币", "CNY人民币"}
 )
@@ -109,6 +112,7 @@ def _empty_report() -> dict[str, Any]:
             "response_rows": [],
             "grid_columns": [],
             "billid_identity": "UNKNOWN",
+            "grid_detail_identity": "UNKNOWN",
             "detail_readback_fields": [],
         },
         "creator": {"status": "UNKNOWN", "field": None},
@@ -406,78 +410,87 @@ def _existing_verified_shell_pages(browser: object) -> int:
     return matched
 
 
-def _inspect_history(page: object, frame: object, report: dict[str, Any]) -> None:
-    response_holder: list[object] = []
-
-    def capture(response: object) -> None:
-        request = getattr(response, "request", None)
-        if request is not None and _is_exact_history_request(request, _TARGET_MPN):
-            response_holder.append(response)
-
-    page.on("response", capture)
+def _inspect_history(
+    page: object,
+    frame: object,
+    report: dict[str, Any],
+    *,
+    verify_identity: Callable[[], None],
+) -> None:
     adapter = PlaywrightDuplicateHistoryPage(frame)
     try:
-        adapter.set_text(MODEL_QUERY_INPUT, _TARGET_MPN)
-        adapter.ensure_checked(EXACT_MATCH_CHECKBOX)
-        adapter.click(QUERY_BUTTON)
-        adapter.wait_for_query_settled(timeout_ms=20_000)
+        verify_identity()
+        payload = adapter.query_exact_response(_TARGET_MPN)
         report["query"]["status"] = "SETTLED"
-        report["query"]["exact_request_matched"] = bool(response_holder)
+        report["query"]["exact_request_matched"] = True
         report["query"]["grid_columns"] = _grid_columns(frame)
-        row_fields: set[str] = set()
-        response_rows: list[dict[str, Any]] = []
-        if response_holder:
-            payload = response_holder[-1].json()
-            top_level, row_shapes = _schema_summary(payload)
-            report["query"]["response_schema_fields"] = top_level
-            report["query"]["response_rows"] = row_shapes
-            if isinstance(payload, dict) and isinstance(payload.get("rows"), list):
-                response_rows = [
-                    row for row in payload["rows"] if isinstance(row, dict)
-                ]
-                if response_rows:
-                    row_fields = set(_safe_keys(response_rows[0]))
+        top_level, row_shapes = _schema_summary(payload)
+        report["query"]["response_schema_fields"] = top_level
+        report["query"]["response_rows"] = row_shapes
+        response_rows = [
+            row for row in payload["rows"] if isinstance(row, dict)
+        ]
+        row_fields = set(_safe_keys(response_rows[0])) if response_rows else set()
         report["query"]["billid_identity"] = "UNKNOWN"
+        report["query"]["grid_detail_identity"] = "UNKNOWN"
         row_ids = _billid_rows(adapter)
-        if len(row_ids) == 1:
-            row_html = adapter.html(f"#{row_ids[0]}") or ""
-            bill_arguments = set(DETAIL_LINK_CALL.findall(row_html))
-            if len(bill_arguments) == 1:
-                adapter.click(
-                    DETAIL_LINK_SELECTOR_TEMPLATE.format(
-                        argument=next(iter(bill_arguments))
-                    )
+        response_bill_ids = {
+            str(row.get("BillID", "")).strip()
+            for row in response_rows
+            if str(row.get("BillID", "")).strip().isdecimal()
+        }
+        report["query"]["billid_identity"] = (
+            "CONFIRMED"
+            if len(response_bill_ids) == len(response_rows)
+            else "UNKNOWN"
+        )
+        matching_links: list[tuple[str, str]] = []
+        for row_id in row_ids:
+            html = adapter.html(f"#{row_id}") or ""
+            bill_arguments = set(DETAIL_LINK_CALL.findall(html))
+            values = adapter.read_row_values(row_id)
+            if (
+                values is not None
+                and values.model == _TARGET_MPN
+                and len(bill_arguments) == 1
+                and next(iter(bill_arguments)) in response_bill_ids
+            ):
+                matching_links.append((row_id, next(iter(bill_arguments)))
                 )
-                detail = _find_bill_detail_frame(page)
-                if detail is not None:
-                    report["query"]["billid_identity"] = (
-                        "CONFIRMED"
-                        if _billid_value(detail) == next(iter(bill_arguments))
-                        else "UNKNOWN"
-                    )
-                    fields = _detail_fields(detail)
-                    report["query"]["detail_readback_fields"] = (
-                        _confirmed_detail_readback_fields(detail)
-                    )
-                    _classify_duplicate_fields(
-                        report,
-                        fields,
-                        row_fields=row_fields,
-                        columns=report["query"]["grid_columns"],
-                        bill_id=next(iter(bill_arguments)),
-                        rows=response_rows,
-                    )
+        if len(matching_links) == 1:
+            _row_id, bill_id = matching_links[0]
+            selector = DETAIL_LINK_SELECTOR_TEMPLATE.format(argument=bill_id)
+            verify_identity()
+            adapter.click(selector)
+            detail = _find_bill_detail_frame(page)
+            if detail is not None:
+                detail_bill_id = _billid_value(detail)
+                report["query"]["grid_detail_identity"] = (
+                    "CONFIRMED" if detail_bill_id == bill_id else "UNKNOWN"
+                )
+                report["query"]["billid_identity"] = report["query"][
+                    "grid_detail_identity"
+                ]
+                fields = _detail_fields(detail)
+                report["query"]["detail_readback_fields"] = (
+                    _confirmed_detail_readback_fields(detail)
+                )
+                _classify_duplicate_fields(
+                    report,
+                    fields,
+                    row_fields=row_fields,
+                    columns=report["query"]["grid_columns"],
+                    bill_id=bill_id,
+                    rows=response_rows,
+                )
+        elif response_rows:
+            report["reason_codes"].append("GRID_RESPONSE_IDENTITY_UNCONFIRMED")
     except InsoDuplicateHistoryError as exc:
         report["query"]["status"] = "UNAVAILABLE"
         report["reason_codes"].append(exc.code.value)
     except Exception:  # noqa: BLE001 - only stable reason codes are reported
         report["query"]["status"] = "UNAVAILABLE"
         report["reason_codes"].append("READ_ONLY_QUERY_INSPECTION_FAILED")
-    finally:
-        try:
-            page.remove_listener("response", capture)
-        except Exception:  # noqa: BLE001 - listener cleanup is best effort
-            report["reason_codes"].append("QUERY_LISTENER_CLEANUP_UNCONFIRMED")
 
 
 def _billid_rows(adapter: PlaywrightDuplicateHistoryPage) -> list[str]:
@@ -577,18 +590,92 @@ def _classify_duplicate_fields(
         }
 
 
-def _inspect_blank_form(page: object, frame: object, report: dict[str, Any]) -> None:
+def _close_frame_dialog(
+    frame: object, verify_identity: Callable[[], None]
+) -> bool:
+    """Close only the unique Layui dialog containing this exact child frame."""
+
+    try:
+        parent = frame.parent_frame
+        child_element = frame.frame_element()
+        dialogs = parent.locator(".layui-layer").filter(has=child_element)
+        if dialogs.count() != 1:
+            return False
+        close = dialogs.locator(".layui-layer-close")
+        if close.count() != 1 or not close.is_visible() or not close.is_enabled():
+            return False
+        classes = (close.get_attribute("class") or "").split()
+        if "layui-layer-close" not in classes:
+            return False
+        verify_identity()
+        close.click(timeout=10_000)
+        return frame.is_detached()
+    except Exception:  # noqa: BLE001 - uncertain close control stays untouched
+        return False
+
+
+def _close_blank_inquiry_form(
+    frame: object, verify_identity: Callable[[], None]
+) -> bool:
+    """Use the observed Back handler, which only hides the blank-form dialog."""
+
+    try:
+        iframe = frame.frame_element()
+        if not iframe.is_visible():
+            return True
+        back = frame.locator("button#btnBack")
+        if (
+            back.count() != 1
+            or not back.is_visible()
+            or not back.is_enabled()
+            or back.get_attribute("title") != "返回列表"
+            or back.get_attribute("onclick") != "goback()"
+        ):
+            return False
+        handler = frame.evaluate(
+            "() => typeof goback === 'function' ? Function.prototype.toString.call(goback) : ''"
+        )
+        if not _SAFE_BLANK_FORM_BACK.fullmatch(handler.strip()):
+            return False
+        verify_identity()
+        try:
+            back.click(timeout=10_000, no_wait_after=True)
+        except Exception:  # noqa: BLE001 - confirm the actual form state below
+            if frame.is_detached() or not iframe.is_visible():
+                return True
+        try:
+            iframe.wait_for(state="hidden", timeout=10_000)
+        except Exception:  # noqa: BLE001 - inspect the actual final frame state below
+            return frame.is_detached() or not iframe.is_visible()
+        return frame.is_detached() or not iframe.is_visible()
+    except Exception:  # noqa: BLE001 - uncertain close control stays untouched
+        return False
+
+
+def _inspect_blank_form(
+    page: object,
+    frame: object,
+    report: dict[str, Any],
+    *,
+    verify_identity: Callable[[], None],
+) -> None:
     form_frame = None
+    ai_frame = None
     try:
         add = frame.locator("button#product_add_")
         if add.count() != 1 or not add.is_visible() or not add.is_enabled():
             report["reason_codes"].append("BLANK_DRAFT_ENTRY_UNCONFIRMED")
             return
+        verify_identity()
         add.click(timeout=10_000)
         form_frames = [
             candidate
             for candidate in page.frames
-            if candidate.name == "winIframealert_enquiry"
+            if urlsplit(candidate.url).scheme == "https"
+            and urlsplit(candidate.url).hostname == "yingsuo.alperp.cn"
+            and urlsplit(candidate.url).path.casefold().endswith(
+                "/sale/enquiry/bill.aspx"
+            )
         ]
         if len(form_frames) != 1:
             report["reason_codes"].append("BLANK_DRAFT_FRAME_UNCONFIRMED")
@@ -673,7 +760,9 @@ def _inspect_blank_form(page: object, frame: object, report: dict[str, Any]) -> 
         if not static_open_only:
             report["ai"]["panel"] = "OPEN_SEMANTICS_UNKNOWN"
             return
-        ai_entry.click(timeout=10_000)
+        report["ai"]["panel"] = "OPENING_READ_ONLY"
+        verify_identity()
+        ai_entry.click(timeout=10_000, no_wait_after=True)
         ai_frames = [
             candidate
             for candidate in page.frames
@@ -767,7 +856,23 @@ def _inspect_blank_form(page: object, frame: object, report: dict[str, Any]) -> 
         )
         report["parent_writer"]["status"] = "UNKNOWN"
     except Exception:  # noqa: BLE001 - reason code only; no page text is persisted
+        if report["ai"]["panel"] == "OPENING_READ_ONLY":
+            report["ai"]["panel"] = "OPEN_FAILED_OR_AMBIGUOUS"
         report["reason_codes"].append("BLANK_DRAFT_INSPECTION_FAILED")
+    finally:
+        ai_closed = ai_frame is None or ai_frame.is_detached()
+        if ai_frame is not None and not ai_closed:
+            ai_closed = _close_frame_dialog(ai_frame, verify_identity)
+        form_open = form_frame is not None and not form_frame.is_detached()
+        if form_open and not _close_blank_inquiry_form(form_frame, verify_identity):
+            report["reason_codes"].append("BLANK_FORM_CLOSE_UNCONFIRMED")
+        if ai_frame is not None and not ai_closed and not ai_frame.is_detached():
+            try:
+                ai_closed = not ai_frame.frame_element().is_visible()
+            except Exception:  # noqa: BLE001 - detached frame means closed
+                ai_closed = True
+        if not ai_closed:
+            report["reason_codes"].append("AI_PANEL_CLOSE_UNCONFIRMED")
 
 
 def _chrome_product(cdp_url: str) -> str | None:
@@ -888,69 +993,54 @@ def run_phase_a_final(root: str | Path | None = None) -> Path:
                                 report["browser"]["context_count"] = len(
                                     handle.browser.contexts
                                 )
-                                with (
-                                    session.operation_access().open_operation_page() as operation
-                                ):
+                                with session.operation_access().operation_page() as operation:
                                     page = operation.page
                                     page.set_default_timeout(10_000)
-                                    page.goto(
-                                        runtime.inso.login_url,
-                                        wait_until="domcontentloaded",
-                                        timeout=30_000,
-                                    )
-                                    if _top_level_login_redirect(page):
-                                        has_existing_shell = bool(
-                                            report["browser"][
-                                                "existing_verified_shell_pages"
-                                            ]
-                                        )
-                                        report["browser"]["login_state"] = (
-                                            "EXISTING_SHELL_CHILD_LOGIN_REDIRECT"
-                                            if has_existing_shell
-                                            else "OWNER_LOGIN_REQUIRED_CHROME"
-                                        )
-                                        keep_chrome_open = True
+                                    frame = operation.shell_frame
+                                    if _query_shell(page, report) is not frame:
                                         report["reason_codes"].append(
-                                            "LEASE_CHILD_AUTH_NOT_SHARED"
-                                            if has_existing_shell
-                                            else "OWNER_LOGIN_REQUIRED_CHROME"
+                                            "VERIFIED_INSO_SHELL_NOT_UNIQUE"
                                         )
                                     else:
-                                        frame = _query_shell(page, report)
-                                        if frame is None:
-                                            report["reason_codes"].append(
-                                                "VERIFIED_INSO_SHELL_NOT_UNIQUE"
-                                            )
-                                        else:
-                                            report["browser"]["login_state"] = (
-                                                "AUTHENTICATED_SHELL"
-                                            )
-                                            _inspect_history(page, frame, report)
-                                if (
-                                    not keep_chrome_open
-                                    and report["browser"]["shell_frame_count"] == 1
-                                ):
-                                    # A separate lease-owned operation page gives the temporary form a
-                                    # simple cleanup boundary: closing that page discards its blank draft.
-                                    with (
-                                        session.operation_access().open_operation_page() as blank_operation
-                                    ):
-                                        blank_page = blank_operation.page
-                                        blank_page.set_default_timeout(10_000)
-                                        blank_page.goto(
-                                            runtime.inso.login_url,
-                                            wait_until="domcontentloaded",
-                                            timeout=30_000,
+                                        report["browser"]["login_state"] = (
+                                            "AUTHENTICATED_SHELL"
                                         )
-                                        blank_frame = _query_shell(blank_page, report)
-                                        if blank_frame is not None:
-                                            _inspect_blank_form(
-                                                blank_page, blank_frame, report
-                                            )
-                                        else:
-                                            report["reason_codes"].append(
-                                                "BLANK_FORM_SHELL_NOT_UNIQUE"
-                                            )
+                                        def verify_identity() -> None:
+                                            with session.operation_access().operation_page() as current:
+                                                if (
+                                                    current.page is not page
+                                                    or current.shell_frame is not frame
+                                                ):
+                                                    raise InsoDuplicateHistoryError(
+                                                        DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE
+                                                    )
+
+                                        _inspect_history(
+                                            page,
+                                            frame,
+                                            report,
+                                            verify_identity=verify_identity,
+                                        )
+                                if report["browser"]["login_state"] == "AUTHENTICATED_SHELL":
+                                    with session.operation_access().operation_page() as operation:
+                                        page = operation.page
+                                        frame = operation.shell_frame
+                                        def verify_blank_identity() -> None:
+                                            with session.operation_access().operation_page() as current:
+                                                if (
+                                                    current.page is not page
+                                                    or current.shell_frame is not frame
+                                                ):
+                                                    raise InsoDuplicateHistoryError(
+                                                        DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE
+                                                    )
+
+                                        _inspect_blank_form(
+                                            page,
+                                            frame,
+                                            report,
+                                            verify_identity=verify_blank_identity,
+                                        )
                                 report["save"]["success_billid_contract"] = (
                                     "CONFIRMED_STATIC"
                                     if report["save"]["handler_contract"]

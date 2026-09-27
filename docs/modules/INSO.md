@@ -4,18 +4,25 @@
 
 `src/inso` provides the explicit INSO session lease, read-only duplicate-history
 adapter, and purchase draft actions. The launcher owns CDP/browser lifecycle.
-Adapters receive lease-created operation pages; they cannot close a reused
-browser or select an arbitrary existing tab. The first real Save still requires
-local runtime acceptance of endpoint, browser, context, and operation-page
-identity.
+The lease pins the unique verified authenticated shell page and list frame as
+the operation page; no child page is created. Each access rechecks browser,
+context, page, origin, shell-frame and login-path identity. A reused shell page
+and browser are never closed by the lease. APP_OWNED browser cleanup remains at
+the composition root after the full cycle drains.
 
 ## Duplicate history
 
-`PlaywrightDuplicateHistoryPage` is the live read-only row adapter for result
-table `#_id_dg`. The verified fields are model `td:nth-child(9)`, quantity
-`td:nth-child(11)`, and time `td:nth-child(14)`. The reader verifies detail
-`BillID` against the numeric `Bill_View_Open(...)` argument for the record it
-opens. No stable tie-break for equal timestamps has been verified.
+`PlaywrightDuplicateHistoryPage` performs a same-document read-only POST from
+the verified authenticated shell to the confirmed `List_Detail` endpoint using
+`DetailField=PartNo`, `DetailFieldValue=<MPN>`, and `nolike=on`. It does not
+touch the hidden `#nolike` checkbox or query button. It accepts only a
+structured response whose rows exactly match the requested MPN and contain
+unique numeric BillIDs. The current live attempt did not return a verifiable
+structured result and remains `QUERY_SETTLEMENT_UNCONFIRMED`; this is an
+adapter/result issue, not a reported login failure. The verified list fields
+remain model `td:nth-child(9)`, quantity `td:nth-child(11)`, and time
+`td:nth-child(14)`. BillID remains the stable list-to-detail identity. No
+stable tie-break for equal timestamps has been verified.
 
 `evaluate_duplicate_history` remains the only owner of canonical MPN matching,
 the inclusive 168-hour window, latest record selection, and equal-time
@@ -70,9 +77,10 @@ Read-only detail inspection confirms unique visible cells at
 `#_id_dg td[data-field="PartNo"]`, `Brand`, and `Qty`, backed by the detail-table
 cache. This is only a read-back contract: a blank form starts with no product
 row, so no live parent-field writer is enabled. `ai_import()` has an in-memory
-callback, but its runtime panel opening returned a generic form submission
-error. No AI recognition, import, synthetic input, or retry occurred; live AI
-selectors remain UNKNOWN.
+callback and the loaded opener appears dialog-only, but the read-only panel-open
+attempt did not expose one unique AI frame. AI recognition, import, synthetic
+input, and parent-field writes were not run. AI read-back and blank-form
+model/brand/quantity selectors remain UNKNOWN.
 
 The existing gated Save boundary remains closed. If later authorized, it requires
 one visible, enabled `button#btnSave` with exact semantics `保存`, records durable
@@ -266,3 +274,23 @@ existing tab was not used to open forms or details outside the lease lifecycle.
 Loaded list-handler inspection found functions referencing `List_Detail`, but
 did not verify a safe visible action to toggle `#nolike`; no hidden-control or
 guessed-JavaScript interaction was attempted.
+
+## Current authenticated-shell reuse result — 2026-09-27
+
+The shell-page lease correction supersedes the older child-page lifecycle notes
+above. Chrome attached as `REUSED`, with exactly one context and the unique
+authenticated INSO shell/list frame. No child page was created and cleanup
+left the reused browser open.
+
+The direct same-document POST uses `DetailField=PartNo`,
+`DetailFieldValue=<MPN>`, and `nolike=on`. The live response did not satisfy the
+structured response/identity contract, so the reader remains
+`QUERY_SETTLEMENT_UNCONFIRMED` and cannot produce a nonduplicate result. No
+creator or quote value was inferred.
+
+`新增` opened the blank inquiry form on the same shell. Static inspection of
+`ai_import()` and its wrapper indicated a dialog route with no detected direct
+persistence call. The permitted AI-panel opener attempt did not expose one
+uniquely identified AI frame; recognition/import were not run. The form was
+hidden/closed. AI read-back and blank-form model/brand/quantity selectors remain
+UNKNOWN. Save controls were observed only; Save/Send/SMTP/Sheets were not used.
