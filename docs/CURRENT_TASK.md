@@ -1,6 +1,6 @@
 # Current Task — V1.2 Phase A final
 
-Phase A FINAL: NEEDS_ONE_CLICK — a bounded, read-only Owner-session runner is ready; it has not been executed from the Codex sandbox.
+Phase A FINAL: BLOCKED — the Owner-authenticated shell is present in the reused tab, but the lease child redirects to login; exact query is also unavailable because `#nolike` is hidden and unchecked.
 V1.2 status: PRE_SAVE_READY / REAL_SAVE_GATED
 Production write gate: CLOSED
 
@@ -109,5 +109,25 @@ CEO performs the daily Safety Review. Keep the production write gate CLOSED.
   and operation-owned pages. A sanitized report will be written to
   `runtime/evidence/v12-phase-a-final/report.json`.
 - No Save, Send, SMTP, Sheets write, or existing-record modification occurred.
-  Production write gate remains CLOSED. No Owner decision is required; one
-  local read-only runner execution is the remaining step.
+  Production write gate remains CLOSED. The runner has since been executed;
+  the remaining runtime findings are recorded below.
+
+## Owner session follow-up — 2026-09-27
+
+- The runner was executed after the Owner reported login complete. CDP was
+  READY, with one context and a reused Chrome browser. It found exactly one
+  existing page with the verified INSO shell and visible list controls, while
+  the lease-created operation page's top-level URL redirected to `/login.aspx`.
+  The report records `LEASE_CHILD_AUTH_NOT_SHARED`; this is an observed page
+  boundary, not a claim about its underlying cause. The existing user tab was
+  not closed or repurposed.
+- A direct read-only attempt on that unique shell page filled the authorized
+  public query MPN, then stopped before dispatch. `#nolike` was unique and
+  enabled, but unchecked and invisible; `PlaywrightDuplicateHistoryPage`
+  returned `QUERY_SETTLEMENT_UNCONFIRMED`. No force/coordinate click was used.
+- The current loaded grid had no cached result row or header metadata, so this
+  session produced no creator, quote, or detail-schema evidence. The AI panel
+  and blank form were not opened on the reused user tab because that page is
+  outside the current lease's operation-page lifecycle.
+- No Save, Send, SMTP, Sheets write, AI recognition, or existing-record
+  modification occurred. Production write gate remains CLOSED.

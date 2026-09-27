@@ -99,6 +99,7 @@ def _empty_report() -> dict[str, Any]:
             "cdp": "UNKNOWN",
             "context_count": None,
             "shell_frame_count": 0,
+            "existing_verified_shell_pages": 0,
             "login_state": "UNKNOWN",
         },
         "query": {
@@ -372,6 +373,37 @@ def _top_level_login_redirect(page: object) -> bool:
         return urlsplit(page.main_frame.url).path.casefold().endswith("/login.aspx")
     except Exception:  # noqa: BLE001 - uncertain identity is not treated as login
         return False
+
+
+def _existing_verified_shell_pages(browser: object) -> int:
+    """Count only pages with one expected list frame and visible shell controls."""
+
+    try:
+        contexts = tuple(browser.contexts)
+    except Exception:  # noqa: BLE001 - identity failure remains zero
+        return 0
+    if len(contexts) != 1:
+        return 0
+    context = contexts[0]
+    matched = 0
+    for page in tuple(context.pages):
+        try:
+            if page.is_closed() or page.context is not context:
+                continue
+            frame = _query_shell(page, _empty_report())
+            if frame is None:
+                continue
+            if (
+                frame.locator("#DetailFieldValue").count() == 1
+                and frame.locator("#DetailFieldValue").is_visible()
+                and frame.locator("button#select_btns").count() == 1
+                and frame.locator("button#select_btns").is_visible()
+                and frame.locator("#_id_dg").count() == 1
+            ):
+                matched += 1
+        except Exception:  # noqa: BLE001 - uncertain page is not a match
+            return 0
+    return matched
 
 
 def _inspect_history(page: object, frame: object, report: dict[str, Any]) -> None:
@@ -844,6 +876,9 @@ def run_phase_a_final(root: str | Path | None = None) -> Path:
                                 report["browser"]["ownership"] = (
                                     "APP_OWNED" if handle.owned else "REUSED"
                                 )
+                                report["browser"]["existing_verified_shell_pages"] = (
+                                    _existing_verified_shell_pages(handle.browser)
+                                )
                                 session = attach_inso_research_session(
                                     cdp_url,
                                     handle,
@@ -864,9 +899,21 @@ def run_phase_a_final(root: str | Path | None = None) -> Path:
                                         timeout=30_000,
                                     )
                                     if _top_level_login_redirect(page):
+                                        has_existing_shell = bool(
+                                            report["browser"][
+                                                "existing_verified_shell_pages"
+                                            ]
+                                        )
+                                        report["browser"]["login_state"] = (
+                                            "EXISTING_SHELL_CHILD_LOGIN_REDIRECT"
+                                            if has_existing_shell
+                                            else "OWNER_LOGIN_REQUIRED_CHROME"
+                                        )
                                         keep_chrome_open = True
                                         report["reason_codes"].append(
-                                            "OWNER_LOGIN_REQUIRED_CHROME"
+                                            "LEASE_CHILD_AUTH_NOT_SHARED"
+                                            if has_existing_shell
+                                            else "OWNER_LOGIN_REQUIRED_CHROME"
                                         )
                                     else:
                                         frame = _query_shell(page, report)

@@ -1,6 +1,6 @@
 # Task: V1.2 Phase A final contract discovery
 
-status: needs_one_click
+status: blocked_on_runtime_contract
 owner: Main Programmer
 created: 2026-09-27
 updated: 2026-09-27
@@ -38,7 +38,11 @@ runner for remaining browser observations. Keep Production Write Gate CLOSED.
 - [x] The runner never clicks `#btnSave`, `#btnSave2`, or `#bcSend`.
 - [x] AI recognition/import are not executed by the runner.
 - [x] The local one-click command is Git-ignored.
-- [ ] Owner-session report confirms or preserves UNKNOWN for remaining facts.
+- [x] Owner-session runner executed; report records current read-only result.
+- [ ] Lease child shares the authenticated shell session, or an approved
+  explicit verified-page read-only path is available.
+- [ ] Exact query control becomes safely actionable; never force the hidden
+  `#nolike` checkbox.
 
 ## verification
 
@@ -48,8 +52,9 @@ runner for remaining browser observations. Keep Production Write Gate CLOSED.
 
 ## completion
 
-- status: needs_one_click
+- status: blocked_on_runtime_contract
 - changed: bounded read-only runner, deterministic report/classifier tests,
   current task and INSO module docs
-- remaining: one local runner execution; no Save or other business write is
-  involved or authorized.
+- remaining: authenticated shell page and lease child session boundary, plus
+  safe exact-query control access. No Save or other business write is involved
+  or authorized.
