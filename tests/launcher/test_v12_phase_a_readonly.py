@@ -10,6 +10,7 @@ from src.launcher.v12_phase_a_readonly import (
     _empty_report,
     _inspect_blank_form,
     _schema_summary,
+    _top_level_login_redirect,
 )
 
 
@@ -141,3 +142,28 @@ def test_read_only_inspector_has_no_recognition_import_or_save_click() -> None:
     assert "save_send.click" not in source
     assert "send.click" not in source
     assert "win_btn__dialog11" not in source
+
+
+def test_embedded_login_frame_does_not_mark_top_level_session_logged_out() -> None:
+    class Page:
+        class Frame:
+            url = "https://yingsuo.alperp.cn/"
+
+        def __init__(self) -> None:
+            self.main_frame = self.Frame()
+            login_frame = type(
+                "LoginFrame", (), {"url": "https://yingsuo.alperp.cn/login.aspx"}
+            )()
+            self.frames = [self.main_frame, login_frame]
+
+    assert _top_level_login_redirect(Page()) is False
+
+
+def test_top_level_login_redirect_is_reported() -> None:
+    class Page:
+        class Frame:
+            url = "https://yingsuo.alperp.cn/login.aspx"
+
+        main_frame = Frame()
+
+    assert _top_level_login_redirect(Page()) is True

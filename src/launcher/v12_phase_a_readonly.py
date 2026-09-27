@@ -365,6 +365,15 @@ def _query_shell(page: object, report: dict[str, Any]) -> object | None:
     return frame
 
 
+def _top_level_login_redirect(page: object) -> bool:
+    """An embedded login iframe alone does not mean the authenticated shell expired."""
+
+    try:
+        return urlsplit(page.main_frame.url).path.casefold().endswith("/login.aspx")
+    except Exception:  # noqa: BLE001 - uncertain identity is not treated as login
+        return False
+
+
 def _inspect_history(page: object, frame: object, report: dict[str, Any]) -> None:
     response_holder: list[object] = []
 
@@ -854,12 +863,7 @@ def run_phase_a_final(root: str | Path | None = None) -> Path:
                                         wait_until="domcontentloaded",
                                         timeout=30_000,
                                     )
-                                    if any(
-                                        urlsplit(item.url)
-                                        .path.casefold()
-                                        .endswith("/login.aspx")
-                                        for item in page.frames
-                                    ):
+                                    if _top_level_login_redirect(page):
                                         keep_chrome_open = True
                                         report["reason_codes"].append(
                                             "OWNER_LOGIN_REQUIRED_CHROME"
