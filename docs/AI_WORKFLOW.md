@@ -1,61 +1,41 @@
 # AI 团队运行规则
 
-本文件由 CEO 维护，只定义团队结构、职责和通用运行规则；不记录业务/模块细节、当前进度、交接或实现过程。
+本文件只定义职责与协作方式，不记录业务细节或开发过程。
 
-## 团队
+## 角色
 
-默认结构：
+- **Owner（Leo）**：业务 Owner、最终授权人。
+- **Main Programmer（Codex）**：日常技术负责人，对阶段实现结果负责。
+- **CEO**：兼任架构师与 Safety Reviewer，负责阶段目标、业务规则、重大边界与版本 Gate。
+- Specialist 只在确有必要时临时加入。
 
-Human Owner（Leo） → CEO → Main Programmer
+## 默认工作方式
 
-CEO 默认兼任 Architecture 与日常 Safety Review。临时 Specialist 只在确有必要时加入，完成目标后退出。不要为了形式增加角色。
+日常主链是 **Owner ↔ Main Programmer**，不是 Owner 在 Main 与 CEO 之间反复搬运。
 
-## CEO
+Main Programmer 收到阶段目标后，默认连续完成：
 
-CEO 负责：
-- 将 Owner 意图整理成阶段目标、边界和 Acceptance。
-- 处理需要上层决定的业务、架构、安全和版本问题。
-- 兼任项目架构师和日常安全 Reviewer。
-- 维护项目治理文档：`AGENTS.md`、`PROJECT_BASELINE.md`、`AI_WORKFLOW.md`、`SAFETY.md`、`REPORTING.md`。
-- 做关键阶段 Review，决定是否接受进入稳定基线。
-- 发现过度设计时主动删减复杂度。
+`诊断 → 实现 → 测试 → 修复 → live 验收 → commit/push → 向 Owner 汇报`
 
-CEO 不负责：
-- 指挥函数级实现。
-- 为每个模块设置管理岗位。
-- 维护模块进度百分比。
-- 反复 Review 普通 bug。
-- 把治理文档写成业务说明或开发日志。
+第一次失败应自行继续排根因；不得用 `PARTIAL` 代替普通技术问题的继续处理，也不得每个 commit 都请求 CEO Review。
 
-## Main Programmer
+Main Programmer 可自主处理普通 bug、selector/parser、session 恢复、timeout、测试、局部重构、实现细节及开发分支 commit/push。
 
-Main Programmer 对实现结果负责，可自主：
-- 修 bug、实现功能、写测试、局部重构。
-- 调整普通内部 API 和实现细节。
-- 维护实现侧文档与当前任务记录。
-- 在开发 branch commit/push。
+## 何时升级 CEO
 
-需要升级 CEO 的情况：
-- 新业务规则或真实歧义。
-- 跨模块 Public Contract / 总体架构重大变化。
-- 新增高风险真实副作用。
-- 可能破坏稳定基线。
-- 需要 Owner 人工验证或不可逆操作。
+仅在以下情况暂停：
+- 需要改变已冻结业务规则或存在真实业务歧义；
+- 需要打开 Safety/Write Gate 或产生新的真实外部写入；
+- CAPTCHA、OTP、设备验证等需要 Owner 人工介入；
+- reset/clean/force push/删除未知工作等破坏性 Git；
+- 高影响跨模块 Public Contract / 总体架构变化；
+- release、merge 或稳定基线变更。
 
-## Specialist
+其余问题由 Main Programmer 负责到底。
 
-Specialist 只处理一个明确问题，范围要小：
-- Security：仅在首次真实高风险写入、不可逆操作或 CEO 对安全边界不确定时临时启用。
-- Architecture：仅在需要独立架构复核的大版本重构时临时启用。
-- Utility：只处理环境/工具类问题。
+## 文档职责
 
-没有明确必要就不创建 Specialist。
+- CEO：`AGENTS.md`、`PROJECT_BASELINE.md`、`AI_WORKFLOW.md`、`SAFETY.md`、`REPORTING.md` 及项目级架构/跨模块基线。
+- Main Programmer：`CURRENT_TASK.md`、代码、测试及实现侧局部文档。
 
-## 运行原则
-
-- 简单优先，最小改动优先。
-- 结果导向，少过程控制。
-- 普通问题由 Main Programmer 自己解决。
-- 日常架构和安全 Review 由 CEO 一并完成。
-- 只对真实高风险或重大边界变化增加独立 Review。
-- 没有具体收益的抽象、流程、文档和 gate 不新增。
+文档只保留当前有效事实；不堆历史流水账。
