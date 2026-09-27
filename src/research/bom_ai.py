@@ -253,6 +253,12 @@ def _is_bom_ai_host(url: str) -> bool:
     return normalized == "bom.ai" or normalized.endswith(".bom.ai")
 
 
+def _reject_bom_ai_challenge(visible_text: str, url: str) -> None:
+    folded = visible_text.casefold()
+    if any(marker in folded for marker in _BOM_AI_CHALLENGE_MARKERS):
+        raise BomAiClientError("INTERACTIVE_CHALLENGE_REQUIRED", url)
+
+
 @dataclass(frozen=True, slots=True)
 class BomAiBrowserConfig:
     """Runtime URLs and selectors for the approved read-only Bom.Ai screen.
@@ -417,9 +423,7 @@ class PlaywrightBomAiAuthenticatedBrowser:
 
     @staticmethod
     def _reject_challenge(visible_text: str, url: str) -> None:
-        folded = visible_text.casefold()
-        if any(marker in folded for marker in _BOM_AI_CHALLENGE_MARKERS):
-            raise BomAiClientError("INTERACTIVE_CHALLENGE_REQUIRED", url)
+        _reject_bom_ai_challenge(visible_text, url)
 
 
 class CdpBomAiAuthenticatedBrowser:
@@ -431,47 +435,48 @@ class CdpBomAiAuthenticatedBrowser:
         *,
         cdp_url: str = "http://127.0.0.1:9222",
         timeout_ms: int = 45_000,
+        settle_ms: int = 2_000,
+        playwright_factory: Callable[[], object] | None = None,
     ) -> None:
         if urlsplit(cdp_url).hostname not in {"127.0.0.1", "localhost", "::1"}:
             raise ValueError("Bom.Ai CDP endpoint must be loopback")
         self._config = config
         self._cdp_url = cdp_url
         self._timeout_ms = timeout_ms
+        self._settle_ms = settle_ms
+        self._playwright_factory = playwright_factory
 
     def fetch_price_page(self, mpn: str, login: BomAiLogin) -> BomAiRawPage:
-        try:
-            from playwright.sync_api import sync_playwright
-        except ImportError as exc:
-            raise BomAiClientError("PLAYWRIGHT_NOT_INSTALLED") from exc
         target_url = self._config.result_url(mpn)
+        factory = self._playwright_factory
+        if factory is None:
+            try:
+                from playwright.sync_api import sync_playwright
+            except ImportError as exc:
+                raise BomAiClientError("PLAYWRIGHT_NOT_INSTALLED") from exc
+            factory = sync_playwright
+        created_page = False
+        page = None
         try:
-            with sync_playwright() as playwright:
+            with factory() as playwright:  # type: ignore[attr-defined]
                 browser = playwright.chromium.connect_over_cdp(
                     self._cdp_url, timeout=self._timeout_ms
                 )
                 context = browser.contexts[0]
                 pages = [page for page in context.pages if _is_bom_ai_host(page.url)]
-                page = pages[0] if pages else new_background_page(
-                    browser, context, timeout_ms=self._timeout_ms
-                )
+                if pages:
+                    page = pages[0]
+                else:
+                    page = new_background_page(
+                        browser, context, timeout_ms=self._timeout_ms
+                    )
+                    created_page = True
                 page.goto(target_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
-                page.wait_for_timeout(2_000)
+                page.wait_for_timeout(self._settle_ms)
                 if not _is_bom_ai_host(page.url):
                     raise BomAiClientError("UNEXPECTED_NAVIGATION_HOST", page.url)
-                if page.locator("a.bom_layer_login:visible").count():
-                    page.locator("a.bom_layer_login:visible").first.click()
-                    modal = page.locator(".layui-layer:visible").last
-                    modal.locator("li").nth(1).click()
-                    if login.company:
-                        modal.locator("#companyName").fill(login.company)
-                    modal.locator("#accountName").fill(login.username)
-                    modal.locator("#smspassword").fill(login.password)
-                    modal.locator("#smsLoginBtn").click()
-                    page.wait_for_timeout(2_000)
-                    if modal.locator("#accountName:visible").count():
-                        raise BomAiClientError("LOGIN_NOT_CONFIRMED", page.url)
-                    page.goto(target_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
-                    page.wait_for_timeout(2_000)
+                _reject_bom_ai_challenge(page.locator("body").inner_text(), page.url)
+                self._login_once_if_required(page, login, target_url)
                 if page.locator("a.bom_layer_login:visible").count():
                     raise BomAiClientError("LOGIN_NOT_CONFIRMED", page.url)
                 return BomAiRawPage(page.content(), page.url, datetime.now(UTC))
@@ -479,6 +484,49 @@ class CdpBomAiAuthenticatedBrowser:
             raise
         except Exception as exc:
             raise BomAiClientError("BROWSER_FAILURE", target_url) from exc
+        finally:
+            if created_page and page is not None:
+                with contextlib.suppress(Exception):
+                    page.close()
+
+    def _login_once_if_required(
+        self, page: object, login: BomAiLogin, target_url: str
+    ) -> None:
+        login_link = page.locator("a.bom_layer_login:visible")
+        if login_link.count() == 0:
+            return
+        login_link.first.click()
+        modal = page.locator(".layui-layer:visible").last
+        _reject_bom_ai_challenge(modal.inner_text(), page.url)
+        account_tab = modal.get_by_text("账号登录", exact=True)
+        if account_tab.count() != 1:
+            raise BomAiClientError("RESULT_CHANGED", page.url)
+        account_tab.click()
+        username = modal.locator(self._config.username_selector)
+        password = modal.locator(self._config.password_selector)
+        submit = modal.locator(self._config.login_button_selector)
+        if any(locator.count() != 1 for locator in (username, password, submit)):
+            _reject_bom_ai_challenge(modal.inner_text(), page.url)
+            raise BomAiClientError("RESULT_CHANGED", page.url)
+        if self._config.company_selector is not None:
+            company = modal.locator(self._config.company_selector)
+            if company.count() != 1:
+                raise BomAiClientError("RESULT_CHANGED", page.url)
+            if login.company is None:
+                raise BomAiClientError("COMPANY_CREDENTIAL_UNAVAILABLE", page.url)
+            company.fill(login.company)
+        username.fill(login.username)
+        password.fill(login.password)
+        submit.click()
+        page.wait_for_timeout(self._settle_ms)
+        _reject_bom_ai_challenge(page.locator("body").inner_text(), page.url)
+        if modal.locator(self._config.username_selector + ":visible").count():
+            raise BomAiClientError("LOGIN_NOT_CONFIRMED", page.url)
+        page.goto(target_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
+        page.wait_for_timeout(self._settle_ms)
+        if not _is_bom_ai_host(page.url):
+            raise BomAiClientError("UNEXPECTED_NAVIGATION_HOST", page.url)
+        _reject_bom_ai_challenge(page.locator("body").inner_text(), page.url)
 
 
 class BomAiMonthCutoff(Protocol):
