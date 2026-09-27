@@ -183,3 +183,31 @@ CEO performs the daily Safety Review. Keep the production write gate CLOSED.
   timestamps remain `AMBIGUOUS` absent a proven ordering rule.
 - Save controls were only inspected. REAL SAVE: NO. REAL SEND: NO. REAL SMTP:
   NO. Sheets write: NO. Production Write Gate: CLOSED.
+
+## CEO follow-up — existing record and AI panel — 2026-09-27
+
+- One existing non-empty row was read locally and opened through its unique
+  `Bill_View_Open` link. Detail `BillID` matched the linked identity and detail
+  `PartNo` matched the list row; PENO and the model/brand/quantity read-back
+  fields were present. No row value, customer, or price was written to files.
+- The current result was not re-queried in exact mode: `#nolike` is inside the
+  collapsed hidden search area, and the visible expand/reset controls did not
+  expose a usable exact-mode action. No hidden/forced control or non-exact query
+  was used. The previously accepted `EXACT_QUERY` contract remains valid, but
+  `NONEMPTY_HISTORY_QUERY` is not confirmed by this run.
+- The primary history grid maps `OfferPrice` to `报价` and
+  `OfferCurrencyID` to `报价币种`. In the opened detail, the `OfferPrice`
+  column is labelled `未税报价`; no `OfferCurrencyID` detail field was found
+  (a `CurrencyID` control is present and is not assumed equivalent). The list
+  price was blank and could not be compared to the detail value. Quote/currency
+  semantics remain UNKNOWN; no live response-field configuration was added.
+- The primary grid exposes no confirmed creator field. The structured response
+  schema was not available from this browser inspection, so the evidence is not
+  sufficient to claim `CREATOR_NOT_EXPOSED_BY_INSO`. `UserName` and `OwnerID`
+  remain excluded as purchaser and salesperson.
+- No visible dialog was open initially. A unique `新增` action was attempted
+  after the read-only detail was closed, but no blank form became visible. The
+  AI iframe remains hidden; recognition/import and parent-field read-back were
+  not performed. AI remains UNKNOWN.
+- REAL SAVE: NO. REAL SEND: NO. REAL SMTP: NO. Sheets write: NO. Production
+  Write Gate remains CLOSED.

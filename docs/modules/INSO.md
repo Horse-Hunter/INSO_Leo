@@ -300,3 +300,27 @@ only as a unique `iframe[src*='/product/Import_ai.aspx']` inside the unique
 `details-dialog._dialog1`; it does not scan `page.frames` for a guess. No AI
 recognition/import ran. AI read-back and blank-form model/brand/quantity
 selectors remain UNKNOWN. Save/Send/SMTP/Sheets were not used.
+
+## Targeted owner-session follow-up — 2026-09-27
+
+- A single existing list row was opened read-only via its unique
+  `Bill_View_Open` link. The detail BillID and PartNo matched the list identity;
+  PENO and model/brand/quantity read-back fields were present. Values were kept
+  local and were not recorded.
+- The live primary-grid labels are `OfferPrice` → `报价` and
+  `OfferCurrencyID` → `报价币种`. The detail column for `OfferPrice` is labelled
+  `未税报价`; no `OfferCurrencyID` detail selector was found. The current list
+  price was blank, so no response/detail amount comparison was possible. Do
+  not configure production quote/currency fields from this evidence.
+- No creator field is confirmed. Current grid fields do not provide creator
+  semantics, but the structured List_Detail response schema was not captured;
+  therefore `CREATOR_NOT_EXPOSED_BY_INSO` is not established. `UserName` and
+  `OwnerID` remain purchaser and salesperson only.
+- The previously accepted exact-query implementation was not changed. In this
+  page the exact checkbox remains inside a collapsed hidden region; no exact
+  query was dispatched in this follow-up. The accepted `EXACT_QUERY` contract
+  remains distinct from the still-unconfirmed non-empty exact query.
+- No visible dialog was open initially. The unique `新增` action did not open a
+  visible blank form after the read-only detail was closed. The AI iframe
+  remains hidden; recognition, import, and parent-field writes were not run.
+  No live adapter fields were added. Production Write Gate remains CLOSED.
