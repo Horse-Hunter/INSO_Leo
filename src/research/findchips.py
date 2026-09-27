@@ -176,7 +176,7 @@ class FindchipsHttpClient:
 
 
 class CdpFindchipsClient:
-    """Read a public result in a temporary, cookie-free CDP browser context."""
+    """Read a public result in a temporary background tab in approved Chrome."""
 
     def __init__(self, *, cdp_url: str = "http://127.0.0.1:9222", timeout_ms: int = 45_000) -> None:
         parsed = urlsplit(cdp_url)
@@ -196,43 +196,31 @@ class CdpFindchipsClient:
                 browser = playwright.chromium.connect_over_cdp(
                     self._cdp_url, timeout=self._timeout_ms
                 )
-                session = browser.new_browser_cdp_session()
+                if not browser.contexts:
+                    raise FindchipsPageUnavailable("CDP_CONTEXT_UNAVAILABLE", target_url)
+                context = browser.contexts[0]
+                page = new_background_page(
+                    browser,
+                    context,
+                    timeout_ms=self._timeout_ms,
+                )
                 try:
-                    previous_ids = set(
-                        session.send("Target.getBrowserContexts")["browserContextIds"]
+                    page.goto(
+                        target_url,
+                        wait_until="domcontentloaded",
+                        timeout=self._timeout_ms,
                     )
-                    context = browser.new_context()
-                    try:
-                        current_ids = set(
-                            session.send("Target.getBrowserContexts")["browserContextIds"]
-                        )
-                        new_ids = current_ids - previous_ids
-                        if len(new_ids) != 1:
-                            raise FindchipsPageUnavailable("ISOLATED_CONTEXT_UNAVAILABLE", target_url)
-                        page = new_background_page(
-                            browser,
-                            context,
-                            timeout_ms=self._timeout_ms,
-                            browser_context_id=new_ids.pop(),
-                        )
-                        page.goto(
-                            target_url,
-                            wait_until="domcontentloaded",
-                            timeout=self._timeout_ms,
-                        )
-                        page.wait_for_timeout(4_000)
-                        if not _is_findchips_response_url(page.url):
-                            raise FindchipsPageUnavailable("UNEXPECTED_RESPONSE_HOST", page.url)
-                        html = page.content()
-                        if not html.strip():
-                            raise FindchipsPageUnavailable("EMPTY_RESPONSE", page.url)
-                        if _is_findchips_login_page(html):
-                            raise FindchipsPageUnavailable("LOGIN_REQUIRED", page.url)
-                        return FindchipsPage(html, page.url, datetime.now(UTC))
-                    finally:
-                        context.close()
+                    page.wait_for_timeout(4_000)
+                    if not _is_findchips_response_url(page.url):
+                        raise FindchipsPageUnavailable("UNEXPECTED_RESPONSE_HOST", page.url)
+                    html = page.content()
+                    if not html.strip():
+                        raise FindchipsPageUnavailable("EMPTY_RESPONSE", page.url)
+                    if _is_findchips_login_page(html):
+                        raise FindchipsPageUnavailable("LOGIN_REQUIRED", page.url)
+                    return FindchipsPage(html, page.url, datetime.now(UTC))
                 finally:
-                    session.detach()
+                    page.close()
         except FindchipsPageUnavailable:
             raise
         except Exception as error:
