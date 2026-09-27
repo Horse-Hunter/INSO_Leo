@@ -140,6 +140,11 @@ def test_parser_and_adapter_use_suffix_lowest_rmb_offer() -> None:
     assert result.price_candidate.display_mpn == "ABC-1-T"
 
 
+def test_login_html_is_not_treated_as_an_empty_quote_result() -> None:
+    with pytest.raises(HqewPageUnavailable, match="LOGIN_REQUIRED"):
+        parse_hqew_offers('<form>登录<input type="password"></form>')
+
+
 def test_dated_history_is_limited_to_one_calendar_month_but_undated_is_allowed() -> None:
     html = (
         _row("ABC", "0.01", "2026-08-21 23:59:59")
