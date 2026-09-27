@@ -43,7 +43,7 @@ V1.2 Production Write Gate 当前 **CLOSED**。
 
 ## 长期边界
 
-- Chrome 为生产浏览器基线；Edge 仅备用。
+- Chrome 是唯一支持的生产浏览器；Edge 支持已废弃。
 - Core Vault 是唯一凭据源。
 - LCSC credential SiteId = `szlcsc.com`；认证 host = `passport.jlc.com`。
 - CAPTCHA / OTP / 设备验证一律人工处理，不绕过。
