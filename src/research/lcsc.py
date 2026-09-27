@@ -29,7 +29,11 @@ from .source_contracts import (
 
 LCSC_USER_AGENT = "INSO-Leo-Research/1.0 (read-only LCSC adapter)"
 LCSC_HOME_URL = "https://www.szlcsc.com/"
-LCSC_SITE_ID = "passport.jlc.com"
+# Core Vault indexes the existing LCSC credential by the commerce site, not
+# by JLC's separate SSO redirect host. Keep these identities intentionally
+# distinct so session recovery never asks the Owner to duplicate a password.
+LCSC_CREDENTIAL_SITE_ID = "szlcsc.com"
+LCSC_AUTH_HOST = "passport.jlc.com"
 
 
 class LcscError(RuntimeError):
@@ -326,7 +330,7 @@ class CdpLcscClient:
                         page.wait_for_timeout(1_000)
                     page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
                     page.wait_for_timeout(3_000)
-                    if urlsplit(page.url).hostname == "passport.jlc.com":
+                    if urlsplit(page.url).hostname == LCSC_AUTH_HOST:
                         body = page.locator("body").inner_text()
                         enter = page.get_by_text("进入系统", exact=True)
                         if "已登录账号" in body and enter.count() == 1:
@@ -396,7 +400,7 @@ class CdpLcscClient:
 
         if self._login_provider is None:
             raise LcscPageUnavailable("LOGIN_REQUIRED")
-        login = self._login_provider.get_login(LCSC_SITE_ID)
+        login = self._login_provider.get_login(LCSC_CREDENTIAL_SITE_ID)
         if login is None:
             raise LcscPageUnavailable("LOGIN_REQUIRED")
         account_tab = page.get_by_text("账号登录", exact=True)  # type: ignore[attr-defined]
@@ -416,7 +420,7 @@ class CdpLcscClient:
         page.wait_for_timeout(3_000)  # type: ignore[attr-defined]
         body = page.locator("body").inner_text()  # type: ignore[attr-defined]
         _reject_lcsc_challenge(body, page.url)  # type: ignore[attr-defined]
-        if urlsplit(page.url).hostname == "passport.jlc.com":  # type: ignore[attr-defined]
+        if urlsplit(page.url).hostname == LCSC_AUTH_HOST:  # type: ignore[attr-defined]
             raise LcscPageUnavailable("LOGIN_NOT_CONFIRMED", page.url)  # type: ignore[attr-defined]
 
     @staticmethod
@@ -438,7 +442,7 @@ def _is_lcsc_session_url(url: str) -> bool:
         and (
             host.casefold() == "szlcsc.com"
             or host.casefold().endswith(".szlcsc.com")
-            or host.casefold() == "passport.jlc.com"
+            or host.casefold() == LCSC_AUTH_HOST
         )
     )
 
