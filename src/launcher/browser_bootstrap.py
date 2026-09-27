@@ -20,7 +20,7 @@ from src.core.app_paths import resolve_app_path
 class BrowserBootstrapError(RuntimeError):
     """CDP is unavailable and an approved browser could not be started."""
 
-    def __init__(self, reason_code: str = "EDGE_CDP_ATTACH_FAILED") -> None:
+    def __init__(self, reason_code: str = "CDP_ATTACH_FAILED") -> None:
         super().__init__(reason_code)
         self.reason_code = reason_code
 
@@ -108,10 +108,9 @@ def _start_owned_window_hider(process: object) -> Callable[[], None]:
 
 
 def _launch(executable: Path, profile: Path, port: int):
-    is_edge = executable.name.casefold() == "msedge.exe"
-    flags = 0 if is_edge else getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     startupinfo = None
-    if os.name == "nt" and not is_edge:
+    if os.name == "nt":
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
@@ -123,9 +122,8 @@ def _launch(executable: Path, profile: Path, port: int):
         "--no-first-run",
         "--no-default-browser-check",
     ]
-    if not is_edge:
-        # Keep the stable V1.1 Chrome runtime windowless.
-        args.append("--no-startup-window")
+    # Keep the stable V1.1 Chrome runtime windowless.
+    args.append("--no-startup-window")
     return subprocess.Popen(
         args,
         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -239,7 +237,7 @@ def wait_for_cdp_ready(
     consecutive_versions = 0
     while monotonic() < deadline:
         if process is not None and process.poll() is not None:
-            raise BrowserBootstrapError("EDGE_CDP_ATTACH_FAILED")
+            raise BrowserBootstrapError("CDP_ATTACH_FAILED")
         websocket_url = version_reader(cdp_url)
         if websocket_url:
             consecutive_versions += 1
@@ -269,7 +267,7 @@ def wait_for_cdp_ready(
         remaining = deadline - monotonic()
         if remaining > 0:
             wait(min(_CDP_RETRY_INTERVAL_SECONDS, remaining))
-    raise BrowserBootstrapError("EDGE_CDP_ATTACH_FAILED")
+    raise BrowserBootstrapError("CDP_ATTACH_FAILED")
 
 
 def _devtools_active_port_status(
@@ -315,7 +313,7 @@ def acquire_cdp_browser(
     if probe is not None and probe(cdp_url):
         # A listener without a valid DevTools endpoint may belong to another
         # process; never launch over it or treat it as ready.
-        raise BrowserBootstrapError("EDGE_CDP_ATTACH_FAILED")
+        raise BrowserBootstrapError("CDP_ATTACH_FAILED")
     raw = config.get("browser_bootstrap")
     if not isinstance(raw, Mapping):
         raise BrowserBootstrapError("CDP unavailable and browser bootstrap is not configured")
@@ -339,12 +337,11 @@ def acquire_cdp_browser(
         process = launch(executable, profile, port)
     except Exception as exc:
         raise BrowserBootstrapError("approved Chrome failed to launch") from exc
-    is_edge = executable.name.casefold() == "msedge.exe"
     handle = BrowserHandle(
         owned=True,
         process=process,
         close_fn=lambda: _close_owned_process(process, cdp_url),
-        cleanup_fn=None if is_edge else _start_owned_window_hider(process),
+        cleanup_fn=_start_owned_window_hider(process),
     )
     try:
         handle.playwright, handle.browser = wait_for_cdp_ready(
@@ -374,4 +371,4 @@ def acquire_cdp_browser(
         raise
     except Exception:  # noqa: BLE001 - expose only the stable reason code
         handle.close()
-        raise BrowserBootstrapError("EDGE_CDP_ATTACH_FAILED") from None
+        raise BrowserBootstrapError("CDP_ATTACH_FAILED") from None

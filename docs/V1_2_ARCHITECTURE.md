@@ -106,7 +106,7 @@ Evidence 仅放 Git-ignored `runtime/evidence/<inquiry_id>/`。默认 30 天保�
 
 ## 7. Browser / Session
 
-- Production browser：**Chrome**；Edge 仅备用。
+- Production browser：**Chrome only**。
 - 重复检查、Research、采购尽量复用同一明确 session lease。
 - 仅关闭 app-owned page/browser；reused Owner Chrome 永不关闭。
 - 页面、context、order/control identity 不唯一即 fail closed。

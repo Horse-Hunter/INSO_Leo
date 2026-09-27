@@ -157,7 +157,7 @@ def _factory_for(connect, started):
 
 def test_tcp_open_but_cdp_version_not_ready_does_not_return_handle(tmp_path):
     launches = []
-    with pytest.raises(BrowserBootstrapError, match="EDGE_CDP_ATTACH_FAILED"):
+    with pytest.raises(BrowserBootstrapError, match="CDP_ATTACH_FAILED"):
         acquire_cdp_browser(
             "http://127.0.0.1:9222", tmp_path, {}, probe=lambda _url: True,
             version_reader=lambda _url: None,
@@ -168,7 +168,7 @@ def test_tcp_open_but_cdp_version_not_ready_does_not_return_handle(tmp_path):
 
 def test_version_without_websocket_is_not_ready():
     clock = _Clock()
-    with pytest.raises(BrowserBootstrapError, match="EDGE_CDP_ATTACH_FAILED"):
+    with pytest.raises(BrowserBootstrapError, match="CDP_ATTACH_FAILED"):
         wait_for_cdp_ready(
             "http://127.0.0.1:9222", process=None,
             version_reader=lambda _url: None,
@@ -211,7 +211,7 @@ def test_cdp_attach_timeout_has_stable_reason_code():
             ),
             monotonic=clock.monotonic, wait=clock.wait, timeout_seconds=1,
         )
-    assert error.value.reason_code == "EDGE_CDP_ATTACH_FAILED"
+    assert error.value.reason_code == "CDP_ATTACH_FAILED"
 
 
 def test_browser_process_exit_fails_immediately():
@@ -219,7 +219,7 @@ def test_browser_process_exit_fails_immediately():
     process.ended = True
     with pytest.raises(BrowserBootstrapError) as error:
         wait_for_cdp_ready("http://127.0.0.1:9222", process=process)
-    assert error.value.reason_code == "EDGE_CDP_ATTACH_FAILED"
+    assert error.value.reason_code == "CDP_ATTACH_FAILED"
 
 
 def test_reused_browser_disconnect_does_not_close_remote_browser():
@@ -268,25 +268,6 @@ def test_owned_chrome_bootstrap_uses_windowless_normal_chrome(monkeypatch, tmp_p
     assert not kwargs["creationflags"] & getattr(
         browser_module.subprocess, "DETACHED_PROCESS", 0
     )
-
-
-def test_owned_edge_bootstrap_is_visible_and_uses_persistent_profile(monkeypatch, tmp_path):
-    import src.launcher.browser_bootstrap as browser_module
-
-    executable = tmp_path / "msedge.exe"
-    profile = tmp_path / "browser-profile"
-    captured = {}
-    monkeypatch.setattr(
-        browser_module.subprocess,
-        "Popen",
-        lambda args, **kwargs: captured.update(args=args, kwargs=kwargs) or object(),
-    )
-    browser_module._launch(executable, profile, 9222)
-    assert f"--user-data-dir={profile}" in captured["args"]
-    assert "--remote-debugging-port=9222" in captured["args"]
-    assert "--remote-debugging-address=127.0.0.1" in captured["args"]
-    assert "--no-startup-window" not in captured["args"]
-    assert captured["kwargs"]["startupinfo"] is None
 
 
 def test_cdp_launches_only_explicit_existing_profile_and_closes_owned(
@@ -371,7 +352,7 @@ def test_cdp_timeout_closes_only_just_launched_process(tmp_path):
     def version(_url):
         return "ws://127.0.0.1/devtools/browser/test" if launched else None
 
-    with pytest.raises(BrowserBootstrapError, match="EDGE_CDP_ATTACH_FAILED"):
+    with pytest.raises(BrowserBootstrapError, match="CDP_ATTACH_FAILED"):
         acquire_cdp_browser(
             "http://127.0.0.1:9222", tmp_path,
             {"browser_bootstrap": {
