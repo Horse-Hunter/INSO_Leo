@@ -1,6 +1,6 @@
 # Current Task — V1.2 final runtime acceptance
 
-Phase A: PENDING — DIAGNOSTIC_EXECUTION_CONTEXT_MISMATCH
+Phase A: PARTIAL — authenticated Chrome live read-only discovery
 V1.2 status: PRE_SAVE_READY / REAL_SAVE_GATED
 Production write gate: CLOSED
 
@@ -16,6 +16,17 @@ Canonical browser baseline: Chrome (`browser.channel = "chrome"`). Edge is retai
 - Existing exact quotation routing, purchaser allowlists, durable UNKNOWN-before-click Save path and UNKNOWN/manual reconciliation seam remain unchanged.
 - `ParentProductFields` and coordinator-compatible `CoordinatorPurchaseDraftWriter.prepare()` exist. Prepare validates AI preview before touching parent fields, writes validated values, then validates parent read-back. Prepare exposes no Save or Send method and does not refer to `win_btn__dialog11`.
 - No production parent-field adapter exists because live model/brand/quantity selectors have not been verified; the production purchase prepare cannot be composed without it.
+
+## Chrome live read-only discovery — 2026-09-27
+
+- The Owner-authenticated, dedicated Chrome CDP endpoint is reachable. It exposes one context and a reused browser; `InsoSessionLease` can create an operation-owned child page without closing the reused browser.
+- The authenticated application shell has one verified INSO root page and exactly one `main` frame at `InnerEnquiry/YeWuXJ/List.aspx`. This explicit frame identity was used only for read-only discovery; no production adapter selects an arbitrary existing tab.
+- The business-inquiry list has unique, visible `#DetailFieldValue`, `button#select_btns` (`查询`), `button#product_add_` (`新增`), and `#_id_dg`. The native `#nolike` exact-match checkbox is not actionable in this shell. No force or coordinate interaction was used, so a live nonempty exact-query settlement signal remains unverified.
+- The scoped history-grid headers confirm `PartNo` (`型号`), `Qty` (`数量`), and `PEDate` (`时间`). `OfferPrice` is labelled `报价`, but its equivalence to the required INSO quote has not been proven. No scoped `制单人` field or stable BillID/timestamp tie-break identity was confirmed.
+- `新增` was statically verified to open the blank temporary-inquiry dialog only. The blank form was opened, inspected, and closed without filling or saving. Unique visible controls are `#CompanyName`, `#ImpValueF`, `#UserName_text`, `#ai_import_` (`AI录单`), `#btnSave` (`保存`), and `#btnSave2` (`保存并发送`). `#bcSend` exists with text `发送` and remains hard-forbidden.
+- The form starts with no product rows. Parent model/brand/quantity controls therefore remain unverified. The loaded `ai_import()` code only opens `product/Import_ai.aspx` and its parent callback updates the unsaved in-memory table cache, but AI-panel controls, AI recognition read-back, and parent product-field selectors were not exercised in this read-only pass.
+- The blank form exposes `BillID` and `PENO`, but no existing-record read-only examination established a saved-record reconciliation identity. Reconciliation remains UNKNOWN/manual review.
+- No Save Data, Save-and-Send, Send, SMTP, Sheets write, production migration, synthetic field input, AI recognition, or existing-record modification occurred.
 
 ## Earlier Edge runtime drift — 2026-09-26
 

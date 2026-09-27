@@ -87,6 +87,33 @@ No Save, Save-and-Send, Send, SMTP, Sheets write, or production migration was
 performed in this closeout. CEO performs the daily Safety Review; the production
 write gate remains CLOSED.
 
+## Live read-only facts — 2026-09-27
+
+The authenticated Chrome runtime exposes exactly one context. The existing INSO
+shell was identified by its expected origin/title and a unique `main` frame at
+`InnerEnquiry/YeWuXJ/List.aspx`; this was discovery-only and does not relax the
+lease rule for production adapters. The lease itself can create an
+operation-owned child page while preserving the reused browser.
+
+On that list frame, `#DetailFieldValue`, `button#select_btns` (`查询`),
+`button#product_add_` (`新增`), and `#_id_dg` are unique and visible. The native
+`#nolike` exact checkbox is not actionable. It was not force-clicked, so
+nonempty exact-query settlement remains unconfirmed. The scoped grid headers
+confirm `PartNo`, `Qty`, and `PEDate`. `OfferPrice` is visibly labelled `报价`,
+but it is not yet proven to be the required INSO quote; creator and stable
+BillID/timestamp tie-break identity remain UNKNOWN.
+
+`新增` was verified from its loaded handler to open an unsaved temporary-inquiry
+dialog. Its form has unique, visible `#CompanyName`, `#ImpValueF`,
+`#UserName_text`, and `#ai_import_`; `#btnSave` is visible with exact text
+`保存`. `#btnSave2` is visibly `保存并发送`, and `#bcSend` is `发送`; both remain
+hard-forbidden. The empty form has no product rows, so live parent
+model/brand/quantity selectors are still UNKNOWN. `ai_import()` opens the AI
+dialog and its callback updates the unsaved in-memory detail table, but this
+pass did not open the AI panel, run recognition, import data, fill fields, or
+save. `BillID` and `PENO` exist on the blank form, but saved-record read-back
+has not been proven on an existing record. The write gate remains CLOSED.
+
 ## Runtime browser baseline — 2026-09-26
 
 The canonical production browser is Chrome (`browser.channel = "chrome"`) as
