@@ -9,7 +9,7 @@ from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
 from ipaddress import ip_address
 from typing import Protocol
-from urllib.parse import quote, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
 from .cdp_pages import new_background_page
 from .source_contracts import (
@@ -89,7 +89,23 @@ def _is_expected_result_url(url: str, mpn: str) -> bool:
     parsed = urlsplit(url)
     encoded_mpn = quote(mpn.strip(), safe="")
     expected_path = f"/yunquote/{encoded_mpn}.html"
-    return _is_hqew_url(url) and parsed.path.casefold() == expected_path.casefold()
+    if not _is_hqew_url(url):
+        return False
+    if parsed.path.casefold() == expected_path.casefold():
+        return True
+    # HQEW currently redirects the legacy result URL through its same-site
+    # yunquote endpoint. Accept only a redirect whose declared target is the
+    # exact requested model URL; no broader URL guessing is permitted.
+    if parsed.path.casefold() != "/yunquote":
+        return False
+    target = parse_qs(parsed.query).get("toUrl", [None])[0]
+    if not isinstance(target, str):
+        return False
+    redirected = urlsplit(target)
+    return bool(
+        _is_hqew_url(target)
+        and redirected.path.casefold() == expected_path.casefold()
+    )
 
 
 class CdpHqewClient:

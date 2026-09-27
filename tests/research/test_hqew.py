@@ -224,6 +224,19 @@ def test_cdp_client_reuses_authenticated_hqew_page_for_navigation() -> None:
     assert page.goto_calls == [(target, "domcontentloaded", 1234)]
 
 
+def test_cdp_client_accepts_verified_same_site_result_redirect() -> None:
+    redirected = (
+        "https://p.hqew.com/yunquote?"
+        "toUrl=http%3A%2F%2Fp.hqew.com%2Fyunquote%2FABC.html&y4=1"
+    )
+    page = FakeCdpPage(redirected, _row("ABC", "1.25"))
+    client, _ = _cdp_client([page], navigate=False)
+
+    captured = client.fetch_first_page("ABC")
+
+    assert captured.url == redirected
+
+
 def test_cdp_client_does_not_reuse_unrelated_page(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
