@@ -10,7 +10,9 @@ from src.research.lcsc import (
     CdpLcscClient,
     LcscAdapter,
     LcscBrowserClient,
+    LcscLogin,
     LcscPage,
+    LcscPageUnavailable,
     parse_lcsc_cooperation_card,
     parse_lcsc_product,
     parse_lcsc_search_product,
@@ -319,6 +321,22 @@ class _CdpLocator:
         return []
 
 
+class _LoginCdpLocator(_CdpLocator):
+    def __init__(self, page: "_ExpiredSessionCdpPage", role: str) -> None:
+        super().__init__(count=1)
+        self._page = page
+        self._role = role
+
+    def click(self, *, timeout: int) -> None:
+        assert timeout > 0
+        if self._role == "submit":
+            self._page.logged_in = True
+            self._page.url = "https://so.szlcsc.com/"
+
+    def fill(self, _value: str) -> None:
+        return None
+
+
 class _CdpPage:
     def __init__(self) -> None:
         self.url = "about:blank"
@@ -348,6 +366,61 @@ class _CdpPage:
 
     def close(self) -> None:
         self.closed = True
+
+
+class _ExpiredSessionCdpPage(_CdpPage):
+    def __init__(self) -> None:
+        super().__init__()
+        self.url = "https://passport.jlc.com/login"
+        self.logged_in = False
+
+    def goto(self, url: str, *, wait_until: str, timeout: int) -> None:
+        assert wait_until == "domcontentloaded"
+        assert timeout > 0
+        self.goto_calls.append(url)
+        self.url = (
+            url
+            if self.logged_in
+            else "https://passport.jlc.com/login?redirectUrl=search"
+        )
+
+    def locator(self, selector: str):
+        if selector == 'input[type="text"]:visible, input[type="tel"]:visible':
+            return _LoginCdpLocator(self, "account")
+        if selector == 'input[type="password"]:visible':
+            return _LoginCdpLocator(self, "password")
+        return super().locator(selector)
+
+    def get_by_text(self, text: str, *, exact: bool):
+        assert exact
+        if text == "账号登录":
+            return _LoginCdpLocator(self, "tab")
+        if text == "登录":
+            return _LoginCdpLocator(self, "submit")
+        return _CdpLocator()
+
+
+class _SameHostExpiredCdpPage(_ExpiredSessionCdpPage):
+    """A login shell served from the search host after session expiry."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.url = "https://so.szlcsc.com/global.html?k=OLD"
+
+    def goto(self, url: str, *, wait_until: str, timeout: int) -> None:
+        assert wait_until == "domcontentloaded"
+        assert timeout > 0
+        self.goto_calls.append(url)
+        self.url = url
+
+    def content(self) -> str:
+        return _cn_search_html() if self.logged_in else "<html>login shell</html>"
+
+
+class _LcscLoginProvider:
+    def get_login(self, site_id: str) -> LcscLogin | None:
+        assert site_id == "passport.jlc.com"
+        return LcscLogin("synthetic-user", "synthetic-password")
 
 
 class _CdpContext:
@@ -426,3 +499,48 @@ def test_cdp_client_reuses_existing_lcsc_tab_without_closing_it(
     ]
     assert capture.product is not None
     assert not page.closed
+
+
+def test_cdp_client_recovers_expired_jlc_session_and_retries_search_once() -> None:
+    page = _ExpiredSessionCdpPage()
+    chromium = _CdpChromium(_CdpBrowser(_CdpContext(page)))
+    client = CdpLcscClient(
+        timeout_ms=1234,
+        login_provider=_LcscLoginProvider(),
+        playwright_factory=lambda: _CdpPlaywright(chromium),
+    )
+
+    capture = client.fetch_product_page("ADXL355BEZ-RL7")
+
+    search_url = "https://so.szlcsc.com/global.html?k=ADXL355BEZ-RL7"
+    assert page.goto_calls == [search_url, search_url]
+    assert capture.product is not None
+    assert not page.closed
+
+
+def test_cdp_client_reports_login_required_when_jlc_vault_is_absent() -> None:
+    page = _ExpiredSessionCdpPage()
+    chromium = _CdpChromium(_CdpBrowser(_CdpContext(page)))
+    client = CdpLcscClient(
+        timeout_ms=1234,
+        playwright_factory=lambda: _CdpPlaywright(chromium),
+    )
+
+    with pytest.raises(LcscPageUnavailable, match="LOGIN_REQUIRED"):
+        client.fetch_product_page("ADXL355BEZ-RL7")
+
+
+def test_cdp_client_recovers_when_same_host_login_shell_breaks_parser() -> None:
+    page = _SameHostExpiredCdpPage()
+    chromium = _CdpChromium(_CdpBrowser(_CdpContext(page)))
+    client = CdpLcscClient(
+        timeout_ms=1234,
+        login_provider=_LcscLoginProvider(),
+        playwright_factory=lambda: _CdpPlaywright(chromium),
+    )
+
+    capture = client.fetch_product_page("ADXL355BEZ-RL7")
+
+    search_url = "https://so.szlcsc.com/global.html?k=ADXL355BEZ-RL7"
+    assert page.goto_calls == [search_url, search_url]
+    assert capture.product is not None

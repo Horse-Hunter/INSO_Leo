@@ -400,6 +400,7 @@ def build_research_service(
     lcsc_client = lcsc_client or CdpLcscClient(
         cdp_url=config.cdp.cdp_url,
         timeout_ms=browser.timeout_ms,
+        login_provider=credentials.lcsc,
     )
     bom_ai_browser = bom_ai_browser or CdpBomAiAuthenticatedBrowser(
         config.bom_ai,

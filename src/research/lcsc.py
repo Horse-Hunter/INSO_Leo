@@ -29,6 +29,7 @@ from .source_contracts import (
 
 LCSC_USER_AGENT = "INSO-Leo-Research/1.0 (read-only LCSC adapter)"
 LCSC_HOME_URL = "https://www.szlcsc.com/"
+LCSC_SITE_ID = "passport.jlc.com"
 
 
 class LcscError(RuntimeError):
@@ -48,6 +49,18 @@ class LcscParseError(LcscError):
 
 class LcscNoMatchingProduct(LcscError):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class LcscLogin:
+    """An in-memory JLC ordinary-login supplied by Core Vault."""
+
+    username: str = field(repr=False)
+    password: str = field(repr=False)
+
+
+class LcscLoginProvider(Protocol):
+    def get_login(self, site_id: str) -> LcscLogin | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -262,12 +275,14 @@ class CdpLcscClient:
         *,
         cdp_url: str = "http://127.0.0.1:9222",
         timeout_ms: int = 45_000,
+        login_provider: LcscLoginProvider | None = None,
         playwright_factory: Callable[[], object] | None = None,
     ) -> None:
         if urlsplit(cdp_url).hostname not in {"127.0.0.1", "localhost", "::1"}:
             raise ValueError("LCSC CDP endpoint must be loopback")
         self._cdp_url = cdp_url
         self._timeout_ms = timeout_ms
+        self._login_provider = login_provider
         self._playwright_factory = playwright_factory
 
     def fetch_product_page(self, mpn: str) -> LcscPage:
@@ -312,13 +327,20 @@ class CdpLcscClient:
                     page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
                     page.wait_for_timeout(3_000)
                     if urlsplit(page.url).hostname == "passport.jlc.com":
-                        # The existing JLC session can require a one-click return
-                        # to the search site. Never fill a login or challenge.
                         body = page.locator("body").inner_text()
                         enter = page.get_by_text("进入系统", exact=True)
-                        if "已登录账号" not in body or enter.count() != 1:
-                            raise LcscPageUnavailable("AUTHENTICATED_SESSION_REQUIRED", page.url)
-                        enter.click(timeout=self._timeout_ms)
+                        if "已登录账号" in body and enter.count() == 1:
+                            enter.click(timeout=self._timeout_ms)
+                        else:
+                            self._restore_session(page)
+                        # Authentication may return to a landing page. Re-run
+                        # the original query exactly once after either SSO handoff
+                        # or a Vault-backed ordinary login.
+                        page.goto(
+                            search_url,
+                            wait_until="domcontentloaded",
+                            timeout=self._timeout_ms,
+                        )
                         page.wait_for_timeout(3_000)
                     if urlsplit(page.url).hostname != "so.szlcsc.com":
                         raise LcscPageUnavailable("SEARCH_NAVIGATION_FAILED", page.url)
@@ -333,7 +355,33 @@ class CdpLcscClient:
                         product = parse_lcsc_cooperation_card(card.inner_text(), mpn)
                         if product is not None:
                             return LcscPage("", page.url, datetime.now(UTC), product)
-                    product, _product_id = parse_lcsc_search_product(page.content(), mpn)
+                    try:
+                        product, _product_id = parse_lcsc_search_product(
+                            page.content(), mpn
+                        )
+                    except LcscParseError:
+                        # A same-host login shell can look like a changed
+                        # search document. Recover only when the actual normal
+                        # account form is present, and re-run the query once.
+                        if not self._has_normal_login_form(page):
+                            raise
+                        self._restore_session(page)
+                        page.goto(
+                            search_url,
+                            wait_until="domcontentloaded",
+                            timeout=self._timeout_ms,
+                        )
+                        page.wait_for_timeout(3_000)
+                        if urlsplit(page.url).hostname != "so.szlcsc.com":
+                            raise LcscPageUnavailable(
+                                "SEARCH_NAVIGATION_FAILED", page.url
+                            )
+                        _reject_lcsc_challenge(
+                            page.locator("body").inner_text(), page.url
+                        )
+                        product, _product_id = parse_lcsc_search_product(
+                            page.content(), mpn
+                        )
                     return LcscPage("", page.url, datetime.now(UTC), product)
                 finally:
                     if created_page:
@@ -342,6 +390,45 @@ class CdpLcscClient:
             raise
         except Exception as exc:
             raise LcscPageUnavailable("BROWSER_FAILURE", search_url) from exc
+
+    def _restore_session(self, page: object) -> None:
+        """Perform one ordinary JLC account login, never a QR/OTP flow."""
+
+        if self._login_provider is None:
+            raise LcscPageUnavailable("LOGIN_REQUIRED")
+        login = self._login_provider.get_login(LCSC_SITE_ID)
+        if login is None:
+            raise LcscPageUnavailable("LOGIN_REQUIRED")
+        account_tab = page.get_by_text("账号登录", exact=True)  # type: ignore[attr-defined]
+        if account_tab.count() != 1:
+            raise LcscPageUnavailable("RESULT_CHANGED", page.url)  # type: ignore[attr-defined]
+        account_tab.click(timeout=self._timeout_ms)
+        account = page.locator(  # type: ignore[attr-defined]
+            'input[type="text"]:visible, input[type="tel"]:visible'
+        )
+        password = page.locator('input[type="password"]:visible')  # type: ignore[attr-defined]
+        submit = page.get_by_text("登录", exact=True)  # type: ignore[attr-defined]
+        if account.count() != 1 or password.count() != 1 or submit.count() != 1:
+            raise LcscPageUnavailable("RESULT_CHANGED", page.url)  # type: ignore[attr-defined]
+        account.fill(login.username)
+        password.fill(login.password)
+        submit.click(timeout=self._timeout_ms)
+        page.wait_for_timeout(3_000)  # type: ignore[attr-defined]
+        body = page.locator("body").inner_text()  # type: ignore[attr-defined]
+        _reject_lcsc_challenge(body, page.url)  # type: ignore[attr-defined]
+        if urlsplit(page.url).hostname == "passport.jlc.com":  # type: ignore[attr-defined]
+            raise LcscPageUnavailable("LOGIN_NOT_CONFIRMED", page.url)  # type: ignore[attr-defined]
+
+    @staticmethod
+    def _has_normal_login_form(page: object) -> bool:
+        """Recognize the site's ordinary account form without URL guessing."""
+
+        try:
+            account_tab = page.get_by_text("账号登录", exact=True)  # type: ignore[attr-defined]
+            password = page.locator('input[type="password"]:visible')  # type: ignore[attr-defined]
+            return account_tab.count() == 1 and password.count() == 1
+        except Exception:  # noqa: BLE001 - only an auth hint, never a failure
+            return False
 
 
 def _is_lcsc_session_url(url: str) -> bool:

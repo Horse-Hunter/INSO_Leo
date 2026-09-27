@@ -24,6 +24,7 @@ from src.core import CredentialProvider, Login, get_login
 from .bom_ai import BOM_AI_SITE_ID, BomAiLogin
 from .icnet import ICNET_SITE_ID, IcNetLogin
 from .inso_history import INSO_SITE_ID, InsoLogin
+from .lcsc import LcscLogin
 
 RESEARCH_CREDENTIAL_SITE_IDS: tuple[str, ...] = (
     ICNET_SITE_ID,
@@ -120,6 +121,19 @@ class BomAiCoreCredentialProvider:
         return BomAiLogin(login.username, login.password, login.company)
 
 
+class LcscCoreLoginProvider:
+    """Optional JLC login bridge; it is intentionally not a startup prerequisite."""
+
+    def __init__(self, bridge: CoreLoginBridge) -> None:
+        self._bridge = bridge
+
+    def get_login(self, site_id: str) -> LcscLogin | None:
+        login = self._bridge.login(site_id)
+        if login is None:
+            return None
+        return LcscLogin(login.username, login.password)
+
+
 class InsoCoreCredentialProvider:
     """Research INSO credential capability backed by the Core Provider."""
 
@@ -139,6 +153,7 @@ class CoreResearchCredentials:
     def __init__(self, provider: CredentialProvider | None = None) -> None:
         self._bridge = CoreLoginBridge(provider)
         self.icnet = IcNetCoreLoginProvider(self._bridge)
+        self.lcsc = LcscCoreLoginProvider(self._bridge)
         self.bom_ai = BomAiCoreCredentialProvider(self._bridge)
         self.inso = InsoCoreCredentialProvider(self._bridge)
 
