@@ -14,15 +14,16 @@ Acceptance:
 - No new credential store, browser framework, external write, secret, cookie, token or customer data is committed.
 
 Current:
-- IC.net fix is committed and pushed: the parser accepts the current `#resultList` container, and the CDP client performs one Vault-backed relogin before re-running the search. Deterministic valid-session, expired-session and no-provider cases pass. Live LM358 smoke reaches the normal login page and returns `LOGIN_REQUIRED` because the existing Core Vault has no IC.net login; no CAPTCHA or failure was misclassified as no-result.
+- IC.net fix is committed and pushed: the parser accepts the current `#resultList` container, and the CDP client performs one Vault-backed relogin before re-running the search. Deterministic valid-session, expired-session and no-provider cases pass.
 - Live discovery: LCSC currently renders normal public search results while its visible login control remains present; the current client incorrectly treats that control as `AUTHENTICATED_SESSION_REQUIRED`.
-- Live discovery: HQEW redirects the historical URL to `/yunquote?toUrl=...`; its rendered page still contains parseable `input.list-data` offers, while the current exact-path check rejects it.
+- IC.net live recovery is now verified using the existing Vault login: LM358 returned 49 result rows after one normal relogin.
+- HQEW fix is committed and pushed: its verified same-site `/yunquote?toUrl=...` redirect is accepted only when the declared model URL is exact. Live LM358 smoke read 19 offers.
 
 Next:
-- Obtain the one approved IC.net Chrome login or add its ordinary login to the existing Vault, then verify the actual result rows. Continue LCSC and HQEW acquisition repairs.
+- Owner completes the existing LCSC/JLC SSO login once in the approved CDP Chrome, then continue the LCSC live smoke and remaining Research source regressions.
 
 Blockers:
-- IC.net live completion requires one normal Owner login in the approved CDP Chrome or an existing Core Vault IC.net login.
+- LCSC/JLC session is at its normal SSO login page and no LCSC Vault credential exists. It requires one normal Owner login; no CAPTCHA/OTP bypass will be attempted.
 
 Owner Decisions:
 - Branch/worktree: `hotfix/v1-1-research-stability` from `be9d0a51d0375884dfa3e5e9e4317958899fdc75`.
