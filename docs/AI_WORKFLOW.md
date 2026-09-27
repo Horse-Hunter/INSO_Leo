@@ -6,7 +6,7 @@
 
 - **Owner（Leo）**：业务 Owner、最终授权人。
 - **Main Programmer（Codex）**：日常技术负责人，对阶段实现结果负责。
-- **CEO**：兼任架构师与 Safety Reviewer，负责阶段目标、业务规则、重大边界与版本 Gate。
+- **CEO**：兼任架构师与 Safety Reviewer，负责阶段目标、业务规则、项目通用文档、重大边界与版本 Gate。
 - Specialist 只在确有必要时临时加入。
 
 ## 默认工作方式
@@ -35,7 +35,19 @@ Main Programmer 可自主处理普通 bug、selector/parser、session 恢复、t
 
 ## 文档职责
 
-- CEO：`AGENTS.md`、`PROJECT_BASELINE.md`、`AI_WORKFLOW.md`、`SAFETY.md`、`REPORTING.md` 及项目级架构/跨模块基线。
-- Main Programmer：`CURRENT_TASK.md`、代码、测试及实现侧局部文档。
+CEO/架构师维护项目通用文档：
+- `AGENTS.md`
+- `PROJECT_BASELINE.md`
+- `AI_WORKFLOW.md`
+- `REPORTING.md`
+- `SAFETY.md`
+- `PRODUCT_BASELINE.md`
+- `MODULE_INDEX.md`
+- 大版本 architecture / safety baseline
 
-文档只保留当前有效事实；不堆历史流水账。
+Main Programmer 维护：
+- `CURRENT_TASK.md`
+- 代码、测试
+- module/runtime/release 等实现侧局部文档
+
+项目通用文档只保留当前有效事实，不堆历史流水账。
