@@ -1,48 +1,22 @@
-# 答复模板
+# 汇报规则
 
-本文件由 CEO 维护，只定义通用答复格式；不记录任何项目当前进度或交接内容。默认简洁，先说结论，再说需要 Owner 做什么。
+默认 **Main Programmer 直接向 Owner 汇报**；普通开发不经过 CEO 中转。
 
-## Main Programmer → CEO
-
-```text
-状态：
-DONE / BLOCKED
-
-结果：
-<一句话>
-
-需要决定：
-NONE / 一个明确决定
-
-验证：
-<关键测试>
-
-阻塞：
-NONE / 真正阻塞项
-
-Commit：
-<hash>
-```
-
-## CEO → Owner
+阶段完成时只报：
 
 ```text
-结论：
-<一句话>
-
-你要做什么：
-NONE / 一个明确动作
-
-需要决定：
-NONE / 一个明确决定
-
-下一步：
-<一句话>
+状态：DONE / BLOCKED
+完成：<关键结果>
+验证：<测试 + live>
+需要 Owner：NONE / 一个明确动作
+阻塞：NONE / 唯一真实 blocker
+Commit：<SHA + push 状态>
 ```
 
-## 规则
+只有业务规则、Safety/Write Gate、重大架构或 release/merge 节点才升级 CEO。
 
-- 没有内容就写 `NONE`。
-- 不先贴技术日志。
-- 不重复背景。
+规则：
+- 不贴长篇过程日志，不重复背景。
+- `NOT_LIVE_VERIFIED` 不等于 `FAIL`。
+- 普通技术失败先自行诊断和修复，不以汇报代替解决。
 - 一个答复尽量只要求 Owner 做一个动作。
