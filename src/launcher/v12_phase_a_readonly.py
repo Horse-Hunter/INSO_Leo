@@ -475,6 +475,7 @@ def _inspect_history(
                 report["query"]["detail_readback_fields"] = (
                     _confirmed_detail_readback_fields(detail)
                 )
+                cache_rows = _quote_cache_rows(frame)
                 _classify_duplicate_fields(
                     report,
                     fields,
@@ -482,6 +483,7 @@ def _inspect_history(
                     columns=report["query"]["grid_columns"],
                     bill_id=bill_id,
                     rows=response_rows,
+                    cache_rows=cache_rows,
                 )
         elif response_rows:
             report["reason_codes"].append("GRID_RESPONSE_IDENTITY_UNCONFIRMED")
@@ -519,6 +521,27 @@ def _billid_value(frame: object) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _quote_cache_rows(frame: object) -> list[dict[str, Any]]:
+    """Read only quote fields from the current grid cache, without persisting values."""
+
+    try:
+        rows = frame.evaluate(
+            """() => {
+                const rows = window.table && window.table.cache
+                    && window.table.cache.dg;
+                if (!Array.isArray(rows)) return null;
+                return rows.map(row => ({
+                    BillID: row.BillID,
+                    OfferPrice: row.OfferPrice,
+                    OfferCurrencyID: row.OfferCurrencyID
+                }));
+            }"""
+        )
+    except Exception:  # noqa: BLE001 - unavailable cache is not evidence
+        return []
+    return rows if isinstance(rows, list) else []
+
+
 def _confirmed_detail_readback_fields(frame: object) -> list[str]:
     selectors = {
         "bill_id": "#BillID",
@@ -551,6 +574,7 @@ def _classify_duplicate_fields(
     columns: list[dict[str, str]],
     bill_id: str,
     rows: list[dict[str, Any]],
+    cache_rows: list[dict[str, Any]],
 ) -> None:
     creator, quote, currency = _confirmed_duplicate_fields(row_fields, columns, fields)
     if creator and any(
@@ -562,23 +586,48 @@ def _classify_duplicate_fields(
     matching_rows = [
         row for row in rows if str(row.get("BillID", "")).strip() == bill_id
     ]
-    if quote and currency and len(matching_rows) == 1:
+    matching_cache_rows = [
+        row for row in cache_rows if str(row.get("BillID", "")).strip() == bill_id
+    ]
+    if (
+        quote
+        and currency
+        and len(matching_rows) == 1
+        and len(matching_cache_rows) == 1
+    ):
         row = matching_rows[0]
+        cache_row = matching_cache_rows[0]
         row_quote = row.get(quote)
         row_currency = row.get(currency)
-        decimal_readable = _decimal_is_readable(row_quote)
+        cache_quote = cache_row.get(quote)
+        cache_currency = cache_row.get(currency)
+        price_nonempty = row_quote is not None and bool(str(row_quote).strip())
+        decimal_readable = _decimal_is_readable(row_quote) if price_nonempty else None
+        price_matches = (
+            _decimal_values_equal(row_quote, cache_quote)
+            if price_nonempty
+            else row_quote == cache_quote
+        )
+        currency_matches = (
+            row_currency is not None
+            and cache_currency is not None
+            and str(row_currency).strip() == str(cache_currency).strip()
+        )
         currency_nonempty = row_currency is not None and bool(
             str(row_currency).strip()
         )
+        values_match = (
+            price_matches
+            and currency_matches
+            and (not price_nonempty or decimal_readable is True)
+        )
         report["inso_quote"] = {
-            "status": "CONFIRMED"
-            if decimal_readable and currency_nonempty
-            else "UNKNOWN",
+            "status": "CONFIRMED" if values_match else "UNKNOWN",
             "field": quote,
             "currency_field": currency,
             "decimal_readable": decimal_readable,
             "currency_nonempty": currency_nonempty,
-            "billid_response_row_unique": True,
+            "billid_response_cache_values_match": values_match,
         }
 
 

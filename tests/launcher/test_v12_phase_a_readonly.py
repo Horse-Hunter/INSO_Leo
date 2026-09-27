@@ -97,9 +97,12 @@ def test_quote_needs_same_billid_response_row_and_decimal_price() -> None:
         ],
         bill_id="101",
         rows=[{"BillID": "101", "OfferPrice": "23.50", "OfferCurrencyID": "1"}],
+        cache_rows=[
+            {"BillID": "101", "OfferPrice": "23.5", "OfferCurrencyID": "1"}
+        ],
     )
     assert report["inso_quote"]["status"] == "CONFIRMED"
-    assert report["inso_quote"]["billid_response_row_unique"] is True
+    assert report["inso_quote"]["billid_response_cache_values_match"] is True
     assert "23.50" not in json.dumps(report)
 
     mismatch = _empty_report()
@@ -113,8 +116,28 @@ def test_quote_needs_same_billid_response_row_and_decimal_price() -> None:
         ],
         bill_id="101",
         rows=[{"BillID": "101", "OfferPrice": "not-a-decimal", "OfferCurrencyID": "2"}],
+        cache_rows=[
+            {"BillID": "101", "OfferPrice": "not-a-decimal", "OfferCurrencyID": "2"}
+        ],
     )
     assert mismatch["inso_quote"]["status"] == "UNKNOWN"
+
+    different_cache = _empty_report()
+    _classify_duplicate_fields(
+        different_cache,
+        [],
+        row_fields={"BillID", "OfferPrice", "OfferCurrencyID"},
+        columns=[
+            {"field": "OfferPrice", "label": "报价"},
+            {"field": "OfferCurrencyID", "label": "报价币种"},
+        ],
+        bill_id="101",
+        rows=[{"BillID": "101", "OfferPrice": "23.50", "OfferCurrencyID": "1"}],
+        cache_rows=[
+            {"BillID": "101", "OfferPrice": "23.50", "OfferCurrencyID": "2"}
+        ],
+    )
+    assert different_cache["inso_quote"]["status"] == "UNKNOWN"
 
 
 def test_decimal_probe_does_not_return_or_log_quote_value() -> None:
