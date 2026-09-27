@@ -419,7 +419,7 @@ class _SameHostExpiredCdpPage(_ExpiredSessionCdpPage):
 
 class _LcscLoginProvider:
     def get_login(self, site_id: str) -> LcscLogin | None:
-        assert site_id == "passport.jlc.com"
+        assert site_id == "szlcsc.com"
         return LcscLogin("synthetic-user", "synthetic-password")
 
 
