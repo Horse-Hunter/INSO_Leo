@@ -1,47 +1,34 @@
 # 项目管理基线
 
-本文件由 CEO 维护，只记录项目级长期规则、总体架构原则和大版本概述。它不记录业务/模块细节、当前进度、任务分工、交接或实现过程。
+本文件只记录项目级长期规则与当前稳定锚点，不记录开发流水账。
 
 ## 核心规则
 
-- **简单优先。** 能简单解决就不复杂解决。
-- **保持简洁，不得臃肿。** 规则、文档、架构和流程只保留必要内容；能删就删，能合并就合并，不堆重复说明、层级或机制。
-- 只为当前已确认需求、已发生问题或明确高影响风险增加复杂度。
-- 不为“以后可能需要”、理论完整性、架构漂亮或泛化能力提前增加层级、框架、状态、依赖、流程或文档。
-- 两个方案都满足目标时，选概念更少、改动更小、路径更直接的方案。
-- 发现设计开始持续衍生新机制时，先删减、合并或推迟。
-- Git + canonical docs 是项目事实源；聊天上下文不是长期事实源。
+- **简单优先、保持瘦身。** 能删就删，能合并就合并；不为未来假设增加框架、状态、流程或文档。
+- 一个事实只保留一个 canonical 来源；已被新结论取代的过程记录应删除或停止作为日常上下文。
+- Git + canonical docs 是事实源；聊天上下文不是长期事实源。
+- 日常启动优先只读 `AGENTS.md + PROJECT_BASELINE.md + CURRENT_TASK.md`，其他文档按需读取。
 
-## 总体架构原则
+## 协作基线
 
-- 软件保持模块化，但不追求过度分层。
-- 跨边界使用明确 Public Contract；内部实现保持自由。
-- 稳定能力优先兼容，新增版本优先 additive / seam-based 改动。
+- 日常执行主链：**Owner ↔ Main Programmer**。
+- Main Programmer 默认独立跑完整阶段：诊断 → 实现 → 测试 → 修复 → live 验收 → commit/push，再向 Owner 汇报。
+- CEO 兼任架构师与 Safety，只处理阶段目标、业务规则、Safety Gate、重大跨模块架构、release/merge 与真正升级事项。
+- 普通 bug、selector/parser、timeout、测试组织、局部重构、普通 commit/push 不升级 CEO。
+- CEO 维护治理/架构类文档；Main Programmer 维护 `CURRENT_TASK.md` 与实现侧局部文档。
+
+## 当前稳定锚点
+
+- V1.1 Research Stability：**CLOSED**。
+- `release/v1.1 = 44cd4a4cdb05fc069189801d24c4710bfd9445f3`。
+- V1.2 开发分支：`feature/v1-2`；V1.1 Research stability 已同步。
+- 生产浏览器：**Chrome**；Edge 仅备用。
+- 凭据唯一来源：**Core Vault**。
+- LCSC Vault SiteId：`szlcsc.com`；认证跳转 host：`passport.jlc.com`。
+- V1.2 Production Write Gate：**CLOSED**。
+
+## 架构原则
+
+- 模块化但不过度分层；跨模块只依赖明确 Public Contract。
+- 稳定能力优先兼容；新增版本优先 additive / seam-based 改动。
 - 没有真实重复或维护痛点，不为抽象而抽象。
-- CEO 兼任项目架构与日常安全 Review；独立 Specialist 只在确有必要的高风险节点临时启用。
-- 项目治理文档与业务/模块/任务文档分离。
-
-## 文档边界
-
-CEO 维护：
-- `PROJECT_BASELINE.md`：项目级规则、架构原则、大版本概述。
-- `AI_WORKFLOW.md`：团队运行规则与职责边界。
-- `SAFETY.md`：通用安全边界。
-- `REPORTING.md`：通用答复模板。
-- `AGENTS.md`：Agent 入口规则。
-
-实现侧文档由 Main Programmer 维护：
-- `PRODUCT_BASELINE.md`：产品/业务长期事实。
-- `MODULE_INDEX.md` 与 module docs：模块职责与 Contract。
-- `CURRENT_TASK.md`：当前任务状态。
-- runtime/release/implementation docs：实际实现与运行信息。
-
-治理文档不得复制实现侧细节。
-
-## 大版本概述
-
-- `release/v1.1`：V1.1 稳定回退锚点。
-- `main`：已接受的当前稳定基线。
-- feature branch：开发中的版本，不视为稳定基线。
-
-后续大版本只在形成稳定基线后补一行概述；不在这里记录开发进度。
