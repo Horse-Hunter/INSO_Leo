@@ -285,19 +285,30 @@ class CdpLcscClient:
                     self._cdp_url, timeout=self._timeout_ms
                 )
                 context = browser.contexts[0]
-                page = new_background_page(
-                    browser, context, timeout_ms=self._timeout_ms
+                page = next(
+                    (
+                        candidate
+                        for candidate in context.pages
+                        if _is_lcsc_session_url(candidate.url)
+                    ),
+                    None,
                 )
-                try:
-                    # LCSC's SSO may only complete after its home page has
-                    # initialized the already-authorized profile. This is a
-                    # read-only navigation in the same background CDP target.
-                    page.goto(
-                        LCSC_HOME_URL,
-                        wait_until="domcontentloaded",
-                        timeout=self._timeout_ms,
+                created_page = page is None
+                if page is None:
+                    page = new_background_page(
+                        browser, context, timeout_ms=self._timeout_ms
                     )
-                    page.wait_for_timeout(1_000)
+                try:
+                    if created_page:
+                        # A new CDP target has no site document yet. Initializing
+                        # the ordinary LCSC home page lets its existing SSO
+                        # cookies establish before the actual search.
+                        page.goto(
+                            LCSC_HOME_URL,
+                            wait_until="domcontentloaded",
+                            timeout=self._timeout_ms,
+                        )
+                        page.wait_for_timeout(1_000)
                     page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
                     page.wait_for_timeout(3_000)
                     if urlsplit(page.url).hostname == "passport.jlc.com":
@@ -313,8 +324,6 @@ class CdpLcscClient:
                         raise LcscPageUnavailable("SEARCH_NAVIGATION_FAILED", page.url)
                     body = page.locator("body").inner_text()
                     _reject_lcsc_challenge(body, page.url)
-                    if page.locator("#login:visible").count():
-                        raise LcscPageUnavailable("AUTHENTICATED_SESSION_REQUIRED", page.url)
                     cards = page.locator('section[class*="OverseasCard"]')
                     for _ in range(10):
                         if cards.count():
@@ -327,11 +336,24 @@ class CdpLcscClient:
                     product, _product_id = parse_lcsc_search_product(page.content(), mpn)
                     return LcscPage("", page.url, datetime.now(UTC), product)
                 finally:
-                    page.close()
+                    if created_page:
+                        page.close()
         except LcscError:
             raise
         except Exception as exc:
             raise LcscPageUnavailable("BROWSER_FAILURE", search_url) from exc
+
+
+def _is_lcsc_session_url(url: str) -> bool:
+    host = urlsplit(url).hostname
+    return bool(
+        host
+        and (
+            host.casefold() == "szlcsc.com"
+            or host.casefold().endswith(".szlcsc.com")
+            or host.casefold() == "passport.jlc.com"
+        )
+    )
 
 
 _NEXT_DATA = re.compile(

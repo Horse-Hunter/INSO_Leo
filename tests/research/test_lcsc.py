@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Self
 
+import pytest
+
 from src.research.fx import UsdRmbQuote
 from src.research.lcsc import (
     CdpLcscClient,
@@ -400,3 +402,27 @@ def test_cdp_client_initializes_lcsc_sso_before_background_search(
     ]
     assert capture.product is not None
     assert page.closed
+
+
+def test_cdp_client_reuses_existing_lcsc_tab_without_closing_it(
+    monkeypatch,
+) -> None:
+    page = _CdpPage()
+    page.url = "https://so.szlcsc.com/global.html?k=OTHER"
+    chromium = _CdpChromium(_CdpBrowser(_CdpContext(page)))
+    monkeypatch.setattr(
+        "src.research.lcsc.new_background_page",
+        lambda *_args, **_kwargs: pytest.fail("must reuse existing LCSC tab"),
+    )
+    client = CdpLcscClient(
+        timeout_ms=1234,
+        playwright_factory=lambda: _CdpPlaywright(chromium),
+    )
+
+    capture = client.fetch_product_page("ADXL355BEZ-RL7")
+
+    assert page.goto_calls == [
+        "https://so.szlcsc.com/global.html?k=ADXL355BEZ-RL7"
+    ]
+    assert capture.product is not None
+    assert not page.closed
