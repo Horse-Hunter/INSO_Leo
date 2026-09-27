@@ -1,0 +1,143 @@
+from __future__ import annotations
+
+import inspect
+import json
+
+from src.launcher.v12_phase_a_readonly import (
+    _classify_duplicate_fields,
+    _confirmed_duplicate_fields,
+    _decimal_is_readable,
+    _empty_report,
+    _inspect_blank_form,
+    _schema_summary,
+)
+
+
+def test_schema_summary_keeps_keys_but_never_values() -> None:
+    payload = {
+        "rows": [
+            {
+                "BillID": "101",
+                "OfferPrice": "23.50",
+                "Creator": "SECRET_CANARY_private_customer",
+            }
+        ],
+        "token": "SECRET_CANARY_auth_token",
+    }
+
+    top_level, row_shapes = _schema_summary(payload)
+    report = json.dumps({"top": top_level, "rows": row_shapes})
+
+    assert top_level == ["rows"]
+    assert row_shapes == [
+        {"path": "rows", "fields": ["BillID", "Creator", "OfferPrice"]}
+    ]
+    assert "SECRET_CANARY" not in report
+    assert "token" not in report
+
+
+def test_creator_requires_schema_grid_and_detail_agreement() -> None:
+    row_fields = {"BillID", "Creator", "UserName", "OwnerID"}
+    columns = [{"field": "Creator", "label": "制单人"}]
+    details = [{"field": "Creator", "label": "制单人", "creator_nonempty": True}]
+
+    creator, quote, currency = _confirmed_duplicate_fields(row_fields, columns, details)
+
+    assert creator == "Creator"
+    assert quote is None
+    assert currency is None
+
+
+def test_purchaser_and_salesperson_never_count_as_creator() -> None:
+    row_fields = {"BillID", "UserName", "OwnerID"}
+    columns = [
+        {"field": "UserName", "label": "采购人员"},
+        {"field": "OwnerID", "label": "业务员"},
+    ]
+    details = columns.copy()
+
+    assert _confirmed_duplicate_fields(row_fields, columns, details) == (
+        None,
+        None,
+        None,
+    )
+
+
+def test_quote_requires_response_grid_and_detail_mapping() -> None:
+    row_fields = {"BillID", "OfferPrice", "OfferCurrencyID"}
+    columns = [{"field": "OfferPrice", "label": "报价"}]
+    details = [
+        {"field": "OfferPrice", "label": "报价", "value": "23.50"},
+        {
+            "field": "OfferCurrencyID",
+            "label": "报价币种",
+            "value": "1",
+            "currency_display_readable": True,
+        },
+    ]
+
+    assert _confirmed_duplicate_fields(row_fields, columns, details) == (
+        None,
+        "OfferPrice",
+        "OfferCurrencyID",
+    )
+    assert _confirmed_duplicate_fields(row_fields, [], details) == (
+        None,
+        None,
+        "OfferCurrencyID",
+    )
+
+
+def test_quote_needs_matching_detail_currency_and_decimal() -> None:
+    report = _empty_report()
+    fields = [
+        {"field": "OfferPrice", "label": "报价", "value": "23.50"},
+        {
+            "field": "OfferCurrencyID",
+            "label": "报价币种",
+            "value": "1",
+            "currency_display_readable": True,
+        },
+    ]
+    _classify_duplicate_fields(
+        report,
+        fields,
+        row_fields={"BillID", "OfferPrice", "OfferCurrencyID"},
+        columns=[{"field": "OfferPrice", "label": "报价"}],
+        bill_id="101",
+        rows=[{"BillID": "101", "OfferPrice": "23.50", "OfferCurrencyID": "1"}],
+    )
+    assert report["inso_quote"]["status"] == "CONFIRMED"
+    assert report["inso_quote"]["row_detail_values_match"] is True
+    assert "23.50" not in json.dumps(report)
+
+    mismatch = _empty_report()
+    _classify_duplicate_fields(
+        mismatch,
+        fields,
+        row_fields={"BillID", "OfferPrice", "OfferCurrencyID"},
+        columns=[{"field": "OfferPrice", "label": "报价"}],
+        bill_id="101",
+        rows=[{"BillID": "101", "OfferPrice": "23.50", "OfferCurrencyID": "2"}],
+    )
+    assert mismatch["inso_quote"]["status"] == "UNKNOWN"
+
+
+def test_decimal_probe_does_not_return_or_log_quote_value() -> None:
+    assert _decimal_is_readable("1,234.50")
+    assert not _decimal_is_readable("SECRET_CANARY")
+    report = json.dumps(_empty_report())
+    assert "SECRET_CANARY" not in report
+
+
+def test_read_only_inspector_has_no_recognition_import_or_save_click() -> None:
+    source = inspect.getsource(_inspect_blank_form)
+
+    assert "ai_entry.click" in source  # opening the inspected panel only
+    assert "recognize.click" not in source
+    assert "pasteImport" in source  # function source is inspected, not invoked
+    assert "doImport" in source
+    assert "save_button.click" not in source
+    assert "save_send.click" not in source
+    assert "send.click" not in source
+    assert "win_btn__dialog11" not in source

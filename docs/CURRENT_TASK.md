@@ -1,6 +1,6 @@
-# Current Task — V1.2 final runtime acceptance
+# Current Task — V1.2 Phase A final
 
-Phase A-3: PARTIAL — confirmed duplicate settlement implemented; remaining live facts preserved as UNKNOWN
+Phase A FINAL: NEEDS_ONE_CLICK — a bounded, read-only Owner-session runner is ready; it has not been executed from the Codex sandbox.
 V1.2 status: PRE_SAVE_READY / REAL_SAVE_GATED
 Production write gate: CLOSED
 
@@ -84,3 +84,30 @@ Canonical browser baseline: Chrome (`browser.channel = "chrome"`). Edge is retai
 - V1.1 Research behavior and its canonical rules are unchanged.
 
 CEO performs the daily Safety Review. Keep the production write gate CLOSED.
+
+## Phase A FINAL — 2026-09-27
+
+- **Query settlement:** production implementation remains in the duplicate
+  page adapter. The one-run inspector uses that adapter and records response
+  schema keys/grid headers, never row values.
+- **Creator / quote:** remain UNKNOWN until the Owner-session report closes the
+  response-schema → grid → detail mapping. The inspector excludes `UserName`
+  and `OwnerID` from creator. It checks quote decimal readability in memory and
+  stores only a boolean. Research `InPrice` is never read.
+- **AI and blank-draft writer:** remain UNKNOWN. The inspector opens a verified
+  blank form and AI panel only when the loaded handler shows the known dialog
+  route and no detected persistence call. It does not run recognition, import a
+  row, or fill parent fields. It records visible input metadata and callback
+  field-name evidence, never values.
+- **Save/reconciliation:** controls and loaded handlers are inspected without
+  clicking. `#btnSave2` and `#bcSend` remain hard-forbidden. Static Save response
+  facts are not treated as proof of post-Save reconciliation.
+- **Runner:** `src/launcher/v12_phase_a_readonly.py` is ready. The local ignored
+  entry `runtime/run_v12_phase_a_readonly.cmd` is available for one double-click
+  in the normal Owner Windows session. It requires configured Chrome, the
+  original `.browser-profile/cdp`, and port 9222; it uses a one-context lease
+  and operation-owned pages. A sanitized report will be written to
+  `runtime/evidence/v12-phase-a-final/report.json`.
+- No Save, Send, SMTP, Sheets write, or existing-record modification occurred.
+  Production write gate remains CLOSED. No Owner decision is required; one
+  local read-only runner execution is the remaining step.

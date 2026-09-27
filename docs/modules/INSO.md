@@ -219,3 +219,31 @@ session and redirects to `/login.aspx`. Phase A remains pending in the
 Owner-known runtime; duplicate settlement/creator/quote, purchase selectors,
 Save control semantics, and saved-record reconciliation remain UNKNOWN.
 Production write gate remains CLOSED.
+
+## Phase A FINAL read-only runner — 2026-09-27
+
+`src/launcher/v12_phase_a_readonly.py` is a bounded one-run inspector for the
+Owner-authenticated Chrome session. The ignored
+`runtime/run_v12_phase_a_readonly.cmd` launches it by double-click. It requires
+the canonical Chrome configuration to point at the existing
+`.browser-profile/cdp` and `127.0.0.1:9222`; mismatch, multiple contexts, login
+redirect, or uncertain page/frame identity stops the inspection.
+
+The runner performs one exact history query through
+`PlaywrightDuplicateHistoryPage`, inspects schema keys/approved labels only, and
+opens a detail only for one unambiguous result row. It then opens a blank
+temporary inquiry and inspects the AI panel without recognition, import, parent
+field writes, or Save. The report contains no record values and is written under
+ignored `runtime/evidence/v12-phase-a-final/report.json`.
+
+Creator is confirmed only when response schema, grid label, and detail label
+agree on creator semantics; purchaser `UserName` and salesperson `OwnerID` are
+excluded. `OfferPrice` is confirmed only when response schema, `报价` grid and
+detail mapping, `OfferCurrencyID`/`报价币种` detail mapping, and a parseable
+decimal sample agree. The amount itself is not reported. Equal timestamps
+remain `AMBIGUOUS` without a proven ordering rule.
+
+AI recognition and parent row writing remain UNKNOWN until their server-side
+effects and unsaved behavior are evidenced. The runner never clicks recognition
+or import. Save controls are read only; `#btnSave2` and `#bcSend` remain
+hard-forbidden. No live Save, Send, SMTP, or Sheets write is permitted.
