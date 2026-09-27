@@ -108,6 +108,14 @@ def _is_expected_result_url(url: str, mpn: str) -> bool:
     )
 
 
+def _is_hqew_login_page(html: str) -> bool:
+    folded = html.casefold()
+    return (
+        ("type=\"password\"" in folded or "type='password'" in folded)
+        and "登录" in html
+    )
+
+
 class CdpHqewClient:
     """Read HQEW through an Owner-authenticated ordinary Chrome session."""
 
@@ -190,6 +198,8 @@ class CdpHqewClient:
                     raise HqewPageUnavailable(
                         "INTERACTIVE_CHALLENGE_REQUIRED", current_url
                     )
+                if _is_hqew_login_page(html):
+                    raise HqewPageUnavailable("LOGIN_REQUIRED", current_url)
                 if not _is_expected_result_url(current_url, mpn):
                     raise HqewPageUnavailable(
                         "RESULT_NAVIGATION_FAILED", current_url
@@ -288,6 +298,8 @@ def parse_hqew_offers(
 ) -> tuple[HqewOffer, ...]:
     if "安全验证" in html or "captcha-reset" in html:
         raise HqewPageUnavailable("INTERACTIVE_CHALLENGE_REQUIRED")
+    if _is_hqew_login_page(html):
+        raise HqewPageUnavailable("LOGIN_REQUIRED")
     parser = _OfferParser(reference_at or datetime.now(UTC))
     parser.feed(html)
     if not parser.offers:

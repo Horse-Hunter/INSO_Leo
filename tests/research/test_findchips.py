@@ -105,6 +105,8 @@ def test_parser_retains_only_safe_offer_facts_and_fails_closed() -> None:
     assert not hasattr(offers[0], "moq")
     with pytest.raises(FindchipsParseError, match="RESULT_CONTAINER_MISSING"):
         parse_findchips_offers("<html></html>")
+    with pytest.raises(FindchipsPageUnavailable, match="LOGIN_REQUIRED"):
+        parse_findchips_offers('<form>Login<input type="password"></form>')
 
 
 def test_target_parse_ignores_unrelated_malformed_tiers() -> None:

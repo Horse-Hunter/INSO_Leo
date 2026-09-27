@@ -111,6 +111,14 @@ def _is_findchips_response_url(url: str) -> bool:
     return normalized == "findchips.com" or normalized.endswith(".findchips.com")
 
 
+def _is_findchips_login_page(html: str) -> bool:
+    folded = html.casefold()
+    return (
+        ("type=\"password\"" in folded or "type='password'" in folded)
+        and "login" in folded
+    )
+
+
 class FindchipsHttpClient:
     """Bounded ordinary-HTTP client for one public Findchips search page."""
 
@@ -151,6 +159,8 @@ class FindchipsHttpClient:
                         "EMPTY_RESPONSE",
                         response_url,
                     )
+                if _is_findchips_login_page(html):
+                    raise FindchipsPageUnavailable("LOGIN_REQUIRED", response_url)
                 return FindchipsPage(
                     html=html,
                     url=response_url,
@@ -216,6 +226,8 @@ class CdpFindchipsClient:
                         html = page.content()
                         if not html.strip():
                             raise FindchipsPageUnavailable("EMPTY_RESPONSE", page.url)
+                        if _is_findchips_login_page(html):
+                            raise FindchipsPageUnavailable("LOGIN_REQUIRED", page.url)
                         return FindchipsPage(html, page.url, datetime.now(UTC))
                     finally:
                         context.close()
@@ -427,6 +439,9 @@ def parse_findchips_offers(
     html: str, target_mpn: str | None = None
 ) -> tuple[FindchipsOffer, ...]:
     """Parse safe offer facts without retaining stock quantities or raw HTML."""
+
+    if _is_findchips_login_page(html):
+        raise FindchipsPageUnavailable("LOGIN_REQUIRED")
 
     parser = _FindchipsParser(target_mpn)
     try:
