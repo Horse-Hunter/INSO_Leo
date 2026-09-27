@@ -218,6 +218,10 @@ def _has_class(node: _Node, class_name: str) -> bool:
     return class_name in node.classes
 
 
+def _has_id(node: _Node, element_id: str) -> bool:
+    return node.attrs.get("id") == element_id
+
+
 def _nodes_with_class(node: _Node, class_name: str) -> list[_Node]:
     return [item for item in node.descendants() if _has_class(item, class_name)]
 
@@ -301,7 +305,10 @@ def parse_icnet_rows(html: str) -> tuple[IcNetRow, ...]:
     parser = _TreeParser()
     parser.feed(html)
     nodes = parser.root.descendants()
-    if not any(_has_class(node, "right_results") for node in nodes):
+    if not any(
+        _has_class(node, "right_results") or _has_id(node, "resultList")
+        for node in nodes
+    ):
         raise IcNetParseError("RESULT_CONTAINER_MISSING")
 
     hidden_classes = _hidden_classes(html)
@@ -525,6 +532,7 @@ class CdpIcNetClient:
         settle_ms: int = 5_000,
         navigate: bool = True,
         min_interval_seconds: float = 90.0,
+        login_provider: IcNetLoginProvider | None = None,
         playwright_factory: Callable[[], object] | None = None,
     ) -> None:
         hostname = urlsplit(cdp_url).hostname
@@ -538,6 +546,7 @@ class CdpIcNetClient:
         self._navigate = navigate
         self._min_interval_seconds = min_interval_seconds
         self._last_navigation_at: float | None = None
+        self._login_provider = login_provider
         self._playwright_factory = playwright_factory
 
     def fetch_first_page(self, mpn: str) -> IcNetPage:
@@ -604,6 +613,13 @@ class CdpIcNetClient:
                         wait_until="domcontentloaded",
                         timeout=self._timeout_ms,
                     )
+                    if _is_icnet_login_url(page.url):
+                        self._restore_session(page)
+                        response = page.goto(
+                            target_url,
+                            wait_until="domcontentloaded",
+                            timeout=self._timeout_ms,
+                        )
                     page.wait_for_load_state(
                         "load",
                         timeout=self._timeout_ms,
@@ -651,6 +667,38 @@ class CdpIcNetClient:
                 "BROWSER_FAILURE",
                 current_url,
             ) from error
+
+    def _restore_session(self, page: object) -> None:
+        """Perform one ordinary Vault-backed login in the attached Chrome page."""
+
+        if self._login_provider is None:
+            raise IcNetPageUnavailable("LOGIN_REQUIRED")
+        login = self._login_provider.get_login(ICNET_SITE_ID)
+        if login is None:
+            raise IcNetPageUnavailable("LOGIN_REQUIRED")
+        username = page.locator("#username")  # type: ignore[attr-defined]
+        password = page.locator("#password")  # type: ignore[attr-defined]
+        submit = page.locator("#btn_login")  # type: ignore[attr-defined]
+        if not all(locator.count() == 1 for locator in (username, password, submit)):
+            raise IcNetPageUnavailable("LOGIN_FORM_UNAVAILABLE")
+        username.fill(login.username)
+        password.fill(login.password)
+        submit.click()
+        page.wait_for_timeout(3_000)  # type: ignore[attr-defined]
+        captcha = page.locator("#loginCode")  # type: ignore[attr-defined]
+        if captcha.count() and captcha.is_visible():
+            raise IcNetPageUnavailable("INTERACTIVE_CHALLENGE_REQUIRED")
+        if _is_icnet_login_url(page.url):  # type: ignore[attr-defined]
+            raise IcNetPageUnavailable("LOGIN_NOT_CONFIRMED")
+
+
+def _is_icnet_login_url(url: str) -> bool:
+    parsed = urlsplit(url)
+    return bool(
+        parsed.hostname
+        and parsed.hostname.casefold() == "member.ic.net.cn"
+        and parsed.path.casefold().endswith("/login.php")
+    )
 
 
 class IcNetAdapter:

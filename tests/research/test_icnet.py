@@ -178,6 +178,16 @@ def test_sanitized_fixture_parses_only_displayed_values() -> None:
     assert rows[3].quantity == 9999
 
 
+def test_current_result_list_container_is_accepted() -> None:
+    html = '<ul id="resultList">' + _row_html(
+        "ABC-123", "Acme", "20", "SSCP"
+    ) + "</ul>"
+
+    assert parse_icnet_rows(html) == (
+        IcNetRow("ABC-123", "Acme", 20, frozenset({"SSCP"})),
+    )
+
+
 @pytest.mark.parametrize(
     ("displayed", "expected"),
     [
@@ -420,6 +430,72 @@ def test_cdp_client_navigation_reuses_attached_normal_chrome_page() -> None:
     target_url = "https://www.ic.net.cn/search/ABC-123.html"
     assert captured.url == target_url
     assert page.goto_calls == [(target_url, "domcontentloaded", 1234)]
+
+
+class _LoginLocator(FakeLocator):
+    def __init__(self, page: "SessionExpiredCdpPage", selector: str) -> None:
+        super().__init__(1)
+        self._page = page
+        self._selector = selector
+
+    def fill(self, _value: str) -> None:
+        return None
+
+    def click(self) -> None:
+        if self._selector == "#btn_login":
+            self._page.logged_in = True
+            self._page.url = "https://www.ic.net.cn/"
+
+    def is_visible(self) -> bool:
+        return False
+
+
+class SessionExpiredCdpPage(FakeCdpPage):
+    def __init__(self, html: str) -> None:
+        super().__init__("https://www.ic.net.cn/", html)
+        self.logged_in = False
+
+    def goto(self, url: str, *, wait_until: str, timeout: int):
+        self.goto_calls.append((url, wait_until, timeout))
+        self.url = url if self.logged_in else "https://member.ic.net.cn/login.php"
+
+    def locator(self, selector: str):
+        if selector in {"#username", "#password", "#btn_login", "#loginCode"}:
+            return _LoginLocator(self, selector)
+        return super().locator(selector)
+
+
+class LoginProvider:
+    def get_login(self, site_id: str) -> IcNetLogin | None:
+        assert site_id == "ic.net.cn"
+        return IcNetLogin("test-user", "test-password")
+
+
+def test_cdp_client_recovers_one_expired_session_with_existing_provider() -> None:
+    page = SessionExpiredCdpPage(FIXTURE.read_text(encoding="utf-8"))
+    context = FakeCdpContext([page])
+    chromium = FakeChromium(FakeCdpBrowser(context))
+    client = CdpIcNetClient(
+        cdp_url="http://127.0.0.1:9333",
+        timeout_ms=1234,
+        settle_ms=0,
+        min_interval_seconds=0,
+        login_provider=LoginProvider(),
+        playwright_factory=lambda: FakePlaywright(chromium),
+    )
+
+    captured = client.fetch_first_page("ABC-123")
+
+    assert captured.url == "https://www.ic.net.cn/search/ABC-123.html"
+    assert len(page.goto_calls) == 2
+
+
+def test_cdp_client_reports_login_required_without_existing_provider() -> None:
+    page = SessionExpiredCdpPage(FIXTURE.read_text(encoding="utf-8"))
+    client, _ = _cdp_client([page], navigate=True)
+
+    with pytest.raises(IcNetPageUnavailable, match="LOGIN_REQUIRED"):
+        client.fetch_first_page("ABC-123")
 
 
 def test_cdp_client_classifies_http_forbidden_before_parser() -> None:
