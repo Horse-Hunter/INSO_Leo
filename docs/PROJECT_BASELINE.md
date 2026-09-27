@@ -22,7 +22,7 @@
 - V1.1 Research Stability：**CLOSED**。
 - `release/v1.1 = 44cd4a4cdb05fc069189801d24c4710bfd9445f3`。
 - V1.2 开发分支：`feature/v1-2`；V1.1 Research stability 已同步。
-- 生产浏览器：**Chrome**；Edge 仅备用。
+- 生产浏览器：**Chrome only**；Edge 不再支持。
 - 凭据唯一来源：**Core Vault**。
 - LCSC Vault SiteId：`szlcsc.com`；认证跳转 host：`passport.jlc.com`。
 - V1.2 Production Write Gate：**CLOSED**。
