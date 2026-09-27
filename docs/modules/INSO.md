@@ -324,3 +324,19 @@ selectors remain UNKNOWN. Save/Send/SMTP/Sheets were not used.
   visible blank form after the read-only detail was closed. The AI iframe
   remains hidden; recognition, import, and parent-field writes were not run.
   No live adapter fields were added. Production Write Gate remains CLOSED.
+
+## Bounded Phase A closeout follow-up — 2026-09-27
+
+- A lease-pinned production Playwright attach reached the verified shell, but
+  its operation-frame grid had no rows to seed the accepted exact-query adapter.
+  A separately surfaced browser UI list had rows but was not mixed into that
+  adapter call. The adapter was not dispatched; no MPN was substituted.
+- Read-only UI inspection opened one blank temporary inquiry and its unique AI
+  dialog iframe at `/product/Import_ai.aspx`. The input is `textarea#paste-area`
+  and the visible recognition control is `button#ai-recognize`. No preview row
+  existed. The recognition handler/persistence behavior was not provable from
+  the exposed runtime, so recognition and import were not run. These observations
+  do not configure production selectors or enable a parent writer.
+- The AI dialog was closed through its visible cancel action. The untouched
+  blank temporary inquiry remains open because its Back implementation was not
+  verifiable in this frame. No Save or Send control was activated.

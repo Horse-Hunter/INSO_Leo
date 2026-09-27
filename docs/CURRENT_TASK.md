@@ -1,6 +1,6 @@
 # Current Task — V1.2 Phase A final
 
-Phase A FINAL: PARTIAL — native exact query is verified; its response was empty. AI dialog opening was intercepted by an existing modal, so its iframe remains unconfirmed.
+Phase A FINAL: PARTIAL — native exact query remains verified, but this run's lease operation frame had no rows for a nonempty query. AI iframe is confirmed; recognition persistence and parent-field read-back remain unknown.
 V1.2 status: PRE_SAVE_READY / REAL_SAVE_GATED
 Production write gate: CLOSED
 
@@ -211,3 +211,24 @@ CEO performs the daily Safety Review. Keep the production write gate CLOSED.
   not performed. AI remains UNKNOWN.
 - REAL SAVE: NO. REAL SEND: NO. REAL SMTP: NO. Sheets write: NO. Production
   Write Gate remains CLOSED.
+
+## Bounded Phase A closeout follow-up — 2026-09-27
+
+- The existing production Playwright lease attached to its verified
+  authenticated shell, but its operation-frame grid had no rows to seed the
+  exact query. A separately surfaced browser UI list had rows, but it was not
+  the lease page and was not mixed into the production adapter call. No exact
+  query was dispatched and no other part number was substituted.
+- In the available authenticated browser UI, one blank temporary inquiry and
+  its unique `details-dialog._dialog1` AI iframe were opened. The AI textarea is
+  `#paste-area` and the recognition button is `#ai-recognize` (`AI 智能识别`).
+  The preview had no rows. The recognition handler was not exposed by the
+  read-only inspection; persistence safety could not be established, so
+  recognition and import were not run. Parent product writer selectors remain
+  UNKNOWN.
+- The AI panel was closed with its visible cancel action. The blank, untouched
+  temporary inquiry remains open because its current frame did not expose the
+  previously documented safe Back implementation; no uncertain close action
+  was dispatched.
+- No business values were recorded. REAL SAVE: NO. REAL SEND: NO. REAL SMTP:
+  NO. Sheets write: NO. Production Write Gate remains CLOSED.
