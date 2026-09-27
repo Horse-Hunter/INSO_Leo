@@ -263,3 +263,6 @@ dispatch; neither control was force-clicked. The loaded grid had no cached
 result row/header metadata. Creator, quote, AI
 recognition/read-back, and blank-draft product writer remain UNKNOWN. The
 existing tab was not used to open forms or details outside the lease lifecycle.
+Loaded list-handler inspection found functions referencing `List_Detail`, but
+did not verify a safe visible action to toggle `#nolike`; no hidden-control or
+guessed-JavaScript interaction was attempted.

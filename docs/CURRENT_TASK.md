@@ -130,5 +130,9 @@ CEO performs the daily Safety Review. Keep the production write gate CLOSED.
   session produced no creator, quote, or detail-schema evidence. The AI panel
   and blank form were not opened on the reused user tab because that page is
   outside the current lease's operation-page lifecycle.
+- Loaded list-handler inspection found functions that reference `List_Detail`,
+  but did not establish a safe visible action that toggles `#nolike`; its
+  associated `精确` label has zero visible bounds. The query adapter remains
+  fail closed rather than invoking a hidden control or guessed JavaScript path.
 - No Save, Send, SMTP, Sheets write, AI recognition, or existing-record
   modification occurred. Production write gate remains CLOSED.
