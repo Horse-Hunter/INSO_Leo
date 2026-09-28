@@ -10,6 +10,7 @@
 验证：<测试 + live>
 需要 Owner：NONE / 一个真正必须由 Owner 完成的动作
 阻塞：NONE / 唯一真实 blocker
+说人话：<仅在有问题/阻塞时填写：用 1-3 句话解释现在到底出了什么问题、影响什么、接下来谁处理>
 Commit：<SHA + push 状态>
 ```
 
@@ -22,4 +23,5 @@ Commit：<SHA + push 状态>
 - selector/parser、browser/CDP、普通 session/认证恢复、timeout、测试错误不得列为“需要 Owner”；先由 Main Programmer 负责到底。
 - 只有 CAPTCHA / OTP / 设备验证等明确人工安全挑战，或业务/Safety/Git/release 决策，才可要求 Owner 动作。
 - 不得要求 Owner 提供账号、密码、cookie、token 或其他 secret。
+- **有问题时，技术描述下面必须紧跟“说人话”。** 不得只给错误码、类名、函数名、selector、堆栈或内部缩写。直白解释必须回答三件事：哪里出了问题；对当前功能有什么影响；下一步由谁处理。Owner 不需要自己翻译技术报告。
 - 一个答复最多要求 Owner 做一个明确动作。
