@@ -782,14 +782,19 @@ def _inspect_blank_form(
         if add.count() != 1 or not add.is_visible() or not add.is_enabled():
             report["reason_codes"].append("BLANK_DRAFT_ENTRY_UNCONFIRMED")
             return
-        verify_identity()
-        add.click(timeout=10_000)
         form_element = page.locator("iframe#winIframealert_enquiry")
-        form_loaded = True
-        try:
-            form_element.wait_for(state="visible", timeout=5_000)
-        except Exception:  # noqa: BLE001 - absence remains a typed safe result
-            form_loaded = False
+        existing_form = (
+            form_element.count() == 1 and form_element.is_visible()
+        )
+        form_loaded = existing_form
+        if not existing_form:
+            verify_identity()
+            add.click(timeout=10_000)
+            try:
+                form_element.wait_for(state="visible", timeout=5_000)
+                form_loaded = True
+            except Exception:  # noqa: BLE001 - absence remains a typed safe result
+                form_loaded = False
         if (
             not form_loaded
             or form_element.count() != 1
