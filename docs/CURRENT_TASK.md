@@ -32,6 +32,10 @@
 - Focused parent-field/composition tests: 35 passed. `git diff --check`: pending final review.
 - Edge runtime branch and `EDGE_CDP_ATTACH_FAILED` removed; Chrome launch behavior remains windowless.
 
+## Shared runtime prerequisite
+
+- INSO shared runtime readiness is now a hard project invariant: approved Chrome/CDP + Core Vault + ordinary authentication recovery + unique authenticated shell must be resolved internally before any INSO feature step. Ordinary readiness failures are not Owner blockers. If the shared path is absent or regresses, fix it and its tests first.
+
 ## Gate status before first real Save
 
 - `PlaywrightParentProductFields` binds the verified parent form frame and exact PartNo/Brand/Qty controls without a Save capability.

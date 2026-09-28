@@ -1,5 +1,13 @@
 # INSO Module — V1.2
 
+## Non-negotiable availability invariant
+
+INSO availability is a reusable platform capability for the whole project, not a per-feature setup step. Every INSO code path and every new Main Programmer window must treat the following as mandatory preconditions that the program/agent resolves by itself: approved Chrome/CDP acquisition, Core Vault credential access, ordinary authentication recovery, and unique authenticated-shell verification.
+
+A feature task must **not** stop because Chrome is not currently running, CDP is not yet attached, the ordinary session expired, or the ordinary authentication page is shown. The existing canonical bootstrap/recovery path must be executed; if that shared path is missing or broken, fix the shared path first and add/repair regression tests, then resume the feature task. Do not ask Owner to locate Chrome, type stored credentials, or manually reconstruct the ordinary session.
+
+Only an explicit human security challenge (CAPTCHA, OTP, device verification, or equivalent) may escalate to Owner. This invariant applies to V1.1, V1.2, diagnostics, read-only inspection, duplicate history, Research, purchase draft, reconciliation, and future INSO features.
+
 ## Canonical runtime authentication contract — VERIFIED
 
 This section is the cross-window source of truth for INSO browser/session startup. New Main Programmer windows must read it before any INSO browser operation. Do not rediscover this flow from scratch.

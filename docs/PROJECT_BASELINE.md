@@ -24,6 +24,7 @@
 - V1.2 开发分支：`feature/v1-2`；V1.1 Research stability 已同步。
 - 生产浏览器：**Chrome only**；Edge 不再支持。
 - 凭据唯一来源：**Core Vault**。
+- **INSO runtime readiness 是跨版本基础设施契约。** 所有 INSO 功能默认必须自行做到：approved Chrome/CDP 可用 → Core Vault credential 可读 → 普通认证自动恢复 → 唯一 authenticated shell 可用。普通 Chrome/CDP/session/认证问题不得升级为 Owner blocker；若公共实现缺失或回归，Main Programmer 先修复公共能力再继续业务。唯一例外是 CAPTCHA/OTP/设备验证等明确人工安全挑战。
 - LCSC Vault SiteId：`szlcsc.com`；认证跳转 host：`passport.jlc.com`。
 - V1.2 Production Write Gate：**CLOSED**。
 
