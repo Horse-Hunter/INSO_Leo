@@ -150,6 +150,8 @@ def test_decimal_probe_does_not_return_or_log_quote_value() -> None:
 def test_read_only_inspector_has_no_recognition_import_or_save_click() -> None:
     source = inspect.getsource(_inspect_blank_form)
 
+    assert 'page.locator("iframe#winIframealert_enquiry")' in source
+    assert "/sale/enquiry/bill.aspx" not in source
     assert "ai_entry.click" in source  # opening the inspected panel only
     assert "ai_frames = [" not in source
     assert "dialog_result = _ai_dialog_frame(frame)" in source

@@ -350,6 +350,25 @@ class _ParentPage:
     def __init__(self, frames):
         self.frames = frames
 
+    def locator(self, selector):
+        assert selector == "iframe#winIframealert_enquiry"
+        matching = [frame for frame in self.frames if frame.name == "winIframealert_enquiry"]
+        return _ParentFrameElement(matching)
+
+
+class _ParentFrameElement:
+    def __init__(self, frames):
+        self.frames = frames
+
+    def count(self):
+        return len(self.frames)
+
+    def is_visible(self):
+        return len(self.frames) == 1 and self.frames[0].visible
+
+    def content_frame(self):
+        return self.frames[0] if len(self.frames) == 1 else None
+
 
 def _parent_fields(*, frame=None):
     frame = frame or _ParentFrame()

@@ -67,7 +67,7 @@ class PlaywrightParentProductFields:
     would turn a read-back seam into an unverified write path.
     """
 
-    _FORM_FRAME_NAME = "winIframealert_enquiry"
+    _FORM_FRAME_SELECTOR = "iframe#winIframealert_enquiry"
     _FIELD_SELECTORS: ClassVar[dict[str, str]] = {
         "model": '#_id_dg td[data-field="PartNo"] input',
         "brand": '#_id_dg td[data-field="Brand"] input',
@@ -132,17 +132,15 @@ class PlaywrightParentProductFields:
         page = self._form_page.page
         _require_inso_origin(page.url)
         try:
-            frames = tuple(
-                frame
-                for frame in page.frames
-                if getattr(frame, "name", "") == self._FORM_FRAME_NAME
-                and _is_verified_inso_url(str(getattr(frame, "url", "")))
-            )
+            element = page.locator(self._FORM_FRAME_SELECTOR)
+            if element.count() != 1 or not element.is_visible():
+                raise SecurityViolation("parent form frame is not unique")
+            frame = element.content_frame()
         except Exception as exc:
             raise SecurityViolation("parent form frame is unavailable") from exc
-        if len(frames) != 1:
+        if frame is None or not _is_verified_inso_url(str(getattr(frame, "url", ""))):
             raise SecurityViolation("parent form frame is not unique")
-        return frames[0]
+        return frame
 
 
 class SaveDispatchStore(Protocol):

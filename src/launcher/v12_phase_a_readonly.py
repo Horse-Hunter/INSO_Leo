@@ -784,19 +784,28 @@ def _inspect_blank_form(
             return
         verify_identity()
         add.click(timeout=10_000)
-        form_frames = [
-            candidate
-            for candidate in page.frames
-            if urlsplit(candidate.url).scheme == "https"
-            and urlsplit(candidate.url).hostname == "yingsuo.alperp.cn"
-            and urlsplit(candidate.url).path.casefold().endswith(
-                "/sale/enquiry/bill.aspx"
-            )
-        ]
-        if len(form_frames) != 1:
+        form_element = page.locator("iframe#winIframealert_enquiry")
+        form_loaded = True
+        try:
+            form_element.wait_for(state="visible", timeout=5_000)
+        except Exception:  # noqa: BLE001 - absence remains a typed safe result
+            form_loaded = False
+        if (
+            not form_loaded
+            or form_element.count() != 1
+            or not form_element.is_visible()
+        ):
             report["reason_codes"].append("BLANK_DRAFT_FRAME_UNCONFIRMED")
             return
-        form_frame = form_frames[0]
+        form_frame = form_element.content_frame()
+        form_url = urlsplit(form_frame.url) if form_frame is not None else None
+        if (
+            form_url is None
+            or form_url.scheme != "https"
+            or form_url.hostname != "yingsuo.alperp.cn"
+        ):
+            report["reason_codes"].append("BLANK_DRAFT_FRAME_UNCONFIRMED")
+            return
         save_button = form_frame.locator("button#btnSave")
         save_send = form_frame.locator("#btnSave2")
         send = form_frame.locator("#bcSend")
