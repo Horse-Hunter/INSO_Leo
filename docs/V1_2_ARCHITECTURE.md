@@ -2,7 +2,7 @@
 
 Status: **ACTIVE / PRE_SAVE_READY / REAL_SAVE_GATED**
 
-本文件只保留当前冻结架构与业务契约，不记录 discovery 历史。当前进度见 `CURRENT_TASK.md`。
+本文件只保留当前冻结架构与业务契约，不记录 discovery 历史。当前进度见 `control-room/COORDINATION.md` 与对应 RFQ。
 
 ## 1. 模块职责
 

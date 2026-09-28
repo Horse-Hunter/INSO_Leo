@@ -59,4 +59,4 @@ AI preview 只接受唯一 row；MPN 按 `ai-mpn-v1` exact、Brand trim-only exa
   - authoritative settled query + 0 candidate → `CONFIRMED_NOT_SAVED`
   - 多候选 → `AMBIGUOUS`
   - 其余 → `UNKNOWN`
-- 当前阶段与 Gate 状态只看 `docs/CURRENT_TASK.md`。
+- 当前阶段与 Gate 状态只看 `control-room/COORDINATION.md` 与对应 RFQ Task Spec。

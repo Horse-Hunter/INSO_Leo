@@ -1,6 +1,6 @@
 # 产品基线
 
-本文件由 CEO 维护，只记录当前仍成立的产品范围、跨模块业务规则和用户可观察结果。实现细节归 module docs，当前阶段归 `CURRENT_TASK.md`。
+本文件由 CEO 维护，只记录当前仍成立的产品范围、跨模块业务规则和用户可观察结果。实现细节归 module docs，当前阶段归 `control-room/COORDINATION.md` 与对应 RFQ Task Spec。
 
 ## 产品目标
 

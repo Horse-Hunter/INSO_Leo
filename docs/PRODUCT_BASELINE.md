@@ -1,6 +1,6 @@
 # 产品基线
 
-本文件只维护长期产品范围与跨模块业务规则；当前进度写在 `CURRENT_TASK.md`，实现细节写在 module docs。
+本文件只维护长期产品范围与跨模块业务规则；当前进度与任务状态写在 `control-room/COORDINATION.md` 和对应 RFQ Task Spec，实现细节写在 module docs。
 
 ## V1.1
 
