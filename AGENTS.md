@@ -7,6 +7,7 @@
 - Main Programmer 维护 `docs/CURRENT_TASK.md`、代码、测试和实现侧局部文档，并默认自行完成一个完整阶段：诊断 → 实现 → 测试 → 修复 → live 验收 → commit/push → 向 Owner 汇报。
 - 普通技术问题不得中途请求 CEO/Owner 接管。selector/parser、browser/CDP、普通 session/认证恢复、timeout、测试和局部实现错误都由 Main Programmer 负责到底；第一次失败必须继续排根因。
 - **INSO 可用性是项目基础能力，不是功能任务的 Owner 前置条件。** 任何涉及 INSO 的窗口必须先自行完成 approved Chrome/CDP 获取、Core Vault 凭据读取、普通认证恢复、唯一 authenticated shell 验证，再进入业务功能；缺失或失效就先修复这条公共能力。不得因找不到 Chrome、CDP 未起、普通 session 失效或普通认证页面而停下来教 Owner 操作。只有 CAPTCHA/OTP/设备验证等明确人工安全挑战才可请求 Owner。
+- **不得在功能窗口里临时手写或临时操作普通 INSO 认证流程。** 该流程必须由一个共享 production helper + deterministic tests 承担；所有功能窗口只调用它。helper 在任何提交动作前必须先确认账号框、密码框均已成功写入非空值，再单次触发精确认证控件；写入未生效时禁止点击、禁止盲重试、禁止新开重复页面。
 - 已验证的页面/selector/session contract 要固化到代码与回归测试，后续直接复用；不得因同一普通技术问题反复 discovery、重复开诊断页面或反复要求 Owner 操作。
 - **问题汇报必须双层表达。** 先写技术事实；紧接着加“说人话”解释，用 Owner 能直接理解的语言说明：现在到底坏在哪、会影响什么、下一步是谁做什么。不得只丢错误码、类名、selector、堆栈或缩写让 Owner 自己翻译。
 - 仅业务规则变化、真实外部写入/Safety Gate、CAPTCHA/OTP/设备验证等明确人工安全挑战、破坏性 Git、重大跨模块架构变化或 release/merge 节点升级 CEO/Owner。

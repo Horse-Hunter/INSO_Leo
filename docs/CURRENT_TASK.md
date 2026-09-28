@@ -34,6 +34,8 @@
 
 ## Shared runtime prerequisite
 
+- Before further INSO live work, ensure the canonical ordinary recovery path is implemented as one shared executable helper with regression tests. It must verify non-empty account/password field read-back before one exact submit, and all INSO windows must call it instead of repeating manual browser steps.
+
 - INSO shared runtime readiness is now a hard project invariant: approved Chrome/CDP + Core Vault + ordinary authentication recovery + unique authenticated shell must be resolved internally before any INSO feature step. Ordinary readiness failures are not Owner blockers. If the shared path is absent or regresses, fix it and its tests first.
 
 ## Gate status before first real Save

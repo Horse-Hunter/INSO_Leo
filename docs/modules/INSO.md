@@ -10,6 +10,26 @@ Only an explicit human security challenge (CAPTCHA, OTP, device verification, or
 
 ## Canonical runtime authentication contract — VERIFIED
 
+### Mandatory executable recovery helper
+
+The verified ordinary recovery flow must exist as one shared production helper owned by the launcher/runtime layer. Feature windows, diagnostics, Research, duplicate checks, purchase-draft work and reconciliation must call that helper rather than reproducing browser steps ad hoc.
+
+The helper must enforce this exact pre-submit sequence:
+
+1. Reuse one uniquely identified INSO page; do not create duplicate recovery pages.
+2. Resolve credentials only through the canonical Core Vault provider.
+3. Fill the unique visible account field.
+4. Read the account field back and prove it is non-empty.
+5. Fill the unique visible password field.
+6. Read the password field back and prove it is non-empty. Never log, report, persist, screenshot, or otherwise expose its value.
+7. Only after both read-backs succeed, trigger the exact visible `get_by_text("登录")` control **once**.
+8. Prove success by the unique authenticated shell + known list-frame controls. Do not infer success from URL movement alone.
+9. If a fill/read-back step fails, do not click, do not blind-retry the submit, and do not open more recovery pages. Diagnose/fix the shared helper.
+10. Only CAPTCHA, OTP, device verification, or an equivalent explicit human security challenge may stop for Owner action.
+
+A new window is non-compliant if it manually reimplements these steps instead of using the shared helper.
+
+
 This section is the cross-window source of truth for INSO browser/session startup. New Main Programmer windows must read it before any INSO browser operation. Do not rediscover this flow from scratch.
 
 - Browser baseline: **Chrome only**, using the approved dedicated profile and CDP `127.0.0.1:9222`. Reuse the existing production browser bootstrap; do not substitute Edge or create another profile.
