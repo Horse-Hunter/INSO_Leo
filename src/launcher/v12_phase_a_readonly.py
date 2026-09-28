@@ -36,6 +36,8 @@ from src.launcher.browser_bootstrap import (
     acquire_cdp_browser,
 )
 from src.launcher.inso_session import attach_inso_research_session
+from src.research.credentials import CoreLoginBridge
+from src.research.inso_history import INSO_SITE_ID
 from src.research.runtime import ResearchRuntimeConfigError, load_runtime_config
 
 _REPORT_RELATIVE_PATH = Path("runtime/evidence/v12-phase-a-final/report.json")
@@ -1176,6 +1178,7 @@ def run_phase_a_final(root: str | Path | None = None) -> Path:
                                     handle,
                                     cycle_id="v12-phase-a-final",
                                     cycle_is_drained=lambda _cycle: drained["value"],
+                                    login=CoreLoginBridge().login(INSO_SITE_ID),
                                 )
                                 report["browser"]["context_count"] = len(
                                     handle.browser.contexts

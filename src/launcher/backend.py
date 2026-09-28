@@ -30,7 +30,9 @@ from src.gui.contracts import (
 )
 from src.gui.state import utc_now
 from src.research import ResearchInput, ResearchResult
+from src.research.credentials import CoreLoginBridge
 from src.research.excel_output import ResearchExcelOutput
+from src.research.inso_history import INSO_SITE_ID
 from src.research.runtime import (
     ResearchRuntimeConfigError,
     assess_readiness,
@@ -394,6 +396,7 @@ class ProductionBackend(GuiBackend):
                     self._browser_handle,
                     cycle_id=self._run_id or "research-cycle",
                     cycle_is_drained=lambda _cycle: self._research_cycle_drained,
+                    login=CoreLoginBridge().login(INSO_SITE_ID),
                 )
             except Exception as exc:
                 self._discard_unready_browser()

@@ -254,7 +254,11 @@ class PlaywrightInsoReadOnlyBrowser:
     def fetch_procurement_temporary_inquiry_history(
         self, mpn: str, login: InsoLogin
     ) -> InsoHistoryCapture:
-        del login  # CDP session is already authenticated by the Owner
+        # The credential is consumed by the composition root while it creates
+        # the leased INSO shell. Keep this explicit argument so the read-only
+        # adapter cannot be used without the canonical credential boundary.
+        if not isinstance(login, InsoLogin):
+            raise InsoReadError("CREDENTIALS_UNAVAILABLE")
         if self._operation_access is None:
             raise InsoReadError("VERIFIED_SESSION_LEASE_REQUIRED")
         access = (
