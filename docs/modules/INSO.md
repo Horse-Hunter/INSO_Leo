@@ -1,5 +1,22 @@
 # INSO Module — V1.2
 
+## Canonical runtime authentication contract — VERIFIED
+
+This section is the cross-window source of truth for INSO browser/session startup. New Main Programmer windows must read it before any INSO browser operation. Do not rediscover this flow from scratch.
+
+- Browser baseline: **Chrome only**, using the approved dedicated profile and CDP `127.0.0.1:9222`. Reuse the existing production browser bootstrap; do not substitute Edge or create another profile.
+- Credential source: **canonical Core Vault only**. INSO Site ID is `yingsuo.alperp.cn`; use the existing Core credential bridge/provider. Never ask Owner for username/password/cookie/token and never log or persist secret values.
+- Startup flow:
+  1. Acquire/reuse the approved Chrome/CDP session.
+  2. If the verified authenticated INSO shell already exists, reuse it directly.
+  3. If the unique INSO page is the ordinary `/login.aspx` form, obtain the INSO credential from Core Vault and perform one normal form submission on that same page.
+  4. Use the unique visible account field and unique visible password field. The **verified login control is the exact visible text locator `get_by_text("登录")`**; do not regress to the previously wrong `input[type=button]` guess and do not use fuzzy/nth/coordinate fallback.
+  5. After submission, authentication is considered successful only when the normal INSO shell is uniquely present and the list frame at `/InnerEnquiry/YeWuXJ/List.aspx` exposes the known controls `#DetailFieldValue`, `button#select_btns`, and `#_id_dg`.
+  6. Then create/reuse `InsoSessionLease` and continue the requested INSO operation.
+- Page discipline: perform recovery on one clearly identified page. Do not open repeated diagnostic login pages. Reused Owner pages/browsers are never closed; app-owned resources are cleaned up only by the existing ownership lifecycle.
+- Failure discipline: ordinary selector/CDP/session recovery is a Main Programmer technical task and must be diagnosed/fixed without asking Owner to take over. Only CAPTCHA, OTP, device verification, or another explicit human security challenge may stop for Owner action.
+- This contract has already been live-verified together with Chrome bootstrap, Core Vault credential access, unique authenticated shell, exact history query and settlement. Treat it as a persisted project fact.
+
 ## Scope and session ownership
 
 `src/inso` provides the explicit INSO session lease, read-only duplicate-history

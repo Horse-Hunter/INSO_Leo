@@ -1,7 +1,7 @@
 # Agent 入口
 
 - **简单优先。** 只做满足当前目标的最小改动；不为未来假设增加框架、层级、流程或文档。
-- 每个新窗口/新阶段先只读：`AGENTS.md`、`docs/PROJECT_BASELINE.md`、`docs/CURRENT_TASK.md`。任务涉及浏览器、session、外部系统或 Safety 时，再读 `docs/AI_WORKFLOW.md`、`docs/SAFETY.md` 和对应 module 文档。
+- 每个新窗口/新阶段先只读：`AGENTS.md`、`docs/PROJECT_BASELINE.md`、`docs/CURRENT_TASK.md`。任务涉及浏览器、session、外部系统或 Safety 时，再读 `docs/AI_WORKFLOW.md`、`docs/SAFETY.md` 和对应 module 文档。**任何 INSO 任务在首次浏览器操作前必须读取 `docs/modules/INSO.md`，并直接复用其中标为 canonical/VERIFIED 的运行契约；不得依赖旧聊天记忆重新猜。**
 - Git 与 canonical docs 是共享事实源；旧聊天和已被新结论取代的记录不作为当前事实。
 - **CEO/架构/Safety 是项目治理主责。** CEO 维护 `AGENTS.md`、项目级治理/架构/Safety 文档，并发布阶段目标、必读文档与边界；Main Programmer 不自行改项目治理规则，除非 CEO 明确要求。
 - Main Programmer 维护 `docs/CURRENT_TASK.md`、代码、测试和实现侧局部文档，并默认自行完成一个完整阶段：诊断 → 实现 → 测试 → 修复 → live 验收 → commit/push → 向 Owner 汇报。
