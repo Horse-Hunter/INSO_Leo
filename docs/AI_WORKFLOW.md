@@ -21,6 +21,15 @@ CEO 发布阶段目标时，同时给出必读文档与不可变边界。Main Pr
 
 Main Programmer 自主负责普通 bug、selector/parser、browser/CDP、普通 session/认证恢复、timeout、测试、局部重构、实现细节及开发分支 commit/push。已验证 contract 必须固化到代码和测试，后续直接复用，不重复 discovery。
 
+## 执行纪律
+
+- **阶段目标优先。** 收到任务后先做能直接推进验收的工作；除非现有设计真的阻塞，不先写新方案、不先造新框架、不先做额外治理。
+- **中间失败默认继续，不默认汇报。** 普通失败应在同一窗口内诊断、修复、重试，直到 DONE 或命中明确升级条件。
+- **第二次出现的同类问题要收敛。** 不再写“下个窗口记得这样做”，而是修成共享 helper / contract / regression test，并把 canonical 事实写回 Git。
+- **不把 Owner 变成人工消息总线。** 普通调试不得依赖 Owner 在 CEO 与 Main Programmer 之间搬运过程报告。
+- **上下文要节省。** CEO 指令只包含目标、验收、必读文档、禁止事项和真正未知项；Main Programmer 不重复粘贴整个项目背景。
+- **结果导向。** 阶段汇报的价值在于 READY/PASS/live/commit/push，不在于描述投入、排查次数或“做了很多工作”。
+
 ## 何时升级 CEO / Owner
 
 仅在以下情况暂停：
