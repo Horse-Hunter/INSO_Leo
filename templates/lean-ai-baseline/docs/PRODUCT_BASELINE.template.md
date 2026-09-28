@@ -1,6 +1,6 @@
 # 产品基线
 
-本文件由 Main Programmer 随真实实现维护，只记录当前仍成立的产品范围和跨模块业务规则。项目级治理规则见 `PROJECT_BASELINE.md`；模块详细规则归 `modules/<MODULE>.md`，当前阶段归 `CURRENT_TASK.md`。
+本文件由 CEO 维护，只记录当前仍成立的产品范围、跨模块业务规则和用户可观察结果。实现细节归 module docs，当前阶段归 `CURRENT_TASK.md`。
 
 ## 产品目标
 
@@ -9,24 +9,16 @@
 - 主要用户：`<CONFIRMED_USERS 或 UNKNOWN>`
 - 成功标准：`<MEASURABLE_RESULT 或 UNKNOWN>`
 
-## 当前已确认流程
+## 当前流程
 
-`<OBSERVED_USER_FLOW 或 UNKNOWN>`
+`<CONFIRMED_USER_FLOW 或 UNKNOWN>`
 
-## 已确认范围
-
-- `<CONFIRMED_SCOPE_ITEM>`
-
-## 明确不在当前范围
-
-- `<EXCLUDED_ITEM>`
-
-## 跨模块长期业务规则
+## 长期业务规则
 
 - `<VERIFIED_RULE 或 NONE>`
 
-## Future Scope / UNKNOWN
+## 明确不在范围
 
-- `<PRODUCT_LEVEL_UNKNOWN 或 NONE>`
+- `<EXCLUDED_ITEM 或 NONE>`
 
-不把愿望当成事实；不复制项目治理规则；模块局部 UNKNOWN 留在对应 module doc，阶段临时问题留在 `CURRENT_TASK.md`。
+Git 保存历史；这里只保留当前有效业务事实，不复制治理规则、实现过程或阶段流水账。

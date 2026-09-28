@@ -1,9 +1,9 @@
 # 模块注册表
 
-软件模块化与 AI 团队结构无关。本文件只登记当前实际模块的职责、Public Contract 入口和依赖方向；普通实现变化由 Main Programmer 维护，模块职责或跨模块 Public Contract 边界变化升级 CEO。不提前建立无用模块。
+本文件由 CEO/架构角色维护，只登记当前模块职责、Public Contract 边界和依赖方向；普通内部实现变化不写入。
 
-| module_id | display_name | code_path | responsibility | Public Contract / module doc | allowed dependencies | forbidden dependencies | status |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `<MODULE_ID>` | `<DISPLAY_NAME>` | `src/<MODULE_ID>/` | `<ONE_SENTENCE>` | `docs/modules/<MODULE_DOC>.md` | `<ALLOWED>` | `<FORBIDDEN>` | `<CURRENT_OR_FUTURE>` |
+| module | code_path | responsibility | public contract | allowed dependencies |
+| --- | --- | --- | --- | --- |
+| `<MODULE>` | `src/<MODULE>/` | `<ONE_SENTENCE>` | `docs/modules/<MODULE>.md` | `<ALLOWED>` |
 
-测试建议放在 `tests/<MODULE_ID>/`。跨模块调用只用 Public Contract，不导入私有实现。若项目无需某列，可简化表格；职责和依赖事实须保持可查。
+模块职责、依赖方向或跨模块 Public Contract 改变时由 CEO 更新。测试默认放在 `tests/<MODULE>/`。

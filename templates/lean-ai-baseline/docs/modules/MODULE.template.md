@@ -7,25 +7,14 @@
 - 输出：`<OUTPUT_CONTRACT>`
 - 状态/错误：`<STATUS_OR_ERROR_CONTRACT>`
 
-## 长期业务规则
+## 当前长期规则
 
-- `<DURABLE_MODULE_RULE>`
-- `<FAIL_CLOSED_RULE_IF_APPLICABLE>`
+- `<DURABLE_RULE>`
 
 ## 边界
 
 - 负责：`<OWNED_RESPONSIBILITY>`
 - 不负责：`<NON_RESPONSIBILITY>`
-- 依赖方向以 `../MODULE_INDEX.md` 为准；安全规则以 `../SAFETY.md` 为准。
+- 依赖方向见 `../MODULE_INDEX.md`，安全见 `../SAFETY.md`。
 
-## 外部读写
-
-- 读取：`<AUTHORIZED_READS 或 NONE>`
-- 写入：`<AUTHORIZED_WRITES 或 NONE>`
-- 真实副作用：`<AUTHORIZATION_REQUIRED 或 NONE>`
-
-## UNKNOWN
-
-- `<MODULE_LEVEL_UNKNOWN>`
-
-只保留当前仍成立的业务事实和 Public Contract；不要保存 selector、XPath、临时 workaround、函数实现细节、测试过程或历史阶段记录。
+只保留当前有效 contract。经 live 验证、需要跨窗口稳定复用且已有回归测试保护的运行 contract（包括必要 selector/protocol）可以保留；临时 discovery、错误尝试、workaround 和历史阶段记录一律交给 Git 历史。
