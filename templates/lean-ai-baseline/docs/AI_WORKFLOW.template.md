@@ -16,13 +16,17 @@ Main Programmer 收到任务后连续完成：
 
 ## CEO 发布任务
 
-任务只包含：
+每条任务先锁定当前未完成验收项和本轮可验证进展，然后只包含：
 1. 业务目标
 2. 验收标准
 3. 必读 canonical docs
 4. Safety / Write Gate
 
 不要在 prompt 中重复实现步骤、治理文档或项目背景。
+
+## 进度纠偏
+
+若一轮没有实质推进当前验收项，CEO 在下一条指令前必须重读 `PROJECT_BASELINE.md`、`CURRENT_TASK.md`、`AI_WORKFLOW.md`，停止扩写方案，把任务收缩到最直接的业务实现。
 
 ## 仅以下情况升级
 
