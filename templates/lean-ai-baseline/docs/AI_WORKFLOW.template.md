@@ -1,33 +1,29 @@
-# AI 团队运行规则
+# AI Workflow
 
-## 角色
+```text
+Discuss requirement
+→ create/complete RFQ Task Spec
+→ Control Room stores spec
+→ “执行 RFQ-XXX”
+→ agent reads AI_START_HERE / MODULE_INDEX / repo / coordination
+→ implementation + execution log + tests/evidence/commits + final report
+→ fixed human summary
+→ if review required: “Review RFQ-XXX”
+→ independent review
+→ PASS = REVIEWED_DONE
+→ FAIL = CHANGES_REQUESTED
+```
 
-- Owner：最终业务授权。
-- CEO：业务目标、验收、业务规则、架构边界、治理和 Safety Gate。
-- Main Programmer：实现、测试、修复、live 验收、commit/push。
+States:
 
-## 默认执行
+`DRAFT → READY → IN_PROGRESS → REVIEW_REQUIRED → REVIEWED_DONE`
 
-Main Programmer 收到任务后连续完成：
+Review failure:
 
-`实现 → 测试 → 修复 → live 验收 → commit/push → 汇报`
+`REVIEW_REQUIRED → CHANGES_REQUESTED → IN_PROGRESS`
 
-普通技术失败不升级 Owner；同类问题再次出现时，收敛为共享代码/contract/回归测试。
+No-review task:
 
-## CEO 发布任务
+`IN_PROGRESS → DONE`
 
-每条任务先锁定当前未完成验收项和本轮可验证进展，然后只包含：
-1. 业务目标
-2. 验收标准
-3. 必读 canonical docs
-4. Safety / Write Gate
-
-不要在 prompt 中重复实现步骤、治理文档或项目背景。
-
-## 进度纠偏
-
-若一轮没有实质推进当前验收项，CEO 在下一条指令前必须重读 `PROJECT_BASELINE.md`、`CURRENT_TASK.md`、`AI_WORKFLOW.md`，停止扩写方案，把任务收缩到最直接的业务实现。
-
-## 仅以下情况升级
-
-业务规则变化、真实写入 Gate、人工安全挑战、破坏性 Git、重大架构、release/merge。
+Every action must advance RFQ acceptance. If progress stalls, reread the RFQ and canonical docs and return to the shortest implementation path.
