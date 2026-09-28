@@ -1,34 +1,21 @@
 # 项目管理基线
 
-本文件由 CEO 维护，只记录项目级长期规则、总体架构原则和大版本概述。不记录业务/模块细节、当前进度、任务分工、交接或实现过程。
+只记录长期有效的项目规则与稳定锚点。
 
 ## 核心规则
 
-- **简单优先。** 能简单解决就不复杂解决。
-- **保持简洁，不得臃肿。** 规则、文档、架构和流程只保留必要内容；能删就删，能合并就合并，不堆重复说明、层级或机制。
-- 只为当前已确认需求、已发生问题或明确高影响风险增加复杂度。
-- 不为“以后可能需要”、理论完整或架构漂亮提前增加层级、框架、状态、依赖、流程或文档。
-- 两个方案都满足目标时，选概念更少、改动更小、路径更直接的方案。
-- 发现方案持续衍生新机制时，先删减、合并或推迟。
+- 业务结果优先；过程说明不能替代交付。
+- 简单优先；不为未来假设增加框架、流程、角色或文档。
+- Git + canonical docs 是长期事实源；聊天不是功能载体。
+- 同类问题再次出现时，优先修共享代码/contract/回归测试。
+- Owner 不参与普通调试或消息搬运。
+- CEO 给 Main Programmer 的任务只写业务目标、验收、必读文档和 Safety 边界；不写数百行操作手册。
 
-## 总体架构原则
+## 职责
 
-- 软件保持模块化，但不追求过度分层。
-- 跨边界使用明确 Public Contract；内部实现保持自由。
-- 稳定能力优先兼容；新增版本优先 additive / seam-based 改动。
-- 没有真实重复或维护痛点，不为抽象而抽象。
-- CEO 兼任项目架构与日常安全 Review；独立 Specialist 只在确有必要的高风险节点临时启用。
-- 治理文档与业务/模块/任务文档分离。
+- CEO：治理、产品/业务基线、总体架构边界、Safety Gate。
+- Main Programmer：`CURRENT_TASK.md`、代码、测试、实现侧 module/runtime 文档。
 
-## 文档边界
+## 稳定锚点
 
-CEO 维护：`PROJECT_BASELINE.md`、`AI_WORKFLOW.md`、`SAFETY.md`、`REPORTING.md`、`AGENTS.md`。
-Main Programmer 维护：`PRODUCT_BASELINE.md`、`MODULE_INDEX.md`、module docs、`CURRENT_TASK.md` 和 runtime/release/implementation docs。
-
-## 大版本概述
-
-- `main`：当前稳定基线。
-- feature branch：开发中，不视为稳定基线。
-- 稳定 release：形成后只补“一行版本 + 一句话用途”。
-
-不在这里记录开发进度。
+- `<CURRENT_STABLE_BASELINE>`

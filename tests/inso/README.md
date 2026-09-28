@@ -1,3 +1,3 @@
 # INSO tests
 
-Tests for future `src/inso/` behavior. Do not access a live INSO system without an explicitly authorized Task.
+Tests for current `src/inso/` behavior. Live INSO actions follow `docs/SAFETY.md`; ordinary runtime/session setup uses the shared INSO runtime path rather than ad-hoc browser steps.

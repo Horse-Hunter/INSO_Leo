@@ -1,3 +1,5 @@
 # INSO
 
-Future-version INSO integration directory. Current ownership and boundary: `docs/MODULE_INDEX.md`.
+V1.2 INSO integration：shared runtime/session、duplicate history、purchase draft、parent-field validation 和 read-only save reconciliation。
+
+Canonical contract：`docs/modules/INSO.md`。
