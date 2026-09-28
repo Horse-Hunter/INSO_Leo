@@ -54,7 +54,6 @@ from src.workflow.v12_store import V12_SCHEMA_VERSION, V12DatabaseError, V12Stor
 from .browser_bootstrap import BrowserBootstrapError, BrowserHandle, acquire_cdp_browser
 from .inso_session import InsoResearchSession, attach_inso_research_session
 from .v12_composition import (
-    UnavailableReadOnlySaveReconciler,
     V12ProductionAdapters,
     V12ProductionComposition,
     compose_v12_production,
@@ -635,17 +634,15 @@ class ProductionBackend(GuiBackend):
     def reconcile_v12_save(self, inquiry_id: str, *, at: datetime):
         """Run only the existing read-only reconciliation contract.
 
-        Until a live record reader is supplied, this records an unreadable
-        result as manual review; it never infers absence or retries Save Data.
+        Production composition must supply the verified read-only adapter; a
+        missing composition is not silently replaced with an absence guess.
         """
 
         if self._v12_store is None:
             raise V12DatabaseError("V1.2 persistence is unavailable")
-        reconciler = (
-            self._v12_composition.save_reconciler
-            if self._v12_composition is not None
-            else UnavailableReadOnlySaveReconciler()
-        )
+        if self._v12_composition is None:
+            raise V12DatabaseError("V1.2 read-only save reconciler is unavailable")
+        reconciler = self._v12_composition.save_reconciler
         return self._v12_store.reconcile_unknown_save(
             inquiry_id, reconciler, at=at
         )

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
-from src.inso.purchase_writer import InsoPurchaseWriter, PlaywrightAiResultReader
+from src.inso.purchase_writer import (
+    InsoPurchaseWriter,
+    PlaywrightAiResultReader,
+    PlaywrightParentProductFields,
+)
 from src.inso.session import SecurityViolation
 from src.inso.write_safety import FakeWriteGate, ProductionWriteGate
 
@@ -188,6 +193,14 @@ def test_production_gate_is_closed_and_send_methods_do_not_exist() -> None:
     assert form_page.value == ""
 
 
+def test_save_and_send_controls_have_no_dispatch_binding() -> None:
+    source = Path("src/inso/purchase_writer.py").read_text(encoding="utf-8")
+
+    bindings = source.split("_BINDINGS:", 1)[1].split("class _PlaywrightActionPort", 1)[0]
+    assert "#btnSave2" not in bindings
+    assert "#bcSend" not in bindings
+
+
 def test_ai_reader_returns_only_ready_single_row_result() -> None:
     reader = PlaywrightAiResultReader(_OperationPage(_FakeAiPage()))
 
@@ -290,3 +303,106 @@ def test_non_ai_recognized_store_state_never_dispatches_save() -> None:
 
     assert form.events == []
     assert not hasattr(writer, "save_and_send")
+
+
+class _ParentLocator:
+    def __init__(self, frame, selector):
+        self.frame = frame
+        self.selector = selector
+
+    def count(self):
+        return self.frame.counts.get(self.selector, 0)
+
+    def is_visible(self):
+        return self.frame.visible
+
+    def is_enabled(self):
+        return self.frame.enabled
+
+    def fill(self, value):
+        self.frame.values[self.selector] = value
+
+    def input_value(self):
+        return self.frame.values.get(self.selector, "")
+
+
+class _ParentFrame:
+    name = "winIframealert_enquiry"
+    url = "https://yingsuo.alperp.cn/InnerEnquiry/YeWuXJ/Enquiry.aspx"
+
+    def __init__(self):
+        self.visible = True
+        self.enabled = True
+        self.counts = {
+            '#_id_dg td[data-field="PartNo"] input': 1,
+            '#_id_dg td[data-field="Brand"] input': 1,
+            '#_id_dg td[data-field="Qty"] input': 1,
+        }
+        self.values = {}
+
+    def locator(self, selector):
+        return _ParentLocator(self, selector)
+
+
+class _ParentPage:
+    url = "https://yingsuo.alperp.cn/"
+
+    def __init__(self, frames):
+        self.frames = frames
+
+
+def _parent_fields(*, frame=None):
+    frame = frame or _ParentFrame()
+    return PlaywrightParentProductFields(_OperationPage(_ParentPage([frame]))), frame
+
+
+def test_parent_product_fields_write_and_read_back_unique_verified_inputs() -> None:
+    fields, _frame = _parent_fields()
+
+    fields.set_model("STM32F103")
+    fields.set_brand(" ST ")
+    fields.set_quantity(12)
+
+    assert fields.read_model() == "STM32F103"
+    assert fields.read_brand() == " ST "
+    assert fields.read_quantity() == 12
+
+
+@pytest.mark.parametrize(
+    ("selector", "action"),
+    (
+        ('#_id_dg td[data-field="PartNo"] input', "model"),
+        ('#_id_dg td[data-field="Brand"] input', "brand"),
+        ('#_id_dg td[data-field="Qty"] input', "quantity"),
+    ),
+)
+def test_parent_product_fields_missing_or_duplicate_candidates_fail_closed(selector, action) -> None:
+    fields, frame = _parent_fields()
+    write = {
+        "model": lambda: fields.set_model("STM32"),
+        "brand": lambda: fields.set_brand("ST"),
+        "quantity": lambda: fields.set_quantity(1),
+    }[action]
+    frame.counts[selector] = 0
+    with pytest.raises(SecurityViolation):
+        write()
+    frame.counts[selector] = 2
+    with pytest.raises(SecurityViolation):
+        write()
+
+
+def test_parent_product_fields_wrong_frame_or_origin_fails_closed() -> None:
+    frame = _ParentFrame()
+    frame.url = "https://evil.example.invalid/form"
+    fields, _ = _parent_fields(frame=frame)
+
+    with pytest.raises(SecurityViolation):
+        fields.set_model("STM32")
+
+
+def test_parent_product_fields_rejects_invalid_quantity_and_readback_mismatch() -> None:
+    fields, frame = _parent_fields()
+    with pytest.raises(SecurityViolation):
+        fields.set_quantity(0)
+    frame.values['#_id_dg td[data-field="Qty"] input'] = "not-a-number"
+    assert fields.read_quantity() is None

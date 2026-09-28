@@ -14,6 +14,7 @@ from .purchase_writer import (
     InsoPurchaseWriter,
     ParentProductFields,
     PlaywrightAiResultReader,
+    PlaywrightParentProductFields,
 )
 from .session import (
     BrowserIdentity,
@@ -47,5 +48,6 @@ __all__ = [
     "PageIdentity",
     "ParentProductFields",
     "PlaywrightAiResultReader",
+    "PlaywrightParentProductFields",
     "SecurityViolation",
 ]

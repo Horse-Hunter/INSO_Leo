@@ -3,14 +3,16 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
 from src.inso import AiRecognitionResult
 from src.launcher.v12_composition import (
     CoordinatorPurchaseDraftWriter,
+    PlaywrightReadOnlySaveReconciler,
     ResearchExcelFactsProvider,
-    UnavailableReadOnlySaveReconciler,
+    SaveReconciliationTarget,
     V12ProductionAdapters,
     compose_v12_production,
 )
@@ -25,6 +27,7 @@ from src.workflow.v12_contracts import (
 )
 from src.workflow.v12_rules import build_ai_input
 from src.workflow.v12_smtp_transport import QQSMTPConfig, QQSMTPTransport
+from src.workflow.v12_store import ReadOnlySaveReconciler
 
 
 class _DuplicateChecker:
@@ -99,6 +102,93 @@ class _Transport:
         return NotificationTransportResult(DeliveryOutcome.UNKNOWN)
 
 
+class _Reconciler(ReadOnlySaveReconciler):
+    def reconcile(self, _inquiry_id):
+        raise AssertionError("not exercised by composition")
+
+
+class _DetailLocator:
+    def __init__(self, values, selector):
+        self.values = values
+        self.selector = selector
+
+    def count(self):
+        return 1 if self.selector in self.values else 0
+
+    def is_visible(self):
+        return True
+
+    def input_value(self):
+        value = self.values[self.selector]
+        if self.selector.startswith("#_id_dg"):
+            raise RuntimeError("detail cell")
+        return value
+
+    def inner_text(self):
+        return self.values[self.selector]
+
+
+class _DetailFrame:
+    def __init__(self, values):
+        self.values = values
+
+    def locator(self, selector):
+        return _DetailLocator(self.values, selector)
+
+
+class _Access:
+    def __init__(self, frame):
+        self.frame = frame
+
+    def operation_page(self):
+        class _Operation:
+            def __init__(self, frame):
+                self.shell_frame = frame
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return None
+
+        return _Operation(self.frame)
+
+
+class _History:
+    rows: ClassVar[list[dict[str, str]]] = []
+    matched: ClassVar[bool] = True
+    error: ClassVar[BaseException | None] = None
+
+    def __init__(self, *_args, **_kwargs):
+        pass
+
+    @property
+    def last_exact_request_matched(self):
+        return self.matched
+
+    def query_exact_response(self, _mpn):
+        if self.error:
+            raise self.error
+        return {"rows": self.rows}
+
+    def click(self, _selector):
+        return None
+
+
+def _live_reconciler(monkeypatch, *, rows, details, matched=True, error=None):
+    import src.launcher.v12_composition as composition
+
+    _History.rows = rows
+    _History.matched = matched
+    _History.error = error
+    monkeypatch.setattr(composition, "PlaywrightDuplicateHistoryPage", _History)
+    return PlaywrightReadOnlySaveReconciler(
+        operation_access=_Access(_DetailFrame(details)),
+        target_for_inquiry=lambda _inquiry: SaveReconciliationTarget("LM358", "Texas Instruments", 123),
+        clock=lambda: datetime(2026, 9, 28, tzinfo=UTC),
+    )
+
+
 def _command():
     return PurchaseDraftCommand(
         command_id="cmd-1",
@@ -139,6 +229,7 @@ def test_v12_production_composition_uses_explicit_live_seams() -> None:
         purchase,
         transport,
         (NotificationRecipient("owner", "owner@example.invalid"),),
+        _Reconciler(),
     )
 
     composition = compose_v12_production(
@@ -156,7 +247,7 @@ def test_v12_production_composition_uses_explicit_live_seams() -> None:
     assert composition.coordinator._purchase_writer is purchase
     assert composition.coordinator._notification_worker is composition.notification_worker
     assert composition.notification_worker._transport is transport
-    assert isinstance(composition.save_reconciler, UnavailableReadOnlySaveReconciler)
+    assert isinstance(composition.save_reconciler, _Reconciler)
 
 
 def test_incomplete_v12_live_adapters_fail_closed() -> None:
@@ -170,16 +261,81 @@ def test_incomplete_v12_live_adapters_fail_closed() -> None:
             object(),
             _Transport(),
             (NotificationRecipient("owner", "owner@example.invalid"),),
+            _Reconciler(),
         )
 
 
-def test_unavailable_save_reader_only_returns_unknown() -> None:
-    result = UnavailableReadOnlySaveReconciler().reconcile("synthetic-inquiry")
+def test_production_requires_a_read_only_save_reconciler() -> None:
+    with pytest.raises(TypeError, match="read-only save reconciler"):
+        V12ProductionAdapters(
+            _DuplicateChecker(), _ResearchFacts(), _purchase_writer(), _Transport(),
+            (NotificationRecipient("owner", "owner@example.invalid"),), None,
+        )
+
+
+def _saved_detail(*, bill_id="42", mpn="LM358", brand="Texas Instruments", qty="123"):
+    return {
+        "#BillID": bill_id,
+        "#PENO": "PENO-1",
+        '#_id_dg td[data-field="PartNo"]': mpn,
+        '#_id_dg td[data-field="Brand"]': brand,
+        '#_id_dg td[data-field="Qty"]': qty,
+    }
+
+
+def test_save_reconciler_confirms_one_exact_saved_record(monkeypatch) -> None:
+    result = _live_reconciler(
+        monkeypatch, rows=[{"BillID": "42"}], details=_saved_detail()
+    ).reconcile("inq-1")
+
+    assert result.outcome is ReconciliationOutcome.CONFIRMED_SAVED
+    assert result.saved_record_ref == "42"
+    assert result.candidate_count == 1
+    assert set(result.verified_fields) >= {"mpn", "brand", "quantity"}
+
+
+def test_save_reconciler_confirms_authoritative_zero_candidates(monkeypatch) -> None:
+    result = _live_reconciler(monkeypatch, rows=[], details={}).reconcile("inq-1")
+
+    assert result.outcome is ReconciliationOutcome.CONFIRMED_NOT_SAVED
+    assert result.authoritative is True
+    assert result.candidate_count == 0
+
+
+def test_save_reconciler_never_picks_one_of_multiple_candidates(monkeypatch) -> None:
+    result = _live_reconciler(
+        monkeypatch, rows=[{"BillID": "42"}, {"BillID": "43"}], details={}
+    ).reconcile("inq-1")
+
+    assert result.outcome is ReconciliationOutcome.AMBIGUOUS
+    assert result.candidate_count == 2
+
+
+@pytest.mark.parametrize(
+    ("rows", "details"),
+    (
+        ([{"BillID": "42"}], _saved_detail(mpn="LM358X")),
+        ([{"BillID": "42"}], _saved_detail(brand="Other")),
+        ([{"BillID": "42"}], _saved_detail(qty="124")),
+        ([{"BillID": "42"}], _saved_detail(bill_id="")),
+    ),
+)
+def test_save_reconciler_mismatch_or_missing_stable_id_is_not_saved(monkeypatch, rows, details) -> None:
+    result = _live_reconciler(monkeypatch, rows=rows, details=details).reconcile("inq-1")
+
+    assert result.outcome is not ReconciliationOutcome.CONFIRMED_SAVED
+
+
+def test_save_reconciler_query_or_settlement_failure_is_unknown(monkeypatch) -> None:
+    result = _live_reconciler(
+        monkeypatch, rows=[], details={}, error=RuntimeError("query failed")
+    ).reconcile("inq-1")
+    settlement = _live_reconciler(
+        monkeypatch, rows=[], details={}, matched=False
+    ).reconcile("inq-1")
 
     assert result.outcome is ReconciliationOutcome.UNKNOWN
-    assert result.reconciled_at.tzinfo is UTC
-    assert result.authoritative is False
-    assert result.candidate_count is None
+    assert settlement.outcome is ReconciliationOutcome.UNKNOWN
 
 
 def test_research_facts_provider_reads_only_persisted_canonical_snapshot(
@@ -234,6 +390,7 @@ def test_qq_smtp_factory_uses_the_explicit_sender_config() -> None:
         purchase_writer=_purchase_writer(),
         smtp_config=QQSMTPConfig(sender_address="sender@example.invalid"),
         recipients=(NotificationRecipient("owner", "owner@example.invalid"),),
+        save_reconciler=_Reconciler(),
     )
 
     assert isinstance(adapters.notification_transport, QQSMTPTransport)

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 from urllib.parse import urlsplit
 
 from .session import OperationPage, SecurityViolation
@@ -56,6 +56,93 @@ class ParentProductFields(Protocol):
     def read_brand(self) -> str | None: ...
 
     def read_quantity(self) -> int | None: ...
+
+
+class PlaywrightParentProductFields:
+    """The three verified product inputs in the leased parent inquiry form.
+
+    This intentionally has no row creation, import, Save, or Send behaviour.
+    A caller must already have reached the unique product row through the
+    verified draft/AI flow.  Treating a missing row as a value to manufacture
+    would turn a read-back seam into an unverified write path.
+    """
+
+    _FORM_FRAME_NAME = "winIframealert_enquiry"
+    _FIELD_SELECTORS: ClassVar[dict[str, str]] = {
+        "model": '#_id_dg td[data-field="PartNo"] input',
+        "brand": '#_id_dg td[data-field="Brand"] input',
+        "quantity": '#_id_dg td[data-field="Qty"] input',
+    }
+
+    def __init__(self, form_page: OperationPage) -> None:
+        self._form_page = form_page
+
+    def set_model(self, value: str) -> None:
+        if not isinstance(value, str) or not value:
+            raise SecurityViolation("parent model is invalid")
+        self._set("model", value)
+        if self.read_model() != value:
+            raise SecurityViolation("parent model read-back did not match")
+
+    def set_brand(self, value: str) -> None:
+        if not isinstance(value, str) or not value:
+            raise SecurityViolation("parent brand is invalid")
+        self._set("brand", value)
+        if self.read_brand() != value:
+            raise SecurityViolation("parent brand read-back did not match")
+
+    def set_quantity(self, value: int) -> None:
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise SecurityViolation("parent quantity is invalid")
+        self._set("quantity", str(value))
+        if self.read_quantity() != value:
+            raise SecurityViolation("parent quantity read-back did not match")
+
+    def read_model(self) -> str | None:
+        return self._read_text("model")
+
+    def read_brand(self) -> str | None:
+        return self._read_text("brand")
+
+    def read_quantity(self) -> int | None:
+        value = self._read_text("quantity")
+        if value is None or not value.isdecimal():
+            return None
+        quantity = int(value)
+        return quantity if quantity > 0 else None
+
+    def _set(self, field: str, value: str) -> None:
+        locator = self._field(field)
+        locator.fill(value)
+
+    def _read_text(self, field: str) -> str | None:
+        try:
+            return self._field(field).input_value()
+        except Exception:  # noqa: BLE001 - browser ambiguity fails closed
+            return None
+
+    def _field(self, field: str) -> Any:
+        frame = self._verified_form_frame()
+        locator = frame.locator(self._FIELD_SELECTORS[field])
+        if locator.count() != 1 or not locator.is_visible() or not locator.is_enabled():
+            raise SecurityViolation("parent product field is not uniquely actionable")
+        return locator
+
+    def _verified_form_frame(self) -> Any:
+        page = self._form_page.page
+        _require_inso_origin(page.url)
+        try:
+            frames = tuple(
+                frame
+                for frame in page.frames
+                if getattr(frame, "name", "") == self._FORM_FRAME_NAME
+                and _is_verified_inso_url(str(getattr(frame, "url", "")))
+            )
+        except Exception as exc:
+            raise SecurityViolation("parent form frame is unavailable") from exc
+        if len(frames) != 1:
+            raise SecurityViolation("parent form frame is not unique")
+        return frames[0]
 
 
 class SaveDispatchStore(Protocol):
@@ -440,6 +527,14 @@ def _require_inso_origin(url: str) -> None:
         or parsed.password
     ):
         raise SecurityViolation("INSO origin is not verified")
+
+
+def _is_verified_inso_url(url: str) -> bool:
+    try:
+        _require_inso_origin(url)
+    except SecurityViolation:
+        return False
+    return not urlsplit(url).path.casefold().endswith("/login.aspx")
 
 
 def _require_ai_page(url: str) -> None:

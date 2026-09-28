@@ -1,6 +1,6 @@
 # Current Task — V1.2 pre-save integration
 
-**Stage:** Phase A COMPLETE; pre-save integration review complete.
+**Stage:** Pre-save production adapters implemented; Chrome live verification pending valid local runtime configuration.
 **Production Write Gate:** CLOSED.
 
 ## Verified baseline
@@ -11,7 +11,7 @@
 - Creator: `CREATOR_NOT_EXPOSED_BY_INSO`.
 - Quote/currency: CONFIRMED.
 - AI recognition/preview: CONFIRMED.
-- Parent product fields, unsaved read-back: CONFIRMED.
+- Parent product fields: production adapter implemented with unique frame/field and immediate read-back checks.
 - Real Save: NO. Real Send: NO. Real SMTP: NO. Sheets write: NO.
 - Production browser: Chrome only.
 
@@ -20,22 +20,23 @@
 - Duplicate check → Research → routing coordinator and retry-safe persisted state/events.
 - SQLite V1.2 migration, active alerts, recipient outbox/ledger, and fake notification transport.
 - Purchase routing, AI draft preparation, validation and parent-field read-back contract.
-- Read-only reconciliation state machine and fail-closed result handling.
+- Read-only reconciliation state machine, production exact-history/detail adapter, and fail-closed result handling.
 - GUI DTO/state integration.
 
 ## Latest verification
 
 - `feature/v1-2` fast-forwarded normally to fetched `origin/feature/v1-2` HEAD `74cb518`.
-- `python -m pytest -q`: 631 passed, 11 skipped.
+- `python -m pytest -q`: 645 passed, 11 skipped.
 - `python -m ruff check src tests`: passed.
-- Launcher CDP focus: 17 passed. `git diff --check`: pending final review.
+- Focused parent-field/composition tests: 35 passed. `git diff --check`: pending final review.
 - Edge runtime branch and `EDGE_CDP_ATTACH_FAILED` removed; Chrome launch behavior remains windowless.
 
-## Concrete blockers before first real Save gate
+## Gate status before first real Save
 
-- No production `ParentProductFields` adapter is bound to the confirmed unsaved INSO form; the code currently requires an injected implementation.
-- Save reconciliation defaults to `UnavailableReadOnlySaveReconciler`; no production read-only adapter proves a unique saved record or authoritative absence.
-- Current computer-use surface exposed Edge only, so no Chrome live verification was attempted. Do not use Edge as a substitute.
+- `PlaywrightParentProductFields` binds the verified parent form frame and exact PartNo/Brand/Qty controls without a Save capability.
+- `PlaywrightReadOnlySaveReconciler` reuses the settled exact history query, validates BillID/PENO/detail fields, and never chooses among multiple candidates or retries Save.
+- Production composition now requires an explicit read-only reconciler; it no longer silently falls back to `UnavailableReadOnlySaveReconciler`.
+- The bounded Chrome-only read-only runner executed with all side effects false, but returned `RESEARCH_RUNTIME_CONFIG_INVALID`; no Chrome/CDP session was available. Edge was not used as a substitute.
 
 No Save Data, Save-and-Send, Send, SMTP, or Sheets write is authorized. Keep Production Write Gate CLOSED until the two adapters and Chrome-only read-only verification are complete.
 
