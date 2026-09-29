@@ -57,3 +57,13 @@
 - `EXECUTION_LOG.md` may preserve history but obsolete current blocker/next-step statements must be marked resolved/superseded.
 - Review requires cleanup evidence and rejects expired handoffs, stale current-state text or unexplained duplicate active worktrees.
 
+## Delivery-first invariant
+
+- The project's primary objective is correct, working delivery of Owner requirements. Governance serves that objective and must not compete with it.
+- Priority is: Owner intent → canonical requirement → reuse → necessary safety/data integrity/reversibility → minimal process.
+- CEO must not create additional gates, reports, boundaries or acceptance burdens unless they are required by the requirement itself, a real safety/data-loss risk, or a demonstrated recurring failure.
+- When Owner corrects a process/design issue, CEO is responsible for identifying and fixing the obvious adjacent implications so Owner does not have to issue multiple follow-up corrections.
+- Reuse enforcement should reduce work: inspect relevant existing capability, reuse it, and only document non-reuse when a plausible reusable path is deliberately rejected.
+- Housekeeping should be done in-line and must not become an artificial blocker to implementation or live verification.
+- Any rule that adds recurring effort without improving correctness, safety, recoverability or delivery speed should be simplified or removed.
+
