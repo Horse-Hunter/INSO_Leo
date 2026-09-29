@@ -68,3 +68,13 @@ Do not start by creating another worktree.
 
 Incoming Executor owns this cleanup. Outgoing Executor only prepares the minimal handoff and preserves the live workspace.
 
+## Delivery first
+
+Do not turn workflow into the task. The task is the required product outcome.
+
+- Start from Owner intent + Task Spec and take the shortest safe path to a working result.
+- Reuse existing working paths; do not create process around reuse unless a non-reuse decision needs justification.
+- Do not add new gates/reports/approval steps unless the requirement, real safety/data-loss risk, or a proven recurring failure requires them.
+- Fix housekeeping in-line when possible; do not stop implementation just to create more process.
+- When Owner corrects one workflow problem, infer and address the obvious adjacent lifecycle/ownership implications so the same class of issue does not return in another form.
+
