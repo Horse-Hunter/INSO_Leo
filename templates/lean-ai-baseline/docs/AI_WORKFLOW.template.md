@@ -4,7 +4,7 @@
 Owner 与 CEO 讨论需求
 → CEO 创建/完善 RFQ Task Spec
 → Control Room 保存完整 Task Spec
-→ Owner 打开任意 Codex / Claude，只说“执行 RFQ-XXX”
+→ Owner 打开任意实现 Agent（Codex / Claude / WorkBuddy 或同类），只说“执行 RFQ-XXX”
 → Executor 读取 AI_START_HERE / MODULE_INDEX / RFQ / repo / coordination
 → Executor 先做 Reuse Audit
 → 复用现有稳定能力，只实现最小增量
