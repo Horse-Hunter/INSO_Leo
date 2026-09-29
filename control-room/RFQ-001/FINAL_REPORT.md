@@ -1,25 +1,25 @@
 # RFQ-001 Final Report
 
 正在实现什么：
-V1.2 pre-save live acceptance。
+完成 V1.2 在真实保存前的安全核验修复。
 
 理想变化是什么：
-完成 V1.2 pre-save live acceptance，并进入独立 Review。
+在第一次允许真实保存前，系统必须能可靠判断是否已保存，且核验材料可供独立复核。
 
 以前是什么：
-共享 runtime 和生产 adapters 已实现，但剩余 live acceptance 尚未在 Control Room 下完成。
+当查询结果较多或不完整时，系统可能只看见其中一部分记录就作出保存判断；核验材料也只保存在本机。
 
 现在是什么：
-所有 pre-save acceptance 已完成，进入独立 Review。
+系统只有在确认看见全部相关记录后才会给出“已保存”或“未保存”的结论；否则会安全地要求进一步处理。核验摘要已放入项目记录，RFQ 状态为 REVIEW_REQUIRED。
 
 做完了什么：
-- 业务询价草稿的 PartNo、Brand、Qty 使用真实可编辑单元格合同，写入后立即回读。
-- 遇到人工验证时，app-owned Chrome 会自动清理，不遗留运行器实例。
-- 已有询价的 BillID、PENO、MPN、Brand、Qty 已只读核对通过。
-- Save、Save-and-Send、Send 均未触发。
+- 修复了不完整查询结果可能导致过早判断的问题。
+- 更新了实际页面填写方式的项目说明。
+- 新增了不含敏感信息、可供复核的核验摘要。
+- 未执行真实保存、发送邮件或写表操作。
 
 测试结果：
-659 passed，11 skipped；Ruff PASS；git diff --check PASS。
+全部自动化回归通过：664 passed，11 skipped；静态检查和变更完整性检查通过。
 
 你接下来需要做什么：
-独立 Review。
+Review RFQ-001。

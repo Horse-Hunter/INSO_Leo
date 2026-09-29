@@ -157,6 +157,7 @@ class _Access:
 class _History:
     rows: ClassVar[list[dict[str, str]]] = []
     matched: ClassVar[bool] = True
+    complete: ClassVar[bool] = True
     error: ClassVar[BaseException | None] = None
 
     def __init__(self, *_args, **_kwargs):
@@ -165,6 +166,10 @@ class _History:
     @property
     def last_exact_request_matched(self):
         return self.matched
+
+    @property
+    def last_exact_result_set_complete(self):
+        return self.complete
 
     def query_exact_response(self, _mpn):
         if self.error:
@@ -175,11 +180,14 @@ class _History:
         return None
 
 
-def _live_reconciler(monkeypatch, *, rows, details, matched=True, error=None):
+def _live_reconciler(
+    monkeypatch, *, rows, details, matched=True, complete=True, error=None
+):
     import src.launcher.v12_composition as composition
 
     _History.rows = rows
     _History.matched = matched
+    _History.complete = complete
     _History.error = error
     monkeypatch.setattr(composition, "PlaywrightDuplicateHistoryPage", _History)
     return PlaywrightReadOnlySaveReconciler(
@@ -336,6 +344,19 @@ def test_save_reconciler_query_or_settlement_failure_is_unknown(monkeypatch) -> 
 
     assert result.outcome is ReconciliationOutcome.UNKNOWN
     assert settlement.outcome is ReconciliationOutcome.UNKNOWN
+
+
+@pytest.mark.parametrize("rows", ([], [{"BillID": "42"}]))
+def test_save_reconciler_requires_a_complete_candidate_set(monkeypatch, rows) -> None:
+    result = _live_reconciler(
+        monkeypatch,
+        rows=rows,
+        details=_saved_detail(),
+        complete=False,
+    ).reconcile("inq-1")
+
+    assert result.outcome is ReconciliationOutcome.UNKNOWN
+    assert result.authoritative is False
 
 
 def test_research_facts_provider_reads_only_persisted_canonical_snapshot(

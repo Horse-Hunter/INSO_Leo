@@ -513,6 +513,9 @@ class FakePlaywrightPage:
         *,
         elements: dict[str, object] | None = None,
         response_rows: list[dict[str, object]] | None = None,
+        current_page: int = 1,
+        page_size: int = 20,
+        total_count: int | None = None,
         goto_error: BaseException | None = None,
     ) -> None:
         self.elements = dict(elements or {})
@@ -531,6 +534,11 @@ class FakePlaywrightPage:
         )
         self._cache_bill_ids = [row["BillID"] for row in self._response_rows]
         self._dom_bill_ids = [row["BillID"] for row in self._response_rows]
+        self._current_page = current_page
+        self._page_size = page_size
+        self._total_count = (
+            len(self._response_rows) if total_count is None else total_count
+        )
 
     def goto(self, url: str, **_: object) -> None:
         self.calls.append(("goto", url))
@@ -626,9 +634,9 @@ class FakePlaywrightPage:
                 "domCount": len(self._dom_bill_ids),
                 "domOtherCount": 0,
                 "hiddenBusinessCount": 0,
-                "pageSize": 20,
-                "currentPage": 1,
-                "totalCount": len(self._cache_bill_ids),
+                "pageSize": self._page_size,
+                "currentPage": self._current_page,
+                "totalCount": self._total_count,
             }
         checkbox = self.elements.get(EXACT_MATCH_CHECKBOX, {})
         return {
@@ -887,6 +895,7 @@ def test_verified_live_settlement_requires_current_exact_request_and_grid() -> N
     assert evidence["RESPONSE_CACHE_IDS_MATCH"] is True
     assert evidence["DOM_ROW_COUNT"] == 1
     assert evidence["RESPONSE_DOM_IDS_MATCH"] is True
+    assert evidence["RESULT_SET_COMPLETE"] is True
     assert evidence["FAILED_STAGE"] is None
     assert "BillID" not in repr(evidence)
     assert "PartNo" not in repr(evidence)
@@ -1038,6 +1047,31 @@ def test_settlement_fails_when_returned_billids_do_not_match_grid() -> None:
     assert evidence["RESPONSE_ROWS_VALID"] is True
     assert evidence["CACHE_ID_SETS_MATCH"] is False
     assert evidence["FAILED_STAGE"] == "RESPONSE_CACHE_IDS_MATCH"
+
+
+@pytest.mark.parametrize(
+    ("current_page", "page_size", "total_count"),
+    ((1, 20, 2), (2, 20, 1), (1, 1, 2)),
+)
+def test_settlement_fails_closed_when_pagination_does_not_prove_complete_result_set(
+    current_page, page_size, total_count
+) -> None:
+    adapter, page = playwright_adapter(elements=playwright_rows())
+    page._current_page = current_page
+    page._page_size = page_size
+    page._total_count = total_count
+
+    adapter.goto("https://yingsuo.alperp.cn" + BUSINESS_INQUIRY_LIST_PATH)
+    adapter.set_text(MODEL_QUERY_INPUT, MPN)
+    adapter.ensure_checked(EXACT_MATCH_CHECKBOX)
+    adapter.click(QUERY_BUTTON)
+    with pytest.raises(InsoDuplicateHistoryError) as failure:
+        adapter.wait_for_query_settled(timeout_ms=1000)
+
+    assert failure.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+    evidence = adapter.last_settlement_evidence
+    assert evidence["RESULT_SET_COMPLETE"] is False
+    assert evidence["FAILED_STAGE"] == "RESULT_SET_COMPLETE"
 
 
 def test_playwright_settlement_is_fail_closed() -> None:

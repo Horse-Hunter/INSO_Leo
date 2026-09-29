@@ -102,7 +102,7 @@ AI 输入：
 
 SQLite 只做 additive migration；V1.1 表不 drop/rewrite。首次迁移前做 timestamped、校验通过的 SQLite backup。禁止自动 downgrade/drop。
 
-Evidence 仅放 Git-ignored `runtime/evidence/<inquiry_id>/`。默认 30 天保留策略；初版不自动删除。
+完整 runtime evidence 放 Git-ignored `runtime/evidence/<inquiry_id>/`。需要独立 Review 的 live acceptance 同时在 Control Room 保存脱敏摘要，只包含安全布尔值、计数和 identity/read-back 检查结果；不得包含 credentials、cookies、业务值或 raw page dumps。默认 30 天保留策略；初版不自动删除。
 
 ## 7. Browser / Session
 

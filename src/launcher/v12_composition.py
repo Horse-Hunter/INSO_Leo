@@ -84,10 +84,10 @@ class _SavedDetail:
 class PlaywrightReadOnlySaveReconciler(ReadOnlySaveReconciler):
     """Reconcile an UNKNOWN Save outcome with one settled, exact history query.
 
-    It never clicks Save/Send.  A zero-row result is authoritative only because
-    ``PlaywrightDuplicateHistoryPage`` proves the native exact query settled
-    against the complete INSO history scope; any failure to establish that scope
-    is returned as UNKNOWN.
+    It never clicks Save/Send.  A zero- or one-row result is authoritative only
+    because ``PlaywrightDuplicateHistoryPage`` proves the native exact query
+    settled against the complete INSO history scope; any failure to establish
+    that scope is returned as UNKNOWN.
     """
 
     def __init__(
@@ -119,7 +119,11 @@ class PlaywrightReadOnlySaveReconciler(ReadOnlySaveReconciler):
                 history = PlaywrightDuplicateHistoryPage(frame, timeout_ms=self._timeout_ms)
                 payload = history.query_exact_response(target.mpn)
                 rows = payload.get("rows")
-                if not isinstance(rows, list) or not history.last_exact_request_matched:
+                if (
+                    not isinstance(rows, list)
+                    or not history.last_exact_request_matched
+                    or not history.last_exact_result_set_complete
+                ):
                     return _unreadable_reconciliation(now)
                 if len(rows) == 0:
                     return ReconciliationResult(

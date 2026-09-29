@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "rfq": "RFQ-001",
+  "evidence_kind": "sanitized_live_pre_save_acceptance",
+  "captured_on": "2026-09-29",
+  "data_policy": "No credentials, cookies, business values, record identifiers, or page dumps are stored in this artifact.",
+  "side_effects": {
+    "real_save": false,
+    "real_save_and_send": false,
+    "real_send": false,
+    "real_smtp": false,
+    "sheets_write": false
+  },
+  "parent_field_readback": {
+    "frame_verified": true,
+    "part_number_actionable_input_count": 1,
+    "brand_actionable_input_count": 1,
+    "quantity_actionable_input_count": 1,
+    "synthetic_values_written": true,
+    "immediate_exact_readback": true,
+    "values_persisted": false
+  },
+  "read_only_reconciliation": {
+    "existing_safe_record_opened_read_only": true,
+    "candidate_count": 1,
+    "bill_id_unique_and_nonempty": true,
+    "peno_unique_and_nonempty": true,
+    "part_number_exact_readback": true,
+    "brand_exact_readback": true,
+    "quantity_exact_readback": true,
+    "record_identifiers_persisted": false
+  },
+  "save_controls": {
+    "save_control_observed": true,
+    "save_and_send_dispatched": false,
+    "send_dispatched": false,
+    "production_write_gate": "CLOSED"
+  }
+}

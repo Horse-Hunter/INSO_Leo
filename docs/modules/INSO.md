@@ -42,11 +42,11 @@
 - purchaser：`input#UserName_text`
 - AI input：`textarea#paste-area`
 - AI recognition：`button#ai-recognize`
-- parent PartNo：`#_id_dg td[data-field="PartNo"] input`
-- parent Brand：`#_id_dg td[data-field="Brand"] input`
-- parent Qty：`#_id_dg td[data-field="Qty"] input`
+- parent PartNo：唯一 `#_id_dg td[data-field="PartNo"]` cell
+- parent Brand：唯一 `#_id_dg td[data-field="Brand"]` cell
+- parent Qty：唯一 `#_id_dg td[data-field="Qty"]` cell
 
-AI preview 只接受唯一 row；MPN 按 `ai-mpn-v1` exact、Brand trim-only exact、Qty positive integer exact。ParentProductFields 写入后立即 read-back；缺失、多重、不可见、不可用、错误 frame/origin 或 mismatch 一律 fail closed。
+每个 parent field 必须先双击唯一 cell，随后只接受唯一、可见、enabled 的 transient `input` editor；fill 后立即从 editor 或已提交 cell read-back。AI preview 只接受唯一 row；MPN 按 `ai-mpn-v1` exact、Brand trim-only exact、Qty positive integer exact。缺失、多重、不可见、不可用、错误 frame/origin 或 mismatch 一律 fail closed。
 
 ## Save / reconciliation
 
@@ -54,7 +54,7 @@ AI preview 只接受唯一 row；MPN 按 `ai-mpn-v1` exact、Brand trim-only exa
 - `#btnSave2`（保存并发送）和 `#bcSend`（发送）没有允许的 dispatch path，永久禁止。
 - Production Write Gate 默认 CLOSED。
 - Save 前必须先持久化 `UNKNOWN_WRITE_OUTCOME`；Save 结果未知时绝不自动再次点击。
-- `PlaywrightReadOnlySaveReconciler` 复用 exact history + BillID/PENO/detail read-back：
+- `PlaywrightReadOnlySaveReconciler` 复用 exact history + BillID/PENO/detail read-back；在确认结果前必须证明 candidate set 完整：native response、cache、DOM 一致，分页总数等于 response row count，且为首页单页结果。不能证明完整性时为 `UNKNOWN`：
   - 唯一候选 + stable id + MPN/Brand/Qty exact → `CONFIRMED_SAVED`
   - authoritative settled query + 0 candidate → `CONFIRMED_NOT_SAVED`
   - 多候选 → `AMBIGUOUS`

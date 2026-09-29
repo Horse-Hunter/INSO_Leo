@@ -92,6 +92,7 @@ def _empty_settlement_evidence() -> dict[str, object]:
         "PAGINATION_CURRENT_PAGE": None,
         "PAGINATION_PAGE_SIZE": None,
         "PAGINATION_TOTAL_COUNT": None,
+        "RESULT_SET_COMPLETE": None,
         "FAILED_STAGE": None,
     }
 
@@ -571,6 +572,18 @@ class PlaywrightDuplicateHistoryPage:
             and _is_exact_history_request(self._settled_request, self._target_mpn)
         )
 
+    @property
+    def last_exact_result_set_complete(self) -> bool:
+        """Whether the settled response is proven to contain every candidate.
+
+        The native list endpoint is paginated.  Matching the grid proves only
+        that this page rendered, not that no later page exists.  This flag is
+        intentionally exposed separately so save reconciliation cannot mistake
+        a current-page row count for the complete candidate set.
+        """
+
+        return self._settlement_evidence.get("RESULT_SET_COMPLETE") is True
+
     def query_exact_response(self, target_mpn: str) -> dict[str, object]:
         """Run the verified native search and return its settled response."""
 
@@ -890,6 +903,23 @@ class PlaywrightDuplicateHistoryPage:
             evidence["PAGINATION_CURRENT_PAGE"] = snapshot.get("currentPage")
             evidence["PAGINATION_PAGE_SIZE"] = snapshot.get("pageSize")
             evidence["PAGINATION_TOTAL_COUNT"] = snapshot.get("totalCount")
+            total_count = snapshot.get("totalCount")
+            page_size = snapshot.get("pageSize")
+            current_page = snapshot.get("currentPage")
+            result_set_complete = (
+                isinstance(total_count, int)
+                and not isinstance(total_count, bool)
+                and total_count >= 0
+                and isinstance(page_size, int)
+                and not isinstance(page_size, bool)
+                and page_size > 0
+                and isinstance(current_page, int)
+                and not isinstance(current_page, bool)
+                and current_page == 1
+                and total_count <= page_size
+                and total_count == len(bill_ids)
+            )
+            evidence["RESULT_SET_COMPLETE"] = result_set_complete
             if not cache_present:
                 evidence["FAILED_STAGE"] = "CACHE_PRESENT"
                 raise ValueError
@@ -919,6 +949,7 @@ class PlaywrightDuplicateHistoryPage:
                 ("BUTTON_ENABLED", evidence["BUTTON_ENABLED"]),
                 ("RESPONSE_CACHE_IDS_MATCH", evidence["RESPONSE_CACHE_IDS_MATCH"]),
                 ("RESPONSE_DOM_IDS_MATCH", evidence["RESPONSE_DOM_IDS_MATCH"]),
+                ("RESULT_SET_COMPLETE", evidence["RESULT_SET_COMPLETE"]),
             )
             failed = next((name for name, ok in required_stages if not ok), None)
             evidence["FAILED_STAGE"] = failed
