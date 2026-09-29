@@ -39,3 +39,12 @@ Stable anchors:
 - Handoff files expire after takeover; obsolete blockers/next steps are marked resolved/superseded.
 - Review fails on expired handoffs, stale current-state text or unjustified duplicate active worktrees.
 
+## Delivery-first invariant
+
+- Correct working delivery of Owner requirements is primary; governance is subordinate.
+- Priority: Owner intent → canonical requirement → reuse → necessary safety/data integrity/reversibility → minimal process.
+- Do not add gates, reports, boundaries or acceptance burden without a real requirement, safety/data-loss risk, or demonstrated recurring-failure reason.
+- CEO handles obvious adjacent implications of Owner corrections without requiring repeated prompts.
+- Housekeeping is performed in-line and should not become an artificial blocker.
+- Rules that add recurring effort without improving correctness, safety, recoverability or delivery speed should be simplified or removed.
+
