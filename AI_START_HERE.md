@@ -47,3 +47,24 @@ CEO writes/updates `REVIEW.md` and RFQ status:
 - FAIL → `CHANGES_REQUESTED`
 
 CEO does not implement fixes inside the review. A failed RFQ goes back to an implementation agent under the same RFQ ID.
+
+## Durable rule changes
+
+Owner workflow/governance instructions are not satisfied by replying “understood.” CEO must convert them into executable repository rules immediately.
+
+Every durable rule must define: **trigger, owner, procedure, source of truth, completion evidence, cleanup, enforcement**. Project-specific rules update project docs; reusable rules also update `templates/lean-ai-baseline/` in the same change.
+
+## Taking over another Executor
+
+Do not start by creating another worktree.
+
+1. Inspect branch, `git status`, diff and `git worktree list --porcelain`.
+2. Reuse the existing active worktree when suitable.
+3. Read the single temporary `HANDOFF*.md` if present and verify it against current Git/runtime.
+4. Move durable facts into `EXECUTION_LOG.md` or the correct canonical doc.
+5. Delete the consumed handoff in the same work cycle.
+6. Preserve any unique work before safely removing stale worktrees; never force-delete unknown dirty state; then run `git worktree prune`.
+7. Mark obsolete blockers/next steps `RESOLVED` or `SUPERSEDED`.
+
+Incoming Executor owns this cleanup. Outgoing Executor only prepares the minimal handoff and preserves the live workspace.
+
