@@ -32,3 +32,19 @@ CEO independently reads Task Spec, Execution Log, Final Report, Git diff/commits
 CEO writes `REVIEW.md`:
 - PASS → `REVIEWED_DONE`
 - FAIL → `CHANGES_REQUESTED`
+
+## Durable rules and takeover
+
+Durable Owner governance instructions must be operationalized, not merely acknowledged. Every rule must define trigger, owner, procedure, source of truth, evidence, cleanup and enforcement.
+
+When taking over:
+1. Reuse the existing active worktree; do not create another by default.
+2. Inspect Git status/diff and `git worktree list --porcelain`.
+3. Read and verify the single temporary handoff if present.
+4. Move durable facts into canonical records.
+5. Delete the consumed handoff in the same work cycle.
+6. Preserve unique work before safely removing stale worktrees; never force-delete unknown dirty state; prune afterward.
+7. Mark obsolete blockers/next steps resolved or superseded.
+
+Incoming Executor owns cleanup; outgoing Executor only prepares the minimal handoff and preserves the workspace.
+
