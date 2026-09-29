@@ -10,10 +10,15 @@ Owner 与 CEO 讨论需求
 → Executor 只给 Owner 固定的人话总结
 → 若需 Review，Executor 告诉 Owner“RFQ-XXX 已完成，需要独立 Review”
 → Owner 回到 CEO，只说“Review RFQ-XXX”
-→ CEO 独立读取 spec/log/report/diff/code/tests/runtime evidence
+→ CEO 独立读取全部技术证据
+→ CEO 对 Owner 只说：发生了什么 / 影响什么 / 接下来做什么
+→ 技术修复细节只写给 Executor
 → PASS = REVIEWED_DONE
 → FAIL = CHANGES_REQUESTED
 ```
+
+Owner-facing communication must not require software-development knowledge.
+Technical implementation terms belong in Executor-facing logs/review findings/Git/tests/evidence.
 
 States:
 
@@ -26,5 +31,3 @@ Review failure:
 No-review task:
 
 `IN_PROGRESS → DONE`
-
-Executor actions must advance RFQ acceptance. Review belongs to CEO, not the implementation agent.

@@ -1,6 +1,8 @@
 # Human Report
 
-The executor's chat reply and `FINAL_REPORT.md` use exactly these seven fields:
+Anything shown directly to Owner must be understandable without software-development knowledge.
+
+## Executor final summary to Owner
 
 ```text
 正在实现什么：
@@ -19,13 +21,30 @@ The executor's chat reply and `FINAL_REPORT.md` use exactly these seven fields:
 <已完成的可验收结果>
 
 测试结果：
-<关键 tests / live / evidence / commit>
+<只说通过/未通过、关键范围和是否做过真实验证；不要堆技术术语>
 
 你接下来需要做什么：
 NONE / Review RFQ-XXX / <唯一需要 Owner 做的动作>
 ```
 
+## CEO Review summary to Owner
+
+```text
+Review 结论：
+PASS / CHANGES_REQUESTED
+
+发生了什么：
+<人话说明>
+
+影响什么：
+<对当前需求、上线、安全或下一步的实际影响>
+
+接下来做什么：
+<Executor 继续修 / Owner 无需操作 / 唯一 Owner 动作>
+```
+
 Rules:
-- Technical detail belongs in `EXECUTION_LOG.md`, Git, tests and evidence—not in the Owner-facing reply.
-- If review is required, the final field says `Review RFQ-XXX`, meaning **return to the CEO conversation**; do not open a new implementation/reviewer agent.
+- Owner-facing 内容只说人话。默认不出现 class、method、selector、stack trace、分页实现、runtime 内部状态等术语。
+- Technical detail belongs in `EXECUTION_LOG.md`, `REVIEW.md` 的 Technical Findings、Git, tests and evidence.
+- If review is required, the final field says `Review RFQ-XXX`, meaning return to the CEO conversation.
 - Ordinary technical failures never become Owner actions.

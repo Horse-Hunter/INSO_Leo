@@ -25,14 +25,7 @@ evidence
 decisions
 FINAL_REPORT
         ↓
-Executor 最后只给 Owner 固定的人话总结：
-正在实现什么
-理想变化是什么
-以前是什么
-现在是什么
-做完了什么
-测试结果
-你接下来需要做什么
+Executor 最后只给 Owner 固定的人话总结
         ↓
 如果需要 Review，Executor 告诉 Owner：
 “RFQ-XXX 已完成，需要独立 Review”
@@ -40,16 +33,14 @@ Executor 最后只给 Owner 固定的人话总结：
 Owner 回到 CEO 会话，只说：
 “Review RFQ-XXX”
         ↓
-CEO 自己读取：
-Task Spec
-Execution Log
-Final Report
-Git diff / commits
-当前代码
-Test evidence
-Runtime evidence
+CEO 自己读取全部技术材料并独立 Review
         ↓
-CEO 直接独立 Review
+CEO 对 Owner 只说人话：
+发生了什么
+影响什么
+接下来做什么
+        ↓
+技术修复要求只写给 Executor
         ↓
 PASS → REVIEWED_DONE
 FAIL → CHANGES_REQUESTED
@@ -58,10 +49,26 @@ FAIL → CHANGES_REQUESTED
 ## Ownership
 
 - Owner：与 CEO 讨论需求；启动任意实现 Agent；接收最终人话总结；需要 Review 时回到 CEO。
-- CEO：把需求写成完整 Task Spec；维护业务规则、架构/Safety 边界；独立 Review。
-- Executor（Codex / Claude）：只负责实现、调试、tests、live evidence、execution log、final report、commit/push。
+- CEO：把需求写成完整 Task Spec；维护业务规则、架构/Safety 边界；独立 Review；对 Owner 负责把技术结论翻译成人话。
+- Executor（Codex / Claude）：负责实现、调试、tests、live evidence、execution log、final report、commit/push，并读取技术化的 Review findings。
 - Git：实现事实源。
 - Control Room：需求、执行记录与 RFQ 状态源。
+
+## Owner communication rule
+
+任何直接发给 Owner 的 CEO / Executor / Review 说明，都必须先转换成人能直接理解的业务语言，只回答三件事：
+
+1. 发生了什么；
+2. 对需求或使用有什么影响；
+3. 接下来是谁做什么。
+
+除非 Owner 主动要求技术细节，否则不在 Owner-facing 内容里出现 selector、class、method、stack trace、分页实现、runtime 内部状态等术语。
+
+技术细节必须写入 Executor-facing 区域，例如：
+- `EXECUTION_LOG.md`
+- `REVIEW.md` 的 Technical Findings
+- Git diff / commit
+- tests / evidence
 
 ## RFQ states
 
@@ -84,3 +91,7 @@ Every executor action must advance the RFQ acceptance criteria. If progress stal
 ## Review rule
 
 Review belongs to CEO, never to the implementation agent that executed the RFQ. CEO reviews independently and does not implement fixes inside the review. PASS closes the RFQ as `REVIEWED_DONE`; FAIL records concrete findings and changes status to `CHANGES_REQUESTED`.
+
+CEO-facing review output has two layers:
+- **Owner Summary:** plain language only.
+- **Executor Technical Findings:** precise technical details and repair instructions.
