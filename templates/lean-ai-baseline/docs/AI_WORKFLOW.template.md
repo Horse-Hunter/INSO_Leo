@@ -45,3 +45,26 @@ Review failure:
 No-review task:
 
 `IN_PROGRESS → DONE`
+
+## Rule Definition of Done
+
+Every durable workflow/governance rule must specify:
+- trigger;
+- responsible role;
+- ordered procedure;
+- canonical source of truth;
+- completion evidence;
+- cleanup/retirement;
+- Review enforcement.
+
+CEO owns converting Owner intent into executable rules and mirrors reusable rules into the baseline templates. Executor applies and records evidence. Reviewer enforces. Owner is not the reminder mechanism.
+
+## Handoff / worktree lifecycle
+
+- Outgoing Executor prepares at most one temporary handoff for a real switch and preserves the live workspace.
+- Incoming Executor owns takeover cleanup: inspect Git/worktrees, verify handoff facts, merge durable facts into canonical records, delete the handoff.
+- Active Executor reuses the current worktree; default one active implementation worktree per active version/RFQ.
+- Preserve unique work before stale worktree removal; never force-delete unknown dirty state; run `git worktree prune`.
+- Canonical execution records mark old blockers/next steps `RESOLVED` or `SUPERSEDED`.
+- Review fails on expired handoffs, stale current-state instructions or unexplained duplicate active worktrees.
+
