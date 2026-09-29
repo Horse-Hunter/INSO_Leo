@@ -68,3 +68,16 @@ CEO owns converting Owner intent into executable rules and mirrors reusable rule
 - Canonical execution records mark old blockers/next steps `RESOLVED` or `SUPERSEDED`.
 - Review fails on expired handoffs, stale current-state instructions or unexplained duplicate active worktrees.
 
+## Delivery-first operating rule
+
+Process is subordinate to delivery.
+
+Use this order:
+Owner intent → canonical requirement → existing reusable capability → minimum implementation delta → only necessary safety/data-integrity/process controls.
+
+Do not add extra gates, reports, approvals, architecture layers or evidence work unless the task, a real safety/data-loss risk, or a demonstrated recurring failure requires them.
+
+When Owner corrects one workflow problem, CEO must also handle the obvious adjacent ownership, lifecycle, reuse and stale-state implications in the same change.
+
+Reuse checks stay lightweight. Formal non-reuse explanation is required only when replacing or duplicating a plausible existing capability.
+
