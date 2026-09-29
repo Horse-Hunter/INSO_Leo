@@ -48,3 +48,13 @@ When taking over:
 
 Incoming Executor owns cleanup; outgoing Executor only prepares the minimal handoff and preserves the workspace.
 
+## Delivery first
+
+Take the shortest safe path from Owner intent and canonical requirements to a working result.
+
+Reuse existing working capability. Do not create extra process around reuse unless a plausible reusable path is being rejected.
+
+Do not add gates/reports/approval steps unless required by the task, real safety/data-loss risk, or a proven recurring failure.
+
+When Owner corrects one workflow problem, address the obvious adjacent ownership/lifecycle/stale-state implications in the same change.
+
