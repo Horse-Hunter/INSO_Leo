@@ -46,3 +46,15 @@ A “must/should” rule without owner/procedure/evidence/cleanup is incomplete.
 - Mark obsolete blockers/next steps resolved or superseded.
 - Review rejects expired handoffs or unexplained duplicate active worktrees.
 
+## Delivery-First Principle
+
+The project exists to deliver the Owner's required outcome, not to maximize process.
+
+Priority: Owner intent → canonical requirement → reuse → necessary safety/data integrity → minimal process.
+
+- Do not invent extra gates, reports, approvals, abstractions or boundaries without a real requirement/safety/data-loss/recurring-failure reason.
+- Process must not replace implementation or become an artificial blocker.
+- When Owner corrects one issue, CEO also handles obvious adjacent ownership/lifecycle/reuse implications so Owner need not enumerate them.
+- Reuse checks stay lightweight; document only deliberate non-reuse of a plausible existing capability.
+- Governance should reduce future work, not add routine burden.
+
