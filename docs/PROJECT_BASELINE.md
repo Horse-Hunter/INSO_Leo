@@ -39,3 +39,21 @@
 - Credential source: Core Vault only.
 - INSO runtime readiness is a shared capability; ordinary runtime/session recovery is not an Owner blocker.
 - V1.2 Production Write Gate: CLOSED.
+
+## Rule operationalization invariant
+
+- Durable Owner process instructions must be operationalized by CEO in repository rules; chat acknowledgement alone has no standing.
+- Every durable rule must name its trigger, responsible role, procedure, canonical state, completion evidence, cleanup and Review enforcement.
+- Reusable governance changes must be mirrored into `templates/lean-ai-baseline/` in the same change.
+- Executor is responsible for executing the rule; Reviewer/CEO is responsible for enforcement. Owner is not responsible for reminding either role.
+
+## Workspace / handoff invariant
+
+- Default is one active implementation worktree per active version/RFQ.
+- Outgoing Executor preserves the live workspace and may leave one minimal temporary handoff only for a real agent switch.
+- Incoming Executor owns takeover cleanup: inspect current Git/worktrees, verify handoff claims, move durable facts to canonical records, delete the handoff, preserve unique work, safely remove stale worktrees, and prune.
+- Unknown dirty worktrees are never force-deleted.
+- Handoff files are never canonical and expire after takeover.
+- `EXECUTION_LOG.md` may preserve history but obsolete current blocker/next-step statements must be marked resolved/superseded.
+- Review requires cleanup evidence and rejects expired handoffs, stale current-state text or unexplained duplicate active worktrees.
+
