@@ -25,3 +25,17 @@ Append concise technical facts:
 Do not store secrets or raw terminal noise.
 
 PENDING
+
+## Workspace / handoff evidence
+
+When applicable, record:
+- active worktree and branch reused;
+- handoff file consumed and deleted;
+- durable handoff facts merged into canonical records;
+- stale worktrees reviewed;
+- unique work preserved before removals;
+- `git worktree prune` completed;
+- obsolete blocker/next-step entries marked `RESOLVED` or `SUPERSEDED`.
+
+Do not treat a temporary handoff as a durable source of truth.
+
