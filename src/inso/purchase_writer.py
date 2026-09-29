@@ -69,9 +69,9 @@ class PlaywrightParentProductFields:
 
     _FORM_FRAME_SELECTOR = "iframe#winIframealert_enquiry"
     _FIELD_SELECTORS: ClassVar[dict[str, str]] = {
-        "model": '#_id_dg td[data-field="PartNo"] input',
-        "brand": '#_id_dg td[data-field="Brand"] input',
-        "quantity": '#_id_dg td[data-field="Qty"] input',
+        "model": '#_id_dg td[data-field="PartNo"]',
+        "brand": '#_id_dg td[data-field="Brand"]',
+        "quantity": '#_id_dg td[data-field="Qty"]',
     }
 
     def __init__(self, form_page: OperationPage) -> None:
@@ -112,12 +112,30 @@ class PlaywrightParentProductFields:
         return quantity if quantity > 0 else None
 
     def _set(self, field: str, value: str) -> None:
-        locator = self._field(field)
-        locator.fill(value)
+        cell = self._field(field)
+        try:
+            cell.dblclick()
+        except Exception as exc:
+            raise SecurityViolation("parent product field is not editable") from exc
+        editor = cell.locator("input")
+        if editor.count() != 1 or not editor.is_visible() or not editor.is_enabled():
+            raise SecurityViolation("parent product editor is not uniquely actionable")
+        editor.fill(value)
 
     def _read_text(self, field: str) -> str | None:
         try:
-            return self._field(field).input_value()
+            cell = self._field(field)
+            editor = cell.locator("input")
+            if editor.count() == 1:
+                if not editor.is_visible() or not editor.is_enabled():
+                    return None
+                return editor.input_value()
+            if editor.count() != 0:
+                return None
+            rendered = cell.locator(".layui-table-cell")
+            if rendered.count() != 1 or not rendered.is_visible():
+                return None
+            return rendered.inner_text()
         except Exception:  # noqa: BLE001 - browser ambiguity fails closed
             return None
 

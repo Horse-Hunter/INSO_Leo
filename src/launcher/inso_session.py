@@ -395,6 +395,13 @@ def attach_inso_research_session(
     except Exception:
         if acquired_here:
             playwright.stop()
-        elif hasattr(browser_handle, "disconnect"):
+        if getattr(browser_handle, "owned", False) and hasattr(
+            browser_handle, "close"
+        ):
+            # Authentication can stop at a real manual verification challenge.
+            # This handle was created for the current operation, so leaving it
+            # attached would orphan an app-owned Chrome process.
+            browser_handle.close()
+        elif not acquired_here and hasattr(browser_handle, "disconnect"):
             browser_handle.disconnect()
         raise

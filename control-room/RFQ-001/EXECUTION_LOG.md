@@ -14,4 +14,31 @@ Do not record passwords, tokens, cookies, raw secrets, or unnecessary terminal n
 
 ## Entries
 
-No Control Room execution recorded yet.
+### 2026-09-29 — parent-field and runtime recovery acceptance work
+
+- Updated `PlaywrightParentProductFields` to use the verified business-inquiry
+  grid contract: uniquely identify each `PartNo` / `Brand` / `Qty` cell,
+  double-click it, require one visible enabled editor, write, and read back
+  from the editor or committed cell. No positional selectors are used.
+- Added the matching static-cell/editor regression coverage in
+  `tests/inso/test_v12_purchase_writer.py`.
+- Updated `attach_inso_research_session` so an app-owned Chrome is closed if
+  authentication stops at a manual verification challenge; added the
+  regression in `tests/launcher/test_inso_session.py`.
+- Live unsaved business-inquiry parent-field read-back was performed without
+  Save, Save-and-Send, or Send. Runtime evidence is sanitized and ignored at
+  `runtime/evidence/v12-phase-a-final/report.json`.
+- Focused verification:
+  `python -m pytest -q tests/launcher/test_inso_session.py tests/inso/test_v12_purchase_writer.py tests/launcher/test_v12_phase_a_readonly.py tests/launcher/test_v12_composition.py -p no:cacheprovider --basetemp D:\\Program_Leo\\INSO_Leo\\runtime\\pytest-focused-0929c`
+  — 67 passed.
+- Full verification (split only to use project-local temporary directories):
+  `tests/core tests/gui` — 83 passed, 10 skipped;
+  `tests/inso tests/launcher` — 174 passed;
+  `tests/workflow tests/sheets` — 172 passed, 1 skipped;
+  `tests/research` — 230 passed.
+  `python -m ruff check src tests` and `git diff --check` — PASS.
+- True blocker: the isolated approved Chrome profile currently presents a
+  required phone-verification-code control before authentication. The helper
+  correctly returns `MANUAL_VERIFICATION_REQUIRED`; it does not bypass this
+  security challenge. Therefore Chrome-only read-only reconciliation-detail
+  acceptance remains pending and RFQ status stays `READY`.

@@ -319,10 +319,49 @@ class _ParentLocator:
     def is_enabled(self):
         return self.frame.enabled
 
+    def dblclick(self):
+        self.frame.editing = self.selector
+
+    def locator(self, selector):
+        if selector == "input":
+            return _ParentEditor(self.frame, self.selector)
+        assert selector == ".layui-table-cell"
+        return _ParentRendered(self.frame, self.selector)
+
+
+class _ParentEditor:
+    def __init__(self, frame, selector):
+        self.frame = frame
+        self.selector = selector
+
+    def count(self):
+        return 1 if self.frame.editing == self.selector else 0
+
+    def is_visible(self):
+        return self.count() == 1 and self.frame.visible
+
+    def is_enabled(self):
+        return self.count() == 1 and self.frame.enabled
+
     def fill(self, value):
         self.frame.values[self.selector] = value
 
     def input_value(self):
+        return self.frame.values.get(self.selector, "")
+
+
+class _ParentRendered:
+    def __init__(self, frame, selector):
+        self.frame = frame
+        self.selector = selector
+
+    def count(self):
+        return 1
+
+    def is_visible(self):
+        return self.frame.visible
+
+    def inner_text(self):
         return self.frame.values.get(self.selector, "")
 
 
@@ -334,11 +373,12 @@ class _ParentFrame:
         self.visible = True
         self.enabled = True
         self.counts = {
-            '#_id_dg td[data-field="PartNo"] input': 1,
-            '#_id_dg td[data-field="Brand"] input': 1,
-            '#_id_dg td[data-field="Qty"] input': 1,
+            '#_id_dg td[data-field="PartNo"]': 1,
+            '#_id_dg td[data-field="Brand"]': 1,
+            '#_id_dg td[data-field="Qty"]': 1,
         }
         self.values = {}
+        self.editing = None
 
     def locator(self, selector):
         return _ParentLocator(self, selector)
@@ -390,9 +430,9 @@ def test_parent_product_fields_write_and_read_back_unique_verified_inputs() -> N
 @pytest.mark.parametrize(
     ("selector", "action"),
     (
-        ('#_id_dg td[data-field="PartNo"] input', "model"),
-        ('#_id_dg td[data-field="Brand"] input', "brand"),
-        ('#_id_dg td[data-field="Qty"] input', "quantity"),
+        ('#_id_dg td[data-field="PartNo"]', "model"),
+        ('#_id_dg td[data-field="Brand"]', "brand"),
+        ('#_id_dg td[data-field="Qty"]', "quantity"),
     ),
 )
 def test_parent_product_fields_missing_or_duplicate_candidates_fail_closed(selector, action) -> None:
@@ -423,5 +463,5 @@ def test_parent_product_fields_rejects_invalid_quantity_and_readback_mismatch() 
     fields, frame = _parent_fields()
     with pytest.raises(SecurityViolation):
         fields.set_quantity(0)
-    frame.values['#_id_dg td[data-field="Qty"] input'] = "not-a-number"
+    frame.values['#_id_dg td[data-field="Qty"]'] = "not-a-number"
     assert fields.read_quantity() is None

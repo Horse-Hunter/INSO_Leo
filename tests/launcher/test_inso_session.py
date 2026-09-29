@@ -379,3 +379,25 @@ def test_authentication_failure_never_exposes_credential_values() -> None:
 
     assert "account-secret" not in repr(error.value)
     assert "password-secret" not in repr(error.value)
+
+
+def test_app_owned_browser_closes_when_manual_verification_stops_login() -> None:
+    context = FakeContext(shell_pages=0)
+    page = _LoginPage(context, body_text="CAPTCHA")
+    browser = _login_browser(page)
+    browser_handle = FakeBrowserHandle(owned=True)
+    playwright = FakePlaywright(browser)
+
+    with pytest.raises(InsoAuthenticationError) as error:
+        attach_inso_research_session(
+            "http://127.0.0.1:9222",
+            browser_handle,
+            cycle_id="cycle-1",
+            cycle_is_drained=lambda _cycle: True,
+            playwright_factory=lambda: playwright,
+            login=_Login(),
+        )
+
+    assert error.value.reason_code == "MANUAL_VERIFICATION_REQUIRED"
+    assert browser_handle.close_count == 1
+    assert browser_handle.disconnect_count == 0
