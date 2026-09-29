@@ -54,3 +54,21 @@ A rule that only says “must/should” but does not define who acts, when, how,
 
 **Enforcement:** Review fails if stale handoffs, unexplained duplicate active worktrees, or obsolete current-state instructions remain.
 
+## Delivery-First Principle
+
+The repository exists to deliver the Owner's required product, not to maximize process.
+
+Priority order:
+1. Owner's current business intent and canonical requirements;
+2. reuse of already-working capability;
+3. necessary safety, data-integrity and reversibility controls;
+4. process/documentation only when it directly supports 1–3.
+
+Rules:
+- Do not invent extra gates, reports, approvals, test ceremonies, abstractions or boundaries unless required by the Task Spec, real safety/data-loss risk, or a demonstrated recurring failure.
+- Process must never become a substitute for implementation. If a housekeeping issue can be fixed immediately, fix it without stopping delivery.
+- When Owner gives a correction, CEO must also check the nearby implications (ownership, lifecycle, stale state, reuse, handoff, release) so Owner does not have to point out each consequence separately.
+- Prefer one short executable rule over many procedural requirements. Any governance change should reduce future work, not add routine burden.
+- Reuse checks are lightweight: inspect only the relevant existing implementation/history. Extra documentation is required only when choosing not to reuse a plausible existing solution.
+- Owner-facing instructions should contain only the minimum actions needed to move delivery forward.
+
