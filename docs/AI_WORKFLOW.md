@@ -180,3 +180,22 @@ Responsibilities:
 
 **Review enforcement:** CHANGES_REQUESTED if expired handoff files, stale current-state instructions, or unexplained duplicate active worktrees remain.
 
+## Delivery-first operating rule
+
+Process is subordinate to delivery.
+
+Decision order:
+1. What outcome did Owner actually ask for?
+2. What canonical requirement/source defines it?
+3. What working capability can be reused?
+4. What minimum change gets to a real runnable/verifiable result?
+5. Only then add the minimum safety/data-integrity/process controls that are genuinely necessary.
+
+Do not add ceremony by default. No extra gate, report, approval, architecture layer, evidence package or cleanup stop is justified merely because it sounds rigorous.
+
+A governance rule is useful only if it prevents a real recurring problem **and reduces total future work**. If it adds routine steps without changing correctness, safety, recoverability or delivery speed, remove/simplify it.
+
+Owner corrections require an implication sweep by CEO: identify the immediate issue plus obvious adjacent effects (who owns it, when it expires, where durable facts belong, what stale state must disappear, what can be reused). Implement the complete fix once instead of waiting for Owner to enumerate each implication.
+
+Reuse checks are intentionally lightweight. Executor only needs to inspect the relevant existing code/history. Formal non-reuse explanation is required only when replacing or duplicating a plausible existing capability.
+
