@@ -5,11 +5,21 @@
 - Review is owned by CEO; Owner returns to CEO with `Review RFQ-XXX`.
 - Git/code/tests/evidence are implementation truth.
 - CEO/Owner own requirement meaning and Task Spec.
-- Executor owns implementation and execution records.
+- Executor owns reuse audit, implementation and execution records.
 - CEO independently reviews without implementing fixes.
 - Instructions stay focused on current RFQ acceptance; no long procedural prompts.
 - Repeated technical failures become shared code/contracts/tests.
 - Owner is not a technical message bus.
+
+## Reuse contract
+
+- Existing stable working capability is the inheritance baseline for the next version.
+- Reuse current/stable implementation, configuration, adapters, runtime, migrations, tests, scripts and packaging before adding anything new.
+- Do not repeat solved discovery or architecture thinking unless requirements changed or new evidence invalidates the prior decision.
+- Do not create duplicate production paths or equivalent infrastructure for the same responsibility.
+- Unavoidable non-reuse must be justified in the RFQ Execution Log before implementation.
+- Temporary discovery/verification paths must converge into one canonical production path before delivery.
+- Review fails on unjustified reimplementation, duplicate capability or unretired parallel production paths.
 
 Stable anchors:
 - `<CURRENT_STABLE_BASELINE>`

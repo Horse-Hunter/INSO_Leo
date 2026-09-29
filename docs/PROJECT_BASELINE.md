@@ -11,12 +11,25 @@
 - Repeated failures become shared code/contracts/regression tests rather than repeated Owner guidance.
 - Owner is not a technical message bus.
 
+## Reuse contract
+
+**Reuse First is a project invariant.**
+
+- V1.1 is the working inheritance baseline for V1.2. V1.2 extends it; it does not independently recreate it.
+- Unless a requirement explicitly changes them, V1.2 must reuse the V1.1 production configuration model, Sheets/OAuth integration, Research runtime, Workflow foundation, Chrome/CDP lifecycle, Core Vault, GUI shell, filesystem/app-root conventions, release safety checks and packaging infrastructure.
+- Existing working code/config/scripts/tests/contracts are authoritative candidates for extension before any new implementation is considered.
+- No duplicate production launcher, duplicate runtime config format, duplicate credential path, duplicate browser/session stack, duplicate migration path, duplicate release pipeline or equivalent parallel infrastructure may be introduced without explicit CEO/Task Spec approval.
+- A stable decision or solved discovery question is not reopened unless requirements changed or new evidence invalidates it.
+- Temporary discovery/live-verification helpers are allowed only as temporary evidence tools. Before release they must either be removed/retired or feed the same canonical production code path.
+- Any unavoidable non-reuse must be documented in the RFQ Execution Log with the inspected existing solution, incompatibility evidence and minimum replacement scope.
+- If the project contains multiple implementations of the same responsibility, consolidation is preferred over adding more code.
+
 ## Roles
 
 - Owner: final business authorization.
-- CEO: requirement clarification, Task Spec, business rules, architecture boundary, Safety/Write Gate, and independent RFQ review.
-- Executor: implementation, debugging, tests, live verification, evidence, execution log, final report, commit/push.
-- CEO Review: independently verifies implementation evidence and returns only PASS / CHANGES_REQUESTED; does not implement fixes inside the review.
+- CEO: requirement clarification, Task Spec, business rules, architecture boundary, Safety/Write Gate, reuse governance, and independent RFQ review.
+- Executor: reuse audit, implementation, debugging, tests, live verification, evidence, execution log, final report, commit/push.
+- CEO Review: independently verifies implementation evidence and reuse discipline and returns only PASS / CHANGES_REQUESTED; does not implement fixes inside the review.
 
 ## Stable project anchors
 

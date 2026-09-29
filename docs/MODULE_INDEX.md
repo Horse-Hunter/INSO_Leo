@@ -28,4 +28,8 @@ sheets | research | inso | quotation -> core
 - GUI 不直接访问浏览器、Excel、Sheets 或业务模块内部实现。
 - Research 不承担主动采购。
 - INSO 主动采购不改写 Research 的价格/库存/MPN 规则。
+- **一个稳定职责只能有一个 canonical owner / production path。**
+- 新功能先扩展已有模块/Public Contract；禁止为了同一职责新增平行模块、平行 launcher、平行 adapter 或平行 runtime。
+- 临时 discovery / live-verification helper 不得演变为长期第二生产路径；验证结论必须回收到 canonical module。
+- 如果现有模块无法承载需求，必须先在 RFQ Execution Log 证明边界冲突，再升级 CEO 决定是否调整模块职责。
 - 模块职责、依赖方向或跨模块 Public Contract 变化必须升级 CEO。

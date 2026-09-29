@@ -15,6 +15,10 @@ Owner 随便打开任意 Codex / Claude 实现会话，只说：
 Executor 自己读取：
 AI_START_HERE / MODULE_INDEX / RFQ / repo / coordination
         ↓
+Executor 先做 Reuse Audit
+        ↓
+优先复用现有稳定能力，只做最小增量
+        ↓
 Executor 开始实现
         ↓
 所有技术细节自动写入：
@@ -35,6 +39,8 @@ Owner 回到 CEO 会话，只说：
         ↓
 CEO 自己读取全部技术材料并独立 Review
         ↓
+CEO 同时检查是否存在重复实现/平行生产路径
+        ↓
 CEO 对 Owner 只说人话：
 发生了什么
 影响什么
@@ -53,6 +59,30 @@ FAIL → CHANGES_REQUESTED
 - Executor（Codex / Claude）：负责实现、调试、tests、live evidence、execution log、final report、commit/push，并读取技术化的 Review findings。
 - Git：实现事实源。
 - Control Room：需求、执行记录与 RFQ 状态源。
+
+## Mandatory Reuse Gate
+
+任何 RFQ 在进入设计/编码前必须先经过 Reuse Audit：
+
+1. 查当前生产实现；
+2. 查最近稳定/发布版本；
+3. 查模块 Public Contract 与已有适配器；
+4. 查 runtime 配置、数据库迁移、浏览器/session、GUI、Sheets、Research、Workflow、打包/发布脚本；
+5. 查已有 tests、evidence 与已关闭 RFQ 的技术结论。
+
+规则：
+
+- **能复用的必须复用。**
+- 新版本默认继承旧稳定版本已经跑通的基础设施和运行方式。
+- 已经有结论的问题不得无新证据重复 discovery / 重复架构讨论。
+- 已经有实现的能力不得另起一套平行实现。
+- 新代码只能填真实 gap，并以最小增量方式加入现有生产主链。
+- 如确实无法复用，Executor 必须先在 `EXECUTION_LOG.md` 记录：检查过什么、为什么不可复用、为什么新实现是最小必要变化。
+- 临时验证、discovery、实验代码不得长期成为第二生产路径；交付前必须收敛回唯一 canonical path。
+- 同一职责如果已经出现两套实现，优先合并/淘汰，不允许再造第三套。
+- 重复故障必须沉淀为共享能力/contract/regression test，禁止靠重复人工排障或重复开发维持。
+
+违反上述任一项即使功能测试通过，也不能视为 RFQ 完成。
 
 ## Owner communication rule
 
@@ -86,7 +116,7 @@ No-review task:
 
 ## Progress rule
 
-Every executor action must advance the RFQ acceptance criteria. If progress stalls, reread the Task Spec, coordination state and relevant canonical docs, then return to the shortest implementation path. Do not create long procedural prompts to compensate for slow progress.
+Every executor action must advance the RFQ acceptance criteria. If progress stalls, reread the Task Spec, coordination state, Reuse Audit and relevant canonical docs, then return to the shortest implementation path. Do not create long procedural prompts, duplicate infrastructure or parallel paths to compensate for slow progress.
 
 ## Review rule
 
@@ -95,3 +125,5 @@ Review belongs to CEO, never to the implementation agent that executed the RFQ. 
 CEO-facing review output has two layers:
 - **Owner Summary:** plain language only.
 - **Executor Technical Findings:** precise technical details and repair instructions.
+
+CEO Review must reject unnecessary reimplementation, duplicated capabilities and unretired parallel production paths even when isolated tests pass.
