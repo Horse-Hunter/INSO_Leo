@@ -127,3 +127,56 @@ CEO-facing review output has two layers:
 - **Executor Technical Findings:** precise technical details and repair instructions.
 
 CEO Review must reject unnecessary reimplementation, duplicated capabilities and unretired parallel production paths even when isolated tests pass.
+
+## Rule Definition of Done
+
+A governance/process instruction is complete only after it is operational, not when it is acknowledged in chat.
+
+Every durable rule must define:
+
+| Field | Required meaning |
+| --- | --- |
+| Trigger | exactly when the rule runs |
+| Owner | role responsible for execution |
+| Procedure | ordered actions |
+| Source of truth | canonical file/state that is updated |
+| Evidence | observable proof of completion |
+| Cleanup | temporary/stale state to remove or supersede |
+| Enforcement | Review consequence if skipped |
+
+Responsibilities:
+- Owner states policy/business intent.
+- CEO converts durable intent into executable project rules; reusable rules also update the lean baseline templates in the same change.
+- Executor applies the rule and records evidence.
+- Reviewer/CEO checks evidence and rejects violations.
+- Owner is never the reminder mechanism for a rule already given.
+
+## Handoff / Worktree Procedure
+
+**Trigger:** Executor changes, or duplicate/stale worktrees are discovered.
+
+**Outgoing Executor**
+1. Stop unsafe/live activity if needed.
+2. Preserve the current worktree and all uncommitted work.
+3. Create/update one minimal temporary `HANDOFF*.md` only if useful context is not already recoverable from canonical docs/Git.
+4. Do not create a new worktree for the receiving agent.
+
+**Incoming Executor**
+1. Inspect branch, `git status`, diff and `git worktree list --porcelain`.
+2. Reuse the current active worktree when suitable.
+3. Read the handoff once and verify each current claim against Git/runtime.
+4. Merge durable facts into `EXECUTION_LOG.md` or the correct canonical document.
+5. Delete the consumed handoff in the same work cycle.
+6. Audit other worktrees. Preserve unique work in traceable Git history before removal; never force-delete unknown dirty work.
+7. Remove stale worktrees and run `git worktree prune`.
+8. Record cleanup evidence in `EXECUTION_LOG.md`.
+
+**Canonical-state rules**
+- `TASK_SPEC.md`: current requirement meaning; Owner/CEO only.
+- `COORDINATION.md`: current RFQ status.
+- `EXECUTION_LOG.md`: durable execution history; old blockers/next steps remain only if explicitly marked `RESOLVED` or `SUPERSEDED`.
+- `HANDOFF*.md`: temporary transport only; deleted after successful takeover.
+- Default: one active implementation worktree per active version/RFQ. Extra worktrees require a current documented purpose.
+
+**Review enforcement:** CHANGES_REQUESTED if expired handoff files, stale current-state instructions, or unexplained duplicate active worktrees remain.
+
