@@ -9,7 +9,7 @@ CEO 创建 / 完善 RFQ-XXX Task Spec
         ↓
 Control Room 保存完整 Task Spec
         ↓
-Owner 随便打开任意 Codex / Claude 实现会话，只说：
+Owner 随便打开任意实现 Agent（Codex / Claude / WorkBuddy 或同类）只说：
 “执行 RFQ-XXX”
         ↓
 Executor 自己读取：
@@ -56,7 +56,7 @@ FAIL → CHANGES_REQUESTED
 
 - Owner：与 CEO 讨论需求；启动任意实现 Agent；接收最终人话总结；需要 Review 时回到 CEO。
 - CEO：把需求写成完整 Task Spec；维护业务规则、架构/Safety 边界；独立 Review；对 Owner 负责把技术结论翻译成人话。
-- Executor（Codex / Claude）：负责实现、调试、tests、live evidence、execution log、final report、commit/push，并读取技术化的 Review findings。
+- Executor（Codex / Claude / WorkBuddy 或同类实现 Agent）：负责实现、调试、tests、live evidence、execution log、final report、commit/push，并读取技术化的 Review findings。
 - Git：实现事实源。
 - Control Room：需求、执行记录与 RFQ 状态源。
 
