@@ -23,3 +23,19 @@
 
 Stable anchors:
 - `<CURRENT_STABLE_BASELINE>`
+
+## Rule operationalization invariant
+
+- Durable Owner workflow/governance instructions are complete only when repository rules define trigger, owner, procedure, canonical state, evidence, cleanup and enforcement.
+- CEO owns operationalization and template propagation for reusable rules.
+- Executor owns execution/evidence; Reviewer owns enforcement; Owner does not repeat reminders.
+
+## Workspace / handoff invariant
+
+- Default one active implementation worktree per active version/RFQ.
+- Outgoing Executor preserves the live workspace and leaves at most one temporary handoff.
+- Incoming Executor owns verified handoff consumption and cleanup.
+- Unique work must be preserved before stale worktree removal; unknown dirty worktrees are never force-deleted; prune afterward.
+- Handoff files expire after takeover; obsolete blockers/next steps are marked resolved/superseded.
+- Review fails on expired handoffs, stale current-state text or unjustified duplicate active worktrees.
+
