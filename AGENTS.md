@@ -3,7 +3,7 @@
 Start with `AI_START_HERE.md`.
 
 - Owner + CEO discuss requirements; CEO creates/completes the RFQ Task Spec.
-- Owner may open any Codex / Claude implementation session and say only `执行 RFQ-XXX`.
+- Owner may open any implementation-agent session (Codex / Claude / WorkBuddy or equivalent) and say only `执行 RFQ-XXX`.
 - `Review RFQ-XXX` belongs to CEO/Architect/Safety, not the implementation agent.
 - Task requirements live in `control-room/RFQ-XXX/TASK_SPEC.md`; RFQ status lives in `control-room/COORDINATION.md`.
 - Read `docs/MODULE_INDEX.md` and only the module docs/code relevant to the RFQ.
