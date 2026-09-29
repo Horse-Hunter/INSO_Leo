@@ -1,42 +1,67 @@
 # AI Workflow
 
-The project uses one canonical workflow:
+Use role names, not “我/你”, to avoid ambiguity.
 
 ```text
-Owner ↔ CEO discuss requirement
+Owner 与 CEO 讨论需求
         ↓
-CEO creates / completes RFQ-XXX Task Spec
+CEO 创建 / 完善 RFQ-XXX Task Spec
         ↓
-Control Room stores the complete Task Spec
+Control Room 保存完整 Task Spec
         ↓
-Any Codex / Claude implementation session receives only:
+Owner 随便打开任意 Codex / Claude 实现会话，只说：
 “执行 RFQ-XXX”
         ↓
-Agent reads AI_START_HERE / MODULE_INDEX / repo / coordination
+Executor 自己读取：
+AI_START_HERE / MODULE_INDEX / RFQ / repo / coordination
         ↓
-Agent implements and writes execution log / tests / evidence / commits / final report
+Executor 开始实现
         ↓
-Agent returns the fixed human summary
+所有技术细节自动写入：
+EXECUTION_LOG
+git diff / commit
+tests
+evidence
+decisions
+FINAL_REPORT
         ↓
-If review is required:
+Executor 最后只给 Owner 固定的人话总结：
+正在实现什么
+理想变化是什么
+以前是什么
+现在是什么
+做完了什么
+测试结果
+你接下来需要做什么
+        ↓
+如果需要 Review，Executor 告诉 Owner：
 “RFQ-XXX 已完成，需要独立 Review”
         ↓
-Owner returns to CEO and says only:
+Owner 回到 CEO 会话，只说：
 “Review RFQ-XXX”
         ↓
-CEO independently reads Task Spec / execution log / final report / Git diff /
-current code / tests / runtime evidence
+CEO 自己读取：
+Task Spec
+Execution Log
+Final Report
+Git diff / commits
+当前代码
+Test evidence
+Runtime evidence
+        ↓
+CEO 直接独立 Review
         ↓
 PASS → REVIEWED_DONE
 FAIL → CHANGES_REQUESTED
 ```
 
-## Task ownership
+## Ownership
 
-- Owner + CEO own requirement meaning.
-- CEO owns Task Spec quality, business rules, architecture/Safety boundaries and independent Review.
-- Executor owns implementation and `EXECUTION_LOG.md` / `FINAL_REPORT.md`.
-- Git stores actual code history/diff; Control Room stores task intent, execution references and review state.
+- Owner：与 CEO 讨论需求；启动任意实现 Agent；接收最终人话总结；需要 Review 时回到 CEO。
+- CEO：把需求写成完整 Task Spec；维护业务规则、架构/Safety 边界；独立 Review。
+- Executor（Codex / Claude）：只负责实现、调试、tests、live evidence、execution log、final report、commit/push。
+- Git：实现事实源。
+- Control Room：需求、执行记录与 RFQ 状态源。
 
 ## RFQ states
 
@@ -46,16 +71,16 @@ Review failure:
 
 `REVIEW_REQUIRED → CHANGES_REQUESTED → IN_PROGRESS`
 
-If review is not required:
+No-review task:
 
 `IN_PROGRESS → DONE`
 
-`BLOCKED` is reserved for a true escalation condition, not ordinary technical failure.
+`BLOCKED` 只用于真实升级条件，不用于普通技术失败。
 
-## Execution rule
+## Progress rule
 
-Every instruction and action must advance the RFQ acceptance criteria. If progress stalls, reread the Task Spec, coordination state and relevant canonical docs, then return to the shortest implementation path. Do not create long procedural prompts to compensate for slow progress.
+Every executor action must advance the RFQ acceptance criteria. If progress stalls, reread the Task Spec, coordination state and relevant canonical docs, then return to the shortest implementation path. Do not create long procedural prompts to compensate for slow progress.
 
 ## Review rule
 
-Review is performed by CEO, independent from the implementation agent. CEO does not fix code inside the review. PASS closes the RFQ as `REVIEWED_DONE`; FAIL records concrete findings and changes status to `CHANGES_REQUESTED`, after which an implementation agent executes the same RFQ again.
+Review belongs to CEO, never to the implementation agent that executed the RFQ. CEO reviews independently and does not implement fixes inside the review. PASS closes the RFQ as `REVIEWED_DONE`; FAIL records concrete findings and changes status to `CHANGES_REQUESTED`.

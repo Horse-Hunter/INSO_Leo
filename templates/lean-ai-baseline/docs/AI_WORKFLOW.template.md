@@ -1,15 +1,16 @@
 # AI Workflow
 
 ```text
-Discuss requirement with CEO
-→ CEO creates/completes RFQ Task Spec
-→ Control Room stores spec
-→ “执行 RFQ-XXX” to any implementation agent
-→ implementation + execution log + tests/evidence/commits + final report
-→ fixed human summary
-→ if review required, Owner returns to CEO:
-  “Review RFQ-XXX”
-→ CEO independently reviews spec/log/report/diff/code/tests/runtime evidence
+Owner 与 CEO 讨论需求
+→ CEO 创建/完善 RFQ Task Spec
+→ Control Room 保存完整 Task Spec
+→ Owner 打开任意 Codex / Claude，只说“执行 RFQ-XXX”
+→ Executor 读取 AI_START_HERE / MODULE_INDEX / RFQ / repo / coordination
+→ 实现 + execution log + tests/evidence/commits + final report
+→ Executor 只给 Owner 固定的人话总结
+→ 若需 Review，Executor 告诉 Owner“RFQ-XXX 已完成，需要独立 Review”
+→ Owner 回到 CEO，只说“Review RFQ-XXX”
+→ CEO 独立读取 spec/log/report/diff/code/tests/runtime evidence
 → PASS = REVIEWED_DONE
 → FAIL = CHANGES_REQUESTED
 ```
@@ -26,4 +27,4 @@ No-review task:
 
 `IN_PROGRESS → DONE`
 
-Every action must advance RFQ acceptance. If progress stalls, reread the RFQ and canonical docs and return to the shortest implementation path.
+Executor actions must advance RFQ acceptance. Review belongs to CEO, not the implementation agent.
