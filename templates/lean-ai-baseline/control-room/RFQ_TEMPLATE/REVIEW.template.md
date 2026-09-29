@@ -1,10 +1,14 @@
-# RFQ-XXX Independent Review
+# RFQ-XXX CEO Independent Review
 
 **Status:** PENDING
 
-Read Task Spec, Execution Log, Final Report, RFQ Git diff/commits, current code, test evidence and runtime evidence.
+Owner triggers review by returning to the CEO/Architect/Safety conversation and saying:
 
-Do not implement fixes during review.
+`Review RFQ-XXX`
+
+CEO independently reads Task Spec, Execution Log, Final Report, RFQ Git diff/commits, current code, test evidence and runtime evidence.
+
+CEO does not implement fixes during review.
 
 ## Verdict
 PENDING

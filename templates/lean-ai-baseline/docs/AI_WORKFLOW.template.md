@@ -1,15 +1,15 @@
 # AI Workflow
 
 ```text
-Discuss requirement
-→ create/complete RFQ Task Spec
+Discuss requirement with CEO
+→ CEO creates/completes RFQ Task Spec
 → Control Room stores spec
-→ “执行 RFQ-XXX”
-→ agent reads AI_START_HERE / MODULE_INDEX / repo / coordination
+→ “执行 RFQ-XXX” to any implementation agent
 → implementation + execution log + tests/evidence/commits + final report
 → fixed human summary
-→ if review required: “Review RFQ-XXX”
-→ independent review
+→ if review required, Owner returns to CEO:
+  “Review RFQ-XXX”
+→ CEO independently reviews spec/log/report/diff/code/tests/runtime evidence
 → PASS = REVIEWED_DONE
 → FAIL = CHANGES_REQUESTED
 ```

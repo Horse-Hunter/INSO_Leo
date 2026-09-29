@@ -23,4 +23,4 @@
 NONE / Review RFQ-XXX / <唯一 Owner 动作>
 ```
 
-Technical detail belongs in Control Room execution records, Git, tests and evidence.
+`Review RFQ-XXX` means return to the CEO conversation for independent review. Technical detail belongs in Control Room execution records, Git, tests and evidence.

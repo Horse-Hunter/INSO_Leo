@@ -4,7 +4,7 @@
 
 - Work is RFQ-driven. The complete current requirement lives in Control Room, not chat.
 - Any executor must be able to start from only `执行 RFQ-XXX`.
-- Any independent reviewer must be able to start from only `Review RFQ-XXX`.
+- Review is owned by CEO: Owner returns to the CEO conversation and says only `Review RFQ-XXX`.
 - Git/code/tests/evidence are implementation truth; Task Spec is requirement truth; `COORDINATION.md` is status truth.
 - CEO instructions must stay requirement-progress focused: business outcome, acceptance, relevant source docs, Safety boundary. No hundreds-line implementation manuals.
 - If progress is slow, reread the RFQ and workflow rules and reduce scope to the shortest path that advances acceptance.
@@ -14,9 +14,9 @@
 ## Roles
 
 - Owner: final business authorization.
-- CEO: requirement clarification, Task Spec quality, business rules, architecture boundary, Safety/Write Gate, independent review when requested.
+- CEO: requirement clarification, Task Spec, business rules, architecture boundary, Safety/Write Gate, and independent RFQ review.
 - Executor: implementation, debugging, tests, live verification, evidence, execution log, final report, commit/push.
-- Reviewer: independent verification only; PASS or CHANGES_REQUESTED.
+- CEO Review: independently verifies implementation evidence and returns only PASS / CHANGES_REQUESTED; does not implement fixes inside the review.
 
 ## Stable project anchors
 

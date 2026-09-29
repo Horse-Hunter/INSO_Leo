@@ -1,8 +1,12 @@
-# RFQ-001 Independent Review
+# RFQ-001 CEO Independent Review
 
 **Status:** PENDING
 
-Reviewer must independently inspect:
+Owner triggers this by returning to the CEO/Architect/Safety conversation and saying:
+
+`Review RFQ-001`
+
+CEO independently inspects:
 - `TASK_SPEC.md`
 - `EXECUTION_LOG.md`
 - `FINAL_REPORT.md`
@@ -11,7 +15,7 @@ Reviewer must independently inspect:
 - test evidence
 - runtime evidence
 
-The reviewer does not implement fixes in this review.
+CEO does not implement fixes during this review.
 
 ## Verdict
 

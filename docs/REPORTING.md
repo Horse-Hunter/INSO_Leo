@@ -22,10 +22,10 @@ The executor's chat reply and `FINAL_REPORT.md` use exactly these seven fields:
 <关键 tests / live / evidence / commit>
 
 你接下来需要做什么：
-NONE / <唯一需要 Owner 做的动作>
+NONE / Review RFQ-XXX / <唯一需要 Owner 做的动作>
 ```
 
 Rules:
 - Technical detail belongs in `EXECUTION_LOG.md`, Git, tests and evidence—not in the Owner-facing reply.
-- If independent review is required, the last field says: `Review RFQ-XXX`.
+- If review is required, the final field says `Review RFQ-XXX`, meaning **return to the CEO conversation**; do not open a new implementation/reviewer agent.
 - Ordinary technical failures never become Owner actions.
