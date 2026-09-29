@@ -37,8 +37,15 @@ Do not record passwords, tokens, cookies, raw secrets, or unnecessary terminal n
   `tests/workflow tests/sheets` — 172 passed, 1 skipped;
   `tests/research` — 230 passed.
   `python -m ruff check src tests` and `git diff --check` — PASS.
-- True blocker: the isolated approved Chrome profile currently presents a
-  required phone-verification-code control before authentication. The helper
-  correctly returns `MANUAL_VERIFICATION_REQUIRED`; it does not bypass this
-  security challenge. Therefore Chrome-only read-only reconciliation-detail
-  acceptance remains pending and RFQ status stays `READY`.
+- Live read-only reconciliation-detail acceptance was completed through the
+  existing authenticated INSO session: one existing record was opened without
+  mutation; `BillID` and `PENO` were unique and nonempty; `PartNo`, `Brand`,
+  and `Qty` each had one field and exactly matched the selected list record.
+  No record values were persisted in this log.
+- The live form had one visible `#btnSave` with save semantics. `#btnSave2`
+  and `#bcSend` were inspected only; neither was dispatched. Production Write
+  Gate remains CLOSED.
+- The isolated Chrome profile's phone-verification-code control remains a
+  correctly fail-closed `MANUAL_VERIFICATION_REQUIRED` path, but did not block
+  read-only acceptance because an already-authenticated INSO session was
+  available for the scoped verification.
