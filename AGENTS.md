@@ -25,3 +25,32 @@ Start with `AI_START_HERE.md`.
 - Temporary discovery/verification code must converge back into the single canonical production path before delivery. Long-lived parallel production paths are prohibited unless explicitly approved by CEO/Task Spec.
 - Repeated technical problems must become one shared capability/contract/regression test, not another implementation or another round of chat reasoning.
 - If two usable implementations exist for the same responsibility, stop and consolidate rather than adding a third.
+
+## Rule Operationalization — mandatory
+
+A chat acknowledgement is **not** a rule change.
+
+When Owner gives a durable workflow/governance instruction, CEO must operationalize it in the repository in the same work cycle. A rule is not complete until all are explicit: **trigger, owner, ordered procedure, source of truth, completion evidence, cleanup/retirement, Review enforcement**.
+
+- **CEO** owns converting Owner policy into executable repository rules and deciding project-only vs reusable. Reusable rules must also update `templates/lean-ai-baseline/` in the same change.
+- **Executor** owns applying the operational rule and recording evidence.
+- **Reviewer/CEO** owns enforcing it during Review.
+- **Owner must not be the reminder mechanism** for a rule already stated.
+
+A rule that only says “must/should” but does not define who acts, when, how, evidence and cleanup is incomplete.
+
+## Handoff and Worktree Lifecycle
+
+**Trigger:** a real Executor switch, or stale/duplicate worktrees are discovered.
+
+- **Outgoing Executor:** create/update at most one concise temporary `HANDOFF*.md` only if needed; stop unsafe/live activity if necessary; preserve the live worktree and uncommitted state. Do not create another worktree just for handoff.
+- **Incoming Executor:** owns takeover cleanup. First inspect branch, `git status`, diff and `git worktree list --porcelain`; read the handoff once; verify it against current Git/runtime; merge durable facts into `EXECUTION_LOG.md` or the correct canonical doc; delete the consumed handoff in the same work cycle.
+- **Active Executor:** owns worktree hygiene. Reuse an existing suitable worktree before creating one. Default: one active implementation worktree per active version/RFQ.
+- Before removing a worktree, preserve unique commits/files in traceable Git history. Never force-delete unknown dirty state. After safe removal run `git worktree prune`.
+- `TASK_SPEC.md` remains Owner/CEO-owned requirement meaning. `COORDINATION.md` contains current RFQ status. `EXECUTION_LOG.md` may preserve history, but obsolete blockers/next steps must be marked `RESOLVED` or `SUPERSEDED`.
+- Handoff files are temporary transport only. After successful takeover no expired handoff, obsolete worktree path, or stale “current blocker” instruction may remain.
+
+**Completion evidence:** Executor records surviving active worktree(s), consumed/deleted handoff, preserved commits and prune result in `EXECUTION_LOG.md`.
+
+**Enforcement:** Review fails if stale handoffs, unexplained duplicate active worktrees, or obsolete current-state instructions remain.
+
