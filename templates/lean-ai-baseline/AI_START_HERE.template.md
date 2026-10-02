@@ -4,7 +4,7 @@ This project is RFQ-driven.
 
 ## 执行 RFQ-XXX
 
-Owner may open any Codex / Claude implementation session and say only `执行 RFQ-XXX`.
+Owner may open any implementation agent (Codex / Claude / WorkBuddy or equivalent) and say only `执行 RFQ-XXX`.
 
 Executor reads Control Room, Module Index, relevant code/docs and Git state.
 

@@ -4,7 +4,7 @@
 Owner 与 CEO 讨论需求
 → CEO 创建/完善 RFQ Task Spec
 → Control Room 保存完整 Task Spec
-→ Owner 打开任意 Codex / Claude，只说“执行 RFQ-XXX”
+→ Owner 打开任意实现 Agent（Codex / Claude / WorkBuddy 或同类），只说“执行 RFQ-XXX”
 → Executor 读取 AI_START_HERE / MODULE_INDEX / RFQ / repo / coordination
 → Executor 先做 Reuse Audit
 → 复用现有稳定能力，只实现最小增量
@@ -67,4 +67,17 @@ CEO owns converting Owner intent into executable rules and mirrors reusable rule
 - Preserve unique work before stale worktree removal; never force-delete unknown dirty state; run `git worktree prune`.
 - Canonical execution records mark old blockers/next steps `RESOLVED` or `SUPERSEDED`.
 - Review fails on expired handoffs, stale current-state instructions or unexplained duplicate active worktrees.
+
+## Delivery-first operating rule
+
+Process is subordinate to delivery.
+
+Use this order:
+Owner intent → canonical requirement → existing reusable capability → minimum implementation delta → only necessary safety/data-integrity/process controls.
+
+Do not add extra gates, reports, approvals, architecture layers or evidence work unless the task, a real safety/data-loss risk, or a demonstrated recurring failure requires them.
+
+When Owner corrects one workflow problem, CEO must also handle the obvious adjacent ownership, lifecycle, reuse and stale-state implications in the same change.
+
+Reuse checks stay lightweight. Formal non-reuse explanation is required only when replacing or duplicating a plausible existing capability.
 

@@ -4,7 +4,7 @@ This repository is **RFQ-driven**. The Control Room is the task source of truth.
 
 ## For implementation agents: 执行 RFQ-XXX
 
-The Owner may open any Codex / Claude implementation session and say only:
+The Owner may open any implementation-agent session (Codex / Claude / WorkBuddy or equivalent) and say only:
 
 `执行 RFQ-XXX`
 
