@@ -491,7 +491,7 @@ def test_quotation_type_rejects_values_outside_the_two_business_routes() -> None
         writer.set_quotation_type("意向单询价")
 
 
-def test_production_gate_is_closed_and_send_methods_do_not_exist() -> None:
+def test_production_gate_is_closed_and_generic_send_methods_do_not_exist() -> None:
     form_page = _FakeFormPage()
     writer = InsoPurchaseWriter(
         form_page=_OperationPage(form_page),
@@ -499,11 +499,17 @@ def test_production_gate_is_closed_and_send_methods_do_not_exist() -> None:
     )
 
     assert hasattr(writer, "save_data")
-    assert not {"save_and_send", "send", "submit"} & set(dir(writer))
-    # Phase A permits an unsaved draft; the irreversible Save remains closed.
+    assert callable(writer.save_and_send)
+    assert not {"send", "submit"} & set(dir(writer))
+    store = _SaveStore()
+    with pytest.raises(SecurityViolation):
+        writer.save_and_send(store, "synthetic-inquiry", at=NOW)
+    # Default production authorization still forbids both irreversible actions.
     with pytest.raises(SecurityViolation):
         writer.save_data(type("Store", (), {"begin_save_dispatch": lambda *_a, **_k: None})(), "inq-1", at=NOW)
     assert form_page.value == ""
+    assert store.calls == []
+    assert form_page.events == []
 
 
 def test_only_owner_authorized_save_and_send_has_a_binding_not_generic_send() -> None:
@@ -815,7 +821,12 @@ def test_non_ai_recognized_store_state_never_dispatches_save() -> None:
         writer.save_data(store, "synthetic-inquiry", at=NOW)
 
     assert form.events == []
-    assert not hasattr(writer, "save_and_send")
+    assert callable(writer.save_and_send)
+    calls_before = list(store.calls)
+    with pytest.raises(SecurityViolation):
+        writer.save_and_send(store, "synthetic-inquiry", at=NOW)
+    assert store.calls == calls_before
+    assert form.events == []
 
 
 class _ParentLocator:

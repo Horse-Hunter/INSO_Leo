@@ -1,5 +1,41 @@
 # RFQ-002 Execution Log — sanitized publication record
 
+## CEO Review B1 repair — 2026-10-02
+
+Synced feature/v1-2 by fast-forward to CEO Review commit 2f89580. Read REVIEW.md,
+this log and FINAL_REPORT.md. B1 is addressed for independent re-review, not
+self-certified PASS. Reused existing writer, gates, fake form and store fixtures;
+only the two obsolete tests in tests/inso/test_v12_purchase_writer.py changed.
+The callable Save-and-Send API is allowed to exist, but default production and
+ordinary fake gates reject it before store or click dispatch. Standalone Save
+remains closed by default; generic send/submit methods remain absent. The
+non-recognized store test retains its Save rejection and confirms unauthorized
+Save-and-Send makes no additional store calls and no form events.
+
+Actual offline checks:
+- Focused: python -m pytest -q tests/inso/test_v12_purchase_writer.py ->
+  56 passed in 0.61s. Initial edit incorrectly expected an empty fake-store call
+  list after the existing rejected Save attempt; corrected only that test to
+  compare its pre-call snapshot, then all focused tests passed.
+- Full: python -m pytest -q tests --basetemp=<new workspace .tmp directory>
+  --tb=short -> 921 passed, 11 skipped in 34.07s, exit 0. Default OS pytest temp
+  directory initially caused 159 setup permission errors (763 passed, 10 skipped);
+  diagnostic confirmed WinError 5 at pytest-of-Leo. Reran the entire unchanged
+  suite using a newly generated, non-existing workspace temp path, not by
+  excluding failing tests or deleting another user's temporary directories.
+- python -m ruff check src tests -> All checks passed, exit 0. This scope does
+  not include the previously recorded unchanged release-script style findings.
+- git diff --check -> PASS.
+
+Only tests and Control Room records changed; no production source, runtime,
+dependencies or build tools changed. No repackaging: existing V1.2 EXE retained.
+Tests use synthetic/local fixtures and the existing suite-wide SMTP guard;
+no real Save, Save-and-Send, SMTP, Sheets writes, production order/browser action
+or old-order replay. First real final submission still belongs to Owner's next
+genuine order. Prior statements that no new offline regression was run are
+SUPERSEDED by these results, not by any real submission or packaged-chain proof.
+RFQ returns to REVIEW_REQUIRED; REVIEW.md remains the CEO-owned prior verdict.
+
 ## Publication scope
 
 2026-10-02: Owner explicitly requested committing/pushing the current work to
