@@ -1,4 +1,4 @@
-param([switch]$BuildOnly)
+param([switch]$BuildOnly, [ValidateSet("1.1", "1.2")][string]$Version = "1.1")
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repo
@@ -20,16 +20,17 @@ if ($LASTEXITCODE -ne 0) {
     throw "Tcl/Tk is unavailable to the build process; refusing a broken GUI artifact."
 }
 
-$release = Join-Path $repo "dist/INSO_V1.1"
+$releaseName = "INSO_V$Version"
+$release = Join-Path $repo "dist/$releaseName"
 if (-not $BuildOnly -and (Test-Path -LiteralPath $release)) {
     throw "Refusing to replace an existing release directory, which may contain local runtime data: $release"
 }
 $buildRoot = Join-Path $repo "build"
-$stageRoot = Join-Path $buildRoot "windows-release-stage"
+$stageRoot = Join-Path $buildRoot "windows-release-stage-$Version"
 $stageMarker = Join-Path $stageRoot ".inso-release-stage"
 $stageDist = Join-Path $stageRoot "dist"
 $stageWork = Join-Path $stageRoot "work"
-$markerValue = "INSO_V1.1 release script staging v1"
+$markerValue = "$releaseName release script staging v1"
 $scanner = Join-Path $repo "scripts/scan_release_artifact.py"
 
 function Test-ReleaseArtifact([string]$Path) {
@@ -59,14 +60,14 @@ function Remove-PreviousOwnedStage {
     if ($unexpected.Count -gt 0) {
         throw "Release staging contains unrecognized items; preserving it."
     }
-    $stagedApp = Join-Path $stageDist "INSO_V1.1"
+    $stagedApp = Join-Path $stageDist $releaseName
     if (Test-Path -LiteralPath (Join-Path $stagedApp "runtime")) {
         throw "Build staging contains runtime data; preserving it."
     }
     if (Test-Path -LiteralPath $stageDist) {
         $distChildren = @(Get-ChildItem -LiteralPath $stageDist -Force)
         if ($distChildren.Count -gt 0 -and
-            ($distChildren.Count -ne 1 -or $distChildren[0].Name -ne 'INSO_V1.1' -or -not $distChildren[0].PSIsContainer)) {
+            ($distChildren.Count -ne 1 -or $distChildren[0].Name -ne $releaseName -or -not $distChildren[0].PSIsContainer)) {
             throw "Release staging dist has unrecognized items; preserving it."
         }
         if (Test-Path -LiteralPath $stagedApp) { Test-ReleaseArtifact $stageDist }
@@ -81,7 +82,9 @@ New-Item -ItemType Directory -Path $stageRoot | Out-Null
 Set-Content -LiteralPath $stageMarker -Value $markerValue -NoNewline
 New-Item -ItemType Directory -Path $stageDist | Out-Null
 $buildSucceeded = $false
+$previousBuildVersion = $env:INSO_BUILD_VERSION
 try {
+    $env:INSO_BUILD_VERSION = $Version
     & $python -m PyInstaller --noconfirm --clean --distpath $stageDist `
         --workpath $stageWork `
         "packaging/INSO_V1.1.spec"
@@ -89,8 +92,8 @@ try {
         throw "PyInstaller failed with exit code $LASTEXITCODE."
     }
 
-    $stagedRelease = Join-Path $stageDist "INSO_V1.1"
-    $exe = Join-Path $stagedRelease "INSO_V1.1.exe"
+    $stagedRelease = Join-Path $stageDist $releaseName
+    $exe = Join-Path $stagedRelease "$releaseName.exe"
     if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
         throw "Expected release executable was not produced: $exe"
     }
@@ -109,10 +112,15 @@ try {
         }
         New-Item -ItemType Directory -Force (Join-Path $repo "dist") | Out-Null
         Move-Item -LiteralPath $stagedRelease -Destination $release
-        Write-Output "Built $release\INSO_V1.1.exe"
+        Write-Output "Built $release\$releaseName.exe"
     }
     $buildSucceeded = $true
 } finally {
+    if ($null -eq $previousBuildVersion) {
+        Remove-Item Env:INSO_BUILD_VERSION -ErrorAction SilentlyContinue
+    } else {
+        $env:INSO_BUILD_VERSION = $previousBuildVersion
+    }
     # PyInstaller's work tree is always disposable and never retained.
     if (Test-Path -LiteralPath $stageWork) {
         Remove-Item -LiteralPath $stageWork -Recurse -Force
@@ -125,7 +133,7 @@ try {
                 (Get-Content -LiteralPath $stageMarker -Raw).Trim() -ne $markerValue) {
                 throw "Release staging ownership marker changed; preserving staging."
             }
-            if (Test-Path -LiteralPath (Join-Path $stageDist "INSO_V1.1/runtime")) {
+            if (Test-Path -LiteralPath (Join-Path $stageDist "$releaseName/runtime")) {
                 throw "Build staging contains runtime data; preserving it."
             }
             if (Test-Path -LiteralPath $stageDist) { Test-ReleaseArtifact $stageDist }

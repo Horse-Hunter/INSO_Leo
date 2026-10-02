@@ -7,7 +7,6 @@ from src.research.bom_ai import (
     BomAiClientError,
     BomAiLogin,
     CdpBomAiAuthenticatedBrowser,
-    PlaywrightBomAiAuthenticatedBrowser,
 )
 
 LOGIN_URL = "https://www.bom.ai/login"
@@ -24,120 +23,6 @@ def _config(**overrides: object) -> BomAiBrowserConfig:
     }
     values.update(overrides)
     return BomAiBrowserConfig(**values)
-
-
-class FakeLocator:
-    def __init__(self, name: str, calls: list, count: int, html: str) -> None:
-        self.name = name
-        self.calls = calls
-        self._count = count
-        self._html = html
-
-    def count(self) -> int:
-        return self._count
-
-    @property
-    def first(self) -> "FakeLocator":
-        return self
-
-    def is_visible(self) -> bool:
-        return self._count > 0
-
-    def inner_text(self) -> str:
-        return self._html
-
-    def fill(self, value: str) -> None:
-        self.calls.append(("fill", self.name, value))
-
-    def click(self) -> None:
-        self.calls.append(("click", self.name, None))
-
-
-class FakePage:
-    def __init__(
-        self,
-        url: str = LOGIN_URL,
-        html: str = "<html>ok</html>",
-        visible_text: str | None = None,
-    ) -> None:
-        self.url = url
-        self.html = html
-        self.visible_text = html if visible_text is None else visible_text
-        self.calls: list = []
-        self.login_form_present = True
-
-    def goto(self, url: str, *, wait_until: str, timeout: int) -> None:
-        assert wait_until == "domcontentloaded"
-        assert timeout > 0
-        self.url = url
-        self.calls.append(("goto", url, None))
-
-    def locator(self, selector: str) -> FakeLocator:
-        count = 1
-        if not self.login_form_present and selector in {
-            "#username",
-            "#password",
-            "#login-button",
-            "#company",
-        }:
-            count = 0
-        return FakeLocator(selector, self.calls, count, self.visible_text)
-
-    def wait_for_timeout(self, timeout: int) -> None:
-        assert timeout >= 0
-
-    def wait_for_selector(self, selector: str, *, state: str, timeout: int) -> None:
-        assert state == "visible"
-        assert timeout > 0
-        self.calls.append(("wait_for_selector", selector, None))
-
-    def content(self) -> str:
-        return self.html
-
-
-class FakeBrowser:
-    def __init__(self, page: FakePage) -> None:
-        self.page = page
-        self.closed = False
-
-    def new_page(self) -> FakePage:
-        return self.page
-
-    def close(self) -> None:
-        self.closed = True
-
-
-class FakeChromium:
-    def __init__(self, browser: FakeBrowser) -> None:
-        self.browser = browser
-
-    def launch(self, *, channel: str, headless: bool) -> FakeBrowser:
-        assert channel == "chrome"
-        assert not headless
-        return self.browser
-
-
-class FakePlaywright:
-    def __init__(self, chromium: FakeChromium) -> None:
-        self.chromium = chromium
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(self, *args: object) -> None:
-        return None
-
-
-def _browser(page: FakePage, config: BomAiBrowserConfig) -> tuple[
-    PlaywrightBomAiAuthenticatedBrowser, FakeBrowser
-]:
-    fake_browser = FakeBrowser(page)
-    acquisition = PlaywrightBomAiAuthenticatedBrowser(
-        config,
-        settle_ms=0,
-        playwright_factory=lambda: FakePlaywright(FakeChromium(fake_browser)),
-    )
-    return acquisition, fake_browser
 
 
 def test_config_rejects_insecure_incomplete_or_mismatched_settings() -> None:
@@ -163,80 +48,6 @@ def test_result_url_quotes_the_trimmed_mpn() -> None:
     config = _config()
 
     assert config.result_url("  Ab c-1  ") == "https://www.bom.ai/search/Ab%20c-1"
-
-
-def test_browser_logs_in_and_captures_the_target_model_page() -> None:
-    page = FakePage()
-    acquisition, fake_browser = _browser(page, _config(post_login_ready_selector="#app"))
-
-    capture = acquisition.fetch_price_page(
-        " ABC-1 ", BomAiLogin("synthetic-user", "synthetic-password")
-    )
-
-    assert ("fill", "#username", "synthetic-user") in page.calls
-    assert ("fill", "#password", "synthetic-password") in page.calls
-    assert ("click", "#login-button", None) in page.calls
-    assert ("goto", "https://www.bom.ai/search/ABC-1", None) in page.calls
-    assert ("wait_for_selector", "#app", None) in page.calls
-    assert capture.url == "https://www.bom.ai/search/ABC-1"
-    assert capture.html == "<html>ok</html>"
-    assert fake_browser.closed
-
-
-def test_browser_skips_login_when_no_form_is_present() -> None:
-    page = FakePage()
-    page.login_form_present = False
-    acquisition, _ = _browser(page, _config())
-
-    acquisition.fetch_price_page("ABC", BomAiLogin("u", "p"))
-
-    assert all(call[0] != "fill" for call in page.calls)
-    assert ("goto", "https://www.bom.ai/search/ABC", None) in page.calls
-
-
-def test_hidden_challenge_word_is_not_treated_as_visible_verification() -> None:
-    page = FakePage(html="<script>captcha</script>", visible_text="normal result")
-    page.login_form_present = False
-    acquisition, _ = _browser(page, _config())
-    capture = acquisition.fetch_price_page("ABC", BomAiLogin("u", "p"))
-    assert capture.html == "<script>captcha</script>"
-
-
-def test_company_selector_requires_a_company_credential() -> None:
-    page = FakePage()
-    acquisition, _ = _browser(page, _config(company_selector="#company"))
-
-    with pytest.raises(BomAiClientError) as error:
-        acquisition.fetch_price_page("ABC", BomAiLogin("u", "p", None))
-
-    assert error.value.code == "COMPANY_CREDENTIAL_UNAVAILABLE"
-
-
-def test_challenge_and_cross_host_navigation_fail_closed() -> None:
-    page = FakePage(html="<html>请完成安全验证 captcha</html>")
-    acquisition, _ = _browser(page, _config())
-
-    with pytest.raises(BomAiClientError) as challenge:
-        acquisition.fetch_price_page("ABC", BomAiLogin("u", "p"))
-    assert challenge.value.code == "INTERACTIVE_CHALLENGE_REQUIRED"
-
-    class RedirectPage(FakePage):
-        def goto(self, url: str, *, wait_until: str, timeout: int) -> None:
-            super().goto(url, wait_until=wait_until, timeout=timeout)
-            if "search" in url:
-                self.url = "https://unexpected.example/search/ABC"
-
-    redirected, _ = _browser(RedirectPage(), _config())
-    with pytest.raises(BomAiClientError) as cross_host:
-        redirected.fetch_price_page("ABC", BomAiLogin("u", "p"))
-    assert cross_host.value.code == "UNEXPECTED_NAVIGATION_HOST"
-
-
-def test_browser_exposes_only_read_only_acquisition() -> None:
-    acquisition, _ = _browser(FakePage(), _config())
-
-    for forbidden in ("submit", "create_order", "write", "checkout", "purchase"):
-        assert not hasattr(acquisition, forbidden)
 
 
 class CdpLocator:
@@ -267,25 +78,62 @@ class CdpLocator:
         assert (text, exact) == ("账号登录", True)
         return CdpLocator(self.page, text, self.page.account_tab_count)
 
-    def fill(self, value: str) -> None:
+    def nth(self, _index: int) -> "CdpLocator":
+        return self
+
+    def is_visible(self) -> bool:
+        return True
+
+    def fill(self, value: str, *, timeout: int | None = None) -> None:
+        if timeout is not None:
+            assert timeout > 0
         self.page.calls.append(("fill", self.selector, value))
 
-    def click(self) -> None:
+    def click(self, *, timeout: int | None = None) -> None:
+        if timeout is not None:
+            assert timeout > 0
         self.page.calls.append(("click", self.selector, None))
         if self.selector == "#smsLoginBtn":
             self.page.logged_in = True
+        if self.selector in self.page.options:
+            self.page.options[self.selector] = not self.page.options[self.selector]
+
+    def evaluate(self, _script: str) -> object:
+        """The state of the checkbox this option label stands for.
+
+        Measured live on www.bom.ai 2026-10-01: each label wraps its own
+        ``input[type=checkbox]``, and "记住密码" reads as *on* while
+        "30天内免登录" reads as off.
+        """
+
+        return self.page.options.get(self.selector)
 
     def inner_text(self) -> str:
         return self.page.visible_text
 
 
 class CdpPage:
-    def __init__(self, *, account_tab_count: int = 1, visible_text: str = "result") -> None:
+    def __init__(
+        self,
+        *,
+        account_tab_count: int = 1,
+        visible_text: str = "result",
+        options: dict[str, bool] | None = None,
+    ) -> None:
         self.url = "https://www.bom.ai/components-price/ABC.html"
         self.account_tab_count = account_tab_count
         self.visible_text = visible_text
         self.logged_in = False
+        self.closed = False
         self.calls: list[tuple[str, str, str | None]] = []
+        self.options = (
+            {
+                'text="30天内免登录"': False,
+                'text="记住密码"': True,
+            }
+            if options is None
+            else options
+        )
 
     def goto(self, url: str, *, wait_until: str, timeout: int) -> None:
         assert wait_until == "domcontentloaded"
@@ -296,11 +144,24 @@ class CdpPage:
     def wait_for_timeout(self, timeout: int) -> None:
         assert timeout >= 0
 
+    def fill(self, selector: str, value: str, *, timeout: int) -> None:
+        raise AssertionError(
+            f"page-level fill({selector!r}) can land on the wrong element"
+        )
+
+    def click(self, selector: str, *, timeout: int) -> None:
+        raise AssertionError(
+            f"page-level click({selector!r}) can land on the wrong element"
+        )
+
     def locator(self, selector: str) -> CdpLocator:
         return CdpLocator(self, selector)
 
     def content(self) -> str:
         return "<html>result</html>"
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class CdpContext:
@@ -334,7 +195,11 @@ class CdpPlaywright:
         return None
 
 
-def _cdp_browser(page: CdpPage) -> CdpBomAiAuthenticatedBrowser:
+def _cdp_browser(monkeypatch, page: CdpPage) -> CdpBomAiAuthenticatedBrowser:
+    monkeypatch.setattr(
+        "src.research.bom_ai.new_background_page",
+        lambda _browser, _context, **_kwargs: page,
+    )
     return CdpBomAiAuthenticatedBrowser(
         _config(
             username_selector="#accountName",
@@ -346,32 +211,81 @@ def _cdp_browser(page: CdpPage) -> CdpBomAiAuthenticatedBrowser:
     )
 
 
-def test_cdp_browser_recovers_one_expired_session_then_retries_original_page() -> None:
+def test_cdp_browser_recovers_one_expired_session_then_retries_original_page(
+    monkeypatch,
+) -> None:
     page = CdpPage()
 
-    capture = _cdp_browser(page).fetch_price_page("ABC", BomAiLogin("user", "secret"))
+    capture = _cdp_browser(monkeypatch, page).fetch_price_page(
+        "ABC", BomAiLogin("user", "secret")
+    )
 
     assert ("click", "账号登录", None) in page.calls
     assert ("fill", "#accountName", "user") in page.calls
     assert ("fill", "#smspassword", "secret") in page.calls
     assert page.calls.count(("goto", "https://www.bom.ai/search/ABC", None)) == 2
     assert capture.html == "<html>result</html>"
+    assert page.closed is True, "the call must give its tab back"
 
 
-def test_cdp_browser_reports_changed_login_ui_without_retrying() -> None:
+def test_cdp_browser_reports_changed_login_ui_without_retrying(monkeypatch) -> None:
     page = CdpPage(account_tab_count=0)
 
     with pytest.raises(BomAiClientError) as error:
-        _cdp_browser(page).fetch_price_page("ABC", BomAiLogin("user", "secret"))
+        _cdp_browser(monkeypatch, page).fetch_price_page(
+            "ABC", BomAiLogin("user", "secret")
+        )
 
     assert error.value.code == "RESULT_CHANGED"
     assert page.calls.count(("goto", "https://www.bom.ai/search/ABC", None)) == 1
+    assert page.closed is True
 
 
-def test_cdp_browser_stops_for_a_visible_challenge() -> None:
+def test_cdp_browser_stops_for_a_visible_challenge(monkeypatch) -> None:
     page = CdpPage(visible_text="请完成安全验证")
 
     with pytest.raises(BomAiClientError) as error:
-        _cdp_browser(page).fetch_price_page("ABC", BomAiLogin("user", "secret"))
+        _cdp_browser(monkeypatch, page).fetch_price_page(
+            "ABC", BomAiLogin("user", "secret")
+        )
 
     assert error.value.code == "INTERACTIVE_CHALLENGE_REQUIRED"
+    assert page.closed is True
+
+
+def test_cdp_browser_leaves_an_option_that_is_already_on_alone(monkeypatch) -> None:
+    """Owner rule 2026-10-01: "记住密码" and "30天内免登录" must both be on.
+
+    "记住密码" defaults to on, so clicking it would turn it *off* -- the state
+    is read before anything is clicked.
+    """
+
+    page = CdpPage()
+
+    _cdp_browser(monkeypatch, page).fetch_price_page(
+        "ABC", BomAiLogin("user", "secret")
+    )
+
+    assert ("click", 'text="30天内免登录"', None) in page.calls
+    assert ("click", 'text="记住密码"', None) not in page.calls
+    assert page.options == {
+        'text="30天内免登录"': True,
+        'text="记住密码"': True,
+    }
+
+
+def test_cdp_browser_refuses_to_submit_an_option_it_cannot_confirm(
+    monkeypatch,
+) -> None:
+    """A label with no provable checkbox is not toggled blind."""
+
+    page = CdpPage(options={})
+
+    with pytest.raises(BomAiClientError) as error:
+        _cdp_browser(monkeypatch, page).fetch_price_page(
+            "ABC", BomAiLogin("user", "secret")
+        )
+
+    assert error.value.code == "LOGIN_OPTION_UNCONFIRMED"
+    assert ("click", "#smsLoginBtn", None) not in page.calls
+    assert page.closed is True

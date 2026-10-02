@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol, Self
+
+_LOG = logging.getLogger(__name__)
 
 
 class SecurityViolation(RuntimeError):
@@ -112,6 +115,12 @@ class InsoOperationAccess:
         self._lease._assert_identity()
         return OperationPage(self._lease)
 
+    def close_owned_operation_tab(self) -> None:
+        """After the operation ends, return only an app-created tab, never Chrome."""
+        if self._lease._owns_operation_page:
+            self._lease._close_own_operation_page()
+            self._lease.invalidate()
+
 
 class InsoSessionLease:
     """Composition-root-owned lease pinned to one verified shell page."""
@@ -131,6 +140,7 @@ class InsoSessionLease:
         operation_page_is_valid: Callable[[PageHandle], bool],
         cycle_id: str,
         cycle_is_drained: Callable[[str], bool],
+        owns_operation_page: bool = False,
     ) -> None:
         self.ownership = BrowserOwnership(ownership)
         self.browser_identity = browser_identity
@@ -144,6 +154,9 @@ class InsoSessionLease:
         self._operation_frame = operation_frame
         self._identity_probe = identity_probe
         self._operation_page_is_valid = operation_page_is_valid
+        #: True only when this process opened the shell tab. A tab the Owner
+        #: already had open is leased but never closed by us.
+        self._owns_operation_page = owns_operation_page
         self._state = LeaseState.ACTIVE
         self._assert_identity()
 
@@ -172,8 +185,23 @@ class InsoSessionLease:
             return
         if self.ownership is BrowserOwnership.APP_OWNED:
             self._browser.close()
-        # A reused browser and its authenticated shell page remain open.
+        # The Owner's browser always stays open. Our own shell tab does not:
+        # the next entry reopens the ERP and logs in again, which is the
+        # behaviour the Owner asked for, and leaving the tab behind is what
+        # produced stale list pages that later looked authenticated.
+        if self._owns_operation_page:
+            self._close_own_operation_page()
         self._state = LeaseState.RELEASED
+
+    def _close_own_operation_page(self) -> None:
+        """Give back the shell tab this process opened; never fail the release."""
+
+        page = self._operation_page_handle
+        try:
+            if not page.is_closed():
+                page.close()
+        except Exception:  # noqa: BLE001 - validation failures close the lease
+            _LOG.warning("the INSO shell tab could not be closed", exc_info=True)
 
     def _assert_identity(self) -> None:
         if self._state is not LeaseState.ACTIVE:

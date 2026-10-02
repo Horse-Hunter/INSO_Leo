@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from src.core import CredentialProvider, Login, get_login
 
 from .bom_ai import BOM_AI_SITE_ID, BomAiLogin
+from .findchips import FindchipsLogin
+from .hqew import HqewLogin
 from .icnet import ICNET_SITE_ID, IcNetLogin
 from .inso_history import INSO_SITE_ID, InsoLogin
 from .lcsc import LcscLogin
@@ -134,6 +136,32 @@ class LcscCoreLoginProvider:
         return LcscLogin(login.username, login.password)
 
 
+class HqewCoreLoginProvider:
+    """Optional HQEW login bridge on the same terms as JLC."""
+
+    def __init__(self, bridge: CoreLoginBridge) -> None:
+        self._bridge = bridge
+
+    def get_login(self, site_id: str) -> HqewLogin | None:
+        login = self._bridge.login(site_id)
+        if login is None:
+            return None
+        return HqewLogin(login.username, login.password)
+
+
+class FindchipsCoreLoginProvider:
+    """Optional Findchips login bridge on the same terms as JLC."""
+
+    def __init__(self, bridge: CoreLoginBridge) -> None:
+        self._bridge = bridge
+
+    def get_login(self, site_id: str) -> FindchipsLogin | None:
+        login = self._bridge.login(site_id)
+        if login is None:
+            return None
+        return FindchipsLogin(login.username, login.password)
+
+
 class InsoCoreCredentialProvider:
     """Research INSO credential capability backed by the Core Provider."""
 
@@ -156,6 +184,11 @@ class CoreResearchCredentials:
         self.lcsc = LcscCoreLoginProvider(self._bridge)
         self.bom_ai = BomAiCoreCredentialProvider(self._bridge)
         self.inso = InsoCoreCredentialProvider(self._bridge)
+        # HQEW and Findchips are wired like JLC: a login is established when
+        # the site asks for one, but a missing entry degrades that one source
+        # to an observable fail-closed result instead of stopping the runtime.
+        self.hqew = HqewCoreLoginProvider(self._bridge)
+        self.findchips = FindchipsCoreLoginProvider(self._bridge)
 
     def check(self, site_id: str) -> CredentialReadiness:
         """Report availability for one canonical site."""

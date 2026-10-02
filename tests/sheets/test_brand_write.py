@@ -330,3 +330,39 @@ def test_shahab_fresh_read_relocates_shifted_row_before_write() -> None:
 
     assert writer.calls == [(shahab_worksheet(), 11, "Resolved Brand")]
     assert result.row_position == 11
+
+
+def test_unknown_brand_placeholder_stays_writable() -> None:
+    # Owner decision (2026-09-30): "unknown" is not a brand the Owner entered,
+    # so the resolved brand may replace it.
+    reader = SequencedReader([[row(4, brand="unknown")], [row(4, brand="UNKNOWN")]])
+    writer = FakeBrandWriter()
+
+    result = write_brand_safely(reader, writer, identity(), "Resolved Brand")
+
+    assert writer.calls == [(worksheet(), 4, "Resolved Brand")]
+    assert result.row_position == 4
+
+
+def test_shahab_unknown_brand_placeholder_stays_writable() -> None:
+    reader = SequencedReader(
+        [
+            [shahab_row(4, brand="unknown")],
+            [shahab_row(4, brand="unknown")],
+        ]
+    )
+    writer = FakeBrandWriter()
+
+    write_brand_safely(reader, writer, shahab_identity(), "Resolved Brand")
+
+    assert writer.calls == [(shahab_worksheet(), 4, "Resolved Brand")]
+
+
+def test_a_real_brand_is_still_never_overwritten() -> None:
+    reader = SequencedReader([[row(4)], [row(4, brand="  TI  ")]])
+    writer = FakeBrandWriter()
+
+    with pytest.raises(BrandCellNotBlankConflict):
+        write_brand_safely(reader, writer, identity(), "Resolved Brand")
+
+    assert writer.calls == []

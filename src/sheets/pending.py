@@ -9,6 +9,30 @@ from .worksheet_schema import WorksheetSchema, worksheet_schema
 
 CellValue: TypeAlias = str | int | float | bool | None
 
+# The Brand column is filled by the Owner, and it may hold a placeholder
+# instead of a brand.  Owner decision (2026-09-30): a Brand cell that says
+# ``unknown`` is not a brand — the row still needs one resolved, so the
+# placeholder must never be treated as a known brand.  The rule is defined once
+# here, because this module owns worksheet-cell semantics, and applied where a
+# brand cell is consumed as a brand: the Research hand-off (both the freshly
+# read row and its persisted copy in the queue) and the safe Brand write guard.
+BRAND_PLACEHOLDERS = frozenset({"unknown"})
+
+
+def usable_brand(value: CellValue) -> str | None:
+    """Return the cell's brand when it is a real brand, otherwise ``None``.
+
+    A blank cell and a placeholder cell both mean "no brand known", which is
+    what makes the existing resolve-the-brand path apply to either.
+    """
+
+    if not isinstance(value, str):
+        return None
+    token = value.strip()
+    if not token or token.casefold() in BRAND_PLACEHOLDERS:
+        return None
+    return token
+
 
 class CustomerNameSource(StrEnum):
     SHAHAB_FIXED = "SHAHAB_FIXED"

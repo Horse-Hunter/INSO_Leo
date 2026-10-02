@@ -133,6 +133,44 @@ class QQSMTPTransport:
         finally:
             _close(client)
 
+    def send_operator_alert(
+        self,
+        *,
+        recipient: NotificationRecipient,
+        subject: str,
+        text_body: str,
+    ) -> NotificationTransportResult:
+        """Deliver one operational alert that is not an order notification.
+
+        The V1.2 ledger exists for customer-facing order notifications: those
+        are persisted, retried and alerted on, and every one of them belongs to
+        an inquiry. An alert telling the Owner that a run stopped because a site
+        asked for a fresh login is none of those things -- it must never be
+        replayed, deduplicated or counted as an order notification -- so it is
+        delivered through the same transport machinery without being dressed up
+        as a ``NotificationCommand`` it is not.
+        """
+
+        if not self._config.sender_address:
+            return _PERMANENT
+        message = EmailMessage()
+        message["From"] = self._config.sender_address
+        message["To"] = recipient.address
+        message["Subject"] = subject
+        message.set_content(text_body)
+        try:
+            client = self._connect()
+        except ssl.SSLCertVerificationError:
+            return _PERMANENT
+        except _PRE_SEND_NETWORK_ERRORS:
+            return _RETRYABLE
+        except Exception:  # noqa: BLE001 - malformed command is a configuration error
+            return _UNKNOWN
+        try:
+            return self._deliver(client, message)
+        finally:
+            _close(client)
+
     # -- internals ---------------------------------------------------------
 
     def _connect(self) -> _SMTPClient:

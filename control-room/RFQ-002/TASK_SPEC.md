@@ -4,7 +4,64 @@
 **Review:** REQUIRED  
 **Branch:** `feature/v1-2`
 
+## Owner decision — packaging timing (2026-09-30)
+
+SUPERSEDED 2026-10-02: Owner completed personal discussion/Review of final
+submission changes and explicitly authorized packaging V1.2 now. Reuse the
+existing release pipeline; build and dependency/launch smoke only. Do not run
+orders or test final Save-and-Send. First submission remains Owner's next true
+order. This lifts EXE deferral, not authorization for executor production sends.
+
+Do **not** build or hand over the Windows release artifact yet. The packaging
+closeout is deferred until the whole chain **including the purchase-draft leg**
+has run through end to end on real production inputs. Scope items 4–6 and the
+artifact-related acceptance lines below are therefore *gated*, not cancelled:
+they stay open and unstarted, and the RFQ remains `IN_PROGRESS`.
+
+Rationale: packaging first would freeze an artifact whose most valuable path
+(the purchase-draft leg) has not yet been proven end to end, so a successful
+build would not mean a working product.
+
 ## Business goal
+
+### Owner update — final submission, pending implementation (2026-10-02)
+
+Owner accepted the real draft results and requested removal of automatic
+purchase screenshots, then a maximum of ten new implementation lines for a
+single 客临时询价 保存并发送 click, five-second wait, upper business-inquiry
+verification of the matching model and newly added time, and operation-tab
+closure. No tests or live execution of this final step are authorized now;
+Owner will perform its first real run on the next genuine order. An uncertain
+result must never trigger a second click. This is a narrowly scoped future
+submission authorization, not authorization for arbitrary INSO sends, Sheets
+writes, new CDP sessions or EXE packaging. Existing closed-gate statements
+remain the execution boundary until that implementation is safely connected.
+
+Owner subsequently approved relaxing the ten-line ceiling and explicitly
+requested a detailed implementation report for personal Review. The submission
+connection is now implemented in the existing production chain; it is NOT run
+or live-tested by the executor. Prior closed-gate/NO-SEND acceptance statements
+below are historical baseline restrictions, superseded only for this narrowly
+authorized future Save-and-Send and the earlier real SMTP exception. Ordinary
+Save Data, generic INSO Send and Sheets writes remain forbidden. No EXE work.
+See FINAL_SUBMISSION_REVIEW.md for exact scope, safeguards and unverified items.
+
+Owner further clarified: the upper inquiry list is newest-first by time.
+Final submission confirmation reads ONLY the first row of the settled first
+page, checking exact model, current submission time and a changed stable ID.
+Total history exceeding one page must NOT block submission. This does not
+relax complete lower-history reads for the seven-day duplicate check or the
+default complete-set legacy reconciliation. No submission testing/restart.
+
+### Owner clarification — duplicate-history source (2026-10-02)
+
+The seven-day duplicate check must read the LOWER 采临时询价 region of the
+business-inquiry page, including its true creator column, not the upper
+business-inquiry list. Reuse the existing Stock_VenQuote source and native
+controls, existing parser and Workflow rules; preserve the shared CDP and
+closed save/send/Sheets-write gate. Prove pagination completeness and do not
+filter out unquoted history using Research price eligibility. This clarification
+supersedes upper-list duplicate-history assumptions, not save reconciliation.
 
 Turn the already-built V1.2 capability into a Windows release candidate that the Owner can actually package, launch and observe through the real production entry point, while keeping every real external write/send gate closed.
 

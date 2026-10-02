@@ -10,6 +10,7 @@ from .pending import (
     WorksheetIdentity,
     WorksheetRow,
     WorksheetRowReader,
+    usable_brand,
 )
 from .worksheet_schema import WorksheetSchema, worksheet_schema
 
@@ -19,7 +20,12 @@ class SheetRecordConflict(RuntimeError):
 
 
 class BrandCellNotBlankConflict(SheetRecordConflict):
-    """The worksheet-specific Brand cell is not blank and cannot be overwritten."""
+    """The worksheet-specific Brand cell already holds a brand.
+
+    A blank cell stays writable, and so does one holding the ``unknown``
+    placeholder: neither is a brand the Owner entered, so a resolved brand may
+    replace it.
+    """
 
 
 class SheetsWriteError(RuntimeError):
@@ -69,9 +75,9 @@ def write_brand_safely(
     target = _unique_brand_candidate(identity, fresh_rows)
     schema = worksheet_schema(identity.worksheet.worksheet)
 
-    if not _is_blank(target.cells.get(schema.brand_column)):
+    if usable_brand(target.cells.get(schema.brand_column)) is not None:
         raise BrandCellNotBlankConflict(
-            f"Brand column {schema.brand_column} is no longer blank"
+            f"Brand column {schema.brand_column} already holds a brand"
         )
 
     try:
@@ -129,7 +135,3 @@ def _matches_snapshot_without_brand(
         row.cells.get(schema.model_column) == snapshot.model
         and row.cells.get(schema.quantity_column) == snapshot.quantity
     )
-
-
-def _is_blank(value: object) -> bool:
-    return value is None or value == ""

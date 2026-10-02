@@ -73,6 +73,15 @@ class WorkflowStateStore:
                 """
             )
 
+    def inquiry_id_for(self, identity: SheetRecordIdentity) -> str:
+        """Expose the canonical inquiry identity derived from a worksheet row.
+
+        Callers that must decide about a row *before* it is queued need the same
+        identity the queue would assign, without duplicating the derivation.
+        """
+
+        return _inquiry_id(_dedup_key(identity))
+
     def enqueue(
         self,
         record: PendingSheetRecord,
@@ -81,7 +90,6 @@ class WorkflowStateStore:
     ) -> bool:
         observed_at = _as_utc(now or datetime.now(UTC))
         identity = record.record_identity
-        key = _dedup_key(identity)
         with self._connect() as connection:
             cursor = connection.execute(
                 """
@@ -96,7 +104,7 @@ class WorkflowStateStore:
                     identity.worksheet.spreadsheet,
                     identity.worksheet.worksheet,
                     identity.row_position,
-                    _inquiry_id(key),
+                    self.inquiry_id_for(identity),
                     _identity_to_json(identity),
                     _value_to_json(record.model),
                     _value_to_json(record.brand),
@@ -274,6 +282,130 @@ class WorkflowStateStore:
                 """,
                 (_time_to_text(changed_at), _time_to_text(changed_at), item_id),
             )
+
+    def abort_invalid_input(
+        self,
+        item_id: int,
+        *,
+        reason: str,
+        now: datetime | None = None,
+    ) -> WorkflowStatus:
+        """Stop a claimed item whose input violates the Research contract.
+
+        A deterministic input error is not a transient failure, so it must not
+        spend the retry budget. The row re-enters the queue through the normal
+        path once its worksheet data is corrected.
+        """
+
+        changed_at = _as_utc(now or datetime.now(UTC))
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE workflow_items
+                SET status = 'FAILED', next_attempt_at = NULL, last_error = ?,
+                    updated_at = ?
+                WHERE id = ? AND status = 'RESEARCHING'
+                """,
+                (reason, _time_to_text(changed_at), item_id),
+            )
+        return WorkflowStatus.FAILED
+
+    def requeue_interrupted_research(self, *, now: datetime | None = None) -> int:
+        """Return claims stranded by a process exit to the durable queue.
+
+        An item can only be ``RESEARCHING`` while its owning process is alive:
+        the claim and the result write happen inside one ``process_due_one``
+        call. A row still in that state at startup is therefore a crash
+        leftover, and ``claim_due`` (which only takes ``QUEUED``/``RETRY_WAIT``)
+        would never look at it again. Research reads only, so releasing the
+        claim and letting the next poll redo it is safe, and the crash must not
+        spend the business retry budget.
+        """
+
+        changed_at = _as_utc(now or datetime.now(UTC))
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE workflow_items
+                SET status = 'QUEUED',
+                    attempt_count = CASE
+                        WHEN attempt_count > 0 THEN attempt_count - 1
+                        ELSE 0
+                    END,
+                    next_attempt_at = ?,
+                    last_error = 'INTERRUPTED_RESEARCH_REQUEUED',
+                    updated_at = ?
+                WHERE status = 'RESEARCHING'
+                """,
+                (_time_to_text(changed_at), _time_to_text(changed_at)),
+            )
+            return int(cursor.rowcount)
+
+    def mark_skipped_input(
+        self, item_id: int, *, now: datetime | None = None
+    ) -> bool:
+        """Hold a row out of the workflow because its worksheet input is invalid.
+
+        The reason is recorded on the item itself, so the row stays visible and
+        is never claimed for Research, while remaining revivable: correcting the
+        worksheet must let the row run again. ``COMPLETED`` is never rewritten,
+        so a finished inquiry cannot be demoted by a later cell edit.
+        """
+
+        changed_at = _as_utc(now or datetime.now(UTC))
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE workflow_items
+                SET status = 'MANUAL_REVIEW', next_attempt_at = NULL,
+                    last_error = 'INVALID_QUANTITY_INPUT', updated_at = ?
+                WHERE id = ?
+                  AND status IN ('QUEUED', 'RETRY_WAIT', 'FAILED', 'MANUAL_REVIEW')
+                """,
+                (_time_to_text(changed_at), item_id),
+            )
+            return cursor.rowcount == 1
+
+    def revive_item(
+        self,
+        item_id: int,
+        record: PendingSheetRecord,
+        *,
+        now: datetime | None = None,
+    ) -> bool:
+        """Re-queue a row that was held back for invalid input.
+
+        Used when a worksheet row that was skipped for invalid input becomes
+        valid again: that skip was a data problem, not a business failure, so
+        the row must be able to run again. ``enqueue`` never rewrites an
+        existing row, so the stored snapshot is refreshed from the worksheet
+        here as well — the workflow must not keep acting on the value that was
+        rejected.
+        """
+
+        changed_at = _as_utc(now or datetime.now(UTC))
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE workflow_items
+                SET status = 'QUEUED', attempt_count = 0, next_attempt_at = ?,
+                    record_identity_json = ?, mpn_json = ?, brand_json = ?,
+                    quantity_json = ?, importance_raw_json = ?,
+                    last_error = NULL, updated_at = ?
+                WHERE id = ? AND status IN ('FAILED', 'MANUAL_REVIEW')
+                """,
+                (
+                    _time_to_text(changed_at),
+                    _identity_to_json(record.record_identity),
+                    _value_to_json(record.model),
+                    _value_to_json(record.brand),
+                    _value_to_json(record.quantity),
+                    _value_to_json(record.importance_raw),
+                    _time_to_text(changed_at),
+                    item_id,
+                ),
+            )
+            return cursor.rowcount == 1
 
     def record_brand_update(
         self,

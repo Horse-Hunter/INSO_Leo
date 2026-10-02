@@ -1,4 +1,4 @@
-"""INSO_V1.1 single-page Dashboard implemented with customtkinter.
+"""INSO_V1.2 single-page Dashboard implemented with customtkinter.
 
 The app owns no automation logic; it consumes a GuiBackend implementation and
 updates its widgets from the main thread via tkinter.after.
@@ -10,7 +10,7 @@ import logging
 import threading
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import Any
 
 from .contracts import (
@@ -19,7 +19,9 @@ from .contracts import (
     Order,
     RunSession,
     RunState,
+    SiteLoginReport,
     V12AlertCode,
+    V12BusinessLabel,
     V12OrderStateDTO,
 )
 from .resources import BackendEvent, MainThreadEventQueue
@@ -96,6 +98,12 @@ def _v12_status_text(state: V12OrderStateDTO | None, fallback: str) -> str:
     if state is None:
         return fallback
     if state.latest_active_alert is not None:
+        if (state.latest_active_alert.alert_type is V12AlertCode.PURCHASE_EXCEPTION
+                and state.latest_active_alert.reason_code.value in {
+                    "SAVE_OUTCOME_UNKNOWN", "RECONCILIATION_AMBIGUOUS",
+                    "RECONCILIATION_UNREADABLE",
+                }):
+            return "提交结果待确认（不会自动重发）"
         return {
             V12AlertCode.DUPLICATE_ORDER: "重复订单",
             V12AlertCode.NOTIFICATION_FAILED: "通知失败",
@@ -103,6 +111,13 @@ def _v12_status_text(state: V12OrderStateDTO | None, fallback: str) -> str:
             V12AlertCode.DATA_QUALITY: "资料待核对",
             V12AlertCode.SECURITY_EVENT: "安全异常",
         }[state.latest_active_alert.alert_type]
+    if state.business_label is V12BusinessLabel.PROCESSING:
+        relevant = [event for event in state.event_history if event.event_type.value in {
+            "PURCHASE_DRAFT_STARTED", "AI_RECOGNITION_READY", "AI_RECOGNITION_MISMATCH",
+            "SAVE_DISPATCH_ARMED", "PURCHASE_DATA_SAVED", "SECURITY_CHECK_FAILED",
+        }]
+        if relevant and relevant[-1].event_type.value == "AI_RECOGNITION_READY":
+            return "采购草稿校验通过（未保存）"
     return state.business_label.value
 
 
@@ -111,8 +126,49 @@ def _get_v12_state(backend: GuiBackend, inquiry_id: str) -> V12OrderStateDTO | N
     return getter(inquiry_id) if callable(getter) else None
 
 
+def _event_display_text(event: Any) -> str:
+    labels = {
+        "DUPLICATE_CHECK_STARTED": "开始检查近 7 天重复订单",
+        "DUPLICATE_CHECK_CONFIRMED": "重复订单检查完成",
+        "DUPLICATE_CHECK_FAILED": "重复订单检查未完成",
+        "RESEARCH_STARTED": "开始调研",
+        "RESEARCH_RETRY_SCHEDULED": "等待重试调研",
+        "DUPLICATE_ORDER_DETECTED": "发现重复订单，停止采购",
+        "IMPORTANT_ORDER_DECIDED": "订单业务判断完成",
+        "NOTIFICATION_COMMAND_CREATED": "通知已进入发送队列",
+        "NOTIFICATION_DELIVERY_FAILED": "通知发送失败",
+        "NOTIFICATION_RETRY_SCHEDULED": "通知等待重试",
+        "NOTIFICATION_DELIVERY_SUCCEEDED": "通知发送成功",
+        "ALERT_RECOVERED": "异常已恢复",
+        "PURCHASE_DRAFT_STARTED": "开始准备未保存采购草稿",
+        "AI_RECOGNITION_READY": "AI 录单及回读校验通过",
+        "AI_RECOGNITION_MISMATCH": "采购录单或校验未通过",
+        "SECURITY_CHECK_FAILED": "安全校验未通过",
+        "DATA_QUALITY_MISSING_CUSTOMER": "客户资料缺失",
+        "DATA_QUALITY_INVALID_QUANTITY": "数量资料无效",
+        "HUMAN_RESOLUTION_RECORDED": "人工处理已记录",
+        "SAVE_DISPATCH_ARMED": "提交前检查已完成（不代表发送成功）",
+        "SAVE_OUTCOME_UNKNOWN": "保存结果待核实",
+        "RECONCILIATION_STARTED": "开始核实保存结果",
+        "RECONCILIATION_CONFIRMED_SAVED": "已核实保存成功",
+        "RECONCILIATION_CONFIRMED_NOT_SAVED": "已核实未保存",
+        "RECONCILIATION_AMBIGUOUS": "保存结果无法唯一确认",
+        "PURCHASE_DATA_SAVED": "采购数据已保存",
+    }
+    text = labels.get(event.event_type.value, "流程状态更新")
+    if event.reason_code is not None:
+        reason = {
+            "CONTROL_NOT_FOUND": "采购页面控件未就绪，需修复程序",
+            "AI_RECOGNITION_MISMATCH": "录单结果未通过校验",
+            "SESSION_STALE": "登录已失效",
+        }.get(event.reason_code.value)
+        if reason:
+            text += f"：{reason}"
+    return text
+
+
 class InsoDashboardApp:
-    """Single-page INSO_V1.1 operator dashboard."""
+    """Single-page INSO_V1.2 operator dashboard."""
 
     def __init__(self, backend: GuiBackend) -> None:
         global ctk
@@ -131,9 +187,11 @@ class InsoDashboardApp:
         self._close_after_id: str | None = None
         self._closing = False
         self._close_finalized = False
+        self._login_all_running = False
+        self._shown_login_report: SiteLoginReport | None = None
 
         self._root = ctk.CTk()
-        self._root.title("INSO_V1.1")
+        self._root.title("INSO_V1.2")
         self._root.geometry("1200x800")
         self._root.configure(fg_color=_BG)
         self._root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -179,7 +237,7 @@ class InsoDashboardApp:
 
         title = ctk.CTkLabel(
             frame,
-            text="INSO_V1.1",
+            text="INSO_V1.2",
             font=_FONT_TITLE,
             text_color=_TEXT,
         )
@@ -221,7 +279,23 @@ class InsoDashboardApp:
             corner_radius=12,
             command=self._on_action,
         )
-        self._action_button.grid(row=1, column=0, sticky="ew", padx=24, pady=(8, 20))
+        self._action_button.grid(row=1, column=0, sticky="ew", padx=24, pady=(8, 12))
+
+        # Owner rule (2026-10-01): signing every site in is its own action, run
+        # *before* a round of inquiry, and reported either way. A run started
+        # with dead sessions is what produced "采集需要人工处理" mid-cycle.
+        self._login_all_button = ctk.CTkButton(
+            card,
+            text="一键登录所有网站",
+            font=("Microsoft YaHei UI", 13, "bold"),
+            fg_color=_BLUE,
+            hover_color="#2563EB",
+            text_color="white",
+            height=44,
+            corner_radius=12,
+            command=self._on_login_all,
+        )
+        self._login_all_button.grid(row=2, column=0, sticky="ew", padx=24, pady=(0, 20))
 
         return card
 
@@ -401,7 +475,7 @@ class InsoDashboardApp:
         )
         detail_title.grid(row=0, column=0, sticky="w", padx=16, pady=(16, 8))
 
-        self._detail_container = ctk.CTkFrame(detail_card, fg_color="transparent")
+        self._detail_container = ctk.CTkScrollableFrame(detail_card, fg_color="transparent")
         self._detail_container.grid(
             row=1, column=0, sticky="nsew", padx=16, pady=(0, 16)
         )
@@ -458,10 +532,15 @@ class InsoDashboardApp:
         def on_log(entry: LogEntry) -> None:
             self._events.publish(BackendEvent("log", entry))
 
+        def on_login_all(report: SiteLoginReport) -> None:
+            self._events.publish(BackendEvent("login_all", report))
+
         self._status_callback = on_status
         self._log_callback = on_log
+        self._login_all_callback = on_login_all
         self._backend.on_status_change(on_status)
         self._backend.on_log(on_log)
+        self._backend.on_login_all(on_login_all)
 
     def _schedule_tick(self) -> None:
         """Drain backend events and refresh changing dashboard state on Tk thread."""
@@ -473,7 +552,10 @@ class InsoDashboardApp:
                 self._update_status(event.payload)
             elif event.kind == "log":
                 self._append_log(event.payload)
+            elif event.kind == "login_all":
+                self._show_login_all_report(event.payload)
         self._update_status(self._backend.get_status())
+        self._sync_login_all()
         self._after_id = self._root.after(1000, self._schedule_tick)
 
     def _assert_main_thread(self) -> None:
@@ -481,13 +563,89 @@ class InsoDashboardApp:
             raise RuntimeError("Tk UI updates must run on the main thread")
 
     def _on_action(self) -> None:
-        if self._status.state == RunState.STOPPED:
+        if self._status.state in {RunState.STOPPED, RunState.MANUAL_REVIEW} and (
+            self._login_all_running or self._backend.login_all_running()
+        ):
+            messagebox.showwarning("一键登录", "请等待网站登录检查结束，再开始询价。")
+            return
+        # Owner rule (2026-10-01): a run stopped for a login problem is meant to
+        # be resumable from this button once the login is repaired in Chrome --
+        # restarting the whole application to re-read the same session would be
+        # the only other route, and the session is exactly what was fixed.
+        if self._status.state in {RunState.STOPPED, RunState.MANUAL_REVIEW}:
             self._backend.start()
         elif self._status.state == RunState.RUNNING:
             self._backend.request_stop_after_cycle()
             self._update_status(self._backend.get_status())
         else:
             logger.debug("忽略操作：当前状态 %s", self._status.state.value)
+
+    def _on_login_all(self) -> None:
+        if self._login_all_running:
+            return
+        if self._status.state in {RunState.RUNNING, RunState.STOPPING_AFTER_CYCLE}:
+            messagebox.showwarning(
+                "一键登录",
+                "正在询价，请先停止本轮询价后再执行一键登录。",
+            )
+            return
+        self._login_all_running = True
+        self._login_all_button.configure(
+            text="正在依次登录…", fg_color=_GRAY, state="disabled"
+        )
+        self._backend.start_login_all_sites()
+
+    def _sync_login_all(self) -> None:
+        """Keep the button honest, and surface a report the callback missed."""
+
+        self._assert_main_thread()
+        report = self._backend.get_login_all_report()
+        if report is not None and report is not self._shown_login_report:
+            self._show_login_all_report(report)
+        running = bool(self._backend.login_all_running())
+        self._login_all_running = running
+        busy = running or self._status.state in {
+            RunState.RUNNING,
+            RunState.STOPPING_AFTER_CYCLE,
+        }
+        if busy:
+            self._login_all_button.configure(
+                text="正在依次登录…" if running else "一键登录所有网站",
+                fg_color=_GRAY,
+                state="disabled",
+            )
+            return
+        self._login_all_button.configure(
+            text="一键登录所有网站", fg_color=_BLUE, state="normal"
+        )
+
+    def _show_login_all_report(self, report: SiteLoginReport) -> None:
+        """Report the sweep once, with the one next step that applies."""
+
+        self._assert_main_thread()
+        if report is self._shown_login_report:
+            return
+        self._shown_login_report = report
+        lines = [
+            f"{result.site}：{result.outcome.value}"
+            + (f"（{result.detail}）" if result.detail else "")
+            for result in report.results
+        ]
+        body = "\n".join(lines)
+        if report.all_signed_in:
+            messagebox.showinfo(
+                "一键登录结果",
+                f"所有网站均已登录，可以直接开始询价。\n\n{body}",
+            )
+            return
+        pending = "、".join(result.site for result in report.needing_attention)
+        messagebox.showwarning(
+            "一键登录结果",
+            "以下网站需要人工处理："
+            f"{pending}\n\n{body}\n\n"
+            "请在本机 Chrome 中手工登录这些网站，关闭多余标签页后，"
+            "再点击「开始询价」。",
+        )
 
     def _update_status(self, status: RunSession) -> None:
         self._assert_main_thread()
@@ -500,9 +658,13 @@ class InsoDashboardApp:
         )
 
         # Action button
-        if status.state == RunState.STOPPED:
+        if status.state in {RunState.STOPPED, RunState.MANUAL_REVIEW}:
             self._action_button.configure(
-                text="开始询价",
+                text=(
+                    "开始询价"
+                    if status.state is RunState.STOPPED
+                    else "重新开始询价"
+                ),
                 fg_color=_GREEN,
                 hover_color="#059669",
                 state="normal",
@@ -625,6 +787,17 @@ class InsoDashboardApp:
         )
         sub.pack(anchor="w", pady=(0, 12))
 
+        ctk.CTkLabel(
+            self._detail_container,
+            text=f"调研结果：{order.status.value}\n货量：{order.stock_label}\n"
+                 f"市场最低参考价：{order.min_reference_price if order.min_reference_price is not None else '--'}\n"
+                 f"总价：{order.total_price if order.total_price is not None else '--'}",
+            font=_FONT_SMALL,
+            text_color=_TEXT,
+            justify="left",
+            wraplength=300,
+        ).pack(anchor="w", pady=(0, 8))
+
         v12_state = _get_v12_state(self._backend, order.inquiry_id)
         if v12_state is not None:
             status_text = _v12_status_text(v12_state, order.status.value)
@@ -638,23 +811,6 @@ class InsoDashboardApp:
                     else _TEXT_SECONDARY
                 ),
             ).pack(anchor="w", pady=(0, 8))
-            if v12_state.event_history:
-                ctk.CTkLabel(
-                    self._detail_container,
-                    text="事件历史",
-                    font=("Microsoft YaHei UI", 11, "bold"),
-                    text_color=_TEXT,
-                ).pack(anchor="w", pady=(2, 4))
-                for event in v12_state.event_history:
-                    reason = f" · {event.reason_code.value}" if event.reason_code else ""
-                    stamp = event.occurred_at.astimezone().strftime("%Y-%m-%d %H:%M")
-                    ctk.CTkLabel(
-                        self._detail_container,
-                        text=f"{stamp}  {event.event_type.value}{reason}",
-                        font=_FONT_SMALL,
-                        text_color=_TEXT_SECONDARY,
-                        wraplength=320,
-                    ).pack(anchor="w")
 
         for ev in order.sources:
             row = ctk.CTkFrame(self._detail_container, fg_color="transparent")
@@ -676,6 +832,8 @@ class InsoDashboardApp:
                 text=price_text,
                 font=_FONT_SMALL,
                 text_color=_TEXT,
+                wraplength=220,
+                justify="left",
             )
             price.pack(side="left", padx=(8, 0))
         if order.remark:
@@ -687,6 +845,18 @@ class InsoDashboardApp:
                 wraplength=300,
             )
             remark.pack(anchor="w", pady=(12, 0))
+
+        if v12_state is not None and v12_state.event_history:
+            ctk.CTkLabel(
+                self._detail_container, text="流程记录（不影响上方调研结果）",
+                font=_FONT_SMALL, text_color=_TEXT_SECONDARY,
+            ).pack(anchor="w", pady=(12, 4))
+            for event in v12_state.event_history:
+                stamp = event.occurred_at.astimezone().strftime("%m-%d %H:%M")
+                ctk.CTkLabel(
+                    self._detail_container, text=f"{stamp}  {_event_display_text(event)}",
+                    font=_FONT_SMALL, text_color=_TEXT_SECONDARY, wraplength=300,
+                ).pack(anchor="w")
 
     def _append_log(self, entry: LogEntry) -> None:
         # For V1, logs are collected but not displayed in a heavy console.
@@ -711,6 +881,9 @@ class InsoDashboardApp:
 
         self._status_badge.configure(text="正在退出", fg_color=_YELLOW)
         self._action_button.configure(text="正在退出", fg_color=_GRAY, state="disabled")
+        self._login_all_button.configure(
+            text="正在退出", fg_color=_GRAY, state="disabled"
+        )
         self._check_close_complete()
 
     def _check_close_complete(self) -> None:
@@ -722,6 +895,8 @@ class InsoDashboardApp:
         self._close_after_id = self._root.after(100, self._check_close_complete)
 
     def _backend_stopped(self) -> bool:
+        if self._backend.login_all_running():
+            return False
         status = self._backend.get_status()
         if status.state not in {RunState.STOPPED, RunState.MANUAL_REVIEW}:
             return False
@@ -738,6 +913,7 @@ class InsoDashboardApp:
         self._after_id = None
         self._backend.on_status_change(None)
         self._backend.on_log(None)
+        self._backend.on_login_all(None)
         try:
             # Diagnostics confirm all backend threads have already exited.
             self._backend.shutdown()

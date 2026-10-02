@@ -51,6 +51,16 @@ class FakeCdpPage:
         self.html = html
         self.has_body = has_body
         self.goto_calls: list[tuple[str, str, int]] = []
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
+
+    def fill(self, selector: str, value: str, *, timeout: int) -> None:
+        raise AssertionError("no credential should be typed into this fake")
+
+    def click(self, selector: str, *, timeout: int) -> None:
+        raise AssertionError("no form should be submitted in this fake")
 
     def goto(self, url: str, *, wait_until: str, timeout: int) -> None:
         self.goto_calls.append((url, wait_until, timeout))
@@ -218,15 +228,26 @@ def test_cdp_client_rejects_remote_endpoint() -> None:
         )
 
 
-def test_cdp_client_reuses_authenticated_hqew_page_for_navigation() -> None:
-    page = FakeCdpPage("https://www.hqew.com/", _row("ABC", "1.25"))
-    client, _ = _cdp_client([page], navigate=True)
+def test_cdp_client_opens_its_own_page_and_closes_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Owner rule: every call opens a page, uses it, and closes it again."""
+
+    monkeypatch.setattr(
+        "src.research.hqew.new_background_page",
+        lambda _browser, context, **_kwargs: context.new_page(),
+    )
+    stale = FakeCdpPage("https://p.hqew.com/yunquote/STALE.html?y4=1", "<html></html>")
+    client, chromium = _cdp_client([stale], navigate=True)
 
     captured = client.fetch_first_page(" ABC ")
 
+    context = chromium.browser.contexts[0]
     target = "https://p.hqew.com/yunquote/ABC.html?y4=1"
     assert captured.url == target
-    assert page.goto_calls == [(target, "domcontentloaded", 1234)]
+    assert stale.goto_calls == [], "an earlier tab must not be reused"
+    assert len(context.pages) == 2
+    assert context.pages[-1].closed is True, "the call must give its tab back"
 
 
 def test_cdp_client_accepts_verified_same_site_result_redirect() -> None:

@@ -39,6 +39,7 @@ class V12BusinessLabel(StrEnum):
     DUPLICATE_ORDER = "重复订单"
     PURCHASE_SENT = "已发采购单"
     PURCHASE_EXCEPTION = "采购录单异常"
+    SKIPPED_INVALID_INPUT = "已跳过（数据异常）"
 
 
 class V12AlertCode(StrEnum):
@@ -69,8 +70,10 @@ class V12ReasonCode(StrEnum):
     RECONCILIATION_UNREADABLE = "RECONCILIATION_UNREADABLE"
     NOTIFICATION_TRANSIENT = "NOTIFICATION_TRANSIENT"
     NOTIFICATION_PERMANENT = "NOTIFICATION_PERMANENT"
+    NOTIFICATION_SENT = "NOTIFICATION_SENT"
     NOTIFICATION_UNKNOWN = "NOTIFICATION_UNKNOWN"
     CUSTOMER_NAME_MISSING = "CUSTOMER_NAME_MISSING"
+    INQUIRY_QUANTITY_INVALID = "INQUIRY_QUANTITY_INVALID"
     EVIDENCE_PATH_UNSAFE = "EVIDENCE_PATH_UNSAFE"
     SQLITE_BACKUP_INVALID = "SQLITE_BACKUP_INVALID"
     SQLITE_BACKUP_COLLISION = "SQLITE_BACKUP_COLLISION"
@@ -93,6 +96,7 @@ class V12EventCode(StrEnum):
     PURCHASE_DRAFT_STARTED = "PURCHASE_DRAFT_STARTED"
     AI_RECOGNITION_READY = "AI_RECOGNITION_READY"
     AI_RECOGNITION_MISMATCH = "AI_RECOGNITION_MISMATCH"
+    SAVE_DISPATCH_ARMED = "SAVE_DISPATCH_ARMED"
     SAVE_OUTCOME_UNKNOWN = "SAVE_OUTCOME_UNKNOWN"
     RECONCILIATION_STARTED = "RECONCILIATION_STARTED"
     RECONCILIATION_CONFIRMED_SAVED = "RECONCILIATION_CONFIRMED_SAVED"
@@ -101,7 +105,69 @@ class V12EventCode(StrEnum):
     PURCHASE_DATA_SAVED = "PURCHASE_DATA_SAVED"
     SECURITY_CHECK_FAILED = "SECURITY_CHECK_FAILED"
     DATA_QUALITY_MISSING_CUSTOMER = "DATA_QUALITY_MISSING_CUSTOMER"
+    DATA_QUALITY_INVALID_QUANTITY = "DATA_QUALITY_INVALID_QUANTITY"
     HUMAN_RESOLUTION_RECORDED = "HUMAN_RESOLUTION_RECORDED"
+
+
+class SiteLoginOutcome(StrEnum):
+    """What one site's turn in the login sweep achieved.
+
+    These are the only verdicts the dashboard reports. They are deliberately
+    coarser than the internal reason codes: the operator's decision is "does
+    this site need me?" and nothing finer changes what they do next.
+    """
+
+    ALREADY_SIGNED_IN = "已在登录状态"
+    SIGNED_IN = "登录成功"
+    NEEDS_HUMAN = "需要人工登录"
+    REJECTED = "账号或密码被拒绝"
+    NO_CREDENTIAL = "缺少登录凭据"
+    UNAVAILABLE = "登录失败"
+
+
+@dataclass(frozen=True, slots=True)
+class SiteLoginResult:
+    """One site's verdict, safe to render: a label and a closed outcome."""
+
+    site: str
+    outcome: SiteLoginOutcome
+    detail: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.outcome, SiteLoginOutcome):
+            raise TypeError("GUI login outcomes must be allowlisted enums")
+
+
+@dataclass(frozen=True, slots=True)
+class SiteLoginReport:
+    """The finished sequential login sweep, in the order the sites were tried."""
+
+    results: tuple[SiteLoginResult, ...]
+    started_at: datetime
+    finished_at: datetime
+
+    @property
+    def all_signed_in(self) -> bool:
+        """True only when every site is genuinely usable without a human."""
+
+        return bool(self.results) and all(
+            result.outcome
+            in {SiteLoginOutcome.ALREADY_SIGNED_IN, SiteLoginOutcome.SIGNED_IN}
+            for result in self.results
+        )
+
+    @property
+    def needing_attention(self) -> tuple[SiteLoginResult, ...]:
+        """The sites the operator has to look at, in sweep order."""
+
+        return tuple(result for result in self.results if not _is_signed_in(result))
+
+
+def _is_signed_in(result: SiteLoginResult) -> bool:
+    return result.outcome in {
+        SiteLoginOutcome.ALREADY_SIGNED_IN,
+        SiteLoginOutcome.SIGNED_IN,
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,6 +338,29 @@ class GuiBackend(ABC):
         """Return optional V1.2 state without changing the V1.1 dashboard contract."""
 
         return None
+
+    def start_login_all_sites(self) -> None:
+        """Begin the sequential "sign in to every site" sweep.
+
+        Optional capability: a backend that cannot do it stays silent, and the
+        dashboard simply never reports a sweep. It must be non-blocking and
+        idempotent while a sweep is already running.
+        """
+
+    def login_all_running(self) -> bool:
+        """Whether a login sweep is in flight right now."""
+
+        return False
+
+    def get_login_all_report(self) -> SiteLoginReport | None:
+        """Return the most recent finished sweep, or ``None`` if never run."""
+
+        return None
+
+    def on_login_all(
+        self, callback: Callable[[SiteLoginReport], Any] | None
+    ) -> None:
+        """Register a callback invoked once per finished sweep."""
 
     @abstractmethod
     def get_health(self) -> HealthReport:

@@ -7,7 +7,14 @@ from src.workflow.v12_contracts import (
     DuplicateOutcome,
     ReasonCode,
 )
-from src.workflow.v12_safety import MpnPolicy, mpn_matches, normalize_mpn
+from src.workflow.v12_safety import (
+    BrandPolicy,
+    MpnPolicy,
+    brand_matches,
+    mpn_matches,
+    normalize_brand,
+    normalize_mpn,
+)
 
 
 def test_ai_and_duplicate_mpn_policy_names_are_distinct_with_same_frozen_semantics() -> None:
@@ -25,6 +32,28 @@ def test_ai_and_duplicate_mpn_policy_names_are_distinct_with_same_frozen_semanti
 def test_mpn_canonicalizer_only_trims_outer_whitespace_and_ascii_uppercases() -> None:
     assert normalize_mpn("  μabc / .-x  ", policy=MpnPolicy.AI_MPN_V1) == "μABC / .-X"
     assert normalize_mpn("A\tB", policy=MpnPolicy.DUP_MPN_V1) == "A\tB"
+
+
+def test_ai_brand_policy_is_partial_but_never_vacuous() -> None:
+    """Owner decision (2026-09-29): partial brand match is acceptable.
+
+    The ERP AI canonicalises the brand, so the Research label and the ERP code
+    differ in wording. An empty token on either side still fails closed.
+    """
+
+    policy = BrandPolicy.AI_BRAND_V1
+    assert policy.value == "ai-brand-v1"
+    assert normalize_brand("  HRS(hirose) ", policy=policy) == "hrs(hirose)"
+    assert brand_matches("HRS(hirose)", "HRS", policy=policy)
+    assert brand_matches("HRS(hirose)", "hirose", policy=policy)
+    assert brand_matches(" Brand ", "brand", policy=policy)
+    assert not brand_matches("HRS(hirose)", "Nexperia", policy=policy)
+    assert not brand_matches("", "HRS", policy=policy)
+    assert not brand_matches("HRS", "   ", policy=policy)
+    with pytest.raises(TypeError):
+        brand_matches("HRS", None, policy=policy)  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        normalize_brand("HRS", policy="unknown")  # type: ignore[arg-type]
 
 
 def test_duplicate_contract_never_allows_unconfirmed_false_result() -> None:

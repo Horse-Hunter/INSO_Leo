@@ -75,10 +75,61 @@ def test_closed_enum_and_public_api_have_no_send_or_generic_click_methods() -> N
         "OPEN_AI_ENTRY",
         "SET_AI_INPUT",
         "RUN_AI_RECOGNITION",
+        "AI_ENTRY_COMMIT",
         "SAVE_DATA",
+        "SAVE_AND_SEND",
     }
     methods = set(dir(InsoDraftActions))
     assert not {"send", "submit", "final_submit", "click", "dispatch"} & methods
+
+
+def test_commit_ai_entry_is_client_side_while_save_data_stays_gated() -> None:
+    """保存数据 on the AI录单 panel is not the bill's Save.
+
+    Verified live (2026-10-01): it runs ``pasteImport() -> AiImport.doImport()``,
+    which is ``returnSet(buildResult())`` + ``windowsClose()``; the dialog's own
+    close callback then runs ``ai_appendRow()`` to reload the bill grid. Nothing
+    reaches the server, so the closed production gate must not block it -- while
+    the real Save (``button#btnSave`` -> ``bill_save_auto``) must stay blocked.
+    """
+
+    registry = SelectorRegistry()
+    registry.register(
+        WriteAction.SAVE_DATA,
+        "save-data-control",
+        "verified-inquiry-form",
+        candidate().semantics,
+    )
+    commit_semantics = ControlSemantics(
+        "button", "保存数据", "保存数据", (("id", "win_btn__dialog11"),)
+    )
+    registry.register(
+        WriteAction.AI_ENTRY_COMMIT,
+        "ai-entry-commit",
+        "ai-entry-dialog",
+        commit_semantics,
+    )
+    dispatcher = FakeDispatcher()
+    api = InsoDraftActions(
+        gate=ProductionWriteGate(),
+        registry=registry,
+        candidate_source=FakeCandidateSource(
+            (
+                candidate(),
+                ControlCandidate("ai-entry-commit", "ai-entry-dialog", commit_semantics),
+            )
+        ),
+        dispatcher=dispatcher,
+    )
+
+    api.commit_ai_entry()
+    assert dispatcher.dispatched == [
+        (WriteAction.AI_ENTRY_COMMIT, "ai-entry-commit", None)
+    ]
+
+    with pytest.raises(SecurityViolation):
+        api.save_data()
+    assert len(dispatcher.dispatched) == 1
 
 
 @pytest.mark.parametrize(

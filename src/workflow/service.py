@@ -7,13 +7,19 @@ from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
-from src.research import ResearchInput, ResearchResult, ResearchStatus
+from src.research import (
+    InvalidResearchInput,
+    ResearchInput,
+    ResearchResult,
+    ResearchStatus,
+)
 from src.sheets import (
     PendingSheetRecord,
     SheetRecordIdentity,
     WorksheetIdentity,
     WorksheetRowReader,
     query_pending_records,
+    usable_brand,
 )
 from src.sheets.brand_write import (
     SheetRecordConflict,
@@ -122,6 +128,17 @@ class WorkflowWorker:
                 # manual handling without spending the business retry budget.
                 self._store.release_unprepared(item.id, now=now)
                 raise
+            except InvalidResearchInput:
+                # A worksheet row whose quantity is not a number violates the
+                # Research contract deterministically. Retrying would fail the
+                # same way and only burn the business retry budget, so stop
+                # here; the row resumes once the worksheet data is corrected.
+                self._store.abort_invalid_input(
+                    item.id,
+                    reason="INVALID_RESEARCH_INPUT",
+                    now=now,
+                )
+                return self._store.get(item.id)
             except Exception as exc:  # noqa: BLE001 - collaborator failures are retryable
                 self._store.schedule_retry(
                     item.id,
@@ -278,10 +295,14 @@ class WorkflowRuntime:
 
 
 def _research_input(item: WorkItem) -> ResearchInput:
+    # The queue stores the Brand cell verbatim, so the persisted copy can still
+    # hold a placeholder the Owner wrote.  Research is handed the same value it
+    # would have read live: a placeholder is not a brand, and Research resolves
+    # the missing one instead of accepting it.
     return ResearchInput(
         inquiry_id=item.inquiry_id,
         mpn=item.mpn,
-        brand=item.brand,
+        brand=usable_brand(item.brand),
         quantity=item.quantity,
         importance_raw=item.importance_raw,
     )

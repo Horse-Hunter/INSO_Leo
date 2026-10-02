@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from time import monotonic, sleep
 from typing import Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
@@ -15,6 +16,13 @@ from urllib.request import Request, urlopen
 
 from .cdp_pages import new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
+from .site_login import (
+    REJECTED_PASSWORD_TEXT,
+    LoginForm,
+    SiteLoginError,
+    await_login_outcome,
+    submit_login_form,
+)
 from .source_contracts import (
     EvidenceField,
     MpnMatchKind,
@@ -34,6 +42,50 @@ LCSC_HOME_URL = "https://www.szlcsc.com/"
 # distinct so session recovery never asks the Owner to duplicate a password.
 LCSC_CREDENTIAL_SITE_ID = "szlcsc.com"
 LCSC_AUTH_HOST = "passport.jlc.com"
+#: JLC's own SSO host. It serves two different pages -- the ordinary account
+#: form, and an already-signed-in account that only needs handing over to the
+#: commerce site -- which is why callers have to look at the page, not the URL.
+LCSC_LOGIN_URL = f"https://{LCSC_AUTH_HOST}/login"
+
+#: JLC's ordinary account form. The page also offers QR and SMS paths; this
+#: form is only ever addressed after the "账号登录" tab has been opened.
+#: ``submit`` must name the account form's own button
+#: (``<button class="el-button base-button w-full submit …">登录</button>``,
+#: tracked by JLC as ``spm=login.account.submit``), never the text "登录": that
+#: text also matches the page's ``<h2>`` heading, which comes first in DOM
+#: order, so a page-level click landed on the heading and the button was never
+#: pressed (measured live 2026-10-01).
+LCSC_LOGIN_FORM = LoginForm(
+    username='input[type="text"]:visible, input[type="tel"]:visible',
+    password='input[type="password"]:visible',
+    submit="button.submit",
+    # Measured live 2026-10-01: JLC answers a login it distrusts with a slider --
+    # "安全验证 / 为了您的账号安全，请完成验证 / 请按住滑块，拖动到最右边". Both
+    # markers were confirmed *absent* from the rendered page before the submit
+    # (body length 212, neither string present), so looking for them here cannot
+    # refuse a form that was never tried.
+    challenge_text=("安全验证", "请按住滑块"),
+    rejection=REJECTED_PASSWORD_TEXT,
+    # Measured live 2026-10-01: the challenge widget is injected only when the
+    # risk engine fires, and its copy is in no eagerly-loaded bundle, so the
+    # markup cannot be read ahead of time. These are the vendor marks JLC's
+    # wording ("请按住滑块，拖动到最右边") comes from; if they all miss,
+    # ``solve_slider_challenge`` falls back to the one element the page itself
+    # marks draggable, and refuses when that is not unique.
+    slider=(
+        "#nc_1_n1z",
+        ".nc_iconfont.btn_slide",
+        "#nc_1_n1z span",
+        "[class*='slide'] [class*='btn']",
+        "[class*='slider'] [class*='btn']",
+    ),
+)
+
+
+def lcsc_login_page_open(page: object) -> bool:
+    """Settle predicate: has JLC's own script carried us off the SSO host?"""
+
+    return urlsplit(getattr(page, "url", "") or "").hostname == LCSC_AUTH_HOST
 
 
 class LcscError(RuntimeError):
@@ -304,38 +356,27 @@ class CdpLcscClient:
                     self._cdp_url, timeout=self._timeout_ms
                 )
                 context = browser.contexts[0]
-                page = next(
-                    (
-                        candidate
-                        for candidate in context.pages
-                        if _is_lcsc_session_url(candidate.url)
-                    ),
-                    None,
+                # Owner rule (2026-10-01): every call opens its own tab, makes
+                # sure it is signed in, does its work, and gives the tab back.
+                page = new_background_page(
+                    browser, context, timeout_ms=self._timeout_ms
                 )
-                created_page = page is None
-                if page is None:
-                    page = new_background_page(
-                        browser, context, timeout_ms=self._timeout_ms
-                    )
                 try:
-                    if created_page:
-                        # A new CDP target has no site document yet. Initializing
-                        # the ordinary LCSC home page lets its existing SSO
-                        # cookies establish before the actual search.
-                        page.goto(
-                            LCSC_HOME_URL,
-                            wait_until="domcontentloaded",
-                            timeout=self._timeout_ms,
-                        )
-                        page.wait_for_timeout(1_000)
+                    # A fresh CDP target has no site document yet. Initializing
+                    # the ordinary LCSC home page lets its existing SSO
+                    # cookies establish before the actual search.
+                    page.goto(
+                        LCSC_HOME_URL,
+                        wait_until="domcontentloaded",
+                        timeout=self._timeout_ms,
+                    )
+                    page.wait_for_timeout(1_000)
                     page.goto(search_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
                     page.wait_for_timeout(3_000)
                     if urlsplit(page.url).hostname == LCSC_AUTH_HOST:
-                        body = page.locator("body").inner_text()
-                        enter = page.get_by_text("进入系统", exact=True)
-                        if "已登录账号" in body and enter.count() == 1:
-                            enter.click(timeout=self._timeout_ms)
-                        else:
+                        if not lcsc_enter_system_if_offered(
+                            page, timeout_ms=self._timeout_ms
+                        ):
                             self._restore_session(page)
                         # Authentication may return to a landing page. Re-run
                         # the original query exactly once after either SSO handoff
@@ -367,7 +408,7 @@ class CdpLcscClient:
                         # A same-host login shell can look like a changed
                         # search document. Recover only when the actual normal
                         # account form is present, and re-run the query once.
-                        if not self._has_normal_login_form(page):
+                        if not has_normal_lcsc_login_form(page):
                             raise
                         self._restore_session(page)
                         page.goto(
@@ -388,63 +429,111 @@ class CdpLcscClient:
                         )
                     return LcscPage("", page.url, datetime.now(UTC), product)
                 finally:
-                    if created_page:
-                        page.close()
+                    page.close()
         except LcscError:
             raise
         except Exception as exc:
             raise LcscPageUnavailable("BROWSER_FAILURE", search_url) from exc
 
     def _restore_session(self, page: object) -> None:
-        """Perform one ordinary JLC account login, never a QR/OTP flow."""
+        """Perform one ordinary JLC account login, never a QR/OTP flow.
+
+        The login itself lives in :func:`ensure_lcsc_signed_in` so the sell
+        sweep signs in exactly the way a price read does; only the translation
+        into this client's own error type belongs here.
+        """
 
         if self._login_provider is None:
             raise LcscPageUnavailable("LOGIN_REQUIRED")
         login = self._login_provider.get_login(LCSC_CREDENTIAL_SITE_ID)
         if login is None:
             raise LcscPageUnavailable("LOGIN_REQUIRED")
-        account_tab = page.get_by_text("账号登录", exact=True)  # type: ignore[attr-defined]
-        if account_tab.count() != 1:
-            raise LcscPageUnavailable("RESULT_CHANGED", page.url)  # type: ignore[attr-defined]
-        account_tab.click(timeout=self._timeout_ms)
-        account = page.locator(  # type: ignore[attr-defined]
-            'input[type="text"]:visible, input[type="tel"]:visible'
-        )
-        password = page.locator('input[type="password"]:visible')  # type: ignore[attr-defined]
-        submit = page.get_by_text("登录", exact=True)  # type: ignore[attr-defined]
-        if account.count() != 1 or password.count() != 1 or submit.count() != 1:
-            raise LcscPageUnavailable("RESULT_CHANGED", page.url)  # type: ignore[attr-defined]
-        account.fill(login.username)
-        password.fill(login.password)
-        submit.click(timeout=self._timeout_ms)
-        page.wait_for_timeout(3_000)  # type: ignore[attr-defined]
-        body = page.locator("body").inner_text()  # type: ignore[attr-defined]
-        _reject_lcsc_challenge(body, page.url)  # type: ignore[attr-defined]
-        if urlsplit(page.url).hostname == LCSC_AUTH_HOST:  # type: ignore[attr-defined]
-            raise LcscPageUnavailable("LOGIN_NOT_CONFIRMED", page.url)  # type: ignore[attr-defined]
-
-    @staticmethod
-    def _has_normal_login_form(page: object) -> bool:
-        """Recognize the site's ordinary account form without URL guessing."""
-
         try:
-            account_tab = page.get_by_text("账号登录", exact=True)  # type: ignore[attr-defined]
-            password = page.locator('input[type="password"]:visible')  # type: ignore[attr-defined]
-            return account_tab.count() == 1 and password.count() == 1
-        except Exception:  # noqa: BLE001 - only an auth hint, never a failure
+            ensure_lcsc_signed_in(
+                page,
+                login=login,
+                timeout_ms=self._timeout_ms,
+            )
+        except SiteLoginError as error:
+            raise LcscPageUnavailable(
+                error.reason_code, page.url  # type: ignore[attr-defined]
+            ) from None
+
+
+def lcsc_enter_system_if_offered(page: object, *, timeout_ms: int) -> bool:
+    """Take JLC's SSO handoff when the page is offering it, and say whether it did.
+
+    ``passport.jlc.com`` serves two different things under one URL. For an
+    account that is already signed in there -- measured live 2026-10-01 -- it
+    prints 「已登录账号 … 点击【进入系统】」 and hands the browser to the commerce
+    site; for anyone else it shows the ordinary account form. Only the first is
+    a handoff, so that is what the page's own wording is used to tell apart.
+    """
+
+    try:
+        body = page.locator("body").inner_text()  # type: ignore[attr-defined]
+        enter = page.get_by_text("进入系统", exact=True)  # type: ignore[attr-defined]
+        if "已登录账号" not in body or enter.count() != 1:
             return False
+        enter.click(timeout=timeout_ms)
+    except Exception:  # noqa: BLE001 - only an auth hint, never a failure
+        return False
+    return True
 
 
-def _is_lcsc_session_url(url: str) -> bool:
-    host = urlsplit(url).hostname
-    return bool(
-        host
-        and (
-            host.casefold() == "szlcsc.com"
-            or host.casefold().endswith(".szlcsc.com")
-            or host.casefold() == LCSC_AUTH_HOST
-        )
+def ensure_lcsc_signed_in(
+    page: object,
+    *,
+    login: LcscLogin | None,
+    timeout_ms: int,
+    wait: Callable[[float], None] = sleep,
+    clock: Callable[[], float] = monotonic,
+) -> None:
+    """Complete one ordinary JLC account login on a page parked on the SSO host.
+
+    Only "open JLC's own account tab" is LCSC-specific; typing, the challenge
+    refusal and the settle wait all come from the shared
+    implementation so one fix reaches every source. Fails closed with a
+    :class:`SiteLoginError`: the caller decides what a given reason code means.
+    """
+
+    if login is None:
+        raise SiteLoginError("CREDENTIALS_UNAVAILABLE")
+    account_tab = page.get_by_text("账号登录", exact=True)  # type: ignore[attr-defined]
+    if account_tab.count() != 1:
+        raise SiteLoginError("RESULT_CHANGED")
+    try:
+        account_tab.click(timeout=timeout_ms)
+    except Exception as error:
+        raise SiteLoginError("LOGIN_FORM_UNAVAILABLE") from error
+    # CAPTCHA/slider/OTP belongs to the operator, not automated login.
+    submit_login_form(page, form=LCSC_LOGIN_FORM, login=login, timeout_ms=timeout_ms)
+    await_login_outcome(
+        page, form=LCSC_LOGIN_FORM, is_login_page=lcsc_login_page_open,
+        timeout_ms=timeout_ms, wait=wait, clock=clock,
     )
+    _reject_lcsc_challenge(
+        page.locator("body").inner_text(),  # type: ignore[attr-defined]
+        page.url,  # type: ignore[attr-defined]
+    )
+    if urlsplit(page.url).hostname == LCSC_AUTH_HOST:  # type: ignore[attr-defined]
+        raise SiteLoginError("LOGIN_NOT_CONFIRMED")
+
+
+def has_normal_lcsc_login_form(page: object) -> bool:
+    """Recognize the site's ordinary account form without URL guessing.
+
+    Kept next to :func:`ensure_lcsc_signed_in` because it answers the same
+    question the login does -- "is this JLC asking for a password?" -- rather
+    than the adapter's "is this a result page?".
+    """
+
+    try:
+        account_tab = page.get_by_text("账号登录", exact=True)  # type: ignore[attr-defined]
+        password = page.locator('input[type="password"]:visible')  # type: ignore[attr-defined]
+        return account_tab.count() == 1 and password.count() == 1
+    except Exception:  # noqa: BLE001 - only an auth hint, never a failure
+        return False
 
 
 _NEXT_DATA = re.compile(

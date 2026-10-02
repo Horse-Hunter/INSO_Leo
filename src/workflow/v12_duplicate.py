@@ -10,7 +10,7 @@ A read failure is never reported as "not a duplicate".
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Protocol
 
 from src.inso.duplicate_history import (
@@ -59,7 +59,10 @@ class InsoDuplicateHistoryChecker:
                 checked_at=at,
             )
         try:
-            capture = self._reader.read(canonical)
+            if getattr(self._reader, "procurement_history", False):
+                capture = self._reader.read(canonical, since=at - timedelta(hours=168))
+            else:
+                capture = self._reader.read(canonical)
         except InsoDuplicateHistoryError as exc:
             return _read_failure(inquiry_id, canonical, at, exc.code)
         except Exception:  # noqa: BLE001 - any read error stays a non-decision

@@ -6,6 +6,8 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from src.workflow import WorkflowStateStore
 from src.workflow.v12_contracts import (
     AlertType,
@@ -24,7 +26,7 @@ from src.workflow.v12_notifications import (
     FakeNotificationTransport,
     V12NotificationWorker,
 )
-from src.workflow.v12_store import V12Store, migrate_v12
+from src.workflow.v12_store import V12DatabaseError, V12Store, migrate_v12
 
 NOW = datetime(2026, 9, 25, 8, tzinfo=UTC)
 INQUIRY = "inq_0123456789abcdef01234567"
@@ -60,6 +62,26 @@ def command() -> NotificationCommand:
         "cmd-notify-1", INQUIRY, NotificationKind.IMPORTANT_ORDER, RECIPIENTS,
         "subject", "text", None, NOW,
     )
+
+
+def test_existing_notification_check_requires_exact_context_and_recipients(tmp_path):
+    store = prepared_store(tmp_path)
+    cmd = command()
+    check = lambda: store.notification_already_created(
+        cmd.command_id, INQUIRY, cmd.kind, RECIPIENTS)
+    assert not check()
+    store.enqueue_notification(cmd)
+    assert check()
+    worker = V12NotificationWorker(store, FakeNotificationTransport({
+        "a": (DeliveryOutcome.SENT,), "b": (DeliveryOutcome.SENT,),
+    }))
+    worker.run_due(now=NOW)
+    assert check()
+    assert not store.notification_already_created(
+        cmd.command_id, INQUIRY, NotificationKind.DUPLICATE_ORDER, RECIPIENTS)
+    assert not store.notification_already_created(
+        cmd.command_id, INQUIRY, cmd.kind,
+        (NotificationRecipient("a", "changed@example.invalid"), RECIPIENTS[1]))
 
 
 def test_recipient_ledger_retries_only_failed_recipient_and_recovers_alert(
@@ -241,3 +263,78 @@ def test_notification_alert_recovers_and_duplicate_alert_becomes_latest_again(
     active_types = {alert.alert_type for alert in store.active_alerts(INQUIRY)}
     assert active_types == {AlertType.DUPLICATE_ORDER}
     assert any(item.event_type is EventType.ALERT_RECOVERED for item in store.event_history(INQUIRY))
+
+
+def test_reenqueue_after_delivery_is_idempotent_and_never_resends(
+    tmp_path: Path,
+) -> None:
+    """Re-routing one inquiry must not crash on, or repeat, its notification.
+
+    A routed inquiry can legitimately need routing again (for example when the
+    purchase draft is rejected). The command id is derived from inquiry+kind, so
+    the second route re-enqueues the *same* command with a new ``created_at``.
+    Treating that timestamp as part of the command's identity raised a database
+    error before the purchase leg had even started.
+    """
+
+    store = prepared_store(tmp_path)
+    store.enqueue_notification(command())
+    transport = FakeNotificationTransport(
+        {"a": (DeliveryOutcome.SENT,), "b": (DeliveryOutcome.SENT,)}
+    )
+    worker = V12NotificationWorker(store, transport)
+    assert worker.run_due(now=NOW) == 2
+
+    store.enqueue_notification(
+        NotificationCommand(
+            "cmd-notify-1",
+            INQUIRY,
+            NotificationKind.IMPORTANT_ORDER,
+            RECIPIENTS,
+            "subject",
+            "text",
+            None,
+            NOW + timedelta(minutes=20),
+        )
+    )
+
+    assert worker.run_due(now=NOW + timedelta(minutes=21)) == 0
+    assert transport.calls == [("cmd-notify-1", "a"), ("cmd-notify-1", "b")]
+    assert (
+        sum(
+            item.event_type is EventType.NOTIFICATION_DELIVERY_SUCCEEDED
+            for item in store.event_history(INQUIRY)
+        )
+        == 2
+    )
+
+
+def test_reenqueue_with_different_content_is_still_a_conflict(tmp_path: Path) -> None:
+    store = prepared_store(tmp_path)
+    store.enqueue_notification(command())
+    with pytest.raises(V12DatabaseError):
+        store.enqueue_notification(
+            NotificationCommand(
+                "cmd-notify-1",
+                INQUIRY,
+                NotificationKind.IMPORTANT_ORDER,
+                RECIPIENTS,
+                "different subject",
+                "text",
+                None,
+                NOW,
+            )
+        )
+    with pytest.raises(V12DatabaseError):
+        store.enqueue_notification(
+            NotificationCommand(
+                "cmd-notify-1",
+                INQUIRY,
+                NotificationKind.IMPORTANT_ORDER,
+                (NotificationRecipient("a", "elsewhere@example.invalid"),),
+                "subject",
+                "text",
+                None,
+                NOW,
+            )
+        )

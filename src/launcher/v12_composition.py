@@ -13,7 +13,10 @@ from src.inso import AiRecognitionResult, InsoOperationAccess, ParentProductFiel
 from src.inso.duplicate_history import (
     DETAIL_LINK_SELECTOR_TEMPLATE,
     PlaywrightDuplicateHistoryPage,
+    parse_inso_timestamp,
 )
+from src.inso.session import SecurityViolation
+from src.launcher.diagnostics import log_step
 from src.research.excel_output import ResearchExcelOutput
 from src.workflow.v12_contracts import (
     NotificationRecipient,
@@ -42,6 +45,11 @@ from src.workflow.v12_store import (
     V12Store,
 )
 
+#: How long the ERP's own grid reload (``ai_appendRow``) may take before the
+#: handed-back row counts as absent. The read-back that follows is the authority;
+#: this only bounds the wait.
+_PARENT_ROW_WAIT_SECONDS = 20.0
+
 
 class _PurchasePrepareActions(Protocol):
     """Only the prepare actions needed here; Save is deliberately absent."""
@@ -62,6 +70,8 @@ class _PurchasePrepareActions(Protocol):
 
     def read_ai_result(self) -> AiRecognitionResult: ...
 
+    def commit_ai_entry(self) -> None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class SaveReconciliationTarget:
@@ -70,6 +80,8 @@ class SaveReconciliationTarget:
     mpn: str
     brand: str
     quantity: int
+    submitted_at: datetime | None = None
+    baseline_bill_ids: frozenset[str] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +115,17 @@ class PlaywrightReadOnlySaveReconciler(ReadOnlySaveReconciler):
         self._clock = clock or (lambda: datetime.now(UTC))
         self._timeout_ms = timeout_ms
 
+    @staticmethod
+    def submission_baseline(frame: object, mpn: str) -> frozenset[str]:
+        """Remember the upper latest row before the draft; Owner confirms newest first."""
+        history = PlaywrightDuplicateHistoryPage(frame, first_page_only=True)
+        payload = history.query_exact_response(mpn)
+        rows = payload.get("rows")
+        if (not isinstance(rows, list) or not history.last_exact_request_matched
+                or not history.last_first_page_settled):
+            raise SecurityViolation("submission baseline is not authoritative")
+        return frozenset(str(row["BillID"]).strip() for row in rows[:1])
+
     def reconcile(self, inquiry_id: str) -> ReconciliationResult:
         now = self._clock()
         target = self._target_for_inquiry(inquiry_id)
@@ -116,15 +139,42 @@ class PlaywrightReadOnlySaveReconciler(ReadOnlySaveReconciler):
             )
             with access.operation_page() as operation:
                 frame = operation.shell_frame
-                history = PlaywrightDuplicateHistoryPage(frame, timeout_ms=self._timeout_ms)
+                history = PlaywrightDuplicateHistoryPage(
+                    frame, timeout_ms=self._timeout_ms,
+                    first_page_only=target.submitted_at is not None,
+                )
                 payload = history.query_exact_response(target.mpn)
                 rows = payload.get("rows")
                 if (
                     not isinstance(rows, list)
                     or not history.last_exact_request_matched
-                    or not history.last_exact_result_set_complete
+                    or not (history.last_first_page_settled if target.submitted_at is not None
+                            else history.last_exact_result_set_complete)
                 ):
                     return _unreadable_reconciliation(now)
+                if target.submitted_at is not None:
+                    # Owner rule: the upper new record's model and current time,
+                    # not lower procurement history and not an old matching row.
+                    if target.baseline_bill_ids is None:
+                        return _unreadable_reconciliation(now)
+                    if not rows or str(rows[0]["BillID"]).strip() in target.baseline_bill_ids:
+                        return _unreadable_reconciliation(now)
+                    row = rows[0]
+                    created = parse_inso_timestamp(str(row.get("PEDate", "")))
+                    observed_at = self._clock()
+                    # The native upper list can display minute-resolution time.
+                    lower = target.submitted_at.astimezone(UTC).replace(second=0, microsecond=0)
+                    if not (lower <= created <= observed_at.astimezone(UTC)):
+                        return _unreadable_reconciliation(now)
+                    if not mpn_matches(target.mpn, str(row.get("PartNo", "")),
+                                       policy=MpnPolicy.AI_MPN_V1):
+                        return _unreadable_reconciliation(now)
+                    return ReconciliationResult(
+                        ReconciliationOutcome.CONFIRMED_SAVED, observed_at,
+                        saved_record_ref=str(row["BillID"]).strip(),
+                        candidate_count=1, authoritative=True,
+                        verified_fields=("mpn", "submission_time", "new_record"),
+                    )
                 if len(rows) == 0:
                     return ReconciliationResult(
                         ReconciliationOutcome.CONFIRMED_NOT_SAVED,
@@ -213,6 +263,10 @@ def _valid_reconciliation_target(value: SaveReconciliationTarget | None) -> bool
         and isinstance(value.quantity, int)
         and not isinstance(value.quantity, bool)
         and value.quantity > 0
+        and (value.submitted_at is None or (
+            value.submitted_at.tzinfo is not None
+            and isinstance(value.baseline_bill_ids, frozenset)
+        ))
     )
 
 
@@ -250,8 +304,8 @@ class CoordinatorPurchaseDraftWriter:
             self._actions.set_ai_input(command.ai_input)
             self._actions.run_ai_recognition()
             preview = self._actions.read_ai_result()
-        except Exception:  # noqa: BLE001 - return only a typed safe failure
-            return self._failed(command, ReasonCode.CONTROL_NOT_FOUND)
+        except Exception as exc:  # noqa: BLE001 - every control failure maps to an explicit reason code
+            return self._failed(command, ReasonCode.CONTROL_NOT_FOUND, step="prepare", error=exc)
 
         preview_check = validate_ai_recognition(
             command_id=command.command_id,
@@ -266,15 +320,53 @@ class CoordinatorPurchaseDraftWriter:
         if preview_check.outcome is not PurchaseOutcome.AI_RECOGNIZED:
             return preview_check
 
+        # Let the ERP fill its own bill row. The 采购临时询价 form is the
+        # operator's surface: its 编码/型号/品牌/数量 are not ours to type into.
+        # 保存数据 on the AI录单 dialog runs ``pasteImport()`` -- literally
+        # ``AiImport.doImport()`` -- which is ``returnSet(buildResult())`` plus
+        # ``windowsClose()``, and that close callback is
+        # ``alertboxs[1].closeMtd = function(){ ai_appendRow() }``: the row is
+        # handed back and ``layui`` reloads the bill grid with it. Nothing here
+        # writes a cell, and the click is not a Save -- ``bill_save_auto`` stays
+        # behind the closed ``ProductionWriteGate``.
         try:
-            self._parent_fields.set_model(preview.model)
-            self._parent_fields.set_brand(preview.brand)
-            self._parent_fields.set_quantity(preview.quantity)
+            self._actions.commit_ai_entry()
+        except Exception as exc:  # noqa: BLE001 - every control failure maps to an explicit reason code
+            return self._failed(
+                command, ReasonCode.CONTROL_NOT_FOUND, step="commit-ai-entry", error=exc
+            )
+
+        try:
+            # ``ai_appendRow`` reloads the grid asynchronously, so the row is
+            # waited for by its own 编码 rather than assumed from the click.
+            rendered = self._parent_fields.wait_for_row(
+                preview.product_id, _PARENT_ROW_WAIT_SECONDS
+            )
+            parent_product_id = self._parent_fields.read_product_id()
             parent_model = self._parent_fields.read_model()
             parent_brand = self._parent_fields.read_brand()
             parent_quantity = self._parent_fields.read_quantity()
-        except Exception:  # noqa: BLE001 - no raw adapter error crosses contract
-            return self._failed(command, ReasonCode.CONTROL_NOT_FOUND)
+        except Exception as exc:  # noqa: BLE001 - every control failure maps to an explicit reason code
+            return self._failed(
+                command, ReasonCode.CONTROL_NOT_FOUND, step="parent-read", error=exc
+            )
+
+        # The 编码 comes from the ERP's own AI result and has no expectation in
+        # the source order (the sheet carries 型号/品牌/数量 only), so it cannot
+        # go through ``validate_ai_recognition``; the row the ERP rendered is the
+        # only proof it arrived, and a draft whose 编码 silently went missing is
+        # the defect this guards (Owner finding, 2026-10-01). The two ways that
+        # goes wrong are reported apart, because "the grid reloaded without our
+        # row" and "the grid reloaded and it is someone else's row" need
+        # different fixes.
+        if not rendered:
+            return self._failed(
+                command, ReasonCode.CONTROL_NOT_FOUND, step="parent-row-missing"
+            )
+        if parent_product_id != preview.product_id:
+            return self._failed(
+                command, ReasonCode.CONTROL_NOT_FOUND, step="parent-id-mismatch"
+            )
 
         return validate_ai_recognition(
             command_id=command.command_id,
@@ -288,8 +380,21 @@ class CoordinatorPurchaseDraftWriter:
         )
 
     def _failed(
-        self, command: PurchaseDraftCommand, reason: ReasonCode
+        self,
+        command: PurchaseDraftCommand,
+        reason: ReasonCode,
+        *,
+        step: str | None = None,
+        error: BaseException | None = None,
     ) -> PurchaseDraftResult:
+        if step is not None:
+            # The run log carries no ERP detail by design, so the step label is
+            # the whole diagnosis: without it a draft that never reached the
+            # AI录单 panel and one that died after the ERP handed its row back
+            # are the same one-line failure. Only our own labels travel; the
+            # runtime filter in ``src/gui/main.py`` rebuilds the file line from
+            # exactly ``step`` and the cause's class name.
+            log_step(step, cause=error)
         return PurchaseDraftResult(
             command_id=command.command_id,
             outcome=PurchaseOutcome.VALIDATION_FAILED,
@@ -379,8 +484,16 @@ class V12ProductionAdapters:
         )
 
     def __post_init__(self) -> None:
-        if not isinstance(self.purchase_writer, CoordinatorPurchaseDraftWriter):
-            raise TypeError("V1.2 purchase writer requires parent product fields")
+        # The production seam is ``_LivePurchaseDraftWriter``, which owns the
+        # leased INSO page and builds the ``CoordinatorPurchaseDraftWriter`` (with
+        # its parent product fields) per call. An isinstance check against the
+        # coordinator therefore rejected the real composition and would have
+        # forced the packaged app to fall back to V1.1-only behaviour. The seam is
+        # recognised by the prepare capability it must expose instead.
+        if not callable(getattr(self.purchase_writer, "prepare", None)):
+            raise TypeError(
+                "V1.2 purchase writer requires parent product fields"
+            )
         required = (
             self.duplicate_checker,
             self.research_facts,
@@ -406,6 +519,7 @@ def compose_v12_production(
     v12_store: V12Store,
     research,
     adapters: V12ProductionAdapters,
+    stop_requested=None,
 ) -> V12ProductionComposition:
     """Build the real seams only when every required adapter is explicit."""
 
@@ -421,6 +535,7 @@ def compose_v12_production(
         adapters.purchase_writer,
         notification_worker,
         adapters.recipients,
+        stop_requested=stop_requested,
     )
     return V12ProductionComposition(
         coordinator,

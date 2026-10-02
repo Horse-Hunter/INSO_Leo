@@ -25,6 +25,7 @@ from .v12_contracts import (
     BusinessState,
     DeliveryOutcome,
     DuplicateCheckResult,
+    DuplicateOutcome,
     EventType,
     NotificationCommand,
     NotificationKind,
@@ -301,6 +302,44 @@ class V12Store:
                 at=at,
             )
 
+    def skip_invalid_quantity(self, inquiry_id: str, *, at: datetime) -> None:
+        """Skip a row whose quantity is not a positive integer, with a reason.
+
+        A sheet row carrying a column legend or a blank quantity cell is not a
+        real inquiry: it is never researched and never drafted. Recording the
+        reason here lets the operator fix the worksheet instead of chasing an
+        obscure downstream conversion failure.
+        """
+
+        event = WorkflowEvent(
+            event_id=_new_id("evt"),
+            inquiry_id=inquiry_id,
+            event_type=EventType.DATA_QUALITY_INVALID_QUANTITY,
+            occurred_at=at,
+            source_module="sheets",
+            reason_code=ReasonCode.INQUIRY_QUANTITY_INVALID,
+        )
+        with _transaction(self.database_path) as connection:
+            connection.execute(
+                "INSERT INTO workflow_v12_inquiry_state "
+                "(inquiry_id, business_state, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(inquiry_id) DO UPDATE SET "
+                "business_state=excluded.business_state, updated_at=excluded.updated_at",
+                (inquiry_id, BusinessState.INVALID_INPUT_SKIPPED.value, _time_text(at)),
+            )
+            _insert_event(connection, event)
+            _raise_alert(
+                connection,
+                alert_id=_new_id("alt"),
+                inquiry_id=inquiry_id,
+                alert_type=AlertType.DATA_QUALITY,
+                reason_code=ReasonCode.INQUIRY_QUANTITY_INVALID,
+                event_id=event.event_id,
+                at=at,
+                deduplicate_by_type=True,
+                scope_key="invalid-quantity",
+            )
+
     def record_customer_snapshot(
         self,
         inquiry_id: str,
@@ -437,6 +476,27 @@ class V12Store:
             )
         return alert_id
 
+    def notification_already_created(
+        self, command_id: str, inquiry_id: str, kind: NotificationKind,
+        recipients: tuple[NotificationRecipient, ...],
+    ) -> bool:
+        """Keep an existing inquiry/kind command immutable; worker owns retries."""
+        with _connect(self.database_path) as connection:
+            command = connection.execute(
+                "SELECT inquiry_id,kind FROM workflow_v12_notification_commands "
+                "WHERE command_id=?", (command_id,),
+            ).fetchone()
+            if command is None or tuple(command) != (inquiry_id, kind.value):
+                return False
+            rows = connection.execute(
+                "SELECT recipient_id,address,outcome FROM workflow_v12_notification_recipients "
+                "WHERE command_id=?", (command_id,),
+            ).fetchall()
+        return bool(rows) and (
+            {row["recipient_id"]: row["address"] for row in rows}
+            == {item.recipient_id: item.address for item in recipients}
+        )
+
     def enqueue_notification(self, command: NotificationCommand) -> None:
         if not command.recipients:
             raise ValueError("notification requires at least one recipient")
@@ -465,16 +525,25 @@ class V12Store:
             )
             inserted = cursor.rowcount == 1
             if not inserted:
+                # Content and recipients are the command's identity; the
+                # creation time is not. An inquiry can legitimately be routed
+                # again -- a failed purchase draft does exactly that -- and the
+                # command id is derived from inquiry+kind, so the second route
+                # re-enqueues the same command with a fresh timestamp. Comparing
+                # that timestamp raised here, before the purchase leg it was
+                # meant to follow, and stopped the whole runtime. The persisted
+                # timestamp is deliberately kept: it records when this
+                # notification was first raised, and delivered recipients stay
+                # delivered.
                 existing = connection.execute(
                     "SELECT inquiry_id, kind, subject, text_body, html_body, "
-                    "created_at, payload_version FROM workflow_v12_notification_commands "
+                    "payload_version FROM workflow_v12_notification_commands "
                     "WHERE command_id=?",
                     (command.command_id,),
                 ).fetchone()
                 expected = (
                     command.inquiry_id, command.kind.value, command.subject,
-                    command.text_body, command.html_body,
-                    _time_text(command.created_at), command.payload_version,
+                    command.text_body, command.html_body, command.payload_version,
                 )
                 if existing is None or tuple(existing) != expected:
                     raise V12DatabaseError("notification command idempotency conflict")
@@ -763,7 +832,9 @@ class V12Store:
                     scope_key="ai-recognition",
                 )
 
-    def begin_save_dispatch(self, inquiry_id: str, *, at: datetime) -> None:
+    def begin_save_dispatch(
+        self, inquiry_id: str, *, at: datetime, save_and_send: bool = False,
+    ) -> None:
         """Persist UNKNOWN before a future dispatch boundary; never dispatches."""
 
         event = WorkflowEvent(
@@ -787,6 +858,11 @@ class V12Store:
                 ),
             )
             _insert_event(connection, event)
+            if save_and_send:
+                _insert_event(connection, WorkflowEvent(
+                    _new_id("evt"), inquiry_id, EventType.SAVE_DISPATCH_ARMED,
+                    at, "inso",
+                ))
             _raise_alert(
                 connection,
                 alert_id=_new_id("alt"), inquiry_id=inquiry_id,
@@ -825,9 +901,14 @@ class V12Store:
         saved_ref = None
         if result.outcome is ReconciliationOutcome.CONFIRMED_SAVED:
             required_fields = {"mpn", "brand", "quantity"}
+            save_and_send = any(event.event_type is EventType.SAVE_DISPATCH_ARMED
+                                for event in self.event_history(inquiry_id))
+            if save_and_send:
+                required_fields = {"mpn", "submission_time", "new_record"}
             if (
                 not _safe_ref(result.saved_record_ref)
                 or result.candidate_count != 1
+                or (save_and_send and not result.authoritative)
                 or not required_fields.issubset(result.verified_fields)
             ):
                 target = PurchaseOutcome.MANUAL_REVIEW
@@ -938,6 +1019,18 @@ class V12Store:
         if row is None:
             raise KeyError(inquiry_id)
         return BusinessState(row["business_state"])
+
+    def duplicate_confirmation_pending(self, inquiry_id: str) -> bool:
+        """Only retry an unresolved lookup, never an already-decided route."""
+        with _connect(self.database_path) as connection:
+            row = connection.execute(
+                "SELECT d.outcome FROM workflow_v12_inquiry_state s "
+                "JOIN workflow_v12_duplicate_results d ON d.inquiry_id=s.inquiry_id "
+                "WHERE s.inquiry_id=? AND s.business_state=? "
+                "ORDER BY d.checked_at DESC, d.rowid DESC LIMIT 1",
+                (inquiry_id, BusinessState.ROUTING.value),
+            ).fetchone()
+        return row is not None and row["outcome"] != DuplicateOutcome.CONFIRMED.value
 
     def order_summary(self, inquiry_id: str) -> OrderSummaryDTO:
         state = self.business_state(inquiry_id)
@@ -1389,6 +1482,7 @@ def _business_label(state: BusinessState) -> BusinessLabel:
         BusinessState.DUPLICATE_STOPPED: BusinessLabel.DUPLICATE_ORDER,
         BusinessState.PURCHASE_EXCEPTION: BusinessLabel.PURCHASE_EXCEPTION,
         BusinessState.PURCHASE_RECORDED: BusinessLabel.PURCHASE_SENT,
+        BusinessState.INVALID_INPUT_SKIPPED: BusinessLabel.SKIPPED_INVALID_INPUT,
     }.get(state, BusinessLabel.PROCESSING)
 
 

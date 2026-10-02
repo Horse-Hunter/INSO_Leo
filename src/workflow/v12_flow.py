@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import html
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -13,9 +14,11 @@ from typing import Protocol
 from src.research import ResearchInput, ResearchResult, ResearchStatus
 from src.sheets import (
     PendingSheetRecord,
+    SheetRecordIdentity,
     WorksheetIdentity,
     WorksheetRowReader,
     query_pending_records,
+    usable_brand,
 )
 
 from .service import ResearchExecutor, WorkflowWorker
@@ -67,7 +70,7 @@ class ResearchFactsProvider(Protocol):
 
 
 class PurchaseDraftWriter(Protocol):
-    """Prepare/recognize a draft only; there is deliberately no save method."""
+    """Prepare a draft; authorized production wiring may submit once."""
 
     def prepare(self, command: PurchaseDraftCommand) -> PurchaseDraftResult: ...
 
@@ -127,6 +130,8 @@ class V12WorkflowCoordinator:
         purchase_writer: PurchaseDraftWriter,
         notification_worker: V12NotificationWorker,
         recipients: tuple[NotificationRecipient, ...],
+        *,
+        stop_requested: Callable[[], bool] | None = None,
     ) -> None:
         self._workflow_store = workflow_store
         self._v12_store = v12_store
@@ -136,6 +141,7 @@ class V12WorkflowCoordinator:
         self._purchase_writer = purchase_writer
         self._notification_worker = notification_worker
         self._recipients = recipients
+        self._stop_requested = stop_requested or (lambda: False)
         self._records: dict[str, PendingSheetRecord] = {}
         self._duplicate_results: dict[str, DuplicateCheckResult] = {}
         self._research_results: dict[str, ResearchResult] = {}
@@ -160,17 +166,48 @@ class V12WorkflowCoordinator:
     def process_pending(
         self, records: tuple[PendingSheetRecord, ...], *, now: datetime
     ) -> tuple[V12FlowResult, ...]:
-        new_ids: list[str] = []
+        enqueued: list[PendingSheetRecord] = []
+        skipped: list[V12FlowResult] = []
+        # Owner rule: a row whose quantity cell is not a number (a column
+        # legend, a blank, a textual placeholder) is not an inquiry. It is held
+        # out of the workflow with its own recorded reason instead of being
+        # researched and drafted, and correcting the worksheet lets it resume
+        # through the normal queue.
+        #
+        # The row is queued before it is held back: V1.2 state, events and
+        # alerts are keyed to the queue's inquiry identity, so a reason can only
+        # be recorded for a row the queue already knows about.
         for record in records:
-            if not self._workflow_store.enqueue(record, now=now):
+            inquiry_id = self._workflow_store.inquiry_id_for(record.record_identity)
+            enqueued_now = self._workflow_store.enqueue(record, now=now)
+            if _quantity_is_numeric(record.quantity):
+                if not enqueued_now and self._is_skipped(inquiry_id):
+                    self._resume_after_input_fix(inquiry_id, record, now=now)
+                if enqueued_now:
+                    enqueued.append(record)
                 continue
-            item = next(
-                item
-                for item in self._workflow_store.all_items()
-                if item.record_identity == record.record_identity
-            )
-            self._records[item.inquiry_id] = record
-            new_ids.append(item.inquiry_id)
+            item = self._workflow_store.get_by_inquiry_id(inquiry_id)
+            demoted = self._workflow_store.mark_skipped_input(item.id, now=now)
+            if demoted and not self._is_skipped(inquiry_id):
+                self._v12_store.skip_invalid_quantity(inquiry_id, at=now)
+            if self._is_skipped(inquiry_id):
+                skipped.append(
+                    self._result(inquiry_id, waiting_reason="INVALID_QUANTITY_SKIPPED")
+                )
+
+        by_row = {
+            _row_key(item.record_identity): item
+            for item in self._workflow_store.all_items()
+        }
+        # A freshly read row supplies the routing facts for a new inquiry and
+        # equally for one that an earlier poll released back to the queue.
+        for record in records:
+            item = by_row.get(_row_key(record.record_identity))
+            if item is not None:
+                self._records[item.inquiry_id] = record
+
+        for record in enqueued:
+            item = by_row[_row_key(record.record_identity)]
             self._set_state(
                 item.inquiry_id,
                 BusinessState.DUPLICATE_CHECK_PENDING,
@@ -186,9 +223,18 @@ class V12WorkflowCoordinator:
 
         wrapped_research = _DuplicateThenResearch(self, now)
         worker = WorkflowWorker(self._workflow_store, wrapped_research)
-        results: list[V12FlowResult] = []
-        remaining = set(new_ids)
-        while remaining:
+        results: list[V12FlowResult] = list(skipped)
+        # The durable queue is the only bound on this drain. Bounding it to the
+        # rows this poll inserted stranded every inquiry an earlier poll had
+        # released (for example while the production INSO session needed manual
+        # handling), so its post-Research routing could never run again.
+        remaining = {
+            item.inquiry_id
+            for item in by_row.values()
+            if item.status.value in {"QUEUED", "RETRY_WAIT"}
+            and not self._is_skipped(item.inquiry_id)
+        }
+        while remaining and not self._stop_requested():
             item = worker.process_due_one(now=now)
             if item is None:
                 break
@@ -198,6 +244,8 @@ class V12WorkflowCoordinator:
             remaining.remove(inquiry_id)
             research_result = self._research_results.get(inquiry_id)
             if item.status.value in {"RETRY_WAIT", "RESEARCHING", "QUEUED"}:
+                if research_result is not None:
+                    self._notify_a_if_nonduplicate(inquiry_id, research_result, now)
                 self._set_state(
                     inquiry_id,
                     BusinessState.RESEARCH_RETRY_WAIT,
@@ -212,6 +260,34 @@ class V12WorkflowCoordinator:
                 )
             elif research_result is not None:
                 results.append(self._route_after_research(inquiry_id, research_result, now))
+        # The existing explicit recovery entry point already knows how to use
+        # persisted Research. Wire it into the normal pending-row poll rather
+        # than requeueing/deleting completed work or researching it again.
+        for record in records:
+            if self._stop_requested():
+                break
+            item = by_row.get(_row_key(record.record_identity))
+            if (
+                item is None or item.status.value != "COMPLETED"
+                or item.record_identity.identifying_snapshot != record.record_identity.identifying_snapshot
+                or not self._v12_store.duplicate_confirmation_pending(item.inquiry_id)
+            ):
+                continue
+            try:
+                confirmed = self._duplicate_checker.check(
+                    item.inquiry_id, item.mpn, int(item.quantity), at=now
+                )
+            except Exception:  # noqa: BLE001 - a failed retry cannot be a negative answer
+                confirmed = None
+            if (
+                isinstance(confirmed, DuplicateCheckResult)
+                and confirmed.inquiry_id == item.inquiry_id
+                and confirmed.outcome is DuplicateOutcome.CONFIRMED
+                and not self._stop_requested()
+            ):
+                results.append(self.confirm_duplicate_and_route(
+                    item.inquiry_id, confirmed, now=now, record=record
+                ))
         return tuple(results)
 
     def confirm_duplicate_and_route(
@@ -305,6 +381,16 @@ class V12WorkflowCoordinator:
     def _route_after_research(
         self, inquiry_id: str, research_result: ResearchResult, now: datetime
     ) -> V12FlowResult:
+        try:
+            previous_purchase = self._v12_store.purchase_state(inquiry_id)
+        except KeyError:
+            pass
+        else:
+            # Repeated polling/recovery must not reopen any existing purchase.
+            return self._result(
+                inquiry_id, purchase_outcome=previous_purchase,
+                waiting_reason="PURCHASE_ALREADY_ATTEMPTED",
+            )
         duplicate_result = self._duplicate_results[inquiry_id]
         route = route_after_research(duplicate_result)
         if route is PostResearchRoute.DUPLICATE_CONFIRMATION_REQUIRED:
@@ -326,11 +412,12 @@ class V12WorkflowCoordinator:
                 duplicate_result=duplicate_result,
             )
             return self._result(inquiry_id, route=route)
+        self._notify_a_if_nonduplicate(inquiry_id, research_result, now)
         if research_result.status not in {ResearchStatus.SUCCESS, ResearchStatus.PARTIAL_SUCCESS}:
             self._set_state(inquiry_id, BusinessState.ROUTING, EventType.IMPORTANT_ORDER_DECIDED, now)
             return self._result(inquiry_id, route=route, waiting_reason="RESEARCH_NOT_SUCCESSFUL")
 
-        record = self._records[inquiry_id]
+        record = self._records.get(inquiry_id) or self._pending_record(inquiry_id)
         facts = self._research_facts.get(inquiry_id)
         tier = _tier(record.importance_raw)
         if facts is None or tier not in {"A", "B", "C"}:
@@ -365,7 +452,7 @@ class V12WorkflowCoordinator:
 
         quantity = _quantity(record.quantity)
         mpn = record.model.strip() if isinstance(record.model, str) else ""
-        brand = research_result.resolved_brand or (record.brand if isinstance(record.brand, str) else "")
+        brand = research_result.resolved_brand or usable_brand(record.brand) or ""
         if quantity is None or not mpn or not brand.strip():
             self._set_state(inquiry_id, BusinessState.PURCHASE_EXCEPTION, EventType.SECURITY_CHECK_FAILED, now, ReasonCode.AI_RECOGNITION_MISMATCH)
             return self._result(inquiry_id, route=route, waiting_reason="PURCHASE_INPUT_INVALID")
@@ -395,18 +482,33 @@ class V12WorkflowCoordinator:
         if result.command_id != command_id or result.outcome not in {
             PurchaseOutcome.AI_RECOGNIZED,
             PurchaseOutcome.VALIDATION_FAILED,
+            PurchaseOutcome.SAVED,
+            PurchaseOutcome.UNKNOWN_WRITE_OUTCOME,
+            PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED,
+            PurchaseOutcome.MANUAL_REVIEW,
         }:
             result = PurchaseDraftResult(
                 command_id, PurchaseOutcome.VALIDATION_FAILED, now,
                 reason_code=ReasonCode.AI_RECOGNITION_MISMATCH,
             )
-        self._v12_store.set_purchase_state(
-            inquiry_id,
-            command_id,
-            result.outcome,
-            at=result.completed_at,
-            reason_code=result.reason_code,
-        )
+        if result.outcome in {PurchaseOutcome.AI_RECOGNIZED, PurchaseOutcome.VALIDATION_FAILED}:
+            self._v12_store.set_purchase_state(
+                inquiry_id, command_id, result.outcome,
+                at=result.completed_at, reason_code=result.reason_code,
+            )
+        elif self._v12_store.purchase_state(inquiry_id) is not result.outcome:
+            raise ValueError("submission outcome is not durably recorded")
+        if result.outcome is PurchaseOutcome.SAVED:
+            self._set_state(
+                inquiry_id, BusinessState.PURCHASE_RECORDED,
+                EventType.PURCHASE_DATA_SAVED, result.completed_at,
+            )
+        elif result.outcome not in {PurchaseOutcome.AI_RECOGNIZED, PurchaseOutcome.VALIDATION_FAILED}:
+            self._set_state(
+                inquiry_id, BusinessState.PURCHASE_EXCEPTION,
+                EventType.SAVE_OUTCOME_UNKNOWN, result.completed_at,
+                ReasonCode.SAVE_OUTCOME_UNKNOWN,
+            )
         if result.outcome is PurchaseOutcome.VALIDATION_FAILED:
             self._set_state(
                 inquiry_id,
@@ -422,6 +524,18 @@ class V12WorkflowCoordinator:
             purchase_outcome=result.outcome,
         )
 
+    def _notify_a_if_nonduplicate(self, inquiry_id, research_result, now) -> None:
+        duplicate = self._duplicate_results.get(inquiry_id)
+        if (duplicate is None or duplicate.outcome is not DuplicateOutcome.CONFIRMED
+                or duplicate.repeated is not False):
+            return
+        record = self._records.get(inquiry_id) or self._pending_record(inquiry_id)
+        if _tier(record.importance_raw) == "A":
+            self._enqueue_notification(
+                inquiry_id, NotificationKind.IMPORTANT_ORDER, research_result, now,
+                facts=self._research_facts.get(inquiry_id), tier="A",
+            )
+
     def _enqueue_notification(
         self,
         inquiry_id: str,
@@ -433,14 +547,26 @@ class V12WorkflowCoordinator:
         tier: str | None = None,
         duplicate_result: DuplicateCheckResult | None = None,
     ) -> None:
-        record = self._records[inquiry_id]
+        # Resolve the row exactly like routing does: the durable queue, not this
+        # poll's Sheet snapshot, decides what is processed, so an inquiry can
+        # legitimately reach notification without a fresh row in ``_records``.
+        # Indexing ``_records`` directly turned that into a KeyError that stopped
+        # the whole runtime.
+        command_id = _command_id(inquiry_id, kind.value.lower())
+        if self._v12_store.notification_already_created(
+            command_id, inquiry_id, kind, self._recipients,
+        ):
+            # Preserve original content through research retries; the delivery
+            # worker alone retries pending recipients and never resends SENT.
+            return
+        record = self._records.get(inquiry_id) or self._pending_record(inquiry_id)
         if facts is None:
             facts = self._research_facts.get(inquiry_id)
         subject, body = _notification_content(
             kind, record, research_result, facts, tier, duplicate_result
         )
         command = NotificationCommand(
-            _command_id(inquiry_id, kind.value.lower()),
+            command_id,
             inquiry_id,
             kind,
             self._recipients,
@@ -450,6 +576,37 @@ class V12WorkflowCoordinator:
             now,
         )
         self._v12_store.enqueue_notification(command)
+
+    def _is_skipped(self, inquiry_id: str) -> bool:
+        """Report whether this inquiry is currently held out of the workflow."""
+
+        try:
+            state = self._v12_store.business_state(inquiry_id)
+        except KeyError:
+            return False
+        return state is BusinessState.INVALID_INPUT_SKIPPED
+
+    def _resume_after_input_fix(
+        self, inquiry_id: str, record: PendingSheetRecord, *, now: datetime
+    ) -> None:
+        """Re-open an inquiry whose worksheet row became valid again.
+
+        The earlier skip was a data problem, not a business failure, so the row
+        returns to the queue with its retry budget intact.
+        """
+
+        try:
+            item = self._workflow_store.get_by_inquiry_id(inquiry_id)
+        except KeyError:
+            pass
+        else:
+            self._workflow_store.revive_item(item.id, record, now=now)
+        self._set_state(
+            inquiry_id,
+            BusinessState.QUEUED,
+            EventType.HUMAN_RESOLUTION_RECORDED,
+            now,
+        )
 
     def _set_state(
         self,
@@ -512,6 +669,21 @@ def _tier(value: object) -> str | None:
     return normalized if normalized in {"A", "B", "C"} else None
 
 
+def _quantity_is_numeric(value: object) -> bool:
+    """Report whether a worksheet quantity cell holds a number at all.
+
+    Owner rule: only a cell that is *not* a number is invalid input and is
+    skipped. This deliberately does not reuse :func:`_quantity`, which also
+    rejects zero and negatives; those keep their existing downstream handling.
+    """
+
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    return isinstance(value, str) and value.strip().isdecimal()
+
+
 def _quantity(value: object) -> int | None:
     if isinstance(value, bool):
         return None
@@ -521,6 +693,16 @@ def _quantity(value: object) -> int | None:
         parsed = int(value.strip())
         return parsed if parsed > 0 else None
     return None
+
+
+def _row_key(identity: SheetRecordIdentity) -> tuple[str, str, int]:
+    """Match the store's own uniqueness key, not the mutable cell snapshot."""
+
+    return (
+        identity.worksheet.spreadsheet,
+        identity.worksheet.worksheet,
+        identity.row_position,
+    )
 
 
 def _command_id(inquiry_id: str, purpose: str) -> str:

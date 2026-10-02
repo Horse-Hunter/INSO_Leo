@@ -9,8 +9,9 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import ClassVar
 from urllib.parse import urlsplit
 from urllib.request import urlopen
 
@@ -27,18 +28,74 @@ class BrowserBootstrapError(RuntimeError):
 
 @dataclass
 class BrowserHandle:
+    """A CDP attachment whose Playwright client is bound to one thread.
+
+    Playwright's synchronous API binds its client to the greenlet of the thread
+    that called ``sync_playwright().start()``. Stopping it from any other thread
+    raises ``greenlet.error: Cannot switch to a different thread``. That matters
+    here because the production runtime starts the client on the poller thread
+    (the V1.2 duplicate check prepares the session first) and releases the idle
+    session from the worker thread.
+
+    A failed stop is unrecoverable -- ``disconnect`` has already dropped its
+    reference -- and it orphans the Playwright driver process, which was measured
+    at ~126 MB per idle-release cycle. The handle therefore records its owning
+    thread and parks the client for that thread to stop, instead of stopping it
+    from whatever thread happens to release the session.
+    """
+
     owned: bool
     process: object | None = None
     close_fn: Callable[[], None] | None = None
     cleanup_fn: Callable[[], None] | None = None
     playwright: object | None = None
     browser: object | None = None
+    _owner_thread: int = field(default=0, repr=False, compare=False)
+
+    # Clients released by a thread that does not own them, keyed by the thread
+    # that must stop them. Class-level so the parking survives the handle being
+    # dropped, and so any runtime loop can drain its own entries.
+    _deferred_stops: ClassVar[dict[int, list[object]]] = {}
+    _deferred_stops_lock: ClassVar[threading.Lock] = threading.Lock()
+
+    def __post_init__(self) -> None:
+        self._owner_thread = threading.get_ident()
 
     def disconnect(self) -> None:
         playwright, self.playwright = self.playwright, None
         self.browser = None
-        if playwright is not None:
+        if playwright is None:
+            return
+        if threading.get_ident() == self._owner_thread:
             playwright.stop()
+            return
+        type(self)._defer_stop(self._owner_thread, playwright)
+
+    @classmethod
+    def drain_deferred_stops(cls) -> int:
+        """Stop clients that were released by a thread that does not own them.
+
+        Safe from any thread: only entries owned by the caller are stopped, so a
+        runtime loop can call this freely. A foreign stop is exactly the
+        ``greenlet.error`` this parking exists to avoid.
+        """
+
+        owner = threading.get_ident()
+        with cls._deferred_stops_lock:
+            pending = cls._deferred_stops.pop(owner, [])
+        stopped = 0
+        for playwright in pending:
+            try:
+                playwright.stop()
+                stopped += 1
+            except Exception as exc:  # noqa: BLE001 - classify only within deadline
+                _LOG.debug("Deferred Playwright stop failed (%s)", type(exc).__name__)
+        return stopped
+
+    @classmethod
+    def _defer_stop(cls, owner: int, playwright: object) -> None:
+        with cls._deferred_stops_lock:
+            cls._deferred_stops.setdefault(owner, []).append(playwright)
 
     def close(self) -> None:
         try:
@@ -189,6 +246,60 @@ def _close_owned_process(process, cdp_url: str) -> None:
             process.wait(timeout=5)
 
 
+def _reap_failed_launch(process: object) -> None:
+    """Terminate only a just-launched, never-ready Chrome process tree.
+
+    This never addresses the CDP endpoint, so it can never touch an unrelated
+    (for example, already authenticated) browser that may serve the same port.
+    """
+
+    try:
+        if process.poll() is None:
+            if os.name == "nt" and getattr(process, "pid", None) is not None:
+                subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+            else:
+                process.terminate()
+        process.wait(timeout=10)
+    except Exception:  # noqa: BLE001 - expose only the stable reason code
+        return
+
+
+def _snapshot_session_cookies(browser: object, profile: Path) -> None:
+    """Best-effort refresh of the protected session backup next to the profile.
+
+    The profile is the only irreplaceable asset in this system (the Owner will
+    not supply another INSO SMS code), so every successful attach refreshes a
+    plaintext cookie snapshot beside it. Failures here must never be fatal.
+    """
+
+    try:
+        contexts = tuple(getattr(browser, "contexts", ()) or ())
+        if not contexts:
+            return
+        cookies = [
+            cookie
+            for cookie in contexts[0].cookies()
+            if "alperp" in (cookie.get("domain") or "")
+        ]
+        if not cookies:
+            return
+        backup_dir = Path(profile).parent / "session-backup"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        target = backup_dir / "inso-cookies-latest.json"
+        target.write_text(
+            json.dumps(cookies, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        _LOG.info("Session cookie backup refreshed at %s", target)
+    except Exception:  # noqa: BLE001 - expose only the stable reason code
+        return
+
+
 def _read_cdp_version(cdp_url: str) -> str | None:
     """Return the advertised websocket endpoint, or None until CDP is ready."""
 
@@ -309,6 +420,10 @@ def acquire_cdp_browser(
             wait=wait,
             monotonic=monotonic,
         )
+        raw_attach = config.get("browser_bootstrap")
+        if isinstance(raw_attach, Mapping) and raw_attach.get("persistent_session") is True:
+            profile_attach = resolve_app_path(str(raw_attach["profile_dir"]), root=app_root)
+            _snapshot_session_cookies(browser, profile_attach)
         return BrowserHandle(owned=False, playwright=playwright, browser=browser)
     if probe is not None and probe(cdp_url):
         # A listener without a valid DevTools endpoint may belong to another
@@ -333,15 +448,31 @@ def acquire_cdp_browser(
         or not 0 < timeout <= 180
     ):
         raise BrowserBootstrapError("approved Chrome executable/profile/port is unavailable")
+    # The shared INSO session profile is irreplaceable: it holds the Owner's
+    # authenticated cookies (including the multi-day SMS-verification memory).
+    # Starting a blank profile would silently demand a new SMS code, so refuse.
+    persistent = raw.get("persistent_session") is True
+    if persistent and not (profile / "Default").is_dir():
+        _LOG.error(
+            "Refusing to start a blank CDP profile; the protected session profile "
+            "at %s has no Default/ directory",
+            profile,
+        )
+        raise BrowserBootstrapError("protected CDP session profile is missing")
     try:
         process = launch(executable, profile, port)
     except Exception as exc:
         raise BrowserBootstrapError("approved Chrome failed to launch") from exc
     handle = BrowserHandle(
-        owned=True,
+        # A persistent session must outlive this process: never take ownership,
+        # and never install the window hider, so no shutdown path can stop the
+        # browser or drop the in-use session.
+        owned=not persistent,
         process=process,
-        close_fn=lambda: _close_owned_process(process, cdp_url),
-        cleanup_fn=_start_owned_window_hider(process),
+        close_fn=(
+            None if persistent else (lambda: _close_owned_process(process, cdp_url))
+        ),
+        cleanup_fn=None if persistent else _start_owned_window_hider(process),
     )
     try:
         handle.playwright, handle.browser = wait_for_cdp_ready(
@@ -355,10 +486,13 @@ def acquire_cdp_browser(
         )
         exists, port_matches = _devtools_active_port_status(profile, port)
         _LOG.info(
-            "CDP ready; DevToolsActivePort exists=%s port_matches=%s",
+            "CDP ready; DevToolsActivePort exists=%s port_matches=%s persistent=%s",
             exists,
             port_matches,
+            persistent,
         )
+        if persistent:
+            _snapshot_session_cookies(handle.browser, profile)
         return handle
     except BrowserBootstrapError:
         exists, port_matches = _devtools_active_port_status(profile, port)
@@ -368,6 +502,10 @@ def acquire_cdp_browser(
             port_matches,
         )
         handle.close()
+        if persistent:
+            # The process we just launched never served CDP, so it cannot be the
+            # authenticated session holder. Reap only that fresh, unused process.
+            _reap_failed_launch(process)
         raise
     except Exception:  # noqa: BLE001 - expose only the stable reason code
         handle.close()

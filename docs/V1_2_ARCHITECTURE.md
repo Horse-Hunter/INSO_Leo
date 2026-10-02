@@ -33,6 +33,11 @@ Sheets
   → AI 校验
   → 保存数据（仅在 Write Gate 打开后）
   → GUI “已发采购单”
+
+数据异常（数量单元格不是数字）：
+  → 跳过并记明确原因（`INVALID_INPUT_SKIPPED` / `INQUIRY_QUANTITY_INVALID`）
+  → GUI “已跳过（数据异常）”
+  → 不发起 Research、不进入采购、不消耗重试预算
 ```
 
 Duplicate lookup 技术失败不阻止 Research，但在 duplicate 未确认前不得进入采购。
@@ -40,6 +45,7 @@ Duplicate lookup 技术失败不阻止 Research，但在 duplicate 未确认前�
 ## 3. 重复检查
 
 - 数据源：INSO 历史，rolling 168h，Asia/Shanghai，下界 inclusive。
+- 历史区域按 Owner 2026-10-02 订正为下方「采临时询价」/ `Stock_VenQuote`，不使用上方业务询价 `List_Detail`；复用现有原生历史读取与 Workflow 判断。制单人为下方 `UserName`，全部分页必须完整核验。
 - 型号：`dup-mpn-v1` = NFKC + outer trim + ASCII uppercase；内部标点/分隔符/空格保持原样；禁止 fuzzy。
 - 取最新一条同型号记录；数量仅做 equality 展示/判断。
 - latest timestamp 并列时，仅可用已证明稳定的 INSO record id；否则 `AMBIGUOUS`。
@@ -87,7 +93,7 @@ AI 输入：
 
 保存前必须验证：
 - MPN：`ai-mpn-v1` canonical exact；
-- Brand：trim-only exact；
+- Brand：`ai-brand-v1` 部分匹配（NFKC + 折叠空白 + 大小写不敏感 + 互相包含；空值 fail closed）；
 - Qty：整数 exact；
 - parent form read-back 与预览一致。
 
@@ -101,6 +107,10 @@ AI 输入：
 - active alerts。
 
 SQLite 只做 additive migration；V1.1 表不 drop/rewrite。首次迁移前做 timestamped、校验通过的 SQLite backup。禁止自动 downgrade/drop。
+
+重启语义：`RESEARCHING` 只能由持有 claim 的存活进程写入（claim 与结果写入在同一次 worker 调用内完成），因此启动时仍为 `RESEARCHING` 的行必属中断残留。启动在任何 worker 之前将其释放回 `QUEUED`（Research 只读，重排安全），否则 `claim_due` 永不再认领该行，inquiry 会永久卡死。
+
+数据异常跳过不消耗重试预算，且表格修正后该 inquiry 自动恢复；恢复时从 worksheet 刷新队列快照，避免用被拒的旧数量继续执行。
 
 完整 runtime evidence 放 Git-ignored `runtime/evidence/<inquiry_id>/`。需要独立 Review 的 live acceptance 同时在 Control Room 保存脱敏摘要，只包含安全布尔值、计数和 identity/read-back 检查结果；不得包含 credentials、cookies、业务值或 raw page dumps。默认 30 天保留策略；初版不自动删除。
 
@@ -126,12 +136,15 @@ SQLite 只做 additive migration；V1.1 表不 drop/rewrite。首次迁移前做
 - post-write read-back；
 - unknown outcome 不自动重试。
 
-唯一可能授权的最终动作：`保存数据`。
+Owner 2026-10-02 明确例外：最终客临时询价表单「保存并发送」可在完整草稿
+校验及持久化 UNKNOWN 后单次提交；五秒后复用上方原生查询，确认同型号、
+本次时间且不同于提交前首行的新记录。Owner 确认上方按时间倒序，仅检查
+首页最上面一行，不要求历史全部位于一页。Executor 不执行此步骤的测试或重启上线，
+交 Owner Review 后由 Owner 下一笔真订单首次验证。单独「保存」仍关闭。
 
 始终禁止：
-- `保存并发送`
 - `发送`
 - 修改历史记录
 - 未列入 allowlist 的写入
 
-CEO/Safety 在首次真实 Save 前做独立 Gate Review。
+本次最终提交源码由 Owner 亲自 Review；不宣称最终发送已实测通过。

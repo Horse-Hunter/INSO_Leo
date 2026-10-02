@@ -80,6 +80,7 @@ def make_lease(
     context_id: str = "context-a",
     cycle_drained=lambda _cycle_id: True,
     shell_valid=lambda page: page.valid,
+    owns_operation_page: bool = False,
 ):
     browser = FakeBrowser()
     context = FakeContext("browser-a", context_id)
@@ -95,6 +96,7 @@ def make_lease(
         operation_page_identity=PageIdentity(context_id, "verified-shell"),
         identity_probe=FakeIdentityProbe(),
         operation_page_is_valid=shell_valid,
+        owns_operation_page=owns_operation_page,
         cycle_id="cycle-1",
         cycle_is_drained=cycle_drained,
     )
@@ -102,6 +104,8 @@ def make_lease(
 
 
 def test_reused_lease_uses_existing_shell_and_never_closes_any_page() -> None:
+    """A shell we did not open is leased and left exactly as it was found."""
+
     lease, browser, context, shell = make_lease(BrowserOwnership.REUSED)
     unrelated = context.pages[1]
     original_page_count = len(context.pages)
@@ -116,6 +120,42 @@ def test_reused_lease_uses_existing_shell_and_never_closes_any_page() -> None:
     assert not shell.is_closed()
     assert not unrelated.is_closed()
     assert browser.close_count == 0
+    assert lease.state is LeaseState.RELEASED
+
+
+def test_reused_lease_gives_back_the_shell_tab_this_process_opened() -> None:
+    """Owner rule (2026-10-01): close what we opened, keep what we did not.
+
+    The next entry reopens the ERP and logs in again, so nothing is lost by
+    handing the tab back -- and a shell left behind is what later looked like an
+    authenticated page while its session was already dead.
+    """
+
+    lease, browser, context, shell = make_lease(
+        BrowserOwnership.REUSED, owns_operation_page=True
+    )
+    unrelated = context.pages[1]
+
+    lease.close_after_drain()
+
+    assert shell.is_closed() is True
+    assert unrelated.is_closed() is False
+    assert browser.close_count == 0, "the Owner's browser always stays open"
+    assert lease.state is LeaseState.RELEASED
+
+
+def test_a_failing_page_close_never_blocks_the_release() -> None:
+    lease, _browser, _context, shell = make_lease(
+        BrowserOwnership.REUSED, owns_operation_page=True
+    )
+
+    def explode() -> None:
+        raise RuntimeError("target already gone")
+
+    shell.close = explode  # type: ignore[method-assign]
+
+    lease.close_after_drain()
+
     assert lease.state is LeaseState.RELEASED
 
 

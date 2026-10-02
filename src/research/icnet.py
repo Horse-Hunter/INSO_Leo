@@ -11,10 +11,19 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from html.parser import HTMLParser
 from ipaddress import ip_address
+from time import monotonic, sleep
 from typing import Protocol
 from urllib.parse import quote, urlsplit
 
 from .cdp_pages import new_background_page
+from .site_login import (
+    REJECTED_PASSWORD_TEXT,
+    LoginForm,
+    SiteLoginError,
+    await_login_outcome,
+    element_is_visible,
+    submit_login_form,
+)
 from .source_contracts import (
     EvidenceField,
     ResearchSource,
@@ -28,6 +37,21 @@ ICNET_SITE_ID = "ic.net.cn"
 ICNET_HOME_URL = "https://www.ic.net.cn/"
 ICNET_LOGIN_URL = "https://member.ic.net.cn/login.php"
 ICNET_USER_AGENT = "INSO-Leo-Research/1.0 (read-only IC.net adapter)"
+
+#: IC.net's ordinary member form. Its captcha is checked after submitting,
+#: because the site only reveals ``#loginCode`` once it distrusts the attempt.
+ICNET_LOGIN_FORM = LoginForm(
+    username="#username",
+    password="#password",
+    submit="#btn_login",
+    rejection=REJECTED_PASSWORD_TEXT,
+)
+
+
+def icnet_login_page_open(page: object) -> bool:
+    """Settle predicate: has IC.net's own script carried us off the form?"""
+
+    return _is_icnet_login_url(getattr(page, "url", "") or "")
 
 
 
@@ -455,28 +479,14 @@ class PlaywrightIcNetClient:
                         wait_until="domcontentloaded",
                         timeout=self._timeout_ms,
                     )
-                    for selector in ("#username", "#password", "#btn_login"):
-                        page.wait_for_selector(
-                            selector,
-                            state="visible",
-                            timeout=self._timeout_ms,
+                    try:
+                        ensure_icnet_signed_in(
+                            page,
+                            login=login,
+                            timeout_ms=self._timeout_ms,
                         )
-                    username = page.locator("#username")
-                    password = page.locator("#password")
-                    login_button = page.locator("#btn_login")
-                    if not all(
-                        locator.count() == 1 for locator in (username, password, login_button)
-                    ):
-                        raise IcNetPageUnavailable("LOGIN_FORM_UNAVAILABLE")
-                    username.fill(login.username)
-                    password.fill(login.password)
-                    login_button.click()
-                    page.wait_for_timeout(3_000)
-                    captcha = page.locator("#loginCode")
-                    if captcha.count() and captcha.is_visible():
-                        raise IcNetPageUnavailable("INTERACTIVE_CHALLENGE_REQUIRED")
-                    if "login.php" in page.url.casefold():
-                        raise IcNetPageUnavailable("LOGIN_NOT_CONFIRMED")
+                    except SiteLoginError as error:
+                        raise IcNetPageUnavailable(error.reason_code) from None
 
                     page.goto(
                         ICNET_HOME_URL,
@@ -575,86 +585,89 @@ class CdpIcNetClient:
                 if not browser.contexts:
                     raise IcNetPageUnavailable("CDP_CONTEXT_UNAVAILABLE")
                 context = browser.contexts[0]
-                pages = list(context.pages)
-                exact_pages = [
-                    page
-                    for page in pages
-                    if page.url.rstrip("/").casefold()
-                    == target_url.rstrip("/").casefold()
-                ]
-
-                if not self._navigate:
+                if self._navigate:
+                    # Owner rule (2026-10-01): every call opens its own tab,
+                    # makes sure it is signed in, does its work, and gives the
+                    # tab back. Reusing an earlier call's tab is what let a
+                    # stale document look like a fresh answer.
+                    page = new_background_page(
+                        browser, context, timeout_ms=self._timeout_ms
+                    )
+                    owned = True
+                else:
+                    exact_pages = [
+                        candidate
+                        for candidate in context.pages
+                        if candidate.url.rstrip("/").casefold()
+                        == target_url.rstrip("/").casefold()
+                    ]
                     if not exact_pages:
                         raise IcNetPageUnavailable("CDP_TARGET_PAGE_NOT_OPEN")
                     page = exact_pages[0]
-                else:
-                    icnet_pages = [
-                        page
-                        for page in pages
-                        if _is_icnet_url(page.url)
-                    ]
-                    if exact_pages:
-                        page = exact_pages[0]
-                    elif icnet_pages:
-                        page = icnet_pages[0]
-                    else:
-                        page = new_background_page(
-                            browser, context, timeout_ms=self._timeout_ms
-                        )
-                    if self._last_navigation_at is not None:
-                        remaining = self._min_interval_seconds - (
-                            time.monotonic() - self._last_navigation_at
-                        )
-                        if remaining > 0:
-                            time.sleep(remaining)
-                    self._last_navigation_at = time.monotonic()
-                    response = page.goto(
-                        target_url,
-                        wait_until="domcontentloaded",
-                        timeout=self._timeout_ms,
-                    )
-                    if _is_icnet_login_url(page.url):
-                        self._restore_session(page)
+                    owned = False
+
+                try:
+                    response = None
+                    if owned:
+                        if self._last_navigation_at is not None:
+                            remaining = self._min_interval_seconds - (
+                                time.monotonic() - self._last_navigation_at
+                            )
+                            if remaining > 0:
+                                time.sleep(remaining)
+                        self._last_navigation_at = time.monotonic()
                         response = page.goto(
                             target_url,
                             wait_until="domcontentloaded",
                             timeout=self._timeout_ms,
                         )
-                    page.wait_for_load_state(
-                        "load",
-                        timeout=self._timeout_ms,
-                    )
-                    page.wait_for_timeout(self._settle_ms)
+                        if _is_icnet_login_url(page.url):
+                            # A login wall is a session problem to solve, never
+                            # a business answer.
+                            self._restore_session(page)
+                            response = page.goto(
+                                target_url,
+                                wait_until="domcontentloaded",
+                                timeout=self._timeout_ms,
+                            )
+                        page.wait_for_load_state(
+                            "load",
+                            timeout=self._timeout_ms,
+                        )
+                        page.wait_for_timeout(self._settle_ms)
 
-                current_url = page.url
-                status = getattr(response, "status", None) if self._navigate else None
-                if isinstance(status, int) and status >= 400:
-                    raise IcNetPageUnavailable(
-                        f"HTTP_STATUS_{status}",
+                    current_url = page.url
+                    status = getattr(response, "status", None)
+                    if isinstance(status, int) and status >= 400:
+                        raise IcNetPageUnavailable(
+                            f"HTTP_STATUS_{status}",
+                            current_url,
+                        )
+                    if page.locator("body").count() == 0:
+                        raise IcNetPageUnavailable(
+                            "RESULT_PAGE_BLOCKED",
+                            current_url,
+                        )
+                    visible_text = page.locator("body").inner_text()
+                    if "您的速度太快了" in visible_text:
+                        raise IcNetPageUnavailable(
+                            "INTERACTIVE_CHALLENGE_REQUIRED",
+                            current_url,
+                        )
+                    expected_path = f"/search/{quote(mpn, safe='')}.html"
+                    if expected_path.casefold() not in current_url.casefold():
+                        raise IcNetPageUnavailable(
+                            "RESULT_NAVIGATION_FAILED",
+                            current_url,
+                        )
+                    return IcNetPage(
+                        page.content(),
                         current_url,
+                        datetime.now(UTC),
                     )
-                if page.locator("body").count() == 0:
-                    raise IcNetPageUnavailable(
-                        "RESULT_PAGE_BLOCKED",
-                        current_url,
-                    )
-                visible_text = page.locator("body").inner_text()
-                if "您的速度太快了" in visible_text:
-                    raise IcNetPageUnavailable(
-                        "INTERACTIVE_CHALLENGE_REQUIRED",
-                        current_url,
-                    )
-                expected_path = f"/search/{quote(mpn, safe='')}.html"
-                if expected_path.casefold() not in current_url.casefold():
-                    raise IcNetPageUnavailable(
-                        "RESULT_NAVIGATION_FAILED",
-                        current_url,
-                    )
-                return IcNetPage(
-                    page.content(),
-                    current_url,
-                    datetime.now(UTC),
-                )
+                finally:
+                    if owned:
+                        page.close()
         except IcNetPageUnavailable:
             raise
         except timeout_error as error:
@@ -669,27 +682,27 @@ class CdpIcNetClient:
             ) from error
 
     def _restore_session(self, page: object) -> None:
-        """Perform one ordinary Vault-backed login in the attached Chrome page."""
+        """Perform one ordinary Vault-backed login in the attached Chrome page.
+
+        Typing, the challenge refusal and the settle wait all come from the
+        shared implementation so one fix reaches every source.
+        """
 
         if self._login_provider is None:
             raise IcNetPageUnavailable("LOGIN_REQUIRED")
         login = self._login_provider.get_login(ICNET_SITE_ID)
         if login is None:
             raise IcNetPageUnavailable("LOGIN_REQUIRED")
-        username = page.locator("#username")  # type: ignore[attr-defined]
-        password = page.locator("#password")  # type: ignore[attr-defined]
-        submit = page.locator("#btn_login")  # type: ignore[attr-defined]
-        if not all(locator.count() == 1 for locator in (username, password, submit)):
-            raise IcNetPageUnavailable("LOGIN_FORM_UNAVAILABLE")
-        username.fill(login.username)
-        password.fill(login.password)
-        submit.click()
-        page.wait_for_timeout(3_000)  # type: ignore[attr-defined]
-        captcha = page.locator("#loginCode")  # type: ignore[attr-defined]
-        if captcha.count() and captcha.is_visible():
-            raise IcNetPageUnavailable("INTERACTIVE_CHALLENGE_REQUIRED")
-        if _is_icnet_login_url(page.url):  # type: ignore[attr-defined]
-            raise IcNetPageUnavailable("LOGIN_NOT_CONFIRMED")
+        try:
+            ensure_icnet_signed_in(
+                page,
+                login=login,
+                timeout_ms=self._timeout_ms,
+            )
+        except SiteLoginError as error:
+            raise IcNetPageUnavailable(
+                error.reason_code, page.url  # type: ignore[attr-defined]
+            ) from None
 
 
 def _is_icnet_login_url(url: str) -> bool:
@@ -699,6 +712,44 @@ def _is_icnet_login_url(url: str) -> bool:
         and parsed.hostname.casefold() == "member.ic.net.cn"
         and parsed.path.casefold().endswith("/login.php")
     )
+
+
+def ensure_icnet_signed_in(
+    page: object,
+    *,
+    login: IcNetLogin | None,
+    timeout_ms: int,
+    wait: Callable[[float], None] = sleep,
+    clock: Callable[[], float] = monotonic,
+) -> None:
+    """Complete one ordinary IC.net member login on a page parked on its form.
+
+    The site reveals ``#loginCode`` only after it distrusts an attempt, so that
+    control is checked *after* the submit and reported as the human-only
+    challenge it is. Fails closed with a :class:`SiteLoginError`; the caller
+    decides what a given reason code means.
+    """
+
+    if login is None:
+        raise SiteLoginError("CREDENTIALS_UNAVAILABLE")
+    submit_login_form(
+        page,
+        form=ICNET_LOGIN_FORM,
+        login=login,
+        timeout_ms=timeout_ms,
+    )
+    await_login_outcome(
+        page,
+        form=ICNET_LOGIN_FORM,
+        is_login_page=icnet_login_page_open,
+        timeout_ms=timeout_ms,
+        wait=wait,
+        clock=clock,
+    )
+    if element_is_visible(page, "#loginCode"):
+        raise SiteLoginError("MANUAL_VERIFICATION_REQUIRED")
+    if _is_icnet_login_url(page.url):  # type: ignore[attr-defined]
+        raise SiteLoginError("LOGIN_NOT_CONFIRMED")
 
 
 class IcNetAdapter:

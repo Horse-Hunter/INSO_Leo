@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -14,6 +15,11 @@ def app_root(*, module_file: str | Path | None = None, frozen: bool | None = Non
     if is_frozen:
         exe = Path(executable) if executable is not None else Path(sys.executable)
         return exe.resolve().parent
+    runtime_root = os.environ.get("INSO_RUNTIME_ROOT")
+    if runtime_root:
+        candidate = Path(runtime_root).expanduser()
+        if candidate.is_dir():
+            return candidate.resolve()
     source = Path(module_file) if module_file is not None else Path(__file__)
     return source.resolve().parents[2]
 

@@ -27,7 +27,7 @@ import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Protocol
 from urllib.parse import parse_qs, urlsplit
@@ -64,6 +64,31 @@ RESULT_MODEL_CELL_SELECTOR = "td:nth-child(9)"
 RESULT_QUANTITY_CELL_SELECTOR = "td:nth-child(11)"
 RESULT_TIMESTAMP_CELL_SELECTOR = "td:nth-child(14)"
 
+#: Condition the grid must satisfy before a settlement snapshot is taken.
+#:
+#: The response settles the *request*; the grid still has to prove it
+#: *rendered*. layui rebuilds the table body and its pager asynchronously, so a
+#: snapshot taken the instant the response arrives can legitimately read a
+#: half-drawn grid. This predicate is evaluated by ``wait_for_function`` -- a
+#: condition wait, never a fixed sleep -- and is only a gate: the snapshot
+#: checks below still decide, and still fail closed if the grid never agrees.
+_GRID_RENDERED_PREDICATE = """expected => {
+    const rows = [...document.querySelectorAll('#_id_dg tr')]
+        .filter(row => /_Main$/.test(row.id));
+    const cache = window.table && window.table.cache && window.table.cache.dg;
+    const ids = Array.isArray(cache) ? cache.map(row => String(row.BillID || '')) : null;
+    if (ids === null) return false;
+    if (expected.rows === 0) {
+        return ids.length === 0 && rows.length === 0;
+    }
+    if (ids.length !== expected.rows || rows.length !== expected.rows) {
+        return false;
+    }
+    return !!document.querySelector('.layui-laypage-count')
+        && !!document.querySelector(
+            '#_id_dg + .layui-table-page select, .layui-laypage select');
+}"""
+
 
 def _empty_settlement_evidence() -> dict[str, object]:
     """Status-only evidence for one exact-query settlement attempt."""
@@ -93,7 +118,9 @@ def _empty_settlement_evidence() -> dict[str, object]:
         "PAGINATION_PAGE_SIZE": None,
         "PAGINATION_TOTAL_COUNT": None,
         "RESULT_SET_COMPLETE": None,
+        "FIRST_PAGE_SETTLED": None,
         "FAILED_STAGE": None,
+        "GRID_RENDERED": None,
     }
 
 #: A detail link calls ``Bill_View_Open(<numeric>)``. The numeric argument is a
@@ -289,6 +316,7 @@ class InsoDuplicateHistoryReader:
         detail_bill_id_selector: str = DETAIL_BILL_ID_SELECTOR,
         response_fields: DuplicateHistoryResponseFields | None = None,
         clock: Callable[[], datetime] | None = None,
+        procurement_history: bool = False,
     ) -> None:
         parsed = urlsplit(list_url)
         if parsed.scheme != "https" or not parsed.hostname:
@@ -297,14 +325,24 @@ class InsoDuplicateHistoryReader:
         self._operation_access = operation_access
         self._timeout_ms = timeout_ms
         self._detail_bill_id_selector = detail_bill_id_selector
-        self._response_fields = response_fields or DuplicateHistoryResponseFields()
+        self._procurement_history = procurement_history
+        self._response_fields = response_fields or (
+            DuplicateHistoryResponseFields(
+                bill_id="id", quoted_at="CreateTime", creator="UserName",
+                inso_quote="InPrice", currency="CurrencyID",
+            ) if procurement_history else DuplicateHistoryResponseFields()
+        )
         self._clock = clock or (lambda: datetime.now(UTC))
 
     @property
     def list_url(self) -> str:
         return f"{self._list_url}{BUSINESS_INQUIRY_LIST_PATH}"
 
-    def read(self, search_value: str) -> DuplicateHistoryCapture:
+    @property
+    def procurement_history(self) -> bool:
+        return self._procurement_history
+
+    def read(self, search_value: str, *, since: datetime | None = None) -> DuplicateHistoryCapture:
         """Search one exact model value and return its verified records.
 
         ``search_value`` is searched verbatim; the caller supplies the canonical
@@ -321,11 +359,13 @@ class InsoDuplicateHistoryReader:
         try:
             with access.operation_page() as operation_page:
                 if hasattr(operation_page, "shell_frame"):
-                    live_page = PlaywrightDuplicateHistoryPage(
-                        operation_page.shell_frame, timeout_ms=self._timeout_ms
+                    page_type = (
+                        PlaywrightProcurementHistoryPage if self._procurement_history
+                        else PlaywrightDuplicateHistoryPage
                     )
+                    live_page = page_type(operation_page.shell_frame, timeout_ms=self._timeout_ms)
                     payload = live_page.query_exact_response(target)
-                    records = self._records_from_response(payload)
+                    records = self._records_from_response(payload, since=since)
                 else:
                     # Deterministic fake/page adapters can keep the narrow
                     # DuplicateHistoryPage test seam.
@@ -349,7 +389,7 @@ class InsoDuplicateHistoryReader:
         return DuplicateHistoryCapture(target, records, url, self._clock())
 
     def _records_from_response(
-        self, payload: dict[str, object]
+        self, payload: dict[str, object], *, since: datetime | None = None
     ) -> tuple[DuplicateHistoryRecord, ...]:
         rows = payload.get("rows")
         fields = self._response_fields
@@ -375,6 +415,12 @@ class InsoDuplicateHistoryReader:
                 seen_bill_ids.add(bill_id)
                 quantity_text = str(row.get(fields.quantity, ""))
                 quoted_at_text = str(row.get(fields.quoted_at, ""))
+                quoted_at = _parse_inso_timestamp(quoted_at_text)
+                # The caller owns the history window. Older records have been
+                # fully fetched/verified but are not quantity/creator inputs to
+                # this read window. Invalid relevant quantities still fail closed.
+                if since is not None and quoted_at < since:
+                    continue
                 quote_raw = row.get(fields.inso_quote) if fields.inso_quote else None
                 currency_raw = row.get(fields.currency) if fields.currency else None
                 creator_raw = row.get(fields.creator) if fields.creator else None
@@ -382,8 +428,11 @@ class InsoDuplicateHistoryReader:
                     DuplicateHistoryRecord(
                         bill_id=bill_id,
                         mpn=mpn,
-                        quantity=_parse_quantity(quantity_text),
-                        quoted_at=_parse_inso_timestamp(quoted_at_text),
+                        quantity=(
+                            _parse_procurement_quantity(quantity_text)
+                            if self._procurement_history else _parse_quantity(quantity_text)
+                        ),
+                        quoted_at=quoted_at,
                         creator=_optional_text(
                             creator_raw if isinstance(creator_raw, str) else None
                         ),
@@ -519,6 +568,101 @@ def _parse_optional_quote(value: str | None) -> Decimal | None:
     return parsed
 
 
+class PlaywrightProcurementHistoryPage:
+    """Read the existing lower Stock_VenQuote UI, including every native page.
+
+    Reuses the ERP's tab, query handler and pagination. No custom HTTP protocol,
+    price filtering, business decision, browser startup or write operation.
+    """
+
+    def __init__(self, page: object, *, timeout_ms: int = 45_000) -> None:
+        self._page = page
+        self._timeout_ms = timeout_ms
+
+    def query_exact_response(self, target_mpn: str) -> dict[str, object]:
+        frame = self._page
+        owner = frame.page
+        if not urlsplit(frame.url).path.casefold().endswith(BUSINESS_INQUIRY_LIST_PATH.casefold()):
+            raise InsoDuplicateHistoryError(DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE)
+        if frame.locator("#DetailField_FenLan").input_value() != "PartNo":
+            raise InsoDuplicateHistoryError(DuplicateHistoryFailure.RECORD_FIELDS_INVALID)
+        field = frame.locator("#DetailFieldValue_layout")
+        field.fill(target_mpn, timeout=self._timeout_ms)
+        if field.input_value() != target_mpn:
+            raise InsoDuplicateHistoryError(DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED)
+        frame.locator("#tab_b_li2 > a").click(timeout=self._timeout_ms)
+        if frame.evaluate("() => String(tab_b_id)") != "4":
+            raise InsoDuplicateHistoryError(DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE)
+
+        def matched(response, page_number):
+            parsed = urlsplit(response.url)
+            query = parse_qs(parsed.query)
+            return (
+                parsed.scheme == "https" and parsed.hostname == "yingsuo.alperp.cn"
+                and parsed.path == "/services/stock/select.ashx"
+                and query.get("action") == ["Stock_VenQuote"]
+                and query.get("para") == [target_mpn]
+                and query.get("pageindex", ["1"]) == [str(page_number)]
+            )
+
+        records = []
+        seen = set()
+        expected_total = None
+        expected_size = None
+        for page_number in range(1, 1001):
+            with owner.expect_response(
+                lambda response, number=page_number: matched(response, number), timeout=self._timeout_ms
+            ) as pending:
+                if page_number == 1:
+                    frame.locator("#select_btns_layout").click(timeout=self._timeout_ms)
+                else:
+                    frame.locator("#tabs_b_panel_2 .layui-laypage-next:visible").click(
+                        timeout=self._timeout_ms
+                    )
+            response = pending.value
+            if response.status != 200:
+                raise InsoDuplicateHistoryError(DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE)
+            payload = response.json()
+            rows = payload.get("rows") if isinstance(payload, dict) else None
+            if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+                raise InsoDuplicateHistoryError(DuplicateHistoryFailure.RECORD_FIELDS_INVALID)
+            ids = [str(row.get("id", "")) for row in rows]
+            if any(not identity.isdecimal() for identity in ids) or len(set(ids)) != len(ids):
+                raise InsoDuplicateHistoryError(DuplicateHistoryFailure.RESULT_IDENTIFIER_AMBIGUOUS)
+            # A matched network response is not enough: wait for the lower
+            # native grid and pager to finish rendering this response.
+            frame.wait_for_function(
+                """expected => {
+                    const grid = document.querySelector('#_id_tabs_b_2');
+                    const rows = grid ? [...grid.querySelectorAll('tr[id$="_Main"]')] : [];
+                    const models = rows.map(r => r.querySelector('td[data-field="PartNo"]')?.innerText.trim());
+                    const pager = document.querySelector('#tabs_b_panel_2 .layui-laypage-count');
+                    return rows.length === expected.length
+                        && models.every((model, i) => model === expected[i])
+                        && !!pager && /\\d+/.test(pager.textContent);
+                }""",
+                arg=[row.get("PartNo") for row in rows], timeout=self._timeout_ms,
+            )
+            pager = frame.locator("#tabs_b_panel_2 .layui-laypage:visible")
+            total_text = pager.locator(".layui-laypage-count").inner_text()
+            total_match = re.search(r"\d+", total_text)
+            size = int(pager.locator("select").input_value())
+            total = int(total_match.group()) if total_match else -1
+            if page_number == 1:
+                expected_total, expected_size = total, size
+            if total != expected_total or size != expected_size or size <= 0:
+                raise InsoDuplicateHistoryError(DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED)
+            if seen.intersection(ids):
+                raise InsoDuplicateHistoryError(DuplicateHistoryFailure.RESULT_IDENTIFIER_AMBIGUOUS)
+            if len(rows) != min(size, max(0, total - len(records))):
+                raise InsoDuplicateHistoryError(DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED)
+            seen.update(ids)
+            records.extend(rows)
+            if len(records) == total:
+                return {"rows": records}
+        raise InsoDuplicateHistoryError(DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED)
+
+
 class PlaywrightDuplicateHistoryPage:
     """Live read-only adapter over the INSO business-inquiry list frame.
 
@@ -537,10 +681,12 @@ class PlaywrightDuplicateHistoryPage:
         *,
         selectors: DuplicateHistoryFieldSelectors | None = None,
         timeout_ms: int = 45_000,
+        first_page_only: bool = False,
     ) -> None:
         self._page = page
         self._selectors = selectors or DuplicateHistoryFieldSelectors()
         self._timeout_ms = timeout_ms
+        self._first_page_only = first_page_only
         self._target_mpn: str | None = None
         self._sequence_before_query: int | None = None
         self._sequence_after_dispatch: int | None = None
@@ -583,6 +729,11 @@ class PlaywrightDuplicateHistoryPage:
         """
 
         return self._settlement_evidence.get("RESULT_SET_COMPLETE") is True
+
+    @property
+    def last_first_page_settled(self) -> bool:
+        """First-page identity/order is proven, not the entire history set."""
+        return self._settlement_evidence.get("FIRST_PAGE_SETTLED") is True
 
     def query_exact_response(self, target_mpn: str) -> dict[str, object]:
         """Run the verified native search and return its settled response."""
@@ -838,6 +989,24 @@ class PlaywrightDuplicateHistoryPage:
             except Exception:
                 self._settlement_evidence["FAILED_STAGE"] = "PENDING_FALSE"
                 raise
+            # The response proves the *data* arrived; the grid only proves it
+            # *rendered*. layui rebuilds the table body and its pager
+            # asynchronously, so a snapshot taken the instant the response
+            # settles can legitimately read rows or a pager that have not been
+            # drawn yet. A half-drawn grid is not a business answer, and reading
+            # one as "unavailable" turned a slow render into a false manual-review
+            # gate. Wait on the render condition -- never on a fixed sleep --
+            # before taking the authoritative snapshot below. A timeout here is
+            # not itself a verdict: the snapshot checks still decide.
+            try:
+                self._page.wait_for_function(
+                    _GRID_RENDERED_PREDICATE,
+                    arg={"rows": len(bill_ids)},
+                    timeout=timeout_ms,
+                )
+                self._settlement_evidence["GRID_RENDERED"] = True
+            except Exception:  # noqa: BLE001 - raw page/provider failures are sanitized
+                self._settlement_evidence["GRID_RENDERED"] = False
             snapshot = self._page.evaluate(
                 """() => {
                     const button = document.querySelector('#select_btns');
@@ -906,20 +1075,54 @@ class PlaywrightDuplicateHistoryPage:
             total_count = snapshot.get("totalCount")
             page_size = snapshot.get("pageSize")
             current_page = snapshot.get("currentPage")
-            result_set_complete = (
+            grid_has_total = (
                 isinstance(total_count, int)
                 and not isinstance(total_count, bool)
                 and total_count >= 0
-                and isinstance(page_size, int)
+            )
+            grid_has_size = (
+                isinstance(page_size, int)
                 and not isinstance(page_size, bool)
                 and page_size > 0
-                and isinstance(current_page, int)
-                and not isinstance(current_page, bool)
-                and current_page == 1
-                and total_count <= page_size
-                and total_count == len(bill_ids)
             )
+            grid_has_page = (
+                isinstance(current_page, int)
+                and not isinstance(current_page, bool)
+            )
+            # A set that fits on one page is complete by definition: no later
+            # page can exist. layui omits the page-number list -- and therefore
+            # the current-page indicator -- whenever the whole result set fits on
+            # the first page, so the indicator is only meaningful when the pager
+            # genuinely spans several pages. Requiring it unconditionally made
+            # every ordinary single-page match fail settlement.
+            single_page = grid_has_total and grid_has_size and total_count <= page_size
+            result_set_complete = (
+                single_page
+                and total_count == len(bill_ids)
+                and (not grid_has_page or current_page == 1)
+            )
+            if not result_set_complete and not bill_ids:
+                # A matched exact query that returned a valid, empty response is
+                # already the complete answer: this page holds no records, so no
+                # later page can hold any. layui renders no pager for an empty
+                # table, so the current page / page size / total count controls
+                # are all absent and the pagination cross-check above cannot run.
+                # Require the response, the cache and the grid to agree on "no
+                # rows" before calling the empty set complete.
+                result_set_complete = (
+                    cache_present
+                    and len(cache_ids) == 0
+                    and isinstance(dom_ids, list)
+                    and len(dom_ids) == 0
+                )
             evidence["RESULT_SET_COMPLETE"] = result_set_complete
+            first_page_settled = (
+                result_set_complete and (not grid_has_total or total_count == len(bill_ids))
+            ) or (
+                grid_has_total and grid_has_size and grid_has_page
+                and current_page == 1 and len(bill_ids) == min(total_count, page_size)
+            )
+            evidence["FIRST_PAGE_SETTLED"] = first_page_settled
             if not cache_present:
                 evidence["FAILED_STAGE"] = "CACHE_PRESENT"
                 raise ValueError
@@ -949,7 +1152,8 @@ class PlaywrightDuplicateHistoryPage:
                 ("BUTTON_ENABLED", evidence["BUTTON_ENABLED"]),
                 ("RESPONSE_CACHE_IDS_MATCH", evidence["RESPONSE_CACHE_IDS_MATCH"]),
                 ("RESPONSE_DOM_IDS_MATCH", evidence["RESPONSE_DOM_IDS_MATCH"]),
-                ("RESULT_SET_COMPLETE", evidence["RESULT_SET_COMPLETE"]),
+                ("FIRST_PAGE_SETTLED", first_page_settled)
+                if self._first_page_only else ("RESULT_SET_COMPLETE", result_set_complete),
             )
             failed = next((name for name, ok in required_stages if not ok), None)
             evidence["FAILED_STAGE"] = failed
@@ -1223,6 +1427,17 @@ def _exact_history_request_shape(request: object | None) -> str:
         return "UNKNOWN"
 
 
+def _parse_procurement_quantity(value: str) -> int:
+    """Accept ERP decimal formatting only when it is an exact positive integer."""
+    try:
+        quantity = Decimal(value.strip().replace(",", ""))
+        if not quantity.is_finite() or quantity <= 0 or quantity != quantity.to_integral_value():
+            raise ValueError
+        return int(quantity)
+    except (InvalidOperation, ValueError):
+        raise InsoDuplicateHistoryError(DuplicateHistoryFailure.RECORD_FIELDS_INVALID) from None
+
+
 def _parse_quantity(value: str) -> int:
     text = value.strip().replace(",", "")
     if not text.isdecimal():
@@ -1254,6 +1469,11 @@ def _parse_inso_timestamp(value: str) -> datetime:
     return parsed.astimezone(UTC)
 
 
+def parse_inso_timestamp(value: str) -> datetime:
+    """Reuse the verified ERP timestamp parser for read-only save confirmation."""
+    return _parse_inso_timestamp(value)
+
+
 __all__ = [
     "BUSINESS_INQUIRY_LIST_PATH",
     "DETAIL_BILL_ID_SELECTOR",
@@ -1278,4 +1498,5 @@ __all__ = [
     "InsoDuplicateHistoryError",
     "InsoDuplicateHistoryReader",
     "PlaywrightDuplicateHistoryPage",
+    "parse_inso_timestamp",
 ]

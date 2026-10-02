@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from .contracts import LogEntry, RunSession
+from .contracts import LogEntry, RunSession, SiteLoginReport
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,7 +24,7 @@ class BackendEvent:
     """Immutable backend notification queued for main-thread UI handling."""
 
     kind: str
-    payload: RunSession | LogEntry
+    payload: RunSession | LogEntry | SiteLoginReport
 
 
 class MainThreadEventQueue:

@@ -9,11 +9,20 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from time import monotonic, sleep
 from typing import Protocol
 from urllib.parse import quote, urlsplit
 
 from .cdp_pages import new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
+from .site_login import (
+    REJECTED_PASSWORD_TEXT,
+    LoginCheckbox,
+    LoginForm,
+    SiteLoginError,
+    await_login_outcome,
+    submit_login_form,
+)
 from .source_contracts import (
     EvidenceField,
     MpnMatchKind,
@@ -310,120 +319,88 @@ class BomAiBrowserConfig:
         )
 
 
-class PlaywrightBomAiAuthenticatedBrowser:
-    """Concrete credential-injected, read-only Bom.Ai page acquisition.
+def bom_ai_login_form(config: BomAiBrowserConfig) -> LoginForm:
+    """This deployment's sign-in form, addressed by the configured selectors.
 
-    Only login, navigation, and page capture are exposed; there is no submit,
-    order, or write capability. Any unexpected host, interactive challenge, or
-    browser failure raises a safe :class:`BomAiClientError` so the adapter can
-    fail closed with an observable outcome.
+    Bom.Ai's sign-in is a layered modal, but every field it shows carries a
+    document-unique id, so the shared page-level filling is exact here.
     """
 
-    def __init__(
-        self,
-        config: BomAiBrowserConfig,
-        *,
-        timeout_ms: int = 45_000,
-        settle_ms: int = 3_000,
-        browser_channel: str = "chrome",
-        headless: bool = False,
-        playwright_factory: Callable[[], object] | None = None,
-    ) -> None:
-        self._config = config
-        self._timeout_ms = timeout_ms
-        self._settle_ms = settle_ms
-        self._browser_channel = browser_channel
-        self._headless = headless
-        self._playwright_factory = playwright_factory
+    return LoginForm(
+        username=config.username_selector,
+        password=config.password_selector,
+        submit=config.login_button_selector,
+        company=config.company_selector,
+        rejection=REJECTED_PASSWORD_TEXT,
+        # Owner rule (2026-10-01): tick "30天内免登录" and "记住密码" before
+        # signing in. Both controls are addressed by their *visible label*:
+        # measured live, ``#freelogin`` and ``#rememberPassword`` report
+        # ``is_visible() == True`` while sitting at x = -119469, parked off the
+        # viewport -- clicking the input would act on something no human could
+        # reach, and ticking the "记住密码" box again would turn it *off* (it
+        # defaults to on), which is why the state is read first.
+        options=(
+            LoginCheckbox(control='text="30天内免登录"'),
+            LoginCheckbox(control='text="记住密码"'),
+        ),
+    )
 
-    def fetch_price_page(self, mpn: str, login: BomAiLogin) -> BomAiRawPage:
-        query = mpn.strip()
-        factory = self._playwright_factory
-        timeout_error: type[Exception] = TimeoutError
-        if factory is None:
-            try:
-                from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-                from playwright.sync_api import sync_playwright
-            except ImportError as exc:
-                raise BomAiClientError("PLAYWRIGHT_NOT_INSTALLED") from exc
-            factory = sync_playwright
-            timeout_error = PlaywrightTimeoutError
 
-        expected_host = urlsplit(self._config.login_url).hostname
-        current_url: str | None = self._config.login_url
-        browser = None
-        try:
-            with factory() as playwright:  # type: ignore[attr-defined]
-                browser = playwright.chromium.launch(
-                    channel=self._browser_channel,
-                    headless=self._headless,
-                )
-                page = browser.new_page()
-                page.goto(
-                    self._config.login_url,
-                    wait_until="domcontentloaded",
-                    timeout=self._timeout_ms,
-                )
-                current_url = page.url
-                self._require_expected_host(current_url, expected_host)
-                self._reject_challenge(page.locator("body").inner_text(), current_url)
+def sign_in_bom_ai(
+    page: object,
+    *,
+    config: BomAiBrowserConfig,
+    login: BomAiLogin | None,
+    timeout_ms: int,
+    wait: Callable[[float], None] = sleep,
+    clock: Callable[[], float] = monotonic,
+) -> bool:
+    """Complete Bom.Ai's ordinary login when the open page still offers it.
 
-                username = page.locator(self._config.username_selector)
-                if username.count() > 0 and username.first.is_visible():
-                    username.fill(login.username)
-                    page.locator(self._config.password_selector).fill(login.password)
-                    if self._config.company_selector is not None:
-                        company = page.locator(self._config.company_selector)
-                        if company.count() > 0:
-                            if login.company is None:
-                                raise BomAiClientError(
-                                    "COMPANY_CREDENTIAL_UNAVAILABLE", current_url
-                                )
-                            company.fill(login.company)
-                    page.locator(self._config.login_button_selector).click()
-                    page.wait_for_timeout(self._settle_ms)
-                    current_url = page.url
-                    self._require_expected_host(current_url, expected_host)
-                    self._reject_challenge(page.locator("body").inner_text(), current_url)
-                    if self._config.post_login_ready_selector is not None:
-                        page.wait_for_selector(
-                            self._config.post_login_ready_selector,
-                            state="visible",
-                            timeout=self._timeout_ms,
-                        )
+    Returns ``False`` when the page shows no login link, which means the tab is
+    already signed in -- the caller's own page is then left exactly as it was.
+    The modal is opened, the account tab chosen and the form submitted here, so
+    the sell sweep signs in exactly the way a price read does.
+    """
 
-                page.goto(
-                    self._config.result_url(query),
-                    wait_until="domcontentloaded",
-                    timeout=self._timeout_ms,
-                )
-                page.wait_for_timeout(self._settle_ms)
-                current_url = page.url
-                self._require_expected_host(current_url, expected_host)
-                html = page.content()
-                self._reject_challenge(page.locator("body").inner_text(), current_url)
-                browser.close()
-                browser = None
-                return BomAiRawPage(html, current_url, datetime.now(UTC))
-        except BomAiClientError:
-            raise
-        except timeout_error as exc:
-            raise BomAiClientError("BROWSER_TIMEOUT", current_url) from exc
-        except Exception as exc:
-            raise BomAiClientError("BROWSER_FAILURE", current_url) from exc
-        finally:
-            if browser is not None:
-                with contextlib.suppress(Exception):
-                    browser.close()
-
-    @staticmethod
-    def _require_expected_host(url: str, expected_host: str | None) -> None:
-        if expected_host is None or urlsplit(url).hostname != expected_host:
-            raise BomAiClientError("UNEXPECTED_NAVIGATION_HOST", url)
-
-    @staticmethod
-    def _reject_challenge(visible_text: str, url: str) -> None:
-        _reject_bom_ai_challenge(visible_text, url)
+    form = bom_ai_login_form(config)
+    login_link = page.locator("a.bom_layer_login:visible")  # type: ignore[attr-defined]
+    if login_link.count() == 0:
+        return False
+    if login is None:
+        raise SiteLoginError("CREDENTIALS_UNAVAILABLE")
+    login_link.first.click()
+    modal = page.locator(".layui-layer:visible").last  # type: ignore[attr-defined]
+    _reject_bom_ai_challenge(modal.inner_text(), page.url)  # type: ignore[attr-defined]
+    account_tab = modal.get_by_text("账号登录", exact=True)
+    if account_tab.count() != 1:
+        raise SiteLoginError("RESULT_CHANGED")
+    account_tab.click()
+    if config.company_selector is not None and login.company is None:
+        raise SiteLoginError("CREDENTIALS_UNAVAILABLE")
+    submit_login_form(
+        page,
+        form=form,
+        login=login,
+        timeout_ms=timeout_ms,
+    )
+    await_login_outcome(
+        page,
+        form=form,
+        is_login_page=lambda candidate: bool(
+            candidate.locator(config.username_selector + ":visible").count()
+        ),
+        timeout_ms=timeout_ms,
+        wait=wait,
+        clock=clock,
+    )
+    _reject_bom_ai_challenge(
+        page.locator("body").inner_text(),  # type: ignore[attr-defined]
+        page.url,  # type: ignore[attr-defined]
+    )
+    if modal.locator(config.username_selector + ":visible").count():
+        raise SiteLoginError("LOGIN_NOT_CONFIRMED")
+    return True
 
 
 class CdpBomAiAuthenticatedBrowser:
@@ -446,6 +423,12 @@ class CdpBomAiAuthenticatedBrowser:
         self._settle_ms = settle_ms
         self._playwright_factory = playwright_factory
 
+    @property
+    def _login_form(self) -> LoginForm:
+        """This deployment's form, addressed by the configured selectors."""
+
+        return bom_ai_login_form(self._config)
+
     def fetch_price_page(self, mpn: str, login: BomAiLogin) -> BomAiRawPage:
         target_url = self._config.result_url(mpn)
         factory = self._playwright_factory
@@ -463,14 +446,12 @@ class CdpBomAiAuthenticatedBrowser:
                     self._cdp_url, timeout=self._timeout_ms
                 )
                 context = browser.contexts[0]
-                pages = [page for page in context.pages if _is_bom_ai_host(page.url)]
-                if pages:
-                    page = pages[0]
-                else:
-                    page = new_background_page(
-                        browser, context, timeout_ms=self._timeout_ms
-                    )
-                    created_page = True
+                # Owner rule (2026-10-01): every call opens its own tab, makes
+                # sure it is signed in, does its work, and gives the tab back.
+                page = new_background_page(
+                    browser, context, timeout_ms=self._timeout_ms
+                )
+                created_page = True
                 page.goto(target_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
                 page.wait_for_timeout(self._settle_ms)
                 if not _is_bom_ai_host(page.url):
@@ -492,36 +473,17 @@ class CdpBomAiAuthenticatedBrowser:
     def _login_once_if_required(
         self, page: object, login: BomAiLogin, target_url: str
     ) -> None:
-        login_link = page.locator("a.bom_layer_login:visible")
-        if login_link.count() == 0:
+        try:
+            signed_in = sign_in_bom_ai(
+                page,
+                config=self._config,
+                login=login,
+                timeout_ms=self._timeout_ms,
+            )
+        except SiteLoginError as error:
+            raise BomAiClientError(error.reason_code, page.url) from None
+        if not signed_in:
             return
-        login_link.first.click()
-        modal = page.locator(".layui-layer:visible").last
-        _reject_bom_ai_challenge(modal.inner_text(), page.url)
-        account_tab = modal.get_by_text("账号登录", exact=True)
-        if account_tab.count() != 1:
-            raise BomAiClientError("RESULT_CHANGED", page.url)
-        account_tab.click()
-        username = modal.locator(self._config.username_selector)
-        password = modal.locator(self._config.password_selector)
-        submit = modal.locator(self._config.login_button_selector)
-        if any(locator.count() != 1 for locator in (username, password, submit)):
-            _reject_bom_ai_challenge(modal.inner_text(), page.url)
-            raise BomAiClientError("RESULT_CHANGED", page.url)
-        if self._config.company_selector is not None:
-            company = modal.locator(self._config.company_selector)
-            if company.count() != 1:
-                raise BomAiClientError("RESULT_CHANGED", page.url)
-            if login.company is None:
-                raise BomAiClientError("COMPANY_CREDENTIAL_UNAVAILABLE", page.url)
-            company.fill(login.company)
-        username.fill(login.username)
-        password.fill(login.password)
-        submit.click()
-        page.wait_for_timeout(self._settle_ms)
-        _reject_bom_ai_challenge(page.locator("body").inner_text(), page.url)
-        if modal.locator(self._config.username_selector + ":visible").count():
-            raise BomAiClientError("LOGIN_NOT_CONFIRMED", page.url)
         page.goto(target_url, wait_until="domcontentloaded", timeout=self._timeout_ms)
         page.wait_for_timeout(self._settle_ms)
         if not _is_bom_ai_host(page.url):

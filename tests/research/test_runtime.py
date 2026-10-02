@@ -8,20 +8,24 @@ import pytest
 from openpyxl import load_workbook
 
 from src.core import CredentialNotConfiguredError, Login
-from src.research.bom_ai import BomAiBrowserConfig, BomAiClientError
+from src.research.bom_ai import (
+    BomAiBrowserConfig,
+    BomAiClientError,
+    CdpBomAiAuthenticatedBrowser,
+)
 from src.research.contracts import ResearchInput, ResearchStatus
 from src.research.credentials import CoreResearchCredentials
 from src.research.excel_output import INQUIRY_ID_HEADER
-from src.research.findchips import FindchipsPageUnavailable
+from src.research.findchips import CdpFindchipsClient, FindchipsPageUnavailable
 from src.research.fx import UsdRmbQuote
-from src.research.hqew import HqewPageUnavailable
+from src.research.hqew import CdpHqewClient, HqewPageUnavailable
 from src.research.icnet import (
     CdpIcNetClient,
     IcNetPageUnavailable,
     PlaywrightIcNetClient,
 )
 from src.research.inso_history import INSO_SITE_ID, InsoBrowserConfig, InsoReadError
-from src.research.lcsc import LcscPageUnavailable
+from src.research.lcsc import CdpLcscClient, LcscPageUnavailable
 from src.research.runtime import (
     BrowserRuntimeConfig,
     CdpRuntimeConfig,
@@ -307,6 +311,84 @@ def test_composition_calls_every_canonical_source_and_keeps_excel_idempotent(
     assert worksheet.cell(2, headers.index(INQUIRY_ID_HEADER) + 1).value == (
         "inq_runtime"
     )
+
+
+def test_research_service_shares_one_cdp_attachment_with_every_cdp_source(
+    tmp_path: Path,
+) -> None:
+    """The launcher's live CDP attachment must reach all five browser sources.
+
+    Playwright's synchronous API cannot be started twice in one thread, so every
+    browser-backed source must connect through the single protected session
+    instead of opening its own. This proves the composed service wires one shared
+    factory into IC.net, Findchips, HQEW, LCSC and BOM.ai alike.
+    """
+
+    config = load_runtime_config(
+        _write_config(
+            tmp_path,
+            _mapping(
+                excel_output_path=str(tmp_path / "调研价格.xlsx"),
+                icnet={"mode": "cdp"},
+            ),
+        )
+    )
+
+    class _ConnectedBrowser:
+        def is_connected(self) -> bool:
+            return True
+
+    def provider() -> tuple[object, object]:
+        return object(), _ConnectedBrowser()
+
+    service = build_research_service(
+        config, provider=AllSitesProvider(), playwright_provider=provider
+    )
+
+    sources = service._price_sources
+    cdp_clients = (
+        service._icnet._client,
+        sources[0]._client,
+        sources[1]._client,
+        sources[2]._client,
+        sources[3]._client._browser,
+    )
+    assert isinstance(cdp_clients[0], CdpIcNetClient)
+    assert isinstance(cdp_clients[1], CdpFindchipsClient)
+    assert isinstance(cdp_clients[2], CdpHqewClient)
+    assert isinstance(cdp_clients[3], CdpLcscClient)
+    assert isinstance(cdp_clients[4], CdpBomAiAuthenticatedBrowser)
+
+    factories = [client._playwright_factory for client in cdp_clients]
+    assert all(factory is not None for factory in factories)
+    assert all(factory is factories[0] for factory in factories)
+
+    with factories[0]() as shared:
+        browser = shared.chromium.connect_over_cdp("http://127.0.0.1:9222")
+    assert isinstance(browser, _ConnectedBrowser)
+
+
+def test_research_service_keeps_private_playwright_outside_the_launcher(
+    tmp_path: Path,
+) -> None:
+    """Without a launcher-provided session each CDP source keeps its own path."""
+
+    config = load_runtime_config(
+        _write_config(
+            tmp_path,
+            _mapping(
+                excel_output_path=str(tmp_path / "调研价格.xlsx"),
+                icnet={"mode": "cdp"},
+            ),
+        )
+    )
+
+    service = build_research_service(config, provider=AllSitesProvider())
+
+    assert service._icnet._client._playwright_factory is None
+    for source in service._price_sources[:3]:
+        assert source._client._playwright_factory is None
+    assert service._price_sources[3]._client._browser._playwright_factory is None
 
 
 def test_readiness_reports_missing_site_and_manual_action(tmp_path: Path) -> None:

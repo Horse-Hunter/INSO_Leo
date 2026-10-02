@@ -99,3 +99,42 @@ def normalize_mpn(value: str, *, policy: MpnPolicy) -> str:
 
 def mpn_matches(left: str, right: str, *, policy: MpnPolicy) -> bool:
     return normalize_mpn(left, policy=policy) == normalize_mpn(right, policy=policy)
+
+
+class BrandPolicy(StrEnum):
+    AI_BRAND_V1 = "ai-brand-v1"
+
+
+def normalize_brand(value: str, *, policy: BrandPolicy) -> str:
+    """Case-folded, whitespace-collapsed brand token for partial matching."""
+
+    if not isinstance(value, str):
+        raise TypeError("brand must be a string")
+    if policy is not BrandPolicy.AI_BRAND_V1:
+        raise ValueError("unsupported brand policy")
+    import unicodedata
+
+    return " ".join(unicodedata.normalize("NFKC", value).split()).casefold()
+
+
+def brand_matches(left: str, right: str, *, policy: BrandPolicy) -> bool:
+    """Partial match: the two brand tokens may differ in wording.
+
+    Owner decision (2026-09-29): the brand only has to match partially, because
+    the ERP's own AI canonicalises it to its own code. Verified live:
+    ``HRS(hirose) -> HRS``, ``HRS -> HRS``, ``hirose -> Hirose``,
+    ``HRS(hirose)_x -> HRS``. The Research label and the ERP code therefore
+    legitimately differ. Correctness stays where it actually lives: the MPN and
+    quantity checks remain exact, and an empty brand on either side still fails
+    closed.
+    """
+
+    left_token = normalize_brand(left, policy=policy)
+    right_token = normalize_brand(right, policy=policy)
+    if not left_token or not right_token:
+        return False
+    return (
+        left_token == right_token
+        or left_token in right_token
+        or right_token in left_token
+    )

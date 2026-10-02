@@ -71,6 +71,7 @@ from .bom_ai import (
     BomAiCredentialedClient,
     CdpBomAiAuthenticatedBrowser,
 )
+from .cdp_pages import shared_playwright_factory
 from .credentials import (
     RESEARCH_CREDENTIAL_SITE_IDS,
     CoreResearchCredentials,
@@ -338,6 +339,7 @@ def build_icnet_client(
     credentials: CoreResearchCredentials,
     *,
     icnet_client: IcNetPageClient | None = None,
+    playwright_factory: Callable[[], object] | None = None,
 ) -> IcNetPageClient:
     """Select the configured IC.net acquisition path."""
 
@@ -350,6 +352,7 @@ def build_icnet_client(
             timeout_ms=browser.timeout_ms,
             settle_ms=browser.settle_ms,
             login_provider=credentials.icnet,
+            playwright_factory=playwright_factory,
         )
     return PlaywrightIcNetClient(
         credentials.icnet,
@@ -372,6 +375,7 @@ def build_research_service(
     bom_ai_browser: BomAiAuthenticatedBrowser | None = None,
     inso_browser: InsoReadOnlyBrowser | None = None,
     inso_operation_access: InsoOperationAccess | Callable[[], InsoOperationAccess] | None = None,
+    playwright_provider: Callable[[], tuple[object, object] | None] | None = None,
 ) -> ResearchService:
     """Compose the canonical ``ResearchService`` from validated runtime config.
 
@@ -379,33 +383,54 @@ def build_research_service(
     that all canonical sources are wired without touching the network. Missing
     per-source prerequisites still surface as observable fail-closed results at
     execution time.
+
+    ``playwright_provider`` lets the launcher hand the already-attached CDP
+    ``(playwright, browser)`` pair to every browser-backed source. Playwright's
+    synchronous API cannot be started twice in one thread, so without it the
+    sources would each try to open a second connection and fail; with it they
+    reuse the single protected session. Outside the launcher it is ``None`` and
+    each source keeps its own connection.
     """
 
     credentials = CoreResearchCredentials(provider)
     fx = fx_provider or EcbDailyUsdRmbProvider()
     browser = config.browser
+    playwright_factory = (
+        shared_playwright_factory(playwright_provider)
+        if playwright_provider is not None
+        else None
+    )
 
     icnet_client = build_icnet_client(
-        config, credentials, icnet_client=icnet_client
+        config,
+        credentials,
+        icnet_client=icnet_client,
+        playwright_factory=playwright_factory,
     )
     findchips_client = findchips_client or CdpFindchipsClient(
         cdp_url=config.cdp.cdp_url,
         timeout_ms=browser.timeout_ms,
+        login_provider=credentials.findchips,
+        playwright_factory=playwright_factory,
     )
     hqew_client = hqew_client or CdpHqewClient(
         cdp_url=config.cdp.cdp_url,
         timeout_ms=browser.timeout_ms,
         settle_ms=browser.settle_ms,
+        login_provider=credentials.hqew,
+        playwright_factory=playwright_factory,
     )
     lcsc_client = lcsc_client or CdpLcscClient(
         cdp_url=config.cdp.cdp_url,
         timeout_ms=browser.timeout_ms,
         login_provider=credentials.lcsc,
+        playwright_factory=playwright_factory,
     )
     bom_ai_browser = bom_ai_browser or CdpBomAiAuthenticatedBrowser(
         config.bom_ai,
         cdp_url=config.cdp.cdp_url,
         timeout_ms=browser.timeout_ms,
+        playwright_factory=playwright_factory,
     )
     inso_browser = inso_browser or PlaywrightInsoReadOnlyBrowser(
         config.inso,
@@ -439,6 +464,7 @@ def build_production_research_service(
     config_path: str | Path | None = None,
     provider: CredentialProvider | None = None,
     cdp_probe: Callable[[str], bool] | None = None,
+    playwright_provider: Callable[[], tuple[object, object] | None] | None = None,
 ) -> ResearchService:
     """Load config, verify every prerequisite, then compose; fail closed."""
 
@@ -448,7 +474,9 @@ def build_production_research_service(
             resolved.cdp.cdp_url, provider=provider, cdp_probe=cdp_probe
         )
     )
-    return build_research_service(resolved, provider=provider)
+    return build_research_service(
+        resolved, provider=provider, playwright_provider=playwright_provider
+    )
 
 
 def format_readiness(readiness: ResearchRuntimeReadiness) -> str:

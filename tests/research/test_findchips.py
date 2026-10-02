@@ -109,6 +109,24 @@ def test_parser_retains_only_safe_offer_facts_and_fails_closed() -> None:
         parse_findchips_offers('<form>Login<input type="password"></form>')
 
 
+def test_explicit_target_empty_result_without_offer_table_is_normal() -> None:
+    html = '<p class="alert alert-info no-results">No results were found for TEST-MPN.</p>'
+    assert parse_findchips_offers(html, "TEST-MPN") == ()
+    result = FindchipsAdapter(Client(html), Fx()).search("TEST-MPN", 40)
+    assert result.outcome is SourceOutcome.NO_STRICT_MPN_MATCH
+
+
+@pytest.mark.parametrize("html", [
+    '<p class="alert alert-info no-results">No results were found for OTHER.</p>',
+    '<script>No results were found for TEST-MPN.</script>',
+    '<p>No results were found for TEST-MPN.</p>',
+    '<p class="alert alert-info no-results">Temporarily unavailable</p>',
+])
+def test_empty_result_requires_authoritative_marker_and_matching_query(html):
+    with pytest.raises(FindchipsParseError, match="RESULT_CONTAINER_MISSING"):
+        parse_findchips_offers(html, "TEST-MPN")
+
+
 def test_target_parse_ignores_unrelated_malformed_tiers() -> None:
     html = _page(
         _row("UNRELATED", "1", "not-json"),

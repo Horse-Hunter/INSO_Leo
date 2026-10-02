@@ -14,7 +14,13 @@ from .v12_contracts import (
     PurchaseOutcome,
     ReasonCode,
 )
-from .v12_safety import MpnPolicy, mpn_matches, normalize_mpn
+from .v12_safety import (
+    BrandPolicy,
+    MpnPolicy,
+    brand_matches,
+    mpn_matches,
+    normalize_mpn,
+)
 
 
 class QuotationType(StrEnum):
@@ -258,11 +264,16 @@ def validate_ai_recognition(
         )
     except (TypeError, ValueError):
         mpn_valid = False
-    brand_valid = (
-        isinstance(expected_brand, str)
-        and isinstance(recognized_brand, str)
-        and recognized_brand.strip() == expected_brand.strip()
-    )
+    try:
+        brand_valid = (
+            isinstance(expected_brand, str)
+            and isinstance(recognized_brand, str)
+            and brand_matches(
+                expected_brand, recognized_brand, policy=BrandPolicy.AI_BRAND_V1
+            )
+        )
+    except (TypeError, ValueError):
+        brand_valid = False
     matches = mpn_valid and brand_valid and quantity_valid
     return PurchaseDraftResult(
         command_id=command_id,

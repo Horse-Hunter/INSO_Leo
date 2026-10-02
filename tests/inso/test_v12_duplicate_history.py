@@ -1074,6 +1074,167 @@ def test_settlement_fails_closed_when_pagination_does_not_prove_complete_result_
     assert evidence["FAILED_STAGE"] == "RESULT_SET_COMPLETE"
 
 
+def test_empty_exact_result_set_without_a_pager_settles_as_complete() -> None:
+    """A matched exact query with no rows must settle, not downgrade.
+
+    layui renders no pager for an empty table, so the pagination controls are
+    absent and the page/size/total cross-check cannot run. When the response,
+    the cache and the grid all agree on "no rows", that empty set is already the
+    complete answer and the duplicate lookup must succeed with zero records.
+    """
+
+    adapter, page = playwright_adapter(elements=playwright_rows(), response_rows=[])
+    page._current_page = None
+    page._page_size = None
+    page._total_count = None
+
+    adapter.goto("https://yingsuo.alperp.cn" + BUSINESS_INQUIRY_LIST_PATH)
+    adapter.set_text(MODEL_QUERY_INPUT, MPN)
+    adapter.ensure_checked(EXACT_MATCH_CHECKBOX)
+    adapter.click(QUERY_BUTTON)
+    adapter.wait_for_query_settled(timeout_ms=1000)
+
+    evidence = adapter.last_settlement_evidence
+    assert evidence["RESPONSE_ROW_COUNT"] == 0
+    assert evidence["CACHE_ROW_COUNT"] == 0
+    assert evidence["DOM_ROW_COUNT"] == 0
+    assert evidence["PAGINATION_CURRENT_PAGE"] is None
+    assert evidence["PAGINATION_TOTAL_COUNT"] is None
+    assert evidence["RESULT_SET_COMPLETE"] is True
+    assert evidence["FAILED_STAGE"] is None
+
+
+def test_empty_response_with_a_stale_grid_row_still_fails_closed() -> None:
+    """The empty-set allowance must never accept a grid that still shows rows."""
+
+    adapter, page = playwright_adapter(elements=playwright_rows(), response_rows=[])
+    page._current_page = None
+    page._page_size = None
+    page._total_count = None
+    page._dom_bill_ids = ["7788"]  # a row the response no longer returns
+
+    adapter.goto("https://yingsuo.alperp.cn" + BUSINESS_INQUIRY_LIST_PATH)
+    adapter.set_text(MODEL_QUERY_INPUT, MPN)
+    adapter.ensure_checked(EXACT_MATCH_CHECKBOX)
+    adapter.click(QUERY_BUTTON)
+    with pytest.raises(InsoDuplicateHistoryError) as failure:
+        adapter.wait_for_query_settled(timeout_ms=1000)
+
+    assert failure.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+    assert adapter.last_settlement_evidence["RESULT_SET_COMPLETE"] is False
+
+
+def test_single_page_match_settles_when_layui_omits_the_page_indicator() -> None:
+    """A match that fits on one page must settle without a page indicator.
+
+    layui omits the page-number list -- and the current-page indicator inside it
+    -- whenever the whole result set fits on the first page, which is the normal
+    case for a duplicate check. The total count still proves the set is a single
+    page, so the exact result must be accepted as complete.
+    """
+
+    adapter, page = playwright_adapter(elements=playwright_rows())
+    page._current_page = None  # single-page pager renders no page-number list
+
+    adapter.goto("https://yingsuo.alperp.cn" + BUSINESS_INQUIRY_LIST_PATH)
+    adapter.set_text(MODEL_QUERY_INPUT, MPN)
+    adapter.ensure_checked(EXACT_MATCH_CHECKBOX)
+    adapter.click(QUERY_BUTTON)
+    adapter.wait_for_query_settled(timeout_ms=1000)
+
+    evidence = adapter.last_settlement_evidence
+    assert evidence["RESPONSE_ROW_COUNT"] == 1
+    assert evidence["PAGINATION_CURRENT_PAGE"] is None
+    assert evidence["PAGINATION_TOTAL_COUNT"] == 1
+    assert evidence["RESULT_SET_COMPLETE"] is True
+    assert evidence["FAILED_STAGE"] is None
+
+
+def test_multi_page_match_still_fails_closed_without_a_page_indicator() -> None:
+    """Dropping the indicator requirement must not accept a multi-page set."""
+
+    adapter, page = playwright_adapter(elements=playwright_rows())
+    page._current_page = None
+    page._page_size = 20
+    page._total_count = 40  # more than one page of results
+
+    adapter.goto("https://yingsuo.alperp.cn" + BUSINESS_INQUIRY_LIST_PATH)
+    adapter.set_text(MODEL_QUERY_INPUT, MPN)
+    adapter.ensure_checked(EXACT_MATCH_CHECKBOX)
+    adapter.click(QUERY_BUTTON)
+    with pytest.raises(InsoDuplicateHistoryError) as failure:
+        adapter.wait_for_query_settled(timeout_ms=1000)
+
+    assert failure.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+    assert adapter.last_settlement_evidence["RESULT_SET_COMPLETE"] is False
+    assert adapter.last_settlement_evidence["FAILED_STAGE"] == "RESULT_SET_COMPLETE"
+
+
+class _LateRenderingPage(FakePlaywrightPage):
+    """The response lands immediately; the grid paints a moment later.
+
+    The real list rebuilds the table body and its pager asynchronously after
+    the response settles, so a snapshot taken the instant the response arrives
+    can legitimately read an undrawn grid. This fake models exactly that: the
+    response is complete at dispatch, and the rows, the cache and the pager only
+    appear once the page is given the render condition to wait on.
+    """
+
+    def __init__(
+        self,
+        *,
+        elements: dict[str, object] | None = None,
+        response_rows: list[dict[str, object]] | None = None,
+    ) -> None:
+        super().__init__(elements=elements, response_rows=response_rows)
+        self._painted_total_count = self._total_count
+        self._painted_cache_ids = list(self._cache_bill_ids)
+        self._painted_dom_ids = list(self._dom_bill_ids)
+        self._total_count = None
+        self._cache_bill_ids = []
+        self._dom_bill_ids = []
+
+    def wait_for_function(self, expression: str, *, arg: object, timeout: int) -> None:
+        if isinstance(arg, dict):
+            # The render condition, not the request-settled condition: resolving
+            # it is the page finishing its draw.
+            self.calls.append(("wait_for_function", arg))
+            self._total_count = self._painted_total_count
+            self._cache_bill_ids = list(self._painted_cache_ids)
+            self._dom_bill_ids = list(self._painted_dom_ids)
+            return
+        super().wait_for_function(expression, arg=arg, timeout=timeout)
+
+
+def test_settlement_waits_for_a_grid_that_renders_after_the_response() -> None:
+    """A late render is not a read failure.
+
+    Regression: settlement used to take one snapshot the moment the response
+    arrived. When layui had not drawn the pager yet the total count read
+    ``None``, ``RESULT_SET_COMPLETE`` became false, and an ordinary duplicate
+    check was downgraded to ``DUPLICATE_LOOKUP_UNAVAILABLE`` -- which routes the
+    inquiry to manual confirmation -- even though the response itself was
+    complete and correct.
+    """
+
+    page = _LateRenderingPage(elements=playwright_rows())
+    adapter = PlaywrightDuplicateHistoryPage(
+        page, selectors=DuplicateHistoryFieldSelectors()
+    )
+
+    adapter.goto("https://yingsuo.alperp.cn" + BUSINESS_INQUIRY_LIST_PATH)
+    adapter.set_text(MODEL_QUERY_INPUT, MPN)
+    adapter.ensure_checked(EXACT_MATCH_CHECKBOX)
+    adapter.click(QUERY_BUTTON)
+    payload = adapter.wait_for_query_settled(timeout_ms=1000)
+
+    evidence = adapter.last_settlement_evidence
+    assert evidence["GRID_RENDERED"] is True
+    assert evidence["RESULT_SET_COMPLETE"] is True
+    assert evidence["FAILED_STAGE"] is None
+    assert payload["rows"] == page._response_rows
+
+
 def test_playwright_settlement_is_fail_closed() -> None:
     adapter, _ = playwright_adapter(
         elements=playwright_rows(),

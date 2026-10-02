@@ -14,7 +14,16 @@ from src.gui.app import (
     _countdown_text,
     _order_row_style,
 )
-from src.gui.contracts import LogEntry, Order, OrderStatus, RunState, SourceDetail
+from src.gui.contracts import (
+    LogEntry,
+    Order,
+    OrderStatus,
+    RunState,
+    SiteLoginOutcome,
+    SiteLoginReport,
+    SiteLoginResult,
+    SourceDetail,
+)
 from src.gui.mock_backend import MockBackend
 from src.gui.resources import BackendEvent, MainThreadEventQueue
 from src.gui.state import make_empty_session, utc_now
@@ -61,6 +70,9 @@ def test_backend_callbacks_only_enqueue_events_from_worker_thread():
 
         def on_log(self, callback):
             self.log_callback = callback
+
+        def on_login_all(self, callback):
+            self.login_all_callback = callback
 
     app = InsoDashboardApp.__new__(InsoDashboardApp)
     app._events = MainThreadEventQueue()
@@ -279,6 +291,215 @@ def test_stopping_state_keeps_action_disabled_until_backend_stopped():
     assert app._action_button.values["state"] == "normal"
 
 
+# ---------------------------------------------------------------------------
+# 一键登录所有网站
+#
+# Owner request (2026-10-01): a button of its own, a popup either way, and -- as
+# the important half -- a stopped run that can be started again from this same
+# screen once the login has been repaired in Chrome.
+# ---------------------------------------------------------------------------
+
+
+class _Widget:
+    def __init__(self):
+        self.values = {}
+
+    def configure(self, **kwargs):
+        self.values.update(kwargs)
+
+
+class _LoginAllBackend:
+    def __init__(self, *, running=False, report=None, state=RunState.STOPPED):
+        self.running = running
+        self.report = report
+        self.state = state
+        self.starts = 0
+        self.sweeps = 0
+
+    def get_status(self):
+        from src.gui.contracts import RunSession
+
+        return RunSession(None, self.state, None, None)
+
+    def get_health(self):
+        from src.gui.contracts import HealthReport
+
+        return HealthReport((), "正常")
+
+    def get_login_all_report(self):
+        return self.report
+
+    def login_all_running(self):
+        return self.running
+
+    def start_login_all_sites(self):
+        self.sweeps += 1
+
+    def start(self):
+        self.starts += 1
+
+
+def _login_all_app(backend):
+    app = InsoDashboardApp.__new__(InsoDashboardApp)
+    app._main_thread_id = get_ident()
+    app._backend = backend
+    app._login_all_button = _Widget()
+    app._action_button = _Widget()
+    app._status_badge = _Widget()
+    app._run_info_labels = {
+        key: _Widget()
+        for key in ("本轮发现订单", "已完成", "正在处理", "下轮询价倒计时")
+    }
+    app._health_labels = {}
+    app._refresh_results = lambda: None
+    app._login_all_running = False
+    app._shown_login_report = None
+    app._status = backend.get_status()
+    return app
+
+
+def test_a_clean_sweep_is_reported_as_ready_to_start(monkeypatch):
+    shown = []
+    monkeypatch.setattr(
+        "src.gui.app.messagebox.showinfo",
+        lambda title, message: shown.append((title, message)),
+    )
+    report = SiteLoginReport(
+        (
+            SiteLoginResult("立创商城", SiteLoginOutcome.SIGNED_IN),
+            SiteLoginResult("IC 现货网", SiteLoginOutcome.ALREADY_SIGNED_IN),
+        ),
+        utc_now(),
+        utc_now(),
+    )
+    app = _login_all_app(_LoginAllBackend(report=report))
+
+    app._sync_login_all()
+
+    assert len(shown) == 1
+    assert "立创商城：登录成功" in shown[0][1]
+    assert "IC 现货网：已在登录状态" in shown[0][1]
+    assert app._login_all_button.values["state"] == "normal"
+
+
+def test_a_sweep_that_needs_a_human_says_which_sites_and_what_to_do(monkeypatch):
+    shown = []
+    monkeypatch.setattr(
+        "src.gui.app.messagebox.showwarning",
+        lambda title, message: shown.append((title, message)),
+    )
+    report = SiteLoginReport(
+        (
+            SiteLoginResult("立创商城", SiteLoginOutcome.SIGNED_IN),
+            SiteLoginResult(
+                "正能量（Bom.Ai）",
+                SiteLoginOutcome.REJECTED,
+                "站点拒绝了账号或密码",
+            ),
+        ),
+        utc_now(),
+        utc_now(),
+    )
+    app = _login_all_app(_LoginAllBackend(report=report))
+
+    app._sync_login_all()
+
+    assert len(shown) == 1
+    (message,) = shown[0][1:]
+    assert "正能量（Bom.Ai）" in message
+    assert "站点拒绝了账号或密码" in message, "the reason must reach the operator"
+    assert "Chrome" in message, "and so must the next step"
+
+
+def test_the_same_report_is_never_presented_twice(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "src.gui.app.messagebox.showinfo",
+        lambda title, message: calls.append(title),
+    )
+    report = SiteLoginReport(
+        (SiteLoginResult("立创商城", SiteLoginOutcome.SIGNED_IN),), utc_now(), utc_now()
+    )
+    app = _login_all_app(_LoginAllBackend(report=report))
+
+    app._sync_login_all()
+    app._sync_login_all()
+    app._sync_login_all()
+
+    assert calls == ["一键登录结果"], "polling the backend is not a popup storm"
+
+
+def test_the_button_locks_itself_while_a_sweep_is_in_flight(monkeypatch):
+    app = _login_all_app(_LoginAllBackend(running=True))
+
+    app._sync_login_all()
+
+    assert app._login_all_button.values == {
+        "text": "正在依次登录…",
+        "fg_color": "#6B7280",
+        "state": "disabled",
+    }
+    assert app._login_all_running is True
+
+
+def test_the_button_is_locked_while_a_round_of_inquiry_is_running(monkeypatch):
+    app = _login_all_app(_LoginAllBackend(state=RunState.RUNNING))
+
+    app._sync_login_all()
+
+    assert app._login_all_button.values["state"] == "disabled"
+    assert app._login_all_button.values["text"] == "一键登录所有网站"
+
+
+def test_clicking_the_button_starts_one_sweep_and_locks_the_button(monkeypatch):
+    backend = _LoginAllBackend()
+    app = _login_all_app(backend)
+
+    app._on_login_all()
+
+    assert backend.sweeps == 1
+    assert app._login_all_button.values["state"] == "disabled"
+
+
+def test_inquiry_start_is_refused_until_login_sweep_finishes(monkeypatch):
+    asked = []
+    monkeypatch.setattr("src.gui.app.messagebox.showwarning", lambda *_args: asked.append(True))
+    backend = _LoginAllBackend(running=True)
+    app = _login_all_app(backend)
+    app._on_action()
+    assert asked and backend.starts == 0
+
+
+def test_clicking_during_a_round_of_inquiry_asks_instead_of_starting(monkeypatch):
+    asked = []
+    monkeypatch.setattr(
+        "src.gui.app.messagebox.showwarning",
+        lambda title, message: asked.append(message),
+    )
+    backend = _LoginAllBackend(state=RunState.RUNNING)
+    app = _login_all_app(backend)
+
+    app._on_login_all()
+
+    assert backend.sweeps == 0
+    assert asked and "先停止" in asked[0]
+
+
+def test_a_run_stopped_for_a_login_can_be_started_again_from_the_same_button():
+    """Otherwise repairing the session and re-reading it needs a full restart."""
+
+    backend = _LoginAllBackend(state=RunState.MANUAL_REVIEW)
+    app = _login_all_app(backend)
+    from src.gui.contracts import RunSession
+
+    app._update_status(RunSession(None, RunState.MANUAL_REVIEW, None, None))
+    assert app._action_button.values["text"] == "重新开始询价"
+    assert app._action_button.values["state"] == "normal"
+
+    app._on_action()
+    assert backend.starts == 1
+
+
 def test_stop_button_requests_backend_and_applies_stopping_snapshot_immediately():
     from src.gui.contracts import RunSession
 
@@ -373,6 +594,18 @@ class _CloseBackend:
     def on_log(self, callback):
         self.events.append(("log_listener", callback))
 
+    def on_login_all(self, callback):
+        self.events.append(("login_all_listener", callback))
+
+    def login_all_running(self):
+        return False
+
+    def get_login_all_report(self):
+        return None
+
+    def start_login_all_sites(self):
+        self.events.append(("login_all_sweep",))
+
     def shutdown(self):
         assert self.due == 0
         assert self.worker_state == "stopped"
@@ -389,6 +622,7 @@ def _close_test_app(backend, events):
     app._backend = backend
     app._status_badge = _CloseWidget(events, "badge")
     app._action_button = _CloseWidget(events, "action")
+    app._login_all_button = _CloseWidget(events, "login_all")
     app._main_thread_id = get_ident()
     return app
 
@@ -448,8 +682,10 @@ def test_close_cancels_after_and_unregisters_before_backend_shutdown():
         ("cancel", "tick-1"),
         ("badge", {"text": "正在退出", "fg_color": "#F59E0B"}),
         ("action", {"text": "正在退出", "fg_color": "#6B7280", "state": "disabled"}),
+        ("login_all", {"text": "正在退出", "fg_color": "#6B7280", "state": "disabled"}),
         ("status_listener", None),
         ("log_listener", None),
+        ("login_all_listener", None),
         ("shutdown",),
         ("destroy",),
     ]

@@ -1,4 +1,4 @@
-"""Allowlisted INSO actions and Save-and-Send prevention.
+"""Allowlisted INSO actions and narrowly authorized final submission.
 
 Production write gates default closed and are not read from runtime config.
 """
@@ -22,7 +22,9 @@ class WriteAction(StrEnum):
     OPEN_AI_ENTRY = "OPEN_AI_ENTRY"
     SET_AI_INPUT = "SET_AI_INPUT"
     RUN_AI_RECOGNITION = "RUN_AI_RECOGNITION"
+    AI_ENTRY_COMMIT = "AI_ENTRY_COMMIT"
     SAVE_DATA = "SAVE_DATA"
+    SAVE_AND_SEND = "SAVE_AND_SEND"
 
 
 WRITE_ACTION_ALLOWLIST = frozenset(WriteAction)
@@ -88,6 +90,20 @@ class ProductionWriteGate:
     def require_open(self) -> None:
         raise SecurityViolation("production write gate is closed")
 
+    def require_save_and_send(self) -> None:
+        raise SecurityViolation("save-and-send is not authorized")
+
+
+class OwnerAuthorizedSaveAndSendGate(ProductionWriteGate):
+    """Owner 2026-10-02 exception; Save Data and all other writes stay closed.
+
+    Explicit production composition only. Never enabled by runtime configuration.
+    This does not authorize this executor to run a submission test.
+    """
+
+    def require_save_and_send(self) -> None:
+        pass
+
 
 class FakeWriteGate:
     """Explicit test-only gate; not wired by launcher or runtime configuration."""
@@ -128,7 +144,7 @@ class SelectorRegistry:
             raise SecurityViolation("unknown write action")
         if not selector_id or not scope_id:
             raise SecurityViolation("selector and scope identities are required")
-        assert_safe_control_semantics(expected_semantics)
+        assert_safe_control_semantics(expected_semantics, action=action)
         if selector_id in self._deny or _contains_denied_selector_term(selector_id):
             self.deny(selector_id)
             raise SecurityViolation("selector identity is denied")
@@ -163,7 +179,7 @@ class SelectorRegistry:
             raise SecurityViolation("resolved selector is denied")
         if not control.enabled or not control.visible:
             raise SecurityViolation("resolved control is not actionable")
-        assert_safe_control_semantics(control.semantics)
+        assert_safe_control_semantics(control.semantics, action=action)
         if control.semantics != definition.expected_semantics:
             raise SecurityViolation("resolved control semantics changed")
         return control
@@ -219,21 +235,55 @@ class InsoDraftActions:
     def run_ai_recognition(self) -> None:
         self._run(WriteAction.RUN_AI_RECOGNITION)
 
+    def commit_ai_entry(self) -> None:
+        """Hand the recognized row back through the panel's own commit control.
+
+        Verified live (2026-10-01): the AI录单 dialog's 保存数据 control runs
+        ``pasteImport() -> AiImport.doImport()``, which is ``returnSet(buildResult())``
+        plus ``windowsClose()`` -- a purely client-side hand-back whose dialog
+        close callback then runs ``ai_appendRow()`` to reload the bill grid.
+        It is *not* a server Save; that remains the gated ``WriteAction.SAVE_DATA``
+        (``button#btnSave`` -> ``bill_save_auto``), and it stays unreachable here.
+        """
+
+        self._run(WriteAction.AI_ENTRY_COMMIT)
+
     def save_data(self) -> None:
         self._run(WriteAction.SAVE_DATA)
+
+    def save_and_send(self) -> None:
+        self._run(WriteAction.SAVE_AND_SEND)
 
     def _run(self, action: WriteAction, value: str | None = None) -> None:
         if not isinstance(action, WriteAction) or action not in WRITE_ACTION_ALLOWLIST:
             raise SecurityViolation("unknown write action")
-        self._gate.require_open()
+        # The production gate protects standalone Save; the explicit Owner
+        # exception below protects Save-and-Send separately. The
+        # V1.2 pre-save workflow is explicitly allowed to prepare an unsaved
+        # draft and validate AI read-back while this gate remains closed.
+        if action is WriteAction.SAVE_DATA:
+            self._gate.require_open()
+        if action is WriteAction.SAVE_AND_SEND:
+            authorize = getattr(self._gate, "require_save_and_send", None)
+            if not callable(authorize):
+                raise SecurityViolation("save-and-send is not authorized")
+            authorize()
         control = self._registry.resolve(action, self._candidate_source.candidates())
         # The semantic check runs on the freshly resolved control immediately
         # before the private dispatcher is called.
-        assert_safe_control_semantics(control.semantics)
+        assert_safe_control_semantics(control.semantics, action=action)
         self._dispatcher.dispatch_validated(action, control, value)
 
 
-def assert_safe_control_semantics(semantics: ControlSemantics) -> None:
+def assert_safe_control_semantics(
+    semantics: ControlSemantics, *, action: WriteAction | None = None,
+) -> None:
+    if action is WriteAction.SAVE_AND_SEND:
+        if semantics != ControlSemantics(
+            "button", "保存并发送", "保存并发送", (("id", "btnSave2"),)
+        ):
+            raise SecurityViolation("save-and-send control identity changed")
+        return
     values = [semantics.role, semantics.accessible_name, semantics.visible_text]
     values.extend(f"{key}={value}" for key, value in semantics.stable_attributes)
     normalized = tuple(_semantic_normalize(value) for value in values)

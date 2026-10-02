@@ -1,12 +1,41 @@
 # Windows release
 
-## Build
+## V1.2 Owner-authorized build and local deployment (2026-10-02)
 
-安装 `requirements-windows-release.lock`，运行：
+Owner explicitly approved packaging after personal Review discussion. Reuse the
+existing build script/spec, not a parallel release pipeline:
 
-`scripts/build_windows_release.ps1`
+`powershell -ExecutionPolicy Bypass -File scripts\build_windows_release.ps1 -Version 1.2`
 
-产物：`dist/INSO_V1.1/INSO_V1.1.exe`。构建脚本会运行 frozen `--self-check`；Tcl/Tk 不可用时直接失败。
+Default version remains 1.1; version 1.2 uses distinct artifact/staging names.
+The generic artifact is scanned and self-checked BEFORE local runtime deployment.
+The existing V1.1 directory is never replaced.
+
+Owner executable on this machine:
+
+`D:\Program_Leo\INSO_Leo\dist\INSO_V1.2\INSO_V1.2.exe`
+
+Local `runtime` is a junction to the already-used
+`.worktrees\v1-2-design\dist\INSO_V1.1\runtime`, preserving config, SQLite,
+Research results and historical purchase state without copying customer data
+into the generic package. This local deployed directory is NOT a portable clean
+distribution; keep its runtime target intact. Do not archive that worktree
+before migrating its live runtime safely.
+
+Frozen dependency check, artifact safety scan and actual stopped GUI startup
+passed. Smoke instance closed normally; no Start Inquiry, credentials/readiness
+probe, order replay, SMTP or Save-and-Send was executed. Final submit remains
+untested by explicit Owner instruction. Double-click the executable, then only
+start inquiry when Owner has a genuine new order. A qualifying new order now
+performs REAL Save-and-Send; Sheets write/standalone Save/generic Send stay closed.
+
+## Phase A source startup
+
+Run from the repository root:
+
+`powershell -ExecutionPolicy Bypass -File scripts\start_v12_phase_a.ps1`
+
+This starts the V1.2 production source candidate against the existing V1.1 local runtime configuration, so it reuses the already-working Sheets, Chrome/CDP and Core Vault setup. It initializes the V1.2 database additively and keeps the Production Write Gate closed. EXE packaging is Phase B and requires separate Owner approval.
 
 ## Runtime files
 
@@ -20,14 +49,14 @@ Chrome bootstrap 只使用显式 approved 配置：
 {
   "browser_bootstrap": {
     "executable": "C:/Approved/Chrome/Application/chrome.exe",
-    "profile_dir": "C:/Approved/INSO-CDP-Profile",
+    "profile_dir": "D:/Program_Leo/INSO_CDP/chrome-profile",
     "debug_port": 9222,
     "ready_timeout_seconds": 30
   }
 }
 ```
 
-Profile 必须已存在；程序不猜路径、不创建替代 profile。CDP 已可用时复用；否则只启动配置中的 approved Chrome。Reused Chrome 不关闭，app-owned Chrome 按 runtime lifecycle 清理。
+Profile 必须已存在且固定为上述唯一 profile；程序不猜路径、不创建替代 profile。CDP 已可用时复用；否则只启动同一 approved Chrome/profile。受保护 Chrome 永不关闭，只按 ownership 清理程序自己的标签。
 
 INSO ordinary authentication 使用共享 runtime helper + Core Vault 自动恢复；只有 CAPTCHA / OTP / device verification 等人工安全挑战需要 Owner。
 
@@ -35,8 +64,4 @@ INSO ordinary authentication 使用共享 runtime helper + Core Vault 自动恢�
 
 不要把 runtime config、OAuth client/grant、browser profile、SQLite、Excel 或 credential 放进 release artifact。
 
-Launcher 日志位于 `runtime/logs/INSO_V1.1.log`，只允许 sanitized diagnostics。Vault readiness 可用：
-
-`INSO_V1.1.exe --diagnose-vault`
-
-报告只能包含 site/config readiness 与安全错误类型，不包含 credential value。
+Launcher 日志位于 `runtime/logs/INSO_V1.2.log`，只允许 sanitized diagnostics。缺少 V1.2 production adapters 时应用会明确停止，不会静默退回 V1.1-only processing。报告只能包含 site/config readiness 与安全错误类型，不包含 credential value。

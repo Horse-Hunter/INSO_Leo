@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
 
 import pytest
 
@@ -42,7 +43,7 @@ def test_named_mutex_acquire_duplicate_and_release_seam():
     assert guard.acquire()
     guard.release()
     assert api.calls == [
-        ("create", "Local\\INSO_V1.1"), ("release", 42), ("close", 42)
+        ("create", "Local\\INSO_V1.2"), ("release", 42), ("close", 42)
     ]
 
     duplicate_api = _MutexApi(ERROR_ALREADY_EXISTS)
@@ -316,6 +317,149 @@ def test_cdp_launches_only_explicit_existing_profile_and_closes_owned(
     assert hider_stopped == [process]
 
 
+def test_persistent_session_is_never_owned_and_never_closes_the_browser(
+    tmp_path, monkeypatch
+):
+    """The shared INSO session browser must survive every shutdown path."""
+
+    import src.launcher.browser_bootstrap as browser_module
+
+    executable = tmp_path / "chrome.exe"
+    executable.touch()
+    profile = tmp_path / "shared-profile"
+    (profile / "Default").mkdir(parents=True)
+    process = _Process()
+    hider_calls = []
+    monkeypatch.setattr(
+        browser_module,
+        "_start_owned_window_hider",
+        lambda candidate: (hider_calls.append(candidate), lambda: None)[1],
+    )
+    started = []
+    launched = []
+
+    def version(_url):
+        return "ws://127.0.0.1/devtools/browser/test" if launched else None
+
+    handle = acquire_cdp_browser(
+        "http://127.0.0.1:9222", tmp_path,
+        {"browser_bootstrap": {
+            "executable": str(executable), "profile_dir": str(profile),
+            "debug_port": 9222, "ready_timeout_seconds": 2,
+            "persistent_session": True,
+        }},
+        probe=lambda _url: False,
+        launch=lambda exe, prof, port: launched.append((exe, prof, port)) or process,
+        wait=lambda _seconds: None,
+        version_reader=version,
+        playwright_factory=_factory_for(lambda *_args, **_kwargs: _FakeBrowser(), started),
+    )
+
+    assert handle.owned is False
+    assert launched == [(executable, profile, 9222)]
+    handle.close()
+    assert process.terminated is False
+    assert hider_calls == []
+    assert started[0].stop_count == 1
+
+
+def test_persistent_session_refuses_to_start_a_blank_profile(tmp_path):
+    executable = tmp_path / "chrome.exe"
+    executable.touch()
+    profile = tmp_path / "blank-profile"
+    profile.mkdir()
+    launches = []
+
+    with pytest.raises(BrowserBootstrapError) as error:
+        acquire_cdp_browser(
+            "http://127.0.0.1:9222", tmp_path,
+            {"browser_bootstrap": {
+                "executable": str(executable), "profile_dir": str(profile),
+                "debug_port": 9222, "ready_timeout_seconds": 2,
+                "persistent_session": True,
+            }},
+            probe=lambda _url: False,
+            version_reader=lambda _url: None,
+            launch=lambda *_args: launches.append(True),
+        )
+
+    assert error.value.reason_code == "protected CDP session profile is missing"
+    assert launches == []
+
+
+def test_persistent_session_reaps_only_the_never_ready_launch(tmp_path, monkeypatch):
+    import src.launcher.browser_bootstrap as browser_module
+
+    executable = tmp_path / "chrome.exe"
+    executable.touch()
+    profile = tmp_path / "shared-profile"
+    (profile / "Default").mkdir(parents=True)
+    process = _Process()
+    reaped = []
+    monkeypatch.setattr(browser_module, "_reap_failed_launch", lambda p: reaped.append(p))
+    clock = _Clock()
+    launched = []
+
+    def version(_url):
+        return "ws://127.0.0.1/devtools/browser/test" if launched else None
+
+    with pytest.raises(BrowserBootstrapError, match="CDP_ATTACH_FAILED"):
+        acquire_cdp_browser(
+            "http://127.0.0.1:9222", tmp_path,
+            {"browser_bootstrap": {
+                "executable": str(executable), "profile_dir": str(profile),
+                "debug_port": 9222, "ready_timeout_seconds": 0.5,
+                "persistent_session": True,
+            }},
+            probe=lambda _url: False,
+            launch=lambda *_args: (launched.append(True) or process),
+            version_reader=version,
+            playwright_factory=_factory_for(
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionResetError()), []
+            ),
+            wait=clock.wait,
+            monotonic=clock.monotonic,
+        )
+
+    assert reaped == [process]
+
+
+def test_persistent_attach_refreshes_the_session_cookie_backup(tmp_path):
+    """Every persistent attach must refresh a recoverable session snapshot."""
+
+    profile = tmp_path / "shared-profile"
+    (profile / "Default").mkdir(parents=True)
+    inso_cookie = {
+        "name": "erp_token", "domain": ".yingsuo.alperp.cn", "value": "synthetic"
+    }
+    unrelated = {"name": "junk", "domain": "example.com", "value": "x"}
+
+    class _Context:
+        def cookies(self):
+            return [inso_cookie, unrelated]
+
+    class _Browser:
+        contexts = (_Context(),)
+
+        def is_connected(self):
+            return True
+
+    handle = acquire_cdp_browser(
+        "http://127.0.0.1:9222", tmp_path,
+        {"browser_bootstrap": {
+            "executable": "chrome.exe", "profile_dir": str(profile),
+            "debug_port": 9222, "persistent_session": True,
+        }},
+        version_reader=lambda _url: "ws://127.0.0.1/devtools/browser/test",
+        playwright_factory=_factory_for(lambda *_args, **_kwargs: _Browser(), []),
+    )
+
+    assert handle.owned is False
+    backup = profile.parent / "session-backup" / "inso-cookies-latest.json"
+    assert backup.is_file()
+    assert json.loads(backup.read_text(encoding="utf-8")) == [inso_cookie]
+
+
 def test_cdp_missing_or_invalid_bootstrap_fails_closed(tmp_path):
     with pytest.raises(BrowserBootstrapError):
         acquire_cdp_browser(
@@ -391,10 +535,10 @@ def test_windowed_startup_duplicate_does_not_construct_backend(tmp_path, monkeyp
     messages = []
     monkeypatch.setattr(main_module, "app_root", lambda: tmp_path)
     monkeypatch.setattr(main_module, "_show_error", lambda message, *_: messages.append(message))
-    monkeypatch.setattr(sys, "argv", ["INSO_V1.1.exe"])
+    monkeypatch.setattr(sys, "argv", ["INSO_V1.2.exe"])
     assert main_module.main(guard_factory=lambda: guard, backend_factory=lambda: constructed.append(True)) == 0
     assert constructed == []
-    assert messages == ["INSO_V1.1 已在运行。"]
+    assert messages == ["INSO_V1.2 已在运行。"]
     assert guard.released
 
 
@@ -411,14 +555,71 @@ def test_windowed_startup_error_is_sanitized_and_points_to_log(tmp_path, monkeyp
     messages = []
     monkeypatch.setattr(main_module, "app_root", lambda: tmp_path)
     monkeypatch.setattr(main_module, "_show_error", lambda message, *_: messages.append(message))
-    monkeypatch.setattr(sys, "argv", ["INSO_V1.1.exe"])
+    monkeypatch.setattr(sys, "argv", ["INSO_V1.2.exe"])
     monkeypatch.setattr(main_module, "ProductionBackend", lambda: (_ for _ in ()).throw(ValueError("private-token-value")))
     assert main_module.main(guard_factory=Guard) == 1
-    log_text = (tmp_path / "runtime/logs/INSO_V1.1.log").read_text(encoding="utf-8")
+    log_text = (tmp_path / "runtime/logs/INSO_V1.2.log").read_text(encoding="utf-8")
     assert "ValueError" in log_text
     assert "private-token-value" not in log_text
-    assert "INSO_V1.1.log" in messages[0]
+    assert "INSO_V1.2.log" in messages[0]
     assert "private-token-value" not in messages[0]
+
+
+def test_runtime_log_keeps_the_failed_step_and_no_page_text(tmp_path):
+    """The step is the only ERP-free diagnosis a failed run can be read from.
+
+    A plain ``log.warning`` from a leg was dropped by the runtime filter, so a
+    draft that never reached the AI录单 panel and one that died after the ERP
+    handed its row back were the same one-line failure. The step label and the
+    exception class name are our own vocabulary and must survive; the
+    exception's *message* is where customer names and field values hide and
+    must not.
+    """
+
+    import src.gui.main as main_module
+    from src.launcher.diagnostics import log_step
+
+    path = main_module._configure_startup_log(tmp_path)
+    try:
+        raise TimeoutError("客户 张三 的报价 private-token-value")
+    except TimeoutError as cause:
+        log_step("parent-row-missing", cause=cause)
+    log_step("surface-left-open")
+
+    log_text = path.read_text(encoding="utf-8")
+    assert (
+        "workflow step failed at parent-row-missing (TimeoutError)" in log_text
+    )
+    assert "workflow step failed at surface-left-open" in log_text
+    for leaked in ("private-token-value", "张三", "TimeoutError:"):
+        assert leaked not in log_text
+
+
+def test_runtime_log_rebuilds_from_extras_never_from_the_message(tmp_path):
+    """A caller cannot smuggle text in by formatting it into the record."""
+
+    import logging
+
+    import src.gui.main as main_module
+    from src.launcher.diagnostics import LOG_NAME
+
+    path = main_module._configure_startup_log(tmp_path)
+    logger = logging.getLogger(LOG_NAME)
+    step_shaped = logging.LogRecord(
+        LOG_NAME, logging.WARNING, __file__, 1, "客户 张三 private-token-value", (), None
+    )
+    step_shaped.inso_step = "../../etc/passwd"
+    step_shaped.inso_cause = "客户 张三 said hello"
+    logger.handle(step_shaped)
+    plain = logging.LogRecord(
+        LOG_NAME, logging.WARNING, __file__, 1, "private-token-value", (), None
+    )
+    logger.handle(plain)
+
+    log_text = path.read_text(encoding="utf-8")
+    assert log_text.count("launcher event (WARNING)") == 2
+    for leaked in ("private-token-value", "张三", "etc/passwd"):
+        assert leaked not in log_text
 
 
 @pytest.mark.parametrize("owned", [False, True])
@@ -457,4 +658,86 @@ def test_backend_closes_only_owned_browser_after_runtime_thread_exits(tmp_path, 
     backend._thread.join(5)
     assert not backend._thread.is_alive()
     assert backend.get_status().state is RunState.STOPPED
-    assert closed == (["production-research-worker"] if owned else [])
+    # The V1.2 coordinator owns Research synchronously; the production
+    # launcher performs the final owned-browser cleanup after both loops end.
+    assert closed == (["production-launcher"] if owned else [])
+
+
+class _FakePlaywrightClient:
+    """Mirrors Playwright's sync client: only its owning thread may stop it."""
+
+    def __init__(self) -> None:
+        self.owner = threading.get_ident()
+        self.stops = 0
+        self.foreign_stop_attempts = 0
+
+    def stop(self) -> None:
+        if threading.get_ident() != self.owner:
+            self.foreign_stop_attempts += 1
+            raise RuntimeError("greenlet.error: Cannot switch to a different thread")
+        self.stops += 1
+
+
+def test_owner_thread_release_still_stops_the_client_immediately() -> None:
+    client = _FakePlaywrightClient()
+    handle = BrowserHandle(owned=False, playwright=client)
+
+    handle.disconnect()
+
+    assert client.stops == 1
+    assert client.foreign_stop_attempts == 0
+    assert handle.playwright is None
+    assert BrowserHandle.drain_deferred_stops() == 0
+
+
+def test_foreign_thread_release_parks_the_client_for_the_owning_thread() -> None:
+    """The production runtime starts Playwright on the poller thread and releases
+    the idle session from the worker thread. Stopping it there raises
+    greenlet.error and orphans the driver process (~126 MB, measured), so the
+    release must park the client instead of stopping it from the wrong thread."""
+
+    client = _FakePlaywrightClient()
+    handle = BrowserHandle(owned=False, playwright=client, browser=object())
+    released = threading.Event()
+
+    def release_from_worker() -> None:
+        handle.disconnect()
+        released.set()
+
+    worker = threading.Thread(target=release_from_worker, name="worker")
+    worker.start()
+    worker.join(10)
+
+    # A raise inside the worker would leave the event unset.
+    assert released.is_set()
+    assert client.foreign_stop_attempts == 0  # never even attempted cross-thread
+    assert client.stops == 0
+    assert handle.playwright is None and handle.browser is None
+
+    # The owning thread stops it at its next drain, exactly once.
+    assert BrowserHandle.drain_deferred_stops() == 1
+    assert client.stops == 1
+    assert BrowserHandle.drain_deferred_stops() == 0
+
+
+def test_drain_from_another_thread_leaves_a_foreign_client_parked() -> None:
+    client = _FakePlaywrightClient()
+    handle = BrowserHandle(owned=False, playwright=client)
+
+    worker = threading.Thread(target=handle.disconnect, name="worker")
+    worker.start()
+    worker.join(10)
+
+    drained: list[int] = []
+    stranger = threading.Thread(
+        target=lambda: drained.append(BrowserHandle.drain_deferred_stops()),
+        name="stranger",
+    )
+    stranger.start()
+    stranger.join(10)
+
+    assert drained == [0]
+    assert client.stops == 0
+
+    assert BrowserHandle.drain_deferred_stops() == 1
+    assert client.stops == 1

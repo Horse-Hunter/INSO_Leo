@@ -157,7 +157,7 @@ def test_ai_input_uses_exact_six_space_delimiters() -> None:
         build_ai_input("M-1", "Brand", True)
 
 
-def test_ai_recognition_uses_exact_ai_mpn_brand_and_integer_quantity() -> None:
+def test_ai_recognition_keeps_mpn_and_quantity_exact() -> None:
     matches = validate_ai_recognition(
         command_id="draft-1",
         completed_at=NOW,
@@ -165,14 +165,15 @@ def test_ai_recognition_uses_exact_ai_mpn_brand_and_integer_quantity() -> None:
         expected_brand=" Brand ",
         expected_quantity=7,
         recognized_mpn="ABC-123",
-        recognized_brand="Brand",
+        recognized_brand="brand",
         recognized_quantity=7,
     )
     assert matches.outcome is PurchaseOutcome.AI_RECOGNIZED
     for values in (
         {"recognized_mpn": "ABC123"},
         {"recognized_mpn": "ABC-124"},
-        {"recognized_brand": "brand"},
+        {"recognized_brand": ""},
+        {"recognized_brand": "Nexperia"},
         {"recognized_quantity": 7.0},
         {"recognized_quantity": 8},
     ):
@@ -192,3 +193,28 @@ def test_ai_recognition_uses_exact_ai_mpn_brand_and_integer_quantity() -> None:
         )
         assert result.outcome is PurchaseOutcome.VALIDATION_FAILED
         assert result.reason_code is ReasonCode.AI_RECOGNITION_MISMATCH
+
+
+def test_ai_recognition_accepts_a_partial_brand_but_not_an_unrelated_one() -> None:
+    """Owner decision (2026-09-29): the brand only has to match partially.
+
+    Verified live: the ERP's AI canonicalises the brand, so Research's
+    ``HRS(hirose)`` comes back as ``HRS``. MPN and quantity stay exact.
+    """
+
+    def outcome(recognized_brand: str) -> PurchaseOutcome:
+        return validate_ai_recognition(
+            command_id="draft-1",
+            completed_at=NOW,
+            expected_mpn="GT17V-10DP-DS-SB(70)",
+            expected_brand="HRS(hirose)",
+            expected_quantity=80,
+            recognized_mpn="GT17V-10DP-DS-SB(70)",
+            recognized_brand=recognized_brand,
+            recognized_quantity=80,
+        ).outcome
+
+    assert outcome("HRS") is PurchaseOutcome.AI_RECOGNIZED
+    assert outcome("Hirose") is PurchaseOutcome.AI_RECOGNIZED
+    assert outcome("hrs(hirose)") is PurchaseOutcome.AI_RECOGNIZED
+    assert outcome("Nexperia") is PurchaseOutcome.VALIDATION_FAILED

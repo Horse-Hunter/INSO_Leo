@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
+from time import monotonic, sleep
 from typing import Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
@@ -16,6 +17,14 @@ from urllib.request import Request, urlopen
 
 from .cdp_pages import new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
+from .site_login import (
+    REJECTED_PASSWORD_TEXT,
+    LoginForm,
+    SiteLoginError,
+    await_login_outcome,
+    challenge_present,
+    submit_login_form,
+)
 from .source_contracts import (
     EvidenceField,
     MpnMatchKind,
@@ -30,6 +39,21 @@ from .source_contracts import (
 
 FINDCHIPS_SEARCH_URL = "https://www.findchips.com/search/"
 FINDCHIPS_USER_AGENT = "INSO-Leo-Research/1.0 (read-only Findchips adapter)"
+#: Canonical credential site id; matches the entry in the Core vault.
+FINDCHIPS_SITE_ID = "findchips.com"
+FINDCHIPS_LOGIN_URL = "https://www.findchips.com/signin"
+
+#: Findchips' ordinary sign-in form. It asks for nothing else -- no captcha and
+#: no company field -- but any future gate is declared as a challenge so the
+#: shared submit refuses to run blind.
+FINDCHIPS_LOGIN_FORM = LoginForm(
+    username="#email-address",
+    password="#password",
+    submit="#j-signin button.signin",
+    # English wording on top of the shared set: this site is the only one whose
+    # refusal is not in Chinese.
+    rejection=(*REJECTED_PASSWORD_TEXT, "incorrect password", "invalid password"),
+)
 
 
 class FindchipsError(RuntimeError):
@@ -87,6 +111,21 @@ class FindchipsPage:
     captured_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class FindchipsLogin:
+    """An in-memory Findchips login supplied by the project Credential Provider."""
+
+    username: str = field(repr=False)
+    password: str = field(repr=False)
+
+
+class FindchipsLoginProvider(Protocol):
+    """Research-facing credential capability; storage details stay in Core."""
+
+    def get_login(self, site_id: str) -> FindchipsLogin | None:
+        """Return one configured login without logging or persisting it."""
+
+
 class FindchipsPageClient(Protocol):
     """Acquisition boundary replaced by fixtures in default tests."""
 
@@ -117,6 +156,22 @@ def _is_findchips_login_page(html: str) -> bool:
         ("type=\"password\"" in folded or "type='password'" in folded)
         and "login" in folded
     )
+
+
+def _is_findchips_signin_url(url: str) -> bool:
+    """True while the tab is still on Findchips' sign-in path."""
+
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return False
+    return (parsed.path or "").casefold().startswith("/signin")
+
+
+def findchips_login_page_open(page: object) -> bool:
+    """Settle predicate: has Findchips' own script carried us off the form?"""
+
+    return _is_findchips_signin_url(getattr(page, "url", "") or "")
 
 
 class FindchipsHttpClient:
@@ -178,21 +233,33 @@ class FindchipsHttpClient:
 class CdpFindchipsClient:
     """Read a public result in a temporary background tab in approved Chrome."""
 
-    def __init__(self, *, cdp_url: str = "http://127.0.0.1:9222", timeout_ms: int = 45_000) -> None:
+    def __init__(
+        self,
+        *,
+        cdp_url: str = "http://127.0.0.1:9222",
+        timeout_ms: int = 45_000,
+        login_provider: FindchipsLoginProvider | None = None,
+        playwright_factory: Callable[[], object] | None = None,
+    ) -> None:
         parsed = urlsplit(cdp_url)
         if parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
             raise ValueError("Findchips CDP endpoint must be loopback")
         self._cdp_url = cdp_url
         self._timeout_ms = timeout_ms
+        self._login_provider = login_provider
+        self._playwright_factory = playwright_factory
 
     def fetch_first_page(self, mpn: str) -> FindchipsPage:
         target_url = build_findchips_search_url(mpn)
+        factory = self._playwright_factory
+        if factory is None:
+            try:
+                from playwright.sync_api import sync_playwright
+            except ImportError as error:
+                raise FindchipsPageUnavailable("PLAYWRIGHT_NOT_INSTALLED") from error
+            factory = sync_playwright
         try:
-            from playwright.sync_api import sync_playwright
-        except ImportError as error:
-            raise FindchipsPageUnavailable("PLAYWRIGHT_NOT_INSTALLED") from error
-        try:
-            with sync_playwright() as playwright:
+            with factory() as playwright:  # type: ignore[attr-defined]
                 browser = playwright.chromium.connect_over_cdp(
                     self._cdp_url, timeout=self._timeout_ms
                 )
@@ -205,26 +272,108 @@ class CdpFindchipsClient:
                     timeout_ms=self._timeout_ms,
                 )
                 try:
-                    page.goto(
-                        target_url,
-                        wait_until="domcontentloaded",
-                        timeout=self._timeout_ms,
-                    )
-                    page.wait_for_timeout(4_000)
-                    if not _is_findchips_response_url(page.url):
-                        raise FindchipsPageUnavailable("UNEXPECTED_RESPONSE_HOST", page.url)
-                    html = page.content()
-                    if not html.strip():
-                        raise FindchipsPageUnavailable("EMPTY_RESPONSE", page.url)
+                    html, current_url = self._load_result(page, target_url)
                     if _is_findchips_login_page(html):
-                        raise FindchipsPageUnavailable("LOGIN_REQUIRED", page.url)
-                    return FindchipsPage(html, page.url, datetime.now(UTC))
+                        # Owner rule (2026-10-01): a login wall is a session
+                        # problem to solve, never a business answer. Sign in,
+                        # then ask the site for the result again.
+                        self._sign_in(page)
+                        html, current_url = self._load_result(page, target_url)
+                        if _is_findchips_login_page(html):
+                            raise FindchipsPageUnavailable(
+                                "LOGIN_NOT_CONFIRMED", current_url
+                            )
+                    return FindchipsPage(html, current_url, datetime.now(UTC))
                 finally:
                     page.close()
         except FindchipsPageUnavailable:
             raise
         except Exception as error:
             raise FindchipsPageUnavailable("BROWSER_FAILURE", target_url) from error
+
+    def _load_result(self, page: object, target_url: str) -> tuple[str, str]:
+        """Fetch the result page and say plainly whether it is usable.
+
+        A document that turns out to be the sign-in page is returned rather
+        than raised: whether it is a problem depends on whether a login can
+        still be established, and that is the caller's decision.
+        """
+
+        page.goto(  # type: ignore[attr-defined]
+            target_url,
+            wait_until="domcontentloaded",
+            timeout=self._timeout_ms,
+        )
+        page.wait_for_load_state("load", timeout=self._timeout_ms)  # type: ignore[attr-defined]
+        page.wait_for_timeout(4_000)  # type: ignore[attr-defined]
+        current_url = page.url  # type: ignore[attr-defined]
+        if not _is_findchips_response_url(current_url):
+            raise FindchipsPageUnavailable("UNEXPECTED_RESPONSE_HOST", current_url)
+        html = page.content()  # type: ignore[attr-defined]
+        if not html.strip():
+            raise FindchipsPageUnavailable("EMPTY_RESPONSE", current_url)
+        return html, current_url
+
+    def _sign_in(self, page: object) -> None:
+        """Establish Findchips' own login once, or say why it cannot be done."""
+
+        provider = self._login_provider
+        login = provider.get_login(FINDCHIPS_SITE_ID) if provider is not None else None
+        if login is None:
+            # No configured credential: this stays the old, honest answer.
+            raise FindchipsPageUnavailable(
+                "LOGIN_REQUIRED", page.url  # type: ignore[attr-defined]
+            )
+        try:
+            ensure_findchips_signed_in(
+                page,
+                login=login,
+                timeout_ms=self._timeout_ms,
+            )
+        except SiteLoginError as error:
+            raise FindchipsPageUnavailable(
+                error.reason_code, page.url  # type: ignore[attr-defined]
+            ) from None
+
+
+def ensure_findchips_signed_in(
+    page: object,
+    *,
+    login: FindchipsLogin | None,
+    timeout_ms: int,
+    wait: Callable[[float], None] = sleep,
+    clock: Callable[[], float] = monotonic,
+) -> None:
+    """Open Findchips' own sign-in page and complete one login there.
+
+    This site navigates itself -- the page it is handed is only a tab -- so the
+    whole flow is shared rather than half of it, and the sell sweep signs in
+    exactly the way a price read does.
+    """
+
+    if login is None:
+        raise SiteLoginError("CREDENTIALS_UNAVAILABLE")
+    page.goto(  # type: ignore[attr-defined]
+        FINDCHIPS_LOGIN_URL,
+        wait_until="domcontentloaded",
+        timeout=timeout_ms,
+    )
+    if challenge_present(page, FINDCHIPS_LOGIN_FORM):
+        raise SiteLoginError("MANUAL_VERIFICATION_REQUIRED")
+    submit_login_form(
+        page,
+        form=FINDCHIPS_LOGIN_FORM,
+        login=login,
+        timeout_ms=timeout_ms,
+    )
+    await_login_outcome(
+        page,
+        form=FINDCHIPS_LOGIN_FORM,
+        is_login_page=findchips_login_page_open,
+        timeout_ms=timeout_ms,
+        wait=wait,
+        clock=clock,
+    )
 
 
 def _parse_stock_presence(value: str | None) -> bool | None:
@@ -309,6 +458,8 @@ class _FindchipsParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.target_mpn = target_mpn
         self.result_container_found = False
+        self.explicit_no_results = False
+        self._empty_message: list[str] | None = None
         self.offers: list[FindchipsOffer] = []
         self._row: dict[str, str | None] | None = None
         self._visible_tiers: list[FindchipsPriceTier] = []
@@ -326,6 +477,8 @@ class _FindchipsParser(HTMLParser):
     ) -> None:
         values = dict(attrs)
         classes = frozenset((values.get("class") or "").split())
+        if tag == "p" and {"alert", "alert-info", "no-results"} <= classes:
+            self._empty_message = []
         if "distributor-results" in classes:
             self.result_container_found = True
         if tag == "tr" and values.get("data-mfrpartnumber") is not None:
@@ -353,10 +506,21 @@ class _FindchipsParser(HTMLParser):
                 self._tier_base_currency = values.get("data-basecurrency")
 
     def handle_data(self, data: str) -> None:
+        if self._empty_message is not None:
+            self._empty_message.append(data)
         if self._active_span is not None:
             self._span_text.append(data)
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == "p" and self._empty_message is not None:
+            message = " ".join("".join(self._empty_message).split())
+            expected = (f"No results were found for {self.target_mpn.strip()}."
+                        if self.target_mpn is not None else None)
+            self.explicit_no_results = (
+                message == expected if expected is not None
+                else re.fullmatch(r"No results were found for .+\.", message) is not None
+            )
+            self._empty_message = None
         if self._row is None:
             return
         if tag == "span" and self._active_span is not None:
@@ -438,7 +602,9 @@ def parse_findchips_offers(
         raise
     except Exception as error:
         raise FindchipsParseError("RESULT_DOCUMENT_UNPARSEABLE") from error
-    if not parser.result_container_found:
+    if parser.explicit_no_results and parser.offers:
+        raise FindchipsParseError("RESULT_DOCUMENT_CONFLICT")
+    if not parser.result_container_found and not parser.explicit_no_results:
         raise FindchipsParseError("RESULT_CONTAINER_MISSING")
     return tuple(parser.offers)
 

@@ -6,6 +6,7 @@ from src.sheets import (
     WorksheetIdentity,
     WorksheetRow,
     query_pending_records,
+    usable_brand,
 )
 
 
@@ -278,3 +279,23 @@ def test_shahab_customer_name_is_fixed_value_without_tier_inference() -> None:
     assert record.customer_name == "SHAHAB"
     assert record.customer_name_source is CustomerNameSource.SHAHAB_FIXED
     assert record.importance_raw == "A"
+
+
+def test_brand_placeholder_cell_is_not_a_usable_brand() -> None:
+    # Owner decision (2026-09-30): the Brand column may say "unknown", and that
+    # is a request to resolve the brand, not a brand.
+    assert usable_brand("unknown") is None
+    assert usable_brand("UNKNOWN") is None
+    assert usable_brand("  Unknown  ") is None
+
+
+def test_absent_brand_cell_is_not_a_usable_brand() -> None:
+    assert usable_brand(None) is None
+    assert usable_brand("") is None
+    assert usable_brand("   ") is None
+    assert usable_brand(2026) is None
+
+
+def test_a_real_brand_is_returned_without_surrounding_whitespace() -> None:
+    assert usable_brand(" Brand X ") == "Brand X"
+    assert usable_brand("HRS(hirose)") == "HRS(hirose)"

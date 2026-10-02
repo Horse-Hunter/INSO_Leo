@@ -11,10 +11,15 @@ from .bom_ai import (
     BomAiLogin,
     BomAiPriceRecord,
     BomAiRawPage,
-    PlaywrightBomAiAuthenticatedBrowser,
     calendar_month_cutoff,
 )
-from .contracts import ResearchInput, ResearchReasonCode, ResearchResult, ResearchStatus
+from .contracts import (
+    InvalidResearchInput,
+    ResearchInput,
+    ResearchReasonCode,
+    ResearchResult,
+    ResearchStatus,
+)
 from .credentials import (
     RESEARCH_CREDENTIAL_SITE_IDS,
     BomAiCoreCredentialProvider,
@@ -132,10 +137,10 @@ __all__ = [
     "InsoLogin",
     "InsoReadError",
     "InsoReadOnlyBrowser",
+    "InvalidResearchInput",
     "LcscAdapter",
     "LcscBrowserClient",
     "LcscHttpClient",
-    "PlaywrightBomAiAuthenticatedBrowser",
     "PlaywrightInsoReadOnlyBrowser",
     "PriceAggregation",
     "ResearchExcelOutput",

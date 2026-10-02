@@ -527,3 +527,61 @@ def test_workflow_state_catalog_is_exact() -> None:
         "MANUAL_REVIEW",
         "FAILED",
     }
+
+
+def test_interrupted_research_claim_is_requeued_for_the_next_poll(tmp_path: Path) -> None:
+    store = WorkflowStateStore(tmp_path / "workflow.sqlite3")
+    store.enqueue(pending(), now=NOW)
+    claimed = store.claim_due(now=NOW)
+    assert claimed is not None
+    assert claimed.status is WorkflowStatus.RESEARCHING
+    assert claimed.attempt_count == 1
+
+    # A process killed mid-Research leaves the claim behind. claim_due only
+    # takes QUEUED/RETRY_WAIT, so without recovery the inquiry stalls forever.
+    assert store.claim_due(now=NOW + timedelta(hours=1)) is None
+
+    assert store.requeue_interrupted_research(now=NOW + timedelta(minutes=1)) == 1
+
+    recovered = store.get(claimed.id)
+    assert recovered.status is WorkflowStatus.QUEUED
+    assert recovered.attempt_count == 0
+    assert recovered.next_attempt_at == NOW + timedelta(minutes=1)
+    assert recovered.last_error == "INTERRUPTED_RESEARCH_REQUEUED"
+    reclaimed = store.claim_due(now=NOW + timedelta(minutes=1))
+    assert reclaimed is not None
+    assert reclaimed.inquiry_id == recovered.inquiry_id
+
+
+def test_interrupted_research_requeue_spares_rows_that_were_never_claimed(
+    tmp_path: Path,
+) -> None:
+    store = WorkflowStateStore(tmp_path / "workflow.sqlite3")
+    store.enqueue(pending(), now=NOW)
+
+    assert store.requeue_interrupted_research(now=NOW) == 0
+
+    item = store.all_items()[0]
+    assert item.status is WorkflowStatus.QUEUED
+    assert item.attempt_count == 0
+    assert item.last_error is None
+
+
+def test_non_numeric_quantity_stops_the_item_without_burning_retries(
+    tmp_path: Path,
+) -> None:
+    store = WorkflowStateStore(tmp_path / "workflow.sqlite3")
+    research = ResultResearch(ResearchStatus.SUCCESS)
+    worker = WorkflowWorker(store, research)
+    store.enqueue(pending(quantity="Qty"), now=NOW)
+
+    item = worker.process_due_one(now=NOW)
+
+    assert item is not None
+    assert item.status is WorkflowStatus.FAILED
+    assert item.last_error == "INVALID_RESEARCH_INPUT"
+    assert item.next_attempt_at is None
+    # The claim incremented the attempt, but nothing is scheduled for retry:
+    # a deterministic data problem would fail the same way again.
+    assert item.attempt_count == 1
+    assert research.inputs == []

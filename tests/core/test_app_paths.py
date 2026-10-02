@@ -26,3 +26,17 @@ def test_config_relative_paths_resolve_against_app_root(tmp_path):
     )
     absolute = tmp_path / "external.xlsx"
     assert resolve_app_path(absolute, root=Path("ignored")) == absolute
+
+
+def test_source_runtime_root_override_is_explicit_and_requires_a_directory(
+    tmp_path, monkeypatch
+):
+    module = tmp_path / "repo" / "src" / "core" / "app_paths.py"
+    module.parent.mkdir(parents=True)
+    module.touch()
+    override = tmp_path / "existing-runtime"
+    override.mkdir()
+    monkeypatch.setenv("INSO_RUNTIME_ROOT", str(override))
+    assert app_root(module_file=module, frozen=False) == override
+    monkeypatch.setenv("INSO_RUNTIME_ROOT", str(tmp_path / "missing-runtime"))
+    assert app_root(module_file=module, frozen=False) == tmp_path / "repo"

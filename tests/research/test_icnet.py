@@ -52,11 +52,18 @@ class FakeLocator:
         self._count = count
         self._text = text
 
+    @property
+    def first(self) -> "FakeLocator":
+        return self
+
     def count(self) -> int:
         return self._count
 
     def inner_text(self) -> str:
         return self._text
+
+    def is_visible(self) -> bool:
+        return False
 
 
 class FakeCdpPage:
@@ -73,6 +80,9 @@ class FakeCdpPage:
         self.has_body = has_body
         self.response_status = response_status
         self.goto_calls: list[tuple[str, str, int]] = []
+        self.closed = False
+        self.fills: list[tuple[str, str]] = []
+        self.clicks: list[str] = []
 
     def goto(self, url: str, *, wait_until: str, timeout: int):
         self.goto_calls.append((url, wait_until, timeout))
@@ -88,6 +98,14 @@ class FakeCdpPage:
     def wait_for_timeout(self, timeout: int) -> None:
         assert timeout >= 0
 
+    def fill(self, selector: str, value: str, *, timeout: int) -> None:
+        assert timeout > 0
+        self.fills.append((selector, value))
+
+    def click(self, selector: str, *, timeout: int) -> None:
+        assert timeout > 0
+        self.clicks.append(selector)
+
     def locator(self, selector: str) -> FakeLocator:
         assert selector == "body"
         return FakeLocator(int(self.has_body), self.html)
@@ -95,20 +113,62 @@ class FakeCdpPage:
     def content(self) -> str:
         return self.html
 
+    def close(self) -> None:
+        self.closed = True
+
+
+def _plain_page() -> FakeCdpPage:
+    return FakeCdpPage("about:blank", "<html><body></body></html>")
+
+
+class _CdpSession:
+    def __init__(self) -> None:
+        self.detached = False
+
+    def send(self, method: str, _params: object) -> dict[str, str]:
+        assert method == "Target.createTarget"
+        return {"targetId": "target-1"}
+
+    def detach(self) -> None:
+        self.detached = True
+
+
+class _PendingPage:
+    """Mirrors Playwright's ``context.expect_page()`` handshake."""
+
+    def __init__(self, context: "FakeCdpContext") -> None:
+        self._context = context
+        self.value: FakeCdpPage | None = None
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_exc: object) -> bool:
+        self.value = self._context.new_page()
+        return False
+
 
 class FakeCdpContext:
-    def __init__(self, pages: list[FakeCdpPage]) -> None:
+    def __init__(self, pages: list[FakeCdpPage], spawn=None) -> None:
         self.pages = pages
+        self.spawn = spawn or _plain_page
 
     def new_page(self) -> FakeCdpPage:
-        page = FakeCdpPage("about:blank", "<html><body></body></html>")
+        page = self.spawn()
         self.pages.append(page)
         return page
+
+    def expect_page(self, *, timeout: int) -> _PendingPage:
+        assert timeout > 0
+        return _PendingPage(self)
 
 
 class FakeCdpBrowser:
     def __init__(self, context: FakeCdpContext) -> None:
         self.contexts = [context]
+
+    def new_browser_cdp_session(self) -> _CdpSession:
+        return _CdpSession()
 
 
 class FakeChromium:
@@ -358,14 +418,17 @@ def _cdp_client(
     *,
     navigate: bool,
     cdp_url: str = "http://127.0.0.1:9333",
+    spawn=None,
+    login_provider=None,
 ) -> tuple[CdpIcNetClient, FakeChromium]:
-    context = FakeCdpContext(pages)
+    context = FakeCdpContext(pages, spawn=spawn)
     chromium = FakeChromium(FakeCdpBrowser(context))
     client = CdpIcNetClient(
         cdp_url=cdp_url,
         timeout_ms=1234,
         settle_ms=0,
         navigate=navigate,
+        login_provider=login_provider,
         playwright_factory=lambda: FakePlaywright(chromium),
     )
     return client, chromium
@@ -418,36 +481,63 @@ def test_cdp_client_attach_only_reads_exact_existing_page() -> None:
     assert chromium.connect_calls == [("http://127.0.0.1:9333", 1234)]
 
 
-def test_cdp_client_navigation_reuses_attached_normal_chrome_page() -> None:
-    page = FakeCdpPage(
-        "https://member.ic.net.cn/login.php",
+def test_cdp_client_opens_its_own_page_and_closes_it() -> None:
+    """Owner rule: every call opens a tab, uses it, and gives it back."""
+
+    stale = FakeCdpPage(
+        "https://www.ic.net.cn/search/STALE.html",
         FIXTURE.read_text(encoding="utf-8"),
     )
-    client, _ = _cdp_client([page], navigate=True)
+    client, chromium = _cdp_client(
+        [stale],
+        navigate=True,
+        spawn=lambda: FakeCdpPage(
+            "about:blank", FIXTURE.read_text(encoding="utf-8")
+        ),
+    )
 
     captured = client.fetch_first_page("  ABC-123  ")
 
+    context = chromium.browser.contexts[0]
     target_url = "https://www.ic.net.cn/search/ABC-123.html"
     assert captured.url == target_url
-    assert page.goto_calls == [(target_url, "domcontentloaded", 1234)]
+    assert stale.goto_calls == [], "an earlier tab must not be reused"
+    assert len(context.pages) == 2
+    assert context.pages[-1].goto_calls == [(target_url, "domcontentloaded", 1234)]
+    assert context.pages[-1].closed is True
 
 
 class _LoginLocator(FakeLocator):
+    """One control on IC.net's own login page.
+
+    Only the three form controls are visible: ``#loginCode`` stays hidden until
+    the site distrusts the attempt, exactly as the live page behaves, which is
+    why it must not count as a visible control here either.
+    """
+
+    _VISIBLE = frozenset({"#username", "#password", "#btn_login"})
+
     def __init__(self, page: "SessionExpiredCdpPage", selector: str) -> None:
         super().__init__(1)
         self._page = page
         self._selector = selector
 
-    def fill(self, _value: str) -> None:
-        return None
+    def nth(self, _index: int) -> "_LoginLocator":
+        return self
 
-    def click(self) -> None:
+    def is_visible(self) -> bool:
+        return self._selector in self._VISIBLE
+
+    def fill(self, value: str, *, timeout: int) -> None:
+        assert timeout > 0
+        self._page.fills.append((self._selector, value))
+
+    def click(self, *, timeout: int) -> None:
+        assert timeout > 0
+        self._page.clicks.append(self._selector)
         if self._selector == "#btn_login":
             self._page.logged_in = True
             self._page.url = "https://www.ic.net.cn/"
-
-    def is_visible(self) -> bool:
-        return False
 
 
 class SessionExpiredCdpPage(FakeCdpPage):
@@ -458,6 +548,16 @@ class SessionExpiredCdpPage(FakeCdpPage):
     def goto(self, url: str, *, wait_until: str, timeout: int):
         self.goto_calls.append((url, wait_until, timeout))
         self.url = url if self.logged_in else "https://member.ic.net.cn/login.php"
+
+    def click(self, selector: str, *, timeout: int) -> None:
+        raise AssertionError(
+            f"page-level click({selector!r}) can land on the wrong element"
+        )
+
+    def fill(self, selector: str, value: str, *, timeout: int) -> None:
+        raise AssertionError(
+            f"page-level fill({selector!r}) can land on the wrong element"
+        )
 
     def locator(self, selector: str):
         if selector in {"#username", "#password", "#btn_login", "#loginCode"}:
@@ -471,40 +571,46 @@ class LoginProvider:
         return IcNetLogin("test-user", "test-password")
 
 
+def _expired_session_spawn() -> SessionExpiredCdpPage:
+    return SessionExpiredCdpPage(FIXTURE.read_text(encoding="utf-8"))
+
+
 def test_cdp_client_recovers_one_expired_session_with_existing_provider() -> None:
-    page = SessionExpiredCdpPage(FIXTURE.read_text(encoding="utf-8"))
-    context = FakeCdpContext([page])
-    chromium = FakeChromium(FakeCdpBrowser(context))
-    client = CdpIcNetClient(
-        cdp_url="http://127.0.0.1:9333",
-        timeout_ms=1234,
-        settle_ms=0,
-        min_interval_seconds=0,
+    client, chromium = _cdp_client(
+        [],
+        navigate=True,
+        spawn=_expired_session_spawn,
         login_provider=LoginProvider(),
-        playwright_factory=lambda: FakePlaywright(chromium),
     )
 
     captured = client.fetch_first_page("ABC-123")
 
+    page = chromium.browser.contexts[0].pages[-1]
     assert captured.url == "https://www.ic.net.cn/search/ABC-123.html"
-    assert len(page.goto_calls) == 2
+    assert ("#username", "test-user") in page.fills
+    assert ("#password", "test-password") in page.fills
+    assert page.clicks == ["#btn_login"]
+    assert page.closed is True
 
 
 def test_cdp_client_reports_login_required_without_existing_provider() -> None:
     page = SessionExpiredCdpPage(FIXTURE.read_text(encoding="utf-8"))
-    client, _ = _cdp_client([page], navigate=True)
+    client, _ = _cdp_client([page], navigate=True, spawn=_expired_session_spawn)
 
     with pytest.raises(IcNetPageUnavailable, match="LOGIN_REQUIRED"):
         client.fetch_first_page("ABC-123")
 
 
 def test_cdp_client_classifies_http_forbidden_before_parser() -> None:
-    page = FakeCdpPage(
-        "https://www.ic.net.cn/",
-        "<html><body>forbidden</body></html>",
-        response_status=403,
+    client, _ = _cdp_client(
+        [],
+        navigate=True,
+        spawn=lambda: FakeCdpPage(
+            "https://www.ic.net.cn/",
+            "<html><body>forbidden</body></html>",
+            response_status=403,
+        ),
     )
-    client, _ = _cdp_client([page], navigate=True)
 
     with pytest.raises(IcNetPageUnavailable, match="HTTP_STATUS_403") as caught:
         client.fetch_first_page("ABC-123")
@@ -515,10 +621,13 @@ def test_cdp_client_classifies_http_forbidden_before_parser() -> None:
 def test_cdp_client_spaces_queries_to_the_same_site(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    page = FakeCdpPage(
-        "https://www.ic.net.cn/", FIXTURE.read_text(encoding="utf-8")
+    client, _ = _cdp_client(
+        [],
+        navigate=True,
+        spawn=lambda: FakeCdpPage(
+            "https://www.ic.net.cn/", FIXTURE.read_text(encoding="utf-8")
+        ),
     )
-    client, _ = _cdp_client([page], navigate=True)
     elapsed = [0.0]
     sleeps: list[float] = []
     monkeypatch.setattr("src.research.icnet.time.monotonic", lambda: elapsed[0])
@@ -534,18 +643,18 @@ def test_cdp_client_spaces_queries_to_the_same_site(
     assert sleeps == [80.0]
 
 
-def test_cdp_client_navigation_does_not_reuse_unrelated_page(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        "src.research.icnet.new_background_page",
-        lambda _browser, context, **_kwargs: context.new_page(),
-    )
+def test_cdp_client_navigation_does_not_reuse_unrelated_page() -> None:
     unrelated = FakeCdpPage(
         "https://evil.example/?next=ic.net.cn",
         FIXTURE.read_text(encoding="utf-8"),
     )
-    client, chromium = _cdp_client([unrelated], navigate=True)
+    client, chromium = _cdp_client(
+        [unrelated],
+        navigate=True,
+        spawn=lambda: FakeCdpPage(
+            "about:blank", FIXTURE.read_text(encoding="utf-8")
+        ),
+    )
 
     captured = client.fetch_first_page("ABC-123")
 
@@ -588,11 +697,14 @@ def test_cdp_client_fails_closed_when_attached_page_has_no_body() -> None:
 
 
 def test_cdp_client_identifies_visible_search_challenge() -> None:
-    page = FakeCdpPage(
-        "https://www.ic.net.cn/searchPnCode.php?l=ins",
-        "对不起！您的速度太快了，请慢一点搜索！请依次点击汉字",
+    client, _ = _cdp_client(
+        [],
+        navigate=True,
+        spawn=lambda: FakeCdpPage(
+            "https://www.ic.net.cn/searchPnCode.php?l=ins",
+            "对不起！您的速度太快了，请慢一点搜索！请依次点击汉字",
+        ),
     )
-    client, _ = _cdp_client([page], navigate=True)
     with pytest.raises(
         IcNetPageUnavailable, match="INTERACTIVE_CHALLENGE_REQUIRED"
     ):

@@ -240,6 +240,11 @@ class _PowerShellVaultBackend:
             self._pwsh,
             "-NoProfile",
             "-NonInteractive",
+            # The provider executes a project-owned temporary bridge script;
+            # bypass applies only to this child process and leaves machine/user
+            # execution policy unchanged.
+            "-ExecutionPolicy",
+            "Bypass",
             "-File",
             script_path,
             "-ModulePath",

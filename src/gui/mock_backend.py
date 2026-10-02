@@ -29,6 +29,9 @@ from .contracts import (
     OrderStatus,
     RunSession,
     RunState,
+    SiteLoginOutcome,
+    SiteLoginReport,
+    SiteLoginResult,
     SourceDetail,
 )
 from .resources import ResourceManager, RingBufferLog, get_process_memory_mb
@@ -100,6 +103,9 @@ class MockBackend(GuiBackend):
         logger.addHandler(self._ring_log)
         self._status_callbacks: list[Callable[[RunSession], Any]] = []
         self._log_callbacks: list[Callable[[LogEntry], Any]] = []
+        self._login_all_callbacks: list[Callable[[SiteLoginReport], Any]] = []
+        self._login_all_report: SiteLoginReport | None = None
+        self._login_all_thread: threading.Thread | None = None
 
         self._resources = ResourceManager()
         self._log("Mock backend 已初始化")
@@ -396,6 +402,57 @@ class MockBackend(GuiBackend):
                 self._log_callbacks.append(callback)
                 self._ring_log.add_listener(self._notify_log)
 
+    def start_login_all_sites(self) -> None:
+        """Demonstrate the sweep with a short, always-successful run."""
+
+        with self._lock:
+            if self._shutdown or (
+                self._login_all_thread is not None
+                and self._login_all_thread.is_alive()
+            ):
+                return
+            started_at = utc_now()
+            self._login_all_thread = threading.Thread(
+                target=self._login_all_worker,
+                args=(started_at,),
+                name="MockLoginAllSites",
+                daemon=True,
+            )
+            self._login_all_thread.start()
+
+    def login_all_running(self) -> bool:
+        with self._lock:
+            thread = self._login_all_thread
+        return thread is not None and thread.is_alive()
+
+    def get_login_all_report(self) -> SiteLoginReport | None:
+        with self._lock:
+            return self._login_all_report
+
+    def on_login_all(
+        self, callback: Callable[[SiteLoginReport], Any] | None
+    ) -> None:
+        with self._lock:
+            if callback is None:
+                self._login_all_callbacks.clear()
+            elif callback not in self._login_all_callbacks:
+                self._login_all_callbacks.append(callback)
+
+    def _login_all_worker(self, started_at: datetime) -> None:
+        results = []
+        for site in _SOURCE_NAMES:
+            sleep(0.2)
+            results.append(SiteLoginResult(site, SiteLoginOutcome.SIGNED_IN))
+        report = SiteLoginReport(tuple(results), started_at, utc_now())
+        with self._lock:
+            self._login_all_report = report
+            callbacks = tuple(self._login_all_callbacks)
+        for callback in callbacks:
+            try:
+                callback(report)
+            except Exception:  # noqa: BLE001,S110 - callback must not break backend
+                pass
+
     def shutdown(self) -> None:
         with self._lock:
             if self._shutdown:
@@ -420,6 +477,7 @@ class MockBackend(GuiBackend):
         self._resources.close_all()
         self.on_status_change(None)
         self.on_log(None)
+        self.on_login_all(None)
         self._notify_status()
         self._log("Mock backend 已关闭")
 

@@ -171,7 +171,36 @@ def test_multiple_failure_remarks_follow_canonical_source_order() -> None:
     )
     results.reverse()
     aggregation = aggregate_price_results(tuple(results), 1)
-    assert aggregation.remarks == "Findchips：暂时不可用；INSO：登录不可用"
+    assert aggregation.remarks == "Findchips：暂时不可用；INSO：没有可用的登录凭据"
+
+
+def test_the_shared_login_verdicts_are_reported_as_themselves() -> None:
+    """A refused credential is not a stalled session, and must not read as one.
+
+    ``CREDENTIAL_REJECTED`` and ``CREDENTIALS_UNAVAILABLE`` both contain the
+    word "CREDENTIAL", so the generic branch would have reported them as
+    "登录不可用" -- the same sentence for "the password is wrong" and "no
+    credential is configured", which are two different repairs.
+    """
+
+    for code, expected in (
+        ("CREDENTIAL_REJECTED", "账号或密码被站点拒绝"),
+        ("CREDENTIALS_UNAVAILABLE", "没有可用的登录凭据"),
+        ("MANUAL_VERIFICATION_REQUIRED", "需要人工验证"),
+        ("LOGIN_FORM_UNAVAILABLE", "站点登录表单已变化"),
+        ("LOGIN_CONTROL_AMBIGUOUS", "站点登录表单已变化"),
+    ):
+        results = _complete(
+            {
+                ResearchSource.INSO: _result(
+                    ResearchSource.INSO,
+                    SourceOutcome.SOURCE_UNAVAILABLE,
+                    failure_code=code,
+                ),
+            }
+        )
+        aggregation = aggregate_price_results(results, 1)
+        assert aggregation.remarks == f"INSO：{expected}", code
 
 
 def test_authenticated_session_failure_is_reported_as_login_unavailable() -> None:

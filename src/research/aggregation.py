@@ -53,10 +53,34 @@ def _failure_code(result: SourceResult) -> str:
     )
 
 
+#: Verdicts the shared login implementation hands back verbatim. They are named
+#: here rather than pattern-matched, because the words inside them ("CREDENTIAL",
+#: "LOGIN") belong to the generic branch below and would be read as a dead
+#: session rather than as the specific thing the site just said.
+_LOGIN_VERDICT_REASONS = {
+    "MANUAL_VERIFICATION_REQUIRED": "需要人工验证",
+    "CREDENTIAL_REJECTED": "账号或密码被站点拒绝",
+    "CREDENTIALS_UNAVAILABLE": "没有可用的登录凭据",
+    "LOGIN_FORM_UNAVAILABLE": "站点登录表单已变化",
+    "LOGIN_CONTROL_AMBIGUOUS": "站点登录表单已变化",
+    # The credential is fine and the form was submitted; what could not be
+    # confirmed is an option beside the form ("30天内免登录"). Saying "登录不可用"
+    # here would send the repair at the password, which is not what broke.
+    "LOGIN_OPTION_UNCONFIRMED": "登录前选项未能勾选",
+}
+
+
 def _failure_reason(code: str) -> str:
     upper = code.upper()
+    verdict = _LOGIN_VERDICT_REASONS.get(upper)
+    if verdict is not None:
+        return verdict
     if "CHALLENGE" in upper or "CAPTCHA" in upper or "OTP" in upper:
         return "需要人工验证"
+    if "REJECTED" in upper:
+        # The site answered the credential itself. Waiting cannot fix it and
+        # neither can a retry, so it must not read like a stalled session.
+        return "账号或密码被站点拒绝"
     if "FX" in upper:
         return "汇率不可用"
     if "HTTP_STATUS_403" in upper:

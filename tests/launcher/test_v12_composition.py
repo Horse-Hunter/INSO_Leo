@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -7,7 +8,11 @@ from typing import ClassVar
 
 import pytest
 
-from src.inso import AiRecognitionResult
+from src.inso import (
+    AiRecognitionResult,
+    ParentProductFields,
+    PlaywrightParentProductFields,
+)
 from src.launcher.v12_composition import (
     CoordinatorPurchaseDraftWriter,
     PlaywrightReadOnlySaveReconciler,
@@ -40,7 +45,7 @@ class _ResearchFacts:
 
 class _PrepareActions:
     def __init__(self, *, preview=None):
-        self.preview = preview or ("LM358", "Texas Instruments", 123, True)
+        self.preview = preview or ("P216328", "LM358", "Texas Instruments", 123, True)
         self.calls: list[tuple] = []
 
     def new_draft(self):
@@ -68,33 +73,66 @@ class _PrepareActions:
         self.calls.append(("read_preview",))
         return AiRecognitionResult(*self.preview)
 
+    def commit_ai_entry(self):
+        self.calls.append(("commit_ai",))
+
 
 class _ParentFields:
-    def __init__(self, *, readback=None):
-        self.values = {"model": None, "brand": None, "quantity": None}
+    """Read-only stand-in for the row the ERP renders into the 采购临时询价 grid.
+
+    There is no setter by design: the automation must not type 编码/型号/品牌/数量
+    into the operator's bill. ``rendered`` is what the ERP's own ``ai_appendRow``
+    put there.
+    """
+
+    def __init__(self, *, readback=None, rendered=None):
+        self.values = rendered or {
+            "product_id": "P216328",
+            "model": "LM358",
+            "brand": "Texas Instruments",
+            "quantity": 123,
+        }
         self.readback = readback
         self.calls: list[tuple] = []
 
-    def set_model(self, value):
-        self.calls.append(("set_model", value))
-        self.values["model"] = value
+    def wait_for_row(self, expected_product_id, timeout_seconds):
+        self.calls.append(("wait_for_row", expected_product_id))
+        return self.values["product_id"] == expected_product_id
 
-    def set_brand(self, value):
-        self.calls.append(("set_brand", value))
-        self.values["brand"] = value
-
-    def set_quantity(self, value):
-        self.calls.append(("set_quantity", value))
-        self.values["quantity"] = value
+    def read_product_id(self):
+        return self.readback[0] if self.readback else self.values["product_id"]
 
     def read_model(self):
-        return self.readback[0] if self.readback else self.values["model"]
+        return self.readback[1] if self.readback else self.values["model"]
 
     def read_brand(self):
-        return self.readback[1] if self.readback else self.values["brand"]
+        return self.readback[2] if self.readback else self.values["brand"]
 
     def read_quantity(self):
-        return self.readback[2] if self.readback else self.values["quantity"]
+        return self.readback[3] if self.readback else self.values["quantity"]
+
+
+class _LateParentFields(_ParentFields):
+    """``ai_appendRow`` never rendered our 编码 inside the wait budget."""
+
+    def wait_for_row(self, expected_product_id, timeout_seconds):
+        self.calls.append(("wait_for_row", expected_product_id))
+        return False
+
+
+class _WrongProductCodeParent(_ParentFields):
+    """The grid reloaded with a row, but not the one the ERP handed over."""
+
+    def read_product_id(self):
+        return "P999999"
+
+
+class _FailingCommitActions(_PrepareActions):
+    """The 保存数据 commit itself never landed."""
+
+    def commit_ai_entry(self):
+        self.calls.append(("commit_ai",))
+        raise TimeoutError("the 保存数据 control never became visible")
 
 
 class _Transport:
@@ -419,7 +457,7 @@ def test_qq_smtp_factory_uses_the_explicit_sender_config() -> None:
 
 
 def test_prepare_ai_mismatch_does_not_touch_parent_product_fields() -> None:
-    actions = _PrepareActions(preview=("LM358X", "Texas Instruments", 123, True))
+    actions = _PrepareActions(preview=("P216328", "LM358X", "Texas Instruments", 123, True))
     parent = _ParentFields()
 
     result = _purchase_writer(actions, parent).prepare(_command())
@@ -428,7 +466,7 @@ def test_prepare_ai_mismatch_does_not_touch_parent_product_fields() -> None:
     assert parent.calls == []
 
 
-def test_prepare_ai_match_writes_preview_fields_then_reads_back() -> None:
+def test_prepare_lets_the_erp_fill_the_row_then_reads_it_back() -> None:
     actions = _PrepareActions()
     parent = _ParentFields()
     writer = _purchase_writer(actions, parent)
@@ -436,11 +474,8 @@ def test_prepare_ai_match_writes_preview_fields_then_reads_back() -> None:
     result = writer.prepare(_command())
 
     assert result.outcome is PurchaseOutcome.AI_RECOGNIZED
-    assert parent.calls == [
-        ("set_model", "LM358"),
-        ("set_brand", "Texas Instruments"),
-        ("set_quantity", 123),
-    ]
+    # The row is handed back by the ERP; the seam only waits for it and reads it.
+    assert parent.calls == [("wait_for_row", "P216328")]
     assert actions.calls == [
         ("new_draft",),
         ("customer", "Win Source Elec. Tech. Ltd"),
@@ -450,16 +485,149 @@ def test_prepare_ai_match_writes_preview_fields_then_reads_back() -> None:
         ("ai_input", _command().ai_input),
         ("recognize",),
         ("read_preview",),
+        ("commit_ai",),
     ]
     assert not hasattr(writer, "save_data")
 
 
+def test_parent_product_fields_expose_no_way_to_type_into_the_bill() -> None:
+    """The 采购临时询价 form is the operator's; we must not fill its product row.
+
+    The ERP fills it itself when the AI录单 panel commits (``pasteImport`` ->
+    ``ai_appendRow``). A seam that could write those cells is the process defect
+    this guards against, so the capability must not exist at all.
+    """
+
+    for name in ("set_product_id", "set_model", "set_brand", "set_quantity"):
+        assert not hasattr(PlaywrightParentProductFields, name)
+        assert not hasattr(ParentProductFields, name)
+
+
+def test_prepare_commits_the_ai_panel_before_reading_the_parent_grid() -> None:
+    """The recognized row only reaches the grid through the panel's own commit."""
+
+    order: list[str] = []
+
+    class _OrderedActions(_PrepareActions):
+        def read_ai_result(self):
+            order.append("read_preview")
+            return super().read_ai_result()
+
+        def commit_ai_entry(self):
+            order.append("commit_ai")
+            super().commit_ai_entry()
+
+    class _OrderedParentFields(_ParentFields):
+        def wait_for_row(self, expected_product_id, timeout_seconds):
+            order.append("wait_for_row")
+            return super().wait_for_row(expected_product_id, timeout_seconds)
+
+    result = _purchase_writer(
+        _OrderedActions(), _OrderedParentFields()
+    ).prepare(_command())
+
+    assert result.outcome is PurchaseOutcome.AI_RECOGNIZED
+    assert order == ["read_preview", "commit_ai", "wait_for_row"]
+
+
+def test_prepare_never_commits_when_the_preview_mismatches() -> None:
+    """A mismatched recognition must not be handed to the bill at all."""
+
+    actions = _PrepareActions(preview=("P216328", "LM358X", "Texas Instruments", 123, True))
+
+    result = _purchase_writer(actions).prepare(_command())
+
+    assert result.outcome is PurchaseOutcome.VALIDATION_FAILED
+    assert ("commit_ai",) not in actions.calls
+
+
 def test_prepare_parent_readback_mismatch_fails_validation() -> None:
-    parent = _ParentFields(readback=("LM358", "Wrong Brand", 123))
+    parent = _ParentFields(readback=("P216328", "LM358", "Wrong Brand", 123))
 
     result = _purchase_writer(parent=parent).prepare(_command())
 
     assert result.outcome is PurchaseOutcome.VALIDATION_FAILED
+
+
+def test_prepare_row_that_never_arrives_fails_closed() -> None:
+    """``ai_appendRow`` reloads the grid asynchronously, so the wait is a gate.
+
+    A row whose 编码 arrives only after the budget expired is not a rendered row:
+    the leg must fail rather than treat the commit click as sufficient.
+    """
+
+    class _LateParentFields(_ParentFields):
+        def wait_for_row(self, expected_product_id, timeout_seconds):
+            self.calls.append(("wait_for_row", expected_product_id))
+            return False
+
+    parent = _LateParentFields()
+
+    result = _purchase_writer(parent=parent).prepare(_command())
+
+    assert result.outcome is PurchaseOutcome.VALIDATION_FAILED
+    assert parent.calls == [("wait_for_row", "P216328")]
+
+
+def test_prepare_row_with_the_wrong_product_code_fails_closed() -> None:
+    parent = _ParentFields(
+        rendered={
+            "product_id": "P999999",
+            "model": "LM358",
+            "brand": "Texas Instruments",
+            "quantity": 123,
+        }
+    )
+
+    result = _purchase_writer(parent=parent).prepare(_command())
+
+    assert result.outcome is PurchaseOutcome.VALIDATION_FAILED
+
+
+def _purchase_steps(caplog) -> list[tuple[str, str | None]]:
+    return [
+        (record.inso_step, record.inso_cause)
+        for record in caplog.records
+        if record.name == "inso.diagnostics"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("actions", "parent", "expected_step", "expected_cause"),
+    [
+        (_FailingCommitActions, _ParentFields, "commit-ai-entry", "TimeoutError"),
+        (_PrepareActions, _LateParentFields, "parent-row-missing", None),
+        (_PrepareActions, _WrongProductCodeParent, "parent-id-mismatch", None),
+    ],
+)
+def test_prepare_failure_names_the_step_that_died(
+    caplog, actions, parent, expected_step, expected_cause
+) -> None:
+    """``CONTROL_NOT_FOUND`` is one code for four different failure sites.
+
+    The AI panel, the panel's own commit, the ERP's grid reload and the
+    launcher's surface dismissal all surface the same reason code, so the step
+    label is the only thing that says where a draft actually died -- and it is
+    the one thing the operator-visible alert can never carry.
+    """
+
+    with caplog.at_level(logging.WARNING, logger="inso.diagnostics"):
+        result = _purchase_writer(actions(), parent()).prepare(_command())
+
+    assert result.outcome is PurchaseOutcome.VALIDATION_FAILED
+    assert _purchase_steps(caplog) == [(expected_step, expected_cause)]
+
+
+def test_prepare_ai_mismatch_reports_no_step_because_none_was_reached(caplog) -> None:
+    """A recognition that never matched is its own reason code, not a lost control."""
+
+    actions = _PrepareActions(preview=("P216328", "LM358X", "Texas Instruments", 123, True))
+
+    with caplog.at_level(logging.WARNING, logger="inso.diagnostics"):
+        result = _purchase_writer(actions).prepare(_command())
+
+    assert result.outcome is PurchaseOutcome.VALIDATION_FAILED
+    assert _purchase_steps(caplog) == []
 
 
 def test_prepare_source_has_no_ai_import_footer_selector_or_save_send_path() -> None:

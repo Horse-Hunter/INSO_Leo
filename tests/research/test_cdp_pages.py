@@ -3,7 +3,7 @@ from typing import Self
 
 import pytest
 
-from src.research.cdp_pages import new_background_page
+from src.research.cdp_pages import new_background_page, shared_playwright_factory
 
 
 class Session:
@@ -82,3 +82,58 @@ def test_failed_page_creation_closes_its_target() -> None:
         "Target.closeTarget", {"targetId": "synthetic-target"}
     )
     assert session.detached
+
+
+class _FakeBrowser:
+    def __init__(self, *, connected: bool = True) -> None:
+        self._connected = connected
+
+    def is_connected(self) -> bool:
+        return self._connected
+
+
+class _FakePlaywright:
+    def __init__(self) -> None:
+        self.stopped = False
+
+    def stop(self) -> None:
+        self.stopped = True
+
+
+def test_shared_factory_reuses_the_live_cdp_browser_without_stopping_it() -> None:
+    """The launcher's single Playwright attachment must be shared, never stopped.
+
+    Playwright's synchronous API cannot be started twice in one thread, so every
+    browser-backed source must connect through the launcher's existing session
+    instead of opening its own.
+    """
+
+    browser = _FakeBrowser()
+    playwright = _FakePlaywright()
+    factory = shared_playwright_factory(lambda: (playwright, browser))
+
+    with factory() as shared:
+        assert shared.chromium.connect_over_cdp("http://127.0.0.1:9222") is browser
+        # A second source in the same run reuses the very same attachment.
+        assert shared.chromium.connect_over_cdp("http://127.0.0.1:9222") is browser
+
+    assert playwright.stopped is False
+
+
+@pytest.mark.parametrize(
+    "provider",
+    (
+        lambda: None,
+        lambda: (object(), _FakeBrowser(connected=False)),
+    ),
+    ids=("absent", "disconnected"),
+)
+def test_shared_factory_falls_back_to_a_private_session(
+    provider, monkeypatch
+) -> None:
+    sentinel = object()
+    monkeypatch.setattr(
+        "playwright.sync_api.sync_playwright", lambda: sentinel, raising=True
+    )
+
+    assert shared_playwright_factory(provider)() is sentinel

@@ -9,6 +9,8 @@ from .duplicate_history import (
     InsoDuplicateHistoryReader,
 )
 from .purchase_writer import (
+    AiEntryPanel,
+    AiFrameProvider,
     AiRecognitionResult,
     AiResultReader,
     InsoPurchaseWriter,
@@ -29,6 +31,8 @@ from .session import (
 )
 
 __all__ = [
+    "AiEntryPanel",
+    "AiFrameProvider",
     "AiRecognitionResult",
     "AiResultReader",
     "BrowserIdentity",

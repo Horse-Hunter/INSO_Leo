@@ -31,6 +31,21 @@ Ordinary technical problems stay inside the implementation session.
 - Temporary validation/discovery paths must be folded back into the canonical production path before delivery.
 - If progress stalls, first search for an already-solved path. Do not compensate by inventing another framework or implementation.
 
+## Protected shared asset: the INSO CDP session — mandatory
+
+**Trigger:** any work that reads INSO, or that touches the browser/CDP, session, launcher or runtime configuration.
+
+The Owner has completed the one-time INSO phone-code login and will not provide another. That login lives in exactly one Chrome profile and is the single most critical, non-reproducible asset in the project.
+
+- **One profile, one port.** Every `browser_bootstrap.profile_dir` is
+  `D:\Program_Leo\INSO_CDP\chrome-profile`; every `debug_port` is `9222`. No version, worktree, AI session or test may use anything else.
+- **Never create a second CDP.** Keep `persistent_session: true`; the launcher attaches to the running endpoint or resumes the *same* profile, and refuses to start a blank profile.
+- **Never force-kill the Chrome on 9222.** Persistent handles are never owned, so no release, failure or timeout path may stop it.
+- **Never delete or move** the canonical folder, its junction, or the physical profile.
+- **Source of truth:** `docs/CDP_SESSION_POLICY.md`. **Only supported start/reuse tool:** `scripts/open_cdp_session.ps1`. **Backup:** `D:\Program_Leo\INSO_CDP\session-backup\` (refreshed automatically on every attach).
+- **Owner:** Executor applies it and records evidence; Reviewer/CEO enforces it.
+- **Enforcement:** Review fails if any config diverges from the canonical profile/port, if `persistent_session` is disabled, or if a change can close the session browser.
+
 ## For CEO: Review RFQ-XXX
 
 The Owner returns to the CEO conversation and says only:

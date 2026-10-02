@@ -8,10 +8,20 @@ from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
 from ipaddress import ip_address
+from time import monotonic, sleep
 from typing import Protocol
 from urllib.parse import parse_qs, quote, urlsplit
 
 from .cdp_pages import new_background_page
+from .site_login import (
+    REJECTED_PASSWORD_TEXT,
+    LoginCheckbox,
+    LoginForm,
+    SiteLoginError,
+    await_login_outcome,
+    challenge_present,
+    submit_login_form,
+)
 from .source_contracts import (
     EvidenceField,
     MpnMatchKind,
@@ -25,6 +35,22 @@ from .source_contracts import (
 )
 
 HQEW_RESULT_URL = "https://p.hqew.com/yunquote/"
+#: Canonical credential site id; matches the entry in the Core vault.
+HQEW_SITE_ID = "p.hqew.com"
+HQEW_LOGIN_URL = "https://passport.hqew.com/login"
+
+#: HQEW's ordinary account form. Its captcha, Aliyun challenge and slider are
+#: all served hidden and only revealed when the site wants a human, so they are
+#: listed as challenges -- never as fields this code would try to fill.
+HQEW_LOGIN_FORM = LoginForm(
+    username="#J_loginName",
+    password="#J_loginPsw",
+    submit="#J_btnLogin",
+    # J_uislider is the visible advertisement carousel, NOT a CAPTCHA.
+    challenge=("#J_verifyCode", "#J_AliyunVerifyCode"),
+    rejection=REJECTED_PASSWORD_TEXT,
+    options=(LoginCheckbox('label[for="J_checkpripolicy_account"]'),),
+)
 
 
 class HqewError(RuntimeError):
@@ -40,6 +66,21 @@ class HqewPageUnavailable(HqewError):
 
 class HqewParseError(HqewError):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class HqewLogin:
+    """An in-memory HQEW login supplied by the project Credential Provider."""
+
+    username: str = field(repr=False)
+    password: str = field(repr=False)
+
+
+class HqewLoginProvider(Protocol):
+    """Research-facing credential capability; storage details stay in Core."""
+
+    def get_login(self, site_id: str) -> HqewLogin | None:
+        """Return one configured login without logging or persisting it."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +157,22 @@ def _is_hqew_login_page(html: str) -> bool:
     )
 
 
+def _is_hqew_login_url(url: str) -> bool:
+    """True while the tab is on HQEW's passport login path."""
+
+    parsed = urlsplit(url)
+    return (
+        (parsed.hostname or "").casefold() == "passport.hqew.com"
+        and parsed.path.casefold().startswith("/login")
+    )
+
+
+def hqew_login_page_open(page: object) -> bool:
+    """Settle predicate: has HQEW's own script carried us off the form yet?"""
+
+    return _is_hqew_login_url(getattr(page, "url", "") or "")
+
+
 class CdpHqewClient:
     """Read HQEW through an Owner-authenticated ordinary Chrome session."""
 
@@ -126,6 +183,7 @@ class CdpHqewClient:
         timeout_ms: int = 45_000,
         settle_ms: int = 5_000,
         navigate: bool = True,
+        login_provider: HqewLoginProvider | None = None,
         playwright_factory: Callable[[], object] | None = None,
     ) -> None:
         hostname = urlsplit(cdp_url).hostname
@@ -135,6 +193,7 @@ class CdpHqewClient:
         self._timeout_ms = timeout_ms
         self._settle_ms = settle_ms
         self._navigate = navigate
+        self._login_provider = login_provider
         self._playwright_factory = playwright_factory
 
     def fetch_first_page(self, mpn: str) -> HqewPage:
@@ -163,57 +222,140 @@ class CdpHqewClient:
                 if not browser.contexts:
                     raise HqewPageUnavailable("CDP_CONTEXT_UNAVAILABLE")
                 context = browser.contexts[0]
-                pages = list(context.pages)
-                exact_pages = [
-                    page for page in pages if _is_expected_result_url(page.url, mpn)
-                ]
-
-                if not self._navigate:
+                if self._navigate:
+                    # Owner rule (2026-10-01): every call opens its own page,
+                    # signs in first when the site asks, does its work, and
+                    # closes the page again. Reusing whichever tab an earlier
+                    # call left behind is what let a stale document look like a
+                    # fresh answer.
+                    page = new_background_page(
+                        browser, context, timeout_ms=self._timeout_ms
+                    )
+                    owned = True
+                else:
+                    exact_pages = [
+                        candidate
+                        for candidate in context.pages
+                        if _is_expected_result_url(candidate.url, mpn)
+                    ]
                     if not exact_pages:
                         raise HqewPageUnavailable("CDP_TARGET_PAGE_NOT_OPEN")
                     page = exact_pages[0]
-                else:
-                    hqew_pages = [page for page in pages if _is_hqew_url(page.url)]
-                    if exact_pages:
-                        page = exact_pages[0]
-                    elif hqew_pages:
-                        page = hqew_pages[0]
-                    else:
-                        page = new_background_page(
-                            browser, context, timeout_ms=self._timeout_ms
-                        )
-                    page.goto(
-                        target_url,
-                        wait_until="domcontentloaded",
-                        timeout=self._timeout_ms,
-                    )
-                    page.wait_for_load_state("load", timeout=self._timeout_ms)
-                    page.wait_for_timeout(self._settle_ms)
+                    owned = False
 
-                current_url = page.url
-                if page.locator("body").count() == 0:
-                    raise HqewPageUnavailable("RESULT_PAGE_BLOCKED", current_url)
-                html = page.content()
-                if "安全验证" in html or "captcha-reset" in html:
-                    raise HqewPageUnavailable(
-                        "INTERACTIVE_CHALLENGE_REQUIRED", current_url
-                    )
-                if _is_hqew_login_page(html):
-                    raise HqewPageUnavailable("LOGIN_REQUIRED", current_url)
-                if not _is_expected_result_url(current_url, mpn):
-                    raise HqewPageUnavailable(
-                        "RESULT_NAVIGATION_FAILED", current_url
-                    )
-                captured_at = datetime.now(UTC)
-                return HqewPage(
-                    html, current_url, captured_at
-                )
+                try:
+                    html, current_url = self._fetch(page, target_url, mpn, owned)
+                    if _is_hqew_login_page(html):
+                        # A login wall is a session problem to solve, never a
+                        # business answer: sign in, then ask for the page again.
+                        self._sign_in(page)
+                        html, current_url = self._fetch(page, target_url, mpn, owned)
+                        if _is_hqew_login_page(html):
+                            raise HqewPageUnavailable(
+                                "LOGIN_NOT_CONFIRMED", current_url
+                            )
+                    return HqewPage(html, current_url, datetime.now(UTC))
+                finally:
+                    if owned:
+                        page.close()
         except HqewPageUnavailable:
             raise
         except timeout_error as error:
             raise HqewPageUnavailable("BROWSER_TIMEOUT", current_url) from error
         except Exception as error:
             raise HqewPageUnavailable("BROWSER_FAILURE", current_url) from error
+
+    def _fetch(
+        self, page: object, target_url: str, mpn: str, navigate: bool
+    ) -> tuple[str, str]:
+        """Navigate to the result page (when we own the tab) and read it.
+
+        An attached tab is read exactly as found -- re-navigating a tab the
+        Owner opened would discard whatever they were looking at.
+        """
+
+        if navigate:
+            page.goto(  # type: ignore[attr-defined]
+                target_url,
+                wait_until="domcontentloaded",
+                timeout=self._timeout_ms,
+            )
+            page.wait_for_load_state("load", timeout=self._timeout_ms)  # type: ignore[attr-defined]
+            page.wait_for_timeout(self._settle_ms)  # type: ignore[attr-defined]
+        current_url = page.url  # type: ignore[attr-defined]
+        if page.locator("body").count() == 0:  # type: ignore[attr-defined]
+            raise HqewPageUnavailable("RESULT_PAGE_BLOCKED", current_url)
+        html = page.content()  # type: ignore[attr-defined]
+        if "安全验证" in html or "captcha-reset" in html:
+            raise HqewPageUnavailable(
+                "INTERACTIVE_CHALLENGE_REQUIRED", current_url
+            )
+        if _is_hqew_login_page(html):
+            # Reported to the caller rather than judged here: whether it is a
+            # problem depends on whether a login can still be established.
+            return html, current_url
+        if not _is_expected_result_url(current_url, mpn):
+            raise HqewPageUnavailable("RESULT_NAVIGATION_FAILED", current_url)
+        return html, current_url
+
+    def _sign_in(self, page: object) -> None:
+        """Establish HQEW's own login once, or say why it cannot be done."""
+
+        provider = self._login_provider
+        login = provider.get_login(HQEW_SITE_ID) if provider is not None else None
+        if login is None:
+            # No configured credential: this stays the old, honest answer.
+            raise HqewPageUnavailable("LOGIN_REQUIRED", page.url)  # type: ignore[attr-defined]
+        try:
+            ensure_hqew_signed_in(
+                page,
+                login=login,
+                timeout_ms=self._timeout_ms,
+            )
+        except SiteLoginError as error:
+            raise HqewPageUnavailable(
+                error.reason_code, page.url  # type: ignore[attr-defined]
+            ) from None
+
+
+def ensure_hqew_signed_in(
+    page: object,
+    *,
+    login: HqewLogin | None,
+    timeout_ms: int,
+    wait: Callable[[float], None] = sleep,
+    clock: Callable[[], float] = monotonic,
+) -> None:
+    """Open HQEW's own sign-in page and complete one login there.
+
+    HQEW serves its captcha, Aliyun challenge and slider hidden and reveals them
+    only when it wants a human, so they are checked *before* the submit -- after
+    one is visible there is nothing left to try.
+    """
+
+    if login is None:
+        raise SiteLoginError("CREDENTIALS_UNAVAILABLE")
+    page.goto(  # type: ignore[attr-defined]
+        HQEW_LOGIN_URL,
+        wait_until="domcontentloaded",
+        timeout=timeout_ms,
+    )
+    if challenge_present(page, HQEW_LOGIN_FORM):
+        raise SiteLoginError("MANUAL_VERIFICATION_REQUIRED")
+    submit_login_form(
+        page,
+        form=HQEW_LOGIN_FORM,
+        login=login,
+        timeout_ms=timeout_ms,
+    )
+    await_login_outcome(
+        page,
+        form=HQEW_LOGIN_FORM,
+        is_login_page=hqew_login_page_open,
+        timeout_ms=timeout_ms,
+        wait=wait,
+        clock=clock,
+    )
 
 
 class _OfferParser(HTMLParser):

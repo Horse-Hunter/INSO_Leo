@@ -2,8 +2,13 @@
 # are intentionally absent; deploy those locally after the generic build.
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 from pathlib import Path
+import os
 
 repo_root = Path(SPECPATH).parent
+release_version = os.environ.get("INSO_BUILD_VERSION", "1.1")
+if release_version not in {"1.1", "1.2"}:
+    raise ValueError("unsupported release version")
+release_name = "INSO_V" + release_version
 
 datas = []
 # The canonical Core Provider resolves this module beside _vault_backend.py.
@@ -62,7 +67,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="INSO_V1.1",
+    name=release_name,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -78,5 +83,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="INSO_V1.1",
+    name=release_name,
 )

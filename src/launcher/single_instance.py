@@ -8,7 +8,7 @@ from ctypes import wintypes
 from dataclasses import dataclass
 
 ERROR_ALREADY_EXISTS = 183
-MUTEX_NAME = r"Local\INSO_V1.1"
+MUTEX_NAME = r"Local\INSO_V1.2"
 
 
 @dataclass
