@@ -1,40 +1,56 @@
 # RFQ-002 CEO Independent Review
 
 **Status:** COMPLETE  
-**Verdict:** CHANGES_REQUESTED  
-**Reviewed HEAD:** `0cb0a90c47fe65320f500b7e68f4c03d443afd60`
+**Verdict:** PASS — REVIEWED_DONE  
+**Reviewed HEAD:** `2e519e1e72b22af620b2c0d90b6e21f6b87140fa`  
+**Previous finding review:** `0cb0a90c47fe65320f500b7e68f4c03d443afd60` → CHANGES_REQUESTED
 
 ## Owner Summary
 
 ### Review 结论
 
-CHANGES_REQUESTED
+REVIEWED_DONE
 
 ### 发生了什么
 
-CEO 已按 `CEO_REPORT.md` 的索引独立核对当前源码、提交记录、执行记录和发布证据。
+CEO 已重新检查 RFQ-002 的修复提交、当前测试、执行记录和最终报告。
 
-最终「保存并发送」没有被重跑或测试；这是 Owner 明确要求保留给下一笔真实新订单的首次验证，**本 Review 不把“尚未实测最终提交”作为失败项**。
+上一次唯一阻塞项已经收掉：两条旧 Phase-A 测试不再错误要求 `save_and_send` 方法必须不存在。当前测试现在与 Owner 最新授权一致：
 
-当前实现的关键保护链本身已经接上：最终动作只通过 Owner 明确授权的「保存并发送」按钮；单独保存和 generic Send 仍关闭；点击前先落 UNKNOWN；结果不确定不会自动重发；下方七天重复历史仍完整分页，上方提交确认只读已结算首页首行；V1.2 独立 EXE 的构建、自检、安全扫描和启动证据也与报告一致。
+- `save_and_send` API 可以存在；
+- 默认 `ProductionWriteGate` 仍然拒绝它；
+- 单独 Save Data 仍关闭；
+- generic `send` / `submit` 仍不存在；
+- 未授权路径不会写入 store，也不会触发页面 dispatch。
 
-但仓库里仍有两条旧自动测试明确断言“`save_and_send` 方法不存在”，而当前生产代码按最新 Owner 授权已经明确存在该方法。也就是说，当前代码和当前测试互相矛盾，执行记录里那次 926 passed / 11 skipped 又发生在最终提交改动之前，因此现在不能真实声称回归仍然通过。
+本次修复只改了测试和 Control Room 记录，没有修改任何进入 EXE 的生产源码，因此现有 V1.2 EXE 不需要重新打包。
 
-### 影响什么
+按 Owner 明确要求，最终「保存并发送」仍然没有被真实执行、没有重跑旧订单，也没有为了 Review 制造测试订单。第一次真实验证继续留给下一笔真实新订单；这不是本次 Review 的失败项。
 
-这不是要求重新跑旧订单，也不是要求执行真实「保存并发送」。
+### 当前验证状态
 
-问题只在仓库内部的验证基线没有跟上最新授权：如果现在直接跑安全离线回归，这两条旧断言本身就会与当前代码冲突。RFQ-002 因此暂时不能关闭为 REVIEWED_DONE。
+Executor 针对最新代码重新执行了安全离线验证：
+
+- focused pytest：56 passed
+- full safe regression：921 passed / 11 skipped
+- Ruff（src/tests）：PASS
+- `git diff --check`：PASS
+
+CEO 已检查当前提交只包含：
+- `tests/inso/test_v12_purchase_writer.py`
+- `control-room/RFQ-002/EXECUTION_LOG.md`
+- `control-room/RFQ-002/FINAL_REPORT.md`
+- `control-room/COORDINATION.md`
+
+没有生产源码、runtime、依赖或打包脚本变化。
 
 ### 接下来做什么
 
-Executor 只需做最小收尾：
+RFQ-002 到此关闭。
 
-- 修正这两条已经过期的测试断言，使其反映最新边界：`save_and_send` 可以存在，但默认生产 gate 不能授权它，单独 Save 和 generic Send 仍保持关闭；
-- 运行不触碰真实订单/真实浏览器提交的离线回归与静态检查；
-- 更新执行记录为真实结果后重新提交 Review。
+Owner 下一步不需要再让 Executor 修改 V1.2。下一笔真实新订单时直接使用现有 V1.2 EXE，首次验证最终「保存并发送」及提交后上方首行确认。
 
-**不要重跑任何旧订单，不要执行真实保存并发送，不要为了补证据触碰生产提交。**
+如果届时结果显示“提交结果待确认”，不要通过重跑订单补发；先人工查看 INSO 当前状态。
 
 ---
 
@@ -42,105 +58,68 @@ Executor 只需做最小收尾：
 
 CEO independently reviewed:
 
-- `control-room/RFQ-002/CEO_REPORT.md`
-- `control-room/RFQ-002/TASK_SPEC.md`
+- current `control-room/RFQ-002/REVIEW.md`
 - `control-room/RFQ-002/EXECUTION_LOG.md`
 - `control-room/RFQ-002/FINAL_REPORT.md`
 - `control-room/RFQ-002/FINAL_SUBMISSION_REVIEW.md`
-- merge HEAD `0cb0a90c47fe65320f500b7e68f4c03d443afd60`
-- implementation checkpoint `5b219338ccb4899b0fc520f92652ee538dd58b95`
-- indexed source paths for write authorization, purchase dispatch, reconciliation, duplicate history, workflow state, session ownership, GUI and Windows packaging
-- current repository tests relevant to the changed final-submission boundary
+- current `control-room/COORDINATION.md`
+- repair commit `2e519e1e72b22af620b2c0d90b6e21f6b87140fa`
+- current `tests/inso/test_v12_purchase_writer.py`
+- prior reviewed production implementation and release evidence
 
-The Review intentionally did **not** run an old order, open a production submission flow, click Save-and-Send, or create a real external write.
+The re-review intentionally did **not** run any production order, Save, Save-and-Send, SMTP, Sheets write, browser submission or old-order replay.
 
-## Verified implementation properties
-
-### 1. Narrow Save-and-Send authorization
-
-Verified.
-
-- Default `ProductionWriteGate` still rejects both ordinary Save and Save-and-Send authorization.
-- `OwnerAuthorizedSaveAndSendGate` changes only the narrow Save-and-Send authorization.
-- Production binds the final action to the exact `button#btnSave2` / 「保存并发送」 semantics.
-- Generic send control `#bcSend` is not bound as the authorized final action.
-- Standalone `SAVE_DATA` still requires the closed general write gate.
-
-### 2. Durable-before-dispatch and no automatic resend
-
-Verified from code.
-
-- The purchase state must already be `AI_RECOGNIZED`.
-- `begin_save_dispatch(..., save_and_send=True)` persists `UNKNOWN_WRITE_OUTCOME` and `SAVE_DISPATCH_ARMED` before the irreversible click.
-- Once that state exists, the normal routing path does not reopen the purchase attempt.
-- Submission exceptions do not retry the irreversible action.
-- Restart reconciliation refuses to use the old legacy lookup for a Save-and-Send marker whose in-memory first-row baseline is unavailable.
-
-### 3. Lower duplicate history vs upper submission confirmation
-
-Verified from code.
-
-- Seven-day duplicate history uses the lower `Stock_VenQuote` source and native pagination until the complete record count is collected.
-- The final submission baseline/reconciliation opts into first-page settlement only.
-- First-page confirmation requires a new first-row stable ID, exact model match and submission-time window.
-- The default complete-set reconciliation contract remains separate.
-
-### 4. Browser/session ownership
-
-Verified from code.
-
-- Reused Owner Chrome is not closed by normal lease release.
-- Only an app-created operation tab may be closed by `close_owned_operation_tab`.
-- Protected persistent CDP handles detach instead of owning/terminating the session browser.
-
-### 5. Packaging evidence
-
-Consistent with the submitted records.
-
-- Existing release pipeline/spec is reused and version-parameterized.
-- V1.1 remains the default and is not overwritten.
-- V1.2 has a distinct artifact name/path.
-- Submitted evidence records build success, frozen self-check exit 0, release scan PASS and stopped GUI startup.
-- Per Owner instruction, packaged startup did not execute an order or final submission.
-
-## Blocking Finding
+## Previous Blocking Finding — Closure
 
 ### B1 — Current regression tests contradict the authorized production API
 
-**Status:** OPEN / BLOCKING
+**CLOSED.**
 
-Current production code intentionally exposes `InsoPurchaseWriter.save_and_send(...)` behind the narrow Owner-authorized gate.
+The two stale assertions were replaced with checks that match the current Owner-authorized boundary.
 
-However, `tests/inso/test_v12_purchase_writer.py` still contains old Phase-A assertions:
+Current tests prove:
 
-- `test_production_gate_is_closed_and_send_methods_do_not_exist` asserts that `save_and_send` is absent from `dir(writer)`;
-- `test_non_ai_recognized_store_state_never_dispatches_save` asserts `not hasattr(writer, "save_and_send")`.
+1. the callable Save-and-Send API exists;
+2. default production authorization rejects it;
+3. rejected Save-and-Send produces no store mutation and no form event;
+4. ordinary Save remains rejected under the default gate;
+5. generic `send` and `submit` APIs remain absent;
+6. a non-recognized store state cannot be used to bypass the submission boundary.
 
-Those assertions cannot both be true with the current authorized implementation. They are not skipped and therefore make the repository's claimed regression contract stale.
+The repair did not alter production source and therefore does not change the already packaged V1.2 artifact.
 
-The execution log correctly states that the earlier `926 passed / 11 skipped` run predates the final submission/packaging change. The current checkpoint therefore has no valid post-change regression result, and `CEO_REPORT.md` / `FINAL_SUBMISSION_REVIEW.md` must not imply these tests were fully aligned when the checked-in file still contains the old assertions.
+## Previously Verified Properties — Still Valid
 
-### Required repair
+### Narrow final-submit authorization
 
-Keep this repair narrow:
+- Final submission remains bound to the exact Owner-authorized 「保存并发送」 control.
+- Standalone Save and generic Send remain closed.
+- UNKNOWN is persisted before dispatch.
+- An uncertain result is not automatically retried.
 
-1. Update/remove only the stale “method must not exist” assertions. Preserve tests that the default gate is closed, standalone Save remains closed, generic Send is unavailable, and no unauthorized dispatch occurs.
-2. Do **not** add or execute a real Save-and-Send test, do not replay an old order, and do not touch production submission.
-3. Run the safe/offline regression and static checks that do not create external side effects; record the actual result.
-4. Update RFQ-002 execution/final records if needed so they describe the checked-in test state accurately.
-5. Return RFQ-002 to `REVIEW_REQUIRED` for CEO re-review.
+### Duplicate-history / final-confirmation separation
 
-## Explicitly deferred by Owner — not a Review failure
+- Lower `Stock_VenQuote` history remains full-pagination for the seven-day duplicate check.
+- Upper inquiry history remains first-page/first-row only for post-submit confirmation.
+- These two completeness rules remain separate.
 
-The following remains intentionally unverified and must stay that way until the next genuine new order:
+### Runtime / release boundary
+
+- Existing V1.2 EXE remains the reviewed artifact because no production source changed in the repair.
+- V1.1 is not overwritten.
+- Existing packaging/self-check/release-scan/startup evidence remains applicable.
+
+## Explicitly Deferred by Owner — Not a Failure
+
+Still intentionally unverified until the next genuine new order:
 
 - the real Save-and-Send click;
-- the real five-second post-submit wait against a genuine order;
-- the real upper-list new-record confirmation after that submission;
-- actual downstream delivery semantics beyond the visible INSO record.
+- the real five-second wait;
+- the real upper-list new-record confirmation;
+- actual downstream delivery beyond the visible INSO record.
 
-First validation belongs to Owner's next real order. An uncertain result must remain non-retriable/manual-review; do not manufacture a test order to close this item.
+No old order should be replayed to close these items.
 
 ## State transition
 
-`REVIEW_REQUIRED → CHANGES_REQUESTED`
+`REVIEW_REQUIRED → REVIEWED_DONE`
