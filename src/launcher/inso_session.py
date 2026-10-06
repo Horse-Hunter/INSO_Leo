@@ -169,6 +169,13 @@ class InsoResearchSession:
     def operation_access(self) -> InsoOperationAccess:
         return self.lease.adapter_access("research-inso-history")
 
+    @property
+    def owns_operation_page(self) -> bool:
+        return self.lease.owns_operation_page
+
+    def close_owned_operation_tab(self) -> None:
+        InsoOperationAccess(self.lease, "launcher-cleanup").close_owned_operation_tab()
+
     def close_after_drain(self) -> None:
         self.lease.close_after_drain()
         if self._ownership is BrowserOwnership.REUSED:
@@ -232,6 +239,7 @@ def ensure_inso_authenticated(
     timeout_seconds: float = _LOGIN_WAIT_SECONDS,
     wait: Callable[[float], None] = sleep,
     clock: Callable[[], float] = monotonic,
+    fresh_page: bool = False,
 ) -> Any | None:
     """Reopen the ERP and ensure a *proven* authenticated list page.
 
@@ -263,9 +271,15 @@ def ensure_inso_authenticated(
         login_timeout_seconds=timeout_seconds,
         wait=wait,
         clock=clock,
+        fresh_page=fresh_page,
     )
     status = guard.ensure_authenticated()
     if status.outcome is InsoSessionOutcome.DEAD:
+        try:
+            if guard.opened_page is not None and not guard.opened_page.is_closed():
+                guard.opened_page.close()
+        except Exception:  # noqa: BLE001 - retain the original authentication failure
+            _log.warning("failed to close the new INSO authentication tab")
         raise InsoAuthenticationError(
             status.reason_code or "AUTHENTICATION_REQUIRED"
         )
@@ -449,6 +463,8 @@ class InsoSessionGuard:
         login: Any | None,
         context: Callable[[], Any],
         reattach: Callable[[], None] | None = None,
+        page: Callable[[], Any] | None = None,
+        fresh_page: bool = False,
         login_url: str = _LOGIN_URL,
         login_timeout_seconds: float = _LOGIN_WAIT_SECONDS,
         wait: Callable[[float], None] = sleep,
@@ -457,6 +473,9 @@ class InsoSessionGuard:
         self._login = login
         self._context = context
         self._reattach = reattach
+        self._page = page
+        self._fresh_page = fresh_page
+        self.authenticated_page: Any | None = None
         self._login_url = login_url
         self._login_timeout_seconds = login_timeout_seconds
         self._wait = wait
@@ -475,13 +494,19 @@ class InsoSessionGuard:
                 InsoSessionOutcome.DEAD, "AUTHENTICATION_REQUIRED"
             )
         try:
-            page, opened_here = _existing_or_new_login_page(self._context())
+            if self._page is not None:
+                page, opened_here = self._page(), False
+            elif self._fresh_page:
+                page, opened_here = self._context().new_page(), True
+            else:
+                page, opened_here = _existing_or_new_login_page(self._context())
         except Exception:  # noqa: BLE001 - an unusable page becomes a status, not an exception
             _log.warning("no INSO page could be opened to prove", exc_info=True)
             return InsoSessionStatus(
                 InsoSessionOutcome.DEAD, "AUTHENTICATION_REQUIRED"
             )
         self.opened_page = page if opened_here else None
+        self.authenticated_page = page
 
         _log.warning("the INSO session is being established by logging in")
         try:
@@ -499,9 +524,6 @@ class InsoSessionGuard:
             return InsoSessionStatus(
                 InsoSessionOutcome.DEAD, "AUTHENTICATED_SHELL_UNAVAILABLE"
             )
-        if not submitted:
-            # The ERP never showed a form, so nothing had to be restored.
-            return InsoSessionStatus(InsoSessionOutcome.AUTHENTICATED)
         if self._reattach is not None:
             try:
                 self._reattach()
@@ -513,7 +535,9 @@ class InsoSessionGuard:
                 return InsoSessionStatus(
                     InsoSessionOutcome.DEAD, "SESSION_IDENTITY_UNVERIFIED"
                 )
-        return InsoSessionStatus(InsoSessionOutcome.RESTORED)
+        return InsoSessionStatus(
+            InsoSessionOutcome.RESTORED if submitted else InsoSessionOutcome.AUTHENTICATED
+        )
 
     def _prove(self, page: Any) -> bool:
         return _open_list_page(
@@ -770,6 +794,9 @@ def attach_inso_research_session(
     cycle_is_drained: Callable[[str], bool],
     playwright_factory: Callable[[], Any] | None = None,
     login: Any | None = None,
+    fresh_page: bool = False,
+    operation_page: Any | None = None,
+    owns_operation_page: bool = False,
 ) -> InsoResearchSession:
     """Attach to exactly one existing authenticated shell in the sole context."""
 
@@ -783,19 +810,23 @@ def attach_inso_research_session(
     acquired_here = playwright is None or browser is None
     if acquired_here:
         playwright = playwright_factory().start()
+    opened_page = None
     try:
         if acquired_here:
             browser = playwright.chromium.connect_over_cdp(endpoint)
         opened_page = (
-            ensure_inso_authenticated(browser, login) if login is not None else None
+            ensure_inso_authenticated(browser, login, fresh_page=fresh_page)
+            if login is not None else None
         )
         contexts = tuple(browser.contexts)
         if not browser.is_connected() or len(contexts) != 1:
             raise SecurityViolation("INSO authenticated context is not unique")
         context = contexts[0]
+        preferred_page = operation_page if operation_page is not None else opened_page
         shells = [
             (page, frame)
             for page in tuple(context.pages)
+            if preferred_page is None or page is preferred_page
             if (frame := _verified_shell_frame(page, context)) is not None
         ]
         if len(shells) != 1:
@@ -846,12 +877,18 @@ def attach_inso_research_session(
             operation_page_is_valid=shell_identity_is_valid,
             # Owner rule (2026-10-01): the launcher gives back the tab it
             # opened. A shell the Owner already had open is left alone.
-            owns_operation_page=opened_page is not None and opened_page is page,
+            owns_operation_page=owns_operation_page or (opened_page is not None and opened_page is page),
             cycle_id=cycle_id,
             cycle_is_drained=cycle_is_drained,
         )
         return InsoResearchSession(lease, playwright, browser_handle, ownership)
     except Exception:
+        cleanup_page = opened_page or (operation_page if owns_operation_page else None)
+        try:
+            if cleanup_page is not None and not cleanup_page.is_closed():
+                cleanup_page.close()
+        except Exception:  # noqa: BLE001 - cleanup must not mask the lease failure
+            _log.warning("failed to close the new INSO operation tab")
         if acquired_here:
             playwright.stop()
         if getattr(browser_handle, "owned", False) and hasattr(

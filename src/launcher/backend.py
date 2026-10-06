@@ -118,7 +118,7 @@ def _login_alert_body(stop_reason: str) -> str:
     """The alert's plain text: what stopped, and what to do about it."""
 
     lines = [
-        "INSO 询价已停止：采集过程中遇到登录问题。",
+        "INSO_V1.2 程序已停止：采集网站遇到登录或人工验证问题（不一定是 INSO 网站）。",
         "",
         "处理步骤：",
         "1. 打开本机的已授权 Chrome；",
@@ -359,11 +359,14 @@ class _PreparedDuplicateChecker:
     the manual-handling requirement.
     """
 
-    def __init__(self, checker, prepare=None) -> None:
+    def __init__(self, checker, prepare=None, *, begin_inquiry=None) -> None:
         self._checker = checker
         self._prepare = prepare
+        self._begin_inquiry = begin_inquiry
 
     def check(self, inquiry_id, mpn, quantity, *, at):
+        if self._begin_inquiry is not None:
+            self._begin_inquiry(inquiry_id)
         if self._prepare is not None:
             try:
                 self._prepare()
@@ -383,8 +386,10 @@ class ProductionBackend(GuiBackend):
         self, config_path=None, production_config_path=None, *, cdp_probe=None,
         root=None, browser_acquirer=acquire_cdp_browser,
         v12_adapters: V12ProductionAdapters | None = None,
+        inquiry_ids: frozenset[str] | None = None,
     ):
         self.root = Path(root) if root is not None else app_root()
+        self._inquiry_scope = inquiry_ids
         self.config_path = Path(config_path) if config_path is not None else runtime_config_path("research.json", root=self.root)
         self.production_path = Path(production_config_path) if production_config_path is not None else runtime_config_path("production.json", root=self.root)
         self.cdp_probe = cdp_probe
@@ -416,6 +421,7 @@ class ProductionBackend(GuiBackend):
         self._store = None
         self._v12_store = None
         self._purchase_completion = None
+        self._active_inso_inquiry = None
         self._v12_adapters = v12_adapters
         self._v12_composition: V12ProductionComposition | None = None
         self._excel = None
@@ -596,6 +602,7 @@ class ProductionBackend(GuiBackend):
                             )
                         ),
                         prepare_research,
+                        begin_inquiry=self._begin_inso_inquiry,
                     ),
                     research_facts=ResearchExcelFactsProvider(ResearchExcelOutput(self._excel)),
                     purchase_writer=_LivePurchaseDraftWriter(
@@ -621,6 +628,8 @@ class ProductionBackend(GuiBackend):
                     research=research_observer,
                     adapters=self._v12_adapters,
                     stop_requested=self._immediate_stop_requested,
+                    on_result=self._complete_inquiry,
+                    inquiry_ids=self._inquiry_scope,
                 )
             else:
                 if cfg.get("v12_release_required") is True:
@@ -666,7 +675,6 @@ class ProductionBackend(GuiBackend):
                                 )
                                 for flow_result in cycle_results:
                                     self._seen(flow_result.inquiry_id)
-                                    self._purchase_completion.process(flow_result, at=utc_now())
                             if self._immediate_stop_requested():
                                 return
                             self._purchase_completion.retry_saved_statuses(at=utc_now())
@@ -679,6 +687,7 @@ class ProductionBackend(GuiBackend):
                             browser_state = "已连接" if self._research_ready else "待命"
                             self._set_health(("正常", browser_state, "正常", "正常"), "正常")
                         finally:
+                            self._close_inso_order_tab()
                             self._poll_idle.set()
                         if self._stop.wait(runtime.poll_interval.total_seconds()):
                             return
@@ -738,6 +747,41 @@ class ProductionBackend(GuiBackend):
             if inquiry not in self._inquiries:
                 self._inquiries.append(inquiry)
 
+    def _begin_inso_inquiry(self, inquiry_id):
+        self._seen(inquiry_id)
+        if self._active_inso_inquiry != inquiry_id:
+            self._close_inso_order_tab()
+            self._active_inso_inquiry = inquiry_id
+
+    def _close_inso_order_tab(self):
+        session = self._inso_session
+        if session is not None:
+            close = getattr(session, "close_owned_operation_tab", None)
+            if callable(close):
+                close()
+        self._inso_session = None
+        self._inso_guard = None
+        self._research_ready = False
+        self._active_inso_inquiry = None
+
+    def _complete_inquiry(self, result):
+        """Settle each row before starting the next; never defer to batch drain."""
+        try:
+            self._seen(result.inquiry_id)
+            settled = self._purchase_completion.process(result, at=utc_now())
+            self._v12_composition.coordinator.run_notifications(now=utc_now())
+            if settled is False or not self._v12_store.notifications_settled(result.inquiry_id):
+                with self._lock:
+                    self._state = RunState.MANUAL_REVIEW
+                    self._next_poll_at = None
+                    self._drain_due_on_stop.clear()
+                    self._stop.set()
+                self._append_log("ERROR", "当前订单提交、状态写回或通知尚未确认，已停止后续订单；不会重发采购。")
+            self._refresh()
+            self._notify()
+        finally:
+            self._close_inso_order_tab()
+
     def _ensure_research_ready(self, research_config, production_config) -> None:
         """Start or reuse CDP only for a due inquiry, then verify readiness."""
 
@@ -763,7 +807,7 @@ class ProductionBackend(GuiBackend):
 
         probe = self.cdp_probe or probe_loopback_endpoint
         try:
-            self._browser_handle = self._browser_acquirer(
+            self._browser_handle = self._browser_handle or self._browser_acquirer(
                 research_config.cdp.cdp_url,
                 self.root,
                 production_config,
@@ -794,6 +838,7 @@ class ProductionBackend(GuiBackend):
                 cycle_id=self._run_id or "research-cycle",
                 cycle_is_drained=lambda _cycle: self._research_cycle_drained,
                 login=CoreLoginBridge().login(INSO_SITE_ID),
+                fresh_page=True,
             )
             self._inso_cdp_url = research_config.cdp.cdp_url
             self._inso_guard = None
@@ -835,7 +880,7 @@ class ProductionBackend(GuiBackend):
             # under that work and made every attempt fail.
             return
         with self._research_gate:
-            if not self._research_ready:
+            if not self._research_ready and self._browser_handle is None:
                 return
             self._research_cycle_drained = True
             handle = self._browser_handle
@@ -903,12 +948,16 @@ class ProductionBackend(GuiBackend):
         guard = InsoSessionGuard(
             login=login,
             context=self._inso_context,
-            reattach=self._reattach_inso_session,
+            page=lambda: session.operation_access().operation_page().page,
+            reattach=lambda: self._reattach_inso_session(
+                operation_page=guard.authenticated_page,
+                owns_operation_page=session.owns_operation_page,
+            ),
         )
         self._inso_guard = (session, guard)
         return guard
 
-    def _reattach_inso_session(self) -> None:
+    def _reattach_inso_session(self, *, operation_page=None, owns_operation_page=False) -> None:
         """Re-lease the verified shell after an in-run re-login.
 
         A lease is pinned to one page identity, so a login invalidates it even
@@ -941,6 +990,8 @@ class ProductionBackend(GuiBackend):
                 # The guard has just logged in and clicked the native menu.
                 # Re-lease that verified page; a second login here navigates
                 # away from it and races the lease we are trying to establish.
+                operation_page=operation_page,
+                owns_operation_page=owns_operation_page,
             )
             self._research_ready = True
         self._set_health(("正常", "已连接", "正常", "正常"), "正常")
@@ -1192,19 +1243,28 @@ class ProductionBackend(GuiBackend):
                 self._state,
                 self._started,
                 self._stopped,
-                len(self._results),
+                len(self._inquiries),
                 sum(
-                    i.status is WorkflowStatus.COMPLETED
-                    and i.inquiry_id in self._inquiries
+                    i.inquiry_id in self._inquiries
+                    and self._business_completed(i.inquiry_id)
                     for i in items
                 ),
-                sum(i.status is WorkflowStatus.RESEARCHING for i in items),
+                int(self._active_inso_inquiry is not None),
                 sum(
                     i.status in (WorkflowStatus.QUEUED, WorkflowStatus.RETRY_WAIT)
                     for i in items
                 ),
                 self._next_poll_at if self._state is RunState.RUNNING else None,
             )
+
+    def _business_completed(self, inquiry_id):
+        if self._v12_store is None:
+            return False
+        try:
+            state = self._v12_store.business_state(inquiry_id)
+        except KeyError:
+            return False
+        return state.value in {"PURCHASE_RECORDED", "DUPLICATE_STOPPED", "INVALID_INPUT_SKIPPED"}
 
     def get_current_run_results(self):
         with self._lock:

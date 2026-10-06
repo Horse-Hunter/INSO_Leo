@@ -22,6 +22,21 @@ def test_ecb_provider_uses_eur_bridge_with_decimal() -> None:
     assert quote.source_label == "ECB daily reference rates 2026-09-21 (EUR bridge)"
 
 
+def test_official_quote_is_reused_within_the_day_and_refreshed_next_day():
+    calls = []
+    times = [NOW]
+    def fetch():
+        calls.append(1)
+        return HEADER + "USD,2026-09-21,1.2\nCNY,2026-09-21,8.4\n"
+    provider = EcbDailyUsdRmbProvider(fetch, clock=lambda: times[0])
+    first = provider.get_quote()
+    assert provider.get_quote() is first
+    assert len(calls) == 1
+    times[0] = NOW.replace(day=23)
+    assert provider.get_quote() is not first
+    assert len(calls) == 2
+
+
 def test_hkd_and_usd_cross_rates_must_share_the_same_ecb_date() -> None:
     usd = HEADER + "USD,2026-09-21,1.2\nCNY,2026-09-21,8.4\n"
     hkd = HEADER + "HKD,2026-09-21,9.2\nCNY,2026-09-21,8.4\n"

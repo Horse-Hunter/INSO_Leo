@@ -112,11 +112,12 @@ class WorkflowWorker:
         self._brand_updater = brand_updater
         self._retry_delays = tuple(retry_delays)
 
-    def process_due_one(self, *, now: datetime | None = None) -> WorkItem | None:
+    def process_due_one(self, *, now: datetime | None = None, inquiry_ids=None) -> WorkItem | None:
         if not _RESEARCH_WORKER_LOCK.acquire(blocking=False):
             return None
         try:
-            item = self._store.claim_due(now=now)
+            item = (self._store.claim_due(now=now) if inquiry_ids is None
+                    else self._store.claim_due(now=now, inquiry_ids=inquiry_ids))
             if item is None:
                 return None
             try:

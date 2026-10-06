@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
+from time import monotonic
 from typing import Protocol
 from urllib.parse import parse_qs, urlsplit
 
@@ -365,7 +366,7 @@ class InsoDuplicateHistoryReader:
                     )
                     live_page = page_type(operation_page.shell_frame, timeout_ms=self._timeout_ms)
                     payload = live_page.query_exact_response(target)
-                    records = self._records_from_response(payload, since=since)
+                    records = self._records_from_response(payload, since=since, target_mpn=target)
                 else:
                     # Deterministic fake/page adapters can keep the narrow
                     # DuplicateHistoryPage test seam.
@@ -389,7 +390,8 @@ class InsoDuplicateHistoryReader:
         return DuplicateHistoryCapture(target, records, url, self._clock())
 
     def _records_from_response(
-        self, payload: dict[str, object], *, since: datetime | None = None
+        self, payload: dict[str, object], *, since: datetime | None = None,
+        target_mpn: str | None = None,
     ) -> tuple[DuplicateHistoryRecord, ...]:
         rows = payload.get("rows")
         fields = self._response_fields
@@ -420,6 +422,11 @@ class InsoDuplicateHistoryReader:
                 # fully fetched/verified but are not quantity/creator inputs to
                 # this read window. Invalid relevant quantities still fail closed.
                 if since is not None and quoted_at < since:
+                    continue
+                # Native lower search is fuzzy. Different exact MPNs are not
+                # quantity/creator inputs for this inquiry (same dup-mpn-v1).
+                if (self._procurement_history and target_mpn is not None
+                        and _dup_mpn_key(mpn) != _dup_mpn_key(target_mpn)):
                     continue
                 quote_raw = row.get(fields.inso_quote) if fields.inso_quote else None
                 currency_raw = row.get(fields.currency) if fields.currency else None
@@ -582,8 +589,20 @@ class PlaywrightProcurementHistoryPage:
     def query_exact_response(self, target_mpn: str) -> dict[str, object]:
         frame = self._page
         owner = frame.page
+        deadline = monotonic() + self._timeout_ms / 1000
+
+        def remaining_ms():
+            value = int((deadline - monotonic()) * 1000)
+            if value <= 0:
+                raise InsoDuplicateHistoryError(DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED)
+            return value
         if not urlsplit(frame.url).path.casefold().endswith(BUSINESS_INQUIRY_LIST_PATH.casefold()):
             raise InsoDuplicateHistoryError(DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE)
+        if not frame.locator("#DetailField_FenLan").input_value():
+            frame.wait_for_function(
+                "() => !!document.querySelector('#DetailField_FenLan')?.value",
+                timeout=remaining_ms(),
+            )
         if frame.locator("#DetailField_FenLan").input_value() != "PartNo":
             raise InsoDuplicateHistoryError(DuplicateHistoryFailure.RECORD_FIELDS_INVALID)
         field = frame.locator("#DetailFieldValue_layout")
@@ -611,13 +630,13 @@ class PlaywrightProcurementHistoryPage:
         expected_size = None
         for page_number in range(1, 1001):
             with owner.expect_response(
-                lambda response, number=page_number: matched(response, number), timeout=self._timeout_ms
+                lambda response, number=page_number: matched(response, number), timeout=remaining_ms()
             ) as pending:
                 if page_number == 1:
-                    frame.locator("#select_btns_layout").click(timeout=self._timeout_ms)
+                    frame.locator("#select_btns_layout").click(timeout=remaining_ms())
                 else:
                     frame.locator("#tabs_b_panel_2 .layui-laypage-next:visible").click(
-                        timeout=self._timeout_ms
+                        timeout=remaining_ms()
                     )
             response = pending.value
             if response.status != 200:
@@ -635,13 +654,18 @@ class PlaywrightProcurementHistoryPage:
                 """expected => {
                     const grid = document.querySelector('#_id_tabs_b_2');
                     const rows = grid ? [...grid.querySelectorAll('tr[id$="_Main"]')] : [];
-                    const models = rows.map(r => r.querySelector('td[data-field="PartNo"]')?.innerText.trim());
+                    const models = rows.map(r => r.querySelector('td[data-field="PartNo"]')?.innerText.replace(/\\s+/g, ' ').trim());
+                    const ids = rows.map(r => r.id.replace(/_Main$/, ''));
                     const pager = document.querySelector('#tabs_b_panel_2 .layui-laypage-count');
-                    return rows.length === expected.length
-                        && models.every((model, i) => model === expected[i])
+                    const current = document.querySelector('#tabs_b_panel_2 .layui-laypage-curr em:last-child');
+                    return rows.length === expected.ids.length
+                        && ids.every((id, i) => id === expected.ids[i])
+                        && models.every((model, i) => model === expected.models[i])
+                        && Number(current?.textContent) === expected.page
                         && !!pager && /\\d+/.test(pager.textContent);
                 }""",
-                arg=[row.get("PartNo") for row in rows], timeout=self._timeout_ms,
+                arg={"ids": ids, "models": [" ".join(str(row.get("PartNo", "")).split()) for row in rows], "page": page_number},
+                timeout=remaining_ms(),
             )
             pager = frame.locator("#tabs_b_panel_2 .layui-laypage:visible")
             total_text = pager.locator(".layui-laypage-count").inner_text()

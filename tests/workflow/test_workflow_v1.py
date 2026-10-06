@@ -64,6 +64,17 @@ def enqueue_one(store: WorkflowStateStore, **overrides: object) -> int:
     return store.all_items()[0].id
 
 
+def test_bounded_claim_cannot_consume_another_pending_order(tmp_path):
+    store = WorkflowStateStore(tmp_path / "workflow.sqlite3")
+    store.enqueue(pending(2), now=NOW)
+    chosen = pending(3, mpn="MPN-2")
+    store.enqueue(chosen, now=NOW)
+    iid = store.inquiry_id_for(chosen.record_identity)
+    assert store.claim_due(now=NOW, inquiry_ids=frozenset()) is None
+    assert store.claim_due(now=NOW, inquiry_ids=frozenset({iid})).inquiry_id == iid
+    assert store.all_items()[0].status is WorkflowStatus.QUEUED
+
+
 class MappingReader:
     def __init__(self, rows: dict[WorksheetIdentity, Iterable[WorksheetRow]]) -> None:
         self.rows = {key: tuple(value) for key, value in rows.items()}

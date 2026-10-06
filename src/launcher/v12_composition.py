@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -170,7 +171,7 @@ class PlaywrightReadOnlySaveReconciler(ReadOnlySaveReconciler):
                         return _unreadable_reconciliation(now)
                     return ReconciliationResult(
                         ReconciliationOutcome.CONFIRMED_SAVED, observed_at,
-                        saved_record_ref=str(row["BillID"]).strip(),
+                        saved_record_ref=_saved_record_ref(str(row["BillID"]).strip()),
                         candidate_count=1, authoritative=True,
                         verified_fields=("mpn", "submission_time", "new_record"),
                     )
@@ -213,7 +214,7 @@ class PlaywrightReadOnlySaveReconciler(ReadOnlySaveReconciler):
         return ReconciliationResult(
             ReconciliationOutcome.CONFIRMED_SAVED,
             now,
-            saved_record_ref=detail.bill_id,
+            saved_record_ref=_saved_record_ref(detail.bill_id),
             candidate_count=1,
             verified_fields=("mpn", "brand", "quantity"),
             authoritative=True,
@@ -250,6 +251,11 @@ class PlaywrightReadOnlySaveReconciler(ReadOnlySaveReconciler):
             values["bill_id"], values["peno"], values["mpn"], values["brand"],
             int(values["quantity"]),
         )
+
+
+def _saved_record_ref(bill_id: str) -> str:
+    """Keep the store's opaque rec_ contract; never persist a raw ERP identifier."""
+    return "rec_" + hashlib.sha256(f"inso:BillID:{bill_id}".encode()).hexdigest()[:32]
 
 
 def _valid_reconciliation_target(value: SaveReconciliationTarget | None) -> bool:
@@ -510,6 +516,8 @@ def compose_v12_production(
     research,
     adapters: V12ProductionAdapters,
     stop_requested=None,
+    on_result=None,
+    inquiry_ids=None,
 ) -> V12ProductionComposition:
     """Build the real seams only when every required adapter is explicit."""
 
@@ -526,6 +534,8 @@ def compose_v12_production(
         notification_worker,
         adapters.recipients,
         stop_requested=stop_requested,
+        on_result=on_result,
+        inquiry_ids=inquiry_ids,
     )
     return V12ProductionComposition(
         coordinator,

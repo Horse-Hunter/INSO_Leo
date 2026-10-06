@@ -13,6 +13,12 @@ from src.gui.contracts import (
 )
 
 
+def test_waiting_status_is_not_misrepresented_as_processing():
+    for label in ("等待重试调研", "重复查询待确认（未提交）"):
+        state = V12OrderStateDTO("inq", V12BusinessLabel.PROCESSING, None, waiting_label=label)
+        assert _v12_status_text(state, "成功") == label
+
+
 def test_latest_active_alert_is_red_status_and_business_label_returns_after_recovery():
     now = datetime(2026, 9, 26, tzinfo=UTC)
     order = Order(

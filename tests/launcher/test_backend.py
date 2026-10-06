@@ -74,6 +74,21 @@ def fake_inso_session_attachment(monkeypatch):
     )
 
 
+def test_run_counters_count_business_completion_not_research_completion(tmp_path):
+    backend = ProductionBackend(root=tmp_path)
+    backend._inquiries = ["research-only", "sent"]
+    backend._store = SimpleNamespace(all_items=lambda: tuple(
+        SimpleNamespace(inquiry_id=iid, status=WorkflowStatus.COMPLETED)
+        for iid in backend._inquiries))
+    states = {"research-only": "ROUTING", "sent": "PURCHASE_RECORDED"}
+    backend._v12_store = SimpleNamespace(business_state=lambda iid: SimpleNamespace(value=states[iid]))
+    backend._active_inso_inquiry = "research-only"
+    status = backend.get_status()
+    assert status.orders_found == 2
+    assert status.completed == 1
+    assert status.in_progress == 1
+
+
 def test_login_unavailable_result_requests_manual_handling():
     seen = []
     manual = []
@@ -1395,6 +1410,7 @@ def test_real_poll_seam_stops_batch_on_login_and_resumes_queued_inquiry(tmp_path
     assert len(_RecordingTransport.sent) == 1
     assert all(item.status.value == "QUEUED" for item in backend._store.all_items())
     interrupted_id = calls[0]
+    assert backend._v12_store.business_state(interrupted_id) is BusinessState.RESEARCH_RETRY_WAIT
     repaired = True
     backend.start()
     assert _wait_until(lambda: len(calls) == 4)
@@ -1403,6 +1419,22 @@ def test_real_poll_seam_stops_batch_on_login_and_resumes_queued_inquiry(tmp_path
     assert calls.count(interrupted_id) == 2, "the interrupted inquiry must not be lost"
     assert len(_RecordingTransport.sent) == 1
     backend.shutdown()
+
+
+@pytest.mark.parametrize("settled,mail_settled", [(False, True), (True, False), (True, True)])
+def test_row_completion_stops_next_row_until_submit_status_and_mail_settle(tmp_path, settled, mail_settled):
+    backend = ProductionBackend(root=tmp_path)
+    backend._state = RunState.RUNNING
+    backend._purchase_completion = SimpleNamespace(process=lambda *_a, **_k: settled)
+    backend._v12_store = SimpleNamespace(notifications_settled=lambda _iid: mail_settled)
+    calls = []
+    backend._v12_composition = SimpleNamespace(coordinator=SimpleNamespace(
+        run_notifications=lambda **_k: calls.append("notifications")))
+    backend._inso_session = SimpleNamespace(close_owned_operation_tab=lambda: calls.append("close"))
+    backend._complete_inquiry(SimpleNamespace(inquiry_id="synthetic-inquiry"))
+    assert calls == ["notifications", "close"]
+    assert backend._immediate_stop_requested() == (not settled or not mail_settled)
+    assert backend._active_inso_inquiry is None and backend._inso_session is None
 
 
 def test_sweep_never_closes_even_a_browser_it_started():

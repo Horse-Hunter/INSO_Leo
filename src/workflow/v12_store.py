@@ -878,13 +878,15 @@ class V12Store:
         reconciler: ReadOnlySaveReconciler,
         *,
         at: datetime,
+        owner_confirmed_sent: bool = False,
     ) -> PurchaseOutcome:
         """Apply only a typed read-only result; raw exceptions never persist."""
 
         current = self._purchase_outcome(inquiry_id)
+        manual_confirmation = owner_confirmed_sent and current is PurchaseOutcome.MANUAL_REVIEW
         if current is PurchaseOutcome.UNKNOWN_WRITE_OUTCOME:
             self._transition_reconciliation_required(inquiry_id, at)
-        elif current is not PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED:
+        elif current is not PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED and not manual_confirmation:
             raise V12DatabaseError("save reconciliation is not required")
         try:
             result = reconciler.reconcile(inquiry_id)
@@ -905,10 +907,13 @@ class V12Store:
                                 for event in self.event_history(inquiry_id))
             if save_and_send:
                 required_fields = {"mpn", "submission_time", "new_record"}
+            if manual_confirmation:
+                required_fields = {"mpn", "quantity", "submission_time", "sent_status"}
             if (
                 not _safe_ref(result.saved_record_ref)
                 or result.candidate_count != 1
-                or (save_and_send and not result.authoritative)
+                or ((save_and_send or manual_confirmation) and not result.authoritative)
+                or (manual_confirmation and not save_and_send)
                 or not required_fields.issubset(result.verified_fields)
             ):
                 target = PurchaseOutcome.MANUAL_REVIEW
@@ -919,7 +924,7 @@ class V12Store:
                 event_type = EventType.RECONCILIATION_CONFIRMED_SAVED
                 saved_ref = result.saved_record_ref
         elif result.outcome is ReconciliationOutcome.CONFIRMED_NOT_SAVED:
-            if not result.authoritative or result.candidate_count != 0:
+            if manual_confirmation or not result.authoritative or result.candidate_count != 0:
                 target = PurchaseOutcome.MANUAL_REVIEW
                 event_type = EventType.RECONCILIATION_AMBIGUOUS
                 reason = ReasonCode.RECONCILIATION_UNREADABLE
@@ -946,6 +951,11 @@ class V12Store:
             )
             _insert_event(connection, event)
             if target is PurchaseOutcome.SAVED:
+                if manual_confirmation:
+                    _insert_event(connection, WorkflowEvent(
+                        _new_id("evt"), inquiry_id, EventType.HUMAN_RESOLUTION_RECORDED,
+                        at, "workflow",
+                    ))
                 _recover_alerts(
                     connection, inquiry_id, AlertType.PURCHASE_EXCEPTION, event,
                     result.reconciled_at, scope_key="save-outcome",
@@ -1057,6 +1067,16 @@ class V12Store:
             )
             for row in rows
         )
+
+    def notifications_settled(self, inquiry_id: str) -> bool:
+        """No required delivery for this row remains pending or unconfirmed."""
+        with _connect(self.database_path) as connection:
+            return connection.execute(
+                "SELECT 1 FROM workflow_v12_notification_recipients r "
+                "JOIN workflow_v12_notification_commands c USING(command_id) "
+                "WHERE c.inquiry_id=? AND r.outcome != 'SENT' LIMIT 1",
+                (inquiry_id,),
+            ).fetchone() is None
 
     def recipient_results(self, command_id: str) -> tuple[RecipientDeliveryResult, ...]:
         with _connect(self.database_path) as connection:

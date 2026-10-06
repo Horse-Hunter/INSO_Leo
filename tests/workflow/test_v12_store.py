@@ -71,6 +71,78 @@ def set_ai_recognized(store: V12Store) -> None:
     )
 
 
+def test_native_bill_reference_survives_durable_submission_confirmation(tmp_path):
+    from src.launcher.v12_composition import _saved_record_ref
+    database = tmp_path / "workflow.sqlite3"
+    make_v1_database(database)
+    migrate(database, tmp_path / "backups")
+    store = V12Store(database)
+    set_ai_recognized(store)
+    store.begin_save_dispatch(INQUIRY, at=NOW, save_and_send=True)
+    reconciler = FakeSaveReconciler(ReconciliationResult(
+        ReconciliationOutcome.CONFIRMED_SAVED, NOW,
+        saved_record_ref=_saved_record_ref("42"), candidate_count=1,
+        authoritative=True, verified_fields=("mpn", "submission_time", "new_record"),
+    ))
+    assert store.reconcile_unknown_save(INQUIRY, reconciler, at=NOW) is PurchaseOutcome.SAVED
+    with pytest.raises(V12DatabaseError):
+        store.begin_save_dispatch(INQUIRY, at=NOW, save_and_send=True)
+
+
+def test_row_closure_requires_every_notification_recipient_sent(tmp_path):
+    from src.workflow.v12_contracts import (
+        NotificationCommand,
+        NotificationKind,
+        NotificationRecipient,
+    )
+    database = tmp_path / "workflow.sqlite3"
+    make_v1_database(database)
+    migrate(database, tmp_path / "backups")
+    store = V12Store(database)
+    assert store.notifications_settled(INQUIRY)
+    store.enqueue_notification(NotificationCommand(
+        command_id="synthetic-mail", inquiry_id=INQUIRY,
+        kind=NotificationKind.PURCHASE_EXCEPTION,
+        recipients=(NotificationRecipient("test", "test@example.invalid"),),
+        subject="test", text_body="test", html_body=None, created_at=NOW,
+    ))
+    assert not store.notifications_settled(INQUIRY)
+    with sqlite3.connect(database) as connection:
+        connection.execute("UPDATE workflow_v12_notification_recipients SET outcome='SENT'")
+    assert store.notifications_settled(INQUIRY)
+
+
+@pytest.mark.parametrize("confirmed,fields", [
+    (False, ("mpn", "quantity", "submission_time", "sent_status")),
+    (True, ("mpn", "quantity", "submission_time")),
+    (True, ("mpn", "quantity", "submission_time", "sent_status")),
+])
+def test_owner_confirmed_sent_recovery_never_rearms_dispatch(tmp_path, confirmed, fields):
+    database = tmp_path / "workflow.sqlite3"
+    make_v1_database(database)
+    migrate(database, tmp_path / "backups")
+    store = V12Store(database)
+    set_ai_recognized(store)
+    store.begin_save_dispatch(INQUIRY, at=NOW, save_and_send=True)
+    assert store.reconcile_unknown_save(INQUIRY, FakeSaveReconciler(), at=NOW) is PurchaseOutcome.MANUAL_REVIEW
+    reconciler = FakeSaveReconciler(ReconciliationResult(
+        ReconciliationOutcome.CONFIRMED_SAVED, NOW,
+        saved_record_ref="rec_" + "a" * 32, candidate_count=1,
+        authoritative=True, verified_fields=fields,
+    ))
+    if not confirmed:
+        with pytest.raises(V12DatabaseError):
+            store.reconcile_unknown_save(INQUIRY, reconciler, at=NOW)
+    else:
+        expected = PurchaseOutcome.SAVED if "sent_status" in fields else PurchaseOutcome.MANUAL_REVIEW
+        assert store.reconcile_unknown_save(INQUIRY, reconciler, at=NOW, owner_confirmed_sent=True) is expected
+    with pytest.raises(V12DatabaseError):
+        store.begin_save_dispatch(INQUIRY, at=NOW, save_and_send=True)
+    events = store.event_history(INQUIRY)
+    assert sum(e.event_type is EventType.SAVE_DISPATCH_ARMED for e in events) == 1
+    assert any(e.event_type is EventType.HUMAN_RESOLUTION_RECORDED for e in events) == (confirmed and "sent_status" in fields)
+
+
 def test_save_dispatch_requires_ai_recognition_and_validation_failure_cannot_rearm(
     tmp_path: Path,
 ) -> None:

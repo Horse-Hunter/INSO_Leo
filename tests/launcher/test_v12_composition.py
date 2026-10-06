@@ -335,7 +335,7 @@ def test_save_reconciler_confirms_one_exact_saved_record(monkeypatch) -> None:
     ).reconcile("inq-1")
 
     assert result.outcome is ReconciliationOutcome.CONFIRMED_SAVED
-    assert result.saved_record_ref == "42"
+    assert result.saved_record_ref == "rec_7ae5535a91b87c3286427ddf141d5870"
     assert result.candidate_count == 1
     assert set(result.verified_fields) >= {"mpn", "brand", "quantity"}
 

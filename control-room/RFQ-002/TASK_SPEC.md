@@ -4,6 +4,29 @@
 **Review:** REQUIRED  
 **Branch:** `feature/v1-2`
 
+## Owner update — six-row incident repair / bounded live run (2026-10-06 evening)
+
+Repair all reported batch defects: per-order fresh owned INSO tabs, complete
+lower-history pagination, submission confirmation/status write-back, important
+notifications, FX readiness and truthful GUI counters/waiting labels. Reuse
+existing production paths. Never borrow a pre-existing INSO page; close each
+order-owned tab on every terminal path, preserving the same protected CDP.
+After offline verification, Owner authorizes ONE of the four unsubmitted rows
+for the normal real end-to-end run including single Save-and-Send, permitted
+status write-back and canonical SMTP; only after it succeeds run the remaining
+three. The two already-sent rows MUST NOT be rearmed/replayed/submitted. No
+other orders, generic saves/sends or arbitrary Sheets writes are authorized.
+Owner additionally requires serial closed-loop processing: finish confirmation,
+status write-back, notification handling and owned-tab cleanup before starting
+the next row. An unknown dispatch or failed success-status write-back stops the
+batch, never permits continuing with an unsettled submission.
+For the two rows Owner explicitly confirmed already sent, repair the false
+confirmation/status incident through read-only native record verification and
+audited Owner-confirmed reconciliation only; never fabricate a pre-dispatch
+baseline, rearm or repeat submission. Only the same authorized status cell
+transition may be backfilled after model, quantity, sent status and dispatch
+time tolerance are verified. Normal polling does not opt into this recovery.
+
 ## Owner update — refresh deployed EXE / CEO report (2026-10-06)
 
 Owner authorizes rebuilding and overwriting the existing V1.2 program assets,

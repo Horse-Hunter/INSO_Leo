@@ -628,6 +628,11 @@ def test_backend_closes_only_owned_browser_after_runtime_thread_exits(tmp_path, 
 
     import src.launcher.backend as backend_module
     import src.research.runtime as research_runtime
+    from src.workflow.v12_contracts import DeliveryOutcome, ReasonCode
+    from src.workflow.v12_notifications import NotificationTransportResult
+
+    monkeypatch.setattr(backend_module.QQSMTPTransport, "send_one", lambda *_a, **_k:
+                        NotificationTransportResult(DeliveryOutcome.SENT, ReasonCode.NOTIFICATION_SENT))
 
     # Reuse the deterministic test config seam from the launcher suite.
     from tests.launcher.test_backend import (

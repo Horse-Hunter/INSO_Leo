@@ -97,6 +97,8 @@ def _countdown_text(status: RunSession, now: datetime | None = None) -> str:
 def _v12_status_text(state: V12OrderStateDTO | None, fallback: str) -> str:
     if state is None:
         return fallback
+    if state.waiting_label is not None:
+        return state.waiting_label
     if state.latest_active_alert is not None:
         if (state.latest_active_alert.alert_type is V12AlertCode.PURCHASE_EXCEPTION
                 and state.latest_active_alert.reason_code.value in {

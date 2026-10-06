@@ -43,19 +43,25 @@ class EcbDailyUsdRmbProvider:
         )
         self._clock = clock or (lambda: datetime.now(UTC))
         self._last_usd_date: str | None = None
+        self._cached_quote: UsdRmbQuote | None = None
 
     def get_quote(self) -> UsdRmbQuote:
+        if (self._cached_quote is not None
+                and self._cached_quote.captured_at.date() == self._clock().date()):
+            return self._cached_quote
         try:
             body = self._fetch_csv()
         except (OSError, RuntimeError, UnicodeError) as exc:
             raise EcbFxError("ECB_FETCH_FAILED") from exc
         rate, date = self._cross_rate(body, "USD")
         self._last_usd_date = date
-        return UsdRmbQuote(
+        quote = UsdRmbQuote(
             rate=rate,
             captured_at=self._clock(),
             source_label=f"ECB daily reference rates {date} (EUR bridge)",
         )
+        self._cached_quote = quote
+        return quote
 
     def get_hkd_rmb_rate(self) -> Decimal:
         """Derive RMB per HKD from same-day official ECB EUR rates."""

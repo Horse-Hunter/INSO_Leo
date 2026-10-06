@@ -21,7 +21,7 @@ from src.sheets import (
     usable_brand,
 )
 
-from .service import ResearchExecutor, WorkflowWorker
+from .service import ResearchExecutor, ResearchPreparationError, WorkflowWorker
 from .store import WorkflowStateStore
 from .v12_contracts import (
     BusinessState,
@@ -132,6 +132,8 @@ class V12WorkflowCoordinator:
         recipients: tuple[NotificationRecipient, ...],
         *,
         stop_requested: Callable[[], bool] | None = None,
+        on_result: Callable[[V12FlowResult], None] | None = None,
+        inquiry_ids: frozenset[str] | None = None,
     ) -> None:
         self._workflow_store = workflow_store
         self._v12_store = v12_store
@@ -142,6 +144,8 @@ class V12WorkflowCoordinator:
         self._notification_worker = notification_worker
         self._recipients = recipients
         self._stop_requested = stop_requested or (lambda: False)
+        self._on_result = on_result
+        self._inquiry_ids = inquiry_ids
         self._records: dict[str, PendingSheetRecord] = {}
         self._duplicate_results: dict[str, DuplicateCheckResult] = {}
         self._research_results: dict[str, ResearchResult] = {}
@@ -167,6 +171,9 @@ class V12WorkflowCoordinator:
         self, records: tuple[PendingSheetRecord, ...], *, now: datetime
     ) -> tuple[V12FlowResult, ...]:
         enqueued: list[PendingSheetRecord] = []
+        if self._inquiry_ids is not None:
+            records = tuple(record for record in records
+                            if self._workflow_store.inquiry_id_for(record.record_identity) in self._inquiry_ids)
         skipped: list[V12FlowResult] = []
         # Owner rule: a row whose quantity cell is not a number (a column
         # legend, a blank, a textual placeholder) is not an inquiry. It is held
@@ -233,9 +240,10 @@ class V12WorkflowCoordinator:
             for item in by_row.values()
             if item.status.value in {"QUEUED", "RETRY_WAIT"}
             and not self._is_skipped(item.inquiry_id)
+            and (self._inquiry_ids is None or item.inquiry_id in self._inquiry_ids)
         }
         while remaining and not self._stop_requested():
-            item = worker.process_due_one(now=now)
+            item = worker.process_due_one(now=now, inquiry_ids=self._inquiry_ids)
             if item is None:
                 break
             inquiry_id = wrapped_research.last_inquiry_id
@@ -638,7 +646,7 @@ class V12WorkflowCoordinator:
         purchase_outcome: PurchaseOutcome | None = None,
         waiting_reason: str | None = None,
     ) -> V12FlowResult:
-        return V12FlowResult(
+        result = V12FlowResult(
             inquiry_id,
             self._v12_store.business_state(inquiry_id),
             route,
@@ -646,6 +654,9 @@ class V12WorkflowCoordinator:
             purchase_outcome,
             waiting_reason,
         )
+        if self._on_result is not None:
+            self._on_result(result)
+        return result
 
 
 class _DuplicateThenResearch:
@@ -657,7 +668,14 @@ class _DuplicateThenResearch:
     def execute(self, research_input: ResearchInput) -> ResearchResult:
         self.last_inquiry_id = research_input.inquiry_id
         self.coordinator._check_duplicate(research_input, at=self.at)
-        result = self.coordinator._research.execute(research_input)
+        try:
+            result = self.coordinator._research.execute(research_input)
+        except ResearchPreparationError:
+            self.coordinator._set_state(
+                research_input.inquiry_id, BusinessState.RESEARCH_RETRY_WAIT,
+                EventType.RESEARCH_RETRY_SCHEDULED, self.at,
+            )
+            raise
         self.coordinator._research_results[research_input.inquiry_id] = result
         return result
 

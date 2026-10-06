@@ -144,6 +144,22 @@ def _make_flow(
     return coordinator, workflow_store, v12_store, research, checker, provider, writer, notification_worker
 
 
+def test_result_is_published_before_the_next_order_runs(tmp_path):
+    from dataclasses import replace
+
+    from src.sheets.pending import query_pending_records
+    flow, ws, _vs, research, _checker, _provider, _writer, _worker = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("货少", Decimal(10), Decimal(2)))
+    first = query_pending_records(FakeSheetsReader(), SHEET)[0]
+    second = replace(first, row_position=4,
+                     record_identity=replace(first.record_identity, row_position=4))
+    published = []
+    flow._on_result = lambda result: published.append((result.inquiry_id, len(research.inputs)))
+    flow.process_pending((first, second), now=NOW)
+    assert [count for _, count in published] == [1, 2]
+    assert [iid for iid, _ in published] == [ws.inquiry_id_for(r.record_identity) for r in (first, second)]
+
+
 def test_delivered_duplicate_is_not_recreated_from_changed_repeat_facts(tmp_path):
     from dataclasses import replace
     transport = FakeNotificationTransport({"synthetic-recipient": (DeliveryOutcome.SENT,)})

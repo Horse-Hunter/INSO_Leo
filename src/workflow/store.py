@@ -118,20 +118,30 @@ class WorkflowStateStore:
             )
             return cursor.rowcount == 1
 
-    def claim_due(self, *, now: datetime | None = None) -> WorkItem | None:
+    def claim_due(self, *, now: datetime | None = None, inquiry_ids=None) -> WorkItem | None:
         claimed_at = _as_utc(now or datetime.now(UTC))
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
+            scope = ""
+            params = [_time_to_text(claimed_at)]
+            if inquiry_ids is not None:
+                ids = tuple(inquiry_ids)
+                if not ids:
+                    connection.commit()
+                    return None
+                scope = " AND inquiry_id IN (" + ",".join("?" for _ in ids) + ")"
+                params.extend(ids)
             row = connection.execute(
                 """
                 SELECT * FROM workflow_items
                 WHERE status IN ('QUEUED', 'RETRY_WAIT')
                   AND next_attempt_at <= ?
+                """ + scope + """
                 ORDER BY next_attempt_at, id
                 LIMIT 1
                 """,
-                (_time_to_text(claimed_at),),
+                params,
             ).fetchone()
             if row is None:
                 connection.commit()

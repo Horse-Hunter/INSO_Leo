@@ -25,8 +25,7 @@ class PurchaseCompletionActions:
         if result.purchase_outcome is PurchaseOutcome.SAVED:
             if self.v12_store.purchase_state(item.inquiry_id) is not PurchaseOutcome.SAVED:
                 raise ValueError("purchase success is not durable")
-            self._write_back(item, at=at)
-            return
+            return self._write_back(item, at=at)
         if result.business_state is BusinessState.PURCHASE_EXCEPTION:
             code = next((e.reason_code.value for e in reversed(self.v12_store.event_history(item.inquiry_id))
                          if e.reason_code is not None), "PURCHASE_EXCEPTION")
@@ -35,15 +34,21 @@ class PurchaseCompletionActions:
             self.notify(item.inquiry_id, "RESEARCH", item.last_error or "RESEARCH_FAILED", at=at)
         elif result.waiting_reason == "DUPLICATE_CONFIRMATION_REQUIRED":
             self.notify(item.inquiry_id, "DUPLICATE_CHECK", "DUPLICATE_LOOKUP_UNAVAILABLE", at=at)
+        return result.purchase_outcome not in {
+            PurchaseOutcome.UNKNOWN_WRITE_OUTCOME, PurchaseOutcome.MANUAL_REVIEW,
+            PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED,
+        }
 
     def _write_back(self, item, *, at):
         if item.inquiry_id in self._settled_status_ids:
-            return
+            return True
         try:
             write_purchase_status_safely(self.reader, self.writer_factory(), item.record_identity)
             self._settled_status_ids.add(item.inquiry_id)
+            return True
         except Exception as exc:  # noqa: BLE001 - retry only status, never purchase
             self.notify(item.inquiry_id, "SHEETS_WRITE_BACK", type(exc).__name__, at=at)
+            return False
 
     def retry_saved_statuses(self, *, at):
         for item in self.workflow_store.all_items():

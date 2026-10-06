@@ -43,6 +43,15 @@ def test_window_does_not_require_quantity_from_irrelevant_old_records():
     assert records[0].bill_id == "2"
 
 
+def test_fuzzy_other_model_quantity_is_not_current_order_validation():
+    reader = InsoDuplicateHistoryReader(list_url="https://yingsuo.alperp.cn", procurement_history=True)
+    unrelated = row(1, quantity="0")
+    unrelated["PartNo"] = "MPN suffix"
+    assert reader._records_from_response({"rows": [unrelated]}, target_mpn="MPN") == ()
+    with pytest.raises(InsoDuplicateHistoryError):
+        reader._records_from_response({"rows": [row(2, quantity="0")]}, target_mpn="MPN")
+
+
 class LowerFrame:
     url = "https://yingsuo.alperp.cn/skins/etaoerp//InnerEnquiry/YeWuXJ/List.aspx"
 
@@ -84,7 +93,10 @@ class LowerFrame:
         return "4"
 
     def wait_for_function(self, expression, *, arg, timeout):
-        assert len(arg) == len(self.pages[self.number - 1])
+        assert arg["ids"] == [r["id"] for r in self.pages[self.number - 1]]
+        assert arg["models"] == [" ".join(r["PartNo"].split()) for r in self.pages[self.number - 1]]
+        assert arg["page"] == self.number
+        assert 'ids.every' in expression and 'expected.page' in expression
 
     def expect_response(self, predicate, *, timeout):
         frame = self
@@ -114,6 +126,35 @@ def test_native_lower_query_reads_every_page_not_upper_query():
     assert ("click", "#select_btns") not in frame.calls
 
 
+def test_lower_render_uses_display_whitespace_without_altering_raw_model():
+    record = row(1)
+    record["PartNo"] = "MPN  suffix\u00a0TRAY"
+    frame = LowerFrame([[record]], total=1)
+    assert PlaywrightProcurementHistoryPage(frame).query_exact_response("MPN")["rows"][0]["PartNo"] == record["PartNo"]
+
+
+def test_new_lower_page_waits_for_native_field_initialization():
+    class InitializingFrame(LowerFrame):
+        ready = False
+
+        def locator(self, selector):
+            locator = super().locator(selector)
+            if selector == "#DetailField_FenLan" and not self.ready:
+                locator.input_value = lambda: ""
+            return locator
+
+        def wait_for_function(self, expression, **kwargs):
+            if "arg" not in kwargs:
+                assert "DetailField_FenLan" in expression
+                self.ready = True
+            else:
+                super().wait_for_function(expression, **kwargs)
+
+    frame = InitializingFrame([[row(1)]], total=1)
+    assert PlaywrightProcurementHistoryPage(frame).query_exact_response("MPN")["rows"] == [row(1)]
+    assert frame.ready
+
+
 def test_repeated_page_identity_is_not_a_complete_history():
     frame = LowerFrame([[row(1), row(2)], [row(2)]], total=3)
     with pytest.raises(InsoDuplicateHistoryError):
@@ -124,3 +165,25 @@ def test_incomplete_page_is_not_a_negative_duplicate_result():
     frame = LowerFrame([[row(1)]], total=3)
     with pytest.raises(InsoDuplicateHistoryError):
         PlaywrightProcurementHistoryPage(frame).query_exact_response("MPN")
+
+
+def test_lower_query_checks_row_identity_and_page_not_just_repeated_models():
+    frame = LowerFrame([[row(1), row(2)], [row(3)]], total=3)
+    observations = []
+    original = frame.wait_for_function
+    def wait(expression, *, arg, timeout):
+        observations.append(arg)
+        original(expression, arg=arg, timeout=timeout)
+    frame.wait_for_function = wait
+    PlaywrightProcurementHistoryPage(frame).query_exact_response("MPN")
+    assert [o["ids"] for o in observations] == [["1", "2"], ["3"]]
+    assert [o["page"] for o in observations] == [1, 2]
+
+
+def test_lower_query_has_one_overall_deadline(monkeypatch):
+    import src.inso.duplicate_history as history
+    clock = iter([0, 0, 0, 6])
+    monkeypatch.setattr(history, "monotonic", lambda: next(clock))
+    frame = LowerFrame([[row(1), row(2)], [row(3)]], total=3)
+    with pytest.raises(InsoDuplicateHistoryError):
+        PlaywrightProcurementHistoryPage(frame, timeout_ms=5000).query_exact_response("MPN")

@@ -74,6 +74,9 @@ class FakePage:
     def is_closed(self) -> bool:
         return self.closed
 
+    def close(self):
+        self.closed = True
+
     def evaluate(self, _script):
         """The ERP's own markers, as a real page reports them."""
 
@@ -183,6 +186,63 @@ def test_reused_session_uses_verified_shell_and_leaves_all_pages_open() -> None:
     assert browser_handle.disconnect_count == 1
     assert playwright.stop_count == 0
     assert unrelated_page.is_closed() is False
+
+
+def test_explicit_owned_order_page_does_not_borrow_an_existing_shell():
+    context = FakeContext(shell_pages=2)
+    browser = FakeBrowser([context])
+    handle = FakeBrowserHandle(owned=False)
+    order_page = context.pages[-1]
+    session = attach_inso_research_session(
+        "http://127.0.0.1:9222", handle, cycle_id="order",
+        cycle_is_drained=lambda _: True,
+        playwright_factory=lambda: FakePlaywright(browser),
+        operation_page=order_page, owns_operation_page=True,
+    )
+    assert session.operation_access().operation_page().page is order_page
+    session.close_owned_operation_tab()
+    assert order_page.closed
+    assert not context.pages[1].closed
+    assert browser.connected and handle.close_count == 0
+
+
+def test_fresh_login_never_selects_an_existing_inso_page(monkeypatch):
+    context = FakeContext()
+    observed = []
+    monkeypatch.setattr(InsoSessionGuard, "_log_in", lambda self, page: observed.append(page) or False)
+    monkeypatch.setattr(InsoSessionGuard, "_prove", lambda self, page: True)
+    guard = InsoSessionGuard(login=_Login(), context=lambda: context, fresh_page=True)
+    old_pages = tuple(context.pages)
+    assert guard.ensure_authenticated().outcome is InsoSessionOutcome.AUTHENTICATED
+    assert guard.opened_page not in old_pages
+    assert observed == [guard.opened_page]
+
+
+def test_failed_fresh_lease_closes_only_the_new_tab(monkeypatch):
+    context = FakeContext()
+    new_page = FakePage(context)
+    browser = FakeBrowser([context])
+    monkeypatch.setattr("src.launcher.inso_session.ensure_inso_authenticated", lambda *_a, **_k: new_page)
+    with pytest.raises(SecurityViolation):
+        attach_inso_research_session(
+            "http://127.0.0.1:9222", FakeBrowserHandle(owned=False),
+            cycle_id="cycle", cycle_is_drained=lambda _c: True,
+            playwright_factory=lambda: FakePlaywright(browser), login=_Login(), fresh_page=True,
+        )
+    assert new_page.closed
+    assert all(not page.closed for page in context.pages)
+
+
+def test_login_guard_stays_on_the_current_order_page(monkeypatch):
+    context = FakeContext(shell_pages=2)
+    selected = context.pages[-1]
+    observed = []
+    monkeypatch.setattr(InsoSessionGuard, "_log_in", lambda self, page: observed.append(page) or True)
+    monkeypatch.setattr(InsoSessionGuard, "_prove", lambda self, page: True)
+    guard = InsoSessionGuard(login=_Login(), context=lambda: context, page=lambda: selected)
+    assert guard.ensure_authenticated().outcome is InsoSessionOutcome.RESTORED
+    assert guard.authenticated_page is selected
+    assert observed == [selected]
 
 
 def test_login_redirect_and_wrong_origin_are_not_shell_candidates() -> None:

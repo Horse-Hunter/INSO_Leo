@@ -170,6 +170,10 @@ class InsoSessionLease:
             raise SecurityViolation("operation identity is required")
         return InsoOperationAccess(self, operation_id)
 
+    @property
+    def owns_operation_page(self) -> bool:
+        return self._owns_operation_page
+
     def invalidate(self) -> None:
         if self._state is LeaseState.ACTIVE:
             self._state = LeaseState.INVALIDATED

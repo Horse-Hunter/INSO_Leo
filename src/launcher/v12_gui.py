@@ -25,6 +25,11 @@ def read_v12_order_state(store: V12Store, inquiry_id: str) -> V12OrderStateDTO:
         for alert in store.active_alerts(inquiry_id)
     )
     latest = alerts[0] if alerts else None
+    waiting_label = None
+    if summary.business_state.value == "RESEARCH_RETRY_WAIT":
+        waiting_label = "等待重试调研"
+    elif store.duplicate_confirmation_pending(inquiry_id):
+        waiting_label = "重复查询待确认（未提交）"
     history = tuple(
         WorkflowEventDTO(
             event.event_id,
@@ -41,4 +46,5 @@ def read_v12_order_state(store: V12Store, inquiry_id: str) -> V12OrderStateDTO:
         latest,
         alerts,
         history,
+        waiting_label,
     )

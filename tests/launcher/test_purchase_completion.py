@@ -54,7 +54,7 @@ def flow(outcome):
 
 def test_only_durable_saved_writes_status():
     handler, sheet, state = actions(PurchaseOutcome.SAVED)
-    handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
+    assert handler.process(flow(PurchaseOutcome.SAVED), at=NOW) is True
     assert sheet.calls == 1 and not state.commands
 
 
@@ -81,7 +81,7 @@ def test_failure_only_notifies_owner_once_and_never_writes(outcome):
 
 def test_sheet_failure_preserves_saved_and_sends_safe_specific_mail():
     handler, sheet, state = actions(PurchaseOutcome.SAVED, writer_fails=True)
-    handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
+    assert handler.process(flow(PurchaseOutcome.SAVED), at=NOW) is False
     assert state.outcome is PurchaseOutcome.SAVED and sheet.calls == 1
     body = next(iter(state.commands.values())).text_body
     assert "表格状态写回失败" in body and "RuntimeError" in body

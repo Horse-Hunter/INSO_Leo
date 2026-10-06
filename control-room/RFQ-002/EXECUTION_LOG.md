@@ -1,5 +1,192 @@
 # RFQ-002 Execution Log — sanitized publication record
 
+## Six-row repair and authorized production closure — 2026-10-06 23:07
+
+This entry supersedes the diagnosis-only and older no-live-execution statements
+below. Same RFQ, active worktree and feature/v1-2 branch; starting HEAD
+`0fe1d5015ff80a4a1cbde44d6af2d683186f1fd5`. No redesign or second workflow.
+
+### Reuse and confirmed causes
+
+- Reused production JSON/config, Core Vault, cached Google grants, official ECB
+  FX, Research sources/Excel facts, existing INSO lease/guards/native query,
+  workflow ledger, SMTP worker, one-cell status writer and release pipeline.
+- Native lower history really progressed sequentially, but page 11 included
+  doubled whitespace in an unrelated raw model. Browser innerText collapses
+  whitespace, so literal raw/display equality never settled. Render comparison
+  now normalizes display whitespace only; raw model/business matching unchanged.
+  Read-only fresh-tab verification completed all 16 pages / 158 native rows.
+- Another lower fuzzy-search set contained an unrelated suffixed model with
+  zero quantity. All pages/IDs remain verified; only exact dup-mpn-v1 models
+  enter current inquiry quantity validation. Exact relevant invalid quantities
+  still fail closed; old/out-of-window records remain outside the decision.
+- Valid native final confirmation returned a raw BillID, but V12Store accepts
+  only opaque rec_ references. Existing reconciler now hashes the ID using the
+  canonical opaque format; store safety contract was not relaxed.
+- Previously completion actions ran only after a whole worksheet batch;
+  Research COMPLETED was counted as business completion. Synchronous per-row
+  result hook now finishes status write/read-back, due notification processing
+  and owned-tab cleanup before any next row. Unknown submission, write-back
+  failure or unconfirmed required notification stops the batch.
+- Every normal inquiry opens its own tab on the SAME 9222 context, enters via
+  login.aspx?t=islogin and native menu, and pins all access/re-login to that
+  page. Cleanup handles failed authentication/lease attachment and every
+  terminal outcome. Owner-existing pages/profile/browser are never closed.
+- GUI reads persisted business/waiting states rather than treating Research
+  success as purchase success. Login-interrupted Research persists waiting
+  state, not indefinite processing. Login mail explicitly distinguishes the
+  INSO_V1.2 program name from the affected collection website.
+- Official successful FX is cached for its observation day only; next day
+  refreshes. No fixed/fake rate or cached failure was introduced.
+
+### Actual production verification and protected recovery
+
+Owner authorized first ONE unsubmitted row, then the remaining THREE only after
+success. The canonical ProductionBackend/coordinator/store support an optional
+inquiry-ID scope for bounded execution; normal GUI defaults to all pending rows.
+This scope filters both fresh Sheet ingestion and existing due queue claims.
+Ignored local helpers only orchestrated that same backend, not a second path.
+
+- First attempt stopped before any purchase dispatch at lower page settlement;
+  diagnosis/fix followed. First row then completed normal draft, AI model/brand/
+  quantity validation, parent read-back, ONE Save-and-Send, authoritative final
+  confirmation, Sheet status transition/read-back and tab cleanup.
+- The next batch stopped without submission on an actual IC.net point-click
+  CAPTCHA. Read-only inspection verified the challenge and left the tab for
+  Owner. Owner personally completed it. No executor CAPTCHA solving/bypass.
+- Two remaining rows then completed; the last row's unrelated fuzzy-history
+  quantity defect was diagnosed/fixed before its first dispatch. Last row also
+  completed the full normal chain. Completed rows were excluded from retries.
+- Final fresh Google read and read-only SQLite audit: all SIX incident rows
+  have status 发给采购, durable SAVED and PURCHASE_RECORDED; each has exactly
+  ONE lifetime SAVE_DISPATCH_ARMED event. Four new authorized dispatches total;
+  the original two were NEVER rearmed, replayed or dispatched again.
+- THREE qualifying important-order commands have SENT receipts for both
+  canonical recipients (six recipient successes). Real SMTP accepted these;
+  inbox receipt is not asserted by the executor. Thresholds/content/recipients
+  remain the existing canonical V1.2 rules. Prior exception receipts preserved.
+- Original two native sent records were independently verified using exact
+  model, quantity, Owner-provided inquiry number, native 已发送 status, and
+  original armed timestamp ±30 minutes. A SQLite online consistent backup with
+  quick_check was kept before audited state recovery and status-cell backfill.
+  No pre-dispatch baseline was invented. Existing reconciliation now has an
+  explicit owner_confirmed_sent opt-in for MANUAL_REVIEW only; typed authoritative
+  singleton evidence must prove model/quantity/time/sent status and an original
+  dispatch must exist. Default polling never enables it. Success appends human
+  resolution evidence; absence/unknown cannot reopen submission.
+- Production Write Gate remains CLOSED for standalone INSO Save Data and
+  generic send/submit. Only already-authorized specific Save-and-Send, canonical
+  SMTP, and 未发→发给采购 cell transition were exercised. No other Sheet cells,
+  protected profile, credentials, prior unrelated orders or CDP ports changed.
+
+### Release and current runtime
+
+Reused `scripts/build_windows_release.ps1 -Version 1.2 -BuildOnly`: build,
+frozen dependency self-check and clean staged-artifact scanner PASS. Replaced
+only Owner's EXE/_internal; runtime junction unchanged. Deployed self-check PASS.
+Full deployed-folder scanner rejects runtime data by design; the generic clean
+artifact scan is the STAGING scan, not a claim the local data-bearing deployment
+can be distributed. No runtime/customer output/credentials/EXE are in Git.
+
+- Deployed: `D:\Program_Leo\INSO_Leo\dist\INSO_V1.2\INSO_V1.2.exe`.
+- SHA256: `C2B46F90BBCD2AD19AC269F3F4459D72942B1B758D83F631316044BA1B44CEE5`.
+- Recoverable old asset backup: `dist/release-backups/INSO_V1.2-20261006-before-batch-repair`
+  under the primary project. Runtime was not moved/copied into this backup.
+- Latest EXE launched normally through computer-use; its exact-path window was
+  observed and re-observed alive. Left idle, never clicked Start Inquiry after
+  this audit. Screenshot capture timed out (FrameArrived); visual pixel smoke
+  is not claimed. Dependency self-check and window launch succeeded.
+- Protected 9222 Chrome remains alive. Owner-existing INSO tab deliberately
+  preserved; all inquiry-owned tabs cleaned. Human-verification tab belongs to
+  Owner following handoff. No new CDP/profile or browser force termination.
+
+Final verified checks (after all source edits and callback stop regressions):
+
+- `python -m pytest -q tests/launcher tests/inso tests/workflow tests/research/test_ecb_fx.py tests/gui --basetemp=.tmp/rfq002-delivery-focused --tb=short`:
+  603 passed, 1 skipped, 33.71 seconds.
+- `python -m pytest -q tests --basetemp=.tmp/rfq002-delivery-full --tb=short`:
+  968 passed, 11 skipped, 37.44 seconds.
+- `python -m ruff check src tests`: all checks passed.
+- `git diff --check`: PASS, CRLF normalization warnings only.
+- Test SMTP replaced by deterministic fixtures, including the two former
+  infrastructure leaks; no test outbound mail attempts in final runs.
+
+Current scope is complete operationally; publishing requires independent CEO
+Review, not an executor PASS declaration. Local diagnostic/raw evidence and
+pre-existing untracked probes are preserved/excluded, never committed.
+
+Pre-publication fetch found CEO-only upstream commits c74e6ee and 7f1caa1,
+closing the old ProductID-test checkpoint at 0fe1d50. Fast-forwarded both;
+REVIEW.md is preserved untouched. Their PASS does not cover this new batch
+source repair. COORDINATION returns to REVIEW_REQUIRED for the new scope.
+No production source changed during this integration; no rebuild/replay needed.
+Owner's additional new pending inquiry is outside the bounded six-row run;
+left for Owner to start from the already restarted latest idle EXE.
+
+## Owner six-row incident — read-only diagnosis (2026-10-06 evening)
+
+Owner reports a six-row batch, lower-history pagination hang, two native sent
+records not reflected in Sheets, inaccurate GUI counters and missing important
+notification. New explicit Owner rule: every order must open its own fresh INSO
+tab, never select a pre-existing INSO page; close the order-owned tab afterwards.
+Same protected Chrome/CDP/profile remains mandatory; this is not a new browser.
+This entry records diagnosis, not a claim that production fixes are complete.
+
+Read existing SQLite via mode=ro, Research snapshots through existing Excel
+reader and approved CDP via an attach-only client; no new page/login/credentials,
+dispatch, production state update, notification or Sheets write. Detached only
+Playwright, never closed Chrome. Deployed EXE hash matches the recorded a1bed40
+artifact; not a stale executable substitution.
+
+Evidence for the six rows (customer fields/record IDs omitted):
+- Two have Research COMPLETED, one SAVE_DISPATCH_ARMED each, then MANUAL_REVIEW /
+  RECONCILIATION_UNREADABLE. Owner screenshot shows native sent records. Current
+  read-only upper exact queries also return one matching record each and pass
+  all first-page settlement stages. No queue rearm or fabricated SAVED state.
+  Status writer requires durable SAVED, so no status write occurred; not evidence
+  of a rejected Google write grant. The precise historical confirmation failure
+  stage was not persisted; a later successful read does not prove what failed
+  immediately after submission.
+- Two have successful Research but UNAVAILABLE duplicate history; no purchase
+  state/dispatch exists. They remain ROUTING awaiting duplicate confirmation.
+- Two have RETRYABLE_FAILURE / RETRY_WAIT; persisted remarks identify unavailable
+  FX (INSO for one, INSO and Findchips for the other). They never entered purchase.
+- Only PURCHASE_EXCEPTION commands were created for this batch; all six show
+  SMTP SENT in the existing delivery ledger, not new executor mail sends.
+
+Important notification explanation: the large C-tier/low-stock qualifying row
+is one of the duplicate-unconfirmed rows. _route_after_research returns before
+important-order evaluation on that branch. The two dispatched C-tier rows do
+not qualify (one low-stock total below threshold, one high-stock). Thus the
+missing eligible mail is blocked by duplicate confirmation, not SMTP transport.
+Business ordering must not be changed without canonical rule review.
+
+Code-confirmed lifecycle defect relative to latest Owner rule:
+_existing_or_new_login_page prefers existing INSO shell/login tabs;
+attach_inso_research_session globally selects a unique shell and tracks only a
+newly opened page as owned. Batch readiness is reused while _research_ready.
+Final tab cleanup only closes an owned page after an armed dispatch, while
+ordinary owned session cleanup is deferred to batch drain. A borrowed old tab
+is consequently neither isolated per order nor closed. Future repair must
+select the explicit current-order owned page even if Owner has another shell,
+retain ownership across re-login/re-lease and clean every terminal path without
+closing borrowed tabs or protected Chrome. No such production change yet.
+
+Lower-page inspection: code clicks scoped next-page controls sequentially, not
+an explicit page-11 jump. A bounded read-only recheck of the earlier affected
+model now fetched four pages / 34 rows successfully. This does not reproduce or
+disprove the earlier hang; old page state and its failed stage remain unproven.
+GUI get_status counts Workflow COMPLETED (Research), not purchase SAVED: 4 means
+four successful Research outcomes, not four sent purchases. RETRY_WAIT/ROUTING
+fall through existing display labels and can look perpetually Processing after
+stop. Batch completion/mail processing also occurs after coordinator returns
+the whole worksheet, rather than immediately after each row; this delays side
+effects when an earlier row/read blocks. These are separate from dispatch safety.
+
+No production fixes, database reconciliation, source-row status repair or test
+order executed during this diagnostic pass. Already-sent purchases retain their
+non-replay durable states; ordinary restart must never be used as a resend.
+
 ## CEO B1 ProductID test-contract repair — 2026-10-06
 
 Fast-forward synchronized feature/v1-2 to CEO Review commit 9685a56, read current
