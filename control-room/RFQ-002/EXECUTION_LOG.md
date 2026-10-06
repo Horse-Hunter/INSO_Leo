@@ -1,5 +1,35 @@
 # RFQ-002 Execution Log — sanitized publication record
 
+## Read-only post-submit confirmation repair — 2026-10-06
+
+Owner confirmed native 已发送 and requested this fix; then explicitly allowed
+record/submission time skew within plus/minus 30 minutes. No replay, Save,
+Save-and-Send, queue rearm or SMTP was performed.
+
+Reused PlaywrightDuplicateHistoryPage and PlaywrightReadOnlySaveReconciler.
+Read-only queries showed response total=-1 can retain a previous pager count;
+it is not necessarily a slow paint. Matching response/cache/DOM were current.
+The current-page selector also read the first decorative empty em rather than
+the numeric last em. Scope pagination to the current upper grid's table-view
+and own pager; read em:last-child. First-page-only proof requires page 1 and
+row count within page capacity, not min(stale total, capacity). All exact
+request/HTTP/JSON/sequence/pending/cache/DOM identity and order guards remain.
+Default complete-set and lower seven-day full pagination are not relaxed.
+
+Read-only verification with the repaired adapter returned FIRST_PAGE_SETTLED
+True, current page 1, FAILED_STAGE None despite stale total; RESULT_SET_COMPLETE
+remained False, not misrepresented as full history. HTTP Date was about three
+minutes ahead of local time. Latest Owner rule is absolute difference between
+record PEDate and this attempt's submission time <= 30 minutes, while exact
+model and changed first-row ID remain mandatory. Removed speculative precise
+server-offset code before commit; no new clock contract/dependency.
+
+No pytest, Ruff, fixtures or final-submit tests, per Owner no-test instruction.
+Only two production files changed; git diff --check PASS. No fabricated baseline,
+automatic SAVED override or rearm for the sent inquiry. Current open process
+and old EXE were not replaced; source fix loads on next restart, no packaging.
+Prior independent Review/regression do not cover this delta.
+
 ## Owner AI preview correction — 2026-10-06 (IN_PROGRESS)
 
 ### Owner-run result after source fix

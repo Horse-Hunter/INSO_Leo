@@ -1028,10 +1028,12 @@ class PlaywrightDuplicateHistoryPage:
                     });
                     const cacheIds = Array.isArray(cache)
                         ? cache.map(row => String(row.BillID || '')) : null;
-                    const pageSize = document.querySelector(
-                        '#_id_dg + .layui-table-page select, .layui-laypage select');
-                    const current = document.querySelector('.layui-laypage-curr em');
-                    const totalText = [...document.querySelectorAll('.layui-laypage-count')]
+                    const pager = document.querySelector('#_id_dg')
+                        ?.closest('.layui-table-view')?.querySelector('.layui-table-page');
+                    const pageSize = pager?.querySelector('select');
+                    // The first em is decorative; the last em holds the page number.
+                    const current = pager?.querySelector('.layui-laypage-curr em:last-child');
+                    const totalText = [...(pager?.querySelectorAll('.layui-laypage-count') || [])]
                         .map(el => (el.textContent || '').match(/\\d+/)?.[0])
                         .find(Boolean);
                     return {
@@ -1119,8 +1121,11 @@ class PlaywrightDuplicateHistoryPage:
             first_page_settled = (
                 result_set_complete and (not grid_has_total or total_count == len(bill_ids))
             ) or (
-                grid_has_total and grid_has_size and grid_has_page
-                and current_page == 1 and len(bill_ids) == min(total_count, page_size)
+                # First-row confirmation needs a settled first page, not a
+                # complete history. Native total=-1 can retain a stale pager
+                # total while the matched response/cache/DOM are already current.
+                grid_has_size and grid_has_page
+                and current_page == 1 and len(bill_ids) <= page_size
             )
             evidence["FIRST_PAGE_SETTLED"] = first_page_settled
             if not cache_present:

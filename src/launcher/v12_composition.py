@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Protocol
 
@@ -162,9 +162,8 @@ class PlaywrightReadOnlySaveReconciler(ReadOnlySaveReconciler):
                     row = rows[0]
                     created = parse_inso_timestamp(str(row.get("PEDate", "")))
                     observed_at = self._clock()
-                    # The native upper list can display minute-resolution time.
-                    lower = target.submitted_at.astimezone(UTC).replace(second=0, microsecond=0)
-                    if not (lower <= created <= observed_at.astimezone(UTC)):
+                    # Owner 2026-10-06: tolerate up to 30 minutes of clock skew.
+                    if abs(created - target.submitted_at.astimezone(UTC)) > timedelta(minutes=30):
                         return _unreadable_reconciliation(now)
                     if not mpn_matches(target.mpn, str(row.get("PartNo", "")),
                                        policy=MpnPolicy.AI_MPN_V1):
