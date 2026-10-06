@@ -1,5 +1,17 @@
 # RFQ-002 — CEO Review 报告（2026-10-06）
 
+最新无报价补充：只修正已诊断的终态/GUI和异常邮件说明，未改业务规则。
+所有五个价格来源正常无报价仍 EXCEPTION/NO_MATCHING_PRODUCT，不进入采购。
+未来终态用 RESEARCH_FAILED；旧 FAILED/ROUTING 历史从 Workflow 原因正确显示，
+不重写生产数据。邮件解释五源无报价、未采购，不把无报价等同型号一定错误。
+专项 440 passed / 1 skipped；全量 974 passed / 11 skipped；Ruff/diff PASS。
+现有发布链构建/产物扫描/部署自检通过，新 EXE 已覆盖原路径，SHA256
+`7FA84072E6FBC4DD0E51F3C864759B54D296EC5AB5B0BF5960BDD6BCAD7EBF20`。
+旧程序备份 `dist/release-backups/INSO_V1.2-20261006-before-no-quotes-display-update`。
+只读实查旧失败订单显示正确、零 dispatch、原一封异常命令未重发；CDP只有
+about:blank。没有订单重跑、INSO提交、真实 SMTP 或 Sheets 写入。
+本补充取代下方旧测试数字和 EXE 指纹，不取代六行实测事实；需独立 Review。
+
 最新空白页补充：Owner 明确允许清理固定 9222 专用上下文的旧业务标签，
 每行前/正常闭环后只留一个 about:blank。既有 launcher 清理入口实现，
 先保留空白再关闭其他页，绝不关闭浏览器/上下文或清登录信息；人工验证

@@ -26,7 +26,11 @@ def read_v12_order_state(store: V12Store, inquiry_id: str) -> V12OrderStateDTO:
     )
     latest = alerts[0] if alerts else None
     waiting_label = None
-    if summary.business_state.value == "RESEARCH_RETRY_WAIT":
+    failure = store.research_failure_reason(inquiry_id)
+    if failure is not None and summary.business_state.value in {"ROUTING", "RESEARCH_FAILED"}:
+        waiting_label = ("调研无报价（未发采购）" if failure == "NO_MATCHING_PRODUCT"
+                         else "调研异常（未发采购）")
+    elif summary.business_state.value == "RESEARCH_RETRY_WAIT":
         waiting_label = "等待重试调研"
     elif store.duplicate_confirmation_pending(inquiry_id):
         waiting_label = "重复查询待确认（未提交）"

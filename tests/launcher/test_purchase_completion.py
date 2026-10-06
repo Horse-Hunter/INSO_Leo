@@ -110,3 +110,20 @@ def test_research_exception_mail_does_not_claim_a_purchase_submission():
     assert sheet.calls == 0
     body = next(iter(state.commands.values())).text_body
     assert "调研异常" in body and "未完成采购提交" in body
+
+
+def test_no_price_exception_mail_explains_five_sources_and_is_idempotent():
+    handler, sheet, state = actions(PurchaseOutcome.PRE_SAVE_READY)
+    item = handler.workflow_store.get_by_inquiry_id("synthetic-inquiry")
+    item.status = SimpleNamespace(value="FAILED")
+    item.last_error = "NO_MATCHING_PRODUCT"
+    result = flow(None)
+    result.business_state = BusinessState.RESEARCH_FAILED
+    handler.process(result, at=NOW)
+    handler.process(result, at=NOW)
+    assert sheet.calls == 0 and len(state.commands) == 1
+    command = next(iter(state.commands.values()))
+    assert "五个价格来源均无报价" in command.text_body
+    assert "未进入采购提交" in command.text_body
+    assert "不等于型号一定填错" in command.text_body
+    assert [r.address for r in command.recipients] == ["linan229@qq.com"]

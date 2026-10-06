@@ -1051,6 +1051,14 @@ class V12Store:
             self.latest_active_alert(inquiry_id),
         )
 
+    def research_failure_reason(self, inquiry_id: str) -> str | None:
+        with _connect(self.database_path) as connection:
+            row = connection.execute(
+                "SELECT last_error FROM workflow_items WHERE inquiry_id=? AND status='FAILED'",
+                (inquiry_id,),
+            ).fetchone()
+        return row["last_error"] if row else None
+
     def event_history(self, inquiry_id: str) -> tuple[WorkflowEvent, ...]:
         with _connect(self.database_path) as connection:
             rows = connection.execute(
@@ -1501,6 +1509,7 @@ def _business_label(state: BusinessState) -> BusinessLabel:
     return {
         BusinessState.DUPLICATE_STOPPED: BusinessLabel.DUPLICATE_ORDER,
         BusinessState.PURCHASE_EXCEPTION: BusinessLabel.PURCHASE_EXCEPTION,
+        BusinessState.RESEARCH_FAILED: BusinessLabel.RESEARCH_EXCEPTION,
         BusinessState.PURCHASE_RECORDED: BusinessLabel.PURCHASE_SENT,
         BusinessState.INVALID_INPUT_SKIPPED: BusinessLabel.SKIPPED_INVALID_INPUT,
     }.get(state, BusinessLabel.PROCESSING)

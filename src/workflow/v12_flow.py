@@ -422,7 +422,7 @@ class V12WorkflowCoordinator:
             return self._result(inquiry_id, route=route)
         self._notify_a_if_nonduplicate(inquiry_id, research_result, now)
         if research_result.status not in {ResearchStatus.SUCCESS, ResearchStatus.PARTIAL_SUCCESS}:
-            self._set_state(inquiry_id, BusinessState.ROUTING, EventType.IMPORTANT_ORDER_DECIDED, now)
+            self._set_state(inquiry_id, BusinessState.RESEARCH_FAILED, EventType.RESEARCH_FAILED, now)
             return self._result(inquiry_id, route=route, waiting_reason="RESEARCH_NOT_SUCCESSFUL")
 
         record = self._records.get(inquiry_id) or self._pending_record(inquiry_id)

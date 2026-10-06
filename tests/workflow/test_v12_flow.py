@@ -160,6 +160,28 @@ def test_result_is_published_before_the_next_order_runs(tmp_path):
     assert [iid for iid, _ in published] == [ws.inquiry_id_for(r.record_identity) for r in (first, second)]
 
 
+def test_all_no_prices_is_terminal_research_failure_and_never_purchase(tmp_path):
+    from src.gui.app import _v12_status_text
+    from src.gui.contracts import V12BusinessLabel
+    from src.research import ResearchReasonCode
+
+    flow, ws, store, research, _checker, _provider, writer, _worker = _make_flow(tmp_path)
+    research.execute = lambda item: ResearchResult(item.inquiry_id, ResearchStatus.EXCEPTION,
+        reason_code=ResearchReasonCode.NO_MATCHING_PRODUCT)
+    result = flow.poll_and_process(FakeSheetsReader(), SHEET, now=NOW)[0]
+    assert result.business_state is BusinessState.RESEARCH_FAILED
+    assert ws.get_by_inquiry_id(result.inquiry_id).status is WorkflowStatus.FAILED
+    assert writer.commands == []
+    state = read_v12_order_state(store, result.inquiry_id)
+    assert state.business_label is V12BusinessLabel.RESEARCH_EXCEPTION
+    assert _v12_status_text(state, "失败") == "调研无报价（未发采购）"
+    # Existing failed history needs display correction only, not DB rewrite/replay.
+    from src.workflow.v12_contracts import EventType, WorkflowEvent
+    store.set_business_state(result.inquiry_id, BusinessState.ROUTING,
+        WorkflowEvent("evt_legacy", result.inquiry_id, EventType.IMPORTANT_ORDER_DECIDED, NOW, "workflow"))
+    assert _v12_status_text(read_v12_order_state(store, result.inquiry_id), "失败") == "调研无报价（未发采购）"
+
+
 def test_delivered_duplicate_is_not_recreated_from_changed_repeat_facts(tmp_path):
     from dataclasses import replace
     transport = FakeNotificationTransport({"synthetic-recipient": (DeliveryOutcome.SENT,)})

@@ -85,6 +85,7 @@ class PurchaseCompletionActions:
                          if uncertain else "采购录单或校验失败，未完成采购提交。"),
         }[phase]
         reason_text = {
+            "NO_MATCHING_PRODUCT": "五个价格来源均无报价，未进入采购提交。请核对型号；无报价不等于型号一定填错。",
             "CONTROL_NOT_FOUND": "采购页面控件或 AI 结果未就绪，未能继续录单。",
             "AI_RECOGNITION_MISMATCH": "AI 录单的型号、品牌或数量与订单不符。",
             "RECONCILIATION_UNREADABLE": "无法读取并确认 INSO 订单记录。",

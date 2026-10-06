@@ -135,6 +135,7 @@ def _event_display_text(event: Any) -> str:
         "DUPLICATE_CHECK_FAILED": "重复订单检查未完成",
         "RESEARCH_STARTED": "开始调研",
         "RESEARCH_RETRY_SCHEDULED": "等待重试调研",
+        "RESEARCH_FAILED": "调研未获得有效报价，未进入采购",
         "DUPLICATE_ORDER_DETECTED": "发现重复订单，停止采购",
         "IMPORTANT_ORDER_DECIDED": "订单业务判断完成",
         "NOTIFICATION_COMMAND_CREATED": "通知已进入发送队列",

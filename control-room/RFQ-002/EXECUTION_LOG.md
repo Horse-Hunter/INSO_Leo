@@ -1,5 +1,47 @@
 # RFQ-002 Execution Log — sanitized publication record
 
+## All-no-quotes presentation closeout — 2026-10-06
+
+Owner-approved narrow follow-up, starting source HEAD
+`773801820a044c22f64cfe5f575a9c5d1aaab609`. The latest Owner-started inquiry
+has terminal Research EXCEPTION / NO_MATCHING_PRODUCT: all five price sources
+returned no quote, not an authentication/timeout failure. No claim that the
+model is definitively invalid. Diagnosed defects were a stale ROUTING business
+state displayed as processing and an unexplained technical code in exception
+mail, not a missing purchase submission.
+
+Reused the existing coordinator, state store, GUI mapper and completion mail.
+New terminal Research failures use additive RESEARCH_FAILED state/event. Existing
+FAILED / ROUTING history renders from its persisted Workflow failure reason,
+without database rewriting. NO_MATCHING_PRODUCT displays “调研无报价（未发采购）”.
+Future exception mail explains five sources have no quote, no purchase was
+submitted, and asks to check the model without declaring it incorrect. The
+existing Owner-only recipient, mail idempotency, purchase gates, important-order
+rules and all-no-price EXCEPTION rule are unchanged. No schema migration needed.
+
+Actual verification:
+- Focused workflow/launcher/GUI pytest: 440 passed, 1 skipped, 33.85 seconds.
+- Full safe/offline pytest: 974 passed, 11 skipped, 37.97 seconds.
+- Ruff src/tests initially reported one test import-order issue; corrected;
+  final Ruff and git diff --check PASS.
+- Added offline regressions for no purchase dispatch, terminal state, both new
+  and legacy-history display, clear exception body, single recipient and no
+  duplicate notification command / Sheets write.
+- Existing V1.2 BuildOnly pipeline, clean staging scans and frozen/deployed
+  dependency self-check PASS. EXE and _internal only replaced; runtime junction
+  unchanged. Previous assets retained in primary-project
+  `dist/release-backups/INSO_V1.2-20261006-before-no-quotes-display-update`.
+- New EXE SHA256:
+  `7FA84072E6FBC4DD0E51F3C864759B54D296EC5AB5B0BF5960BDD6BCAD7EBF20`.
+- Computer-use normal close/relaunch; no Start Inquiry action. Pixel screenshot
+  verification is not claimed. Fixed 9222 read-only inventory: one about:blank.
+- Read-only production DB verification of the existing failed inquiry, using
+  the new GUI mapper with enforced read-only SQLite connections: correct label,
+  zero SAVE_DISPATCH_ARMED events, exactly one existing exception command.
+  No production row rewrites, replay, INSO submission, SMTP or Sheets write.
+- Independent Review required for these new changes; prior batch evidence is
+  preserved and no sent order was replayed.
+
 ## Owner blank-only idle follow-up — 2026-10-06
 
 Supersedes the earlier preserve-Owner-business-tabs decision, not protection of

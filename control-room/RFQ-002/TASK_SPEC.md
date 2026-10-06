@@ -4,6 +4,15 @@
 **Review:** REQUIRED  
 **Branch:** `feature/v1-2`
 
+## Owner update — all-no-quotes presentation (2026-10-06)
+
+Owner authorizes only the diagnosed terminal Research state / GUI / exception
+mail explanation correction, offline verification and existing V1.2 rebuild /
+overwrite. Preserve all-no-price EXCEPTION/NO_MATCHING_PRODUCT and no-purchase
+rules. No live order replay, dispatch, SMTP or Sheets write for this repair.
+Old failed history must render accurately without rewriting production rows
+or resending its delivered exception mail.
+
 ## Owner update — blank-only idle CDP (2026-10-06 late evening)
 
 Owner explicitly supersedes preservation of pre-existing BUSINESS tabs in the
