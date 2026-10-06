@@ -76,6 +76,20 @@ later without editing any config — only the junction is repointed.
 
 ## How to use it
 
+### Owner's idle-tab rule (2026-10-06)
+
+Trigger: before starting an inquiry and after a row's normal closed-loop finish.
+Owner: production launcher. Procedure/source: `park_shared_cdp` in the existing
+browser bootstrap module; select the unique dedicated 9222 context, retain or
+create ONE about:blank BEFORE closing other tabs, then verify it is the sole
+live page. Owner explicitly allows cleanup of pre-existing business tabs here;
+this does not apply to unrelated Chrome profiles/windows. Cookies, context,
+browser process, profile and port stay untouched. A row awaiting manual
+CAPTCHA/OTP/device verification is not closed: stop and keep its human-needed
+page until Owner resolves it. Evidence/enforcement: offline last-tab/context
+safety tests, actual page inventory and closed-loop callback cleanup; inability
+to establish the blank-only state fails closed rather than advancing orders.
+
 ```powershell
 # Ensure the shared session is up (reuses it if already running; never creates a new one)
 powershell -ExecutionPolicy Bypass -File scripts\open_cdp_session.ps1

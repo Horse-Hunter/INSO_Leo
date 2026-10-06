@@ -1,5 +1,16 @@
 # RFQ-002 — CEO Review 报告（2026-10-06）
 
+最新空白页补充：Owner 明确允许清理固定 9222 专用上下文的旧业务标签，
+每行前/正常闭环后只留一个 about:blank。既有 launcher 清理入口实现，
+先保留空白再关闭其他页，绝不关闭浏览器/上下文或清登录信息；人工验证
+未完成时先停住并留验证页。真实清理前后 cookies 一致，最终库存一个空白。
+Focused 381 passed；full safe/offline 972 passed / 11 skipped；Ruff/diff PASS。
+新 EXE 已覆盖并重启待命，SHA256
+`2EEE1833FA2F2749C1DBE934010CFC0876BBE88A4E61D8783EDEF3611275EEBC`。
+旧资产备份 `dist/release-backups/INSO_V1.2-20261006-before-blank-tab-update`。
+未运行新订单或重跑已发订单，未提交/SMTP/写 Sheets。下方批次实测仍有效，
+但其旧 EXE 指纹及“保留 Owner 旧业务页”安排已被本补充取代。
+
 ## 最新六行事件修复与实测交付（取代下方旧版本结论）
 
 原故障已在既有生产链修复，没有重建系统。最终只读审计确认六行均为

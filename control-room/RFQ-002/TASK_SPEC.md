@@ -4,6 +4,17 @@
 **Review:** REQUIRED  
 **Branch:** `feature/v1-2`
 
+## Owner update — blank-only idle CDP (2026-10-06 late evening)
+
+Owner explicitly supersedes preservation of pre-existing BUSINESS tabs in the
+dedicated 9222 context. Before a new inquiry and after each normally settled
+row, close all business/extra blank tabs and retain exactly ONE about:blank.
+Create/retain the blank before closing any tabs; never close Chrome/context,
+erase cookies or alter the protected profile/port. An unresolved manual
+verification is not a closed row: stop and preserve its human-needed page.
+No new order execution authorized by this cleanup change; pending new inquiry
+remains for Owner. Update/deploy through the same release pipeline.
+
 ## Owner update — six-row incident repair / bounded live run (2026-10-06 evening)
 
 Repair all reported batch defects: per-order fresh owned INSO tabs, complete

@@ -12,10 +12,54 @@ from src.launcher.browser_bootstrap import (
     BrowserBootstrapError,
     BrowserHandle,
     acquire_cdp_browser,
+    park_shared_cdp,
     wait_for_cdp_ready,
 )
 from src.launcher.single_instance import ERROR_ALREADY_EXISTS, SingleInstanceGuard
 from src.research import ResearchResult, ResearchStatus
+
+
+@pytest.mark.parametrize("urls", [[], ["https://yingsuo.alperp.cn/", "https://www.ic.net.cn/"],
+                                 ["about:blank", "about:blank", "https://yingsuo.alperp.cn/"]])
+def test_dedicated_cdp_parks_one_blank_before_closing_business_tabs(urls):
+    from types import SimpleNamespace
+    pages = []
+    calls = []
+
+    class Page:
+        def __init__(self, url):
+            self.url, self.closed = url, False
+
+        def is_closed(self): return self.closed
+
+        def close(self):
+            assert len(pages) > 1, "never close the last Chrome tab"
+            self.closed = True
+            pages.remove(self)
+            calls.append("close")
+
+    pages.extend(Page(url) for url in urls)
+
+    def new_page():
+        calls.append("blank")
+        page = Page("about:blank")
+        pages.append(page)
+        return page
+
+    browser = SimpleNamespace(is_connected=lambda: True,
+        contexts=[SimpleNamespace(pages=pages, new_page=new_page)])
+    park_shared_cdp(browser)
+    assert len(pages) == 1 and pages[0].url == "about:blank"
+    if urls and "about:blank" not in urls:
+        assert calls[0] == "blank"
+    park_shared_cdp(browser)
+    assert len(pages) == 1
+
+
+def test_dedicated_tab_cleanup_refuses_ambiguous_context():
+    from types import SimpleNamespace
+    with pytest.raises(BrowserBootstrapError):
+        park_shared_cdp(SimpleNamespace(is_connected=lambda: True, contexts=[object(), object()]))
 
 
 class _MutexApi:

@@ -26,6 +26,24 @@ class BrowserBootstrapError(RuntimeError):
         self.reason_code = reason_code
 
 
+def park_shared_cdp(browser) -> None:
+    """Owner's dedicated context: retain one blank tab without closing Chrome."""
+    contexts = tuple(browser.contexts)
+    if not browser.is_connected() or len(contexts) != 1:
+        raise BrowserBootstrapError("CDP_CONTEXT_NOT_UNIQUE")
+    context = contexts[0]
+    pages = tuple(context.pages)
+    blank = next((p for p in pages if not p.is_closed() and p.url == "about:blank"), None)
+    if blank is None:
+        blank = context.new_page()  # Keep a live tab BEFORE closing any old page.
+    for page in pages:
+        if page is not blank and not page.is_closed():
+            page.close()
+    remaining = tuple(p for p in context.pages if not p.is_closed())
+    if remaining != (blank,) or blank.url != "about:blank":
+        raise BrowserBootstrapError("CDP_TAB_CLEANUP_UNCONFIRMED")
+
+
 @dataclass
 class BrowserHandle:
     """A CDP attachment whose Playwright client is bound to one thread.

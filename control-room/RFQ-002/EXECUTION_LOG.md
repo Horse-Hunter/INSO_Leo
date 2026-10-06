@@ -1,5 +1,43 @@
 # RFQ-002 Execution Log — sanitized publication record
 
+## Owner blank-only idle follow-up — 2026-10-06
+
+Supersedes the earlier preserve-Owner-business-tabs decision, not protection of
+the Chrome process/context/profile/cookies. Owner wants exactly one blank page
+before a row starts and after a normal closed-loop row finishes. Reuse audit:
+existing launcher owns attach and synchronous per-row cleanup; added the small
+`park_shared_cdp` capability to its existing browser_bootstrap module and invoked
+it there. No new browser, adapter, workflow, credential path or business rule.
+Blank is created/retained BEFORE closing any old page. Unique context and final
+single-blank inventory are checked; failure stops the flow. Manual-verification
+stop is not a closed row, so its human-needed page is preserved. Scope is the
+dedicated 9222 context only, not other Chrome windows/profiles.
+
+Owner also confirmed personally reducing the browser to one blank. A bounded
+live cleanup check used the same canonical helper (no order execution) and
+verified a connected browser, one about:blank and identical before/after cookie
+records without printing/persisting their contents. After deployment/restart,
+read-only inventory again found only about:blank. New pending order was NOT run;
+no INSO Save/Save-and-Send, SMTP or Sheets write in this follow-up.
+
+Checks after final source changes:
+- `python -m pytest -q tests/launcher tests/inso --basetemp=.tmp/rfq002-blank-focused --tb=short`:
+  381 passed, 12.58 seconds.
+- `python -m pytest -q tests --basetemp=.tmp/rfq002-blank-full --tb=short`:
+  972 passed, 11 skipped, 37.71 seconds; no outbound test SMTP attempts.
+- `python -m ruff check src tests` and `git diff --check`: PASS.
+- Existing V1.2 build, staged clean scan, frozen self-check and deployed
+  self-check PASS. Only EXE/_internal replaced, runtime junction unchanged.
+- New EXE SHA256:
+  `2EEE1833FA2F2749C1DBE934010CFC0876BBE88A4E61D8783EDEF3611275EEBC`.
+- Previous batch-repair assets recoverable at primary-project
+  `dist/release-backups/INSO_V1.2-20261006-before-blank-tab-update`.
+- Computer-use gracefully closed/reopened the app; exact-path new window
+  observed alive. Idle only; no screenshot/pixel-smoke or new business claim.
+- Changes: existing launcher lifecycle/helper, four safety regressions, protected
+  CDP policy and RFQ records. All previous six-row no-resend evidence remains
+  valid, not replayed. Return to REVIEW_REQUIRED for independent new-scope Review.
+
 ## Six-row repair and authorized production closure — 2026-10-06 23:07
 
 This entry supersedes the diagnosis-only and older no-live-execution statements

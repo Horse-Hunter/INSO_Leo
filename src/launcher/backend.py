@@ -80,7 +80,12 @@ from src.workflow.v12_store import (
     migrate_v12,
 )
 
-from .browser_bootstrap import BrowserBootstrapError, BrowserHandle, acquire_cdp_browser
+from .browser_bootstrap import (
+    BrowserBootstrapError,
+    BrowserHandle,
+    acquire_cdp_browser,
+    park_shared_cdp,
+)
 from .diagnostics import log_step
 from .inso_session import (
     InsoAuthenticationError,
@@ -763,6 +768,9 @@ class ProductionBackend(GuiBackend):
         self._inso_guard = None
         self._research_ready = False
         self._active_inso_inquiry = None
+        browser = getattr(self._browser_handle, "browser", None)
+        if browser is not None and self._state is not RunState.MANUAL_REVIEW:
+            park_shared_cdp(browser)
 
     def _complete_inquiry(self, result):
         """Settle each row before starting the next; never defer to batch drain."""
@@ -831,6 +839,8 @@ class ProductionBackend(GuiBackend):
             self._discard_unready_browser()
             raise BrowserBootstrapError("CDP research readiness failed")
         try:
+            if self._browser_handle.browser is not None:
+                park_shared_cdp(self._browser_handle.browser)
             self._research_cycle_drained = False
             self._inso_session = attach_inso_research_session(
                 research_config.cdp.cdp_url,
