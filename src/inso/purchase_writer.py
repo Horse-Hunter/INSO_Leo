@@ -35,13 +35,10 @@ _log = logging.getLogger("inso.purchase_writer")
 
 @dataclass(frozen=True, slots=True)
 class AiRecognitionResult:
-    """Read-only value shape from the verified single-row AI result area.
+    """Verified AI preview; product_id is a legacy, unused compatibility field.
 
-    Live shape (2026-10-01): the ERP's own AI录单 preview table is
-    ``# / 产品编码 / 型号 / 品牌 / 数量`` and it resolves 产品编码 (``ProductID``)
-    from its product master -- ``STM8L051F3P6`` came back as ``P216328``. That
-    code is server-side data (``/api/ai/extract-erp-table``) which cannot be
-    derived locally, so it is carried through rather than recomputed.
+    Owner 2026-10-06: only model, brand and quantity are checked. ERP generates
+    its product code after AI entry commit; it is not a preview prerequisite.
     """
 
     product_id: str
@@ -66,6 +63,8 @@ class ParentProductFields(Protocol):
     """
 
     def wait_for_row(self, expected_product_id: str, timeout_seconds: float) -> bool: ...
+
+    def wait_for_model(self, expected_model: str, timeout_seconds: float) -> bool: ...
 
     def read_product_id(self) -> str | None: ...
 
@@ -122,6 +121,18 @@ class PlaywrightParentProductFields:
 
     def read_product_id(self) -> str | None:
         return self._read_text("product_id")
+
+    def wait_for_model(self, expected_model: str, timeout_seconds: float) -> bool:
+        """Wait for ERP's imported model, never require or validate its code."""
+        if not isinstance(expected_model, str) or not expected_model:
+            raise SecurityViolation("expected parent model is invalid")
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            if self.read_model() == expected_model:
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            self._form_page.page.wait_for_timeout(self._POLL_MILLISECONDS)
 
     def read_model(self) -> str | None:
         return self._read_text("model")
@@ -361,7 +372,6 @@ class PlaywrightAiResultReader:
         fields = {
             name: row.locator(f'input[data-f="{field}"]')
             for name, field in (
-                ("product_id", "ProductID"),
                 ("model", "PartNo"),
                 ("brand", "Brand"),
                 ("quantity", "Qty"),
@@ -369,16 +379,15 @@ class PlaywrightAiResultReader:
         }
         if any(locator.count() != 1 for locator in fields.values()):
             return None
-        product_id = fields["product_id"].input_value()
         model = fields["model"].input_value()
         brand = fields["brand"].input_value()
         quantity_text = fields["quantity"].input_value()
-        if not product_id or not model or not brand or not quantity_text.isdecimal():
+        if not model or not brand or not quantity_text.isdecimal():
             return None
         quantity = int(quantity_text)
         if quantity <= 0:
             return None
-        return AiRecognitionResult(product_id, model, brand, quantity, ready=True)
+        return AiRecognitionResult("", model, brand, quantity, ready=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -579,7 +588,7 @@ _AI_ENTRY_POLL_MILLISECONDS = 200
 # The AI entry runs recognition asynchronously. Immediately after the click the
 # button still carries a progress caption ("🔗 正在连接 AI 服务... 0%", then
 # "✅ 正在校验品牌与物料库... 66%", "✨ 即将完成，请稍候... 95%") and the preview
-# has no rows at all; only ~1s later does it become "重新识别" with one
+# has no rows at all; after recognition it becomes "重新识别" with one
 # populated row. A single immediate read therefore always saw "not ready". The
 # reader now polls the exact same predicate until it holds or the deadline
 # passes. A genuine failure -- no unique row, or a field mismatch -- still

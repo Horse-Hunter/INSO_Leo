@@ -1,5 +1,52 @@
 # RFQ-002 Execution Log — sanitized publication record
 
+## Owner AI preview correction — 2026-10-06 (IN_PROGRESS)
+
+Owner reported a genuine new inquiry stalled after recognition and authorized
+diagnosis only through AI validation, explicitly excluding final submission.
+Reused ProductionBackend session setup and InsoPurchaseWriter on the canonical
+9222/profile. No polling worker, queue replay, SMTP or persisted INSO action was
+run. Default ProductionWriteGate was used; stopped before AI_ENTRY_COMMIT and
+Save-and-Send. The one specified inquiry's durable state was VALIDATION_FAILED /
+CONTROL_NOT_FOUND with zero SAVE_DISPATCH_ARMED / saved / unknown-send events.
+
+Live diagnostic reproduced recognition in about 1.1–1.3s: exactly one preview
+row exposes PartNo, Brand and Qty, but no ProductID input. The original reader
+requires all four inputs, returns None and eventually maps to CONTROL_NOT_FOUND;
+the GUI's generic validation message is not evidence of a three-field mismatch.
+Model and quantity match; the AI brand is a substring of the Research brand,
+which satisfies the existing AI_BRAND_V1 policy. Raw values remain local only.
+Additional read-only scripts could not inspect the closed operation tab;
+second probe's supplementary structure print hit local console encoding, after
+the same three-field observation; cleanup ran and no submission occurred.
+
+Owner explicitly clarified that ERP generates its code after AI 保存数据 and
+the code must not be checked at either stage. Removed ProductID as a preview
+prerequisite and removed active parent-code wait/read/comparison. Preview and
+parent model/brand/quantity checks remain unchanged; parent wait now watches
+the imported model row. Legacy code helpers/value field remain compatibility
+only, unused by this production chain. AI result failures now have the separate
+ai-result-read diagnostic step. Reverted the speculative 120s wait change;
+the existing 20s ready predicate remains. No parallel production implementation.
+docs/modules/INSO.md records the latest Owner correction over old code assumptions.
+
+No automated tests, Ruff, fake submission or real submission run for this fix,
+per Owner request. Existing prior regression/Review PASS does not cover this
+delta. Source startup for Owner verification is the next step; existing EXE
+still contains the old reader until a later authorized rebuild. Only the
+specified pre-dispatch failed inquiry was made retryable using the previously
+established targeted rearm pattern, after verifying zero dispatch/saved/unknown
+events and creating an integrity-checked backup
+owner-ai-retry-20261006T065416322727Z.sqlite3. Only its replaceable failed purchase
+snapshot was removed and its queue state set QUEUED; append-only events,
+notification ledger and every other inquiry were retained. No order was run.
+Started existing scripts/start_v12_phase_a.ps1 with hidden console, canonical
+runtime reuse, no worker Start action. Native inventory and accessibility
+confirmed the Python-owned INSO_V1.2 window; screenshot capture timed out,
+accessibility recovery succeeded but Tk did not expose button text. This is
+startup evidence only, not proof of fixed business execution. No EXE rebuild.
+git diff --check passed. Awaiting Owner's manual run; RFQ remains IN_PROGRESS.
+
 ## CEO Review B1 repair — 2026-10-02
 
 Synced feature/v1-2 by fast-forward to CEO Review commit 2f89580. Read REVIEW.md,

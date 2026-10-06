@@ -303,9 +303,13 @@ class CoordinatorPurchaseDraftWriter:
             self._actions.open_ai_entry()
             self._actions.set_ai_input(command.ai_input)
             self._actions.run_ai_recognition()
-            preview = self._actions.read_ai_result()
         except Exception as exc:  # noqa: BLE001 - every control failure maps to an explicit reason code
             return self._failed(command, ReasonCode.CONTROL_NOT_FOUND, step="prepare", error=exc)
+
+        try:
+            preview = self._actions.read_ai_result()
+        except Exception as exc:  # noqa: BLE001 - recognition must settle before any commit
+            return self._failed(command, ReasonCode.CONTROL_NOT_FOUND, step="ai-result-read", error=exc)
 
         preview_check = validate_ai_recognition(
             command_id=command.command_id,
@@ -337,12 +341,11 @@ class CoordinatorPurchaseDraftWriter:
             )
 
         try:
-            # ``ai_appendRow`` reloads the grid asynchronously, so the row is
-            # waited for by its own 编码 rather than assumed from the click.
-            rendered = self._parent_fields.wait_for_row(
-                preview.product_id, _PARENT_ROW_WAIT_SECONDS
+            # ERP generates its code on import. Wait for the model row, then
+            # validate only Owner's three business fields below.
+            rendered = self._parent_fields.wait_for_model(
+                preview.model, _PARENT_ROW_WAIT_SECONDS
             )
-            parent_product_id = self._parent_fields.read_product_id()
             parent_model = self._parent_fields.read_model()
             parent_brand = self._parent_fields.read_brand()
             parent_quantity = self._parent_fields.read_quantity()
@@ -351,21 +354,9 @@ class CoordinatorPurchaseDraftWriter:
                 command, ReasonCode.CONTROL_NOT_FOUND, step="parent-read", error=exc
             )
 
-        # The 编码 comes from the ERP's own AI result and has no expectation in
-        # the source order (the sheet carries 型号/品牌/数量 only), so it cannot
-        # go through ``validate_ai_recognition``; the row the ERP rendered is the
-        # only proof it arrived, and a draft whose 编码 silently went missing is
-        # the defect this guards (Owner finding, 2026-10-01). The two ways that
-        # goes wrong are reported apart, because "the grid reloaded without our
-        # row" and "the grid reloaded and it is someone else's row" need
-        # different fixes.
         if not rendered:
             return self._failed(
                 command, ReasonCode.CONTROL_NOT_FOUND, step="parent-row-missing"
-            )
-        if parent_product_id != preview.product_id:
-            return self._failed(
-                command, ReasonCode.CONTROL_NOT_FOUND, step="parent-id-mismatch"
             )
 
         return validate_ai_recognition(

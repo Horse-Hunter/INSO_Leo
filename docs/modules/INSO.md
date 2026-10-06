@@ -80,14 +80,14 @@ MPN/brand/quantity read-back and existing operation-page cleanup remain intact.
 - AI 录单入口：parent form 内 `#ai_import_`（文案 `AI录单`）→ 同页 `details-dialog` 层 + `iframe[src*='/product/Import_ai.aspx']`；**不是新标签页**
 - AI input：`textarea#paste-area`（在 AI 录单 iframe 内）
 - AI recognition：`button#ai-recognize`（在 AI 录单 iframe 内）
-- AI 预览行是**四列**：`#preview-body > tr input[data-f]` = `ProductID`（表头 `产品编码`）/ `PartNo`（`型号`）/ `Brand`（`品牌`）/ `Qty`（`数量`）。`ProductID` 由 ERP **服务端** AI（`POST /api/ai/extract-erp-table`）在自己的物料库里解析（实测 `STM8L051F3P6` → `P216328`），本地无法推导，**只能透传**。
+- AI 预览只校验 `#preview-body > tr input[data-f]` 中的 `PartNo` / `Brand` / `Qty`。Owner 2026-10-06 明确：产品编码在 AI 面板「保存数据」后由 ERP 自动生成，不读取、不校验，不作为继续回填或提交的前置条件。旧四字段假设被此规则取代。
 - parent ProductID：唯一 `#_id_dg td[data-field="ProductID"]` cell（首列「编码/型号」）——**只读**
 - parent PartNo：唯一 `#_id_dg td[data-field="PartNo"]` cell——**只读**
 - parent Brand：唯一 `#_id_dg td[data-field="Brand"]` cell——**只读**
 - parent Qty：唯一 `#_id_dg td[data-field="Qty"]` cell——**只读**
 - AI 面板提交：`details-dialog._dialog1` 内唯一 `button:has-text("保存数据")`（id `win_btn__dialog11`）→ 纯客户端回填，见下
 
-> **AI 录单的结果由 ERP 自己灌进单据，我们不填这些格（Owner 订正，2026-10-01）**：AI 预览行是**四列**——`#preview-body > tr input[data-f]` = `ProductID`（表头 `产品编码`）/ `PartNo`（`型号`）/ `Brand`（`品牌`）/ `Qty`（`数量`）。`ProductID` 由 ERP **服务端** AI（`POST /api/ai/extract-erp-table`）在自己的物料库里解析（实测 `STM8L051F3P6` → `P216328`），本地无法推导，**只能透传**。
+> **AI 录单的结果由 ERP 自己灌进单据，我们不填这些格（Owner 订正，2026-10-01；2026-10-06 补充）**：只校验型号、品牌、数量；产品编码由 ERP 在保存 AI 数据后生成，不关注、不校验。不得为了满足旧假设制造编码。
 >
 > **回填走面板自己的「保存数据」**（`details-dialog._dialog1` 页脚，id `win_btn__dialog11`）。逐字核验过的完整链路：
 > `保存数据` → `pasteImport()` → `AiImport.doImport()` → `returnSet(buildResult())` + `windowsClose()`；
@@ -107,7 +107,7 @@ AI 录单为同页异步面板：点击 `#ai_import_` 后才能取到 AI iframe�
 
 **回填与回读的顺序**：`read_ai_result()` 读到唯一 ready row 并通过 `validate_ai_recognition` 之后，由 `InsoPurchaseWriter.commit_ai_entry()` 点面板的 `保存数据`。它作为动作枚举 `WriteAction.AI_ENTRY_COMMIT` 绑定在**"包含该 AI frame 的那个 dialog"内**（scope `ai-dialog`，选择器 `button:has-text("保存数据")`，身份按 id `win_btn__dialog11`——裸 `<button>` 的 `type` 默认是 `submit`，而 `submit` 是 denied semantic，故与 `SAVE_DATA` 一样**只按 id 绑**，见 `_ID_ONLY_ACTIONS`）。该动作**不受 Production Write Gate 约束**（纯客户端），`SAVE_DATA` 照旧受约束。
 
-`ai_appendRow` 经 `layui` **异步** reload 表体，所以点击之后必须**按「编码」条件等待**（`PlaywrightParentProductFields.wait_for_row`：轮询到 `read_product_id()` 等于识别结果或超时）再回读四列。等待只是闸门，**回读与比对才是判据**；超时即 fail closed（`CONTROL_NOT_FOUND`，step `parent-row-missing`），绝不把"点过了"当成"填好了"。**"表体重载了但行不是我们那一行"另记 `parent-id-mismatch`**——两者的修法完全不同，不该共用一个 step 名。
+`ai_appendRow` 经 `layui` **异步** reload 表体，所以点击后按型号等待唯一父页面行（`PlaywrightParentProductFields.wait_for_model`），再回读型号、品牌、数量，沿用原业务匹配策略。等待只是闸门，**回读与比对才是判据**；超时仍 fail closed（`CONTROL_NOT_FOUND`，step `parent-row-missing`）。不再读取或比对产品编码。
 
 parent 四列是**只读 seam**：取唯一、可见、enabled 的 `#_id_dg td[data-field="ProductID"|"PartNo"|"Brand"|"Qty"]`，先读 transient `input` 的 `input_value()`，无 editor 时回退读 `.layui-table-cell` 的 `inner_text()`；缺失、多重、不可见、错误 frame/origin 一律返回 `None`（fail closed）。**没有 setter**——见上。
 
