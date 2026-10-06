@@ -52,6 +52,7 @@ class DuplicateOutcome(StrEnum):
 class NotificationKind(StrEnum):
     IMPORTANT_ORDER = "IMPORTANT_ORDER"
     DUPLICATE_ORDER = "DUPLICATE_ORDER"
+    PURCHASE_EXCEPTION = "PURCHASE_EXCEPTION"
 
 
 class DeliveryOutcome(StrEnum):

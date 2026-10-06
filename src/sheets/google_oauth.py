@@ -38,7 +38,7 @@ def build_read_only_google_sheets_service(
 
 
 def build_read_write_google_sheets_service(
-    client_secret_file: str | Path,
+    client_secret_file: str | Path, *, allow_interactive: bool = True,
 ) -> Any:
     """Use a separately protected write-scope grant when possible."""
 
@@ -46,6 +46,7 @@ def build_read_write_google_sheets_service(
         client_secret_file,
         scope=READ_WRITE_SCOPE,
         access_description="read/write",
+        allow_interactive=allow_interactive,
     )
 
 
@@ -93,7 +94,8 @@ def _save_credentials(path: Path, scope: str, credentials: Any) -> None:
 
 
 def _build_google_sheets_service(
-    client_secret_file: str | Path, *, scope: str, access_description: str
+    client_secret_file: str | Path, *, scope: str, access_description: str,
+    allow_interactive: bool = True,
 ) -> Any:
     try:
         from google.auth.transport.requests import Request
@@ -109,6 +111,8 @@ def _build_google_sheets_service(
         path = _token_path(client_secret_file, scope)
         credentials = _read_credentials(path, scope, Credentials)
         if credentials is None:
+            if not allow_interactive:
+                raise GoogleSheetsAuthorizationError("Google Sheets write consent is required")
             flow = InstalledAppFlow.from_client_secrets_file(
                 str(client_secret_file), scopes=[scope]
             )

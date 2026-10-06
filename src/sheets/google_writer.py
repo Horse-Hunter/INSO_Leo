@@ -43,6 +43,9 @@ class GoogleSheetsBrandWriter(TargetedBrandWriter):
         if row_position < 1:
             raise ValueError("row_position must be a positive Google Sheet row number")
         brand_column = worksheet_schema(worksheet.worksheet).brand_column
+        self._write_cell(worksheet, row_position, brand_column, brand)
+
+    def _write_cell(self, worksheet, row_position, column, value) -> None:
         try:
             (
                 self._service.spreadsheets()
@@ -51,21 +54,31 @@ class GoogleSheetsBrandWriter(TargetedBrandWriter):
                     spreadsheetId=worksheet.spreadsheet,
                     range=_brand_cell_range(
                         worksheet.worksheet,
-                        brand_column,
+                        column,
                         row_position,
                     ),
                     valueInputOption="RAW",
                     body={
                         "majorDimension": "ROWS",
-                        "values": [[brand]],
+                        "values": [[value]],
                     },
                 )
                 .execute()
             )
         except Exception as exc:
             raise GoogleSheetsWriteError(
-                f"Unable to update Brand column {brand_column}"
+                f"Unable to update column {column}"
             ) from exc
+
+
+class GoogleSheetsPurchaseStatusWriter(GoogleSheetsBrandWriter):
+    """Only the Owner-approved status value; no arbitrary status argument."""
+
+    def write_purchase_status(self, worksheet: WorksheetIdentity, row_position: int) -> None:
+        if row_position < 1:
+            raise ValueError("row_position must be positive")
+        column = worksheet_schema(worksheet.worksheet).status_column
+        self._write_cell(worksheet, row_position, column, "发给采购")
 
 
 def _brand_cell_range(

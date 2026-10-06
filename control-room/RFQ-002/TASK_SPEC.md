@@ -4,6 +4,18 @@
 **Review:** REQUIRED  
 **Branch:** `feature/v1-2`
 
+## Owner update — completion write-back and exception mail (2026-10-06)
+
+Owner explicitly authorizes only this additional Sheets write: after confirmed
+successful purchase Save-and-Send, relocate/re-read the source row and change
+its status from 未发 to 发给采购. Preserve every other cell; ambiguous identity
+or changed status must fail closed. Write-back failure never permits purchase
+resubmission. Failed/unconfirmed purchase processing must mail specific safe
+order/phase/reason details only to linan229@qq.com through existing SMTP.
+Offline tests and real bounded status/mail verification are allowed. The
+already-submitted Owner inquiry must NEVER be saved/sent again. This supersedes
+the old blanket Sheets-write prohibition only for this status transition.
+
 ## Owner decision — packaging timing (2026-09-30)
 
 SUPERSEDED 2026-10-02: Owner completed personal discussion/Review of final

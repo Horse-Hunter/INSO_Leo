@@ -1,5 +1,69 @@
 # RFQ-002 Execution Log — sanitized publication record
 
+## Owner completion status / exception notification extension — 2026-10-06
+
+Owner authorized source status 未发 -> 发给采购 only after purchase success,
+exception mail only to the Owner, and bounded tests of these two features.
+Task Spec records the narrow Sheets exception; no generic write gate opened.
+Returned the requested internal inquiry ID privately to Owner, not published
+as customer data here. No INSO writer or order processing was invoked in tests.
+
+Reuse audit: Sheets already owns unique snapshot relocation and RAW single-cell
+API updates; OAuth already protects grants by CurrentUser DPAPI. SMTP and V12
+immutable command / recipient retry / delivery ledger already exist. Gaps were
+the status-specific adapter/guard and post-purchase side-effect connection only.
+Extended existing API writer, added status helper and small launcher completion
+handler. Existing contracts gain PURCHASE_EXCEPTION notification kind; existing
+schema stores string kind without migration. No new transport/config/launcher,
+dependencies, browser, CDP, migration, alternate workflow or screenshot path.
+
+Normal production composition invokes completion handler on flow outcomes:
+durable SAVED only -> targeted status write; failures -> one immutable command
+per inquiry/phase/reason with Owner-only recipients. Mail contains order ID,
+model, brand, quantity, source worksheet/row, phase, Chinese explanation and
+safe reason code, not raw provider/page/credential output. Unknown dispatch
+explicitly says it may already be sent and must not be replayed. Research
+retry/failed/manual, duplicate-confirmation failure and purchase exceptions are
+covered; original login operator alert now includes affected order details.
+Existing notification worker owns delivery/retry and suppresses sent recipients.
+Write-back failure keeps SAVED and never invokes purchase; future polls/restart
+retry saved status only. In-memory settled cache avoids repeated successful
+lookups; fresh read-back of 发给采购 handles a prior uncertain write response.
+
+Tests: final 152 passed in 8.48s for tests/sheets, new launcher completion tests,
+launcher backend, existing V12 notifications/SMTP and GUI contract mirrors.
+Notification due processing uses current time after completion, not the poll's
+earlier start timestamp, so newly created exception commands can send this cycle.
+Ruff src/tests PASS; diff check PASS. Initial selected run had one stale login
+mail fixture expectation and blocked SMTP attempts in older backend fixtures;
+reused original login transport path and mocked send_one in that fixture. Final
+run has no outbound-mail guard warnings. Full repository pytest not rerun; prior
+ProductID-contract tests are outside this feature-specific validation scope.
+
+Real bounded verification: no write grant existed; Owner completed official
+Google OAuth and grant was persisted in the existing protected cache. Subsequent
+non-interactive reuse succeeded without another prompt. Owner additionally
+instructed no repeated routine consent; canonical Sheets doc records operational
+reuse/protection/fail-closed procedure. No consent was automated.
+
+Using only Owner's already-confirmed sent inquiry, targeted status API update
+succeeded. First post-write read hit Google 502; idempotent retry found 发给采购
+already present, read-back succeeded and repeat call caused no second write.
+No other cells or other orders were written. Native purchase state was not
+rewritten/manufactured as SAVED; no rearm/INSO repeat or resend occurred.
+Separate synthetic local SQLite fixture exercised the new exception command
+through real QQ SMTP to Owner only: recipient outcome SENT (SMTP acceptance,
+not proof of inbox display). Subject/model visibly denote a test without any
+INSO action. Re-enqueue/worker retry caused no additional mail. Fixtures/raw
+output/grants/runtime stay local ignored, excluded from Git.
+
+Normal source app restarted gracefully after confirming no active Research;
+only Python INSO window closed, protected Chrome not manipulated. New source
+window and command line confirmed; default STOPPED, no Start Inquiry action.
+Screenshot capture timed out (Tk accessibility/process inventory available),
+not used as business-test evidence. Existing EXE not rebuilt in this request.
+Changes submitted for independent Review; no self-certified overall RFQ PASS.
+
 ## Read-only post-submit confirmation repair — 2026-10-06
 
 Owner confirmed native 已发送 and requested this fix; then explicitly allowed

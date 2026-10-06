@@ -40,6 +40,7 @@ from src.workflow.v12_contracts import (
     BusinessState,
     DeliveryOutcome,
     EventType,
+    NotificationTransportResult,
     PurchaseDraftCommand,
     PurchaseDraftResult,
     PurchaseOutcome,
@@ -64,6 +65,8 @@ class _FakeInsoSession:
 
 @pytest.fixture(autouse=True)
 def fake_inso_session_attachment(monkeypatch):
+    monkeypatch.setattr(QQSMTPTransport, "send_one", lambda *_a, **_k:
+                        NotificationTransportResult(DeliveryOutcome.SENT, ReasonCode.NOTIFICATION_SENT))
     monkeypatch.setattr(
         launcher,
         "attach_inso_research_session",

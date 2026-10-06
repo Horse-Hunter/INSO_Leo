@@ -36,6 +36,7 @@ from src.gui.state import utc_now
 from src.inso.duplicate_history import InsoDuplicateHistoryReader
 from src.inso.purchase_writer import InsoPurchaseWriter, PlaywrightParentProductFields
 from src.inso.write_safety import OwnerAuthorizedSaveAndSendGate
+from src.launcher.purchase_completion import PurchaseCompletionActions
 from src.research import ResearchInput, ResearchResult
 from src.research.credentials import CoreLoginBridge
 from src.research.excel_output import ResearchExcelOutput
@@ -48,8 +49,12 @@ from src.research.runtime import (
     probe_loopback_endpoint,
 )
 from src.sheets import WorksheetIdentity
-from src.sheets.google_oauth import build_read_only_google_sheets_service
+from src.sheets.google_oauth import (
+    build_read_only_google_sheets_service,
+    build_read_write_google_sheets_service,
+)
 from src.sheets.google_reader import GoogleSheetsRowReader
+from src.sheets.google_writer import GoogleSheetsPurchaseStatusWriter
 from src.workflow import (
     ResearchPreparationError,
     WorkflowPoller,
@@ -410,6 +415,7 @@ class ProductionBackend(GuiBackend):
         self._history_fingerprint = None
         self._store = None
         self._v12_store = None
+        self._purchase_completion = None
         self._v12_adapters = v12_adapters
         self._v12_composition: V12ProductionComposition | None = None
         self._excel = None
@@ -537,6 +543,20 @@ class ProductionBackend(GuiBackend):
                 quiesce=lambda: nullcontext(),
             )
             self._v12_store = V12Store(db)
+            status_writer = None
+
+            def get_status_writer():
+                nonlocal status_writer
+                if status_writer is None:
+                    status_writer = GoogleSheetsPurchaseStatusWriter(
+                        build_read_write_google_sheets_service(client, allow_interactive=False)
+                    )
+                return status_writer
+
+            self._purchase_completion = PurchaseCompletionActions(
+                workflow_store=self._store, v12_store=self._v12_store,
+                reader=reader, writer_factory=get_status_writer,
+            )
             # An item can only be RESEARCHING while the process that claimed it
             # is alive: the claim and the result write share one worker call. A
             # row still in that state therefore belongs to an interrupted run,
@@ -646,10 +666,12 @@ class ProductionBackend(GuiBackend):
                                 )
                                 for flow_result in cycle_results:
                                     self._seen(flow_result.inquiry_id)
+                                    self._purchase_completion.process(flow_result, at=utc_now())
                             if self._immediate_stop_requested():
                                 return
+                            self._purchase_completion.retry_saved_statuses(at=utc_now())
                             self._v12_composition.coordinator.run_notifications(
-                                now=self._last_poll
+                                now=utc_now()
                             )
                             with self._lock:
                                 if self._state is RunState.RUNNING:
@@ -1028,9 +1050,9 @@ class ProductionBackend(GuiBackend):
         # The run is already stopped above, so the Owner's screen says what
         # happened before the mail round trip is attempted. The mail is what
         # tells them while they are away from the machine.
-        self._alert_owner_of_login(stop_reason=remarks)
+        self._alert_owner_of_login(stop_reason=remarks, inquiry_id=inquiry_id)
 
-    def _alert_owner_of_login(self, *, stop_reason: str) -> None:
+    def _alert_owner_of_login(self, *, stop_reason: str, inquiry_id: str | None = None) -> None:
         """Mail the one address that repairs sessions, at most once per run.
 
         Owner rule (2026-10-01): only ``linan229@qq.com``. The message never
@@ -1049,10 +1071,16 @@ class ProductionBackend(GuiBackend):
             transport = QQSMTPTransport(
                 config=QQSMTPConfig(sender_address=_LOGIN_ALERT_SENDER)
             )
+            body = _login_alert_body(stop_reason)
+            if inquiry_id is not None and self._store is not None:
+                item = self._store.get_by_inquiry_id(inquiry_id)
+                body += (f"\n订单识别码：{inquiry_id}\n型号：{item.mpn}\n"
+                         f"品牌：{item.resolved_brand or item.brand}\n数量：{item.quantity}\n"
+                         "阶段：网站登录/调研；本次未完成采购提交。")
             result = transport.send_operator_alert(
                 recipient=NotificationRecipient("owner", _LOGIN_ALERT_RECIPIENT),
                 subject="【INSO】询价已停止：需要重新登录网站",
-                text_body=_login_alert_body(stop_reason),
+                text_body=body,
             )
         except Exception as exc:  # noqa: BLE001 - fail closed at runtime boundary
             log.warning("the login alert could not be delivered (%s)", type(exc).__name__)
