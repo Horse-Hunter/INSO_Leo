@@ -2,6 +2,25 @@
 
 ## Owner AI preview correction — 2026-10-06 (IN_PROGRESS)
 
+### Owner-run result after source fix
+
+Owner clicked Start, not executor. Read-only local monitoring observed
+AI_RECOGNITION_READY followed by SAVE_DISPATCH_ARMED and then MANUAL_REVIEW /
+RECONCILIATION_UNREADABLE. No executor click/replay/rearm was performed after
+dispatch. Reused the production session and exact upper-query adapter solely
+to inspect the outcome; the single matching visible upper row has the requested
+model and quantity and native status 已发送. This establishes a saved/sent INSO
+record, not downstream supplier delivery. Raw business row data stays out of Git.
+
+Automatic confirmation failed at FIRST_PAGE_SETTLED: request match, HTTP 200,
+JSON, exact response rows (one), sequence advancement, pending=false, enabled
+button, cache and DOM identities/order all passed. Pagination current page was
+None and the native pager total was 1604 despite the exact filtered response
+having one row. The first-page completeness assumption therefore rejected a
+visible successful submission. No override to SAVED and no second dispatch.
+Timestamp-window confirmation was never reached; that remains unverified.
+Remaining work is this read-only confirmation defect, not another AI/Save retry.
+
 Owner reported a genuine new inquiry stalled after recognition and authorized
 diagnosis only through AI validation, explicitly excluding final submission.
 Reused ProductionBackend session setup and InsoPurchaseWriter on the canonical
