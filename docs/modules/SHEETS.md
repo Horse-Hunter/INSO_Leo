@@ -39,6 +39,14 @@ Brand write：
 
 其他模块只透传 opaque identity，不实现 worksheet-specific relocation。
 
+后续状态模块接入：保留原 `inquiry_id`，调用 Workflow 的
+`get_by_inquiry_id` 取回 `record_identity`，再交给 Sheets 定位；不能反解摘要、
+按当前行号重算 ID 或仅按型号写回。该 ID 基于入队时表格/工作表/原行号，
+不随排序自动移动，行号复用存在旧身份冲突。状态变化不改变已存 ID。
+当前采购状态 helper 只支持未发 -> 发给采购及该状态的幂等确认，不是通用
+setter；后续状态需明确授权和预期当前状态，继续唯一匹配/写前重读/单格写/
+读回。不能用原快照“未发”覆盖后续业务状态。详见 RFQ-002 CEO_REPORT.md。
+
 ## OAuth / safety
 
 Owner 2026-10-06: preserve and reuse the existing CurrentUser DPAPI-protected

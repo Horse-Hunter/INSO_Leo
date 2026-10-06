@@ -1,5 +1,40 @@
 # RFQ-002 Execution Log — sanitized publication record
 
+## Owner-authorized EXE refresh and CEO handoff — 2026-10-06
+
+Reused existing release script/spec and release Python, production source
+a1bed4094af8a834483c8f9f7852f6e7de0c7ac4. BuildOnly Version 1.2 succeeded;
+staging frozen self-check exit 0 and RELEASE_SCAN_OK. Tcl initialized under
+Owner identity; no environment replacement. No production source changed here.
+
+Validated exact staging/deployment roots and child names, no staged reparse
+points/runtime, no running INSO executable. Old EXE/_internal moved recoverably
+to D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.2-20261006-before-completion-update;
+new generic assets copied into D:\Program_Leo\INSO_Leo\dist\INSO_V1.2.
+Runtime junction identity/target checked before and after, unchanged; did not
+move/copy runtime, delete data/grants, overwrite V1.1 or touch protected CDP.
+Deployed frozen self-check exit 0; new executable SHA256
+FDAA40FEF27AB83C7C014F2C3BC0FB5072207882DFB1F748AD08050E9597482D.
+
+Window inventory showed prior source GUI already absent, not closed by agent.
+Computer-use skill used for attempted EXE startup, but app approval timed out;
+no bypass or Start Inquiry. Native GUI launch and packaged full chain therefore
+NOT verified this round. No order replay, INSO Save/Save-and-Send, real SMTP,
+Sheets update, authorization or credential probe during packaging.
+
+Expanded CEO report with build provenance, Oct 6 repairs/features, verified vs
+unverified scopes, original inquiry_id -> Workflow store -> opaque Sheet
+identity -> unique current-row relocation procedure. Recorded row movement/
+reuse limits and that later statuses require their own authorized transition,
+not arbitrary use of the purchase-only helper. No follow-on module implemented.
+Updated canonical Sheets/release docs and latest report, not CEO's Review verdict.
+
+Ruff src/tests PASS using existing developer Python; release Python lacks Ruff
+(not a packaging dependency). Latest full pytest not rerun; 152 selected checks
+are prior feature evidence, older 921/11 full regression is not current-source
+proof. Diff check at final publication; only docs staged, raw local probes and
+runtime excluded. RFQ remains REVIEW_REQUIRED for independent CEO Review.
+
 ## Owner completion status / exception notification extension — 2026-10-06
 
 Owner authorized source status 未发 -> 发给采购 only after purchase success,

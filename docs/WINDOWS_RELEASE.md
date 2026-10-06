@@ -1,5 +1,26 @@
 # Windows release
 
+## Current V1.2 refresh (2026-10-06)
+
+Owner authorized rebuilding and overwriting the same V1.2 application path.
+Reused `scripts/build_windows_release.ps1 -Version 1.2 -BuildOnly`; staging
+self-check and RELEASE_SCAN_OK passed. Built production source
+`a1bed4094af8a834483c8f9f7852f6e7de0c7ac4`. Replaced only EXE/_internal after
+moving old assets into `dist/release-backups/INSO_V1.2-20261006-before-completion-update`.
+Runtime junction/target and protected grants were preserved; V1.1 untouched.
+Deployed frozen self-check exit 0; EXE SHA256:
+`FDAA40FEF27AB83C7C014F2C3BC0FB5072207882DFB1F748AD08050E9597482D`.
+
+Current build includes Oct 6 AI/confirmation fixes and purchase completion
+status/mail features. The narrow successful status transition 未发 -> 发给采购
+is now Owner-authorized; previous blanket Sheets-write statements below are
+historical, not current. Ordinary Save/generic Send remain closed.
+No orders, submission, mail or Sheets update executed during packaging.
+GUI launch attempt did not complete (Computer Use app approval timeout);
+no bypass. Owner can double-click the existing EXE path below. Build/self-check
+does not prove the new packaged full order chain; only test a genuine new order.
+Earlier startup/first-submit statements below apply to the old Oct 2 build.
+
 ## V1.2 Owner-authorized build and local deployment (2026-10-02)
 
 Owner explicitly approved packaging after personal Review discussion. Reuse the

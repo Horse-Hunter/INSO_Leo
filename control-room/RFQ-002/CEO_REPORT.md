@@ -1,145 +1,179 @@
-# RFQ-002 — CEO Review 报告（2026-10-02）
+# RFQ-002 — CEO Review 报告（2026-10-06）
 
-## 结论先行
+## 交付结论
 
-V1.2 已完成本机 EXE 打包、依赖自检、安全扫描和正常入口窗口启动检查，
-Owner 已获得程序路径，计划在下一笔真实新订单验证最终保存并发送。
-**这不是 RFQ-002 全部验收 PASS，也不是独立 Review 结论。**
+V1.2 已重新打包，覆盖 Owner 原路径的程序文件。本次 EXE 包含 AI 校验修复、
+提交后确认修复、采购成功表格状态写回和异常邮件通知。旧程序文件已备份，
+原配置、数据库、历史状态、Research 结果和 Google 授权缓存保留。
+本轮没有运行订单或重新保存发送已发订单。
 
-最终保存并发送、五秒等待及上方最新首行确认已经接入源码并随本次打包；
-按 Owner 明确要求，执行者没有运行此新增提交步骤的测试或真实提交。
-最终提交及其确认行为仍未实测，打包后的完整业务链也未执行。
+当前状态为 **REVIEW_REQUIRED**。旧 CEO PASS 只覆盖
+`2e519e1e72b22af620b2c0d90b6e21f6b87140fa`，不覆盖后续修改。
+本报告不是独立 Review PASS，也不宣称新版完整业务链已经实测通过。
 
-## 1. 仓库与现场
+## 1. 版本与部署
 
-- 仓库：Horse-Hunter/INSO_Leo。
-- 分支：feature/v1-2。
-- 实现起始基线：`51d17ba3aac6658bad25e468358aa1e6f51186f9`；提交后的最终
-  审查指针以 `feature/v1-2` 远端最新 HEAD 为准，不使用起始基线冒充交付版本。
-- 唯一当前实现现场：`D:\Program_Leo\INSO_Leo\.worktrees\v1-2-design`。
-- RFQ-002 为 `REVIEW_REQUIRED`，不是 Review PASS。
-- Owner 进一步明确授权将 WorkBuddy 与本执行阶段累积实现、测试、脱敏记录
-  commit/push 到 feature/v1-2。本报告随该实现检查点发布；EXE、runtime、
-  原始探测 JSON 与测试输出不进 Git。远端新增规则提交通过正常 merge 保留。
-- CEO chat 从远端 feature/v1-2 读取本报告及实际源码差异，无需访问本机。
-  不要将 Git 发布或本地 EXE 交付等同于未执行的回归/业务验收已经通过。
-- 部署 EXE：`D:\Program_Leo\INSO_Leo\dist\INSO_V1.2\INSO_V1.2.exe`。
-- 启动检查实例已正常关闭；未点击开始询价，未让该实例执行订单。
+- 仓库：Horse-Hunter/INSO_Leo；分支：feature/v1-2。
+- EXE 生产源码基线：`a1bed4094af8a834483c8f9f7852f6e7de0c7ac4`。
+  此后的本轮提交仅更新文档；最终审查指针以远端分支 HEAD 为准。
+- 活跃工作区：`D:\Program_Leo\INSO_Leo\.worktrees\v1-2-design`。
+- Owner 程序：`D:\Program_Leo\INSO_Leo\dist\INSO_V1.2\INSO_V1.2.exe`。
+- 新 EXE SHA256：
+  `FDAA40FEF27AB83C7C014F2C3BC0FB5072207882DFB1F748AD08050E9597482D`。
+- 旧程序备份：
+  `D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.2-20261006-before-completion-update`。
+  只备份旧 EXE 和 _internal，不移动或复制生产 runtime。
+- 原 runtime junction 仍指向
+  `D:\Program_Leo\INSO_Leo\.worktrees\v1-2-design\dist\INSO_V1.1\runtime`。
+  V1.1 程序未覆盖。安全迁移运行数据之前不得删除/移动该工作区或 junction 目标。
+- EXE、备份、授权缓存、数据库、客户明细和原始输出不进 Git。
+  远端交付源码与脱敏报告，部署目录不是独立可搬走的通用分发包。
 
-## 2. 最新 Owner 决策（优先于历史限制）
+## 2. 本阶段修复与新增功能
 
-1. 严格 Reuse-First：继承 V1.1/WorkBuddy 的配置、OAuth、Research、Workflow、
-   Vault、Chrome/CDP、GUI、数据库和发布工具，不重建这些能力。
-2. 只使用 `127.0.0.1:9222` 与
-   `D:\Program_Leo\INSO_CDP\chrome-profile`。保护 Chrome/profile，不新增 CDP。
-3. 七天重复检查从**下方采临时询价**读取完整历史、日期、数量及真实制单人，
-   不得用上方业务询价列表替代，不因价格资格过滤丢弃零报价历史。
-4. Owner 接受真实草稿结果，要求删除自动采购截图。旧证据保留。
-5. Owner 授权**客临时询价表单单次保存并发送**；先完成原 AI/parent 校验，
-   点击后等待五秒，再查上方业务询价；未知结果不自动重发。
-6. Owner 放宽十行代码限制，要求详细报告并亲自 Review。
-7. Owner 确认上方列表按时间倒序，最终确认只看**首页最上面一条**，检查
-   同型号、本次时间和不同于提交前首行的单据编号。历史超过一页不能阻挡提交。
-   下方七天重复检查仍须完整分页，两者不能混同。
-8. Owner 明确禁止执行者测试新增最终提交步骤；首次实际验证留给下一笔真订单。
-9. Owner 随后明确授权现在打包 EXE，取代先前 Phase B 暂缓要求。
+### AI 录单校验
 
-真实 SMTP 属于此前 Owner 授权范围；重要/重复通知沿用原收件人与触发规则，
-登录停止告警只发指定 Owner 邮箱。新增提交授权**不开放**单独 INSO 保存、
-generic Send、Sheets 写入或任意历史记录修改。
+现场问题不是单纯等待不足：AI 已识别型号/品牌/数量，但旧代码还要求预览中
+存在产品编码。Owner 明确产品编码在 AI 页面“保存数据”之后生成，不需校验。
+生产主链现在只核对型号、品牌、数量，保留原品牌规则，不增加另一套录单实现。
+旧产品编码兼容方法保留，生产主链不再使用其校验。
 
-## 3. 已实现与复用范围
+Owner 随后亲自启动新订单，三项校验通过，真实保存并发送一次；Owner 在
+INSO 看到记录为“已发送”。执行者未再次提交这笔订单。
 
-- 沿用唯一正常生产入口与 V1.2 装配，不设置 V1.1-only 静默降级路径。
-- 延续现有 Sheets 读取、Research、重复判断、类型/采购员选择、AI 识别、
-  原生回填和父页面型号/品牌/数量核对。
-- Findchips 原生明确无结果页按无结果处理，不将登录/脚本/空白错误泛化成无结果。
-- 通知台账保持已创建命令内容不变，SENT 不重发，原 worker 处理允许的通知重试。
-- 自动采购截图已从生产链移除；没有删除旧截图或修改生产数据库。
-- 最终提交仍通过原选择器/动作边界：只有明确 Owner 例外与唯一精确 form 控件
-  才能 dispatch。默认 gate 与单独 Save 仍关闭，generic Send 不绑定。
-- 校验通过先持久化 AI_RECOGNIZED；提交前事务落 UNKNOWN 和提交开始事件，
-  随后只可能点击一次。没有提交重试或提交后自动重新登录再点击。
-- 提交前记住上方首行 ID；提交后复用原查询并核验首页、结算、response/cache/DOM
-  的身份及顺序，只读首行型号、时间、新 ID。上海时区解析复用现有代码。
-- 确认后沿用 SAVED 状态，GUI 显示“已发采购单”；无法确认显示
-  “提交结果待确认（不会自动重发）”。此成功标准不证明供应商端实际收件。
-- 任何已有采购状态阻止再次建草稿/提交，旧测试草稿不自动补发。
-- 仅归还程序自己创建的操作 tab，不关闭借用的 Owner tab 或 Chrome。
-- 未新增数据库迁移。中断重启保留待确认，旧 reconciliation 不得拿旧记录
-  确认这次新提交；提交前首行基准只在当前调用内保留，中断需人工核实。
+### 提交后确认
 
-具体代码职责及源码入口见 `FINAL_SUBMISSION_REVIEW.md`。关键 Review 文件：
+误判原因是上方查询页码读取错误及筛选后保留的旧总数，不代表 INSO 发送失败。
+复用原查询，证明上方首页已结算后，只看最新首行：准确型号、新单据编号
+（与提交前基准不同）和本次提交时间；Owner 允许时间误差前后 **30 分钟**。
+不再用陈旧总数要求首页代表完整历史，响应/缓存/DOM 身份与顺序核对仍保留。
 
-| 范围 | 文件 |
-| --- | --- |
-| 写入授权、唯一按钮与单次点击 | `src/inso/write_safety.py`、`src/inso/purchase_writer.py` |
-| 正常生产提交装配与结果确认 | `src/launcher/backend.py`、`src/launcher/v12_composition.py` |
-| 首页结算、原时间解析复用 | `src/inso/duplicate_history.py` |
-| 提交前持久化、防重复路由 | `src/workflow/v12_store.py`、`src/workflow/v12_flow.py` |
-| 页面 ownership、待确认文案 | `src/inso/session.py`、`src/gui/app.py` |
-| 同一版本化发布流程 | `scripts/build_windows_release.ps1`、`packaging/INSO_V1.1.spec` |
+只读复查原已发送记录的首页结算通过，没有重新提交。下方**采临时询价**
+七天重复检查仍完整分页并读取真实制单人，不能与上方提交确认混用。
+无法确认仍提示人工核实，不能自动再次点击提交。
 
-## 4. 验证证据与不能混淆的范围
+### 采购成功后写表状态
 
-| 项目 | 证据/结果 | 范围限制 |
+只有流程结果与持久化采购状态都为 SAVED 才自动写回；Research 完成、
+按钮点击或 GUI 完成计数不是采购成功证明。
+
+- 复用 Sheets 唯一快照定位、写前重读、RAW 单格更新与读回。
+- 只改标准表 A / SHAHAB B 状态格：“未发”→“发给采购”；其他格不动。
+- 已为“发给采购”不重复写；其他状态、零/多候选阻止写入。
+- 写回失败保持采购成功，告警后只重试表格状态，绝不重发采购单。
+
+Owner 授权对已人工确认发送成功的原订单验证状态更新。写后第一次读回遇
+Google 502；重试确认已为“发给采购”，再次调用无第二次写入。
+未伪造采购台账为 SAVED，未调用 INSO 提交。
+
+### 异常邮件
+
+新增异常通知只发 `linan229@qq.com`，包含内部识别码、型号、品牌、数量、
+来源工作表/原行号、失败阶段及安全的具体原因。覆盖采购录单/校验、提交
+不明、重复查询不可确认、Research 异常和状态写回失败；既有登录告警补订单
+信息。原重要/重复订单通知仍沿用原触发规则与收件人，不被替换。
+
+提交不明明确提示“可能已经发送，请查 INSO，禁止直接重跑”。
+复用既有命令/收件人台账和 SMTP worker，同一订单/阶段/原因去重，
+SENT 收件人不重发。真实验证使用明确标记的合成测试通知，QQ SMTP 接受，
+再次入队无重发；SMTP 接受不等于已证明收件箱展示。
+
+### Google 授权
+
+Owner 已亲自完成写入授权，使用原 CurrentUser DPAPI 加密缓存，保存在仓库外。
+普通重启/版本更新/打包不删除缓存或更换 OAuth client。
+生产写回 `allow_interactive=False`，仅复用/刷新 grant，不在 worker 重复弹授权。
+真实撤销、缺失或损坏须明确失败告警，不能承诺授权永不失效。
+
+## 3. 后续模块如何定位同一行的内部识别码
+
+### 定义与存储
+
+当前计算在 `src/workflow/store.py`：
+
+```python
+key = "\x1f".join((spreadsheet_id, worksheet_name, str(original_row_number)))
+inquiry_id = "inq_" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:24]
+```
+
+输入是 Google 表格 ID、工作表原名称、读取入队时的原行号；不含型号、品牌、
+数量或状态。修改状态不会改变已保存识别码。它不同于 INSO 单据编号 BillID
+和产品编码 ProductID。
+
+摘要不能反解为表格/行号。Workflow 的 `workflow_items` 保存唯一 inquiry_id
+及 `record_identity_json`，后者含表格、工作表、原行号和识别快照。
+具体客户订单识别码已私下给 Owner，不发布到 Git 报告。
+
+### 后续模块接入顺序
+
+1. 在任务/事件中接收并保存原 inquiry_id，使用同一 Workflow 数据库。
+2. 使用已有公开查询，不按现在的行号重新计算识别码：
+
+   ```python
+   item = workflow_store.get_by_inquiry_id(original_inquiry_id)
+   identity = item.record_identity
+   # 向 Sheets 传递 opaque identity，执行明确授权的状态转换。
+   ```
+
+3. 由 Sheets 按工作表映射重读并确定当前唯一目标行。原行号只是线索；
+   插行/排序后可能变化。现有非品牌定位快照：标准表核对状态、重要程度、
+   型号、数量；SHAHAB 核对状态、型号、数量。其他模块不复制定位逻辑。
+4. 明确当前阶段允许的“预期当前状态 → 下一状态”，写前重读、只改目标格、
+   写后读回。内容改变、零/多候选失败关闭，不按型号或原行号猜测。
+5. 状态失败与 INSO 不可逆提交分开；不能因表格失败重发采购。
+
+识别码不会自动追随 Google 行移动；重新使用同一行号可能与旧队列身份冲突。
+它是本地 Workflow 记录身份，不是 Google 原生永久行 ID。不能用重新计算的
+摘要、型号或行号单独定位旧订单。
+
+当前 `write_purchase_status_safely` 仅支持“未发/已发给采购”的幂等转换，
+不是任意状态 setter。后续其他状态须单独授权，复用原身份查询、Sheets
+定位和单格写回，定义当时的预期状态；不能用原快照“未发”覆盖后续状态。
+本轮只记录接入方式，不实施未来模块。
+
+## 4. 复用与安全
+
+继承 V1.1/WorkBuddy 的配置、Sheets/OAuth、Research、Workflow、Vault、GUI、
+数据库、Chrome/CDP 和同一发布脚本/spec；无新增依赖、第二启动链或迁移。
+自动采购截图仍已删除。唯一 CDP 为 127.0.0.1:9222，profile 为
+`D:\Program_Leo\INSO_CDP\chrome-profile`，本轮未操作它。
+
+默认 ProductionWriteGate 仍关闭；已批准客临时询价最终提交为窄例外。
+AI 窗口内导入保存与普通对外单独 Save 不能混同；普通 Save、generic send/
+submit 未开放。Sheets 仅开放上述成功状态转换，未开放任意写入。
+
+## 5. 验证与未验证范围
+
+| 验证 | 结果 | 范围限制 |
 | --- | --- | --- |
-| 此前源码回归 | 执行记录：926 passed / 11 skipped | 在最终提交及打包修改之前，不证明新代码通过 |
-| 此前真实订单续跑 | 原 Research、下方重复判断、未保存草稿、AI/parent 校验及 SMTP 台账记录 | 不是最终保存并发送验收 |
-| 当前源码静态检查 | `ruff check src` PASS | 不等于自动测试/真实业务验证 |
-| 发布脚本语法 | PowerShell parser errors=0 | 不覆盖业务逻辑 |
-| 差异格式 | `git diff --check` PASS | 有既有 CRLF 提示，非失败 |
-| 本次打包 | `build_windows_release.ps1 -Version 1.2` 成功 | 沿用旧 spec 和资产，V1.1 未覆盖 |
-| 冻结依赖自检 | `--self-check` exit 0 | 不运行业务、不证明完整装配后的订单链 |
-| 干净产物扫描 | `RELEASE_SCAN_OK` | 在关联私有运行目录之前扫描，不宣称带生产 runtime 的目录也是干净分发包 |
-| 正常 EXE 入口启动 | PID 36596；INSO_V1.2 标题；窗口响应正常，正常关闭 | STOPPED 状态，未点开始、未执行订单或 packaged 完整链 smoke |
-| 新增最终提交 | 未测试/未真实执行 | Owner 明确要求留给下一笔真订单 |
+| 上轮新状态/通知与相关离线检查 | 152 passed，8.48 秒 | 不是最新全仓库回归 |
+| 上轮真实状态更新/读回 | 通过，重复调用无第二次写 | Owner 已确认发送的订单；未执行 INSO |
+| 上轮真实异常邮件 | SMTP 接受，去重通过 | 合成测试通知，只发 Owner |
+| 本轮 Ruff src/tests | PASS | 使用已有开发 Python；发布环境未安装 Ruff |
+| 本轮 git diff --check | PASS | 文档提交前检查 |
+| 同一发布脚本 -Version 1.2 -BuildOnly | 成功 | 干净 staging，源码 a1bed40 |
+| 冻结依赖自检 | exit 0 | staging 与覆盖后的 EXE，不运行订单 |
+| 干净产物扫描 | RELEASE_SCAN_OK | 关联私有 runtime 前 |
+| 本轮 GUI 启动 | 未完成 | Computer Use app approval timeout；没有绕过或点击开始 |
+| 新 EXE 完整订单链 | 未运行 | 留给 Owner 下一笔真订单，不重跑旧单 |
 
-扩大检查范围至既有 `scripts/windows_release_entry.py` 时有三个原有 Ruff
-风格问题，未为打包扩展业务代码，不宣称全仓库 Ruff 全通过。
+早前 921 passed / 11 skipped 不覆盖 10 月 6 日修改。AI/确认修复按当时 Owner
+指示未跑自动测试，部分旧 ProductID 合约测试尚未对齐；不将专项检查或
+打包成功称为最新完整回归通过。原订单的本地采购结果仍待人工确认，未
+伪造为 SAVED；人工确认及表格补写不会自动改历史采购台账。
+供应商实际收件没有证据。
 
-最终 EXE SHA256：
-`99F131DBDFC69C961121FF896FF8C9573C0BC0CBAB3D73B1BEFF60455E095D7C`
+## 6. CEO Review 重点与阅读入口
 
-本次打包/启动检查没有执行真实 Save、Save-and-Send、SMTP、Sheets 写入、
-订单重跑、凭据探测或 CDP 页面操作；不把更早已授权的 SMTP 验证说成本轮发送。
+审查 `e585e88`、`c30e96a`、`a1bed40` 及执行记录，重点核对：
 
-## 5. 本机部署与保护事项
+- AI 三要素、下方完整七天历史与上方首页确认的不同边界。
+- 时间 ±30 分钟、新首行编号、精确型号、结算证据及未知结果不重发。
+- 提交前落未知状态、单次 dispatch、旧单防补发和重启安全不退化。
+- durable SAVED 才写表、定位冲突不误写、状态重试不触发采购提交。
+- Owner-only 异常邮件、台账去重、grant 复用和 protected runtime/CDP。
+- 最新全量回归尚缺；如要求执行先修过期 ProductID 测试，不重跑已发订单。
 
-V1.2 使用独立产物目录；本机 `runtime` junction 指向：
-`D:\Program_Leo\INSO_Leo\.worktrees\v1-2-design\dist\INSO_V1.1\runtime`。
-
-这复用现有配置、SQLite、Excel 和历史采购状态，避免换 EXE 后丢状态或重发。
-**部署目录不是独立可搬走的通用分发包。** 在安全迁移其 runtime 之前，不得
-删除/移动该目标目录或 archive 当前工作区；本机仍依赖原配置中的合法路径。
-打包所需 Tcl/Tk 在 Owner 本机身份下可用，沙箱探测失败不等于安装损坏；
-复用原 Python 环境成功构建，没有重装或换一套环境。
-
-## 6. CEO 需要给出的独立 Review
-
-- 从最新 Owner 授权审查 narrowly scoped Save-and-Send 例外，不按旧绝对禁止
-  误判，也不要把这一例外理解成所有生产写入都已开放。
-- 检查 UNKNOWN 先落库、唯一按钮身份、旧单防补发、异常/重启不重试是否成立。
-- 检查“下方完整七天历史”与“上方首行提交确认”边界没有串用；新增首页模式
-  不改变默认完整集合判据，时间排序事实来自 Owner 确认而非本轮探测。
-- 检查时间精度、首行 ID 变化和待确认策略；并明确记录成功不等于发送送达证明。
-- 核对发布与 runtime ownership；不要因 worktree 清理破坏 Owner 当前 EXE。
-- 必须明确列出未执行最终提交测试、新完整回归与 packaged 完整业务链 smoke。
-  Owner 的“不测试提交”授权不能被改写为“提交测试已 PASS”。
-- Git 发布使代码和脱敏记录可供远端 Review；最终回归、独立 Review 及首次
-  最终提交仍未完成，不因 Owner 收到 EXE 自动标成 REVIEWED_DONE。
-- 未跟踪的原始 probe JSON、测试目录及本机运行数据不要 blanket stage/commit；
-  Review 既有记录是否脱敏后再由执行者处理版本控制交付。
-
-本报告只请求 CEO 独立审查，不授权 CEO 运行真实提交测试、重跑旧订单或重开发。
-如发现问题，应写入 RFQ-002 REVIEW.md 并返还执行者，不开启新的平行任务。
-
-## 7. 阅读入口
-
-按顺序阅读当前工作区：
-`AI_START_HERE.md` → `control-room/COORDINATION.md` →
-`control-room/RFQ-002/TASK_SPEC.md`（最新授权取代历史限制）→
-本报告 → `FINAL_SUBMISSION_REVIEW.md` → `EXECUTION_LOG.md` → 实际源码 diff。
-
-Owner 下一步已告知：来真订单时打开 V1.2 并点击开始询价；遇待确认不重跑补发。
-执行者没有向 CEO chat 自动发消息，本报告由 Owner 转交。
+阅读：Task Spec 最新授权 → 本报告 → Execution Log → 实际源码 diff →
+Final Report。REVIEW.md 旧 PASS 是历史检查点，等待 CEO 独立新结论。
+本轮未自动向 CEO chat 发消息，Owner 可让 CEO 从远端读取本报告。

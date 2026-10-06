@@ -4,6 +4,15 @@
 **Review:** REQUIRED  
 **Branch:** `feature/v1-2`
 
+## Owner update — refresh deployed EXE / CEO report (2026-10-06)
+
+Owner authorizes rebuilding and overwriting the existing V1.2 program assets,
+preserving runtime, state, protected grants and the shared CDP. Reuse the same
+release pipeline; keep an old-asset backup. Build/dependency/startup checks do
+not authorize order replay or another INSO submission. CEO report must explain
+how later modules resolve the original inquiry_id to the source identity and
+safely locate its current Sheet row; do not implement follow-on modules here.
+
 ## Owner update — completion write-back and exception mail (2026-10-06)
 
 Owner explicitly authorizes only this additional Sheets write: after confirmed
