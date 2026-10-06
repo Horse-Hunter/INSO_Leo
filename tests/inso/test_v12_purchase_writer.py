@@ -636,7 +636,7 @@ def test_ai_reader_returns_only_ready_single_row_result() -> None:
         result.quantity,
         result.ready,
     ) == (
-        "P216328",
+        "",
         "LM358",
         "Texas Instruments",
         123,
@@ -644,28 +644,28 @@ def test_ai_reader_returns_only_ready_single_row_result() -> None:
     )
 
 
-def test_ai_reader_requires_the_product_code_the_erp_resolved() -> None:
-    """The ERP's AI preview carries a 产品编码 column (``data-f="ProductID"``).
-
-    Live shape 2026-10-01: the preview table is ``# / 产品编码 / 型号 / 品牌 /
-    数量`` and ``STM8L051F3P6`` came back as ``P216328``. Reading only the last
-    three fields silently discarded the 编码, so the written draft was missing
-    it. An empty 编码 is not a readable row.
-    """
-
+@pytest.mark.parametrize("product_id", [None, "", "P216328", "P999999"])
+def test_ai_reader_accepts_business_fields_without_a_product_code(product_id) -> None:
+    """Owner rule: the ERP generates its code on import, not in AI validation."""
     values = {
-        "ProductID": "",
         "PartNo": "LM358",
         "Brand": "Texas Instruments",
         "Qty": "123",
     }
+    if product_id is not None:
+        values["ProductID"] = product_id
     reader = PlaywrightAiResultReader(
         _opened_panel(values=values),
         wait_seconds=0.05,
         poll_milliseconds=1,
     )
 
-    assert reader.read() is None
+    result = reader.read()
+    assert result is not None
+    assert (result.model, result.brand, result.quantity, result.ready) == (
+        "LM358", "Texas Instruments", 123, True,
+    )
+    assert result.product_id == ""  # Legacy field, not a success prerequisite.
 
 
 def test_ai_reader_waits_for_the_async_progress_before_reading() -> None:
@@ -696,7 +696,7 @@ def test_ai_reader_waits_for_the_async_progress_before_reading() -> None:
         result.quantity,
         result.ready,
     ) == (
-        "P216328",
+        "",
         "LM358",
         "Texas Instruments",
         123,

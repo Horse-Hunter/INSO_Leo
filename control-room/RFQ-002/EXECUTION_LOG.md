@@ -1,5 +1,50 @@
 # RFQ-002 Execution Log — sanitized publication record
 
+## CEO B1 ProductID test-contract repair — 2026-10-06
+
+Fast-forward synchronized feature/v1-2 to CEO Review commit 9685a56, read current
+Review/Task Spec/Execution Log/module boundaries; B1 is the only repair scope.
+Reuse audit confirmed production reader already returns an empty compatibility
+product_id and coordinator waits by model, validating model/brand/quantity.
+No production deficiency required changes; only two existing test files updated.
+
+AI ready/async assertions now expect the unused empty compatibility field.
+Reader test covers absent, empty, matching and unrelated ProductID, all accepted
+when business fields are ready. Parent fixtures use wait_for_model; a ProductID
+read raises in the stand-in so success proves it is not consulted. Blank or
+unrelated parent code no longer rejects valid business fields. Replaced obsolete
+parent-id-mismatch diagnostic with actual unreadable-model parent-read coverage;
+model/brand/quantity read-back mismatch failures remain explicitly covered.
+Legacy read_product_id/wait_for_row adapter compatibility tests remain intact;
+they do not assert those helpers are production success prerequisites.
+
+Actual safe/offline commands and results (existing developer Python, sandbox):
+- python -m pytest -q tests/inso/test_v12_purchase_writer.py
+  tests/launcher/test_v12_composition.py
+  --basetemp=.tmp/rfq002-productid-focused-20261006 --tb=short
+  -> 91 passed in 1.02s, exit 0.
+- python -m pytest -q tests
+  --basetemp=.tmp/rfq002-productid-full-20261006 --tb=short
+  -> 946 passed, 11 skipped in 33.98s, exit 0. No deselected tests.
+- python -m ruff check src tests -> All checks passed, exit 0.
+- git diff --check -> PASS; reviewed test/doc-only diff.
+
+Full run reported two existing outbound SMTP attempts from
+test_backend_closes_only_owned_browser_after_runtime_thread_exits[False/True]
+in tests/launcher/test_release_infrastructure.py. The unchanged suite-wide
+SMTP/SMTP_SSL guard blocked both locally before connection; no real email left
+the machine. Recorded transparently; unrelated fixtures were not changed under
+the Owner's ProductID-only scope. Tests used synthetic fixtures/mocked external
+boundaries; no production orders or credentials were used, and no real
+Save/Save-and-Send, SMTP or Sheets writes were performed.
+
+Earlier records saying latest full regression was missing or ProductID tests
+were stale are SUPERSEDED by this test-only repair and current 946/11 result.
+No src, business logic, dependencies, runtime, CDP or packaging changes. Existing
+V1.2 EXE remains the a1bed40 production artifact; no rebuild under packaging rule.
+Control Room returned to REVIEW_REQUIRED; B1 closure verdict belongs to CEO,
+not executor. Raw pre-existing probe files/test runtime remain untracked/ignored.
+
 ## Owner-authorized EXE refresh and CEO handoff — 2026-10-06
 
 Reused existing release script/spec and release Python, production source

@@ -45,7 +45,7 @@ class _ResearchFacts:
 
 class _PrepareActions:
     def __init__(self, *, preview=None):
-        self.preview = preview or ("P216328", "LM358", "Texas Instruments", 123, True)
+        self.preview = preview or ("", "LM358", "Texas Instruments", 123, True)
         self.calls: list[tuple] = []
 
     def new_draft(self):
@@ -95,12 +95,12 @@ class _ParentFields:
         self.readback = readback
         self.calls: list[tuple] = []
 
-    def wait_for_row(self, expected_product_id, timeout_seconds):
-        self.calls.append(("wait_for_row", expected_product_id))
-        return self.values["product_id"] == expected_product_id
+    def wait_for_model(self, expected_model, timeout_seconds):
+        self.calls.append(("wait_for_model", expected_model))
+        return self.values["model"] == expected_model
 
     def read_product_id(self):
-        return self.readback[0] if self.readback else self.values["product_id"]
+        raise AssertionError("ProductID must not participate in production validation")
 
     def read_model(self):
         return self.readback[1] if self.readback else self.values["model"]
@@ -113,18 +113,18 @@ class _ParentFields:
 
 
 class _LateParentFields(_ParentFields):
-    """``ai_appendRow`` never rendered our 编码 inside the wait budget."""
+    """``ai_appendRow`` never rendered our model inside the wait budget."""
 
-    def wait_for_row(self, expected_product_id, timeout_seconds):
-        self.calls.append(("wait_for_row", expected_product_id))
+    def wait_for_model(self, expected_model, timeout_seconds):
+        self.calls.append(("wait_for_model", expected_model))
         return False
 
 
-class _WrongProductCodeParent(_ParentFields):
-    """The grid reloaded with a row, but not the one the ERP handed over."""
+class _UnreadableParentFields(_ParentFields):
+    """The model row rendered, but its business-field read-back failed."""
 
-    def read_product_id(self):
-        return "P999999"
+    def read_model(self):
+        raise ValueError("synthetic unreadable parent model")
 
 
 class _FailingCommitActions(_PrepareActions):
@@ -475,7 +475,7 @@ def test_prepare_lets_the_erp_fill_the_row_then_reads_it_back() -> None:
 
     assert result.outcome is PurchaseOutcome.AI_RECOGNIZED
     # The row is handed back by the ERP; the seam only waits for it and reads it.
-    assert parent.calls == [("wait_for_row", "P216328")]
+    assert parent.calls == [("wait_for_model", "LM358")]
     assert actions.calls == [
         ("new_draft",),
         ("customer", "Win Source Elec. Tech. Ltd"),
@@ -518,16 +518,16 @@ def test_prepare_commits_the_ai_panel_before_reading_the_parent_grid() -> None:
             super().commit_ai_entry()
 
     class _OrderedParentFields(_ParentFields):
-        def wait_for_row(self, expected_product_id, timeout_seconds):
-            order.append("wait_for_row")
-            return super().wait_for_row(expected_product_id, timeout_seconds)
+        def wait_for_model(self, expected_model, timeout_seconds):
+            order.append("wait_for_model")
+            return super().wait_for_model(expected_model, timeout_seconds)
 
     result = _purchase_writer(
         _OrderedActions(), _OrderedParentFields()
     ).prepare(_command())
 
     assert result.outcome is PurchaseOutcome.AI_RECOGNIZED
-    assert order == ["read_preview", "commit_ai", "wait_for_row"]
+    assert order == ["read_preview", "commit_ai", "wait_for_model"]
 
 
 def test_prepare_never_commits_when_the_preview_mismatches() -> None:
@@ -541,8 +541,13 @@ def test_prepare_never_commits_when_the_preview_mismatches() -> None:
     assert ("commit_ai",) not in actions.calls
 
 
-def test_prepare_parent_readback_mismatch_fails_validation() -> None:
-    parent = _ParentFields(readback=("P216328", "LM358", "Wrong Brand", 123))
+@pytest.mark.parametrize("readback", [
+    ("", "LM358X", "Texas Instruments", 123),
+    ("", "LM358", "Wrong Brand", 123),
+    ("", "LM358", "Texas Instruments", 124),
+])
+def test_prepare_parent_readback_mismatch_fails_validation(readback) -> None:
+    parent = _ParentFields(readback=readback)
 
     result = _purchase_writer(parent=parent).prepare(_command())
 
@@ -552,27 +557,23 @@ def test_prepare_parent_readback_mismatch_fails_validation() -> None:
 def test_prepare_row_that_never_arrives_fails_closed() -> None:
     """``ai_appendRow`` reloads the grid asynchronously, so the wait is a gate.
 
-    A row whose 编码 arrives only after the budget expired is not a rendered row:
+    A row whose model arrives only after the budget expired is not a rendered row:
     the leg must fail rather than treat the commit click as sufficient.
     """
-
-    class _LateParentFields(_ParentFields):
-        def wait_for_row(self, expected_product_id, timeout_seconds):
-            self.calls.append(("wait_for_row", expected_product_id))
-            return False
 
     parent = _LateParentFields()
 
     result = _purchase_writer(parent=parent).prepare(_command())
 
     assert result.outcome is PurchaseOutcome.VALIDATION_FAILED
-    assert parent.calls == [("wait_for_row", "P216328")]
+    assert parent.calls == [("wait_for_model", "LM358")]
 
 
-def test_prepare_row_with_the_wrong_product_code_fails_closed() -> None:
+@pytest.mark.parametrize("product_id", ["", "P999999"])
+def test_prepare_ignores_parent_product_code_when_business_fields_match(product_id) -> None:
     parent = _ParentFields(
         rendered={
-            "product_id": "P999999",
+            "product_id": product_id,
             "model": "LM358",
             "brand": "Texas Instruments",
             "quantity": 123,
@@ -581,7 +582,8 @@ def test_prepare_row_with_the_wrong_product_code_fails_closed() -> None:
 
     result = _purchase_writer(parent=parent).prepare(_command())
 
-    assert result.outcome is PurchaseOutcome.VALIDATION_FAILED
+    assert result.outcome is PurchaseOutcome.AI_RECOGNIZED
+    assert parent.calls == [("wait_for_model", "LM358")]
 
 
 def _purchase_steps(caplog) -> list[tuple[str, str | None]]:
@@ -597,7 +599,7 @@ def _purchase_steps(caplog) -> list[tuple[str, str | None]]:
     [
         (_FailingCommitActions, _ParentFields, "commit-ai-entry", "TimeoutError"),
         (_PrepareActions, _LateParentFields, "parent-row-missing", None),
-        (_PrepareActions, _WrongProductCodeParent, "parent-id-mismatch", None),
+        (_PrepareActions, _UnreadableParentFields, "parent-read", "ValueError"),
     ],
 )
 def test_prepare_failure_names_the_step_that_died(

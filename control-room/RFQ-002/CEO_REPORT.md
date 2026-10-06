@@ -1,5 +1,13 @@
 # RFQ-002 — CEO Review 报告（2026-10-06）
 
+最新复验补充：CEO B1 所列 ProductID 旧测试已按三要素规则修正，仅改 tests
+及 Control Room 文档。Focused 91 passed；最新完整 safe/offline regression
+946 passed / 11 skipped；Ruff src/tests、diff check PASS。两条既有发布测试
+的 SMTP 尝试由保护层本机拦截，没有真实发送，详细记录见 Execution Log。
+未改 src、未重新打包、未运行真实订单/提交/SMTP/Sheets 写入。
+下文“旧 ProductID 测试未对齐/最新全量缺失”已由本次证据取代，其他部署及
+未完成真实业务验收范围不变；等待 CEO 独立重新 Review。
+
 ## 交付结论
 
 V1.2 已重新打包，覆盖 Owner 原路径的程序文件。本次 EXE 包含 AI 校验修复、
