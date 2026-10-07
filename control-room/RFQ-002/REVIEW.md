@@ -1,118 +1,104 @@
 # RFQ-002 CEO Independent Review — 2026-10-07
 
 **Status:** COMPLETE  
-**Verdict:** CHANGES_REQUESTED  
-**Reviewed HEAD:** `732a4593631457c07660ed950bc11c1c322aedc4`  
-**Previous PASS:** superseded; it covered the earlier ProductID checkpoint only.
+**Verdict:** PASS — REVIEWED_DONE  
+**Reviewed Executor HEAD:** `95ce4ca40b6c1b3c8e56765c524c88e270d72c4d`  
+**Current V1.2 EXE SHA256:** `7803C90E5AD34415CDF1BE9FDF4F373364C7955CE916BF16A6BF5BFBC7E1FC0A`
 
 ## Owner Summary
 
 ### Review 结论
 
-CHANGES_REQUESTED
+REVIEWED_DONE
 
-CEO 已独立检查自上次 PASS 之后的当前生产改动，重点覆盖：
+上一次唯一阻塞项 B1 已关闭。
 
-- 六行批量闭环修复 `c7b77e5`
-- 单空白页 CDP 收尾 `7738018`
-- 无报价终态 / GUI / 异常邮件修复 `732a459`
-- 当前 TASK_SPEC、CEO_REPORT、EXECUTION_LOG、FINAL_REPORT 与相关源码/测试
+Executor 的修复范围符合 CEO 要求：生产源码只改了
+`src/launcher/inso_session.py` 中 fresh INSO authentication page 的清理条件，
+没有重构浏览器链，也没有改变采购、Research、SMTP、Sheets 或其他业务规则。
 
-### 最新无报价修复
+当前行为：
 
-**通过代码 Review。**
+- fresh owned INSO page 遇 `MANUAL_VERIFICATION_REQUIRED` 时不会被提前关闭；
+- CAPTCHA / 手机验证码 / 设备验证页会保留给人工处理；
+- 错误继续向上抛出，Backend 进入 `MANUAL_REVIEW`；
+- `MANUAL_REVIEW` 下现有 `park_shared_cdp` 保护仍会阻止清空人工验证页；
+- 普通认证失败和无效 shell 仍会关闭本次新开的 owned tab；
+- Chrome / context / protected profile 不会因该异常路径被关闭。
 
-当前实现与 Owner 最新规则一致：
-
-- 五个价格来源正常但均无报价时仍保持 Research `EXCEPTION / NO_MATCHING_PRODUCT`；
-- 新发生的终止 Research 写入 `RESEARCH_FAILED`，不再继续显示为处理中；
-- Workflow `FAILED` + 历史 V1.2 `ROUTING` 可只读映射为“调研无报价（未发采购）”，无需改生产数据库；
-- 无报价不会进入采购 writer；
-- 后续异常邮件明确写“五个价格来源均无报价、未进入采购提交”，只建议核对型号，不宣称型号必错；
-- 已存在的异常通知 command 仍按原 ledger 幂等，不会因文案更新重发旧邮件。
-
-提交记录的 focused 440/1、full safe 974/11、Ruff 与 diff check 与当前源码范围一致；本 Review 没有重跑订单，也没有执行真实 INSO / SMTP / Sheets 写入。
-
-### 当前唯一阻塞项
-
-最新 RFQ 还包含上次 PASS 之后新增的“单空白页 CDP”规则，因此本次 Review 必须一起覆盖。这里发现一处与 Owner 明确规则不一致的安全边界。
-
----
-
-## Blocking Finding
-
-### B1 — HIGH — INSO 人工验证页会在进入 MANUAL_REVIEW 前被关闭
-
-TASK_SPEC 当前明确要求：
+因此该实现现在与 TASK_SPEC 的规则一致：
 
 > unresolved manual verification is not a closed row: stop and preserve its human-needed page.
 
-但当前生产路径中：
+## Verification
 
-1. 每笔询价以 `fresh_page=True` 新开 INSO 页；
-2. `InsoSessionGuard.ensure_authenticated()` 如果发现 CAPTCHA / 手机验证码 / 设备验证，会返回 `DEAD / MANUAL_VERIFICATION_REQUIRED`；
-3. 外层 `ensure_inso_authenticated()` 对任何 `DEAD` 都会立即执行：
-   `guard.opened_page.close()`；
-4. 此时 Backend 尚未进入 `RunState.MANUAL_REVIEW`。
+Executor 对最新源码重新执行并记录：
 
-因此，如果人工验证发生在 INSO 新开的 owned tab 上，当前代码会先把人需要处理的验证页关闭，再向上抛错。后面的 `park_shared_cdp` 虽然有 “MANUAL_REVIEW 时不清空” 的保护，但已经来不及。
+- focused pytest：133 passed
+- full safe/offline regression：979 passed / 11 skipped
+- Ruff `src tests`：PASS
+- `git diff --check`：PASS
 
-这与 Execution Log 中“Manual-verification stop ... human-needed page is preserved”的声明不完全一致。现有测试验证了错误码和普通 failed fresh lease cleanup，但没有覆盖“fresh owned page + MANUAL_VERIFICATION_REQUIRED 必须保留页面”。
+新增离线 regression 覆盖：
 
-### Required repair
+- synthetic CAPTCHA；
+- 手机验证码；
+- 设备验证；
+- fresh page 保留；
+- run 进入 MANUAL_REVIEW；
+- MANUAL_REVIEW 后不执行 post-challenge park；
+- Chrome/context/profile 不关闭；
+- 普通认证失败仍清理 owned page。
 
-只做最小修复：
+CEO 已检查上述测试与生产代码的契约对应关系，未发现新的阻塞问题。
 
-1. `ensure_inso_authenticated()` 在 `MANUAL_VERIFICATION_REQUIRED` 时不得关闭本次新开的 human-needed page；
-2. 其他普通认证失败 / 无效 lease 仍按现有规则清理 owned tab；
-3. 增加一个离线 regression，明确证明：
-   - fresh owned INSO page 遇人工验证后仍保持打开；
-   - 浏览器/context/profile 不关闭；
-   - run 进入 MANUAL_REVIEW 后不会被 `park_shared_cdp` 清掉；
-4. 运行当前 full safe/offline regression、Ruff、diff check。
+## Packaging
 
-不要为了这个修复运行真实订单或制造验证码场景。
+由于此次确实修改了生产 `src/`，重新打包是必要且正确的。
 
-### Packaging
+当前交付记录：
 
-这是生产源码路径（`src/launcher/inso_session.py` / 可能的 launcher lifecycle）问题。
+- build：PASS
+- frozen self-check：PASS
+- clean staged release scan：PASS
+- deployed frozen self-check：PASS
+- idle launch：PASS
+- 未点击“开始询价”
+- 新 EXE SHA256：
+  `7803C90E5AD34415CDF1BE9FDF4F373364C7955CE916BF16A6BF5BFBC7E1FC0A`
+- 旧程序备份：
+  `D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.2-20261007-before-manual-page-fix`
 
-如果修复修改了会进入 EXE 的 `src/`，需要重新打包 V1.2，并重新记录 EXE hash；不需要重跑真实业务订单，只做 build/self-check/release scan/idle launch 即可。
+本次没有运行真实订单、Save / Save-and-Send、SMTP 或 Sheets 写入，也没有制造线上验证码场景。
 
----
+## Previously Reviewed Current Scope
 
-## Independently Verified Current Areas
+本次 PASS 同时保留此前对当前 RFQ 最新范围的独立结论：
 
-### Six-row closed-loop changes
+- 六行批量闭环修复；
+- bounded inquiry scope；
+- per-row completion / status write-back / notification / tab cleanup；
+- lower-history complete pagination + exact-MPN business filtering；
+- upper submission confirmation / no automatic resend；
+- Owner-confirmed old-sent recovery 的窄 opt-in；
+- blank-only CDP 的正常闭环路径；
+- all-no-quotes `RESEARCH_FAILED` 终态；
+- “调研无报价（未发采购）” GUI 显示；
+- Owner-only 无报价异常通知且不武断判定型号错误。
 
-从当前代码确认：
+没有发现新的阻塞项。
 
-- bounded inquiry scope 不会 claim 其他待处理订单；
-- 每行 result callback 在下一行前执行状态写回、通知处理和 owned-tab cleanup；
-- UNKNOWN / MANUAL_REVIEW / write-back failure 不会重新触发采购提交；
-- lower-history fuzzy search 仍完整分页后才按 exact MPN 过滤业务记录；
-- final saved record ref 仍转换为 opaque `rec_` 引用；
-- Owner-confirmed old-sent recovery 是显式 opt-in，并要求原 dispatch 事件和 typed authoritative evidence。
+## Explicitly not claimed
 
-### Blank-only CDP normal path
+- 没有为了 Review 重跑历史订单；
+- 没有重新执行真实采购；
+- 没有重新发送真实 SMTP；
+- 没有重新写 Google Sheets；
+- 没有真实制造 CAPTCHA / 手机验证码 / 设备验证；
+- 不宣称本次重新打包后的 EXE 又完成了一遍完整真实业务链。
 
-正常闭环时 `park_shared_cdp` 会先保留/创建一个 about:blank，再关闭其他页，并且不关闭 Chrome/context。这个正常路径符合 Owner 要求。
-
-问题只在“人工验证发生在 fresh INSO owned page”这一异常路径。
-
-### No-quote terminal path
-
-无报价当前会终止 Research、显示正确 GUI 文案、发送 Owner-only 解释邮件，且不会进入采购 dispatch。
-
-## Safety
-
-本 Review 未：
-- 重跑任何历史订单；
-- 执行 Save / Save-and-Send；
-- 发送真实 SMTP；
-- 写 Google Sheets；
-- 操作 protected CDP。
+这些都不是关闭当前 Review 所必需的条件。
 
 ## State transition
 
-`REVIEW_REQUIRED → CHANGES_REQUESTED`
+`REVIEW_REQUIRED → REVIEWED_DONE`
