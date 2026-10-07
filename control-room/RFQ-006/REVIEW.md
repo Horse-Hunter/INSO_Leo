@@ -152,3 +152,31 @@ Executor 报告：
 ## State transition
 
 `REVIEW_REQUIRED → CHANGES_REQUESTED`
+
+## Owner screenshot addendum — 2026-10-07 15:15 +08:00
+
+Owner supplied a current screenshot of the real Google worksheet and thereby resolved the quotation-input geometry that was previously marked UNKNOWN.
+
+Confirmed from Owner-provided production screenshot/business instruction:
+
+- active worksheet title: `报价输入`;
+- URL gid: `489913321`;
+- this worksheet is intentionally blank input surface — there is **no header row**;
+- quotation payload is written into the **first row**;
+- 14 values occupy **A1:N1** in the canonical RFQ-004 order:
+  `日期、型号、品牌、数量、币种、供方返点、报价、供方未税价、平台数量、批号、货期、备注、备注2、制单人`;
+- therefore `input_row=1`, `first_column=1 (A)`;
+- the visible `更新报价` control is outside the A:N input area; screenshot proves visible text only, not its DOM role/selector.
+
+This corrects the earlier RFQ-005/RFQ-006 assumption that `报价输入` contains a 14-column header row. It does not.
+
+Required implementation correction:
+
+- keep metadata binding `title=报价输入` ↔ configured `gid=489913321`;
+- remove the requirement to read/validate a Google header row for this worksheet;
+- do not invent a fake `header_row=0/1` merely to satisfy the old model;
+- preserve the 14-field order contract in code and exact RAW write/readback for `A1:N1`;
+- production config may now carry the confirmed `gid`, `input_row=1`, `first_column=1`; `header_row` must no longer be required for V1.3 quotation input;
+- read-only browser inspection may verify the real `更新报价` locator/session without clicking it; popup/Apps Script post-click behavior remains live-only until separately Owner-authorized.
+
+Because geometry is now Owner-confirmed, `BLOCKED LIVE CONFIG` due solely to geometry may be removed after this code/config correction. Production business execution is still not authorized by this addendum.
