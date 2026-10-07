@@ -199,15 +199,15 @@ def test_auth_fault_global_stop_retains_page_and_does_not_process_next_row():
 
 
 @pytest.mark.parametrize("sources,items", [
-    ([source(2)], []), ([source(2), source(3)], [item(2)]),
+    ([source(2)], []),
     ([source(2)], [item(2), item(3)]), ([source(2, quantity="6")], [item(2)]),
     ([source(2, brand="edited")], [item(2)]),
 ])
 def test_orphan_ambiguous_or_changed_identity_never_invents_id(sources, items):
     service, operations, _, _ = cycle([], sources=sources, items=items)
-    with pytest.raises(V12Fault) as raised:
-        service.run(WS)
-    assert raised.value.reason == "SOURCE_IDENTITY_UNRESOLVED"
+    result, = service.run(WS)
+    assert result.outcome is QuotationOutcome.ROW_FAILED
+    assert result.row_error_reason.value in {"SOURCE_IDENTITY_UNRESOLVED", "SOURCE_IDENTITY_AMBIGUOUS"}
     assert operations.tabs == []
 
 
@@ -229,8 +229,9 @@ def test_status_changed_after_scan_fails_before_query():
         calls += 1
         return [source(2)] if calls == 1 else [source(2, "采购已报价")]
     sheets.read_rows = read
-    with pytest.raises(V12Fault):
-        service.run(WS)
+    result, = service.run(WS)
+    assert result.outcome is QuotationOutcome.ROW_FAILED
+    assert result.row_error_reason.value == "SOURCE_CHANGED"
     assert operations.tabs == []
 
 

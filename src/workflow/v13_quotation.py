@@ -1,5 +1,4 @@
 """RFQ-004 serial read cycle; intentionally absent from the production scheduler."""
-import sqlite3
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
@@ -21,7 +20,10 @@ from src.sheets import (
     query_quotation_candidates,
 )
 from src.sheets.brand_write import SheetRecordConflict
-from src.sheets.quotation_candidates import relocate_quotation_source
+from src.sheets.quotation_candidates import (
+    QuotationSourceAmbiguous,
+    relocate_quotation_source,
+)
 
 from .inso_query import run_inso_query
 from .models import WorkItem
@@ -31,6 +33,20 @@ from .v12_faults import FaultScope, V12Fault
 class QuotationOutcome(StrEnum):
     QUOTE_FOUND = "QUOTE_FOUND"
     NO_RECENT_QUOTE = "NO_RECENT_QUOTE"
+    ROW_FAILED = "ROW_FAILED"
+
+
+class RowErrorReason(StrEnum):
+    SOURCE_IDENTITY_UNRESOLVED = "SOURCE_IDENTITY_UNRESOLVED"
+    SOURCE_IDENTITY_AMBIGUOUS = "SOURCE_IDENTITY_AMBIGUOUS"
+    SOURCE_MPN_UNAVAILABLE = "SOURCE_MPN_UNAVAILABLE"
+    SOURCE_CHANGED = "SOURCE_CHANGED"
+
+
+class V13SourceRowError(Exception):
+    def __init__(self, reason: RowErrorReason):
+        super().__init__(reason.value)
+        self.reason = reason
 
 
 class V13Stopped(RuntimeError):
@@ -54,52 +70,91 @@ class V13Candidate:
     inquiry_id: str
     record_identity: SheetRecordIdentity
     queried_mpn: str
+    source_row_position: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class V13QuotationResult:
-    inquiry_id: str
-    record_identity: SheetRecordIdentity
-    queried_mpn: str
+    inquiry_id: str | None
+    record_identity: SheetRecordIdentity | None
+    queried_mpn: str | None
     outcome: QuotationOutcome
     quotation: V13QuotationRow | None
+    row_error_reason: RowErrorReason | None = None
+    source_worksheet: WorksheetIdentity | None = None
+    source_row_position: int | None = None
 
 
-def read_v13_candidates(
-    reader: WorksheetRowReader, worksheet: WorksheetIdentity, store: ExistingInquiryStore,
-) -> tuple[V13Candidate, ...]:
-    """Bind source candidates ONLY to uniquely relocated original ledger IDs.
+def _read_source_rows(reader, worksheet):
+    try:
+        return tuple(reader.read_rows(worksheet))
+    except V12Fault:
+        raise
+    except Exception:  # noqa: BLE001 - this boundary contains only the shared Sheets read
+        raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE") from None
 
-    There is deliberately no enqueue, inquiry_id_for(current row), or new ID.
-    An orphan or ambiguous source cannot become a different business order.
-    """
-    source_rows = tuple(reader.read_rows(worksheet))
 
-    class SnapshotReader:
-        def read_rows(self, requested):
-            return source_rows
+def _ledger_items(store):
+    try:
+        return tuple(store.all_items())
+    except V12Fault:
+        raise
+    except Exception:  # noqa: BLE001 - only the shared ledger read, not row validation
+        raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
 
-    observed = query_quotation_candidates(SnapshotReader(), worksheet)
-    matches: dict[int, list[WorkItem]] = {row.row_position: [] for row in observed}
-    for item in store.all_items():
+
+def _source_bindings(items, worksheet, source_rows):
+    matches, ambiguous = {}, set()
+    for item in items:
         if item.record_identity.worksheet != worksheet:
             continue
         try:
             row = relocate_quotation_source(
                 item.record_identity, source_rows, expected_brand=_expected_brand(item),
             )
+        except QuotationSourceAmbiguous as exc:
+            ambiguous.update(exc.row_positions)
+            continue
         except SheetRecordConflict:
             continue
-        matches[row.row_position].append(item)
+        matches.setdefault(row.row_position, []).append(item)
+    return matches, ambiguous
+
+
+def read_v13_candidates(
+    reader: WorksheetRowReader, worksheet: WorksheetIdentity, store: ExistingInquiryStore,
+) -> tuple[V13Candidate | V13QuotationResult, ...]:
+    """Ordered candidate-or-row-error; later bad rows cannot abort the batch."""
+    source_rows = _read_source_rows(reader, worksheet)
+
+    class SnapshotReader:
+        def read_rows(self, requested):
+            return source_rows
+
+    try:
+        observed = query_quotation_candidates(SnapshotReader(), worksheet)
+    except Exception:  # noqa: BLE001 - schema/reader shape is a shared Sheets boundary
+        raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_SCHEMA_UNAVAILABLE") from None
+    matches, ambiguous = _source_bindings(_ledger_items(store), worksheet, source_rows)
     result = []
     for record in sorted(observed, key=lambda row: row.row_position):
-        items = matches[record.row_position]
-        if len(items) != 1:
-            raise V12Fault(FaultScope.GLOBAL_STOP, "SOURCE_IDENTITY_UNRESOLVED")
-        item = items[0]
+        items = matches.get(record.row_position, [])
+        item = items[0] if len(items) == 1 and record.row_position not in ambiguous else None
+        reason = None
         if not isinstance(record.model, str) or not record.model.strip():
-            raise V12Fault(FaultScope.GLOBAL_STOP, "SOURCE_MPN_UNAVAILABLE")
-        result.append(V13Candidate(item.inquiry_id, item.record_identity, record.model))
+            reason = RowErrorReason.SOURCE_MPN_UNAVAILABLE
+        elif len(items) > 1 or record.row_position in ambiguous:
+            reason = RowErrorReason.SOURCE_IDENTITY_AMBIGUOUS
+        elif item is None:
+            reason = RowErrorReason.SOURCE_IDENTITY_UNRESOLVED
+        if reason is not None:
+            result.append(V13QuotationResult(
+                item.inquiry_id if item else None, item.record_identity if item else None,
+                record.model if isinstance(record.model, str) else None,
+                QuotationOutcome.ROW_FAILED, None, reason, worksheet, record.row_position,
+            ))
+        else:
+            result.append(V13Candidate(item.inquiry_id, item.record_identity, record.model, record.row_position))
     return tuple(result)
 
 
@@ -113,29 +168,44 @@ class V13QuotationCycle:
         self._quotes = quote_reader or InsoQuotationReader()
 
     def run(self, worksheet: WorksheetIdentity) -> tuple[V13QuotationResult, ...]:
-        try:
-            candidates = read_v13_candidates(self._reader, worksheet, self._store)
-        except V12Fault:
-            raise
-        except sqlite3.Error:
-            raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
-        except Exception:  # noqa: BLE001 - source read failure must stop, never empty
-            raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE") from None
+        candidates = read_v13_candidates(self._reader, worksheet, self._store)
         results = []
         for candidate in candidates:
             if self._stop():
                 raise V13Stopped("STOP_REQUESTED")
 
+            if isinstance(candidate, V13QuotationResult):
+                results.append(candidate)
+                continue
+
             def operation(candidate=candidate):
                 if self._stop():
                     raise V13Stopped("STOP_REQUESTED")
-                item = self._store.get_by_inquiry_id(candidate.inquiry_id)
+                try:
+                    item = self._store.get_by_inquiry_id(candidate.inquiry_id)
+                except KeyError:
+                    raise V13SourceRowError(RowErrorReason.SOURCE_IDENTITY_UNRESOLVED) from None
+                except V12Fault:
+                    raise
+                except Exception:  # noqa: BLE001 - only shared ledger access
+                    raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
                 if item.record_identity != candidate.record_identity:
-                    raise SheetRecordConflict("ledger source identity changed")
-                relocate_quotation_source(
-                    item.record_identity, self._reader.read_rows(worksheet),
-                    expected_brand=_expected_brand(item),
-                )
+                    raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
+                fresh_rows = _read_source_rows(self._reader, worksheet)
+                try:
+                    row = relocate_quotation_source(
+                        item.record_identity, fresh_rows, expected_brand=_expected_brand(item),
+                    )
+                except QuotationSourceAmbiguous:
+                    raise V13SourceRowError(RowErrorReason.SOURCE_IDENTITY_AMBIGUOUS) from None
+                except SheetRecordConflict:
+                    raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED) from None
+                bindings, ambiguous = _source_bindings(_ledger_items(self._store), worksheet, fresh_rows)
+                bound = bindings.get(row.row_position, [])
+                if row.row_position in ambiguous or len(bound) != 1:
+                    raise V13SourceRowError(RowErrorReason.SOURCE_IDENTITY_AMBIGUOUS)
+                if bound[0].inquiry_id != candidate.inquiry_id:
+                    raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
                 access = self._operations.open(candidate.inquiry_id)
                 try:
                     rows = self._quotes.read(access, candidate.queried_mpn)
@@ -153,20 +223,27 @@ class V13QuotationCycle:
                     reset=self._operations.close, wait=self._wait,
                     stop_fault=lambda: V13Stopped("STOP_REQUESTED"),
                 )
+            except V13SourceRowError as exc:
+                self._operations.close()
+                results.append(V13QuotationResult(
+                    candidate.inquiry_id, candidate.record_identity, candidate.queried_mpn,
+                    QuotationOutcome.ROW_FAILED, None, exc.reason, worksheet, candidate.source_row_position,
+                ))
+                continue
             except V12Fault:
                 # Engine closes failed query tabs before exhaustion; auth tabs protected.
                 raise
             except V13Stopped:
                 self._operations.close()
                 raise
-            except Exception:  # noqa: BLE001 - identity/read/clock faults never become no quote
+            except Exception:
                 self._operations.close()
-                raise V12Fault(FaultScope.GLOBAL_STOP, "V13_READ_UNAVAILABLE") from None
+                raise
             self._operations.close()
             results.append(V13QuotationResult(
                 candidate.inquiry_id, candidate.record_identity, candidate.queried_mpn,
                 QuotationOutcome.QUOTE_FOUND if quote is not None else QuotationOutcome.NO_RECENT_QUOTE,
-                quote,
+                quote, source_worksheet=worksheet, source_row_position=candidate.source_row_position,
             ))
         return tuple(results)
 

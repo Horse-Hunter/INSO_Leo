@@ -63,3 +63,91 @@ Original dirty main checkout, local feature/v1-2 ref (241fd48), and reviewed rem
 UNKNOWN (live-only): actual current contiguous header/display layout (including virtual/fixed-column DOM behavior), exact live text rendering and raw Date formatting, real session/query behavior and latest quotations against authorized production records. Synthetic fakes prove adapters/boundaries, not live DOM acceptance; reader fails closed on unrecognized structure. Actual authentication/security challenge/server behavior is not claimed from offline tests. Live validation is intentionally deferred under RFQ-004 safety boundary; final scheduler/GUI/mail/writeback/EXE are RFQ-005/006 scope.
 
 Delivery: REVIEW_REQUIRED, not REVIEWED_DONE; no executor REVIEW.md or PASS verdict. Commit/push feature/v1-3 and local/remote equality are verified after this record is committed; no self-referential commit SHA in tracked documents.
+
+
+## CEO B1 repair — 2026-10-07 — current delivery
+
+Synced the existing clean feature/v1-3 worktree by fast-forward to CEO Review
+`3872c63b88a3778ccedd4d2fbd42f7d0ade25e80`. Read current REVIEW/TASK_SPEC/log/report/
+COORDINATION and module boundaries. Only B1 is repaired. REVIEW.md and Owner
+TASK_SPEC remain unchanged; no executor Review verdict. CHANGES_REQUESTED ->
+IN_PROGRESS -> REVIEW_REQUIRED. The earlier claim that orphan/ambiguous/changed
+source identity must GLOBAL_STOP is SUPERSEDED by this row/global split.
+
+Root cause: read_v13_candidates raised global faults during batch binding, before
+first-row query; re-read row conflicts were also converted by a broad exception
+handler into V13_READ_UNAVAILABLE. Global snapshot uniqueness further rejected
+two distinct original-position orders with identical fields.
+
+Production changes only:
+- src/sheets/quotation_candidates.py: strict original-position-first verification
+  with current sent status, schema-specific importance/model/quantity and the
+  original or persisted UPDATED expected brand. Validation reuses relocate_record
+  on the anchored row. Only a failed original anchor enters existing unique
+  relocation fallback, with exact expected brand filtering. Zero matches remain
+  row conflict; multiple matches carry a typed QuotationSourceAmbiguous with safe
+  source row positions. Original inquiry_id/record_identity are never regenerated,
+  modified or persisted. Standard and SHAHAB schemas reuse existing semantics.
+- src/workflow/v13_quotation.py: source scan returns ordered candidate-or-error
+  entries; cycle returns each bad row at its source position and processes later
+  valid rows. ROW_FAILED plus fixed RowErrorReason codes SOURCE_IDENTITY_UNRESOLVED,
+  SOURCE_IDENTITY_AMBIGUOUS, SOURCE_MPN_UNAVAILABLE, SOURCE_CHANGED is the future
+  RFQ-006 red/log/229 boundary, without GUI/mail integration here. Unbound results
+  have inquiry_id/record_identity=None, and retain only worksheet/current-row
+  observation for locating the failure; that location is NOT a new business ID.
+  Bound row errors keep original identity. No row-error wait, tab open or retry.
+- The cycle still get_by_inquiry_id/re-reads before every actual attempt. A missing
+  individual inquiry, changed identity/status/snapshot or ambiguous source becomes
+  ROW_FAILED, continuing next row. All historical bindings are checked for
+  competition both at scan and at fresh re-read: one current row cannot be claimed
+  by two original inquiries or silently rebound to a different inquiry. Only
+  related rows fail. Identical stationary orders resolve their own original anchors.
+- Shared reader/schema/ledger failures are sanitized GLOBAL_STOP in narrow external
+  read boundaries, including all_items/get_by_inquiry_id database failures. The
+  broad cycle catch no longer invents a GLOBAL_STOP classification for arbitrary
+  Python errors: it only cleans up and re-raises unexpected errors. INSO retry,
+  auth/manual verification and CDP faults retain existing semantics unchanged.
+
+No browser/CDP/session, duplicate_history, retry engine, V1.2 flow, Save-and-Send,
+GUI, notification, schema/migration or persistent identity table changes. No new
+worktree or dependencies. Existing worktree remains attached for independent Review;
+other worktrees/runtime and all prior execution records remain preserved.
+
+Tests: tests/workflow/test_rfq004_b1.py adds 25 parameterized cases: source-ordered
+valid/bad/valid with separate closed tabs/no waits; identical stationary orders;
+replaced original position with unique relocation; genuinely ambiguous fallback
+with later valid row; competing historical identities; four missing/non-string MPNs;
+five re-read status/model/brand/quantity/importance conflicts; scan/re-read shared
+Sheets failure; both ledger database access failures; individual missing identity;
+row conflict after one INSO retry wait; competition introduced at fresh re-read;
+standard/SHAHAB strict anchor/persisted brand; changed ledger identity; attempted
+re-binding to another inquiry. Existing old global row-failure expectations updated
+to current row outcomes, while INSO exhaustion/manual protection tests retained.
+The old blanket duplicate-snapshot fail-fast parameter is superseded by the explicit
+original-anchor/true-ambiguity B1 cases, not by relaxed identity matching.
+
+Final verification, existing developer Python 3.12 and existing bundled IANA data
+via the same PYTHONTZPATH recorded above (no installed dependencies):
+- `python -m pytest -q tests/inso/test_v13_quotation_read.py tests/workflow/test_v13_quotation.py tests/launcher/test_v13_quotation_operations.py tests/workflow/test_rfq004_b1.py --basetemp=.tmp/rfq004-b1-focused-final --tb=short`:
+  **72 passed in 0.68s**, exit 0.
+- `python -m pytest -q tests --basetemp=.tmp/rfq004-b1-full-final --tb=short`:
+  **1125 passed / 1 skipped in 47.78s**, exit 0. Existing RFQ-002/RFQ-003/V1.2
+  regressions included; no outbound-mail attempt warnings.
+- `python -m ruff check src tests`: PASS. `git diff --check`: PASS.
+  Scoped diff reviewed; no unrelated source changes or generated files staged.
+
+Both required centerpiece cases PASS: valid/bad/valid preserves source output order
+and queries only the two valid rows; same-snapshot original rows10/11 map separately
+to their own inquiry IDs and exact original identity objects. All clocks fixed aware
+ZoneInfo; all retry waits fake. Existing no-quote/72h/latest/raw14/no-content-validation,
+full paging/owned-tab/shutdown/INSO global-stop and verification-page tests PASS.
+
+Safety: no live systems, credentials, real Save/Save-and-Send, Google writes,
+quote update, Apps Script, SMTP, true business submission or historical replay.
+No build/deploy or V1.2 EXE overwrite. Read-only EXE hash remains
+`1A49C9650BA531F2299326FFC89761D0391CD5F2C0FE32327DDD0736BD5C3E84`.
+Remaining live-only UNKNOWNs unchanged: actual fourteen-column/header/raw display
+layout and Date format, real INSO quotations/query/session/security behavior.
+Offline proof is not production acceptance. RFQ-006 GUI/email/manual-completion
+integration remains out of scope. Commit/push and actual local/remote HEAD equality
+are verified after committing these records; CEO REVIEW.md is left intact.
