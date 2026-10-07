@@ -95,3 +95,10 @@ Workflow 不解析 Research Excel 业务细节，不实现 Sheets relocation，�
 ## RFQ-005 quotation update service
 
 `v13_quote_update.V13QuotationUpdater` consumes RFQ-004 results, preserves no-quote/row-error inputs, serially establishes raw input and invokes the narrow Google UI contract. Full input write/read gets initial+3 attempts per establishment stage; update initial+3 re-established attempts; source already quoted prevents resubmit. Confirmed popup leads only to max3 short interruptible source reads, never repeated clicks. Original identity/competition validation is read-only. Success UPDATED_INSERTED/UPDATED_ALREADY_EXISTS; row failures use fixed codes; shared Sheets/schema/auth/ledger/CDP failures GLOBAL_STOP. No scheduler/GUI/mail/quarantine or source status write.
+
+RFQ-005 B1/B2: Owner corrected the target title to `报价输入` on 2026-10-07;
+the former “报价输入子表” is rejected. Each update attempt validates metadata
+binding and headers before opening the configured gid. A binding/header fault
+becomes GLOBAL_STOP with zero tab opening, writes or clicks. Canonical factory
+supplies the same explicit location to Sheets and UI; UI does not guess the title.
+Existing four-write/four-update budgets and three short source reads are unchanged.

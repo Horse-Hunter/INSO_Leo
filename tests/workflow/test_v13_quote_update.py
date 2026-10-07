@@ -384,3 +384,90 @@ def test_other_source_status_is_never_submitted_by_the_update_service():
     result = updater.update_one(found())
     assert result.row_error_reason is RowErrorReason.SOURCE_CHANGED
     assert actions.opened == actions.clicks == 0 and io.writes == [] and waits == []
+
+
+# Exercise the actual Sheets adapter through Workflow, rather than a schema stub.
+@pytest.mark.parametrize("metadata,gid", [
+    ({"sheets": [{"properties": {"title": "报价输入", "sheetId": 27}}]}, "99"),
+    ({"sheets": [{"properties": {"title": "报价输入", "sheetId": 27}},
+                {"properties": {"title": "其他", "sheetId": 99}}]}, "99"),
+    ({"sheets": [{"properties": {"title": "其他", "sheetId": 27}}]}, "27"),
+    ({"sheets": []}, "27"),
+    ({"sheets": [{"properties": {"title": "报价输入", "sheetId": 27}},
+                {"properties": {"title": "报价输入", "sheetId": 28}}]}, "27"),
+    (None, "27"), ({}, "27"), ({"sheets": {}}, "27"),
+    ({"sheets": [None]}, "27"), ({"sheets": [{}]}, "27"),
+    ({"sheets": [{"properties": None}]}, "27"),
+    ({"sheets": [{"properties": {"title": "报价输入"}}]}, "27"),
+    ({"sheets": [{"properties": {"title": 123, "sheetId": 27}}]}, "27"),
+    *[({"sheets": [{"properties": {"title": "报价输入", "sheetId": bad}}]}, "27")
+      for bad in (None, True, "27", 27.0, -1)],
+])
+def test_metadata_binding_fault_stops_before_any_header_write_ui_open_or_click(metadata, gid):
+    from tests.sheets.test_quotation_input import adapter
+    io, values = adapter(gid=gid)
+    values.metadata = metadata
+    source_reader = Source()
+    actions = Actions(source_reader)
+    updater = V13QuotationUpdater(source=source_reader, quotation_input=io, actions=actions, wait=lambda _: False)
+    with pytest.raises(V12Fault) as raised:
+        updater.update_one(found())
+    assert raised.value.scope is FaultScope.GLOBAL_STOP
+    assert [kind for kind, _ in values.calls] == ["metadata"]
+    assert actions.opened == actions.closed == actions.clicks == 0
+
+
+@pytest.mark.parametrize("failure", ["provider", "auth", 401, 403])
+def test_metadata_request_failure_is_sanitized_global_stop_before_ui(failure):
+    from src.sheets.google_oauth import GoogleSheetsAuthorizationError
+    from tests.sheets.test_quotation_input import adapter
+    io, values = adapter()
+    error = (GoogleSheetsAuthorizationError("private provider contents") if failure == "auth"
+             else RuntimeError("private provider contents"))
+    if isinstance(failure, int):
+        error.resp = SimpleNamespace(status=failure)
+    values.metadata_error = error
+    source_reader = Source()
+    actions = Actions(source_reader)
+    updater = V13QuotationUpdater(source=source_reader, quotation_input=io, actions=actions, wait=lambda _: False)
+    with pytest.raises(V12Fault) as raised:
+        updater.update_one(found())
+    assert raised.value.scope is FaultScope.GLOBAL_STOP
+    assert "private" not in str(raised.value)
+    assert [kind for kind, _ in values.calls] == ["metadata"]
+    assert actions.opened == actions.clicks == 0
+
+
+def test_binding_pass_with_bad_headers_is_global_stop_before_ui_or_write():
+    from tests.sheets.test_quotation_input import adapter
+    io, values = adapter()
+    values.headers = ["wrong"] * 14
+    source_reader = Source()
+    actions = Actions(source_reader)
+    updater = V13QuotationUpdater(source=source_reader, quotation_input=io, actions=actions, wait=lambda _: False)
+    with pytest.raises(V12Fault) as raised:
+        updater.update_one(found())
+    assert raised.value.scope is FaultScope.GLOBAL_STOP
+    assert [kind for kind, _ in values.calls] == ["metadata", "get"]
+    assert actions.opened == actions.clicks == 0
+
+
+@pytest.mark.parametrize("popup,outcome", [
+    (POPUP, QuotationOutcome.UPDATED_INSERTED),
+    (EXISTS, QuotationOutcome.UPDATED_ALREADY_EXISTS),
+])
+def test_actual_api_binding_headers_raw_readback_and_popup_success(popup, outcome):
+    from tests.sheets.test_quotation_input import adapter
+    io, values = adapter()
+    source_reader = Source()
+    actions = Actions(source_reader)
+    actions.popups = [popup]
+    updater = V13QuotationUpdater(source=source_reader, quotation_input=io, actions=actions, wait=lambda _: False)
+    upstream = found()
+    result = updater.update_one(upstream)
+    assert result.outcome is outcome
+    assert result.inquiry_id == upstream.inquiry_id and result.record_identity == upstream.record_identity
+    assert tuple(values.payload) == upstream.quotation.payload
+    assert [kind for kind, _ in values.calls][:2] == ["metadata", "get"]
+    assert sum(kind == "update" for kind, _ in values.calls) == actions.clicks == 1
+    assert actions.opened == actions.closed == 1

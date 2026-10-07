@@ -132,6 +132,8 @@ class V13QuotationUpdater:
                 self._check_stop()
                 if self._current_status(result) == "采购已报价":
                     return self._success(result, UpdatePopupOutcome.ALREADY_EXISTS)
+                # Binding/header faults must stop before opening a possibly wrong gid.
+                self._input.validate_schema()
                 try:
                     self._actions.open_quote_input()
                     write_reason = RowErrorReason.QUOTE_INPUT_WRITE_FAILED

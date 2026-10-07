@@ -26,7 +26,7 @@ class QuotationInputLocation:
     gid: str
 
     def __post_init__(self):
-        if (not isinstance(self.worksheet, WorksheetIdentity) or self.worksheet.worksheet != "报价输入子表"
+        if (not isinstance(self.worksheet, WorksheetIdentity) or self.worksheet.worksheet != "报价输入"
                 or not isinstance(self.worksheet.spreadsheet, str)
                 or not re.fullmatch(r"[A-Za-z0-9_-]+", self.worksheet.spreadsheet)
                 or any(isinstance(value, bool) or not isinstance(value, int) or value < 1
@@ -90,6 +90,7 @@ class GoogleQuotationInput:
         self._service, self._columns = service, expected_columns
 
     def validate_schema(self):
+        self.validate_location_binding()
         try:
             values = self._get(self.location.header_range)
             if _row_values(values) != self._columns:
@@ -99,9 +100,35 @@ class GoogleQuotationInput:
         except Exception:  # noqa: BLE001 - shared schema/read boundary
             raise QuotationInputUnavailable("QUOTE_INPUT_SCHEMA_UNAVAILABLE") from None
 
+    def validate_location_binding(self):
+        """Prove the API title and configured UI gid identify the same sheet."""
+        try:
+            response = self._service.spreadsheets().get(
+                spreadsheetId=self.worksheet.spreadsheet,
+                fields="sheets.properties(sheetId,title)", includeGridData=False,
+            ).execute()
+        except Exception:  # noqa: BLE001 - metadata is always a shared boundary
+            raise QuotationInputUnavailable("QUOTE_INPUT_METADATA_UNAVAILABLE") from None
+        if not isinstance(response, dict) or not isinstance(response.get("sheets"), list):
+            raise QuotationInputUnavailable("QUOTE_INPUT_METADATA_INVALID")
+        matches = []
+        for sheet in response["sheets"]:
+            properties = sheet.get("properties") if isinstance(sheet, dict) else None
+            if not isinstance(properties, dict):
+                raise QuotationInputUnavailable("QUOTE_INPUT_METADATA_INVALID")
+            title, sheet_id = properties.get("title"), properties.get("sheetId")
+            if (not isinstance(title, str) or isinstance(sheet_id, bool)
+                    or not isinstance(sheet_id, int) or sheet_id < 0):
+                raise QuotationInputUnavailable("QUOTE_INPUT_METADATA_INVALID")
+            if title == self.worksheet.worksheet:
+                matches.append(sheet_id)
+        if len(matches) != 1 or str(matches[0]) != self.location.gid:
+            raise QuotationInputUnavailable("QUOTE_INPUT_LOCATION_BINDING_MISMATCH")
+
     def write_payload(self, payload: tuple[str, ...]):
         if len(payload) != 14 or any(not isinstance(value, str) for value in payload):
             raise QuotationInputAttemptFailed("QUOTE_INPUT_WRITE_FAILED")
+        self.validate_schema()
         try:
             self._service.spreadsheets().values().update(
                 spreadsheetId=self.worksheet.spreadsheet, range=self.location.input_range,

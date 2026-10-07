@@ -16,7 +16,7 @@ RAW = ("2026/10/07 01:00", "000MPN", "", "001.2300", "奇币", "", "000.1000", "
 
 
 def location(**changes):
-    values = {"worksheet": WorksheetIdentity("fake-sheet", "报价输入子表"), "header_row": 4,
+    values = {"worksheet": WorksheetIdentity("fake-sheet", "报价输入"), "header_row": 4,
               "input_row": 7, "first_column": 3, "gid": "27"}
     return QuotationInputLocation(**{**values, **changes})
 
@@ -26,8 +26,17 @@ class Values:
         self.payload = ["old"]*14
         self.headers = list(QUOTATION_COLUMNS)
         self.calls = []
+        self.metadata = {"sheets": [{"properties": {"title": "报价输入", "sheetId": 27}}]}
+        self.metadata_error = None
         self.write_error = None
         self.read_error = None
+    def metadata_get(self, **kwargs):
+        self.calls.append(("metadata", kwargs))
+        def run():
+            if self.metadata_error:
+                raise self.metadata_error
+            return self.metadata
+        return SimpleNamespace(execute=run)
     def get(self, **kwargs):
         self.calls.append(("get", kwargs))
         def run():
@@ -45,10 +54,10 @@ class Values:
         return SimpleNamespace(execute=run)
 
 
-def adapter():
+def adapter(**changes):
     values = Values()
-    service = SimpleNamespace(spreadsheets=lambda: SimpleNamespace(values=lambda: values))
-    return GoogleQuotationInput(service, location(), expected_columns=QUOTATION_COLUMNS), values
+    service = SimpleNamespace(spreadsheets=lambda: SimpleNamespace(values=lambda: values, get=values.metadata_get))
+    return GoogleQuotationInput(service, location(**changes), expected_columns=QUOTATION_COLUMNS), values
 
 
 def test_full_raw14_exact_order_blanks_and_special_text_overwrite_old_row():
@@ -57,11 +66,11 @@ def test_full_raw14_exact_order_blanks_and_special_text_overwrite_old_row():
     writer.write_payload(RAW)
     assert writer.read_payload() == RAW
     update = next(call[1] for call in values.calls if call[0] == "update")
-    assert update == {"spreadsheetId": "fake-sheet", "range": "'报价输入子表'!C7:P7",
+    assert update == {"spreadsheetId": "fake-sheet", "range": "'报价输入'!C7:P7",
                       "valueInputOption": "RAW", "body": {"majorDimension": "ROWS", "values": [list(RAW)]}}
     assert values.payload[2] == values.payload[5] == values.payload[13] == ""
     assert values.payload[3] == "001.2300" and values.payload[11] == "  原文\n备注  "
-    assert all(call[1]["range"].startswith("'报价输入子表'!") for call in values.calls)
+    assert all(call[1]["range"].startswith("'报价输入'!") for call in values.calls if call[0] != "metadata")
 
 
 def test_readback_missing_trailing_cells_only_pads_empty_without_trim():
@@ -111,5 +120,35 @@ def test_geometry_is_explicit_and_never_guessed(changes):
 
 def test_configured_column_range_crosses_z_correctly_without_magic_a1():
     target = location(first_column=26)
-    assert target.input_range == "'报价输入子表'!Z7:AM7"
+    assert target.input_range == "'报价输入'!Z7:AM7"
     assert target.url == "https://docs.google.com/spreadsheets/d/fake-sheet/edit#gid=27"
+
+
+def test_correct_title_only_and_old_name_is_rejected():
+    assert location().worksheet.worksheet == "报价输入"
+    with pytest.raises(QuotationInputUnavailable, match="QUOTE_INPUT_LOCATION_INVALID"):
+        location(worksheet=WorksheetIdentity("fake-sheet", "报价输入子表"))
+
+
+def test_direct_write_validates_minimal_metadata_then_headers_before_raw_update():
+    writer, values = adapter()
+    writer.write_payload(RAW)
+    assert [kind for kind, _ in values.calls] == ["metadata", "get", "update"]
+    assert values.calls[0][1] == {
+        "spreadsheetId": "fake-sheet", "fields": "sheets.properties(sheetId,title)",
+        "includeGridData": False,
+    }
+    assert values.calls[1][1]["range"] == "'报价输入'!C4:P4"
+    values.metadata["sheets"][0]["properties"]["sheetId"] = 99
+    with pytest.raises(QuotationInputUnavailable):
+        writer.write_payload(RAW)
+    assert sum(kind == "update" for kind, _ in values.calls) == 1
+
+
+def test_zero_is_a_valid_sheet_id_and_requires_exact_gid_text():
+    writer, values = adapter(gid="0")
+    values.metadata["sheets"][0]["properties"]["sheetId"] = 0
+    writer.validate_schema()
+    writer, values = adapter(gid="027")
+    with pytest.raises(QuotationInputUnavailable):
+        writer.validate_schema()

@@ -79,3 +79,13 @@ Reviewer verifies this flag and grant exclusion from Git/release artifacts.
 ## RFQ-005 quotation input/status boundary
 
 `quotation_input.GoogleQuotationInput` consumes an explicit `QuotationInputLocation` (no default geometry), validates the exact fourteen headers supplied by RFQ-004 composition, writes all raw strings with RAW and reads them back without coercion/trim; missing trailing cells are empty strings. Shared schema/auth/API failures differ from targeted attempt failures. `relocate_quotation_status` is the existing reviewed original-anchor/unique-fallback read with explicit sent/quoted status scope; sent-only RFQ-004 wrapper unchanged. No Python source 采购已报价 writer exists. Actual geometry remains UNKNOWN.
+
+Owner correction 2026-10-07: actual target title is `报价输入`; the previous
+“报价输入子表” was incorrect and is rejected, without aliases. The existing
+GoogleQuotationInput.validate_location_binding reads only sheets.properties
+sheetId/title using the supplied Sheets service. Metadata shape must be valid,
+exactly one target title must exist, sheetId must be a nonnegative integer (not
+bool), and str(sheetId) must equal explicit gid. Metadata failures are sanitized
+shared QuotationInputUnavailable. validate_schema runs binding then exact14
+headers; write_payload independently repeats both before every RAW update.
+Production gid/range geometry remains UNKNOWN; no defaults or live acceptance.

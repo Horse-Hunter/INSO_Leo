@@ -30,7 +30,7 @@ replacement. Review belongs to CEO. Final integration remains RFQ-006.
 
 ## Implementation / reviewed upstream preservation
 - src/sheets/quotation_input.py: QuotationInputLocation requires explicit worksheet
-  报价输入子表, header_row, first input_row, first_column, gid and existing spreadsheet
+  报价输入, header_row, first input_row, first_column, gid and existing spreadsheet
   ID. No default geometry or magic A1:N1. Configured contiguous fourteen-cell header
   range must exactly equal the RFQ-004 columns supplied by launcher composition.
   GoogleQuotationInput writes a complete one-row/14-string values.update with RAW,
@@ -148,3 +148,65 @@ worktree created, other worktrees/protected assets preserved. RFQ-004 review/spe
 records untouched. RFQ-005 REVIEW_REQUIRED only; no REVIEW.md or PASS verdict.
 Commit/push and actual local/remote HEAD equality are verified after committing
 these records, without inserting self-referential commit metadata.
+
+
+## Owner correction / B1-B2 repair — 2026-10-07
+真实 Google worksheet title 为 `报价输入`；此前“报价输入子表”为错误名称，
+已修正，旧名称不作为 alias 接受。配置 gid 仍必须显式提供，不猜测生产值。
+Existing Sheets service `spreadsheets().get` requests only
+`sheets.properties(sheetId,title)` with `includeGridData=False`.
+Exactly one title must equal 报价输入, its sheetId must be a nonnegative integer
+(not bool/string/float), and str(sheetId) must exactly equal configured gid.
+Missing/duplicate target, malformed metadata, mismatch or metadata/auth/API failure
+raises sanitized QuotationInputUnavailable -> GLOBAL_STOP. Verify metadata before
+fourteen headers; both must pass before opening the UI and before each RAW write.
+No DOM title guess, business-cell metadata read, new adapter/config/OAuth path or
+production gid. Existing RFQ-004 identity/read/retry and V1.2 behavior remain frozen.
+
+
+## Repair implementation / reuse / scope
+Fetched and fast-forwarded feature/v1-3 to CEO review commit
+b4c1ea6; reused the existing rfq004-v13 managed worktree. No new branch/worktree.
+Full-name search across src/tests/docs/control-room/RFQ-005/tasks found current
+wrong-name references only in quotation_input, its fake fixture/range assertions,
+and the previous execution/final report. All current configuration references now
+use 报价输入; CEO REVIEW.md remains byte-for-byte unchanged as historical evidence.
+This correction paragraph documents the prior name error explicitly.
+
+Reuse GoogleQuotationInput/QuotationInputLocation, canonical factory's same location,
+existing service/OAuth, raw14/readback, workflow error mapping and retry/UI/source
+contracts. No parallel path or new dependency. Source changes limited to:
+- src/sheets/quotation_input.py: exact correct title; minimal metadata binding
+  helper; metadata -> headers -> write ordering, including direct write calls.
+- src/workflow/v13_quote_update.py: pre-open validation, so invalid gid never opens.
+Tests use synthetic metadata service plus existing fake UI/source, not production.
+Existing RFQ-004 source/tests/control-room and V1.2 source/release are unchanged.
+No production credentials, browser, Google API or other business access performed.
+Metadata request exceptions become QUOTE_INPUT_METADATA_UNAVAILABLE without raw
+provider text; malformed properties become QUOTE_INPUT_METADATA_INVALID; absent,
+duplicate or mismatched target becomes QUOTE_INPUT_LOCATION_BINDING_MISMATCH.
+All map to GLOBAL_STOP, never row-only faults. No cached permanent validation token:
+every direct write repeats metadata/header checks, protecting against stale reuse.
+
+## Repair verification
+28 additional cases; focused182 (110 RFQ-005 +72 RFQ-004/B1).
+Focused command:
+`python -m pytest -q tests/sheets/test_quotation_input.py tests/quotation/test_update_result.py tests/workflow/test_v13_quote_update.py tests/launcher/test_google_quote_update.py tests/inso/test_v13_quotation_read.py tests/workflow/test_v13_quotation.py tests/workflow/test_rfq004_b1.py tests/launcher/test_v13_quotation_operations.py --basetemp=.tmp/rfq005-b1b2-focused --tb=short`
+182 passed in 0.88s, exit0. Existing PYTHONTZPATH to bundled tzdata reused;
+no dependency installation. Added actual API adapter through workflow cases for
+wrong gid, gid on another sheet, absent/duplicate title, malformed response/sheets/
+properties/title/ID, missing ID, bool/string/float/negative ID, metadata provider/
+auth/401/403 failures, correct binding but bad14 headers, inserted/existing success.
+Fault cases assert zero writes, UI opens and clicks; metadata faults also zero
+header reads. Direct writes prove minimal metadata request -> header -> RAW write,
+and repeat validation rejects a changed binding. Correct sheetId0 accepted;
+noncanonical gid027 fails exact string binding. Old title constructor rejected.
+Full safe/offline:
+`python -m pytest -q tests --basetemp=.tmp/rfq005-b1b2-full --tb=short`
+1235 passed, 1 skipped in 47.70s, exit0. Includes V1.2/RFQ-004 regressions.
+`python -m ruff check src tests`: PASS. `git diff --check`: PASS.
+No new business UNKNOWN; only documented live geometry/gid/DOM/Script delay/session
+UNKNOWNs remain. No live acceptance or self-issued CEO verdict. REVIEW_REQUIRED.
+Scoped final diff checked, historical REVIEW.md and frozen RFQ-004 unchanged;
+no generated runtime output, dependency or secret added. Commit/push with actual
+local/remote equality verified after recording these non-self-referential results.
