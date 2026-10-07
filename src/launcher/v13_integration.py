@@ -19,7 +19,6 @@ def quotation_location(cfg):
     try:
         return QuotationInputLocation(
             WorksheetIdentity(cfg["spreadsheet_id"], "报价输入"),
-            geometry["header_row"],
             geometry["input_row"],
             geometry["first_column"],
             geometry["gid"],
@@ -99,3 +98,26 @@ def notify_runtime_fault(store, key, reason, *, at):
             at,
         )
     )
+
+
+def notify_website_issue(store, inquiry_id, site, code, *, mpn=None, at):
+    """Closed failure categories only; durable dedup across poll cycles and restarts."""
+    # Provider text is used only to choose a fixed reason, never copied into mail/key.
+    upper = code.upper()
+    reason = (
+        "AUTHENTICATION_REQUIRED"
+        if any(t in upper for t in ("LOGIN", "CREDENTIAL", "AUTHENTICATION", "VERIFICATION", "CHALLENGE", "SESSION_STALE"))
+        else "QUERY_TIMEOUT" if "TIMEOUT" in upper
+        else "RESULT_UNAVAILABLE" if any(t in upper for t in ("PARSE", "MISSING", "EMPTY"))
+        else "SOURCE_UNAVAILABLE"
+    )
+    owner = (NotificationRecipient("owner", "linan229@qq.com"),)
+    command_id = f"website:{inquiry_id}:{site.value}:{reason}"
+    if store.notification_already_created(command_id, inquiry_id, NotificationKind.PURCHASE_EXCEPTION, owner):
+        return
+    store.enqueue_notification(NotificationCommand(
+        command_id, inquiry_id, NotificationKind.PURCHASE_EXCEPTION, owner,
+        "询价网站不可用",
+        f"网站：{site.value}\ninquiry_id：{inquiry_id}\nMPN：{mpn or 'UNKNOWN'}\nreason：{reason}\n请人工检查网站登录/可用性。",
+        None, at,
+    ))

@@ -1803,3 +1803,20 @@ remote feature/v1-3-integration HEAD
 最后一句：
 
 “RFQ-006 已提交 CEO Review。”
+
+## Owner correction / CEO repair — 2026-10-07
+Supersedes earlier header/geometry UNKNOWN assumptions: 报价输入 intentionally has no header.
+QUOTE_INPUT_GEOMETRY CONFIRMED: gid=489913321, input_row=1, first_column=1, target A1:N1.
+header_row is absent; header NONE / NOT APPLICABLE. QUOTATION_COLUMNS is the INSO raw14 order,
+not Google header text. Revalidate unique metadata title/gid before each write and UI opening.
+Strict hold relocation remains first; on conflict only the original worksheet/position is a
+human-status safety anchor (never business identity). Sent blocks that position; quoted closes
+the hold; missing/unknown status retains it and unrelated rows continue.
+Unknown V1.3 operation/reader/updater exceptions GLOBAL_STOP V13_INTERNAL_FAILURE without hold;
+only typed row-local failures and reviewed retry exhaustion may become ROW_FAILED.
+Every website SOURCE_UNAVAILABLE enqueues one sanitized, deduplicated owner229 alert via existing
+ledger/worker. INSO authentication is global; IC.net pauses V1.2; other sites continue.
+Rebuild, backup/deploy V1.3 assets and own config; preserve V1.2 executable/config bytes.
+Read-only metadata/DOM only. No business write/click/Script/Save/Send or actual procurement.
+Real button DOM and live popup/status/delay remain UNKNOWN unless safely read-only verified.
+Final status REVIEW_REQUIRED; REVIEW.md is CEO-owned and must remain unchanged.

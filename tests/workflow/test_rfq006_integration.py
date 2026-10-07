@@ -276,7 +276,6 @@ def test_gui_projection(outcome, label, style):
         {
             "quotation_input": {
                 "gid": "0",
-                "header_row": 1,
                 "input_row": None,
                 "first_column": 1,
             }
@@ -485,3 +484,84 @@ def test_shared_preparation_cause_is_not_downgraded_to_purchase_pause(name, wrap
     with pytest.raises(V12Fault) as exc:
         combined.run(None, [WS], now=NOW)
     assert exc.value.scope is FaultScope.GLOBAL_STOP and not events
+
+
+@pytest.mark.parametrize("bound,changes", [
+    (False, {"model": "NEW-MPN"}),
+    (True, {"model": "NEW-MPN"}),
+    (True, {"brand": "NEW-BRAND"}),
+    (True, {"quantity": "999"}),
+])
+@pytest.mark.parametrize("status", ["发给采购", "采购已报价", "UNKNOWN"])
+def test_hold_mutation_uses_original_position_only_as_human_status_anchor(tmp_path, bound, changes, status):
+    from tests.inso.test_v13_quotation_read import quote
+    db, store, sheets, holds, _ledger, quotes, make, observed = fixture(tmp_path, [(quote(),)])
+    if not bound:
+        sheets.rows = [source(9, model="")]
+    fail = lambda r: replace(r, outcome=QuotationOutcome.ROW_FAILED, row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED)
+    make(fail).run(WS)
+    before = len(quotes.calls)
+    position = 2 if bound else 9
+    sheets.rows = [source(position, status, **changes)]
+    make().run(WS)
+    make().run(WS)
+    assert len(quotes.calls) == before
+    assert len(store.all_items()) == 1
+    assert bool(holds.active()) == (status != "采购已报价")
+    if status == "采购已报价":
+        assert observed[-1][0].outcome is QuotationOutcome.UPDATED_ALREADY_EXISTS
+    with sqlite3.connect(db) as c:
+        assert c.execute("SELECT count(*) FROM workflow_v12_notification_commands").fetchone()[0] == 1
+
+
+def test_deleted_held_row_retains_hold_and_unrelated_bound_row_continues(tmp_path):
+    _db, store, sheets, holds, _ledger, quotes, make, _observed = fixture(tmp_path, [()])
+    sheets.rows = [source(9, model="")]
+    make().run(WS)
+    sheets.rows = [source(2)]
+    output = make().run(WS)
+    assert len(holds.active()) == 1 and len(quotes.calls) == 1
+    assert output[0].outcome is QuotationOutcome.NO_RECENT_QUOTE
+    assert len(store.all_items()) == 1
+
+
+@pytest.mark.parametrize("stage", ["reader", "operation", "factory", "update", "contract", "close"])
+@pytest.mark.parametrize("error_type", [RuntimeError, ValueError])
+def test_unknown_v13_exception_globally_stops_without_hold_or_later_query(tmp_path, stage, error_type):
+    from tests.inso.test_v13_quotation_read import quote
+    db, store, sheets, holds, _ledger, quotes, make, observed = fixture(tmp_path, [(quote(),), ()])
+    sheets.rows = [source(3, "未发", model="SECOND")]
+    for record in query_pending_records(sheets, WS):
+        store.enqueue(record, now=NOW)
+    sheets.rows = [source(2), source(3, model="SECOND")]
+    def fail(*_):
+        raise error_type("private provider details")
+    integrated = make(fail if stage == "update" else lambda r: r)
+    if stage == "reader":
+        quotes.read = fail
+    elif stage == "operation":
+        integrated.cycle._operations.open = fail
+    elif stage == "factory":
+        integrated.updater_factory = fail
+    elif stage == "contract":
+        integrated.updater_factory = lambda: SimpleNamespace(update_one=lambda _: None)
+    elif stage == "close":
+        integrated.cycle._operations.close = fail
+    with pytest.raises(V12Fault) as raised:
+        integrated.run(WS)
+    assert raised.value.scope is FaultScope.GLOBAL_STOP
+    assert raised.value.reason == "V13_INTERNAL_FAILURE"
+    assert holds.active() == () and observed == []
+    assert len(quotes.calls) <= 1 and len(store.all_items()) == 2
+    with sqlite3.connect(db) as c:
+        assert c.execute("SELECT count(*) FROM workflow_v12_notification_commands").fetchone()[0] == 0
+
+
+def test_typed_row_local_updater_source_error_still_holds_only_that_row(tmp_path):
+    from src.workflow.v13_quotation import V13SourceRowError
+    from tests.inso.test_v13_quotation_read import quote
+    _db, _store, _sheets, holds, _ledger, _quotes, make, _observed = fixture(tmp_path, [(quote(),)])
+    def local_error(_):
+        raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
+    assert make(local_error).run(WS)[0].outcome is QuotationOutcome.ROW_FAILED
+    assert len(holds.active()) == 1

@@ -13,7 +13,13 @@ from src.sheets.worksheet_schema import worksheet_schema
 
 from .v12_faults import FaultScope, V12Fault
 from .v12_store import V12DatabaseError, create_verified_backup
-from .v13_quotation import QuotationOutcome, RowErrorReason, V13Stopped
+from .v13_quotation import (
+    QuotationOutcome,
+    RowErrorReason,
+    V13QuotationResult,
+    V13SourceRowError,
+    V13Stopped,
+)
 
 log = logging.getLogger(__name__)
 
@@ -169,7 +175,7 @@ class V13IntegratedCycle:
 
     def run(self, worksheet):
         blocked_ids, blocked_locations = set(), set()
-        # Inspect all holds before query; source identity, never a bare row number.
+        # Strict identity first; original location is a human-status barrier only.
         from src.sheets import (
             IdentifyingSnapshot,
             SheetRecordIdentity,
@@ -211,8 +217,18 @@ class V13IntegratedCycle:
                 )
             except SheetRecordConflict:
                 log.warning("V1.3 held source cannot be safely located")
-                self.observe(result, key)
-                continue
+                # Never bind/query/write using this fallback: only block automation
+                # and let the Owner's status at the original position close a hold.
+                anchors = [row for row in rows if row.row_position == identity.row_position]
+                if len(anchors) != 1:
+                    self.observe(result, key)
+                    continue
+                located = anchors[0]
+                status = located.cells.get(worksheet_schema(worksheet.worksheet).status_column)
+                if status != "采购已报价":
+                    blocked_locations.add(identity.row_position)
+                    self.observe(result, key)
+                    continue
             if (
                 located.cells.get(worksheet_schema(worksheet.worksheet).status_column)
                 == "采购已报价"
@@ -251,6 +267,10 @@ class V13IntegratedCycle:
                     if result.outcome is QuotationOutcome.QUOTE_FOUND
                     else result
                 )
+                if not isinstance(final, V13QuotationResult):
+                    raise TypeError("invalid updater result contract")
+            except V13SourceRowError as exc:
+                final = replace(result, outcome=QuotationOutcome.ROW_FAILED, row_error_reason=exc.reason)
             except (V12Fault, V13Stopped):
                 raise
             except (sqlite3.Error, V12DatabaseError):
@@ -258,11 +278,7 @@ class V13IntegratedCycle:
                     FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE"
                 ) from None
             except Exception:  # noqa: BLE001 - shared read boundary or isolated row adapter
-                final = replace(
-                    result,
-                    outcome=QuotationOutcome.ROW_FAILED,
-                    row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED,
-                )
+                raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE") from None
             key = final.inquiry_id
             if final.outcome is QuotationOutcome.ROW_FAILED:
                 record = next(

@@ -438,25 +438,11 @@ def test_metadata_request_failure_is_sanitized_global_stop_before_ui(failure):
     assert actions.opened == actions.clicks == 0
 
 
-def test_binding_pass_with_bad_headers_is_global_stop_before_ui_or_write():
-    from tests.sheets.test_quotation_input import adapter
-    io, values = adapter()
-    values.headers = ["wrong"] * 14
-    source_reader = Source()
-    actions = Actions(source_reader)
-    updater = V13QuotationUpdater(source=source_reader, quotation_input=io, actions=actions, wait=lambda _: False)
-    with pytest.raises(V12Fault) as raised:
-        updater.update_one(found())
-    assert raised.value.scope is FaultScope.GLOBAL_STOP
-    assert [kind for kind, _ in values.calls] == ["metadata", "get"]
-    assert actions.opened == actions.clicks == 0
-
-
 @pytest.mark.parametrize("popup,outcome", [
     (POPUP, QuotationOutcome.UPDATED_INSERTED),
     (EXISTS, QuotationOutcome.UPDATED_ALREADY_EXISTS),
 ])
-def test_actual_api_binding_headers_raw_readback_and_popup_success(popup, outcome):
+def test_actual_api_headerless_binding_raw_readback_and_popup_success(popup, outcome):
     from tests.sheets.test_quotation_input import adapter
     io, values = adapter()
     source_reader = Source()
@@ -468,6 +454,6 @@ def test_actual_api_binding_headers_raw_readback_and_popup_success(popup, outcom
     assert result.outcome is outcome
     assert result.inquiry_id == upstream.inquiry_id and result.record_identity == upstream.record_identity
     assert tuple(values.payload) == upstream.quotation.payload
-    assert [kind for kind, _ in values.calls][:2] == ["metadata", "get"]
+    assert [kind for kind, _ in values.calls][:2] == ["metadata", "metadata"]
     assert sum(kind == "update" for kind, _ in values.calls) == actions.clicks == 1
     assert actions.opened == actions.closed == 1

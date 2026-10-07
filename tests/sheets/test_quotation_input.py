@@ -16,17 +16,16 @@ RAW = ("2026/10/07 01:00", "000MPN", "", "001.2300", "奇币", "", "000.1000", "
 
 
 def location(**changes):
-    values = {"worksheet": WorksheetIdentity("fake-sheet", "报价输入"), "header_row": 4,
-              "input_row": 7, "first_column": 3, "gid": "27"}
+    values = {"worksheet": WorksheetIdentity("fake-sheet", "报价输入"),
+              "input_row": 1, "first_column": 1, "gid": "489913321"}
     return QuotationInputLocation(**{**values, **changes})
 
 
 class Values:
     def __init__(self):
         self.payload = ["old"]*14
-        self.headers = list(QUOTATION_COLUMNS)
         self.calls = []
-        self.metadata = {"sheets": [{"properties": {"title": "报价输入", "sheetId": 27}}]}
+        self.metadata = {"sheets": [{"properties": {"title": "报价输入", "sheetId": 489913321}}]}
         self.metadata_error = None
         self.write_error = None
         self.read_error = None
@@ -42,7 +41,7 @@ class Values:
         def run():
             if self.read_error:
                 raise self.read_error
-            return {"values": [self.headers if kwargs["range"].endswith("C4:P4") else self.payload]}
+            return {"values": [self.payload]}
         return SimpleNamespace(execute=run)
     def update(self, **kwargs):
         self.calls.append(("update", kwargs))
@@ -66,7 +65,7 @@ def test_full_raw14_exact_order_blanks_and_special_text_overwrite_old_row():
     writer.write_payload(RAW)
     assert writer.read_payload() == RAW
     update = next(call[1] for call in values.calls if call[0] == "update")
-    assert update == {"spreadsheetId": "fake-sheet", "range": "'报价输入'!C7:P7",
+    assert update == {"spreadsheetId": "fake-sheet", "range": "'报价输入'!A1:N1",
                       "valueInputOption": "RAW", "body": {"majorDimension": "ROWS", "values": [list(RAW)]}}
     assert values.payload[2] == values.payload[5] == values.payload[13] == ""
     assert values.payload[3] == "001.2300" and values.payload[11] == "  原文\n备注  "
@@ -81,13 +80,12 @@ def test_readback_missing_trailing_cells_only_pads_empty_without_trim():
     assert writer.read_payload() == ("",)*14
 
 
-@pytest.mark.parametrize("bad", [["wrong"]*14, list(reversed(QUOTATION_COLUMNS)), []])
-def test_missing_or_shifted_schema_is_shared_failure_before_write(bad):
+def test_headerless_blank_input_validates_metadata_without_reading_any_cells():
     writer, values = adapter()
-    values.headers = bad
-    with pytest.raises(QuotationInputUnavailable):
-        writer.validate_schema()
-    assert not any(kind == "update" for kind, _ in values.calls)
+    values.payload = []
+    writer.validate_schema()
+    assert [kind for kind, _ in values.calls] == ["metadata"]
+    assert not hasattr(writer.location, "header_row")
 
 
 @pytest.mark.parametrize("status", [400, 401, 403, 404, 429, 500, 503])
@@ -111,7 +109,7 @@ def test_targeted_write_and_readback_failures_are_row_attempts():
         writer.read_payload()
 
 
-@pytest.mark.parametrize("changes", [{"input_row": 4}, {"first_column": 0}, {"gid": "unknown"},
+@pytest.mark.parametrize("changes", [{"input_row": 0}, {"first_column": 0}, {"gid": "unknown"},
                                      {"worksheet": WorksheetIdentity("fake-sheet", "wrong")}, {"input_row": True}])
 def test_geometry_is_explicit_and_never_guessed(changes):
     with pytest.raises(QuotationInputUnavailable):
@@ -120,8 +118,8 @@ def test_geometry_is_explicit_and_never_guessed(changes):
 
 def test_configured_column_range_crosses_z_correctly_without_magic_a1():
     target = location(first_column=26)
-    assert target.input_range == "'报价输入'!Z7:AM7"
-    assert target.url == "https://docs.google.com/spreadsheets/d/fake-sheet/edit#gid=27"
+    assert target.input_range == "'报价输入'!Z1:AM1"
+    assert target.url == "https://docs.google.com/spreadsheets/d/fake-sheet/edit#gid=489913321"
 
 
 def test_correct_title_only_and_old_name_is_rejected():
@@ -130,15 +128,14 @@ def test_correct_title_only_and_old_name_is_rejected():
         location(worksheet=WorksheetIdentity("fake-sheet", "报价输入子表"))
 
 
-def test_direct_write_validates_minimal_metadata_then_headers_before_raw_update():
+def test_direct_write_validates_minimal_metadata_before_raw_update():
     writer, values = adapter()
     writer.write_payload(RAW)
-    assert [kind for kind, _ in values.calls] == ["metadata", "get", "update"]
+    assert [kind for kind, _ in values.calls] == ["metadata", "update"]
     assert values.calls[0][1] == {
         "spreadsheetId": "fake-sheet", "fields": "sheets.properties(sheetId,title)",
         "includeGridData": False,
     }
-    assert values.calls[1][1]["range"] == "'报价输入'!C4:P4"
     values.metadata["sheets"][0]["properties"]["sheetId"] = 99
     with pytest.raises(QuotationInputUnavailable):
         writer.write_payload(RAW)

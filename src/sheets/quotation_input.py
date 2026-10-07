@@ -20,7 +20,6 @@ class QuotationInputAttemptFailed(RuntimeError):
 @dataclass(frozen=True, slots=True)
 class QuotationInputLocation:
     worksheet: WorksheetIdentity
-    header_row: int
     input_row: int
     first_column: int
     gid: str
@@ -30,8 +29,7 @@ class QuotationInputLocation:
                 or not isinstance(self.worksheet.spreadsheet, str)
                 or not re.fullmatch(r"[A-Za-z0-9_-]+", self.worksheet.spreadsheet)
                 or any(isinstance(value, bool) or not isinstance(value, int) or value < 1
-                       for value in (self.header_row, self.input_row, self.first_column))
-                or self.input_row <= self.header_row
+                       for value in (self.input_row, self.first_column))
                 or not isinstance(self.gid, str) or not self.gid.isdecimal()):
             raise QuotationInputUnavailable("QUOTE_INPUT_LOCATION_INVALID")
 
@@ -42,10 +40,6 @@ class QuotationInputLocation:
     @property
     def input_range(self):
         return self.range_at(self.input_row)
-
-    @property
-    def header_range(self):
-        return self.range_at(self.header_row)
 
     @property
     def url(self):
@@ -90,15 +84,8 @@ class GoogleQuotationInput:
         self._service, self._columns = service, expected_columns
 
     def validate_schema(self):
+        """Validate the headerless raw14 contract and live metadata binding."""
         self.validate_location_binding()
-        try:
-            values = self._get(self.location.header_range)
-            if _row_values(values) != self._columns:
-                raise QuotationInputUnavailable("QUOTE_INPUT_SCHEMA_MISMATCH")
-        except QuotationInputUnavailable:
-            raise
-        except Exception:  # noqa: BLE001 - shared schema/read boundary
-            raise QuotationInputUnavailable("QUOTE_INPUT_SCHEMA_UNAVAILABLE") from None
 
     def validate_location_binding(self):
         """Prove the API title and configured UI gid identify the same sheet."""

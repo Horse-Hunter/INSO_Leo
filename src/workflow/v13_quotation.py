@@ -174,6 +174,14 @@ class V13QuotationCycle:
         self._quotes = quote_reader or InsoQuotationReader()
 
     def run(self, worksheet: WorksheetIdentity, *, skip=lambda _: False, on_result=lambda result: result) -> tuple[V13QuotationResult, ...]:
+        try:
+            return self._run(worksheet, skip=skip, on_result=on_result)
+        except (V12Fault, V13Stopped):
+            raise
+        except Exception:  # noqa: BLE001 - includes close/result adapter contract failures
+            raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE") from None
+
+    def _run(self, worksheet, *, skip, on_result):
         candidates = read_v13_candidates(self._reader, worksheet, self._store)
         results = []
         for candidate in candidates:
@@ -245,13 +253,9 @@ class V13QuotationCycle:
             except V13Stopped:
                 self._operations.close()
                 raise
-            except Exception:  # noqa: BLE001 - isolated V1.3 adapter failure
+            except Exception:  # noqa: BLE001 - unknown adapter failures stop shared business
                 self._operations.close()
-                results.append(on_result(V13QuotationResult(
-                    candidate.inquiry_id,candidate.record_identity,candidate.queried_mpn,
-                    QuotationOutcome.ROW_FAILED,None,RowErrorReason.SOURCE_CHANGED,
-                    worksheet,candidate.source_row_position)))
-                continue
+                raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE") from None
             self._operations.close()
             results.append(on_result(V13QuotationResult(
                 candidate.inquiry_id, candidate.record_identity, candidate.queried_mpn,

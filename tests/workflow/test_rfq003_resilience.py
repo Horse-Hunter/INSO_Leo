@@ -243,7 +243,7 @@ def test_other_research_sources_continue_after_timeout_and_challenge(tmp_path, m
     backend = ProductionBackend(root=tmp_path)
     backend._state = RunState.RUNNING
     mails = []
-    monkeypatch.setattr(backend, "_alert_owner_of_login", lambda **kwargs: mails.append(kwargs))
+    backend._v12_store = SimpleNamespace(notification_already_created=lambda *_: False, enqueue_notification=mails.append)
     calls = []
     def search(name):
         calls.append(name)
@@ -259,7 +259,7 @@ def test_other_research_sources_continue_after_timeout_and_challenge(tmp_path, m
         output=SimpleNamespace(upsert=lambda *_a, **_k: None), source_observer=backend._observe_source_failure)
     result = service.execute(ResearchInput("synthetic", "ABC", "Brand", 2, "A"))
     assert result.status is ResearchStatus.PARTIAL_SUCCESS
-    assert calls == list(PRICE_SOURCES) and len(mails) == 1
+    assert calls == list(PRICE_SOURCES) and len(mails) == 2
     assert backend.get_status().state is RunState.RUNNING
     backend.shutdown()
 

@@ -114,6 +114,7 @@ from .v12_gui import read_startup_interruptions, read_v12_order_state
 from .v13_integration import (
     notify_quotation,
     notify_runtime_fault,
+    notify_website_issue,
     quotation_gui,
     quotation_location,
 )
@@ -873,7 +874,8 @@ class ProductionBackend(GuiBackend):
             self._state = RunState.QUOTATION_RUNNING
         inquiry = self._active_inso_inquiry or (self._inquiries[-1] if self._inquiries else None)
         if inquiry is not None:
-            self._record_fault_alert(inquiry,"FAULT",fault.reason)
+            if inquiry not in self._manual_inquiries:
+                self._record_fault_alert(inquiry,"FAULT",fault.reason)
         else:
             notify_runtime_fault(self._v12_store,self._run_id or "run",fault.reason,at=utc_now())
         self._append_log("WARNING", "采购模块暂停，报价模块继续；请检查采购网站或订单。")
@@ -944,15 +946,17 @@ class ProductionBackend(GuiBackend):
         if result.outcome is not SourceOutcome.SOURCE_UNAVAILABLE:
             return
         code = next((str(f.value) for f in result.evidence.fields if f.key == "failure_code"), "SOURCE_UNAVAILABLE")
+        notified = self._v12_store is not None
+        if notified:
+            mpn = self._store.get_by_inquiry_id(inquiry_id).mpn if self._store is not None else None
+            notify_website_issue(self._v12_store, inquiry_id, result.source, code, mpn=mpn, at=utc_now())
         login = any(token in code for token in ("LOGIN", "CREDENTIAL", "AUTHENTICATION", "VERIFICATION", "CHALLENGE", "SESSION_STALE"))
         if result.source is ResearchSource.IC_NET:
-            self._manual_review(inquiry_id, "IC.net：需要人工验证" if login else "IC.net：查询不可用")
+            self._manual_review(inquiry_id, "IC.net：需要人工验证" if login else "IC.net：查询不可用", notify=False)
             raise V12Fault(FaultScope.V12_PAUSE, "IC_NET_UNAVAILABLE")
         if result.source is ResearchSource.INSO and login:
-            self._manual_review(inquiry_id, "INSO：登录不可用")
+            self._manual_review(inquiry_id, "INSO：登录不可用", notify=False)
             raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED")
-        if login:
-            self._manual_review(inquiry_id, f"{result.source.value}：登录不可用")
 
     def _run_inso_query(self, inquiry_id, operation, prepare):
         first_attempt = True
@@ -1404,7 +1408,7 @@ class ProductionBackend(GuiBackend):
         self._runtime_error(exc)
         self._release_idle_browser(force=True)
 
-    def _manual_review(self, inquiry_id, remarks: str = ""):
+    def _manual_review(self, inquiry_id, remarks: str = "", *, notify=True):
         lower = remarks.casefold()
         if not any(site in lower for site in ("inso", "英索", "ic.net")):
             if self._purchase_completion is not None:
@@ -1437,6 +1441,8 @@ class ProductionBackend(GuiBackend):
         )
         self._refresh()
         self._notify()
+        if not notify:
+            return
         # The run is already stopped above, so the Owner's screen says what
         # happened before the mail round trip is attempted. The mail is what
         # tells them while they are away from the machine.
