@@ -280,6 +280,9 @@ class V12Store:
                 (inquiry_id, state.value, _time_text(event.occurred_at)),
             )
             _insert_event(connection, event)
+            if state is BusinessState.QUEUED and event.event_type is EventType.HUMAN_RESOLUTION_RECORDED:
+                _recover_alerts(connection, inquiry_id, AlertType.DATA_QUALITY, event,
+                    event.occurred_at, scope_key="invalid-quantity")
 
     def record_missing_customer(self, inquiry_id: str, at: datetime) -> None:
         event = WorkflowEvent(

@@ -1,5 +1,17 @@
 # RFQ-003 — Owner authorized V1.2 resilience closeout
 
+## Owner follow-up authorization — 2026-10-07
+
+After B1 approval, Owner requested following the already-started current four
+genuine orders to procurement completion, diagnosing/fixing confirmed defects,
+offline verification, rebuilding/overwriting V1.2, and preparing a CEO report so
+CEO can synchronize applicable changes to V1.3. This is a scoped exception to the
+original offline-only acceptance below, for current real fulfillment, not replay
+of historical/sent orders or production experiments. Original business rules,
+fixed CDP and durable no-resend safeguards remain unchanged. No V1.3 development
+or messaging another implementation chat is authorized here. Results recorded in
+EXECUTION_LOG/FINAL_REPORT; further source delta requires independent Review.
+
 Source: Owner request 2026-10-07. Branch feature/v1-2. No V1.3 implementation.
 Status source: control-room/COORDINATION.md. Independent Review REQUIRED.
 

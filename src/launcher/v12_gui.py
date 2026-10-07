@@ -58,6 +58,7 @@ def read_startup_interruptions(database_path: Path) -> dict:
 
 def read_v12_order_state(store: V12Store, inquiry_id: str) -> V12OrderStateDTO:
     summary = store.order_summary(inquiry_id)
+    events = store.event_history(inquiry_id)
     alerts = tuple(
         OrderAlertDTO(
             alert.alert_id,
@@ -67,6 +68,14 @@ def read_v12_order_state(store: V12Store, inquiry_id: str) -> V12OrderStateDTO:
             alert.active,
         )
         for alert in store.active_alerts(inquiry_id)
+        # Older builds resumed valid input without recovering its alert. Only
+        # a proven saved row plus a later input-repair event supersedes that
+        # narrow old warning; do not hide customer/security/submission alerts.
+        if not (summary.business_state is BusinessState.PURCHASE_RECORDED
+            and alert.alert_type.value == "DATA_QUALITY"
+            and alert.reason_code.value in {"INQUIRY_INPUT_INVALID", "INQUIRY_QUANTITY_INVALID"}
+            and any(e.event_type.value == "HUMAN_RESOLUTION_RECORDED" and e.occurred_at > alert.raised_at
+                for e in events))
     )
     latest = alerts[0] if alerts else None
     waiting_label = None
@@ -91,7 +100,7 @@ def read_v12_order_state(store: V12Store, inquiry_id: str) -> V12OrderStateDTO:
             event.occurred_at,
             recovered=event.event_type.value == "ALERT_RECOVERED",
         )
-        for event in store.event_history(inquiry_id)
+        for event in events
     )
     return V12OrderStateDTO(
         inquiry_id,

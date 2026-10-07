@@ -1,5 +1,19 @@
 # Windows release
 
+## Current Owner batch display repair (2026-10-07)
+
+Current V1.2 EXE SHA256:
+`340D7F7E7E818FA74DE36B138B205F5905F320406FD8D391EF860BD052529E5F`.
+Backup: `dist/release-backups/INSO_V1.2-20261007-before-input-alert-cooldown-fix`.
+Validated-input alert recovery/read-only saved-history display and row-cooldown
+visibility only; no business/gate/timing change. Existing build/self-check/clean
+scan/deployed check PASS; normal GUI idle launch confirmed, not Start Inquiry.
+Runtime/DB/config/grant/fixed profile preserved. Owner's existing real loop before
+replacement yielded three saved/source-updated orders and one no-quote unsent row;
+this is not four-order procurement success or new EXE live acceptance.
+Full evidence and downstream V1.3 sync limits: RFQ-003 current reports.
+Earlier release evidence below is historical, not the current EXE metadata.
+
 ## Current RFQ-003 V1.2 refresh (2026-10-07)
 
 Owner-authorized resilience update, REVIEW_REQUIRED; not V1.3 or live acceptance.

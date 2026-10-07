@@ -243,3 +243,74 @@ SMTP, Sheets writes, production replay or live CAPTCHA were executed.
 Live acceptance remains UNKNOWN; independent CEO Review required. Final SHA and
 remote equality are checked after commit/push, reported without self-referential
 commit metadata edits.
+
+## Owner current-batch follow-up — 2026-10-07 — IN_PROGRESS
+
+Owner explicitly requested fulfillment of four current genuine unsent orders,
+confirmed-bug repair, V1.2 rebuild/overwrite, and CEO report for downstream V1.3
+sync. This live fulfillment authorization is distinct from the preceding B1
+offline-only repair; no historical replay or fabricated input is authorized.
+Owner started the existing deployed loop. Executor observes read-only DB/events
+and existing Sheets reader, does not separately click Start or dispatch orders.
+Cached Google authorization reused with allow_interactive=False, no new consent.
+No production SQL updates, new CDP, profile/cookie cleanup or customer-data commit.
+
+Remote CEO approval commits 36a2aee/c8d514e fast-forwarded into the existing dirty
+worktree; REVIEW.md left unchanged. Reviewed B1 baseline remains approved. This
+new incremental follow-up requires fresh Review, not executor self-approval.
+
+Confirmed issue: invalid S tier correctly skipped under existing A/B/C rules;
+Owner corrected source to A and the original queue resumed and purchased. Old
+invalid-input DATA_QUALITY warning remained active, falsely showing a saved order
+red. Reused existing recover-alert transaction on validated input revival. Narrow
+read-only GUI compatibility filter handles older already-saved/repaired rows,
+without clearing customer/security/submit/notification alerts or editing DB.
+Second issue: row cooldown was displayed as imminent polling. Added optional
+RunSession row_cooldown_until and thin wrapper around existing stop.wait; GUI now
+shows cooldown remaining or active processing. No change to 180 seconds, source
+order, stop, last-row/empty-poll policy, purchase gates or notifications.
+
+Production files: gui/app.py, gui/contracts.py, launcher/backend.py,
+launcher/v12_gui.py, workflow/v12_store.py. Three offline regressions added to
+tests/workflow/test_rfq003_resilience.py. No dependency/schema/second main chain.
+Actual exact-source tests:
+- focused six related module suites: 999 passed / 1 skipped in 36.75s.
+- full safe/offline tests: 1046 passed / 11 skipped in 37.51s.
+- python -m ruff check src tests: PASS. git diff --check: PASS.
+- existing build_windows_release.ps1 -Version 1.2 -BuildOnly: exit 0;
+  frozen self-check and clean staged RELEASE_SCAN_OK passed.
+Live four-order completion and deployed hash/idle launch still pending at this
+entry; do not treat offline tests or build as production acceptance.
+
+Follow-up completion evidence, Asia/Shanghai 2026-10-07 evening:
+Existing Owner loop processed the first three genuine rows to PURCHASE_RECORDED,
+each with exactly one SAVE_CLICK_COMPLETED, one confirmed-saved reconciliation,
+two important-notification successes. Source read-only check verified all three
+are 发给采购. Fourth row added after the prior poll entered the next poll queue;
+normal inter-row cooldown, duplicate check and Research proceeded. Fourth ended
+NO_MATCHING_PRODUCT / RESEARCH_FAILED. Existing Excel result has all five price
+sources 无结果; no SAVE_DISPATCH_ARMED/SAVE_CLICK_COMPLETED, exception notice
+delivered, source remains 未发. This is a normal safe no-quote terminal state,
+not a procurement control bug. Owner asked to confirm model or explicitly decide
+no-quote treatment. Four successful purchases remains BLOCKED on that business
+decision; never report 4/4 or bypass the existing requirement. No historical replay.
+Old empty-brand dummy row is not one of these four genuine current orders.
+Read-only probes are ignored .tmp helpers, not new production implementations.
+
+Confirmed display fixes and offline/build work complete. Empty application closed
+normally via computer-use; deploy helper verified no running EXE, made new backup,
+replaced only EXE/_internal and completed deployed self-check exit0:
+DEPLOYMENT_OK_RUNTIME_PRESERVED.
+Backup D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.2-20261007-before-input-alert-cooldown-fix.
+Backup hash 1A49C9650BA531F2299326FFC89761D0391CD5F2C0FE32327DDD0736BD5C3E84.
+New EXE 340D7F7E7E818FA74DE36B138B205F5905F320406FD8D391EF860BD052529E5F.
+Runtime junction target remains v1-2-design/dist/INSO_V1.1/runtime. Chrome survives
+with original blank window; no profile/config/grant/DB migration or reset.
+Computer-use idle-launched rebuilt application; unique final V1.2 window returned.
+Window capture timed out twice; no stale-coordinate use or fabricated screenshot
+evidence. No Start Inquiry clicked, no new replay/submission or test mail/write.
+Owner live operations preceding replacement are explicitly documented above,
+so earlier B1 'no real business' statements apply only to that historical repair.
+Current increment REVIEW_REQUIRED; original CEO PASS at241fd48 stays unchanged.
+CEO_SYNC_REPORT.md gives exact files and V1.3 reuse boundaries, no V1.3 code change.
+Commit/push equality will be verified externally; no self-referential SHA edit.

@@ -525,3 +525,55 @@ def test_b1_real_execution_evidence_is_still_quarantined_without_active_business
 def test_b1_closed_business_states_are_not_quarantined(state):
     from src.workflow.v12_contracts import interrupted_business_state
     assert interrupted_business_state(state, None, False, execution_started=True) is None
+
+
+def test_corrected_s_tier_recovers_only_invalid_input_alert_then_runs(tmp_path):
+    from datetime import timedelta
+
+    from src.workflow.v12_contracts import ReasonCode
+    f, ws, vs, research, *_rest = _make_flow(tmp_path)
+    reader = FakeSheetsReader(tier="S")
+    iid = f.poll_and_process(reader, SHEET, now=NOW)[0].inquiry_id
+    assert not research.inputs and vs.active_alerts(iid)
+    vs.record_missing_customer(iid, NOW)
+    f.poll_and_process(FakeSheetsReader(tier="A"), SHEET, now=NOW + timedelta(minutes=1))
+    assert len(research.inputs) == 1
+    assert ws.get_by_inquiry_id(iid).importance_raw == "A"
+    assert all(a.reason_code not in {ReasonCode.INQUIRY_INPUT_INVALID, ReasonCode.INQUIRY_QUANTITY_INVALID}
+        for a in vs.active_alerts(iid))
+    assert any(a.reason_code is ReasonCode.CUSTOMER_NAME_MISSING for a in vs.active_alerts(iid))
+
+
+def test_legacy_saved_row_hides_repaired_input_warning_only_without_db_write(tmp_path):
+    from datetime import timedelta
+
+    from src.workflow.v12_contracts import WorkflowEvent
+    f, _ws, vs, *_rest = _make_flow(tmp_path)
+    iid = f.process_pending(rows()[:1], now=NOW)[0].inquiry_id
+    vs.skip_invalid_quantity(iid, at=NOW)
+    vs.append_event(WorkflowEvent("legacy-input-repair", iid, EventType.HUMAN_RESOLUTION_RECORDED,
+        NOW + timedelta(minutes=1), "workflow"))
+    f._set_state(iid, BusinessState.PURCHASE_RECORDED, EventType.PURCHASE_DATA_SAVED, NOW + timedelta(minutes=2))
+    assert vs.active_alerts(iid), "simulate an older build's stale alert"
+    before = vs.event_history(iid)
+    dto = read_v12_order_state(vs, iid)
+    assert dto.latest_active_alert is None and _v12_status_text(dto, "") == "已发采购单"
+    assert vs.event_history(iid) == before and vs.active_alerts(iid), "display is read-only"
+    vs.record_missing_customer(iid, NOW + timedelta(minutes=3))
+    assert read_v12_order_state(vs, iid).latest_active_alert.reason_code.value == "CUSTOMER_NAME_MISSING"
+
+
+def test_row_cooldown_is_visible_and_stop_still_interrupts_wait(tmp_path):
+    from src.gui.app import _countdown_text
+    backend = ProductionBackend(root=tmp_path)
+    backend._state = RunState.RUNNING
+    texts = []
+    def wait(seconds):
+        status = backend.get_status()
+        assert seconds == 180 and status.row_cooldown_until is not None
+        texts.append(_countdown_text(status, status.row_cooldown_until))
+        return True
+    backend._stop = SimpleNamespace(wait=wait, set=lambda: None)
+    assert backend._wait_between_rows(180)
+    assert texts == ["冷却 00:00"] and backend.get_status().row_cooldown_until is None
+    backend.shutdown()

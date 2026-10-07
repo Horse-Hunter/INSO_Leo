@@ -1,5 +1,47 @@
 # RFQ-003 Final Report — 2026-10-07
 
+## 当前 Owner 批次跟踪与修复版交付（覆盖下方历史 B1 摘要）
+
+正在实现什么：跟踪 Owner 已启动的当前四笔真实订单，修复已确认显示问题，
+覆盖 V1.2，并给 CEO 形成 V1.3 适用差异报告。不开发 V1.3。
+
+以前是什么：S 评级按原 A/B/C 规则跳过；改为 A 后业务恢复但旧资料警报仍显示红色。
+三分钟行间冷却显示“即将轮询”，被误认为卡住。
+
+现在是什么：最小修复资料警报恢复及只读历史兼容；GUI 显示冷却/正在处理。
+没有改评级、采购条件、Save-and-Send gate、通知规则或180秒策略。
+原 B1 已由 CEO 在 c8d514e 基线批准；本次增量为 REVIEW_REQUIRED。
+
+真实结果：当前四笔中三笔 PURCHASE_RECORDED，唯一点击各一次，原重要通知
+各两次投递成功，源表状态均已读取确认“发给采购”。第四笔五个价格来源均无
+结果，NO_MATCHING_PRODUCT / RESEARCH_FAILED，零提交，异常通知成功，源表
+仍“未发”。这符合无报价不采购规则，不是四笔采购全部完成。需要 Owner 核对
+第四笔型号或另行明确业务授权；执行者没有猜型号、填价格、改库或强制发送。
+旧空品牌测试行不是本次四笔之一，仍按资料错误跳过，不补发。
+旧真实订单没有重跑；上述是真实 Owner 循环观察，与离线验证严格分开。
+
+验证：focused 999 passed / 1 skipped；full safe/offline 1046 passed / 11 skipped；
+Ruff src tests、git diff --check PASS。现有 build/frozen self-check/staged scan、
+deployed self-check PASS。通过 computer-use 正常关闭空闲应用并启动新版待命，
+未点击开始询价。截图接口超时，不宣称截图验证成功；窗口/进程启动已确认。
+
+部署：`D:\Program_Leo\INSO_Leo\dist\INSO_V1.2\INSO_V1.2.exe`
+
+新 SHA256：`340D7F7E7E818FA74DE36B138B205F5905F320406FD8D391EF860BD052529E5F`
+
+备份：`D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.2-20261007-before-input-alert-cooldown-fix`
+
+备份旧 EXE SHA256：`1A49C9650BA531F2299326FFC89761D0391CD5F2C0FE32327DDD0736BD5C3E84`
+
+只替换 EXE/_internal。runtime junction/DB/config/grant/profile 均保留。
+CEO 同步细节：`CEO_SYNC_REPORT.md`，五个生产文件及三条新离线测试；不提交
+原始客户输出、订单身份、价格、授权或生成包。本次没有实现/运行 V1.3。
+
+你接下来需要做什么：确认第四笔无报价业务处置；CEO Review 本次增量后再同步 V1.3。
+尚未证明第四笔可采购或新 EXE 真订单端到端运行，保留 UNKNOWN，不能称全部完成。
+
+## 以下为此前 B1 修复交付历史
+
 正在实现什么：
 维护现有 V1.2，完成采购故障隔离、恢复、提交待确认和行间三分钟冷却；没有开发 V1.3。
 
