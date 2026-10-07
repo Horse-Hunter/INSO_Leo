@@ -78,7 +78,7 @@ Additive TEXT enum states/events require no schema change or new database.
   of an already-attached session after manual/module/global pause: disconnect only,
   no lease/tab close and no park. Chrome/context/profile/cookies stay untouched.
 
-## Offline tests (final source)
+## Initial delivery offline tests (448c26c; superseded by B1 results below)
 
 Focused:
 `python -m pytest -q tests/workflow tests/launcher tests/inso tests/research tests/sheets tests/gui --basetemp=.tmp/rfq003-focused-final-verified --tb=short`
@@ -116,7 +116,7 @@ reader/transport instead of relying on empty real-page stubs. Initial mail attem
 were blocked locally by suite guard; no actual SMTP connection was made. No test
 weakens native query completeness, gates or durable-click proof.
 
-## Release / deployment evidence
+## Initial delivery release / deployment evidence (superseded by B1 below)
 
 Reused `scripts/build_windows_release.ps1 -Version 1.2 -BuildOnly`, existing spec,
 release Python and dependencies. Final build exit 0; staged frozen `--self-check`
@@ -165,3 +165,81 @@ not a claim that V1.3 runs today.
 Only scoped source/tests/docs are committed; EXE/runtime, private probes and local
 deployment helper stay ignored/untracked. Commit/remote equality is verified after
 push and reported to Owner, without inserting a self-referential commit SHA here.
+
+## CEO Review B1 repair — 2026-10-07 — current delivery
+
+Synced existing feature/v1-2 worktree by fast-forward to CEO Review HEAD
+`55466e64e2f0ea64b108c70945265d0afc49d747`. Read latest REVIEW/TASK_SPEC/log/
+COORDINATION. B1 is the only repair; requirement meaning and REVIEW.md unchanged.
+CHANGES_REQUESTED -> IN_PROGRESS -> REVIEW_REQUIRED; no executor Review verdict.
+Earlier universal unfinished-row quarantine claim is SUPERSEDED by this evidence
+gate. No new queue/state/schema/identity/browser/notification implementation.
+
+Root cause: every pending row is pre-enqueued and pre-created with
+DUPLICATE_CHECK_PENDING plus DUPLICATE_CHECK_STARTED, before serial active work.
+That pending event alone cannot identify the row that really started. Old startup
+quarantine and idle GUI projection both treated any nonclosed row as interrupted.
+
+Minimal production delta, exactly three files:
+- `workflow/v12_contracts.py`: extend the existing interruption helper with durable
+  execution proof; pending/queued/no business state plus no claim/later event/no
+  purchase/no submit evidence returns no interruption. Reuse existing real-phase
+  business states and explicit execution-event allowlist; exclude ambiguous
+  precreation DUPLICATE_CHECK_STARTED. Keep closed-state priority, existing held
+  interruptions and unknown/possibly-sent safety intact.
+- `workflow/v12_flow.py`: supply existing persisted RESEARCHING claim/attempt_count
+  or real execution events. A released preparation claim can have attempt_count=0,
+  so the durable DUPLICATE_CHECKING/later phase still proves actual start. Include
+  SAVE_CLICK_COMPLETED alongside SAVE_DISPATCH_ARMED as possible-submit evidence.
+  No change to enqueue/drain/cooldown, claim SQL, routing, gates or notifications.
+- `launcher/v12_gui.py`: same helper/allowlist, read-only SQL EXISTS event flags
+  and claim fields. Do not append untouched pending rows as interrupted/error
+  history. SQL mode=ro remains; no production DB writes/migrations at idle launch.
+
+Untouched later rows stay QUEUED, never mark_interrupted, and remain eligible in
+original source order. First closed row stays closed during a cooldown exit.
+Real active unfinished/armed/clicked/unknown rows stay held, not auto-procured.
+No resetting old held rows or cleanup/migration of the production database.
+
+Offline coverage: 18 new parameter cases (2 three-row crash/cooldown scenarios,
+7 durable claim/event/submission evidence cases, 9 closed-state cases). Updated
+two original tests to seed genuine active-row evidence rather than bare enqueue;
+strengthened manual completion test with red removal and another no-replay poll.
+Launcher real-composition/fake-data test now asserts the next untouched original
+source row runs, while the third row remains queued/pending rather than frozen.
+No fake browser/transport operates on real orders; all waits are fake/interrupted.
+
+Actual final validation:
+- Focused:
+  `python -m pytest -q tests/workflow tests/launcher tests/inso tests/research tests/sheets tests/gui --basetemp=.tmp/rfq003-b1-focused-final --tb=short`
+  **996 passed / 1 skipped in 35.76s**, exit 0.
+- Full safe/offline:
+  `python -m pytest -q tests --basetemp=.tmp/rfq003-b1-full-final --tb=short`
+  **1043 passed / 11 skipped in 37.18s**, exit 0.
+- `python -m ruff check src tests`: PASS, exit 0.
+- `git diff --check`: PASS, exit 0; reviewed three-file production delta.
+  Initial new fixture tried a guarded direct purchase-state transition and was
+  rejected offline (3 failures); corrected fixture to use existing guarded ledger
+  transitions, without relaxing production safety. Final runs all pass, no SMTP
+  attempt warning. Existing RFQ-002 page preservation and RFQ-003 policies PASS.
+
+Reused existing build/spec/deploy helper; changed only local ignored backup literal.
+`scripts/build_windows_release.ps1 -Version 1.2 -BuildOnly`: exit 0.
+Frozen self-check: exit 0. Clean staged scan: RELEASE_SCAN_OK.
+Only EXE/_internal overwritten; deployed self-check exit 0 and
+DEPLOYMENT_OK_RUNTIME_PRESERVED. New backup, no earlier backup overwritten:
+`D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.2-20261007-before-rfq003-b1`
+Backup EXE SHA256:
+`4B412E25C778246E573A9854A1C168ABC1EB443792696375D39AAB1A93BC1766`.
+New deployed EXE SHA256:
+`1A49C9650BA531F2299326FFC89761D0391CD5F2C0FE32327DDD0736BD5C3E84`.
+Deployed path remains `D:\Program_Leo\INSO_Leo\dist\INSO_V1.2\INSO_V1.2.exe`.
+Runtime junction verified unchanged to v1-2-design/dist/INSO_V1.1/runtime.
+No runtime/workflow DB/config/OAuth/grant/profile modification/move/delete/reset
+or cookie cleanup; no Chrome/context close or new CDP. Old GUI closed normally
+using computer-use; rebuilt GUI idle-launched, unique INSO_V1.2 window observed.
+No Start Inquiry or login sweep clicked. No real orders, Save/Save-and-Send,
+SMTP, Sheets writes, production replay or live CAPTCHA were executed.
+Live acceptance remains UNKNOWN; independent CEO Review required. Final SHA and
+remote equality are checked after commit/push, reported without self-referential
+commit metadata edits.

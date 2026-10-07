@@ -13,6 +13,7 @@ from src.gui.contracts import (
     WorkflowEventDTO,
 )
 from src.workflow.v12_contracts import (
+    EXECUTION_EVENT_TYPES,
     BusinessState,
     PurchaseOutcome,
     business_label_for_state,
@@ -29,16 +30,23 @@ def read_startup_interruptions(database_path: Path) -> dict:
         connection.row_factory = sqlite3.Row
         if connection.execute("PRAGMA user_version").fetchone()[0] == 0:
             return {}  # Existing V1 DB is migrated only through the normal Start boundary.
+        execution_types = tuple(event.value for event in EXECUTION_EVENT_TYPES)
+        placeholders = ",".join("?" for _ in execution_types)
         rows = connection.execute("SELECT w.inquiry_id,w.mpn_json,w.brand_json,w.quantity_json,w.last_error,"
+            "w.status,w.attempt_count,EXISTS(SELECT 1 FROM workflow_v12_events x "
+            f"WHERE x.inquiry_id=w.inquiry_id AND x.event_type IN ({placeholders})) AS executed,"
             "s.business_state,p.outcome,EXISTS(SELECT 1 FROM workflow_v12_events e "
-            "WHERE e.inquiry_id=w.inquiry_id AND e.event_type='SAVE_DISPATCH_ARMED') AS armed "
+            "WHERE e.inquiry_id=w.inquiry_id AND e.event_type IN ('SAVE_DISPATCH_ARMED','SAVE_CLICK_COMPLETED')) AS armed "
             "FROM workflow_items w LEFT JOIN workflow_v12_inquiry_state s USING(inquiry_id) "
-            "LEFT JOIN workflow_v12_purchase_state p USING(inquiry_id)").fetchall()
+            "LEFT JOIN workflow_v12_purchase_state p USING(inquiry_id)", execution_types).fetchall()
     result = {}
     for row in rows:
         current = BusinessState(row["business_state"]) if row["business_state"] else None
         state = interrupted_business_state(current,
-            PurchaseOutcome(row["outcome"]) if row["outcome"] else None, bool(row["armed"]))
+            PurchaseOutcome(row["outcome"]) if row["outcome"] else None, bool(row["armed"]),
+            execution_started=(row["status"] == "RESEARCHING" or row["attempt_count"] > 0 or bool(row["executed"])))
+        if state is None and current in {None, BusinessState.QUEUED, BusinessState.DUPLICATE_CHECK_PENDING}:
+            continue  # Untouched rows need no interrupted/error history projection.
         state = state or current
         label = V12BusinessLabel(business_label_for_state(state).value)
         waiting = "调研无报价（未发采购）" if state is BusinessState.RESEARCH_FAILED and row["last_error"] == "NO_MATCHING_PRODUCT" else label.value

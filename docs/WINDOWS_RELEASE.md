@@ -4,9 +4,10 @@
 
 Owner-authorized resilience update, REVIEW_REQUIRED; not V1.3 or live acceptance.
 Existing build/spec/deploy path reused. Final EXE SHA256:
-`4B412E25C778246E573A9854A1C168ABC1EB443792696375D39AAB1A93BC1766`.
-Original pre-update EXE/_internal backup:
-`dist/release-backups/INSO_V1.2-20261007-before-rfq003-resilience`.
+`1A49C9650BA531F2299326FFC89761D0391CD5F2C0FE32327DDD0736BD5C3E84`.
+Current CEO B1 repair backup (earlier backups preserved):
+`dist/release-backups/INSO_V1.2-20261007-before-rfq003-b1`.
+Startup quarantine now requires actual execution evidence, not merely pre-enqueue.
 Only frozen assets overwritten; runtime junction, DB, config/grants/profile preserved.
 Build, frozen/deployed self-check, clean staged scan and idle launch PASS. GUI stays
 idle: no inquiry, submission, SMTP, Sheets write or real challenge tested.

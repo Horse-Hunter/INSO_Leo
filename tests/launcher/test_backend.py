@@ -1434,6 +1434,10 @@ def test_real_poll_seam_stops_batch_on_login_and_resumes_queued_inquiry(tmp_path
     backend.request_stop_after_cycle()
     backend._thread.join(5)
     assert calls.count(interrupted_id) == 1, "the interrupted inquiry must not be resumed"
+    assert calls[1] == backend._store.all_items()[1].inquiry_id, "resume the next untouched source row, not only newly added rows"
+    untouched = backend._store.all_items()[2]
+    assert untouched.status.value == "QUEUED"
+    assert backend._v12_store.business_state(untouched.inquiry_id) is BusinessState.DUPLICATE_CHECK_PENDING
     assert len([m for m in _RecordingTransport.sent if "异常" in m[2]]) == 1
     backend.shutdown()
 

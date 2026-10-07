@@ -134,7 +134,7 @@ CLOSED_BUSINESS_STATES = frozenset({
 
 
 def interrupted_business_state(state: BusinessState | None, purchase: PurchaseOutcome | None,
-                               armed: bool) -> BusinessState | None:
+                               armed: bool, *, execution_started: bool = False) -> BusinessState | None:
     possible = armed or purchase in {PurchaseOutcome.UNKNOWN_WRITE_OUTCOME,
         PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED, PurchaseOutcome.MANUAL_REVIEW,
         PurchaseOutcome.SAVED, PurchaseOutcome.SUBMIT_UNCONFIRMED}
@@ -142,6 +142,12 @@ def interrupted_business_state(state: BusinessState | None, purchase: PurchaseOu
         return None
     if state in {BusinessState.INTERRUPTED_UNSENT, BusinessState.INTERRUPTED_POSSIBLY_SENT}:
         return state
+    # Pre-enqueue also writes DUPLICATE_CHECK_STARTED, so that event alone is
+    # deliberately NOT execution proof. A durable claim, later phase, purchase
+    # or unambiguous execution event is required before quarantining a row.
+    if (not possible and purchase is None and not execution_started
+            and state in {None, BusinessState.QUEUED, BusinessState.DUPLICATE_CHECK_PENDING}):
+        return None
     return BusinessState.INTERRUPTED_POSSIBLY_SENT if possible else BusinessState.INTERRUPTED_UNSENT
 
 
@@ -191,6 +197,14 @@ class EventType(StrEnum):
     DATA_QUALITY_MISSING_CUSTOMER = "DATA_QUALITY_MISSING_CUSTOMER"
     DATA_QUALITY_INVALID_QUANTITY = "DATA_QUALITY_INVALID_QUANTITY"
     HUMAN_RESOLUTION_RECORDED = "HUMAN_RESOLUTION_RECORDED"
+
+
+# Shared by durable startup quarantine and its strictly read-only GUI projection.
+# Exclude DUPLICATE_CHECK_STARTED: legacy batches emit it for untouched rows.
+EXECUTION_EVENT_TYPES = frozenset({EventType.DUPLICATE_CHECK_CONFIRMED,
+    EventType.DUPLICATE_CHECK_FAILED, EventType.RESEARCH_STARTED,
+    EventType.RESEARCH_RETRY_SCHEDULED, EventType.PURCHASE_DRAFT_STARTED,
+    EventType.AI_RECOGNITION_READY, EventType.SAVE_CLICK_COMPLETED})
 
 
 @dataclass(frozen=True, slots=True)

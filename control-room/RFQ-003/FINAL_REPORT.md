@@ -8,13 +8,20 @@
 历史中断不自动重跑；正常下一行开始前等待三分钟，停止可以立即打断。
 
 以前是什么：
-RFQ-002 已独立 Review 通过。原有强确认、异常停止及恢复规则尚未满足 RFQ-003。
+CEO Review 指出唯一阻塞 B1：同批尚未开始的后续订单也会被重启恢复误标为处理中断。
 
 现在是什么：
 RFQ-003 为 REVIEW_REQUIRED。新版已覆盖当前 V1.2 并启动待命，未点击开始询价。
 沿用唯一生产主链、原订单识别码/台账、固定 CDP、现有通知与发布基础设施。
 
 做完了什么：
+
+- 本次只修 B1：启动隔离和只读显示都要求真实执行证据；预入队/预建 pending 不算开始。
+- 第一条处理中断时仅隔离第一条；第一条闭环后冷却退出时，后续未开始订单仍按源表顺序正常继续。
+- 可能已发送的中断仍隔离、已闭环不重开，人工完成后的解除及禁止重发边界保留。
+
+以下为此前 RFQ-003 功能，本次未重新开发：
+
 - 无报价、重复、单行资料错误、明确提交前失败安全闭环，继续下一行。
 - IC.net/采购自身异常暂停采购模块；INSO/共享表格/数据库/CDP严重故障全局停止。
 - INSO 下方查询失败最多三次 fresh-tab 重试，每次可中断等待三分钟，真实空结果不混淆。
@@ -25,18 +32,18 @@ RFQ-003 为 REVIEW_REQUIRED。新版已覆盖当前 V1.2 并启动待命，未�
 - 未开放单独保存或通用发送，未改变原重要/重复通知收件人。
 
 测试结果：
-Focused：978 passed / 1 skipped。完整 safe/offline：1025 passed / 11 skipped。
+Focused：996 passed / 1 skipped。完整 safe/offline：1043 passed / 11 skipped。
 Ruff src tests、git diff --check 通过。build、冻结自检、干净发布扫描、部署自检通过。
 通过 computer-use 正常关闭/启动最终版并保持待命；未运行真实业务，不代表线上验收。
 
 部署路径：`D:\Program_Leo\INSO_Leo\dist\INSO_V1.2\INSO_V1.2.exe`
 
-新 EXE SHA256：`4B412E25C778246E573A9854A1C168ABC1EB443792696375D39AAB1A93BC1766`
+新 EXE SHA256：`1A49C9650BA531F2299326FFC89761D0391CD5F2C0FE32327DDD0736BD5C3E84`
 
-原版备份：`D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.2-20261007-before-rfq003-resilience`
+本次覆盖前备份：`D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.2-20261007-before-rfq003-b1`
 
 仅覆盖 EXE/_internal，runtime/数据库/config/grant/固定 profile 保留。
-中间构建额外备份及所有真实离线数字见 EXECUTION_LOG.md。
+所有旧备份保留；新增18个参数化回归场景及实际离线数字见 EXECUTION_LOG.md。
 未运行真实订单、Save/Save-and-Send、SMTP、Sheets写入或真实验证码场景。
 真实新订单端到端结果仍为 UNKNOWN；不得将离线测试冒充真实提交成功。
 

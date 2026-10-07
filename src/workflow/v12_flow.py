@@ -27,6 +27,7 @@ from src.sheets.purchase_status import current_purchase_status
 from .service import ResearchExecutor, ResearchPreparationError, WorkflowWorker
 from .store import WorkflowStateStore
 from .v12_contracts import (
+    EXECUTION_EVENT_TYPES,
     BusinessState,
     DuplicateCheckResult,
     DuplicateOutcome,
@@ -177,12 +178,14 @@ class V12WorkflowCoordinator:
             except KeyError:
                 state = None
             events = self._v12_store.event_history(item.inquiry_id)
-            armed = any(e.event_type is EventType.SAVE_DISPATCH_ARMED for e in events)
+            armed = any(e.event_type in {EventType.SAVE_DISPATCH_ARMED, EventType.SAVE_CLICK_COMPLETED} for e in events)
             try:
                 purchase = self._v12_store.purchase_state(item.inquiry_id)
             except KeyError:
                 purchase = None
-            interrupted = interrupted_business_state(state, purchase, armed)
+            interrupted = interrupted_business_state(state, purchase, armed,
+                execution_started=(item.status.value == "RESEARCHING" or item.attempt_count > 0
+                    or any(e.event_type in EXECUTION_EVENT_TYPES for e in events)))
             if interrupted is None or interrupted is state:
                 continue
             self._workflow_store.mark_interrupted(item.id, now=now)

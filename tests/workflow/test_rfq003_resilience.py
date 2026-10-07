@@ -14,6 +14,7 @@ from src.launcher.v12_gui import read_v12_order_state
 from src.research import ResearchInput, ResearchResult, ResearchStatus
 from src.sheets import WorksheetRow, query_pending_records
 from src.workflow.v12_contracts import (
+    CLOSED_BUSINESS_STATES,
     BusinessState,
     DuplicateCheckResult,
     DuplicateOutcome,
@@ -21,6 +22,7 @@ from src.workflow.v12_contracts import (
     PurchaseOutcome,
     ReconciliationOutcome,
     ReconciliationResult,
+    business_label_for_state,
 )
 from src.workflow.v12_faults import FaultScope, V12Fault
 from src.workflow.v12_flow import ResearchBusinessFacts
@@ -148,6 +150,7 @@ def test_restart_quarantines_and_sheet_manual_completion_releases_red_only(tmp_p
     first = rows()[0]
     ws.enqueue(first, now=NOW)
     iid = ws.inquiry_id_for(first.record_identity)
+    f._set_state(iid, BusinessState.DUPLICATE_CHECKING, EventType.DUPLICATE_CHECK_STARTED, NOW)
     if armed:
         vs.set_purchase_state(iid, "cmd", PurchaseOutcome.PRE_SAVE_READY, at=NOW)
         vs.set_purchase_state(iid, "cmd", PurchaseOutcome.AI_RECOGNIZED, at=NOW)
@@ -164,6 +167,9 @@ def test_restart_quarantines_and_sheet_manual_completion_releases_red_only(tmp_p
     reader.row = WorksheetRow(99, {**reader.row.cells, "A": "发给采购"})
     f.poll_and_process(reader, SHEET, now=NOW)
     assert vs.business_state(iid) is BusinessState.HUMAN_COMPLETED and not research.inputs
+    assert _order_row_style(SimpleNamespace(status=SimpleNamespace(value="error"), processed_at=None),
+        NOW, read_v12_order_state(vs, iid)) == "legacy"
+    assert f.poll_and_process(reader, SHEET, now=NOW) == () and not research.inputs
 
 
 @pytest.mark.parametrize("state", [BusinessState.SUBMIT_UNCONFIRMED, BusinessState.STATUS_WRITE_PENDING])
@@ -216,10 +222,12 @@ def test_idle_projection_is_read_only_and_includes_orders_without_research_excel
     first = rows()[0]
     ws.enqueue(first, now=NOW)
     iid = ws.inquiry_id_for(first.record_identity)
+    f._set_state(iid, BusinessState.DUPLICATE_CHECKING, EventType.DUPLICATE_CHECK_STARTED, NOW)
+    before = vs.event_history(iid)
     preview = read_startup_interruptions(vs.database_path)
     assert preview[iid][0].business_label.value == "处理中断（未发送）"
     assert ws.get_by_inquiry_id(iid).status.value == "QUEUED"
-    assert vs.event_history(iid) == (), "idle projection must never quarantine/write"
+    assert vs.event_history(iid) == before, "idle projection must never quarantine/write"
     assert f._records == {}
 
 
@@ -429,3 +437,91 @@ def test_legacy_unproven_submit_exception_is_unfinished_and_quarantined(tmp_path
     assert not backend._business_completed("synthetic")
     backend._v12_store = None
     backend.shutdown()
+
+
+def _b1_batch():
+    first = rows()[0]
+    return tuple(replace(first, model=f"B1-{offset}", row_position=3 + offset,
+        record_identity=replace(first.record_identity, row_position=3 + offset,
+            identifying_snapshot=replace(first.record_identity.identifying_snapshot, model=f"B1-{offset}")))
+        for offset in range(3))
+
+
+@pytest.mark.parametrize("during_cooldown", [False, True])
+def test_b1_three_row_restart_preserves_untouched_rows_and_source_order(tmp_path, during_cooldown):
+    from src.launcher.v12_gui import read_startup_interruptions
+    batch = _b1_batch()
+    flow, ws, vs, research, checker, *_rest = _make_flow(tmp_path)
+    if during_cooldown:
+        research.execute = lambda item: ResearchResult(item.inquiry_id, ResearchStatus.EXCEPTION)
+        flow._row_wait = lambda seconds: seconds == 180  # Exit while waiting; no real sleep.
+        assert len(flow.process_pending(batch, now=NOW)) == 1
+    else:
+        def interrupted(*_a, **_k):
+            raise V12Fault(FaultScope.V12_PAUSE, "synthetic active query interruption")
+        checker.check = interrupted
+        with pytest.raises(V12Fault):
+            flow.process_pending(batch, now=NOW)
+    ids = [ws.inquiry_id_for(record.record_identity) for record in batch]
+    assert len(ws.all_items()) == 3
+    assert all(ws.get_by_inquiry_id(iid).attempt_count == 0 for iid in ids[1:])
+    assert all(vs.business_state(iid) is BusinessState.DUPLICATE_CHECK_PENDING for iid in ids[1:])
+    assert all([e.event_type for e in vs.event_history(iid)] == [EventType.DUPLICATE_CHECK_STARTED] for iid in ids[1:])
+    preview = read_startup_interruptions(vs.database_path)
+    assert not any(iid in preview for iid in ids[1:]), "idle GUI must not mark untouched rows red"
+    restarted, ws, vs, _research, *_rest = _make_flow(tmp_path)
+    restarted.initialize_run_state(now=NOW)
+    expected = BusinessState.RESEARCH_FAILED if during_cooldown else BusinessState.INTERRUPTED_UNSENT
+    assert vs.business_state(ids[0]) is expected
+    assert all(ws.get_by_inquiry_id(iid).status.value == "QUEUED" for iid in ids[1:])
+    if not during_cooldown:
+        assert ws.get_by_inquiry_id(ids[0]).status.value == "MANUAL_REVIEW"
+        assert _order_row_style(SimpleNamespace(status=SimpleNamespace(value=""), processed_at=None),
+            NOW, read_v12_order_state(vs, ids[0])) == "error"
+    execution = []
+    restarted._research.execute = lambda item: execution.append(item.mpn) or ResearchResult(item.inquiry_id, ResearchStatus.EXCEPTION)
+    restarted._row_wait = lambda seconds: execution.append(seconds) or False
+    result = restarted.process_pending(batch, now=NOW)
+    assert [row.inquiry_id for row in result] == ids[1:]
+    assert execution == ["B1-1", 180, "B1-2"]
+    assert vs.business_state(ids[0]) is expected
+
+
+@pytest.mark.parametrize("evidence", ["claim", "research-event", "armed", "clicked", "unknown", "reconciliation", "manual"])
+def test_b1_real_execution_evidence_is_still_quarantined_without_active_business_state(tmp_path, evidence):
+    from src.launcher.v12_gui import read_startup_interruptions
+    from src.workflow.v12_contracts import WorkflowEvent
+    flow, ws, vs, research, *_rest = _make_flow(tmp_path)
+    row = rows()[0]
+    ws.enqueue(row, now=NOW)
+    iid = ws.inquiry_id_for(row.record_identity)
+    if evidence == "claim":
+        ws.claim_due(now=NOW)
+    elif evidence in {"research-event", "armed", "clicked"}:
+        event = {"research-event": EventType.RESEARCH_STARTED,
+            "armed": EventType.SAVE_DISPATCH_ARMED, "clicked": EventType.SAVE_CLICK_COMPLETED}[evidence]
+        vs.append_event(WorkflowEvent("synthetic-event", iid, event, NOW, "workflow"))
+    else:
+        vs.set_purchase_state(iid, "synthetic-cmd", PurchaseOutcome.PRE_SAVE_READY, at=NOW)
+        vs.set_purchase_state(iid, "synthetic-cmd", PurchaseOutcome.AI_RECOGNIZED, at=NOW)
+        vs.begin_save_dispatch(iid, at=NOW)  # Ledger only; no action/transport.
+        if evidence == "reconciliation":
+            def crash(_iid):
+                raise SystemExit("synthetic reconciliation interruption")
+            with pytest.raises(SystemExit):
+                vs.reconcile_unknown_save(iid, SimpleNamespace(reconcile=crash), at=NOW)
+        elif evidence == "manual":
+            vs.reconcile_unknown_save(iid, SimpleNamespace(reconcile=lambda _iid:
+                ReconciliationResult(ReconciliationOutcome.UNKNOWN, NOW)), at=NOW)
+    expected = (BusinessState.INTERRUPTED_UNSENT if evidence in {"claim", "research-event"}
+        else BusinessState.INTERRUPTED_POSSIBLY_SENT)
+    assert read_startup_interruptions(vs.database_path)[iid][0].business_label.value == business_label_for_state(expected).value
+    flow.initialize_run_state(now=NOW)
+    assert vs.business_state(iid) is expected
+    assert flow.process_pending((row,), now=NOW) == () and research.inputs == []
+
+
+@pytest.mark.parametrize("state", list(CLOSED_BUSINESS_STATES))
+def test_b1_closed_business_states_are_not_quarantined(state):
+    from src.workflow.v12_contracts import interrupted_business_state
+    assert interrupted_business_state(state, None, False, execution_started=True) is None
