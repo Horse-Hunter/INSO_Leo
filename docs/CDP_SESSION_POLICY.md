@@ -1,5 +1,11 @@
 # CDP Session Policy — the one shared INSO browser session
 
+RFQ-003 (2026-10-07): human-needed pages are not closed orders. INSO manual
+verification is GLOBAL_STOP; IC.net is a V1.2 module pause. Preserve the page
+through final worker cleanup, detach only the client, and never park the paused
+session. Successful closed rows keep the existing fresh-owned-tab cleanup.
+Query retries use the same endpoint/profile, never overlapping INSO operations.
+
 Status: **BINDING**. Applies to every window, every AI agent, and every build
 version (V1.1 hotfix, V1.2, and anything after) that reads INSO.
 

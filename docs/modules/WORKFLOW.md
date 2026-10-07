@@ -1,5 +1,19 @@
 # Workflow 模块
 
+## RFQ-003 当前 V1.2 恢复边界（2026-10-07）
+
+以 `control-room/RFQ-003/TASK_SPEC.md` 为当前规则，不实现 V1.3。
+复用现有 inquiry_id、record_identity、SQLite、notification ledger 和唯一生产链。
+单行无报价、数据错误、重复、明确提交前失败、已点击后确认失败及单格状态写回
+失败均闭环后继续；真实下一行开始前可中断等待 180 秒，末行/空轮询不等待。
+INSO 查询初次加最多三次 fresh-tab 重试，每次间隔可中断 180 秒；不是行间冷却。
+IC.net / V1.2 内部异常 MODULE_PAUSED；INSO 认证、查询重试耗尽及共享
+Sheets / ledger / CDP 不可用 GLOBAL_STOP，GUI 不退出。SMTP 独立幂等重试。
+重启仅只读投影历史中断为红色；正常 Start 将未闭环订单隔离，不自动恢复或再采购。
+人工将源状态改为发给采购后，原 identity 经唯一 relocate/re-read 自动 HUMAN_COMPLETED。
+源码关键字段校验型号、品牌、正整数数量及重要程度；修正的无效输入可后续正常识别。
+与以下历史恢复/重试描述冲突时，本段及 RFQ-003 优先。
+
 ## 职责
 
 Workflow 负责 Scheduler、`inquiry_id`、持久状态、retry、duplicate prevention 和跨模块编排；只消费模块 Public Contract，不复制模块内部业务逻辑。

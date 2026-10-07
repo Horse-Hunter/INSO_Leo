@@ -48,6 +48,7 @@ from src.research.runtime import (
     load_runtime_config,
     probe_loopback_endpoint,
 )
+from src.research.source_contracts import ResearchSource, SourceOutcome
 from src.sheets import WorksheetIdentity
 from src.sheets.google_oauth import (
     build_read_only_google_sheets_service,
@@ -72,6 +73,7 @@ from src.workflow.v12_contracts import (
     ReasonCode,
 )
 from src.workflow.v12_duplicate import InsoDuplicateHistoryChecker
+from src.workflow.v12_faults import FaultScope, V12Fault
 from src.workflow.v12_smtp_transport import QQSMTPConfig, QQSMTPTransport
 from src.workflow.v12_store import (
     V12_SCHEMA_VERSION,
@@ -104,7 +106,7 @@ from .v12_composition import (
     V12ProductionComposition,
     compose_v12_production,
 )
-from .v12_gui import read_v12_order_state
+from .v12_gui import read_startup_interruptions, read_v12_order_state
 
 log = logging.getLogger(__name__)
 
@@ -174,12 +176,16 @@ class _Observer:
                     "CDP browser requires manual handling"
                 ) from exc
         result = self.service.execute(item)
-        remarks = (result.remarks or "").casefold()
-        if any(marker in remarks for marker in self._HUMAN_ACTION_MARKERS):
-            self.manual_review(item.inquiry_id, result.remarks or "")
+        for detail in (result.remarks or "").split("；"):
+            remarks = detail.casefold()
+            if not any(marker in remarks for marker in self._HUMAN_ACTION_MARKERS):
+                continue
+            self.manual_review(item.inquiry_id, detail)
             # Do not let a partial result route into notification/purchase or
             # consume this inquiry. Existing queue release makes it resumable.
-            raise ResearchPreparationError("Research requires session repair")
+            if "ic.net" in remarks or "inso" in remarks or "英索" in remarks:
+                raise V12Fault(FaultScope.GLOBAL_STOP if "inso" in remarks or "英索" in remarks
+                    else FaultScope.V12_PAUSE, "Research requires session repair")
         return result
 
 
@@ -270,7 +276,12 @@ class _LivePurchaseDraftWriter:
                 event.event_type is EventType.SAVE_DISPATCH_ARMED
                 for event in self._store.event_history(command.inquiry_id)
             ):
-                access.close_owned_operation_tab()
+                try:
+                    access.close_owned_operation_tab()
+                except (sqlite3.Error, V12DatabaseError):
+                    raise
+                except Exception as exc:  # noqa: BLE001 - cleanup must not replay a dispatched row
+                    log_step("owned-tab-cleanup", cause=exc)
 
     def _prepare_on_page(self, command, access):
         with access.operation_page() as form:
@@ -312,11 +323,13 @@ class _LivePurchaseDraftWriter:
                     result = self._submit_validated(command, result, writer, form, access, baseline)
                 return result
             finally:
-                if not writer.dismiss_order_surface():
-                    log.warning(
-                        "the INSO 采购临时询价 window did not close after this order"
-                    )
-                    log_step("surface-left-open")
+                try:
+                    if not writer.dismiss_order_surface():
+                        log_step("surface-left-open")
+                except (sqlite3.Error, V12DatabaseError):
+                    raise
+                except Exception as exc:  # noqa: BLE001 - retain the durable submission result
+                    log_step("surface-cleanup", cause=exc)
 
     def _submit_validated(self, command, result, writer, form, access, baseline):
         """Connect the existing draft, durable dispatch and read-only upper query."""
@@ -328,14 +341,19 @@ class _LivePurchaseDraftWriter:
         try:
             writer.save_and_send(self._store, command.inquiry_id, at=submitted_at)
             form.page.wait_for_timeout(5000)
-        except Exception as exc:  # noqa: BLE001 - never retry an irreversible action
+        except Exception as exc:
             log_step("save-and-send-unconfirmed", cause=exc)
+            if isinstance(exc, (sqlite3.Error, V12DatabaseError)):
+                raise
             if self._store.purchase_state(command.inquiry_id) is PurchaseOutcome.AI_RECOGNIZED:
-                # A pre-dispatch failure is held for review too, never retried.
-                self._store.begin_save_dispatch(
-                    command.inquiry_id, at=submitted_at, save_and_send=True,
-                )
-        writer.dismiss_order_surface()
+                return replace(result, outcome=PurchaseOutcome.VALIDATION_FAILED,
+                    reason_code=ReasonCode.CONTROL_NOT_FOUND, completed_at=utc_now())
+        try:
+            writer.dismiss_order_surface()
+        except Exception:  # noqa: BLE001 - after dispatch, never repeat the click
+            outcome = self._store.mark_submit_unconfirmed(command.inquiry_id, at=utc_now())
+            return replace(result, outcome=outcome, completed_at=utc_now(),
+                reason_code=ReasonCode.SAVE_OUTCOME_UNKNOWN)
         target = SaveReconciliationTarget(
             command.mpn, command.brand, command.quantity, submitted_at, baseline,
         )
@@ -355,33 +373,45 @@ class _LivePurchaseDraftWriter:
 class _PreparedDuplicateChecker:
     """Prepare the verified INSO session before the V1.2 duplicate lookup.
 
-    The V1.2 flow checks for a repeat *before* Research, but the shared INSO
-    session is attached only when the Research worker prepares. Without this the
-    first duplicate lookup of a run reaches INSO before that session exists, so
-    every check downgraded to ``DUPLICATE_LOOKUP_UNAVAILABLE``. Preparation is
-    idempotent and gated; a preparation failure falls through so the checker
-    keeps owning its fail-closed downgrade and the Research path still surfaces
-    the manual-handling requirement.
+    Reuse the lower-history reader. Query failures get at most three fresh-tab
+    retries after interruptible waits; authentication failures stop immediately.
     """
 
-    def __init__(self, checker, prepare=None, *, begin_inquiry=None) -> None:
+    def __init__(self, checker, prepare=None, *, begin_inquiry=None, reset=None, wait=None) -> None:
         self._checker = checker
         self._prepare = prepare
         self._begin_inquiry = begin_inquiry
+        self._reset = reset
+        self._wait = wait
 
     def check(self, inquiry_id, mpn, quantity, *, at):
         if self._begin_inquiry is not None:
             self._begin_inquiry(inquiry_id)
-        if self._prepare is not None:
+        for attempt in range(4):
+            if self._begin_inquiry is not None:
+                self._begin_inquiry(inquiry_id)
+            if self._prepare is not None:
+                try:
+                    self._prepare()
+                except BrowserBootstrapError as exc:
+                    raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED") from exc
             try:
-                self._prepare()
+                result = self._checker.check(inquiry_id, mpn, quantity, at=at)
+            except (sqlite3.Error, V12DatabaseError):
+                raise
             except Exception:
-                # The checker owns the fail-closed downgrade.
-                log.warning(
-                    "duplicate-check INSO session preparation failed",
-                    exc_info=True,
-                )
-        return self._checker.check(inquiry_id, mpn, quantity, at=at)
+                if self._wait is None:
+                    raise
+                result = None
+            if self._wait is None or (result is not None and result.outcome.value == "CONFIRMED"):
+                return result
+            if self._reset is not None:
+                self._reset()
+            if attempt == 3:
+                raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_QUERY_RETRIES_EXHAUSTED")
+            if self._wait(180):
+                raise V12Fault(FaultScope.V12_PAUSE, "STOP_REQUESTED")
+        raise AssertionError("bounded query loop exhausted")
 
 
 class ProductionBackend(GuiBackend):
@@ -423,6 +453,7 @@ class ProductionBackend(GuiBackend):
         self._results = ()
         self._history = ()
         self._history_fingerprint = None
+        self._startup_interruptions = {}
         self._store = None
         self._v12_store = None
         self._purchase_completion = None
@@ -452,6 +483,18 @@ class ProductionBackend(GuiBackend):
             tuple(HealthItem(n, "未知", "尚未检查") for n in self._components()),
             "需要人工处理",
         )
+        if self.production_path.is_file():
+            try:
+                startup_cfg = json.loads(self.production_path.read_text(encoding="utf-8"))
+                path = resolve_app_path(Path(startup_cfg.get("sqlite_path", "runtime/production/workflow.sqlite3")), root=self.root)
+                self._startup_interruptions = read_startup_interruptions(path)
+                known = {o.inquiry_id for o in self._history}
+                self._history += tuple(Order(iid, model or "", brand, _integer(quantity, 0),
+                    "待验证", None, None, OrderStatus.ERROR, (), "", "", None, None)
+                    for iid, (_dto, model, brand, quantity) in self._startup_interruptions.items() if iid not in known)
+            except (sqlite3.Error, ValueError):
+                self._state = RunState.GLOBAL_STOP
+                self._append_log("ERROR", "订单台账不可读，已停止共享业务；未恢复任何订单。")
 
     @staticmethod
     def _components():
@@ -568,23 +611,16 @@ class ProductionBackend(GuiBackend):
                 workflow_store=self._store, v12_store=self._v12_store,
                 reader=reader, writer_factory=get_status_writer,
             )
-            # An item can only be RESEARCHING while the process that claimed it
-            # is alive: the claim and the result write share one worker call. A
-            # row still in that state therefore belongs to an interrupted run,
-            # and claim_due (which only takes QUEUED/RETRY_WAIT) would never look
-            # at it again, stalling the inquiry forever. Research only reads, so
-            # releasing the claim is the safe recovery. This runs before any
-            # worker starts.
-            requeued = self._store.requeue_interrupted_research(now=utc_now())
-            if requeued:
-                self._append_log(
-                    "warning",
-                    f"released {requeued} interrupted Research claim(s) back to the queue",
-                )
+            # RFQ-003: historical unfinished rows are quarantined below before
+            # workers start. Never release an old claim for automatic replay.
             research = build_research_service(
                 rc,
                 inso_operation_access=self._inso_operation_access,
                 playwright_provider=self._research_playwright_provider,
+                source_observer=self._observe_source_failure,
+                inso_query=lambda iid, operation: self._run_inso_query(iid, operation, lambda: self._ensure_research_ready(rc, cfg)),
+                source_query=lambda iid, site, operation: self._run_source_query(iid, site, operation,
+                    lambda: self._open_research_session(rc, cfg)),
             )
 
             def prepare_research() -> None:
@@ -608,6 +644,8 @@ class ProductionBackend(GuiBackend):
                         ),
                         prepare_research,
                         begin_inquiry=self._begin_inso_inquiry,
+                        reset=self._close_inso_order_tab,
+                        wait=self._stop.wait,
                     ),
                     research_facts=ResearchExcelFactsProvider(ResearchExcelOutput(self._excel)),
                     purchase_writer=_LivePurchaseDraftWriter(
@@ -635,7 +673,9 @@ class ProductionBackend(GuiBackend):
                     stop_requested=self._immediate_stop_requested,
                     on_result=self._complete_inquiry,
                     inquiry_ids=self._inquiry_scope,
+                    row_wait=self._stop.wait,
                 )
+                self._v12_composition.coordinator.initialize_run_state(now=utc_now())
             else:
                 if cfg.get("v12_release_required") is True:
                     raise V12DatabaseError("V1.2 production adapters are required")
@@ -667,6 +707,7 @@ class ProductionBackend(GuiBackend):
                             self._poll_idle.clear()
                         try:
                             self._last_poll = utc_now()
+                            self._v12_composition.coordinator.begin_poll_cycle()
                             if self._v12_composition is None:
                                 raise V12DatabaseError("V1.2 production composition is unavailable")
                             # V1.2 owns the poll-to-research handoff.  It still
@@ -708,6 +749,8 @@ class ProductionBackend(GuiBackend):
                             return
                         BrowserHandle.drain_deferred_stops()
                         self._refresh()
+                        if self._v12_composition is not None:
+                            self._v12_composition.coordinator.run_notifications(now=utc_now())
                         self._release_idle_browser()
                         self._stop.wait(runtime.worker_idle_interval.total_seconds())
                 except ResearchPreparationError as exc:
@@ -742,7 +785,7 @@ class ProductionBackend(GuiBackend):
                 self._research_cycle_drained = True
                 self._release_idle_browser(force=True)
             with self._lock:
-                if self._state is not RunState.MANUAL_REVIEW:
+                if self._state not in {RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}:
                     self._state = RunState.STOPPED
                 self._stopped = utc_now()
                 self._notify()
@@ -752,6 +795,63 @@ class ProductionBackend(GuiBackend):
             if inquiry not in self._inquiries:
                 self._inquiries.append(inquiry)
 
+    def _observe_source_failure(self, inquiry_id, result):
+        if result.outcome is not SourceOutcome.SOURCE_UNAVAILABLE:
+            return
+        code = next((str(f.value) for f in result.evidence.fields if f.key == "failure_code"), "SOURCE_UNAVAILABLE")
+        login = any(token in code for token in ("LOGIN", "CREDENTIAL", "AUTHENTICATION", "VERIFICATION", "CHALLENGE", "SESSION_STALE"))
+        if result.source is ResearchSource.IC_NET:
+            self._manual_review(inquiry_id, "IC.net：需要人工验证" if login else "IC.net：查询不可用")
+            raise V12Fault(FaultScope.V12_PAUSE, "IC_NET_UNAVAILABLE")
+        if result.source is ResearchSource.INSO and login:
+            self._manual_review(inquiry_id, "INSO：登录不可用")
+            raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED")
+        if login:
+            self._manual_review(inquiry_id, f"{result.source.value}：登录不可用")
+
+    def _run_inso_query(self, inquiry_id, operation, prepare):
+        for attempt in range(4):
+            try:
+                result = operation()
+            except (sqlite3.Error, V12DatabaseError, V12Fault):
+                raise
+            except Exception:  # noqa: BLE001 - read failure must never become an empty history
+                result = None
+            if result is not None:
+                self._observe_source_failure(inquiry_id, result)
+                code = next((str(f.value) for f in result.evidence.fields if f.key == "failure_code"), "SOURCE_UNAVAILABLE")
+                if result.outcome is not SourceOutcome.SOURCE_UNAVAILABLE or "FX" in code:
+                    return result
+            self._close_inso_order_tab()
+            if attempt == 3:
+                raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_QUERY_RETRIES_EXHAUSTED")
+            if self._stop.wait(180):
+                raise V12Fault(FaultScope.V12_PAUSE, "STOP_REQUESTED")
+            self._begin_inso_inquiry(inquiry_id)
+            prepare()
+        raise AssertionError("bounded INSO query loop exhausted")
+
+    def _run_source_query(self, inquiry_id, site, operation, reconnect):
+        """Three bounded shared-CDP recoveries, independent of per-query retry."""
+        for attempt in range(4):
+            result = operation()
+            source_result = result.source_result if site is ResearchSource.IC_NET else result
+            code = next((str(f.value) for f in source_result.evidence.fields if f.key == "failure_code"), "")
+            if not any(token in code for token in ("CDP", "PLAYWRIGHT", "CONTEXT")):
+                return result
+            if attempt == 3:
+                raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_RECONNECT_EXHAUSTED")
+            self._release_idle_browser(force=True)
+            try:
+                self._begin_inso_inquiry(inquiry_id)
+                reconnect()
+            except BrowserBootstrapError as exc:
+                if isinstance(exc.__cause__, InsoAuthenticationError):
+                    raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED") from exc
+                if attempt == 2:
+                    raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_RECONNECT_EXHAUSTED") from exc
+        raise AssertionError("bounded CDP loop exhausted")
+
     def _begin_inso_inquiry(self, inquiry_id):
         self._seen(inquiry_id)
         if self._active_inso_inquiry != inquiry_id:
@@ -760,7 +860,7 @@ class ProductionBackend(GuiBackend):
 
     def _close_inso_order_tab(self):
         session = self._inso_session
-        if session is not None:
+        if session is not None and self._state not in {RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}:
             close = getattr(session, "close_owned_operation_tab", None)
             if callable(close):
                 close()
@@ -769,7 +869,7 @@ class ProductionBackend(GuiBackend):
         self._research_ready = False
         self._active_inso_inquiry = None
         browser = getattr(self._browser_handle, "browser", None)
-        if browser is not None and self._state is not RunState.MANUAL_REVIEW:
+        if browser is not None and self._state not in {RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}:
             park_shared_cdp(browser)
 
     def _complete_inquiry(self, result):
@@ -778,9 +878,9 @@ class ProductionBackend(GuiBackend):
             self._seen(result.inquiry_id)
             settled = self._purchase_completion.process(result, at=utc_now())
             self._v12_composition.coordinator.run_notifications(now=utc_now())
-            if settled is False or not self._v12_store.notifications_settled(result.inquiry_id):
+            if settled is False:
                 with self._lock:
-                    self._state = RunState.MANUAL_REVIEW
+                    self._state = RunState.MODULE_PAUSED
                     self._next_poll_at = None
                     self._drain_due_on_stop.clear()
                     self._stop.set()
@@ -804,7 +904,15 @@ class ProductionBackend(GuiBackend):
             if failure is not None and failure[0] == self._last_poll:
                 raise failure[1]
             try:
-                self._open_research_session(research_config, production_config)
+                for attempt in range(3):
+                    try:
+                        self._open_research_session(research_config, production_config)
+                        break
+                    except BrowserBootstrapError as failure:
+                        if isinstance(failure.__cause__, InsoAuthenticationError):
+                            raise
+                        if attempt == 2:
+                            raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_RECONNECT_EXHAUSTED") from failure
             except BrowserBootstrapError as exc:
                 self._research_acquire_failure = (self._last_poll, exc)
                 raise
@@ -899,6 +1007,18 @@ class ProductionBackend(GuiBackend):
             self._inso_session = None
             self._inso_guard = None
             self._research_ready = False
+        if session is not None and self._state in {
+            RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP,
+        }:
+            # A human-needed page is not a drained order. Detach only the client;
+            # never close its lease/tab, Chrome, context, profile or cookies.
+            disconnect = getattr(handle, "disconnect", None)
+            if callable(disconnect):
+                try:
+                    disconnect()
+                except Exception as exc:  # noqa: BLE001 - preserve the human page even if detach fails
+                    log.warning("Paused client detach failed (%s)", type(exc).__name__)
+            return
         if session is not None:
             try:
                 session.close_after_drain()
@@ -1045,7 +1165,17 @@ class ProductionBackend(GuiBackend):
     def _runtime_error(self, exc):
         log.warning("Production runtime worker failed (%s)", type(exc).__name__)
         with self._lock:
-            self._state = RunState.MANUAL_REVIEW
+            self._state = RunState.MODULE_PAUSED
+            cause = exc
+            while cause is not None:
+                if isinstance(cause, V12Fault):
+                    self._state = (RunState.GLOBAL_STOP if cause.scope is FaultScope.GLOBAL_STOP
+                                   else RunState.MODULE_PAUSED)
+                    break
+                if isinstance(cause, (sqlite3.Error, V12DatabaseError, InsoAuthenticationError, ProductionConfigurationError)) or type(cause).__name__.startswith("GoogleSheets"):
+                    self._state = RunState.GLOBAL_STOP
+                    break
+                cause = cause.__cause__
             self._next_poll_at = None
             self._drain_due_on_stop.clear()
             with self._poll_gate:
@@ -1070,12 +1200,40 @@ class ProductionBackend(GuiBackend):
         )
         self._append_log("ERROR", message)
         self._notify()
+        fault_inquiry = self._active_inso_inquiry or (self._inquiries[-1] if self._inquiries else None)
+        reason = "V12_INTERNAL_FAILURE"
         cause = exc
         while cause is not None:
+            if isinstance(cause, V12Fault):
+                reason = cause.reason
+                break
+            if isinstance(cause, (sqlite3.Error, V12DatabaseError)):
+                reason = "WORKFLOW_LEDGER_UNAVAILABLE"
+                break
             if isinstance(cause, InsoAuthenticationError):
-                self._alert_owner_of_login(stop_reason="INSO：登录不可用")
+                reason = "INSO_AUTHENTICATION_REQUIRED"
+                break
+            if type(cause).__name__.startswith("GoogleSheets"):
+                reason = "GOOGLE_SHEETS_UNAVAILABLE"
                 break
             cause = cause.__cause__
+        if fault_inquiry not in self._manual_inquiries:
+            self._record_fault_alert(fault_inquiry, "FAULT", reason)
+        if self._purchase_completion is None or fault_inquiry is None:
+            self._alert_owner_of_login(stop_reason=self._state.value)
+
+    def _record_fault_alert(self, inquiry_id, phase, reason):
+        if self._purchase_completion is None or inquiry_id is None:
+            return
+        try:
+            self._purchase_completion.notify(inquiry_id, phase, reason, at=utc_now())
+            if self._v12_composition is not None:
+                self._v12_composition.coordinator.run_notifications(now=utc_now())
+        except (sqlite3.Error, V12DatabaseError):
+            self._state = RunState.GLOBAL_STOP
+            self._stop.set()
+            self._append_log("ERROR", "订单台账不可用，无法记录故障通知；全部共享业务已停止。")
+            self._alert_owner_of_login(stop_reason="订单台账不可用；全部共享业务已停止")
 
     def _preparation_error(self, exc: ResearchPreparationError) -> None:
         """Fail closed for CDP setup without consuming a Research retry."""
@@ -1084,9 +1242,16 @@ class ProductionBackend(GuiBackend):
         self._release_idle_browser(force=True)
 
     def _manual_review(self, inquiry_id, remarks: str = ""):
+        lower = remarks.casefold()
+        if not any(site in lower for site in ("inso", "英索", "ic.net")):
+            if self._purchase_completion is not None:
+                self._record_fault_alert(inquiry_id, "SESSION", remarks)
+            else:
+                self._alert_owner_of_login(stop_reason=remarks, inquiry_id=inquiry_id)
+            return
         with self._lock:
             self._manual_inquiries.add(inquiry_id)
-            self._state = RunState.MANUAL_REVIEW
+            self._state = (RunState.GLOBAL_STOP if "inso" in lower or "英索" in lower else RunState.MODULE_PAUSED)
             self._next_poll_at = None
             self._drain_due_on_stop.clear()
             with self._poll_gate:
@@ -1111,7 +1276,11 @@ class ProductionBackend(GuiBackend):
         # The run is already stopped above, so the Owner's screen says what
         # happened before the mail round trip is attempted. The mail is what
         # tells them while they are away from the machine.
-        self._alert_owner_of_login(stop_reason=remarks, inquiry_id=inquiry_id)
+        if self._purchase_completion is not None:
+            self._record_fault_alert(inquiry_id, "SESSION", "INSO_AUTHENTICATION_REQUIRED"
+                if "inso" in lower or "英索" in lower else "IC_NET_UNAVAILABLE")
+        else:
+            self._alert_owner_of_login(stop_reason=remarks, inquiry_id=inquiry_id)
 
     def _alert_owner_of_login(self, *, stop_reason: str, inquiry_id: str | None = None) -> None:
         """Mail the one address that repairs sessions, at most once per run.
@@ -1274,7 +1443,18 @@ class ProductionBackend(GuiBackend):
             state = self._v12_store.business_state(inquiry_id)
         except KeyError:
             return False
-        return state.value in {"PURCHASE_RECORDED", "DUPLICATE_STOPPED", "INVALID_INPUT_SKIPPED"}
+        if state.value == "PURCHASE_EXCEPTION":
+            try:
+                if self._v12_store.purchase_state(inquiry_id) in {
+                    PurchaseOutcome.UNKNOWN_WRITE_OUTCOME, PurchaseOutcome.MANUAL_REVIEW,
+                    PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED,
+                }:
+                    return False
+            except KeyError:
+                pass
+        return state.value in {"PURCHASE_RECORDED", "DUPLICATE_STOPPED", "INVALID_INPUT_SKIPPED",
+            "SUBMIT_UNCONFIRMED", "STATUS_WRITE_PENDING", "RESEARCH_FAILED", "PURCHASE_EXCEPTION",
+            "SOURCE_CHANGED", "HUMAN_COMPLETED"}
 
     def get_current_run_results(self):
         with self._lock:
@@ -1286,7 +1466,8 @@ class ProductionBackend(GuiBackend):
 
     def get_v12_order_state(self, inquiry_id):
         if self._v12_store is None:
-            return None
+            preview = self._startup_interruptions.get(inquiry_id)
+            return preview[0] if preview else None
         try:
             return read_v12_order_state(self._v12_store, inquiry_id)
         except KeyError:

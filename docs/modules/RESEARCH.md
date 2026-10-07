@@ -1,5 +1,15 @@
 # Research 模块
 
+## RFQ-003 来源故障隔离（2026-10-07）
+
+复用 ResearchService 和现有全部 adapters；聚合/价格算法不变。
+生产组合注入 typed source observer / query recovery，不新增第二套调研。
+IC.net 不可用暂停 V1.2；INSO 认证立即全局停止，历史查询失败按 fresh-tab
+初次加三次重试恢复；其他来源超时/登录/验证只记该来源失败，继续其余来源。
+人工登录/验证提醒仍走既有通知账本至 Owner 229。无报价仍保持真实无报价，
+Workflow V1.2 将本行调研失败安全终结而非自动重跑；重要/重复通知规则不变。
+共享 CDP 有限恢复失败必须向上抛 GLOBAL_STOP，不能被可选来源降格吞掉。
+
 ## Public Contract
 
 入口：`ResearchService.execute(ResearchInput) -> ResearchResult`。

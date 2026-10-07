@@ -354,6 +354,23 @@ class WorkflowStateStore:
     def mark_skipped_input(
         self, item_id: int, *, now: datetime | None = None
     ) -> bool:
+        return self._mark_held(item_id, now=now)
+
+    def mark_interrupted(self, item_id: int, *, now: datetime | None = None) -> None:
+        with self._connect() as connection:
+            connection.execute("UPDATE workflow_items SET status='MANUAL_REVIEW', "
+                "next_attempt_at=NULL,last_error='INTERRUPTED',updated_at=? WHERE id=?",
+                (_time_to_text(_as_utc(now or datetime.now(UTC))), item_id))
+
+    def finish_row_failure(self, item_id: int, reason: str, *, now: datetime) -> None:
+        with self._connect() as connection:
+            connection.execute("UPDATE workflow_items SET status='FAILED',next_attempt_at=NULL,"
+                "last_error=?,updated_at=? WHERE id=?",
+                (reason, _time_to_text(_as_utc(now)), item_id))
+
+    def _mark_held(
+        self, item_id: int, *, now: datetime | None = None
+    ) -> bool:
         """Hold a row out of the workflow because its worksheet input is invalid.
 
         The reason is recorded on the item itself, so the row stays visible and

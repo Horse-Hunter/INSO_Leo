@@ -1,5 +1,14 @@
 # Sheets 模块
 
+## RFQ-003 当前状态写回边界（2026-10-07）
+
+复用现有 targeted RAW 单格写及唯一 relocate/re-read；不改身份生成方式。
+采购 SAVED 或 durable 唯一点击已证明的 SUBMIT_UNCONFIRMED 可写发给采购。
+写回失败 STATUS_WRITE_PENDING，本单已闭环且绝不再采购，229 提醒人工更新。
+该单格失败不暂停模块；整表读取/授权/结构不可用仍 GLOBAL_STOP。
+提交前重新校对源型号、品牌、数量、状态；关键冲突终止本单、不覆盖人工数据。
+历史中断行人工改为发给采购后仅同步 HUMAN_COMPLETED，不执行采购。
+
 ## Public Contract
 
 Sheets 执行 Workflow 明确调用的单次读/写操作。对外返回标准化记录和 opaque `record_ref/record_identity`；自身不调度、不 polling。

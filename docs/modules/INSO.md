@@ -1,5 +1,16 @@
 # INSO 模块
 
+## RFQ-003 提交事实与查询恢复（2026-10-07）
+
+沿用唯一 fresh-owned-tab / fixed CDP / lower Stock_VenQuote 查询链。
+原子提交前 arming 不等于点击证明：必须原生唯一 Save-and-Send 调用成功返回后
+记录 SAVE_CLICK_COMPLETED；只有独立 durable click receipt 才允许 SUBMIT_UNCONFIRMED。
+该状态与 SAVED 分开，禁止再次 dispatch；尝试写源状态并提示 Owner 人工确认。
+点击结果未知且无 receipt，不可写发给采购。单独 Save 和 generic send 仍关闭。
+下方历史明确空结果与查询失败分开；查询失败初次加最多三次 fresh-tab 重试，
+180 秒可中断等待；耗尽 GLOBAL_STOP。认证/人工验证立即 GLOBAL_STOP，
+初次登录及中途失效的 human-needed 页均保留，最终清理只断开客户端、不 park。
+
 ## Owner 2026-10-06：提交后确认
 
 上方查询只核对已结算首页第一条：型号匹配、新 ID 与提交前首条不同、记录

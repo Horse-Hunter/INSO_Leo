@@ -195,6 +195,8 @@ class PlaywrightParentProductFields:
 class SaveDispatchStore(Protocol):
     """Narrow Workflow persistence seam; the INSO module owns no state rules."""
 
+    def record_submit_click(self, inquiry_id: str, *, at: datetime) -> None: ...
+
     def begin_save_dispatch(
         self, inquiry_id: str, *, at: datetime, save_and_send: bool = False,
     ) -> None: ...
@@ -1119,6 +1121,7 @@ class InsoPurchaseWriter:
         self._registry.resolve(WriteAction.SAVE_AND_SEND, self._port.candidates())
         store.begin_save_dispatch(inquiry_id, at=at, save_and_send=True)
         self._actions.save_and_send()
+        store.record_submit_click(inquiry_id, at=at)
 
 
 def _require_inso_origin(url: str) -> None:

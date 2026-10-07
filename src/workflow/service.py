@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 import threading
 from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime, timedelta, timezone
@@ -29,6 +30,7 @@ from src.sheets.brand_write import (
 
 from .models import WorkflowStatus, WorkItem
 from .store import DEFAULT_RETRY_DELAYS, WorkflowStateStore
+from .v12_store import V12DatabaseError
 
 UTC = timezone.utc
 _SHEET_POLL_LOCK = threading.Lock()
@@ -140,6 +142,8 @@ class WorkflowWorker:
                     now=now,
                 )
                 return self._store.get(item.id)
+            except (sqlite3.Error, V12DatabaseError):
+                raise
             except Exception as exc:  # noqa: BLE001 - collaborator failures are retryable
                 self._store.schedule_retry(
                     item.id,

@@ -22,6 +22,8 @@ class RunState(str, Enum):
     RUNNING = "运行中"
     STOPPING_AFTER_CYCLE = "本轮结束后停止"
     MANUAL_REVIEW = "需要人工处理"
+    MODULE_PAUSED = "采购模块暂停"
+    GLOBAL_STOP = "全局基础设施故障"
 
 
 class OrderStatus(str, Enum):
@@ -35,6 +37,12 @@ class OrderStatus(str, Enum):
 
 
 class V12BusinessLabel(StrEnum):
+    INTERRUPTED_UNSENT = "处理中断（未发送）"
+    INTERRUPTED_POSSIBLY_SENT = "处理中断（可能已发送，请先核对）"
+    HUMAN_COMPLETED = "人工处理完成"
+    SOURCE_CHANGED = "源订单已变更"
+    SUBMIT_UNCONFIRMED = "已发采购（待确认）"
+    STATUS_WRITE_PENDING = "采购已处理，表格状态待人工更新"
     RESEARCH_EXCEPTION = "调研异常"
     PROCESSING = "处理中"
     DUPLICATE_ORDER = "重复订单"
@@ -52,6 +60,7 @@ class V12AlertCode(StrEnum):
 
 
 class V12ReasonCode(StrEnum):
+    INQUIRY_INPUT_INVALID = "INQUIRY_INPUT_INVALID"
     UNKNOWN_EXTERNAL_FAILURE = "UNKNOWN_EXTERNAL_FAILURE"
     DUPLICATE_ORDER_DETECTED = "DUPLICATE_ORDER_DETECTED"
     DUPLICATE_LOOKUP_UNAVAILABLE = "DUPLICATE_LOOKUP_UNAVAILABLE"
@@ -82,6 +91,8 @@ class V12ReasonCode(StrEnum):
 
 
 class V12EventCode(StrEnum):
+    DATA_QUALITY_INVALID_INPUT = "DATA_QUALITY_INVALID_INPUT"
+    SAVE_CLICK_COMPLETED = "SAVE_CLICK_COMPLETED"
     DUPLICATE_CHECK_STARTED = "DUPLICATE_CHECK_STARTED"
     DUPLICATE_CHECK_CONFIRMED = "DUPLICATE_CHECK_CONFIRMED"
     DUPLICATE_CHECK_FAILED = "DUPLICATE_CHECK_FAILED"

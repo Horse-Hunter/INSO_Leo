@@ -63,8 +63,19 @@ class _FakeInsoSession:
             self.browser_handle.close()
 
 
+class _FakeDuplicateChecker:
+    def __init__(self, _reader):
+        pass
+    def check(self, inquiry_id, mpn, _quantity, *, at):
+        from src.workflow.v12_contracts import DuplicateCheckResult, DuplicateOutcome
+        return DuplicateCheckResult(inquiry_id, DuplicateOutcome.CONFIRMED, mpn, at, repeated=False)
+
+
 @pytest.fixture(autouse=True)
 def fake_inso_session_attachment(monkeypatch):
+    monkeypatch.setattr(launcher, "InsoDuplicateHistoryChecker", _FakeDuplicateChecker)
+    monkeypatch.setattr(QQSMTPTransport, "send_operator_alert", lambda *_a, **_k:
+                        SimpleNamespace(outcome=DeliveryOutcome.SENT))
     monkeypatch.setattr(QQSMTPTransport, "send_one", lambda *_a, **_k:
                         NotificationTransportResult(DeliveryOutcome.SENT, ReasonCode.NOTIFICATION_SENT))
     monkeypatch.setattr(
@@ -103,8 +114,7 @@ def test_login_unavailable_result_requests_manual_handling():
     )
     item = ResearchInput("synthetic-inquiry", "TEST-1", None, 1, None)
 
-    with pytest.raises(launcher.ResearchPreparationError):
-        observer.execute(item)
+    assert observer.execute(item) is result
     assert seen == ["synthetic-inquiry"]
     # The stop reason travels with the verdict so the alert mail can say which
     # site asked for a human instead of only that something did.
@@ -182,7 +192,7 @@ def _write_runtime_configs(tmp_path, *, pending_count=0):
         encoding="utf-8",
     )
     rows = [
-        ["未发", None, "A", None, f"SYNTH-MPN-{index}", None, index]
+        ["未发", None, "A", None, f"SYNTH-MPN-{index}", "Brand", index + 1]
         for index in range(pending_count)
     ]
     return production, research, rows
@@ -266,15 +276,16 @@ def test_production_composition_builds_real_seams_without_network(
             return ResearchResult(
                 item.inquiry_id,
                 ResearchStatus.RETRYABLE_FAILURE,
-                remarks="需要人工验证",
+                remarks="IC.net：需要人工验证",
             )
 
     captured["observer"].service = _ChallengeResearch()
+    backend._purchase_completion = None  # No inquiry was enqueued in this composition-only fixture.
     with pytest.raises(launcher.ResearchPreparationError):
         captured["observer"].execute(ResearchInput("inq-challenge", "MPN", None, 1, None))
     assert "inq-challenge" in backend._inquiries
     assert "inq-challenge" in backend._manual_inquiries
-    assert backend.get_status().state is RunState.MANUAL_REVIEW
+    assert backend.get_status().state is RunState.MODULE_PAUSED
     assert not backend._drain_due_on_stop.is_set()
     backend.shutdown()
 
@@ -360,11 +371,11 @@ def test_browser_bootstrap_failure_enters_manual_review_without_research_retry(
     )
     backend.start()
     assert sheets_called.wait(5)
-    assert _wait_until(lambda: backend.get_status().state is RunState.MANUAL_REVIEW)
+    assert _wait_until(lambda: backend.get_status().state is RunState.GLOBAL_STOP)
     backend._thread.join(timeout=5)
 
     item = backend._store.all_items()[0]
-    assert browser_calls == [True]
+    assert browser_calls == [True, True, True]
     assert research_calls == []
     assert item.status is WorkflowStatus.QUEUED
     assert item.attempt_count == 0
@@ -416,11 +427,11 @@ def test_readiness_failure_closes_owned_browser_without_research_retry(
     )
     backend.start()
     assert sheets_called.wait(5)
-    assert _wait_until(lambda: backend.get_status().state is RunState.MANUAL_REVIEW)
+    assert _wait_until(lambda: backend.get_status().state is RunState.GLOBAL_STOP)
     backend._thread.join(timeout=5)
 
     item = backend._store.all_items()[0]
-    assert browser_calls == [True]
+    assert browser_calls == [True, True, True]
     assert closed.is_set()
     assert research_calls == []
     assert item.status is WorkflowStatus.QUEUED
@@ -480,13 +491,11 @@ def test_stop_after_cycle_drains_every_due_item_from_current_poll(
     backend._thread.join(timeout=5)
 
     assert backend._thread is not None and not backend._thread.is_alive()
-    assert len(calls) == 3
+    assert len(calls) == 1  # Stop interrupts the row cooldown; no second row starts.
     assert callable(research_builder_kwargs[0]["inso_operation_access"])
-    assert len(set(calls)) == 3
+    assert len(set(calls)) == 1
     assert len(backend._store.all_items()) == 3
-    assert all(
-        item.status is WorkflowStatus.COMPLETED for item in backend._store.all_items()
-    )
+    assert sum(item.status is WorkflowStatus.COMPLETED for item in backend._store.all_items()) == 1
     assert backend.get_status().state is RunState.STOPPED
     backend.shutdown()
 
@@ -576,9 +585,10 @@ def test_startup_releases_a_research_claim_left_by_an_interrupted_run(
         "the worker thread never finished starting up"
     )
     assert _wait_until(
-        lambda: backend._store.get(stranded.id).status is WorkflowStatus.COMPLETED,
+        lambda: backend._store.get(stranded.id).status is WorkflowStatus.MANUAL_REVIEW,
         timeout=8,
-    ), "an inquiry stranded by an interrupted run must be picked up again"
+    ), "an interrupted inquiry must be quarantined, never resumed automatically"
+    assert backend._v12_store.business_state(stranded.inquiry_id) is BusinessState.INTERRUPTED_UNSENT
 
     backend.request_stop_after_cycle()
     backend._thread.join(timeout=5)
@@ -615,9 +625,9 @@ def test_missing_runtime_fails_closed_to_manual_review(tmp_path):
     )
     backend.start()
     backend._thread.join(timeout=2)
-    assert backend.get_status().state is RunState.MANUAL_REVIEW
+    assert backend.get_status().state is RunState.MODULE_PAUSED
     assert backend.get_health().overall == "需要人工处理"
-    assert "需要人工处理" in backend.get_logs()[-1].message
+    assert any("需要人工处理" in entry.message for entry in backend.get_logs())
     backend.shutdown()
 
 
@@ -723,9 +733,9 @@ def test_runtime_component_error_stops_poll_and_worker_fail_closed():
     backend = ProductionBackend()
     backend._runtime_error(RuntimeError("synthetic failure"))
     assert backend._stop.is_set()
-    assert backend.get_status().state is RunState.MANUAL_REVIEW
+    assert backend.get_status().state is RunState.MODULE_PAUSED
     assert backend.get_health().overall == "需要人工处理"
-    assert "RuntimeError" in backend.get_logs()[-1].message
+    assert any("RuntimeError" in entry.message for entry in backend.get_logs())
     backend.shutdown()
 
 
@@ -797,7 +807,8 @@ def test_duplicate_check_still_delegates_when_preparation_fails():
         raise RuntimeError("synthetic bootstrap failure")
 
     checker = _PreparedDuplicateChecker(_FakeChecker(), _prepare)
-    assert checker.check("inq_1", "MPN-1", 5, at="now") == "unavailable"
+    with pytest.raises(RuntimeError):
+        checker.check("inq_1", "MPN-1", 5, at="now")
 
 
 def test_duplicate_check_without_a_preparer_is_a_passthrough():
@@ -1341,12 +1352,16 @@ class _RecordingTransport:
 
     sent: ClassVar[list] = []
 
-    def __init__(self, *, config) -> None:
+    def __init__(self, *, config, credentials=None) -> None:
         self.config = config
 
     def send_operator_alert(self, *, recipient, subject, text_body):
         self.sent.append((self.config, recipient, subject, text_body))
         return SimpleNamespace(outcome=DeliveryOutcome.SENT)
+
+    def send_one(self, command, recipient):
+        self.sent.append((self.config, recipient, command.subject, command.text_body))
+        return NotificationTransportResult(DeliveryOutcome.SENT, ReasonCode.NOTIFICATION_SENT)
 
 
 def test_sweep_unexpected_failure_still_publishes_a_popup_report(tmp_path, monkeypatch):
@@ -1387,6 +1402,7 @@ def test_real_poll_seam_stops_batch_on_login_and_resumes_queued_inquiry(tmp_path
     calls = []
     _RecordingTransport.sent = []
     monkeypatch.setattr(launcher, "QQSMTPTransport", _RecordingTransport)
+    monkeypatch.setattr("src.launcher.v12_composition.QQSMTPTransport", _RecordingTransport)
     monkeypatch.setattr(launcher, "build_read_only_google_sheets_service",
                         lambda _path: _SheetsService(rows, Event()))
     monkeypatch.setattr(launcher, "assess_readiness",
@@ -1397,7 +1413,7 @@ def test_real_poll_seam_stops_batch_on_login_and_resumes_queued_inquiry(tmp_path
             calls.append(item.inquiry_id)
             return ResearchResult(item.inquiry_id,
                                   ResearchStatus.SUCCESS if repaired else ResearchStatus.PARTIAL_SUCCESS,
-                                  remarks="" if repaired else "华强：需要人工验证")
+                                  remarks="" if repaired else "IC.net：需要人工验证")
 
     monkeypatch.setattr(launcher, "build_research_service", lambda *_args, **_kwargs: Research())
     backend = ProductionBackend(config_path=config, production_config_path=production,
@@ -1412,12 +1428,13 @@ def test_real_poll_seam_stops_batch_on_login_and_resumes_queued_inquiry(tmp_path
     interrupted_id = calls[0]
     assert backend._v12_store.business_state(interrupted_id) is BusinessState.RESEARCH_RETRY_WAIT
     repaired = True
+    rows.append(["未发", None, "A", None, "NEW-NORMAL-ROW", "Brand", 1])
     backend.start()
-    assert _wait_until(lambda: len(calls) == 4)
+    assert _wait_until(lambda: len(calls) == 2)
     backend.request_stop_after_cycle()
     backend._thread.join(5)
-    assert calls.count(interrupted_id) == 2, "the interrupted inquiry must not be lost"
-    assert len(_RecordingTransport.sent) == 1
+    assert calls.count(interrupted_id) == 1, "the interrupted inquiry must not be resumed"
+    assert len([m for m in _RecordingTransport.sent if "异常" in m[2]]) == 1
     backend.shutdown()
 
 
@@ -1432,8 +1449,8 @@ def test_row_completion_stops_next_row_until_submit_status_and_mail_settle(tmp_p
         run_notifications=lambda **_k: calls.append("notifications")))
     backend._inso_session = SimpleNamespace(close_owned_operation_tab=lambda: calls.append("close"))
     backend._complete_inquiry(SimpleNamespace(inquiry_id="synthetic-inquiry"))
-    assert calls == ["notifications", "close"]
-    assert backend._immediate_stop_requested() == (not settled or not mail_settled)
+    assert calls == (["notifications", "close"] if settled else ["notifications"])
+    assert backend._immediate_stop_requested() == (not settled)
     assert backend._active_inso_inquiry is None and backend._inso_session is None
 
 
@@ -1457,7 +1474,7 @@ def test_preparation_authentication_failure_stops_and_alerts_only_owner(tmp_path
         failure.__cause__ = auth
     backend._runtime_error(failure)
     assert backend._stop.is_set()
-    assert backend.get_status().state is RunState.MANUAL_REVIEW
+    assert backend.get_status().state is RunState.GLOBAL_STOP
     assert len(_RecordingTransport.sent) == 1
     assert _RecordingTransport.sent[0][1].address == "linan229@qq.com"
     backend.shutdown()
@@ -1478,7 +1495,7 @@ def test_a_run_stopped_by_a_login_problem_mails_only_the_one_address(
 
     backend._manual_review("inq-1", "立创：需要人工验证")
 
-    assert backend.get_status().state is RunState.MANUAL_REVIEW
+    assert backend.get_status().state is RunState.STOPPED  # Other Research sites do not stop V1.2.
     assert len(_RecordingTransport.sent) == 1
     config, recipient, subject, body = _RecordingTransport.sent[0]
     assert recipient.address == "linan229@qq.com"
@@ -1532,7 +1549,7 @@ def test_a_mail_that_cannot_be_sent_never_changes_what_the_run_did(
 
     backend._manual_review("inq-1", "")
 
-    assert backend.get_status().state is RunState.MANUAL_REVIEW
+    assert backend.get_status().state is RunState.STOPPED
     assert any("登录提醒邮件" in entry.message for entry in backend.get_logs())
     backend.shutdown()
 

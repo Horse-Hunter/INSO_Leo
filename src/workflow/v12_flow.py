@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import html
+import sqlite3
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
 from typing import Protocol
@@ -20,6 +21,8 @@ from src.sheets import (
     query_pending_records,
     usable_brand,
 )
+from src.sheets.brand_write import SheetRecordConflict
+from src.sheets.purchase_status import current_purchase_status
 
 from .service import ResearchExecutor, ResearchPreparationError, WorkflowWorker
 from .store import WorkflowStateStore
@@ -36,7 +39,9 @@ from .v12_contracts import (
     PurchaseOutcome,
     ReasonCode,
     WorkflowEvent,
+    interrupted_business_state,
 )
+from .v12_faults import FaultScope, V12Fault
 from .v12_notifications import V12NotificationWorker
 from .v12_rules import (
     PostResearchRoute,
@@ -47,7 +52,7 @@ from .v12_rules import (
     should_send_important_order_notification,
     validate_ai_recognition,
 )
-from .v12_store import V12Store
+from .v12_store import V12DatabaseError, V12Store
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +139,7 @@ class V12WorkflowCoordinator:
         stop_requested: Callable[[], bool] | None = None,
         on_result: Callable[[V12FlowResult], None] | None = None,
         inquiry_ids: frozenset[str] | None = None,
+        row_wait: Callable[[float], bool] | None = None,
     ) -> None:
         self._workflow_store = workflow_store
         self._v12_store = v12_store
@@ -146,11 +152,42 @@ class V12WorkflowCoordinator:
         self._stop_requested = stop_requested or (lambda: False)
         self._on_result = on_result
         self._inquiry_ids = inquiry_ids
+        self._row_wait = row_wait or (lambda _seconds: False)
+        self._row_closed = False
         self._records: dict[str, PendingSheetRecord] = {}
         self._duplicate_results: dict[str, DuplicateCheckResult] = {}
         self._research_results: dict[str, ResearchResult] = {}
         self._last_inquiry_id: str | None = None
+        self._current_reader = None
 
+    def begin_poll_cycle(self) -> None:
+        self._row_closed = False
+
+    def _before_next_row(self) -> bool:
+        if self._row_closed and self._row_wait(180):
+            return False
+        self._row_closed = False
+        return not self._stop_requested()
+
+    def initialize_run_state(self, *, now: datetime) -> None:
+        """Quarantine prior unfinished work; never automatically resume it."""
+        for item in self._workflow_store.all_items():
+            try:
+                state = self._v12_store.business_state(item.inquiry_id)
+            except KeyError:
+                state = None
+            events = self._v12_store.event_history(item.inquiry_id)
+            armed = any(e.event_type is EventType.SAVE_DISPATCH_ARMED for e in events)
+            try:
+                purchase = self._v12_store.purchase_state(item.inquiry_id)
+            except KeyError:
+                purchase = None
+            interrupted = interrupted_business_state(state, purchase, armed)
+            if interrupted is None or interrupted is state:
+                continue
+            self._workflow_store.mark_interrupted(item.id, now=now)
+            self._set_state(item.inquiry_id, interrupted,
+                EventType.HUMAN_RESOLUTION_RECORDED, now)
     def run_notifications(self, *, now: datetime) -> int:
         """Deliver due commands independently of the purchase workflow."""
 
@@ -165,7 +202,32 @@ class V12WorkflowCoordinator:
     ) -> tuple[V12FlowResult, ...]:
         """Read pending rows through the existing Sheets schema and process fakes."""
 
-        return self.process_pending(query_pending_records(reader, worksheet), now=now)
+        self._current_reader = reader
+        records = query_pending_records(reader, worksheet)
+        for item in self._workflow_store.all_items():
+            if item.record_identity.worksheet != worksheet:
+                continue
+            try:
+                state = self._v12_store.business_state(item.inquiry_id)
+            except KeyError:
+                continue
+            if state in {BusinessState.INTERRUPTED_UNSENT, BusinessState.INTERRUPTED_POSSIBLY_SENT}:
+                try:
+                    if current_purchase_status(reader, item.record_identity) == "发给采购":
+                        self._set_state(item.inquiry_id, BusinessState.HUMAN_COMPLETED,
+                            EventType.HUMAN_RESOLUTION_RECORDED, now)
+                except SheetRecordConflict:
+                    pass
+        # Row movement preserves the existing inquiry_id, never creates another purchase.
+        existing = self._workflow_store.all_items()
+        normalized = []
+        for record in records:
+            matches = [i for i in existing if i.record_identity.worksheet == worksheet
+                and i.record_identity.identifying_snapshot == record.record_identity.identifying_snapshot]
+            if len(matches) == 1:
+                record = replace(record, record_identity=matches[0].record_identity)
+            normalized.append(record)
+        return self.process_pending(tuple(normalized), now=now)
 
     def process_pending(
         self, records: tuple[PendingSheetRecord, ...], *, now: datetime
@@ -175,6 +237,7 @@ class V12WorkflowCoordinator:
             records = tuple(record for record in records
                             if self._workflow_store.inquiry_id_for(record.record_identity) in self._inquiry_ids)
         skipped: list[V12FlowResult] = []
+        held: dict[str, str | None] = {}
         # Owner rule: a row whose quantity cell is not a number (a column
         # legend, a blank, a textual placeholder) is not an inquiry. It is held
         # out of the workflow with its own recorded reason instead of being
@@ -187,7 +250,15 @@ class V12WorkflowCoordinator:
         for record in records:
             inquiry_id = self._workflow_store.inquiry_id_for(record.record_identity)
             enqueued_now = self._workflow_store.enqueue(record, now=now)
-            if _quantity_is_numeric(record.quantity):
+            if not enqueued_now and not self._is_skipped(inquiry_id):
+                existing = self._workflow_store.get_by_inquiry_id(inquiry_id)
+                if existing.record_identity.identifying_snapshot != record.record_identity.identifying_snapshot:
+                    self._workflow_store.mark_interrupted(existing.id, now=now)
+                    self._set_state(inquiry_id, BusinessState.SOURCE_CHANGED, EventType.SECURITY_CHECK_FAILED, now)
+                    held[inquiry_id] = "SOURCE_CHANGED"
+                    continue
+            if (_quantity(record.quantity) is not None and isinstance(record.model, str)
+                    and record.model.strip() and usable_brand(record.brand) and _tier(record.importance_raw)):
                 if not enqueued_now and self._is_skipped(inquiry_id):
                     self._resume_after_input_fix(inquiry_id, record, now=now)
                 if enqueued_now:
@@ -196,11 +267,11 @@ class V12WorkflowCoordinator:
             item = self._workflow_store.get_by_inquiry_id(inquiry_id)
             demoted = self._workflow_store.mark_skipped_input(item.id, now=now)
             if demoted and not self._is_skipped(inquiry_id):
-                self._v12_store.skip_invalid_quantity(inquiry_id, at=now)
-            if self._is_skipped(inquiry_id):
-                skipped.append(
-                    self._result(inquiry_id, waiting_reason="INVALID_QUANTITY_SKIPPED")
-                )
+                self._v12_store.skip_invalid_quantity(inquiry_id, at=now,
+                    reason_code=(ReasonCode.INQUIRY_QUANTITY_INVALID if _quantity(record.quantity) is None
+                        else ReasonCode.INQUIRY_INPUT_INVALID))
+            if demoted and self._is_skipped(inquiry_id):
+                held[inquiry_id] = "INVALID_QUANTITY_SKIPPED"
 
         by_row = {
             _row_key(item.record_identity): item
@@ -239,11 +310,39 @@ class V12WorkflowCoordinator:
             item.inquiry_id
             for item in by_row.values()
             if item.status.value in {"QUEUED", "RETRY_WAIT"}
+            and item.inquiry_id in {self._workflow_store.inquiry_id_for(r.record_identity) for r in records}
             and not self._is_skipped(item.inquiry_id)
+            and self._v12_store.business_state(item.inquiry_id) not in {
+                BusinessState.INTERRUPTED_UNSENT, BusinessState.INTERRUPTED_POSSIBLY_SENT,
+                BusinessState.HUMAN_COMPLETED, BusinessState.SOURCE_CHANGED,
+            }
             and (self._inquiry_ids is None or item.inquiry_id in self._inquiry_ids)
         }
+        remaining.update(held)
+        ordered = list(dict.fromkeys(self._workflow_store.inquiry_id_for(r.record_identity)
+            for r in sorted(records, key=lambda r: r.row_position)))
         while remaining and not self._stop_requested():
-            item = worker.process_due_one(now=now, inquiry_ids=self._inquiry_ids)
+            if not ordered:
+                break
+            selected = ordered.pop(0)
+            if selected not in remaining:
+                continue
+            if selected in held:
+                if not self._before_next_row():
+                    break
+                remaining.remove(selected)
+                results.append(self._result(selected, waiting_reason=held[selected]))
+                continue
+            due = [i for i in self._workflow_store.all_items() if i.inquiry_id in remaining
+                   and i.inquiry_id == selected
+                   and i.status.value in {"QUEUED", "RETRY_WAIT"}
+                   and i.next_attempt_at is not None and i.next_attempt_at <= now]
+            if not due:
+                remaining.remove(selected)
+                continue
+            if not self._before_next_row():
+                break
+            item = worker.process_due_one(now=now, inquiry_ids=frozenset({selected}))
             if item is None:
                 break
             inquiry_id = wrapped_research.last_inquiry_id
@@ -252,6 +351,13 @@ class V12WorkflowCoordinator:
             remaining.remove(inquiry_id)
             research_result = self._research_results.get(inquiry_id)
             if item.status.value in {"RETRY_WAIT", "RESEARCHING", "QUEUED"}:
+                if research_result is not None and research_result.status is ResearchStatus.RETRYABLE_FAILURE:
+                    self._notify_a_if_nonduplicate(inquiry_id, research_result, now)
+                    self._workflow_store.finish_row_failure(item.id,
+                        research_result.reason_code.value if research_result.reason_code else "RESEARCH_SOURCE_FAILURE", now=now)
+                    self._set_state(inquiry_id, BusinessState.RESEARCH_FAILED, EventType.RESEARCH_FAILED, now)
+                    results.append(self._result(inquiry_id, waiting_reason="RESEARCH_NOT_SUCCESSFUL"))
+                    continue
                 if research_result is not None:
                     self._notify_a_if_nonduplicate(inquiry_id, research_result, now)
                 self._set_state(
@@ -282,6 +388,8 @@ class V12WorkflowCoordinator:
             ):
                 continue
             try:
+                if not self._before_next_row():
+                    break
                 confirmed = self._duplicate_checker.check(
                     item.inquiry_id, item.mpn, int(item.quantity), at=now
                 )
@@ -369,6 +477,10 @@ class V12WorkflowCoordinator:
                 or result.inquiry_id != inquiry_id
             ):
                 raise ValueError("duplicate result identity is invalid")
+        except V12Fault:
+            raise
+        except (sqlite3.Error, V12DatabaseError) as exc:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from exc
         except Exception:  # noqa: BLE001 - no lookup error becomes a negative result
             result = DuplicateCheckResult(
                 inquiry_id,
@@ -461,6 +573,13 @@ class V12WorkflowCoordinator:
         quantity = _quantity(record.quantity)
         mpn = record.model.strip() if isinstance(record.model, str) else ""
         brand = research_result.resolved_brand or usable_brand(record.brand) or ""
+        if self._current_reader is not None:
+            try:
+                if current_purchase_status(self._current_reader, record.record_identity) != "未发":
+                    raise SheetRecordConflict("source status changed")
+            except SheetRecordConflict:
+                self._set_state(inquiry_id, BusinessState.SOURCE_CHANGED, EventType.SECURITY_CHECK_FAILED, now)
+                return self._result(inquiry_id, waiting_reason="SOURCE_CHANGED")
         if quantity is None or not mpn or not brand.strip():
             self._set_state(inquiry_id, BusinessState.PURCHASE_EXCEPTION, EventType.SECURITY_CHECK_FAILED, now, ReasonCode.AI_RECOGNITION_MISMATCH)
             return self._result(inquiry_id, route=route, waiting_reason="PURCHASE_INPUT_INVALID")
@@ -486,7 +605,15 @@ class V12WorkflowCoordinator:
         self._v12_store.set_purchase_state(
             inquiry_id, command_id, PurchaseOutcome.PRE_SAVE_READY, at=now
         )
-        result = self._purchase_writer.prepare(command)
+        try:
+            result = self._purchase_writer.prepare(command)
+        except (V12Fault, sqlite3.Error, V12DatabaseError):
+            raise
+        except Exception:
+            if self._v12_store.purchase_state(inquiry_id) is not PurchaseOutcome.PRE_SAVE_READY:
+                raise
+            result = PurchaseDraftResult(command_id, PurchaseOutcome.VALIDATION_FAILED, now,
+                reason_code=ReasonCode.CONTROL_NOT_FOUND)
         if result.command_id != command_id or result.outcome not in {
             PurchaseOutcome.AI_RECOGNIZED,
             PurchaseOutcome.VALIDATION_FAILED,
@@ -494,6 +621,7 @@ class V12WorkflowCoordinator:
             PurchaseOutcome.UNKNOWN_WRITE_OUTCOME,
             PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED,
             PurchaseOutcome.MANUAL_REVIEW,
+            PurchaseOutcome.SUBMIT_UNCONFIRMED,
         }:
             result = PurchaseDraftResult(
                 command_id, PurchaseOutcome.VALIDATION_FAILED, now,
@@ -511,6 +639,9 @@ class V12WorkflowCoordinator:
                 inquiry_id, BusinessState.PURCHASE_RECORDED,
                 EventType.PURCHASE_DATA_SAVED, result.completed_at,
             )
+        elif result.outcome is PurchaseOutcome.SUBMIT_UNCONFIRMED:
+            self._set_state(inquiry_id, BusinessState.SUBMIT_UNCONFIRMED,
+                EventType.SAVE_OUTCOME_UNKNOWN, result.completed_at, ReasonCode.SAVE_OUTCOME_UNKNOWN)
         elif result.outcome not in {PurchaseOutcome.AI_RECOGNIZED, PurchaseOutcome.VALIDATION_FAILED}:
             self._set_state(
                 inquiry_id, BusinessState.PURCHASE_EXCEPTION,
@@ -656,6 +787,7 @@ class V12WorkflowCoordinator:
         )
         if self._on_result is not None:
             self._on_result(result)
+        self._row_closed = waiting_reason not in {"RESEARCH_RETRY_WAIT", "DUPLICATE_CONFIRMATION_REQUIRED"}
         return result
 
 

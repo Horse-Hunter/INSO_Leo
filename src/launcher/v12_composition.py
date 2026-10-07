@@ -518,6 +518,7 @@ def compose_v12_production(
     stop_requested=None,
     on_result=None,
     inquiry_ids=None,
+    row_wait=None,
 ) -> V12ProductionComposition:
     """Build the real seams only when every required adapter is explicit."""
 
@@ -536,6 +537,7 @@ def compose_v12_production(
         stop_requested=stop_requested,
         on_result=on_result,
         inquiry_ids=inquiry_ids,
+        row_wait=row_wait,
     )
     return V12ProductionComposition(
         coordinator,

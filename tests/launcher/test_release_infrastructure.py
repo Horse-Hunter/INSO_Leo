@@ -680,12 +680,14 @@ def test_backend_closes_only_owned_browser_after_runtime_thread_exits(tmp_path, 
 
     # Reuse the deterministic test config seam from the launcher suite.
     from tests.launcher.test_backend import (
+        _FakeDuplicateChecker,
         _FakeInsoSession,
         _SheetsService,
         _write_runtime_configs,
     )
 
     production, research, rows = _write_runtime_configs(tmp_path, pending_count=1)
+    monkeypatch.setattr(backend_module, "InsoDuplicateHistoryChecker", _FakeDuplicateChecker)
     poll_called = threading.Event()
     browser_acquired = threading.Event()
     closed = []

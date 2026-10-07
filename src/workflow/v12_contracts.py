@@ -13,6 +13,7 @@ from enum import StrEnum
 
 
 class ReasonCode(StrEnum):
+    INQUIRY_INPUT_INVALID = "INQUIRY_INPUT_INVALID"
     UNKNOWN_EXTERNAL_FAILURE = "UNKNOWN_EXTERNAL_FAILURE"
     DUPLICATE_ORDER_DETECTED = "DUPLICATE_ORDER_DETECTED"
     DUPLICATE_LOOKUP_UNAVAILABLE = "DUPLICATE_LOOKUP_UNAVAILABLE"
@@ -65,6 +66,7 @@ class DeliveryOutcome(StrEnum):
 
 
 class PurchaseOutcome(StrEnum):
+    SUBMIT_UNCONFIRMED = "SUBMIT_UNCONFIRMED"
     PRE_SAVE_READY = "PRE_SAVE_READY"
     AI_RECOGNIZED = "AI_RECOGNIZED"
     VALIDATION_FAILED = "VALIDATION_FAILED"
@@ -83,6 +85,12 @@ class ReconciliationOutcome(StrEnum):
 
 
 class BusinessState(StrEnum):
+    INTERRUPTED_UNSENT = "INTERRUPTED_UNSENT"
+    INTERRUPTED_POSSIBLY_SENT = "INTERRUPTED_POSSIBLY_SENT"
+    HUMAN_COMPLETED = "HUMAN_COMPLETED"
+    SOURCE_CHANGED = "SOURCE_CHANGED"
+    SUBMIT_UNCONFIRMED = "SUBMIT_UNCONFIRMED"
+    STATUS_WRITE_PENDING = "STATUS_WRITE_PENDING"
     QUEUED = "QUEUED"
     DUPLICATE_CHECK_PENDING = "DUPLICATE_CHECK_PENDING"
     DUPLICATE_CHECKING = "DUPLICATE_CHECKING"
@@ -102,12 +110,47 @@ class BusinessState(StrEnum):
 
 
 class BusinessLabel(StrEnum):
+    INTERRUPTED_UNSENT = "处理中断（未发送）"
+    INTERRUPTED_POSSIBLY_SENT = "处理中断（可能已发送，请先核对）"
+    HUMAN_COMPLETED = "人工处理完成"
+    SOURCE_CHANGED = "源订单已变更"
+    SUBMIT_UNCONFIRMED = "已发采购（待确认）"
+    STATUS_WRITE_PENDING = "采购已处理，表格状态待人工更新"
     PROCESSING = "处理中"
     RESEARCH_EXCEPTION = "调研异常"
     DUPLICATE_ORDER = "重复订单"
     PURCHASE_SENT = "已发采购单"
     PURCHASE_EXCEPTION = "采购录单异常"
     SKIPPED_INVALID_INPUT = "已跳过（数据异常）"
+
+
+CLOSED_BUSINESS_STATES = frozenset({
+    BusinessState.PURCHASE_RECORDED, BusinessState.SUBMIT_UNCONFIRMED,
+    BusinessState.STATUS_WRITE_PENDING, BusinessState.DUPLICATE_STOPPED,
+    BusinessState.RESEARCH_FAILED, BusinessState.PURCHASE_EXCEPTION,
+    BusinessState.INVALID_INPUT_SKIPPED, BusinessState.SOURCE_CHANGED,
+    BusinessState.HUMAN_COMPLETED,
+})
+
+
+def interrupted_business_state(state: BusinessState | None, purchase: PurchaseOutcome | None,
+                               armed: bool) -> BusinessState | None:
+    possible = armed or purchase in {PurchaseOutcome.UNKNOWN_WRITE_OUTCOME,
+        PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED, PurchaseOutcome.MANUAL_REVIEW,
+        PurchaseOutcome.SAVED, PurchaseOutcome.SUBMIT_UNCONFIRMED}
+    if state in CLOSED_BUSINESS_STATES and not (state is BusinessState.PURCHASE_EXCEPTION and possible):
+        return None
+    if state in {BusinessState.INTERRUPTED_UNSENT, BusinessState.INTERRUPTED_POSSIBLY_SENT}:
+        return state
+    return BusinessState.INTERRUPTED_POSSIBLY_SENT if possible else BusinessState.INTERRUPTED_UNSENT
+
+
+def business_label_for_state(state: BusinessState) -> BusinessLabel:
+    renamed = {BusinessState.DUPLICATE_STOPPED: "DUPLICATE_ORDER",
+        BusinessState.PURCHASE_RECORDED: "PURCHASE_SENT",
+        BusinessState.INVALID_INPUT_SKIPPED: "SKIPPED_INVALID_INPUT",
+        BusinessState.RESEARCH_FAILED: "RESEARCH_EXCEPTION"}
+    return BusinessLabel.__members__.get(renamed.get(state, state.name), BusinessLabel.PROCESSING)
 
 
 class AlertType(StrEnum):
@@ -119,6 +162,8 @@ class AlertType(StrEnum):
 
 
 class EventType(StrEnum):
+    DATA_QUALITY_INVALID_INPUT = "DATA_QUALITY_INVALID_INPUT"
+    SAVE_CLICK_COMPLETED = "SAVE_CLICK_COMPLETED"
     DUPLICATE_CHECK_STARTED = "DUPLICATE_CHECK_STARTED"
     DUPLICATE_CHECK_CONFIRMED = "DUPLICATE_CHECK_CONFIRMED"
     DUPLICATE_CHECK_FAILED = "DUPLICATE_CHECK_FAILED"

@@ -37,6 +37,7 @@ from .v12_contracts import (
     ReconciliationOutcome,
     ReconciliationResult,
     WorkflowEvent,
+    business_label_for_state,
 )
 from .v12_evidence import validate_evidence_reference
 
@@ -302,7 +303,8 @@ class V12Store:
                 at=at,
             )
 
-    def skip_invalid_quantity(self, inquiry_id: str, *, at: datetime) -> None:
+    def skip_invalid_quantity(self, inquiry_id: str, *, at: datetime,
+                              reason_code: ReasonCode = ReasonCode.INQUIRY_QUANTITY_INVALID) -> None:
         """Skip a row whose quantity is not a positive integer, with a reason.
 
         A sheet row carrying a column legend or a blank quantity cell is not a
@@ -314,10 +316,11 @@ class V12Store:
         event = WorkflowEvent(
             event_id=_new_id("evt"),
             inquiry_id=inquiry_id,
-            event_type=EventType.DATA_QUALITY_INVALID_QUANTITY,
+            event_type=(EventType.DATA_QUALITY_INVALID_QUANTITY if reason_code is ReasonCode.INQUIRY_QUANTITY_INVALID
+                        else EventType.DATA_QUALITY_INVALID_INPUT),
             occurred_at=at,
             source_module="sheets",
-            reason_code=ReasonCode.INQUIRY_QUANTITY_INVALID,
+            reason_code=reason_code,
         )
         with _transaction(self.database_path) as connection:
             connection.execute(
@@ -333,7 +336,7 @@ class V12Store:
                 alert_id=_new_id("alt"),
                 inquiry_id=inquiry_id,
                 alert_type=AlertType.DATA_QUALITY,
-                reason_code=ReasonCode.INQUIRY_QUANTITY_INVALID,
+                reason_code=reason_code,
                 event_id=event.event_id,
                 at=at,
                 deduplicate_by_type=True,
@@ -872,6 +875,39 @@ class V12Store:
                 scope_key="save-outcome",
             )
 
+    def record_submit_click(self, inquiry_id: str, *, at: datetime) -> None:
+        """Receipt only AFTER native click returns; arming alone is not proof."""
+        with _transaction(self.database_path) as connection:
+            row = connection.execute(
+                "SELECT outcome FROM workflow_v12_purchase_state WHERE inquiry_id=?", (inquiry_id,),
+            ).fetchone()
+            armed = connection.execute(
+                "SELECT COUNT(*) FROM workflow_v12_events WHERE inquiry_id=? AND event_type='SAVE_DISPATCH_ARMED'",
+                (inquiry_id,),
+            ).fetchone()[0]
+            clicked = connection.execute(
+                "SELECT COUNT(*) FROM workflow_v12_events WHERE inquiry_id=? AND event_type='SAVE_CLICK_COMPLETED'",
+                (inquiry_id,),
+            ).fetchone()[0]
+            if row is None or row[0] != PurchaseOutcome.UNKNOWN_WRITE_OUTCOME.value or armed != 1 or clicked:
+                raise V12DatabaseError("unique durable dispatch is required for a click receipt")
+            _insert_event(connection, WorkflowEvent(_new_id("evt"), inquiry_id,
+                EventType.SAVE_CLICK_COMPLETED, at, "inso"))
+
+    def submit_click_proven(self, inquiry_id: str) -> bool:
+        history = self.event_history(inquiry_id)
+        return (sum(e.event_type is EventType.SAVE_DISPATCH_ARMED for e in history) == 1
+                and sum(e.event_type is EventType.SAVE_CLICK_COMPLETED for e in history) == 1)
+
+    def mark_submit_unconfirmed(self, inquiry_id: str, *, at: datetime) -> PurchaseOutcome:
+        if not self.submit_click_proven(inquiry_id):
+            return self.purchase_state(inquiry_id)
+        with _transaction(self.database_path) as connection:
+            connection.execute("UPDATE workflow_v12_purchase_state SET outcome=?,updated_at=? "
+                "WHERE inquiry_id=? AND outcome IN ('UNKNOWN_WRITE_OUTCOME','READ_ONLY_RECONCILIATION_REQUIRED','MANUAL_REVIEW')",
+                (PurchaseOutcome.SUBMIT_UNCONFIRMED.value, _time_text(at), inquiry_id))
+        return self.purchase_state(inquiry_id)
+
     def reconcile_unknown_save(
         self,
         inquiry_id: str,
@@ -939,6 +975,8 @@ class V12Store:
                 if result.outcome is ReconciliationOutcome.AMBIGUOUS
                 else ReasonCode.RECONCILIATION_UNREADABLE
             )
+        if target is not PurchaseOutcome.SAVED and self.submit_click_proven(inquiry_id):
+            target = PurchaseOutcome.SUBMIT_UNCONFIRMED
         event = WorkflowEvent(
             _new_id("evt"), inquiry_id, event_type, result.reconciled_at,
             "inso", reason_code=reason,
@@ -1506,13 +1544,7 @@ def _safe_ref(value: str | None) -> str | None:
 
 
 def _business_label(state: BusinessState) -> BusinessLabel:
-    return {
-        BusinessState.DUPLICATE_STOPPED: BusinessLabel.DUPLICATE_ORDER,
-        BusinessState.PURCHASE_EXCEPTION: BusinessLabel.PURCHASE_EXCEPTION,
-        BusinessState.RESEARCH_FAILED: BusinessLabel.RESEARCH_EXCEPTION,
-        BusinessState.PURCHASE_RECORDED: BusinessLabel.PURCHASE_SENT,
-        BusinessState.INVALID_INPUT_SKIPPED: BusinessLabel.SKIPPED_INVALID_INPUT,
-    }.get(state, BusinessLabel.PROCESSING)
+    return business_label_for_state(state)
 
 
 def _fsync_file(path: Path) -> None:

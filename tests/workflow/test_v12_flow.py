@@ -213,7 +213,7 @@ def test_a_notice_survives_research_retry_but_requires_confirmed_nonduplicate(
         tmp_path, duplicate_failure=duplicate_failure, notification_transport=transport)
     research.execute = lambda item: ResearchResult(item.inquiry_id, ResearchStatus.RETRYABLE_FAILURE)
     result = flow.poll_and_process(FakeSheetsReader(tier="A"), SHEET, now=NOW)
-    assert result[0].waiting_reason == "RESEARCH_RETRY_WAIT"
+    assert result[0].waiting_reason == "RESEARCH_NOT_SUCCESSFUL"
     worker.run_due(now=NOW)
     assert len(transport.calls) == (0 if duplicate_failure else 1)
 
@@ -378,7 +378,7 @@ def test_duplicate_recovery_does_not_route_changed_or_removed_pending_row(tmp_pa
     flow.poll_and_process(FakeSheetsReader(quantity=999), SHEET, now=NOW + timedelta(minutes=30))
     assert len(research.inputs) == 1
     assert not writer.commands
-    assert store.duplicate_confirmation_pending(pending.inquiry_id)
+    assert store.business_state(pending.inquiry_id) is BusinessState.SOURCE_CHANGED
     assert len(workflow.all_items()) == 1
 
 
@@ -575,7 +575,7 @@ def test_a_placeholder_sheet_brand_is_asked_for_rather_than_trusted(
 
     results = flow.poll_and_process(FakeSheetsReader(brand="UNKNOWN"), SHEET, now=NOW)
 
-    assert [item.brand for item in unresolved.inputs] == [None]
+    assert unresolved.inputs == []  # RFQ-003: unusable brand is a row data error.
     assert writer.commands == []
-    assert results[0].business_state is BusinessState.PURCHASE_EXCEPTION
-    assert results[0].waiting_reason == "PURCHASE_INPUT_INVALID"
+    assert results[0].business_state is BusinessState.INVALID_INPUT_SKIPPED
+    assert results[0].waiting_reason == "INVALID_QUANTITY_SKIPPED"

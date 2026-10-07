@@ -267,7 +267,7 @@ def test_fresh_manual_verification_page_survives_backend_cleanup(tmp_path, monke
     assert error.value.__cause__.reason_code == "MANUAL_VERIFICATION_REQUIRED"
     assert not page.closed and page.clicks == 0
     backend._runtime_error(error.value)
-    assert backend.get_status().state is RunState.MANUAL_REVIEW
+    assert backend.get_status().state is RunState.GLOBAL_STOP
     assert backend._immediate_stop_requested()
     backend._close_inso_order_tab()
     # Also exercise the existing MANUAL_REVIEW guard with a retained attachment.

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Protocol
 
 from .aggregation import (
@@ -15,7 +17,9 @@ from .contracts import ResearchInput, ResearchReasonCode, ResearchResult, Resear
 from .excel_output import ExcelOutputError, ResearchExcelOutput
 from .icnet import IcNetResult
 from .source_contracts import (
+    EvidenceField,
     ResearchSource,
+    SourceEvidence,
     SourceOutcome,
     SourceResult,
     format_source_result,
@@ -51,22 +55,48 @@ class ResearchService:
         bom_ai: PriceSearcher,
         inso: PriceSearcher,
         output: ResearchExcelOutput,
+        source_observer: Callable | None = None,
+        inso_query: Callable | None = None,
+        source_query: Callable | None = None,
     ) -> None:
         self._icnet = icnet
         self._price_sources = (findchips, hqew, lcsc, bom_ai, inso)
         self._output = output
+        self._source_observer = source_observer
+        self._inso_query = inso_query
+        self._source_query = source_query
 
     def execute(self, research_input: ResearchInput) -> ResearchResult:
         return self.execute_detailed(research_input).result
 
     def execute_detailed(self, research_input: ResearchInput) -> ResearchExecution:
-        icnet = self._icnet.search(
-            research_input.mpn, research_input.brand, research_input.quantity
-        )
-        price_results = tuple(
-            source.search(research_input.mpn, research_input.quantity)
-            for source in self._price_sources
-        )
+        def icnet_search():
+            return self._icnet.search(research_input.mpn, research_input.brand, research_input.quantity)
+        icnet = (self._source_query(research_input.inquiry_id, ResearchSource.IC_NET, icnet_search)
+                 if self._source_query is not None else icnet_search())
+        if self._source_observer is not None:
+            self._source_observer(research_input.inquiry_id, icnet.source_result)
+        price_results_list = []
+        for name, source in zip((ResearchSource.FINDCHIPS, ResearchSource.HQEW,
+                ResearchSource.LCSC, ResearchSource.BOM_AI, ResearchSource.INSO), self._price_sources, strict=True):
+            def search(source=source, name=name):
+                def operation():
+                    try:
+                        return source.search(research_input.mpn, research_input.quantity)
+                    except Exception:
+                        if name is ResearchSource.INSO:
+                            raise
+                        return SourceResult(name, SourceOutcome.SOURCE_UNAVAILABLE,
+                            SourceEvidence(name, research_input.mpn, None, SourceOutcome.SOURCE_UNAVAILABLE,
+                                datetime.now(UTC), fields=(EvidenceField("failure_code", "SOURCE_UNAVAILABLE"),)))
+                return (self._source_query(research_input.inquiry_id, name, operation)
+                        if self._source_query is not None else operation())
+            result = (self._inso_query(research_input.inquiry_id, search)
+                      if name is ResearchSource.INSO and self._inso_query is not None else search())
+            price_results_list.append(result)
+            if self._source_observer is not None:
+                self._source_observer(research_input.inquiry_id, result)
+        price_results = tuple(price_results_list)
         aggregation = aggregate_price_results(price_results, research_input.quantity)
         resolved_brand = icnet.resolved_brand or research_input.brand
         status, reason_code, remarks = (

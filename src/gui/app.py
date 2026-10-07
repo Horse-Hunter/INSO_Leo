@@ -55,6 +55,8 @@ _FONT_NUMBER = ("Microsoft YaHei UI", 20, "bold")
 
 def _status_color(status: str) -> str:
     status_l = status.lower()
+    if status_l == "全局基础设施故障":
+        return _RED
     if status_l in {"正常", "completed", "运行中", "success"}:
         return _GREEN
     if status_l in {"需要登录", "manual_review", "需要人工处理", "warning"}:
@@ -70,7 +72,18 @@ def _order_row_style(
     v12_state: V12OrderStateDTO | None = None,
 ) -> str:
     if v12_state is not None and v12_state.latest_active_alert is not None:
+        if v12_state.business_label.value in {"已发采购（待确认）", "采购已处理，表格状态待人工更新"}:
+            return "warning"
+        if v12_state.business_label.value == "人工处理完成":
+            return "legacy"
         return "error"
+    if v12_state is not None:
+        if v12_state.business_label.value in {"已发采购（待确认）", "采购已处理，表格状态待人工更新"}:
+            return "warning"
+        if v12_state.business_label.value == "人工处理完成":
+            return "legacy"
+        if v12_state.business_label.value in {"处理中断（未发送）", "处理中断（可能已发送，请先核对）", "源订单已变更", "重复订单"}:
+            return "error"
     status = order.status.value.casefold()
     if any(word in status for word in ("warning", "警告")):
         return "warning"
@@ -149,8 +162,10 @@ def _event_display_text(event: Any) -> str:
         "SECURITY_CHECK_FAILED": "安全校验未通过",
         "DATA_QUALITY_MISSING_CUSTOMER": "客户资料缺失",
         "DATA_QUALITY_INVALID_QUANTITY": "数量资料无效",
+        "DATA_QUALITY_INVALID_INPUT": "源订单关键字段不合法，已跳过",
         "HUMAN_RESOLUTION_RECORDED": "人工处理已记录",
         "SAVE_DISPATCH_ARMED": "提交前检查已完成（不代表发送成功）",
+        "SAVE_CLICK_COMPLETED": "保存并发送已点击一次",
         "SAVE_OUTCOME_UNKNOWN": "保存结果待核实",
         "RECONCILIATION_STARTED": "开始核实保存结果",
         "RECONCILIATION_CONFIRMED_SAVED": "已核实保存成功",
@@ -566,7 +581,7 @@ class InsoDashboardApp:
             raise RuntimeError("Tk UI updates must run on the main thread")
 
     def _on_action(self) -> None:
-        if self._status.state in {RunState.STOPPED, RunState.MANUAL_REVIEW} and (
+        if self._status.state in {RunState.STOPPED, RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP} and (
             self._login_all_running or self._backend.login_all_running()
         ):
             messagebox.showwarning("一键登录", "请等待网站登录检查结束，再开始询价。")
@@ -575,7 +590,7 @@ class InsoDashboardApp:
         # be resumable from this button once the login is repaired in Chrome --
         # restarting the whole application to re-read the same session would be
         # the only other route, and the session is exactly what was fixed.
-        if self._status.state in {RunState.STOPPED, RunState.MANUAL_REVIEW}:
+        if self._status.state in {RunState.STOPPED, RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}:
             self._backend.start()
         elif self._status.state == RunState.RUNNING:
             self._backend.request_stop_after_cycle()
@@ -661,7 +676,7 @@ class InsoDashboardApp:
         )
 
         # Action button
-        if status.state in {RunState.STOPPED, RunState.MANUAL_REVIEW}:
+        if status.state in {RunState.STOPPED, RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}:
             self._action_button.configure(
                 text=(
                     "开始询价"

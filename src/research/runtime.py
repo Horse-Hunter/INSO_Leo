@@ -376,6 +376,9 @@ def build_research_service(
     inso_browser: InsoReadOnlyBrowser | None = None,
     inso_operation_access: InsoOperationAccess | Callable[[], InsoOperationAccess] | None = None,
     playwright_provider: Callable[[], tuple[object, object] | None] | None = None,
+    source_observer: Callable | None = None,
+    inso_query: Callable | None = None,
+    source_query: Callable | None = None,
 ) -> ResearchService:
     """Compose the canonical ``ResearchService`` from validated runtime config.
 
@@ -455,6 +458,9 @@ def build_research_service(
             clock=clock,
         ),
         output=ResearchExcelOutput(config.excel_output_path),
+        source_observer=source_observer,
+        inso_query=inso_query,
+        source_query=source_query,
     )
 
 

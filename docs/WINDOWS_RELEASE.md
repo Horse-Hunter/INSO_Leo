@@ -1,5 +1,18 @@
 # Windows release
 
+## Current RFQ-003 V1.2 refresh (2026-10-07)
+
+Owner-authorized resilience update, REVIEW_REQUIRED; not V1.3 or live acceptance.
+Existing build/spec/deploy path reused. Final EXE SHA256:
+`4B412E25C778246E573A9854A1C168ABC1EB443792696375D39AAB1A93BC1766`.
+Original pre-update EXE/_internal backup:
+`dist/release-backups/INSO_V1.2-20261007-before-rfq003-resilience`.
+Only frozen assets overwritten; runtime junction, DB, config/grants/profile preserved.
+Build, frozen/deployed self-check, clean staged scan and idle launch PASS. GUI stays
+idle: no inquiry, submission, SMTP, Sheets write or real challenge tested.
+Current rules and full evidence: `control-room/RFQ-003/EXECUTION_LOG.md`.
+Older build descriptions below are historical when conflicting with this update.
+
 ## Current V1.2 refresh (2026-10-06)
 
 Owner authorized rebuilding and overwriting the same V1.2 application path.

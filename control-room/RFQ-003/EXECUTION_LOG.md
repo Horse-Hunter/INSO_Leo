@@ -1,0 +1,167 @@
+# RFQ-003 Execution Log
+
+2026-10-07: synchronized feature/v1-2 to CEO PASS commit bf92407;
+RFQ-002 is REVIEWED_DONE. Reuse existing active v1-2-design worktree.
+Scope is the attached Owner requirements preserved in TASK_SPEC.md, not V1.3.
+No real order, submission, SMTP, Sheets writes or live CAPTCHA permitted.
+## Baseline and reuse
+
+Started from `bf924076b016433443a731d0ec5c0eec8f90da18` on feature/v1-2;
+origin Horse-Hunter/INSO_Leo. Re-fetch before delivery showed the same remote HEAD.
+Read entry/governance/module navigation and RFQ-002 packet/review. CEO PASS for
+95ce4ca is preserved; RFQ-002 remains REVIEWED_DONE. No V1.3 code or dependencies.
+Reused existing active `.worktrees/v1-2-design`, not another implementation.
+
+Existing integration reused: WorkflowStateStore / V12Store identities and SQL
+schema, native lower Stock_VenQuote readers, ResearchService/adapters and price
+aggregation, targeted Sheets status helper, QQ SMTP worker/notification ledger,
+fixed protected CDP/profile, GUI DTOs, build script/spec/deployment asset layout.
+Additive TEXT enum states/events require no schema change or new database.
+
+## Implementation evidence
+
+- New narrow `workflow/v12_faults.py` provides V12_PAUSE versus GLOBAL_STOP through
+  the existing ResearchPreparationError boundary. Launcher keeps GUI alive.
+- Existing coordinator drains current source rows serially in source order;
+  invalid/conflicting rows cannot overtake earlier business rows. All closed
+  row results settle before interruptible Event.wait(180) for an actual next row.
+  Empty/last-row cycles have no added wait. Query wait is independent, not added
+  during an unfinished row. Stop interrupts the cooldown without starting a row.
+- Model/usable brand/positive integer quantity/tier input errors skip Research
+  and procurement, retain durable reason/Owner command, and can run after source
+  correction through the existing skipped-input revival. Critical source changes
+  stop only that row. Relocation preserves original inquiry_id; no fuzzy matching
+  or ID recomputation by new row position.
+- NO_MATCHING_PRODUCT remains a real no-quote fact/GUI label, no purchase.
+  V1.2 finalizes exhausted row Research failure instead of automatically replaying
+  the row; Research aggregate outcomes/FX/stock/price rules themselves unchanged.
+  Original important/duplicate notification eligibility/recipients unchanged.
+- Typed source observer stops V1.2 for IC.net, globally stops INSO authentication;
+  optional Research source exceptions remain failures, not false empty results,
+  and other sources/rows continue. Site human-login reminders use Owner 229 only.
+  Shared faults thrown during source recovery cannot be swallowed by optional
+  source exception fallback.
+- Lower duplicate/history queries: initial plus at most three fresh-tab attempts,
+  failed owned-tab cleanup, interruptible 180-second wait, same-row retry; clear
+  empty is success, untrusted/incomplete query is not. Exhaustion GLOBAL_STOP.
+  Existing session/bootstrap recovery uses only the same protected endpoint and
+  profile, bounded to three recoveries; failure GLOBAL_STOP. No overlapping INSO
+  work is started by row/query cooldown paths.
+- Native Save-and-Send still resolves a unique gated control and durably arms
+  BEFORE dispatch. SAVE_CLICK_COMPLETED is recorded only AFTER native click
+  succeeds. Exactly one arming plus one receipt proves the unique click. Arming
+  alone never authorizes status write. Failure to persist state is GLOBAL_STOP.
+  Post-confirmation unknown + receipt => independent SUBMIT_UNCONFIRMED, no second
+  click, Owner confirmation command, Sheets status attempt, yellow explicit GUI.
+  SAVED remains a separate stronger fact. Standalone Save/generic send unchanged.
+- Post-dispatch owned-tab/surface cleanup failure logs a sanitized step but cannot
+  discard the durable result and trigger purchase replay. DB errors still surface.
+  Clearly pre-submit errors end the row without status write and allow next row.
+- Status write failure => STATUS_WRITE_PENDING, row closed, yellow manual-update
+  wording and 229 instruction; no repurchase and no repeated automatic writeback
+  for that state. Entire Sheets read/authorization failure still GLOBAL_STOP.
+- SMTP settlement is not a purchase prerequisite. Existing durable commands/retry
+  worker operate independently, including running worker idle ticks. Legacy direct
+  Owner alert is a fallback only when there is no usable inquiry/completion ledger
+  or the ledger itself is unavailable; cannot persist a command in a broken DB.
+  Normal inquiry faults do not also invoke a duplicate legacy alert.
+- Idle startup projects history with SQLite mode=ro, including rows not present in
+  Research Excel; no automatic migration/quarantine/write occurs at idle launch.
+  Normal Start quarantines unfinished historical rows before workers. Armed/unknown
+  outcomes display red possible-send interruption, proven pre-submit rows red
+  unsent interruption; queue skips both, no recovery buttons or purchase replay.
+  Source remaining 未发 stays held. Unique relocation/re-read of 发给采购 marks
+  HUMAN_COMPLETED, never procurement. GUI clears red even without an active alert.
+  Legacy PURCHASE_EXCEPTION with armed/unknown submission is NOT a closed row:
+  quarantine as possible-send interruption, and exclude it from completed counts.
+- RFQ-002 fresh verification-page protection retained. Also tested final release
+  of an already-attached session after manual/module/global pause: disconnect only,
+  no lease/tab close and no park. Chrome/context/profile/cookies stay untouched.
+
+## Offline tests (final source)
+
+Focused:
+`python -m pytest -q tests/workflow tests/launcher tests/inso tests/research tests/sheets tests/gui --basetemp=.tmp/rfq003-focused-final-verified --tb=short`
+
+Result: **978 passed, 1 skipped in 35.27s**, exit 0. Final repeated focused run
+also verifies the explicit counter assertion added to the same legacy cases.
+
+Full safe/offline:
+`python -m pytest -q tests --basetemp=.tmp/rfq003-full-final-ledger --tb=short`
+
+Result: **1025 passed, 11 skipped in 37.68s**, exit 0.
+Skipped tests are not claimed as verified live acceptance. Time waits use fake
+wait/event seams; no wall-clock three-minute test waits. Suite-wide SMTP guard
+prevents real outbound mail; final successful runs had no attempted-mail warning.
+
+`python -m ruff check src tests`: PASS, exit 0.
+`git diff --check`: PASS, exit 0 (Git LF/CRLF notices are not whitespace failures).
+Reviewed diff for production/control-room/test scope and protected lifecycle.
+
+Additional RFQ-003 regressions prove row ordering/cooldown/interruption; model,
+brand, quantity skip; source pause/global/optional failure; duplicate AND Research
+history retry success on attempts 1/2/3/4 and exhaustion; native unique-click proof
+and no repeat; unconfirmed status write success/failure with next-row continuation;
+restart quarantine/manual completion/moved row; yellow/red labels; DB versus
+internal fault scope; CDP recoveries 1/2/3/exhaustion; read-only startup; callback
+fault propagation; pre-submit source conflict; post-submit cleanup; active-human
+page preservation through final release; human completion red removal.
+Existing no-quote, important/duplicate notices, SMTP failure/idempotent retry,
+AI model/brand/quantity-only validation, gate and RFQ-002 CAPTCHA/OTP/device
+preservation regressions continue PASS.
+
+Intermediate runs exposed outdated old stop/replay test expectations and missing
+offline fakes. Corrected test expectations to RFQ-003 and injected fake duplicate
+reader/transport instead of relying on empty real-page stubs. Initial mail attempts
+were blocked locally by suite guard; no actual SMTP connection was made. No test
+weakens native query completeness, gates or durable-click proof.
+
+## Release / deployment evidence
+
+Reused `scripts/build_windows_release.ps1 -Version 1.2 -BuildOnly`, existing spec,
+release Python and dependencies. Final build exit 0; staged frozen `--self-check`
+exit 0; **RELEASE_SCAN_OK**. Clean staged scan, not deployed private runtime scan.
+Build staging is the existing marked throwaway stage; no production data packaged.
+
+Deployed only EXE/_internal to:
+`D:\Program_Leo\INSO_Leo\dist\INSO_V1.2\INSO_V1.2.exe`
+
+Original pre-RFQ-003 backup (EXE + _internal):
+`D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.2-20261007-before-rfq003-resilience`
+
+Original EXE SHA256:
+`7803C90E5AD34415CDF1BE9FDF4F373364C7955CE916BF16A6BF5BFBC7E1FC0A`
+
+Final EXE SHA256:
+`4B412E25C778246E573A9854A1C168ABC1EB443792696375D39AAB1A93BC1766`
+
+Final deployed self-check exit 0; DEPLOYMENT_OK_RUNTIME_PRESERVED.
+An intermediate build was idle-launched, then final GUI red-removal correction
+was verified/rebuilt. Its assets are separately recoverably backed up at:
+`D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.2-20261007-before-rfq003-final-projection`
+(intermediate EXE CD731B3008773C88594D0EB95D1607F58AA4A2735D388CD2B32ECAD80F4FEEDE).
+Original pre-change backup remains intact, not replaced by the intermediate one.
+The GUI-red-removal intermediate (4370281F59158ECCEA55B0974607F97F3B94C3C47EDF33D8B429C199E0DD41BB)
+was additionally backed up at:
+`D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.2-20261007-before-rfq003-final-ledger`
+before the final legacy unproven-submit quarantine/counter correction build.
+Every final production change is included in the final self-checked executable.
+
+Runtime junction verified unchanged:
+`D:\Program_Leo\INSO_Leo\.worktrees\v1-2-design\dist\INSO_V1.1\runtime`.
+No runtime/DB/config/OAuth/grant/profile move/reset/delete or cookie cleanup.
+Old GUI closed normally with computer-use, not process kill. Final executable
+idle-launched through the same skill; unique INSO_V1.2 window observed, no Start
+Inquiry/login sweep/business controls clicked. No real protected business checks.
+
+## Delivery boundary / remaining UNKNOWN
+
+REVIEW_REQUIRED, not executor PASS/REVIEWED_DONE. Final offline/release evidence
+does not prove live server delivery, CAPTCHA behavior or Google updates for a new
+production order. Those remain UNKNOWN until Owner-authorized actual use/review.
+No real orders, Save/Save-and-Send, SMTP, Sheets writes or live CAPTCHA were run.
+No historical order replay. No V1.3 added; module fault enum is a future boundary,
+not a claim that V1.3 runs today.
+Only scoped source/tests/docs are committed; EXE/runtime, private probes and local
+deployment helper stay ignored/untracked. Commit/remote equality is verified after
+push and reported to Owner, without inserting a self-referential commit SHA here.

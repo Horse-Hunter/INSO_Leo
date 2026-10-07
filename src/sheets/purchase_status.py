@@ -11,6 +11,20 @@ class PurchaseStatusWriter(Protocol):
     def write_purchase_status(self, worksheet: WorksheetIdentity, row_position: int) -> None: ...
 
 
+def current_purchase_status(reader: WorksheetRowReader, identity: SheetRecordIdentity) -> str:
+    """Read-only stable snapshot relocation, permitting only the status transition."""
+    rows = tuple(reader.read_rows(identity.worksheet))
+    column = worksheet_schema(identity.worksheet.worksheet).status_column
+    eligible = [r for r in rows if r.cells.get(column) in {"未发", "发给采购"}]
+    normalized = [replace(r, cells={**r.cells, column: "未发"}) for r in eligible]
+    row = relocate_record(identity, normalized)
+    schema = worksheet_schema(identity.worksheet.worksheet)
+    actual = next(r for r in eligible if r.row_position == row.row_position)
+    if actual.cells.get(schema.brand_column) != identity.identifying_snapshot.brand:
+        raise SheetRecordConflict("source brand changed")
+    return str(actual.cells[column])
+
+
 def write_purchase_status_safely(
     reader: WorksheetRowReader, writer: PurchaseStatusWriter, identity: SheetRecordIdentity,
 ) -> bool:

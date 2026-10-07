@@ -19,6 +19,10 @@ class V12:
     def __init__(self, outcome):
         self.outcome = outcome
         self.commands = {}
+        self.state = BusinessState.PURCHASE_RECORDED if outcome is PurchaseOutcome.SAVED else BusinessState.PURCHASE_EXCEPTION
+    def business_state(self, _iid): return self.state
+    def set_business_state(self, _iid, state, _event): self.state = state
+    def submit_click_proven(self, _iid): return self.outcome is PurchaseOutcome.SUBMIT_UNCONFIRMED
     def purchase_state(self, _iid): return self.outcome
     def event_history(self, _iid): return ()
     def notification_already_created(self, cid, *_args): return cid in self.commands
@@ -81,7 +85,8 @@ def test_failure_only_notifies_owner_once_and_never_writes(outcome):
 
 def test_sheet_failure_preserves_saved_and_sends_safe_specific_mail():
     handler, sheet, state = actions(PurchaseOutcome.SAVED, writer_fails=True)
-    assert handler.process(flow(PurchaseOutcome.SAVED), at=NOW) is False
+    assert handler.process(flow(PurchaseOutcome.SAVED), at=NOW) is True
+    assert state.state is BusinessState.STATUS_WRITE_PENDING
     assert state.outcome is PurchaseOutcome.SAVED and sheet.calls == 1
     body = next(iter(state.commands.values())).text_body
     assert "表格状态写回失败" in body and "RuntimeError" in body
