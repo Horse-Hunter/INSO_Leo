@@ -12,7 +12,7 @@
 
 Status is changed by the active executor/reviewer. Requirement meaning is changed only by Owner/CEO.
 
-| RFQ-006 | V1.2 + V1.3 production integration and release | REVIEW_REQUIRED | `feature/v1-3-integration` | REQUIRED | `control-room/RFQ-006/TASK_SPEC.md` |
+| RFQ-006 | V1.2 + V1.3 production integration and release | CHANGES_REQUESTED | `feature/v1-3-integration` | REQUIRED | `control-room/RFQ-006/TASK_SPEC.md` |
 
 | RFQ-007 | Sync reviewed V1.2 alert/cooldown increment into V1.3 | REVIEWED_DONE | `feature/v1-3-sync-v12-increment` | REQUIRED | `control-room/RFQ-007/TASK_SPEC.md` |
 
