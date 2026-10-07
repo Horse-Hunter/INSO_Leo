@@ -10,16 +10,17 @@ NOW = datetime(2026, 10, 7, tzinfo=timezone.utc)
 
 
 @pytest.mark.parametrize("state,cooldown,in_progress,next_poll,expected", [
-    (RunState.RUNNING, 180, 0, 900, "冷却 03:00"),
+    (RunState.RUNNING, 120, 0, 900, "冷却 02:00"),
+    (RunState.RUNNING, 119, 0, 900, "冷却 01:59"),
     (RunState.RUNNING, None, 1, 900, "订单处理中"),
     (RunState.RUNNING, None, 0, 900, "15:00"),
     (RunState.RUNNING, None, 0, None, "即将轮询"),
     (RunState.QUOTATION_RUNNING, None, 0, 900, "15:00"),
     (RunState.QUOTATION_RUNNING, None, 1, None, "订单处理中"),
-    (RunState.QUOTATION_RUNNING, 180, 0, 900, "15:00"),
-    (RunState.STOPPED, 180, 1, 900, "00:00"),
-    (RunState.MODULE_PAUSED, 180, 1, 900, "00:00"),
-    (RunState.GLOBAL_STOP, 180, 1, 900, "00:00"),
+    (RunState.QUOTATION_RUNNING, 120, 0, 900, "15:00"),
+    (RunState.STOPPED, 120, 1, 900, "00:00"),
+    (RunState.MODULE_PAUSED, 120, 1, 900, "00:00"),
+    (RunState.GLOBAL_STOP, 120, 1, 900, "00:00"),
 ])
 def test_combined_countdown_preserves_quotation_and_purchase_isolation(
     state, cooldown, in_progress, next_poll, expected

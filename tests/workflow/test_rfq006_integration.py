@@ -60,7 +60,7 @@ def test_combined_real_v12_cooldown_only_between_rows(tmp_path, count, status):
     )
     combined.run(None, [WS], now=NOW)
     assert events == [
-        v for i in range(count) for v in ([180, "V12"] if i else ["V12"])
+        v for i in range(count) for v in ([120, "V12"] if i else ["V12"])
     ] + ["V13"]
 
 

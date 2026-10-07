@@ -45,15 +45,15 @@ def test_row_terminal_continues_with_exact_cooldown_and_none_after_last(tmp_path
     research.execute = lambda item: events.append("research") or ResearchResult(item.inquiry_id, status)
     f._row_wait = lambda seconds: events.append(seconds) or False
     results = f.process_pending(rows(), now=NOW)
-    assert len(results) == 2 and events == ["research", 180, "research"]
+    assert len(results) == 2 and events == ["research", 120, "research"]
     f.begin_poll_cycle()
     assert f.process_pending((), now=NOW) == ()
-    assert events == ["research", 180, "research"]
+    assert events == ["research", 120, "research"]
 
 
 def test_stop_interrupts_cooldown_without_starting_second_row(tmp_path):
     f, _ws, _vs, research, *_rest = _make_flow(tmp_path)
-    f._row_wait = lambda seconds: seconds == 180
+    f._row_wait = lambda seconds: seconds == 120
     assert len(f.process_pending(rows(), now=NOW)) == 1
     assert len(research.inputs) == 1
 
@@ -88,7 +88,7 @@ def test_site_challenge_scope_is_explicit(tmp_path, monkeypatch, site, scope):
 
 
 @pytest.mark.parametrize("successful_attempt", [1, 2, 3, 4, None])
-def test_inso_queries_retry_fresh_only_after_180_seconds(successful_attempt):
+def test_inso_queries_retry_fresh_only_after_120_seconds(successful_attempt):
     events = []
     attempts = []
     def check(iid, mpn, _quantity, *, at):
@@ -107,7 +107,7 @@ def test_inso_queries_retry_fresh_only_after_180_seconds(successful_attempt):
     else:
         assert checker.check("synthetic", "TEST", 1, at=NOW).outcome is DuplicateOutcome.CONFIRMED
     count = successful_attempt or 4
-    assert len(attempts) == count and events.count(180) == count - 1
+    assert len(attempts) == count and events.count(120) == count - 1
     assert events[:2] == ["fresh", "query"]
     assert events.count("close") == count - (successful_attempt is not None)
 
@@ -363,8 +363,8 @@ def test_research_inso_history_retry_is_bounded_and_does_not_treat_failure_as_em
         result = backend._run_inso_query("synthetic", operation, lambda: events.append("prepare"))
         assert result.outcome is SourceOutcome.NO_VALID_PRICE
     assert len(attempts) == (successful_attempt or 4)
-    assert events.count(180) == (successful_attempt or 4) - 1
-    assert events.count("fresh") == events.count("prepare") == events.count(180)
+    assert events.count(120) == (successful_attempt or 4) - 1
+    assert events.count("fresh") == events.count("prepare") == events.count(120)
 
 
 def test_owned_tab_cleanup_error_cannot_lose_post_dispatch_result(monkeypatch):
@@ -454,7 +454,7 @@ def test_b1_three_row_restart_preserves_untouched_rows_and_source_order(tmp_path
     flow, ws, vs, research, checker, *_rest = _make_flow(tmp_path)
     if during_cooldown:
         research.execute = lambda item: ResearchResult(item.inquiry_id, ResearchStatus.EXCEPTION)
-        flow._row_wait = lambda seconds: seconds == 180  # Exit while waiting; no real sleep.
+        flow._row_wait = lambda seconds: seconds == 120  # Exit while waiting; no real sleep.
         assert len(flow.process_pending(batch, now=NOW)) == 1
     else:
         def interrupted(*_a, **_k):
@@ -483,7 +483,7 @@ def test_b1_three_row_restart_preserves_untouched_rows_and_source_order(tmp_path
     restarted._row_wait = lambda seconds: execution.append(seconds) or False
     result = restarted.process_pending(batch, now=NOW)
     assert [row.inquiry_id for row in result] == ids[1:]
-    assert execution == ["B1-1", 180, "B1-2"]
+    assert execution == ["B1-1", 120, "B1-2"]
     assert vs.business_state(ids[0]) is expected
 
 
@@ -564,16 +564,18 @@ def test_legacy_saved_row_hides_repaired_input_warning_only_without_db_write(tmp
 
 
 def test_row_cooldown_is_visible_and_stop_still_interrupts_wait(tmp_path):
+    from datetime import timedelta
+
     from src.gui.app import _countdown_text
     backend = ProductionBackend(root=tmp_path)
     backend._state = RunState.RUNNING
     texts = []
     def wait(seconds):
         status = backend.get_status()
-        assert seconds == 180 and status.row_cooldown_until is not None
-        texts.append(_countdown_text(status, status.row_cooldown_until))
+        assert seconds == 120 and status.row_cooldown_until is not None
+        texts.append(_countdown_text(status, status.row_cooldown_until - timedelta(seconds=120)))
         return True
     backend._stop = SimpleNamespace(wait=wait, set=lambda: None)
-    assert backend._wait_between_rows(180)
-    assert texts == ["冷却 00:00"] and backend.get_status().row_cooldown_until is None
+    assert backend._wait_between_rows(120)
+    assert texts == ["冷却 02:00"] and backend.get_status().row_cooldown_until is None
     backend.shutdown()

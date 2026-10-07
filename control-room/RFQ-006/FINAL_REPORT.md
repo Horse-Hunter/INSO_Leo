@@ -64,3 +64,21 @@ Commit/push feature/v1-3-integration; verify local==remote HEAD and clean active
 RFQ-006 increment remains REVIEW_REQUIRED; RFQ-007 approved record remains REVIEWED_DONE.
 No new CEO product decision conflict was found. Remaining approval is independent review and then
 release installation; no further source implementation issue is known after these checks.
+
+## Latest Owner120-second increment — 2026-10-07
+Base e8ae7e9880fdcce4ffd200c1366b1bb5b1c02a71; current branch feature/v1-3-integration.
+Owner expanded the normal Research row request to all fixed180-second waits. Production diff:
+- src/workflow/v12_flow.py:168: normal Research/purchase row wait120s.
+- src/workflow/inso_query.py:30: shared INSO duplicate/history/quotation query retry120s.
+- Existing backend deadline and GUI rendering reused unchanged: 冷却02:00 then01:59.
+- Existing interruptible Event.wait, four total query attempts, close-before-retry, no final-row
+  cooldown, V1.3 normal row0s and combined scheduler900s preserved.
+- Chrome configured timeout maximum180s remains a validation bound, not a fixed180s wait;
+  default30s and fixed browser/session protections remain unchanged.
+Latest exact-source focused289 PASS12.18s; full1394 PASS/1 SKIP58.08s; Ruff/diff PASS.
+BuildOnly/frozen self-check/RELEASE_SCAN_OK PASS. New candidate EXE SHA256:
+BFD2BAFF59E19D46D31DA3E8BFEE81968B5C860D4EF0A3FF2A54F7EA21F52F30.
+This candidate supersedes the prior candidate hash/test totals; prior idle diagnostic remains
+historical evidence only, not a new idle run. Installed release/configs not overwritten.
+All earlier quote robustness/status-warning/Research-mail changes remain in this branch.
+No real business action/SMTP/order replay; no dependencies. Independent review remains REQUIRED.

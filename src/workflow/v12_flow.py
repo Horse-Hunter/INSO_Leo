@@ -165,7 +165,7 @@ class V12WorkflowCoordinator:
         self._row_closed = False
 
     def _before_next_row(self) -> bool:
-        if self._row_closed and self._row_wait(180):
+        if self._row_closed and self._row_wait(120):
             return False
         self._row_closed = False
         return not self._stop_requested()

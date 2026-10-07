@@ -52,3 +52,5 @@ V1.2 Production Write Gate 当前 **CLOSED**。
 - LCSC credential SiteId = `szlcsc.com`；认证 host = `passport.jlc.com`。
 - CAPTCHA / OTP / 设备验证一律人工处理，不绕过。
 - 不引入 Redis、Celery、Kafka、Docker 或大型 Workflow Engine，除非出现真实需求。
+
+- Owner2026-10-07：正常 Research/采购订单行间隔由180秒缩短为120秒，GUI按同一期限倒计时（冷却02:00）。Owner随后补充：查询失败重试亦由180秒改120秒；报价正常行间0秒和15分钟循环不变。

@@ -92,3 +92,13 @@ review; do not overwrite the installed release before review. See RFQ-006 FINAL_
 Only RESEARCH / NO_MATCHING_PRODUCT exception mail additionally targets shawn@inso-hk.com.
 Other phases/reasons/recipients are unchanged. Reuse existing recipient ledger/worker/SMTP;
 version only this changed immutable command payload. No historical replay or real test mail.
+
+## Owner interval correction — 2026-10-07
+Normal V1.2 Research/purchase row cooldown is120 seconds, replacing the previous180-second
+row policy. Canonical V12FlowCoordinator passes120 to the existing interruptible backend
+wrapper; GUI derives the same deadline and starts at 冷却02:00. No trailing last-row cooldown.
+Owner expanded scope: INSO query/duplicate-history/quotation retries also become120s;
+quotation normal rows retain0s; scheduler900s.
+Prior180s fixed-wait clauses are historical and superseded by this request.
+Chrome bootstrap maximum allowed configured timeout180s is a validation limit, not a fixed
+180s wait; existing default30s and browser configuration/protection are unchanged.

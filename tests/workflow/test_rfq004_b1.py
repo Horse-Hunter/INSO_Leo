@@ -163,7 +163,7 @@ def test_conflict_after_inso_retry_wait_stops_row_without_extra_retry():
     assert bad.outcome is QuotationOutcome.ROW_FAILED
     assert bad.row_error_reason is RowErrorReason.SOURCE_CHANGED
     assert valid.outcome is QuotationOutcome.NO_RECENT_QUOTE
-    assert len(operations.tabs) == 2 and waits == [180]
+    assert len(operations.tabs) == 2 and waits == [120]
 
 
 def test_competition_created_before_query_does_not_enter_inso():

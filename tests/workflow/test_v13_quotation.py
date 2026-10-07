@@ -154,7 +154,7 @@ def test_two_rows_each_fresh_tab_no_inter_row_cooldown():
 
 
 @pytest.mark.parametrize("attempt", [1, 2, 3, 4])
-def test_shared_engine_success_on_any_attempt_with_fresh_tab_and_fake_180(attempt):
+def test_shared_engine_success_on_any_attempt_with_fresh_tab_and_fake_120(attempt):
     service, operations, quotes, waits = cycle([failure()]*(attempt-1)+[(quote(),)])
     result, = service.run(WS)
     assert result.outcome is QuotationOutcome.QUOTE_FOUND
@@ -162,7 +162,7 @@ def test_shared_engine_success_on_any_attempt_with_fresh_tab_and_fake_180(attemp
     assert len(operations.tabs) == attempt
     assert len({id(tab) for tab in operations.tabs}) == attempt
     assert all(tab.closed for tab in operations.tabs)
-    assert waits == [180]*(attempt-1)
+    assert waits == [120]*(attempt-1)
 
 
 def test_exhaustion_is_shared_global_stop_never_no_recent_quote():
@@ -172,7 +172,7 @@ def test_exhaustion_is_shared_global_stop_never_no_recent_quote():
     assert raised.value.scope is FaultScope.GLOBAL_STOP
     assert raised.value.reason == "INSO_QUERY_RETRIES_EXHAUSTED"
     assert len(quotes.calls) == 4
-    assert waits == [180]*3
+    assert waits == [120]*3
     assert all(tab.closed for tab in operations.tabs)
 
 
@@ -180,7 +180,7 @@ def test_fake_wait_shutdown_interrupts_before_new_tab():
     service, operations, quotes, waits = cycle([failure()], wait=lambda seconds: True)
     with pytest.raises(V13Stopped):
         service.run(WS)
-    assert waits == [180]
+    assert waits == [120]
     assert len(quotes.calls) == len(operations.tabs) == 1
     assert operations.tabs[0].closed
 

@@ -1904,3 +1904,13 @@ Script clears input; Executor only waits for execution settlement before next ro
 RFQ-007 now REVIEWED_DONE at2c9f704; increment preserved verbatim.
 After V1.3 implementation, only RESEARCH / NO_MATCHING_PRODUCT exception additionally notifies
 shawn@inso-hk.com; other recipient sets and SMTP path unchanged. No real SMTP acceptance.
+
+## Owner interval correction — 2026-10-07
+Normal V1.2 Research/purchase row cooldown is120 seconds, replacing the previous180-second
+row policy. Canonical V12FlowCoordinator passes120 to the existing interruptible backend
+wrapper; GUI derives the same deadline and starts at 冷却02:00. No trailing last-row cooldown.
+Owner expanded scope: INSO query/duplicate-history/quotation retries also become120s;
+quotation normal rows retain0s; scheduler900s.
+Prior180s fixed-wait clauses are historical and superseded by this request.
+Chrome bootstrap maximum allowed configured timeout180s is a validation limit, not a fixed
+180s wait; existing default30s and browser configuration/protection are unchanged.

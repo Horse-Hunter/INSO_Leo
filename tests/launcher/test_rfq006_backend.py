@@ -185,7 +185,7 @@ def test_purchase_cooldown_uses_real_stop_event_and_clears_deadline(tmp_path):
     backend = launcher.ProductionBackend(root=tmp_path)
     backend._state = RunState.RUNNING
     results = []
-    thread = Thread(target=lambda: results.append(backend._wait_between_rows(180)))
+    thread = Thread(target=lambda: results.append(backend._wait_between_rows(120)))
     try:
         thread.start()
         assert _wait_until(lambda: backend.get_status().row_cooldown_until is not None)
@@ -202,12 +202,12 @@ def test_purchase_cooldown_uses_real_stop_event_and_clears_deadline(tmp_path):
 def test_purchase_cooldown_deadline_cleared_if_original_wait_raises(tmp_path):
     backend = launcher.ProductionBackend(root=tmp_path)
     def failed_wait(seconds):
-        assert seconds == 180 and backend.get_status().row_cooldown_until is not None
+        assert seconds == 120 and backend.get_status().row_cooldown_until is not None
         raise RuntimeError("synthetic wait failure")
     backend._stop = SimpleNamespace(wait=failed_wait, set=lambda: None)
     try:
         with pytest.raises(RuntimeError, match="synthetic wait failure"):
-            backend._wait_between_rows(180)
+            backend._wait_between_rows(120)
         assert backend.get_status().row_cooldown_until is None
     finally:
         backend.shutdown()

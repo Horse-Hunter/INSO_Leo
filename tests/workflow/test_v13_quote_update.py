@@ -247,7 +247,7 @@ def test_already_quoted_on_entry_has_no_write_tab_or_click():
     assert io.writes == [] and actions.opened == actions.clicks == 0 and waits == []
 
 
-def test_success_bad_success_batch_is_serial_without_180s_wait_or_quarantine():
+def test_success_bad_success_batch_is_serial_without_120s_wait_or_quarantine():
     updater, _, io, actions, waits = service()
     original_update = updater.update_one
     def update(result):
