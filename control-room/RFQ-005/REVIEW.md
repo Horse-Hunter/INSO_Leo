@@ -1,95 +1,119 @@
 # RFQ-005 CEO Independent Review — 2026-10-07
 
 **Status:** COMPLETE  
-**Verdict:** CHANGES_REQUESTED  
-**Reviewed Executor HEAD:** `063321ef2cf5e9aa508b488e50df3e9088a36bf4`
+**Verdict:** PASS / REVIEWED_DONE  
+**Reviewed Executor HEAD:** `df176dd803fc8ebf7e03a9482718302fa1285220`  
+**Previous blocking review:** B1 at `d9bbeebdff94261ed7aff7318096202b557cee29`
 
-## Summary
+## Decision
 
-RFQ-005 的主体实现方向正确。独立 Review 已确认以下关键边界基本符合 Owner 要求：
+RFQ-005 is approved.
 
-- 只消费 RFQ-004 的 `QUOTE_FOUND`；`NO_RECENT_QUOTE / ROW_FAILED` 不写、不点更新；
-- 14 列 payload 使用 RAW 整行写入，并做精确 readback；
-- 空字符串、前导零、小数尾零、空格/换行等按字符串保留；
-- Python 不直接写源状态 `采购已报价`；
-- `更新报价` 支持幂等重试，成功填入 1 行 / 已有报价 1 行都视为成功；
-- 每次 update retry 前重新确认 source、重新写/读 14 列、重新建立 Google operation surface；
-- 成功 popup 后只做 source status short-poll，不再次提交；
-- 单行 input/update/source 问题保持 ROW_FAILED，后续行继续；
-- 共享 Google / ledger / CDP / auth 问题保持 GLOBAL_STOP；
-- V1.3 正常相邻行不使用 V1.2 的 180 秒 cooldown；
-- 没有引入 V1.3 永久 interruption quarantine；
-- RFQ-004 原 inquiry_id / record_identity 与 relocation 边界被保留；
-- 未打包、未部署、未覆盖 V1.2。
+Owner 已纠正真实 Google worksheet title 为 `报价输入`。本次修复同时完成名称纠正和 title↔gid 的 fail-closed metadata 绑定校验；此前错误名称 `报价输入子表` 不再作为生产 alias 接受。
 
-但发现一个直接关系到真实更新安全的配置校验缺口，因此当前不能标 REVIEWED_DONE。
+RFQ-005 仍保持 read/update-side source delivery 边界：未接最终15分钟总调度、GUI、229邮件、正式 V1.3 打包部署，也未覆盖当前 V1.2 EXE。
 
-## Blocking Finding
+## B1/B2 verification
 
-### B1 — HIGH — API 写入的 worksheet 名称与 UI 打开的 gid 没有被证明是同一张“报价输入子表”
+### PASS — 真实目标名称已统一为 `报价输入`
 
-当前 `QuotationInputLocation` 同时保存：
+`QuotationInputLocation` 现在只接受 worksheet title `报价输入`。旧名称 `报价输入子表` 会直接以 `QUOTE_INPUT_LOCATION_INVALID` fail closed。
 
-- worksheet title：固定 `报价输入子表`
-- `gid`
+当前 Sheets range 也统一使用 `'报价输入'!...`；没有保留双名称兼容路径。
 
-但两条生产路径分别使用不同标识：
+### PASS — API worksheet title 与 UI gid 已被证明属于同一张 sheet
 
-1. `GoogleQuotationInput` 通过 Sheets API range：`'报价输入子表'!...` 写入/回读 14 列；
-2. `GoogleQuotationUpdateActions` 通过 URL：`.../edit#gid=<configured gid>` 打开页面并点击 `更新报价`。
+`GoogleQuotationInput.validate_location_binding()` 使用现有 Sheets service 的 spreadsheet metadata，只读取：
 
-当前 `validate_schema()` 只验证“按 worksheet title 读取到的 14 个表头正确”，而 UI guard 只验证 URL fragment 等于配置的 gid。
+- `sheets.properties.sheetId`
+- `sheets.properties.title`
 
-**没有任何地方验证：这个 gid 实际属于 title = 报价输入子表 的同一个 worksheet。**
+并要求：
 
-因此存在安全场景：API 正确写入报价输入子表，但配置 gid 错误并指向同一 spreadsheet 的另一张 sheet；UI adapter 仍会认为 URL 正确。如果错误 sheet 也存在可点击的更新报价控件，就可能在错误 surface 上执行 Script。
+- metadata shape 可验证；
+- 恰有一张 title 为 `报价输入`；
+- `sheetId` 为非负整数且不是 bool/字符串/浮点；
+- `str(sheetId)` 与显式配置 gid 完全一致。
 
-这是 RFQ-005 的关键“写入 → 更新报价”闭环，不能仅依赖人工保证 gid 永远正确。
+任何 title 缺失、重复、sheetId 异常、gid 不匹配、metadata/API/auth 读取失败都会抛 `QuotationInputUnavailable`，随后由 workflow 映射为 `GLOBAL_STOP`。
 
-## Required Repair
+因此不会出现“Sheets API 写 A 表、浏览器却在同一 spreadsheet 的 B 表点击更新报价”的配置漂移。
 
-只做最小修复，不扩大 RFQ-005 范围。
+### PASS — 错误 binding 在任何写入或 UI 打开前停止
 
-1. 在 quotation input / location schema validation 阶段，通过现有 Sheets API metadata 能力验证：
-   - spreadsheet 可访问；
-   - 恰有一个 sheet title 为 `报价输入子表`；
-   - 该 sheet 的真实 `sheetId` 与配置 `gid` 一致。
+`V13QuotationUpdater` 在打开 Google operation surface 前执行 `validate_schema()`；该方法先验证 title/gid metadata binding，再验证14列表头。
 
-2. 如果 title 不存在、结构异常、sheetId 与 gid 不一致，或 metadata 无法可靠读取，必须 `QuotationInputUnavailable → GLOBAL_STOP`；不能继续写 input，更不能点击更新报价。
+`write_payload()` 本身也再次执行 schema/binding 验证，因此直接调用 writer 也不会绕过安全边界。
 
-3. 不要通过浏览器 DOM 猜 worksheet title。优先使用 Google Sheets API metadata，只新增窄验证。
+回归覆盖确认错误 gid、gid 指向另一 sheet、目标 sheet 缺失、metadata 结构异常、metadata auth/API failure、14-header mismatch 时均：
 
-4. 保持现有 14 列 header 验证：metadata title/gid 绑定正确 + 14列 header contract 正确，两者都成立后才允许写。
+- 0 quotation RAW write；
+- 0 Google operation page open；
+- 0 更新报价 click；
+- GLOBAL_STOP。
 
-5. 不要 hardcode 生产 gid。gid 仍来自未来 RFQ-006 的显式配置，只是在使用前被验证。
+### PASS — 14列 header 与 RAW 写入边界保持
 
-## Required Regression
+title/gid binding 通过后仍必须通过精确14列 header contract，之后才允许完整 RAW 写入。
 
-至少补：
+RFQ-005 原有以下边界未被弱化：
 
-1. title = 报价输入子表，metadata sheetId == configured gid → schema PASS，可继续写。
-2. title 正确，但 metadata sheetId != configured gid → GLOBAL_STOP；0 write；0 update click。
-3. configured gid 指向同 spreadsheet 的另一张 sheet → fail closed。
-4. 报价输入子表不存在 → GLOBAL_STOP。
-5. spreadsheet metadata read/auth failure → GLOBAL_STOP，错误信息不得泄漏 provider 内容。
-6. 现有 14-header mismatch 测试继续 PASS。
-7. full RFQ-005 + RFQ-004/V1.2 regression 继续 PASS。
+- 14列全部写入，包括空字符串；
+- 精确 readback；
+- 不 trim / 不重格式化报价内容；
+- Python 不写源状态 `采购已报价`；
+- popup `成功填入1行` => `UPDATED_INSERTED`；
+- `已有报价1行` => `UPDATED_ALREADY_EXISTS`；
+- 成功 popup 后不重复 update，只短轮询 source status；
+- update 未确认最多初次+3次幂等重试；
+- 单行 targeted failure 继续下一行；
+- 共享 Google / ledger / CDP / auth failure 仍 GLOBAL_STOP；
+- V1.3 正常相邻订单无180秒 cooldown；
+- 无 V1.3 永久 interruption quarantine。
 
-## Non-blocking note for RFQ-006
+## Regression / evidence reviewed
 
-当前 live-only selector / actual range / Script refresh latency 仍然 UNKNOWN，这一点记录得正确。RFQ-006 在正式接入真实配置前仍需要 authorized read/live acceptance；不要把 offline fake PASS 当成 live acceptance。
+Executor reports for repaired HEAD:
 
-## Verification Required
+- focused: **182 passed**
+- full safe/offline: **1235 passed / 1 skipped**
+- Ruff: **PASS**
+- `git diff --check`: **PASS**
 
-修复后重新执行：
+新增/修复测试覆盖包括：
 
-- RFQ-005 focused；
-- full safe/offline pytest；
-- `python -m ruff check src tests`；
-- `git diff --check`。
+- 正确 title + 正确 sheetId/gid；
+- 错 gid；
+- gid 指向同 spreadsheet 另一 sheet；
+- 目标 `报价输入` 不存在；
+- duplicate/malformed metadata；
+- sheetId bool/string/float/negative 等非法形态；
+- metadata provider/auth/401/403 failure；
+- binding 正确但14列表头错误；
+- `UPDATED_INSERTED` / `UPDATED_ALREADY_EXISTS` 完整离线闭环；
+- RFQ-004 / RFQ-003 / V1.2 回归。
 
-仍然禁止真实 Google 报价写入、更新报价、Apps Script、Save / Save-and-Send、SMTP、真实业务提交、V1.3 打包/部署或覆盖 V1.2 EXE。
+未执行真实 Google 报价写入、更新报价、Apps Script、Save、Save-and-Send、SMTP、真实业务提交、打包或部署。
 
-## State transition
+当前 V1.2 EXE 保持不变：
 
-`REVIEW_REQUIRED → CHANGES_REQUESTED`
+`1A49C9650BA531F2299326FFC89761D0391CD5F2C0FE32327DDD0736BD5C3E84`
+
+## Residual live-only unknowns
+
+以下仍是 RFQ-006 / authorized live acceptance 前的明确 UNKNOWN：
+
+- 生产 gid；
+- 真实输入 row/column 与14列表头布局；
+- `更新报价` 按钮实际 DOM/role；
+- popup / dismiss 实际 DOM；
+- Apps Script 刷新延迟；
+- Google 登录、权限和生产会话行为。
+
+这些不阻塞 RFQ-005 的源码/离线验收，但 RFQ-006 不得把 synthetic PASS 当作 live acceptance。
+
+## Final state
+
+`CHANGES_REQUESTED → REVIEW_REQUIRED → REVIEWED_DONE`
+
+RFQ-005 is complete and may be used as the baseline for RFQ-006.
