@@ -1,7 +1,8 @@
 # CEO 同步 V1.3：V1.2 资料警报与冷却显示修复
 
-状态：修复版已覆盖并待命，本次增量 REVIEW_REQUIRED；真实订单3/4发送，
-第四笔五站无报价按规则未发，等待 Owner 核对型号/业务处置。不得称四笔全部完成。
+状态：修复版已覆盖并待命，本次增量 REVIEW_REQUIRED；四笔均按业务规则处理闭环：
+三笔发送，第四笔五站无报价、不采购并发邮件，Owner 已确认处理正确。
+此前“等待 Owner 决定第四笔”已 RESOLVED；不得误写为四笔都发送，不重跑第四笔。
 范围：Owner 2026-10-07 要求跟踪当前四条订单、修复确认的问题、覆盖 V1.2，
 由 CEO 再把适用改动同步给 V1.3 Codex。本文不授权开发/运行 V1.3。
 
@@ -23,6 +24,39 @@
    的期限，finally 清理，不改等待、停止、行顺序、末行/空轮询规则。
    `src/gui/app.py` 明示“冷却 MM:SS”/“订单处理中”，不再让运行中等待误显即将轮询。
 
+## V1.3 同步方式：复用实际代码 diff，禁止重新开发
+
+修复源提交：`f515a145360d0eb72c4ffd7b8988a6cea6ae7ed2`（feature/v1-2）。
+此提交以 CEO 已批准 B1 的 `c8d514e` 为父提交；本报告后续文档提交不包含新生产实现。
+CEO Review 通过后，V1.3 Codex 的任务是合并适用代码和测试，不是读本文后重新设计实现。
+
+执行方式：
+
+1. 用 `git show f515a145360d0eb72c4ffd7b8988a6cea6ae7ed2 -- src tests`
+   读取真实补丁，与 V1.3 当前同名文件逐项对照。先确认是否已有等效修复。
+2. 相同共享代码直接复用补丁；已有等效实现则保留，不重复开发。
+3. V1.3 已修改的代码只做必要兼容合并，保留 V1.3 成果；禁止整文件覆盖，
+   禁止无差别 copy 或整提交盲目 cherry-pick，以免覆盖报价逻辑或误带采购节流。
+4. 同步现有修复及对应回归，按下方模块边界验证；禁止另写第二套警报恢复、
+   GUI 状态、浏览器、身份或 workflow 实现。报告解释原因和边界，实际 diff 才是复用对象。
+5. 对确实不能直接复用的冲突，记录源补丁位置、冲突原因和最小适配 diff；
+   没有证据不得以“版本不同”为由重构或重写。新增需求另行交 CEO 决定。
+
+文件级合并边界：
+
+- `workflow/v12_store.py`、`launcher/v12_gui.py`：复用资料警报修复；仍限于
+  原 V1.2 状态/事件语义，不擅自替换成报价终态或清除其他警报。
+- `gui/contracts.py`：共享 RunSession 可选字段保留默认 None，兼容现有调用。
+- `launcher/backend.py`：冷却期限 wrapper 只留在 V1.2 采购的既有 row_wait 接口，
+  不绑定 V1.3 报价循环，不给 V1.3 新增180秒等待。
+- `gui/app.py`：合并显示逻辑并保持 V1.3 模块状态不被 V1.2 专属冷却误标。
+- `tests/workflow/test_rfq003_resilience.py`：复用本次三条回归；必要时只适配
+  V1.3 现有测试接口，并补证明报价流程未继承采购冷却的安全离线断言。
+
+完成证据：记录每个源文件对应“原补丁复用 / 已有等效 / 最小兼容适配”，
+提交实际 diff 和 focused/full safe/offline、Ruff、diff check 结果，由 CEO 独立 Review。
+不得把理解报告、复制文档或口头说明当成代码同步完成。
+
 ## V1.3 同步边界
 
 - 优先复用共享资料警报生命周期和 DTO；只同步本分支的适用 diff，不复制一套 store/GUI。
@@ -43,7 +77,7 @@
 准确的离线验证：相关六模块 focused 999 passed / 1 skipped（36.75s）；
 完整 safe/offline 1046 passed / 11 skipped（37.51s）；Ruff src tests / diff check PASS。
 现有 BuildOnly、frozen self-check、clean staged release scan 已通过。
-待部署候选 SHA256：340D7F7E7E818FA74DE36B138B205F5905F320406FD8D391EF860BD052529E5F。
+已部署 EXE SHA256：340D7F7E7E818FA74DE36B138B205F5905F320406FD8D391EF860BD052529E5F。
 当前四笔：3笔 PURCHASE_RECORDED、各唯一 SAVE_CLICK_COMPLETED、重要通知各2次
 投递成功，Sheets均“发给采购”；1笔 NO_MATCHING_PRODUCT / RESEARCH_FAILED、
 五个价格来源均无结果、零提交、异常邮件成功、Sheets仍“未发”。
@@ -54,6 +88,8 @@
 备份：D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.2-20261007-before-input-alert-cooldown-fix。
 正常关闭空闲GUI，computer-use启动新版待命，不点击开始，不自动重跑第四笔。
 截图接口超时，窗口启动可确认；新版真实订单端到端尚未验证，保留 UNKNOWN。
+后续 Owner 要求代点开始，computer-use 截图仍超时且无法读取开始按钮状态，
+没有盲点或成功开启证据。Owner 随后取消该操作；不得称新版正在询价轮询。
 远端已 fast-forward 到 CEO B1 批准基线 c8d514e；本次 diff 独立 Review，不覆盖
 旧 REVIEW.md PASS，不冒充它已经批准本次改动。提交后验证 local/remote 相同。
 真实履约观察与离线测试必须分开；禁止拿离线 passing 代替订单发送/表格写回证据。

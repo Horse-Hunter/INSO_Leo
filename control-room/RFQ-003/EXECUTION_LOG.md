@@ -314,3 +314,19 @@ so earlier B1 'no real business' statements apply only to that historical repair
 Current increment REVIEW_REQUIRED; original CEO PASS at241fd48 stays unchanged.
 CEO_SYNC_REPORT.md gives exact files and V1.3 reuse boundaries, no V1.3 code change.
 Commit/push equality will be verified externally; no self-referential SHA edit.
+
+## Owner report clarification — documentation only
+
+Owner confirmed the fourth no-quote order must not enter procurement and its
+existing exception mail is correct. Prior business-decision blocker is RESOLVED:
+four handled per rules, three sent, one no-quote; no retry/model change needed.
+Owner requested explicit reuse instructions for V1.3. CEO_SYNC_REPORT now pins
+f515a145360d0eb72c4ffd7b8988a6cea6ae7ed2 as the implementation diff, specifies
+file-level merge limits, prohibits reimplementation/blind whole-file copy, and
+requires equivalent-existing/minimal-adaptation evidence plus offline regression.
+FINAL_REPORT synchronized; old B1 history/CEO REVIEW unchanged. No src/tests,
+EXE, runtime, DB or business actions changed. No rebuild or pytest rerun for this
+documentation-only update; prior code results are historical, not rerun numbers.
+git diff --check and staged diff reviewed before commit/push.
+Later requested Start action could not observe screenshot/button; no blind click,
+no verified polling start. Owner canceled it. Current polling must not be claimed.
