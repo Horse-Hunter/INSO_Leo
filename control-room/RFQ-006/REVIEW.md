@@ -159,3 +159,139 @@ These are not source/offline blockers for RFQ-006, but the deployed V1.3 must no
 `CHANGES_REQUESTED -> REVIEW_REQUIRED -> REVIEWED_DONE`
 
 RFQ-006 implementation/release is complete. The next action, if Owner chooses, is a separately authorized controlled live acceptance of one V1.3 quotation update path.
+
+---
+
+# RFQ-006 Final Increment CEO Independent Review — 2026-10-08
+
+**Status:** COMPLETE  
+**Verdict:** CHANGES_REQUESTED  
+**Reviewed final HEAD:** `96d6d4465eb829a27701592fb814beeeaace558e`  
+**Reviewed increment commits:** `e8ae7e9880fdcce4ffd200c1366b1bb5b1c02a71`, `d8204b5b6829dc8e9ab762be626e3765a424a2f4`, `96d6d4465eb829a27701592fb814beeeaace558e`
+
+Prior RFQ-006 and RFQ-007 approvals remain valid for their reviewed baselines. This verdict applies only to the new final increment above.
+
+## Summary
+
+The final increment closes substantial live-readiness gaps correctly: lowest-price quotation selection, the Owner-verified Google drawing/button path, actual popup aliases, 30-second source-status verification, yellow pending-state projection, Research no-quote recipient expansion, 120-second waits, and serial idle login maintenance are all directionally correct and well covered by offline tests.
+
+However, two safety blockers remain in the new code. They directly contradict explicit Owner requirements and can affect the shared Google input or preservation of human-needed login pages. Deployment is therefore not approved yet.
+
+## Blocking Finding B1 — HIGH — Script settlement can be accepted before the running notice ever appears
+
+`GoogleQuotationUpdateActions.dismiss_result()` currently does:
+
+1. click the exact `确定` button;
+2. immediately locate text containing `正在运行脚本`;
+3. call `wait_for(state="hidden")` on that locator;
+4. then clear `_script_pending` and allow the page to close / next row to proceed.
+
+Playwright's `hidden` state is already satisfied when the locator is absent/detached. Therefore, if the Sheets `正在运行脚本` notice appears asynchronously a moment *after* the `确定` click, the current code can return immediately before the Script is proven to have started or finished.
+
+This creates exactly the race the Owner rule was intended to prevent: the next quotation row may write `A1:N1` while the prior Apps Script is still running and about to clear the shared input range.
+
+The current unit fake masks this race because `Page.script_running` starts as `True` before `dismiss_result()` is called. There is no regression where the notice is initially absent, appears after the click, and then disappears.
+
+### Required repair
+
+- After `确定`, prove script settlement with a bounded, fail-closed observation sequence.
+- Do not treat 'notice absent immediately after click' as script completion.
+- A safe implementation may, for example, wait for the running notice to become visible and then hidden, or use another Owner-observed authoritative completion signal. If the notice never becomes observable within the bounded window, return `GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED`, keep `_script_pending=True`, preserve the page and globally stop.
+- Do not clear `A1:N1` from Python and do not start another row until settlement is proved.
+
+### Required regression
+
+At minimum:
+
+1. notice already visible after `确定` -> wait until hidden -> PASS;
+2. notice initially absent, appears after click, then hides -> PASS only after the hide;
+3. notice never appears -> GLOBAL_STOP / `GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED`, page preserved;
+4. notice appears but never hides -> same GLOBAL_STOP / preserved page;
+5. no next-row write/open is possible while `_script_pending` remains true.
+
+## Blocking Finding B2 — HIGH — Idle keepalive manual/failure pages are later closed by the poll finalizer
+
+The new background sweep correctly avoids foregrounding failures and `_run_login_sweep(background=True)` intentionally leaves failed/manual pages and pre-existing nonblank pages open.
+
+However the canonical poll loop invokes `_idle_login_tick()` **before** its existing `finally: _close_inso_order_tab()` cleanup.
+
+`_close_inso_order_tab()` unconditionally calls `park_shared_cdp(browser)` whenever the run state is normal. `park_shared_cdp()` closes every nonblank page and retains only one `about:blank` page.
+
+Therefore, when the maintenance sweep borrows the poller's existing BrowserHandle, any page that the keepalive deliberately retained for CAPTCHA/manual login—or any pre-existing nonblank page the requirement says to preserve—can be closed moments later by the poll finalizer.
+
+This violates the explicit keepalive requirements:
+
+-验证码、人工登录及原有非空白页面保留;
+- failure should notify 229 but not destroy the page the Owner needs to repair;
+- background maintenance must not change the existing manual-page protection boundary.
+
+The current keepalive tests verify `_run_login_sweep(background=True)` in isolation, but they do not execute the real poll-finally cleanup after a borrowed-handle failure/pre-existing page.
+
+### Required repair
+
+- Carry explicit knowledge that the background sweep left protected/nonblank pages which must survive the poll finalizer, or otherwise make the finalizer page-preservation-aware.
+- Do not globally suppress ordinary settled parking: successful idle maintenance with no protected/nonblank page should still return the fixed browser to the normal blank parked state.
+- Do not create a second browser/session/page-management system.
+- Preserve the existing RFQ-002/RFQ-003 human-verification behavior.
+
+### Required regression
+
+At minimum run the real sequence `combined cycle -> idle keepalive -> poll finally cleanup` and prove:
+
+1. borrowed-handle NEEDS_HUMAN page remains open after poll finalization;
+2. borrowed-handle pre-existing nonblank page remains open after poll finalization;
+3. all-success/no-protected-page path still parks to exactly one `about:blank`;
+4. keepalive failure still does not pause/global-stop business and still queues 229;
+5. next scheduled cycle can continue after the preserved page case according to existing state rules.
+
+## Other reviewed increment areas
+
+### PASS — quotation selection logic
+
+The final code uses exact MPN + inclusive rolling 72 hours and compares positive eighth-column `供方未税价` values after RMB conversion. Invalid/blank/negative/non-finite net prices are excluded, positive prices outrank zero, zero-only fallback chooses the newest zero, same-price ties choose newer records while Python's stable `max` preserves the first read row on exact time ties. Raw14 display strings are not rewritten.
+
+`供方税点` is captured as the sixth field. Unsupported positive currency becomes a typed row-local `QUOTE_PRICE_UNCOMPARABLE`; missing/invalid FX becomes shared `V13_FX_UNAVAILABLE` GLOBAL_STOP. No blocker found in this boundary.
+
+### PASS — update-result/source-status policy
+
+The real drawing fallback is restricted to the metadata-bound quote-input page and requires exactly one visible drawing; the observed `报价工具` readiness text is awaited before write/click. Stale dialogs are rejected. Actual `更新完成 / 已有价跳过` aliases are parsed, and inserted/existing outcomes independently require source `采购已报价` within a bounded 30-second window. `SOURCE_STATUS_NOT_UPDATED` remains a durable row hold, pale-yellow GUI state and 229 notification, with no forced source write and no automatic repeat click.
+
+The previously authorized DRV8833PWR existing-price live path is valid evidence for the button/popup/already-existing path only; it does not prove first-insert source transition.
+
+### PASS — Research no-result recipient scope
+
+Only `phase == RESEARCH && reason == NO_MATCHING_PRODUCT` adds `shawn@inso-hk.com` beside the Owner recipient. The immutable notification command is versioned only for this recipient change. Other notification routing remains unchanged.
+
+### PASS — 120-second wait policy
+
+The V1.2 inter-row cooldown and shared INSO duplicate/history/quotation retry engine now use 120 seconds while preserving interruptible Event.wait, initial+3 attempts, close-before-retry, no final-row trailing cooldown, V1.3 normal 0-second row gap and the 900-second combined poll interval.
+
+### PARTIAL — idle Research keepalive
+
+Trigger counting, 30-minute real-time threshold, pending-row reset, pause/stop skips, same-CDP reuse, no report popup, site continuation and durable 229 notification are implemented and covered. B2 above prevents approval of its page-lifecycle behavior.
+
+## Verification evidence reviewed
+
+Executor reports final HEAD:
+
+- focused: **273 passed**;
+- full safe/offline: **1414 passed / 1 skipped**;
+- keepalive focused: **20 passed**;
+- Ruff: **PASS**;
+- `git diff --check`: **PASS**;
+- V1.3 BuildOnly: **PASS**;
+- frozen self-check: **PASS**;
+- release scan: **PASS**;
+- candidate EXE SHA256: `6FE03F2442377CA49A1A919A1715C401F83B8C481033F98802017AE8F11157B9`.
+
+These results support the broad regression state but do not cover the two lifecycle races above.
+
+## Release decision
+
+**DO NOT DEPLOY** the `6FE03F...` candidate as the final production V1.3 yet.
+
+No additional live business action is required to repair B1/B2. Both can and should be fixed and regression-tested offline first. After repair, rebuild a new candidate and resubmit for independent CEO Review.
+
+## State transition
+
+`REVIEW_REQUIRED -> CHANGES_REQUESTED`
