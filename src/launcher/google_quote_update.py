@@ -15,6 +15,37 @@ from src.workflow.v13_quote_update import (
     WorkflowQuotationSource,
 )
 
+_SCRIPT_SETTLEMENT_LATCH = """button => {
+    const previous = window.__insoQuoteSettlement;
+    if (previous) previous.observer.disconnect();
+    const latch = {confirmed: false, started: false, settled: false};
+    const visibleRunning = () => {
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+            if (!node.textContent.includes('正在运行脚本')) continue;
+            const element = node.parentElement;
+            if (!element || !element.getClientRects().length) continue;
+            const style = getComputedStyle(element);
+            if (style.visibility !== 'hidden' && style.display !== 'none') return true;
+        }
+        return false;
+    };
+    const sample = () => {
+        if (!latch.confirmed) return;
+        const running = visibleRunning();
+        if (running) { latch.started = true; latch.settled = false; }
+        else if (latch.started) latch.settled = true;
+    };
+    latch.observer = new MutationObserver(sample);
+    latch.observer.observe(document.body, {
+        subtree: true, childList: true, characterData: true, attributes: true
+    });
+    button.addEventListener('click', () => { latch.confirmed = true; sample(); },
+        {capture: true, once: true});
+    window.__insoQuoteSettlement = latch;
+}"""
+
 
 class GoogleQuotationUpdateActions:
     def __init__(self, *, browser_handle, location: QuotationInputLocation,
@@ -101,6 +132,8 @@ class GoogleQuotationUpdateActions:
         return drawing
 
     def click_update_quote(self):
+        if self._script_pending:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED")
         self._guard()
         button = self._ready_control()
         # Stale result dialogs cannot be mistaken for this attempt's result.
@@ -128,11 +161,17 @@ class GoogleQuotationUpdateActions:
         # this observed execution ends; never clear the shared input ourselves.
         self._script_pending = True
         try:
-            self._attempt(lambda: button.click(timeout=self._timeout))
-            notice = self._page.get_by_text("正在运行脚本", exact=False)
-            self._attempt(lambda: notice.wait_for(state="hidden", timeout=self._result_timeout))
+            button.evaluate(_SCRIPT_SETTLEMENT_LATCH, timeout=self._timeout)
+            button.click(timeout=self._timeout)
+            self._page.wait_for_function(
+                "() => window.__insoQuoteSettlement?.confirmed && window.__insoQuoteSettlement.started",
+                timeout=self._result_timeout)
+            self._page.wait_for_function(
+                "() => window.__insoQuoteSettlement?.started && window.__insoQuoteSettlement.settled",
+                timeout=self._result_timeout)
             self._guard()
-        except UpdateAttemptUnconfirmed:
+            self._page.evaluate("() => window.__insoQuoteSettlement.observer.disconnect()")
+        except Exception:  # noqa: BLE001 - any settlement uncertainty preserves the operation page
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED") from None
         self._script_pending = False
 

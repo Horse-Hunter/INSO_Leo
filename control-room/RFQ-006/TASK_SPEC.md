@@ -1919,3 +1919,36 @@ Chrome bootstrap maximum allowed configured timeout180s is a validation limit, n
 See tasks/2026-10-07-idle-login-keepalive.md: optional serial maintenance after two empty
 polls AND30min, canonical all-site background login,229 error mail, no popup or workflow
 hold/pause/stop. Preserve manual pages; no production acceptance or installed release change.
+
+## CEO CHANGES_REQUESTED repairs and Owner S-as-A — 2026-10-08
+Base c596adafd4e14881e292851e51c7375841e92c20 (CEO review265d6e9 retained).
+Only B1, B2 and Owner tier interpretation are changed. Previous passed quotation/mail/wait/
+scheduler contracts remain canonical. This section supersedes historical "S invalid; Owner must
+change S to A" statements; raw source S is never rewritten.
+
+B1: before exact确定 click, arm a read-only MutationObserver and click-capture latch on that
+button. PREPARED→CONFIRM_CLICKED→RUNNING_OBSERVED→SETTLED. Observe visible正在运行脚本 after
+confirmation; keep start and end evidence even if the API click returns after DOM transitions.
+Wait start max30s then end max30s. Absent initially is not settled. Any observation/DOM/CDP
+uncertainty raises GLOBAL_STOP GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED, pending stays true,
+owned Google page remains open, no next open/write/click, no automatic resubmit or input clear.
+
+B2: minimal protected target-ID set in ProductionBackend; register pre-existing nonblank pages
+and failed/manual keepalive pages. All backend park sites (_close_inso_order_tab poll finally,
+_open_research_session, _run_login_sweep) use preservation-aware wrapper. Live protected targets
+survive cleanup; detach/unready cleanup never closes their browser/pages. Owner-closed targets
+are pruned from current context, then canonical one-blank park resumes. Stable CDP target IDs
+survive new Playwright page wrappers after detach. Existing protected boundary suppresses another
+login sweep; detached page checks use canonical attach in check-only mode without early relogin.
+Business operations still own their normal page closures. No second browser/page manager.
+Real poll-loop regression runs two cycles, borrowed keepalive, poll-finally and Owner-close
+cleanup, proving human/preexisting pages survive and business continues with229 notification.
+
+S: existing _tier normalization maps rawS to effectiveA, otherA/B/C unchanged. All routing,
+important-order, duplicate handling and procurement use that single effective tier. Pending
+records, WorkItem and identifying_snapshot preserve rawS. Legacy skippedS naturally resumes
+same inquiry through existing _resume_after_input_fix/alert recovery; customer-name remains
+active. D/blank/UNKNOWN remain invalid. No DB migration/replay or Sheets tier writeback.
+
+Verification results and new candidate hash are recorded below after final checks.
+No new live action is authorized or executed; first-insert live/SMTP acceptance remains UNKNOWN.

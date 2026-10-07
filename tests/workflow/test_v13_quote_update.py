@@ -495,3 +495,13 @@ def test_status_change_at_30_second_boundary_is_success_not_warning(popup):
     assert result.row_error_reason is None
     assert result.outcome in {QuotationOutcome.UPDATED_INSERTED, QuotationOutcome.UPDATED_ALREADY_EXISTS}
     assert waits == [1.0] * 30 and actions.clicks == 1
+
+
+def test_script_settlement_fault_prevents_second_row_open_write_and_click():
+    updater, _src, inp, actions, waits = service()
+    actions.popups = ["更新完成 成功填入：0行 已有价跳过：1行"]
+    actions.dismiss_error = V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED")
+    with pytest.raises(V12Fault, match="GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"):
+        updater.run((found(), found(3)))
+    assert actions.opened == actions.clicks == 1
+    assert len(inp.writes) == 1 and not waits

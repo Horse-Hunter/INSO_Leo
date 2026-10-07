@@ -54,3 +54,5 @@ V1.2 Production Write Gate 当前 **CLOSED**。
 - 不引入 Redis、Celery、Kafka、Docker 或大型 Workflow Engine，除非出现真实需求。
 
 - Owner2026-10-07：正常 Research/采购订单行间隔由180秒缩短为120秒，GUI按同一期限倒计时（冷却02:00）。Owner随后补充：查询失败重试亦由180秒改120秒；报价正常行间0秒和15分钟循环不变。
+
+- Owner2026-10-08：客户等级S与A使用完全相同的业务规则，canonical effective tier为A；源表、WorkItem、identity snapshot的真实S保持不变。旧S非法规则已被取代；未发的旧S跳过订单在正常poll中以同inquiry自然恢复，不做历史重放或批量迁移。

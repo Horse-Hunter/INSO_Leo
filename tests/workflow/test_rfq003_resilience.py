@@ -527,18 +527,27 @@ def test_b1_closed_business_states_are_not_quarantined(state):
     assert interrupted_business_state(state, None, False, execution_started=True) is None
 
 
-def test_corrected_s_tier_recovers_only_invalid_input_alert_then_runs(tmp_path):
+def test_legacy_skipped_s_auto_resumes_and_recovers_only_invalid_input_alert(tmp_path):
     from datetime import timedelta
 
     from src.workflow.v12_contracts import ReasonCode
     f, ws, vs, research, *_rest = _make_flow(tmp_path)
     reader = FakeSheetsReader(tier="S")
-    iid = f.poll_and_process(reader, SHEET, now=NOW)[0].inquiry_id
+    # Reproduce the old build without mutating the source S or its identity.
+    from src.workflow import v12_flow
+    original_tier = v12_flow._tier
+    v12_flow._tier = lambda value: None if value == "S" else original_tier(value)
+    try:
+        iid = f.poll_and_process(reader, SHEET, now=NOW)[0].inquiry_id
+    finally:
+        v12_flow._tier = original_tier
     assert not research.inputs and vs.active_alerts(iid)
     vs.record_missing_customer(iid, NOW)
-    f.poll_and_process(FakeSheetsReader(tier="A"), SHEET, now=NOW + timedelta(minutes=1))
+    result, = f.poll_and_process(reader, SHEET, now=NOW + timedelta(minutes=1))
+    assert result.inquiry_id == iid and len(ws.all_items()) == 1
     assert len(research.inputs) == 1
-    assert ws.get_by_inquiry_id(iid).importance_raw == "A"
+    assert ws.get_by_inquiry_id(iid).importance_raw == "S"
+    assert ws.get_by_inquiry_id(iid).record_identity.identifying_snapshot.importance_raw == "S"
     assert all(a.reason_code not in {ReasonCode.INQUIRY_INPUT_INVALID, ReasonCode.INQUIRY_QUANTITY_INVALID}
         for a in vs.active_alerts(iid))
     assert any(a.reason_code is ReasonCode.CUSTOMER_NAME_MISSING for a in vs.active_alerts(iid))

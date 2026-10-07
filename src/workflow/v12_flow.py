@@ -822,7 +822,7 @@ def _tier(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().upper()
-    return normalized if normalized in {"A", "B", "C"} else None
+    return "A" if normalized == "S" else normalized if normalized in {"A", "B", "C"} else None
 
 
 def _quantity_is_numeric(value: object) -> bool:

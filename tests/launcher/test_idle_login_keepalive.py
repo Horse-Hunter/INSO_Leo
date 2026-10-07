@@ -115,6 +115,7 @@ def test_background_reuses_canonical_sweep_safe_cleanup_and_disconnect(tmp_path,
     backend, handle = _sweep_backend(tmp_path, monkeypatch, results)
     page = SimpleNamespace(url="https://manual/" if existing_nonblank else "about:blank", is_closed=lambda: False)
     handle.browser.contexts = [SimpleNamespace(pages=[page])]
+    monkeypatch.setattr(backend, "_page_target_id", lambda p: str(id(p)))
     observed = []
     monkeypatch.setattr(launcher, "sweep_sites", lambda browser, **kw: observed.append(kw) or tuple(results))
     parked = []
@@ -190,3 +191,148 @@ def test_invalid_maintenance_result_is_only_operational_warning(tmp_path, monkey
     backend._idle_login_tick(now=NOW + timedelta(minutes=30))
     assert backend._state is RunState.RUNNING and not backend._stop.is_set()
     assert len(store.claim_due_notifications(now=NOW + timedelta(minutes=31))) == 1
+
+
+class ProtectedPage:
+    def __init__(self, context, url):
+        self.context, self.url, self.closed = context, url, False
+        self.target_id = str(id(self))
+        context.pages.append(self)
+    def is_closed(self):
+        return self.closed
+    def close(self):
+        self.closed = True
+        self.context.pages.remove(self)
+
+
+class ProtectedContext:
+    def __init__(self):
+        self.pages = []
+        self.new_page()
+    def new_page(self):
+        return ProtectedPage(self, "about:blank")
+    def new_cdp_session(self, page):
+        return SimpleNamespace(send=lambda method: {"targetInfo": {"targetId": page.target_id}}, detach=lambda: None)
+
+
+@pytest.mark.parametrize("kind", ["human", "existing", "success"])
+def test_actual_poll_finally_preserves_keepalive_targets_and_next_cycle(tmp_path, monkeypatch, kind):
+    import json
+    import sqlite3
+    from threading import Event
+
+    from src.workflow.v13_integration import CombinedCycle
+    from tests.launcher.test_backend import (
+        _RecordingTransport,
+        _SheetsService,
+        _write_runtime_configs,
+    )
+    production, rc, rows = _write_runtime_configs(tmp_path)
+    config = json.loads(production.read_text(encoding="utf-8"))
+    config.update(v13_enabled=True, quotation_input={"gid": "0", "input_row": 1, "first_column": 1})
+    production.write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setattr(launcher, "build_read_only_google_sheets_service", lambda _: _SheetsService(rows, Event()))
+    monkeypatch.setattr(launcher, "assess_readiness", lambda *a, **k: SimpleNamespace(ready=True, missing_site_ids=()))
+    monkeypatch.setattr(launcher, "build_research_service", lambda *a, **k: SimpleNamespace(execute=lambda _: None))
+    monkeypatch.setattr("src.launcher.v12_composition.QQSMTPTransport", _RecordingTransport)
+    monkeypatch.setattr(launcher, "QQSMTPTransport", _RecordingTransport)
+    context = ProtectedContext()
+    browser = SimpleNamespace(contexts=[context], is_connected=lambda: True)
+    handle = SimpleNamespace(browser=browser, owned=False, disconnect=lambda: None, close=lambda: None)
+    backend = launcher.ProductionBackend(config_path=rc, production_config_path=production,
+        root=tmp_path, browser_acquirer=lambda *a, **k: handle)
+    preserved = []
+    if kind == "existing":
+        preserved.append(ProtectedPage(context, "https://manual.example/"))
+    sweeps, cycles, cleanups = [], [], []
+    def sweep(browser, **kw):
+        sweeps.append(True)
+        if kind == "human":
+            preserved.append(ProtectedPage(context, "https://captcha.example/"))
+        return (SiteLoginResult("TEST", SiteLoginOutcome.NEEDS_HUMAN if kind == "human" else SiteLoginOutcome.SIGNED_IN),)
+    monkeypatch.setattr(launcher, "sweep_sites", sweep)
+    def business(self, reader, worksheets, *, now):
+        cycles.append(backend._state)
+        self.v12.begin_poll_cycle()
+        backend._browser_handle = handle
+        if len(cycles) == 1:
+            backend._idle_empty_polls = 1
+            backend._idle_login_since = now - timedelta(minutes=31)
+    monkeypatch.setattr(CombinedCycle, "run", business)
+    close = backend._close_inso_order_tab
+    def cleanup():
+        close()
+        cleanups.append(tuple(context.pages))
+    monkeypatch.setattr(backend, "_close_inso_order_tab", cleanup)
+    original_wait = backend._stop.wait
+    def wait(seconds):
+        if seconds == 900:
+            if len(cycles) >= 2:
+                backend._stop.set()
+                return True
+            return False
+        return original_wait(seconds)
+    backend._stop.wait = wait
+    try:
+        backend.start()
+        backend._thread.join(timeout=8)
+        assert not backend._thread.is_alive() and len(cycles) == 2
+        assert cycles == [RunState.RUNNING, RunState.RUNNING]
+        assert len(sweeps) == 1  # Protected repair page must not accumulate another sweep.
+        if preserved:
+            assert all(not p.closed and p in cleanups[0] for p in preserved)
+            assert all(p in context.pages for p in preserved)
+            backend._state = RunState.RUNNING
+            backend._browser_handle = handle
+            for page in preserved:
+                page.close()  # Owner's manual closure releases protection on next cleanup.
+            backend._close_inso_order_tab()
+            assert not backend._keepalive_protected_targets
+        assert len(context.pages) == 1 and context.pages[0].url == "about:blank"
+        with sqlite3.connect(backend._v12_store.database_path) as db:
+            count = db.execute("SELECT count(*) FROM workflow_v12_notification_commands WHERE command_id LIKE 'idle-login:%'").fetchone()[0]
+            assert count == int(kind == "human")
+            assert db.execute("SELECT count(*) FROM workflow_v13_holds").fetchone()[0] == 0
+    finally:
+        backend.shutdown()
+
+
+def test_detached_protected_target_check_never_relogs_before_idle_threshold(tmp_path, monkeypatch):
+    backend, handle = _sweep_backend(tmp_path, monkeypatch, ())
+    context = ProtectedContext()
+    handle.browser = SimpleNamespace(contexts=[context], is_connected=lambda: True)
+    backend._keepalive_protected_targets.add("owner-closed-target")
+    monkeypatch.setattr(launcher, "sweep_sites", lambda *a, **kw: pytest.fail("check-only must not relog"))
+    assert backend._run_login_sweep(background=True, check_only=True) == ()
+    assert not backend._keepalive_protected_targets and handle.disconnected
+    assert len(context.pages) == 1 and context.pages[0].url == "about:blank"
+
+
+def test_protected_target_survives_new_cdp_page_wrappers(tmp_path):
+    backend = launcher.ProductionBackend(root=tmp_path)
+    first = ProtectedContext()
+    original = ProtectedPage(first, "https://manual.example/")
+    backend._protect_keepalive_pages([original])
+    second = ProtectedContext()
+    attached = ProtectedPage(second, original.url)
+    attached.target_id = original.target_id
+    browser = SimpleNamespace(contexts=[second], is_connected=lambda: True)
+    backend._park_browser(browser)
+    assert not attached.closed and attached in second.pages
+    attached.close()
+    backend._park_browser(browser)
+    assert not backend._keepalive_protected_targets
+    assert len(second.pages) == 1 and second.pages[0].url == "about:blank"
+
+
+@pytest.mark.parametrize("state", [RunState.GLOBAL_STOP, RunState.MANUAL_REVIEW])
+def test_stop_page_without_inso_session_is_not_closed_by_backend_release(tmp_path, state):
+    backend = launcher.ProductionBackend(root=tmp_path)
+    released = []
+    backend._state = state
+    backend._browser_handle = SimpleNamespace(owned=True,
+        disconnect=lambda: released.append("detach"),
+        close=lambda: pytest.fail("must retain settlement/manual operation page"))
+    backend._inso_session = None
+    backend._release_idle_browser(force=True)
+    assert released == ["detach"]

@@ -29,7 +29,13 @@ class Locator:
     def filter(self, *, has_text):
         self.pattern = has_text
         return self
+    def evaluate(self, script, **kwargs):
+        assert "MutationObserver" in script and "addEventListener('click'" in script
+        self.page.armed = True
     def click(self, **kwargs):
+        if self.name == "确定":
+            assert self.page.armed
+            self.page.confirmed = True
         self.page.clicks.append(self.name)
         if self.name == "更新报价":
             self.page.popup = "报价更新完成\n成功填入：1行"
@@ -69,6 +75,24 @@ class Page:
         self.menu_ready, self.menu_failure, self.ready_waits = True, False, []
         self.result_waits = []
         self.script_running, self.script_stuck, self.script_waits = True, False, []
+        self.armed = self.confirmed = self.started = self.settled = False
+        self.script_never_starts = False
+    def wait_for_function(self, script, **kwargs):
+        state = "settled" if ".settled" in script else "started"
+        self.script_waits.append({"state": state, **kwargs})
+        assert self.armed and self.confirmed
+        if state == "started":
+            if self.script_never_starts:
+                raise TimeoutError("never started")
+            self.script_running = self.started = True
+        else:
+            assert self.started
+            if self.script_stuck:
+                raise TimeoutError("never settled")
+            self.script_running = False
+            self.settled = True
+    def evaluate(self, script):
+        assert self.started and self.settled
     def goto(self, url, **kwargs):
         self.url = url
     def get_by_role(self, role, *, name=None, exact=None):
@@ -295,7 +319,8 @@ def test_live_unnamed_dialog_is_read_dismissed_and_rejected_if_stale():
     assert page.result_waits == [30000]
     actions.dismiss_result()
     assert page.popup is None and page.clicks == ["确定"]
-    assert page.script_waits == [{"state": "hidden", "timeout": 30000}]
+    assert page.script_waits == [{"state": "started", "timeout": 30000},
+                                 {"state": "settled", "timeout": 30000}]
     assert not page.script_running
     actions.close()
 
@@ -315,3 +340,49 @@ def test_script_settlement_timeout_preserves_surface_and_prevents_next_row():
     with pytest.raises(V12Fault, match="GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"):
         actions.open_quote_input()
     assert page.clicks == ["确定"]
+
+
+@pytest.mark.parametrize("initial_running", [True, False])
+def test_settlement_proves_start_then_end_even_if_initially_absent(initial_running):
+    actions, browser = adapter()
+    actions.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    page.popup = "更新完成 成功填入：0行 已有价跳过：1行"
+    page.script_running = initial_running
+    actions.dismiss_result()
+    assert page.started and page.settled and not actions._script_pending
+    actions.close()
+    actions.open_quote_input()
+    assert page.closed and browser.contexts[0].pages[-1] is not page
+
+
+def test_never_observed_start_is_not_settlement_and_blocks_next_surface():
+    actions, browser = adapter()
+    actions.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    page.popup = "更新完成 成功填入：0行 已有价跳过：1行"
+    page.script_running = False
+    page.script_never_starts = True
+    with pytest.raises(V12Fault, match="GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"):
+        actions.dismiss_result()
+    assert actions._script_pending and not page.started
+    actions.close()
+    with pytest.raises(V12Fault, match="GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"):
+        actions.open_quote_input()
+    with pytest.raises(V12Fault, match="GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"):
+        actions.click_update_quote()
+    assert not page.closed and page.clicks == ["确定"]
+
+
+def test_cdp_error_during_settlement_maps_to_settlement_stop_and_preserves_page():
+    actions, browser = adapter()
+    actions.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    page.popup = "更新完成 成功填入：1行"
+    def failed(*a, **kw):
+        raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")
+    page.wait_for_function = failed
+    with pytest.raises(V12Fault, match="GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"):
+        actions.dismiss_result()
+    actions.close()
+    assert actions._script_pending and not page.closed

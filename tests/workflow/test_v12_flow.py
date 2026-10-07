@@ -579,3 +579,34 @@ def test_a_placeholder_sheet_brand_is_asked_for_rather_than_trusted(
     assert writer.commands == []
     assert results[0].business_state is BusinessState.INVALID_INPUT_SKIPPED
     assert results[0].waiting_reason == "INVALID_QUANTITY_SKIPPED"
+
+
+@pytest.mark.parametrize("duplicate", [False, True])
+def test_s_and_a_have_identical_business_routing_with_raw_s_preserved(tmp_path, duplicate):
+    outcomes, commands, kinds = [], [], []
+    for tier in ("S", "A"):
+        facts = ResearchBusinessFacts("货足", Decimal(10), Decimal(2))
+        flow, ws, vs, research, checker, _, writer, _ = _make_flow(tmp_path / tier, facts=facts)
+        if duplicate:
+            checker.check = lambda iid, *a, **k: _confirmed_duplicate(iid, at=NOW, repeated=True)
+        result, = flow.poll_and_process(FakeSheetsReader(tier=tier), SHEET, now=NOW)
+        item = ws.get_by_inquiry_id(result.inquiry_id)
+        assert len(research.inputs) == 1 and result.business_state is not BusinessState.INVALID_INPUT_SKIPPED
+        assert item.importance_raw == tier
+        assert item.record_identity.identifying_snapshot.importance_raw == tier
+        assert flow._records[result.inquiry_id].importance_raw == tier
+        outcomes.append((result.business_state, result.routing_outcome, result.purchase_outcome))
+        commands.append([(c.customer_tier, c.quotation_type, c.purchaser) for c in writer.commands])
+        kinds.append([c.kind for c in vs.claim_due_notifications(now=NOW)])
+    assert outcomes[0] == outcomes[1] and commands[0] == commands[1] and kinds[0] == kinds[1]
+    if not duplicate:
+        assert commands[0] == [("A", "需要问全价格", "颜浩坚")]
+        assert NotificationKind.IMPORTANT_ORDER in kinds[0]
+
+
+@pytest.mark.parametrize("tier", ["D", "", "UNKNOWN"])
+def test_other_invalid_tiers_are_not_effective_a(tmp_path, tier):
+    flow, _, vs, research, _, _, writer, _ = _make_flow(tmp_path)
+    result, = flow.poll_and_process(FakeSheetsReader(tier=tier), SHEET, now=NOW)
+    assert result.business_state is BusinessState.INVALID_INPUT_SKIPPED
+    assert not research.inputs and not writer.commands and vs.active_alerts(result.inquiry_id)

@@ -115,3 +115,61 @@ Latest candidate EXE6FE03F2442377CA49A1A919A1715C401F83B8C481033F98802017AE8F111
 superseding earlier candidate hashes. Installed release/configs not overwritten pending Review.
 No real login/SMTP/order replay/quotation update/purchase; real keepalive login and SMTP delivery
 remain UNKNOWN. No dependency added; CEO review files unchanged.
+
+## CEO CHANGES_REQUESTED repairs and Owner S-as-A — 2026-10-08
+Base c596adafd4e14881e292851e51c7375841e92c20 (CEO review265d6e9 retained).
+Only B1, B2 and Owner tier interpretation are changed. Previous passed quotation/mail/wait/
+scheduler contracts remain canonical. This section supersedes historical "S invalid; Owner must
+change S to A" statements; raw source S is never rewritten.
+
+B1: before exact确定 click, arm a read-only MutationObserver and click-capture latch on that
+button. PREPARED→CONFIRM_CLICKED→RUNNING_OBSERVED→SETTLED. Observe visible正在运行脚本 after
+confirmation; keep start and end evidence even if the API click returns after DOM transitions.
+Wait start max30s then end max30s. Absent initially is not settled. Any observation/DOM/CDP
+uncertainty raises GLOBAL_STOP GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED, pending stays true,
+owned Google page remains open, no next open/write/click, no automatic resubmit or input clear.
+
+B2: minimal protected target-ID set in ProductionBackend; register pre-existing nonblank pages
+and failed/manual keepalive pages. All backend park sites (_close_inso_order_tab poll finally,
+_open_research_session, _run_login_sweep) use preservation-aware wrapper. Live protected targets
+survive cleanup; detach/unready cleanup never closes their browser/pages. Owner-closed targets
+are pruned from current context, then canonical one-blank park resumes. Stable CDP target IDs
+survive new Playwright page wrappers after detach. Existing protected boundary suppresses another
+login sweep; detached page checks use canonical attach in check-only mode without early relogin.
+Business operations still own their normal page closures. No second browser/page manager.
+Real poll-loop regression runs two cycles, borrowed keepalive, poll-finally and Owner-close
+cleanup, proving human/preexisting pages survive and business continues with229 notification.
+
+S: existing _tier normalization maps rawS to effectiveA, otherA/B/C unchanged. All routing,
+important-order, duplicate handling and procurement use that single effective tier. Pending
+records, WorkItem and identifying_snapshot preserve rawS. Legacy skippedS naturally resumes
+same inquiry through existing _resume_after_input_fix/alert recovery; customer-name remains
+active. D/blank/UNKNOWN remain invalid. No DB migration/replay or Sheets tier writeback.
+
+Verification results and new candidate hash are recorded below after final checks.
+No new live action is authorized or executed; first-insert live/SMTP acceptance remains UNKNOWN.
+
+### Final repair verification / candidate
+B1 regression PASS: visible→hidden; initially absent→delayed start→end; never starts and
+never settles GLOBAL_STOP; CDP settlement error maps to the fixed settlement reason; pending
+preserves page/blocks reopen and re-click; updater two-row batch makes only first open/write/click.
+Verified actual popup0 inserted/1 existing alias remains PASS. Backend GLOBAL_STOP/manual
+release with no INSO session detaches only, preserving Google/human operation pages.
+B2 PASS: real production poll loop executes combined→keepalive→finally→next cycle with borrowed
+CDP; NEEDS_HUMAN/preexisting pages survive, business remains RUNNING,229 command enqueued,
+no hold; all-success ends exactly one blank. Owner close prunes IDs/restores canonical park;
+new CDP wrappers retain same target protection; check-only attach does not relog early.
+S PASS: freshS Research; S/A equivalent duplicate/important-order/routing/type/purchaser;
+PendingSheetRecord/WorkItem/identity rawS preserved; oldS skip auto-resumes same inquiry and
+invalid-input alert recovers while customer-name alert remains. D/blank/UNKNOWN invalid;
+B/C threshold suite unchanged. RFQ003 B1 and RFQ004/005/006/007 regressions PASS.
+Focused459 PASS15.66s; full safe/offline1431 PASS/1 SKIP57.05s. Ruff src/tests PASS;
+git diff --check PASS. BuildOnly/frozen self-check/RELEASE_SCAN_OK PASS (exit0).
+New candidate EXE SHA256:
+77A861A40AE042BDC75A6AB1FBA7E6A5C0794052B9A972A28DEEAFBECC9CA126.
+Candidate path: build/windows-release-stage-1.3/dist/INSO_V1.3/INSO_V1.3.exe.
+Not deployed; no installed V1.2/V1.3/config/DB/OAuth/credential/profile/CDP asset changes.
+No new real procurement, Save/Save-and-Send, quote write/update, Apps Script or SMTP.
+CEO review SHA256 unchanged:15D43DE42795A6D11FAB2E8FAC13F508E2762627896C35E02E099630D5AF1955.
+No new decision conflict found. RFQ006 CHANGES_REQUESTED→REVIEW_REQUIRED; RFQ007 unchanged.
+Source fixes verified offline, not a new live Script/login/SMTP acceptance claim.

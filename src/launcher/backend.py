@@ -472,6 +472,7 @@ class ProductionBackend(GuiBackend):
         self._state = RunState.STOPPED
         self._started = self._stopped = self._last_poll = None
         self._next_poll_at = None
+        self._keepalive_protected_targets = set()
         self._idle_empty_polls = 0
         self._idle_login_since = utc_now()
         self._row_cooldown_until = None
@@ -1032,11 +1033,48 @@ class ProductionBackend(GuiBackend):
             self._close_inso_order_tab()
             self._active_inso_inquiry = inquiry_id
 
+    @staticmethod
+    def _page_target_id(page):
+        session = page.context.new_cdp_session(page)
+        try:
+            return session.send("Target.getTargetInfo")["targetInfo"]["targetId"]
+        finally:
+            session.detach()
+
+    def _protect_keepalive_pages(self, pages):
+        for page in pages:
+            if not page.is_closed() and page.url != "about:blank":
+                self._keepalive_protected_targets.add(self._page_target_id(page))
+
+    def _live_keepalive_pages(self, browser):
+        if not self._keepalive_protected_targets:
+            return ()
+        context, = browser.contexts
+        live = {self._page_target_id(p): p for p in context.pages if not p.is_closed()}
+        self._keepalive_protected_targets.intersection_update(live)
+        return tuple(live[target] for target in self._keepalive_protected_targets)
+
+    def _park_browser(self, browser):
+        protected = self._live_keepalive_pages(browser)
+        if protected:
+            context, = browser.contexts
+            if not any(not p.is_closed() and p.url == "about:blank" for p in context.pages):
+                new_background_page(browser, context, timeout_ms=10000)
+            return
+        park_shared_cdp(browser)
+
     def _close_inso_order_tab(self):
         session = self._inso_session
         if session is not None and self._state not in {RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}:
             close = getattr(session, "close_owned_operation_tab", None)
-            if callable(close):
+            protected = False
+            if self._keepalive_protected_targets:
+                try:
+                    page = session.operation_access().operation_page().page
+                    protected = self._page_target_id(page) in self._keepalive_protected_targets
+                except Exception:  # noqa: BLE001 - uncertain owned page must remain available to the Owner
+                    protected = True
+            if callable(close) and not protected:
                 close()
         self._inso_session = None
         self._inso_guard = None
@@ -1044,7 +1082,7 @@ class ProductionBackend(GuiBackend):
         self._active_inso_inquiry = None
         browser = getattr(self._browser_handle, "browser", None)
         if browser is not None and self._state not in {RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}:
-            park_shared_cdp(browser)
+            self._park_browser(browser)
 
     def _complete_inquiry(self, result):
         """Settle each row before starting the next; never defer to batch drain."""
@@ -1125,7 +1163,7 @@ class ProductionBackend(GuiBackend):
             raise BrowserBootstrapError("CDP research readiness failed")
         try:
             if self._browser_handle.browser is not None:
-                park_shared_cdp(self._browser_handle.browser)
+                self._park_browser(self._browser_handle.browser)
             self._research_cycle_drained = False
             self._inso_session = attach_inso_research_session(
                 research_config.cdp.cdp_url,
@@ -1153,15 +1191,18 @@ class ProductionBackend(GuiBackend):
         self._inso_session = None
         self._inso_guard = None
         self._research_ready = False
-        if session is not None:
+        if session is not None and not self._keepalive_protected_targets:
             try:
                 self._research_cycle_drained = True
                 session.close_after_drain()
             except Exception as exc:  # noqa: BLE001 - cleanup boundary
                 log.warning("Unready INSO session shutdown failed (%s)", type(exc).__name__)
-        if handle is not None and session is None:
+        if handle is not None and (session is None or self._keepalive_protected_targets):
             try:
-                handle.close()
+                if self._keepalive_protected_targets:
+                    handle.disconnect()
+                else:
+                    handle.close()
             except Exception as exc:  # noqa: BLE001 - cleanup boundary
                 log.warning("Unready browser shutdown failed (%s)", type(exc).__name__)
 
@@ -1184,7 +1225,10 @@ class ProductionBackend(GuiBackend):
             self._inso_session = None
             self._inso_guard = None
             self._research_ready = False
-        if session is not None and self._state in {
+        if self._keepalive_protected_targets and handle is not None:
+            handle.disconnect()  # Target IDs survive detach; never close protected Chrome/pages.
+            return
+        if handle is not None and self._state in {
             RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP,
         }:
             # A human-needed page is not a drained order. Detach only the client;
@@ -1201,9 +1245,12 @@ class ProductionBackend(GuiBackend):
                 session.close_after_drain()
             except Exception as exc:  # noqa: BLE001 - cleanup boundary
                 log.warning("INSO session shutdown failed (%s)", type(exc).__name__)
-        if handle is not None and session is None:
+        if handle is not None and (session is None or self._keepalive_protected_targets):
             try:
-                handle.close()
+                if self._keepalive_protected_targets:
+                    handle.disconnect()
+                else:
+                    handle.close()
             except Exception as exc:  # noqa: BLE001 - cleanup boundary
                 log.warning("Idle browser shutdown failed (%s)", type(exc).__name__)
         with self._lock:
@@ -1685,6 +1732,25 @@ class ProductionBackend(GuiBackend):
             self._idle_empty_polls = 0
             self._idle_login_since = now
             return
+        browser = getattr(self._browser_handle, "browser", None)
+        if browser is None and self._keepalive_protected_targets:
+            # Reuse the canonical sweep attach path to resolve Owner-closed targets.
+            try:
+                self._run_login_sweep(background=True, check_only=True)
+            except Exception:  # noqa: BLE001 - optional maintenance/page check cannot block workflow
+                self._append_log("WARNING", "保活人工页面状态暂不可确认，继续保留。")
+            self._idle_empty_polls = 0
+            self._idle_login_since = now
+            return
+        try:
+            protected = bool(self._live_keepalive_pages(browser)) if self._keepalive_protected_targets else False
+        except Exception:  # noqa: BLE001 - uncertainty retains the human boundary
+            protected = True
+        if protected:
+            # Owner has an open repair boundary. Do not accumulate another failed sweep.
+            self._idle_empty_polls = 0
+            self._idle_login_since = now
+            return
         self._idle_empty_polls += 1
         if self._idle_empty_polls < 2 or now - self._idle_login_since < timedelta(minutes=30):
             return
@@ -1781,7 +1847,7 @@ class ProductionBackend(GuiBackend):
             except Exception as exc:  # noqa: BLE001 - fail closed at runtime boundary
                 log.debug("login sweep callback failed (%s)", type(exc).__name__)
 
-    def _run_login_sweep(self, *, background=False) -> tuple[SiteLoginResult, ...]:
+    def _run_login_sweep(self, *, background=False, check_only=False) -> tuple[SiteLoginResult, ...]:
         """Attach the approved CDP browser, sweep it, then give it back."""
 
         try:
@@ -1817,7 +1883,15 @@ class ProductionBackend(GuiBackend):
                 ),
             )
         try:
+            if check_only:
+                self._park_browser(handle.browser)
+                return ()
+            if background and self._live_keepalive_pages(handle.browser):
+                self._park_browser(handle.browser)
+                return ()
             existing_pages = tuple(handle.browser.contexts[0].pages) if background else ()
+            if background:
+                self._protect_keepalive_pages(existing_pages)
             options = ({"present_failures": False,
                         "stop_requested": self._immediate_stop_requested,
                         "wait": self._stop.wait} if background else {})
@@ -1827,6 +1901,9 @@ class ProductionBackend(GuiBackend):
                 timeout_ms=research_config.browser.timeout_ms,
                 **options,
             )
+            if background and any(r.outcome not in {
+                    SiteLoginOutcome.SIGNED_IN, SiteLoginOutcome.ALREADY_SIGNED_IN} for r in results):
+                self._protect_keepalive_pages(handle.browser.contexts[0].pages)
             if background and not self._immediate_stop_requested():
                 context, = handle.browser.contexts
                 if not any(not p.is_closed() and p.url == "about:blank" for p in context.pages):
@@ -1834,7 +1911,7 @@ class ProductionBackend(GuiBackend):
                 if all(r.outcome in {SiteLoginOutcome.SIGNED_IN,
                                      SiteLoginOutcome.ALREADY_SIGNED_IN} for r in results) and results and not any(
                         not p.is_closed() and p.url != "about:blank" for p in existing_pages):
-                    park_shared_cdp(handle.browser)
+                    self._park_browser(handle.browser)
                 # Failed or pre-existing nonblank pages are retained for human review.
             return results
         except SiteSweepError as exc:
