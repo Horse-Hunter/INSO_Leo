@@ -64,6 +64,7 @@ from src.workflow import (
     WorkflowStatus,
     WorkflowWorker,
 )
+from src.workflow.inso_query import run_inso_query
 from src.workflow.v12_contracts import (
     DeliveryOutcome,
     EventType,
@@ -387,7 +388,7 @@ class _PreparedDuplicateChecker:
     def check(self, inquiry_id, mpn, quantity, *, at):
         if self._begin_inquiry is not None:
             self._begin_inquiry(inquiry_id)
-        for attempt in range(4):
+        def prepare():
             if self._begin_inquiry is not None:
                 self._begin_inquiry(inquiry_id)
             if self._prepare is not None:
@@ -395,23 +396,25 @@ class _PreparedDuplicateChecker:
                     self._prepare()
                 except BrowserBootstrapError as exc:
                     raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED") from exc
+
+        def operation():
             try:
-                result = self._checker.check(inquiry_id, mpn, quantity, at=at)
+                return self._checker.check(inquiry_id, mpn, quantity, at=at)
             except (sqlite3.Error, V12DatabaseError):
                 raise
             except Exception:
                 if self._wait is None:
                     raise
-                result = None
-            if self._wait is None or (result is not None and result.outcome.value == "CONFIRMED"):
-                return result
-            if self._reset is not None:
-                self._reset()
-            if attempt == 3:
-                raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_QUERY_RETRIES_EXHAUSTED")
-            if self._wait(180):
-                raise V12Fault(FaultScope.V12_PAUSE, "STOP_REQUESTED")
-        raise AssertionError("bounded query loop exhausted")
+                return None
+
+        if self._wait is None:
+            prepare()
+            return operation()
+        return run_inso_query(
+            operation, prepare=prepare,
+            succeeded=lambda result: result is not None and result.outcome.value == "CONFIRMED",
+            reset=self._reset or (lambda: None), wait=self._wait,
+        )
 
 
 class ProductionBackend(GuiBackend):
@@ -810,26 +813,35 @@ class ProductionBackend(GuiBackend):
             self._manual_review(inquiry_id, f"{result.source.value}：登录不可用")
 
     def _run_inso_query(self, inquiry_id, operation, prepare):
-        for attempt in range(4):
-            try:
-                result = operation()
-            except (sqlite3.Error, V12DatabaseError, V12Fault):
-                raise
-            except Exception:  # noqa: BLE001 - read failure must never become an empty history
-                result = None
-            if result is not None:
-                self._observe_source_failure(inquiry_id, result)
-                code = next((str(f.value) for f in result.evidence.fields if f.key == "failure_code"), "SOURCE_UNAVAILABLE")
-                if result.outcome is not SourceOutcome.SOURCE_UNAVAILABLE or "FX" in code:
-                    return result
-            self._close_inso_order_tab()
-            if attempt == 3:
-                raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_QUERY_RETRIES_EXHAUSTED")
-            if self._stop.wait(180):
-                raise V12Fault(FaultScope.V12_PAUSE, "STOP_REQUESTED")
+        first_attempt = True
+
+        def prepare_attempt():
+            nonlocal first_attempt
+            if first_attempt:
+                first_attempt = False
+                return
             self._begin_inso_inquiry(inquiry_id)
             prepare()
-        raise AssertionError("bounded INSO query loop exhausted")
+
+        def read_attempt():
+            try:
+                return operation()
+            except (sqlite3.Error, V12DatabaseError, V12Fault):
+                raise
+            except Exception:  # noqa: BLE001 - failed reads never become empty history
+                return None
+
+        def succeeded(result):
+            if result is None:
+                return False
+            self._observe_source_failure(inquiry_id, result)
+            code = next((str(f.value) for f in result.evidence.fields if f.key == "failure_code"), "SOURCE_UNAVAILABLE")
+            return result.outcome is not SourceOutcome.SOURCE_UNAVAILABLE or "FX" in code
+
+        return run_inso_query(
+            read_attempt, prepare=prepare_attempt, succeeded=succeeded,
+            reset=self._close_inso_order_tab, wait=self._stop.wait,
+        )
 
     def _run_source_query(self, inquiry_id, site, operation, reconnect):
         """Three bounded shared-CDP recoveries, independent of per-query retry."""

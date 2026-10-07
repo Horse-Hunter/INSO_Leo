@@ -586,7 +586,9 @@ class PlaywrightProcurementHistoryPage:
         self._page = page
         self._timeout_ms = timeout_ms
 
-    def query_exact_response(self, target_mpn: str) -> dict[str, object]:
+    def query_exact_response(
+        self, target_mpn: str, *, capture_page: Callable | None = None,
+    ) -> dict[str, object]:
         frame = self._page
         owner = frame.page
         deadline = monotonic() + self._timeout_ms / 1000
@@ -681,7 +683,11 @@ class PlaywrightProcurementHistoryPage:
             if len(rows) != min(size, max(0, total - len(records))):
                 raise InsoDuplicateHistoryError(DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED)
             seen.update(ids)
-            records.extend(rows)
+            # Optional read-only display capture runs while this page is settled.
+            captured = rows if capture_page is None else capture_page(frame, rows)
+            if len(captured) != len(rows):
+                raise InsoDuplicateHistoryError(DuplicateHistoryFailure.RESULT_ROW_UNREADABLE)
+            records.extend(captured)
             if len(records) == total:
                 return {"rows": records}
         raise InsoDuplicateHistoryError(DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED)
@@ -1404,6 +1410,11 @@ def _dup_mpn_key(value: object) -> str | None:
         chr(ord(char) - 32) if "a" <= char <= "z" else char
         for char in normalized
     )
+
+
+def canonical_history_mpn(value: object) -> str | None:
+    """Public exact dup-mpn-v1 key for consumers of raw lower history."""
+    return _dup_mpn_key(value)
 
 
 def _validate_exact_response_rows(rows: list[object], target: str) -> None:

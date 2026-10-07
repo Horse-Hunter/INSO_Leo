@@ -71,3 +71,7 @@ Reviewer verifies this flag and grant exclusion from Git/release artifacts.
 读取 scope：`spreadsheets.readonly`；写入 scope：`spreadsheets`；不申请 Drive scope。Refresh grant 使用 Windows CurrentUser DPAPI 加密并保存在仓库外。Token 不进入 Git/log。
 
 真实写入必须遵守 `docs/SAFETY.md`；当前 V1.2 Gate 状态见 `CURRENT_TASK.md`。
+
+## RFQ-004 V1.3 read-only source
+
+`query_quotation_candidates` reads exact 发给采购 through the existing schema/row parser; V1.2 pending entry remains exact 未发. `quotation_candidates.relocate_quotation_source` reuses existing exact relocation with sent-state expectation and explicit persisted expected brand, preserving the opaque original identity. No write, poll or new ID. Workflow binds existing ledger inquiry IDs; orphan/ambiguous sources fail closed.

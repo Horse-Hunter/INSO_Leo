@@ -106,12 +106,19 @@ def query_pending_records(
     worksheet: WorksheetIdentity,
 ) -> tuple[PendingSheetRecord, ...]:
     """Read once and return rows whose schema-specific status is exactly 未发."""
+    return query_records_by_status(reader, worksheet, status="未发")
 
+
+def query_records_by_status(
+    reader: WorksheetRowReader, worksheet: WorksheetIdentity, *, status: str,
+) -> tuple[PendingSheetRecord, ...]:
+    """One-shot exact status read using the canonical schema and row parser."""
+    wanted_status = status
     schema = worksheet_schema(worksheet.worksheet)
     pending: list[PendingSheetRecord] = []
     for row in reader.read_rows(worksheet):
         status = row.cells.get(schema.status_column)
-        if status != "未发":
+        if status != wanted_status:
             continue
 
         snapshot = _source_snapshot(row, schema)
@@ -173,3 +180,10 @@ def _source_snapshot(
         brand=row.cells.get(schema.brand_column),
         quantity=row.cells.get(schema.quantity_column),
     )
+
+
+def query_quotation_candidates(
+    reader: WorksheetRowReader, worksheet: WorksheetIdentity,
+) -> tuple[PendingSheetRecord, ...]:
+    """V1.3 read-only source; never polls or changes a cell."""
+    return query_records_by_status(reader, worksheet, status="发给采购")

@@ -10,6 +10,7 @@ from .pending import (
     WorksheetRow,
     WorksheetRowReader,
     query_pending_records,
+    query_quotation_candidates,
     usable_brand,
 )
 
@@ -23,5 +24,6 @@ __all__ = [
     "WorksheetRow",
     "WorksheetRowReader",
     "query_pending_records",
+    "query_quotation_candidates",
     "usable_brand",
 ]

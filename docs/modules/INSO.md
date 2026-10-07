@@ -178,3 +178,7 @@ AI preview 只接受唯一 row；MPN 按 `ai-mpn-v1` exact、Qty positive intege
 - 无首行、仍是旧首行、时间不符、字段缺失、查询失败均为待确认，不标成未保存、不自动重发。确认仅证明上方出现了业务记录，不证明各供应商收到发送内容。
 - 操作退出后仅归还 app-created INSO tab；借用的 Owner tab 保留。绝不关闭 Chrome/context 或创建第二 CDP。
 - baseline 仅属于当前调用，不新增持久表/迁移。中断重启不会自动提交，legacy reconciliation 不得拿旧记录确认此次 Save-and-Send；结果需人工核实，不能靠重跑补发。
+
+## RFQ-004 V1.3 read-only quotation capability
+
+`quotation_read.InsoQuotationReader` reuses the existing complete lower native query via per-page display capture. `V13QuotationRow` retains fourteen raw text cells 日期→制单人 separately from its parsed aware time; `select_recent_latest` applies exact MPN and inclusive Shanghai rolling72h, latest timestamp only. No quantity/price/brand business validation. Structure/time failure is not an empty quote. Current live fourteen-column layout remains UNKNOWN; see RFQ-004 Execution Log. Existing V1.2 default query behavior remains unchanged.

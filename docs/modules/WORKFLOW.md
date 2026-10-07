@@ -87,3 +87,7 @@ Save safety：
 ## 边界
 
 Workflow 不解析 Research Excel 业务细节，不实现 Sheets relocation，不直接操作 INSO DOM，不自行发送 SMTP。模块职责变化看 `MODULE_INDEX.md`；当前阶段 wiring 看 `CURRENT_TASK.md`。
+
+## RFQ-004 isolated V1.3 read cycle
+
+`v13_quotation.V13QuotationCycle` binds sent-source rows to original ledger inquiry_id/record_identity, re-reads/relocates before each attempt and processes serial fresh owned operation tabs. Returns QUOTE_FOUND with raw quotation DTO or normal NO_RECENT_QUOTE. No enqueue/new ID/Google write/SMTP/production scheduling. `inso_query.run_inso_query` is the shared extracted RFQ-003 query retry: initial+3, close then interruptible180s, exhaustion GLOBAL_STOP; both V1.2 launcher readers reuse it with unchanged classification. V1.3 has no normal row cooldown. Protected authentication failures bypass retry and retain the human page. Final integration remains outside RFQ-004.
