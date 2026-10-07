@@ -1,155 +1,133 @@
 # RFQ-004 CEO Independent Review — 2026-10-07
 
 **Status:** COMPLETE  
-**Verdict:** CHANGES_REQUESTED  
-**Reviewed Executor HEAD:** `bece24be349c382d6b5703128663382f4549a62e`
+**Verdict:** PASS / REVIEWED_DONE  
+**Reviewed Executor HEAD:** `d45b55ea51110ffd81ba2c6f33c31bce9eaa81f0`  
+**Previous Blocking Review:** B1 at CEO review commit `48750c1361ce9c34df6107c8ed5b120babd277bc`
 
-## Summary
+## Decision
 
-RFQ-004 的主体方向正确，以下部分经独立代码 Review 未发现新的阻塞问题：
+RFQ-004 is approved.
 
-- 从 RFQ-003 REVIEWED_DONE 基线独立创建 `feature/v1-3`；
-- V1.2 `未发` 扫描保持原语义，V1.3 新增精确 `发给采购` 只读扫描；
-- V1.3 不创建新的 inquiry_id，输出继续携带原 `inquiry_id / record_identity`；
-- 复用现有下方 `Stock_VenQuote` 查询、分页、settlement、exact MPN 规则；
-- 72 小时窗口使用 Asia/Shanghai aware time，边界为 inclusive；
-- 多条记录只按记录时间选择最新，不做价格/品牌/数量等业务筛选；
-- `日期 → 制单人` 14 列使用独立 raw payload 保留显示文本，parsed time 不覆盖原日期；
-- 查询成功但 72 小时内 0 条正确表达为 `NO_RECENT_QUOTE`；
-- 查询失败与 0 条结果分离，复用初次 + 3 次 retry / 180 秒可中断等待；
-- V1.3 正常相邻订单没有 V1.2 的 180 秒行间冷却；
-- 人工验证仍走共享 INSO GLOBAL_STOP，并保护 human-needed page；
-- 未接 Google 写入、更新报价、总调度、GUI/邮件和正式发布，符合 RFQ-004 边界；
-- Executor 报告的 focused 48、full safe/offline 1101/1、Ruff、diff 均与提交范围相符。
+The previous B1 blocker is repaired: a bad V1.3 source row no longer aborts the whole quotation-read batch, while genuinely shared Sheets / ledger / INSO / CDP failures still retain global-stop semantics.
 
-但当前 V1.3 source identity failure 被错误升级成 GLOBAL_STOP，而且候选在处理前一次性全解析，会导致“一条有问题的报价行阻塞全部报价”。这违反 Owner 已确认的 V1.3 单行隔离原则，因此不能标 REVIEWED_DONE。
+RFQ-004 remains read-side only. It does not write quotation data, click 更新报价, change Google source status, integrate the final scheduler/GUI/mail flow, package V1.3, or replace the deployed V1.2 executable.
 
-## Blocking Finding
+## B1 verification
 
-### B1 — HIGH — 单行 source identity 问题会 GLOBAL_STOP，并在处理第一条前阻塞整个 V1.3 批次
+### PASS — row failures are isolated
 
-Owner 已确认的 V1.3 总原则是：
+The cycle now produces an ordered candidate-or-result stream and supports:
 
-> V1.3 某一行订单遇到问题，只影响这一行；Owner 会单独处理该行报价流程并修改状态，程序继续下一条。只有共享 Google / INSO / CDP / ledger 等基础设施故障才全局停止。
+- `QUOTE_FOUND`
+- `NO_RECENT_QUOTE`
+- `ROW_FAILED`
 
-当前 `read_v13_candidates()` 会：
+with fixed safe row reasons:
 
-1. 一次性读取全部 `发给采购`；
-2. 尝试先把所有 observed rows 与历史 workflow item 绑定；
-3. 任意一行匹配数量不是 1，立即抛：
-   `V12Fault(FaultScope.GLOBAL_STOP, "SOURCE_IDENTITY_UNRESOLVED")`；
-4. 任意一行 MPN 不可用，同样直接 GLOBAL_STOP；
-5. 因为解析发生在真正逐行 query 前，所以即使前面已有完全正常的报价行，也不会先处理。
+- `SOURCE_IDENTITY_UNRESOLVED`
+- `SOURCE_IDENTITY_AMBIGUOUS`
+- `SOURCE_MPN_UNAVAILABLE`
+- `SOURCE_CHANGED`
 
-这把“单行 source/identity 数据问题”错误当成了“共享基础设施故障”。
+A row-level source problem does not open INSO, does not wait 180 seconds, does not consume query retry budget, and does not stop later rows.
 
-同样地，单行在 query 前 re-read 时出现 `SheetRecordConflict` / ledger identity conflict，当前会经通用异常路径升级为 `V13_READ_UNAVAILABLE` GLOBAL_STOP。
+The new valid / bad / valid regression verifies that the two valid rows each receive their own fresh INSO operation tab while the bad middle row is returned as `ROW_FAILED` and skipped.
 
-这与 RFQ-004 的“每行独立 closed-loop”以及 Owner 的 V1.3 故障隔离基线不一致。
+### PASS — original-position-first identity anchoring
 
-### Additional concrete identity edge case
+`relocate_quotation_source()` now first validates the original `record_identity.row_position` using:
 
-当前 `relocate_quotation_source()` 完全复用 `relocate_record()` 的“非 Brand snapshot 必须全表唯一”策略。
+- exact current `发给采购` status;
+- original importance semantics;
+- original model;
+- original quantity;
+- expected brand, including the already-persisted UPDATED Research brand rule.
 
-因此如果 Google 中存在两笔不同订单，但它们碰巧有相同：
+The row position is used only as an anchor for the existing identity. It never creates or rewrites an inquiry identity.
 
-- importance
-- MPN
-- quantity
+If the original position no longer matches, the implementation falls back to exact unique relocation.
 
-并且状态都已变为 `发给采购`，
+### PASS — equal snapshot orders at their original positions remain distinct
 
-即使两笔订单仍各自在原来的 row_position、历史 inquiry_id 完全不同，当前 resolver 仍会因为全表存在两个 snapshot match 而将两笔都视为 unresolved。
+The regression with two different historical inquiries having the same business snapshot but different original rows passes.
 
-这种情况不应该变成全局停机。
+Each current row binds to its own original inquiry_id / record_identity rather than being rejected solely because the snapshot is duplicated elsewhere in the sheet.
 
-原 row_position 不能成为新的永久 identity，但在“原位置仍然存在且完整 snapshot/status-transition 可验证”的情况下，可以作为现有 record_identity 的第一安全定位锚点；只有原位置不再匹配时，再进入 unique relocation fallback。若 fallback 仍歧义，则只把该行作为 row-level failure，不能拖死其他 V1.3 行。
+### PASS — true relocation ambiguity remains fail-closed, but row-local
 
-## Required Repair
+When the original position no longer matches and more than one exact relocation candidate remains, the related current rows are returned as `ROW_FAILED / SOURCE_IDENTITY_AMBIGUOUS`.
 
-只修 source candidate / identity isolation，不扩大 RFQ-004 范围。
+The implementation does not guess, does not generate a replacement ID, and does not upgrade this row-local ambiguity to GLOBAL_STOP.
 
-1. V1.3 必须真正逐行隔离：
-   - 一条 `发给采购` 的 identity/MPN/source-row 问题 → 当前行 typed row failure；
-   - 后续候选继续；
-   - 不得 GLOBAL_STOP；
-   - RFQ-004 暂未接 GUI/邮件，可先用明确的 result/error DTO 表达，供 RFQ-006 映射“红色 + 229 + 下一条”。
+### PASS — fresh re-read conflicts remain row-local
 
-2. GLOBAL_STOP 只保留给共享基础设施：
-   - Sheets 整体 read/auth/schema 不可用；
-   - workflow ledger 整体不可用；
-   - INSO auth/manual verification；
-   - INSO query retries exhausted；
-   - shared CDP/session infrastructure failure。
+Immediately before each actual INSO attempt the source row is re-read and identity is checked again.
 
-3. 不要在真正逐行处理之前，因为某个 later candidate 的 row-local identity failure 让整个 batch 失败。
-   - valid row 应按源表顺序正常产出结果；
-   - bad row 产出 row-level failure；
-   - 后续 valid row 继续。
+A per-row status/model/brand/quantity/importance conflict becomes `SOURCE_CHANGED` or the appropriate row reason, closes/avoids the operation as appropriate, and continues to the next source row.
 
-4. 改进定位顺序：
-   - 首先检查 original `record_identity.row_position` 当前是否仍对应同一订单（允许唯一授权的 `未发 → 发给采购` 状态变化，以及现有 persisted UPDATED brand）；
-   - 若原位置不再匹配，再使用现有 unique relocation；
-   - 不生成新 inquiry_id；
-   - 不用 fuzzy matching；
-   - 无法可靠定位时只产生当前行 row-level failure。
+If a source conflict appears after an earlier INSO query attempt and 180-second retry wait, that row exits as `ROW_FAILED` without spending additional query attempts.
 
-5. 保持“行移动不是新订单”：
-   - 能唯一 relocate 时仍使用原 inquiry_id / original record_identity；
-   - DTO 不应改写原 identity。
+### PASS — shared infrastructure failures remain global
 
-## Required Regression Tests
+The repair does not weaken global-stop boundaries.
 
-至少新增：
+The added tests keep the following as `FaultScope.GLOBAL_STOP`:
 
-1. **valid + bad + valid 三行**
-   - 第1行 identity 正常；
-   - 第2行 source identity unresolved；
-   - 第3行 identity 正常；
-   - 结果应为：第1行正常读取 → 第2行 row-level failure → 第3行继续读取；
-   - 不产生 GLOBAL_STOP；
-   - normal rows 仍各自 fresh tab；
-   - bad row 不进入 INSO query。
+- shared Sheets read failure;
+- workflow ledger/database read failure;
+- INSO authentication / manual verification;
+- INSO query retries exhausted;
+- shared CDP/session failures from the existing operation adapter.
 
-2. **两个完全相同 snapshot 的不同订单，原位置未移动**
-   - same importance / MPN / quantity，可同品牌；
-   - 两个不同 original inquiry_id / row_position；
-   - 状态均从未发变为发给采购；
-   - 两行都必须映射回各自 original inquiry_id；
-   - 不能因为 snapshot 非唯一而失败。
+This matches the Owner fault-isolation baseline.
 
-3. **原位置已变化但可唯一 relocate**
-   - 继续复用 original identity/inquiry_id。
+## Wider RFQ-004 verification
 
-4. **原位置已变化且 relocation 真正歧义**
-   - 只当前 row failure；
-   - 下一行继续；
-   - 不创建新 ID。
+The original RFQ-004 implementation remains consistent with the approved requirements:
 
-5. **Sheets 整体 read failure**
-   - 仍然 GLOBAL_STOP，证明没有把共享故障误降级。
+- exact `发给采购` scan; V1.2 `未发` semantics unchanged;
+- original `inquiry_id / record_identity` retained;
+- one fresh INSO operation tab per valid source row;
+- existing lower `Stock_VenQuote` query/pagination reused;
+- exact MPN selection;
+- rolling inclusive 72-hour window in Asia/Shanghai;
+- query success with zero recent records => normal `NO_RECENT_QUOTE`;
+- multiple eligible records => latest record only;
+- `日期 → 制单人` 14 displayed fields preserved as raw strings;
+- business content is not rejected for empty/odd brand, quantity, currency, price, lot, lead-time, remarks, or creator fields;
+- query failures never masquerade as no quotation;
+- normal V1.3 row-to-row processing has no 180-second cooldown;
+- INSO query recovery remains initial attempt + at most three retries with interruptible 180-second waits;
+- manual-verification pages remain protected.
 
-6. 保留现有 query retries exhausted / manual verification GLOBAL_STOP 测试。
+## Executor verification evidence reviewed
 
-## Verification Required
+Executor reports for the repaired HEAD:
 
-修复后重新执行：
+- focused: **72 passed**
+- full safe/offline: **1125 passed / 1 skipped**
+- Ruff: **PASS**
+- `git diff --check`: **PASS**
 
-- RFQ-004 focused tests；
-- full safe/offline pytest；
-- `python -m ruff check src tests`；
-- `git diff --check`。
+No real Save, Save-and-Send, Google write, 更新报价, Apps Script, SMTP, production submission, historical replay, packaging, deployment, or V1.2 executable replacement was performed.
 
-仍然禁止：
+The deployed V1.2 remains unchanged with SHA256:
 
-- 真实 Save / Save-and-Send；
-- Google 写入；
-- 更新报价；
-- SMTP；
-- Apps Script；
-- 正式 V1.3 打包；
-- 覆盖当前 V1.2 EXE。
+`1A49C9650BA531F2299326FFC89761D0391CD5F2C0FE32327DDD0736BD5C3E84`
 
-## State transition
+## Residual live-only unknowns
 
-`REVIEW_REQUIRED → CHANGES_REQUESTED`
+The following remain intentionally unverified until an authorized live/read acceptance stage:
+
+- actual current INSO 14-column header/DOM layout;
+- exact displayed raw text/date formatting;
+- real quotation-query/session behavior against production records.
+
+These are not blockers for RFQ-004 because this RFQ explicitly delivers the read-side source, selection, DTO, fault and operation boundaries with offline/safe verification. They must not be silently treated as live acceptance in RFQ-005/006.
+
+## Final state
+
+`CHANGES_REQUESTED → REVIEW_REQUIRED → REVIEWED_DONE`
+
+RFQ-004 is complete and may be used as the baseline for RFQ-005.
