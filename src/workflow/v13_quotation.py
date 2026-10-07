@@ -9,8 +9,9 @@ from src.inso.duplicate_history import InsoDuplicateHistoryError
 from src.inso.quotation_read import (
     InsoQuotationAuthenticationError,
     InsoQuotationReader,
+    QuotationPriceUnavailable,
     V13QuotationRow,
-    select_recent_latest,
+    select_recent_lowest,
 )
 from src.inso.session import InsoOperationAccess
 from src.sheets import (
@@ -43,6 +44,7 @@ class RowErrorReason(StrEnum):
     SOURCE_IDENTITY_AMBIGUOUS = "SOURCE_IDENTITY_AMBIGUOUS"
     SOURCE_MPN_UNAVAILABLE = "SOURCE_MPN_UNAVAILABLE"
     SOURCE_CHANGED = "SOURCE_CHANGED"
+    QUOTE_PRICE_UNCOMPARABLE = "QUOTE_PRICE_UNCOMPARABLE"
     QUOTE_INPUT_WRITE_FAILED = "QUOTE_INPUT_WRITE_FAILED"
     QUOTE_INPUT_READBACK_MISMATCH = "QUOTE_INPUT_READBACK_MISMATCH"
     UPDATE_RESULT_UNCONFIRMED = "UPDATE_RESULT_UNCONFIRMED"
@@ -168,10 +170,21 @@ class V13QuotationCycle:
     def __init__(self, *, reader: WorksheetRowReader, store: ExistingInquiryStore,
                  operations: QuotationOperations, clock: Callable[[], datetime],
                  wait: Callable[[int], bool], stop_requested: Callable[[], bool] = lambda: False,
-                 quote_reader: InsoQuotationReader | None = None):
+                 quote_reader: InsoQuotationReader | None = None, fx_provider=None):
         self._reader, self._store, self._operations = reader, store, operations
         self._clock, self._wait, self._stop = clock, wait, stop_requested
         self._quotes = quote_reader or InsoQuotationReader()
+        self._fx = fx_provider
+
+    def _currency_rate(self, currency):
+        if self._fx is None:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "V13_FX_UNAVAILABLE")
+        from src.research.ecb_fx import EcbFxError
+        try:
+            quote = self._fx.get_quote()
+            return quote.rate if currency == "USD" else self._fx.get_hkd_rmb_rate()
+        except (EcbFxError, OSError):
+            raise V12Fault(FaultScope.GLOBAL_STOP, "V13_FX_UNAVAILABLE") from None
 
     def run(self, worksheet: WorksheetIdentity, *, skip=lambda _: False, on_result=lambda result: result) -> tuple[V13QuotationResult, ...]:
         try:
@@ -227,7 +240,13 @@ class V13QuotationCycle:
                 try:
                     rows = self._quotes.read(access, candidate.queried_mpn)
                     # Query-time clock sampled after this attempt completes, not batch start.
-                    return select_recent_latest(rows, queried_mpn=candidate.queried_mpn, now=self._clock()), True
+                    try:
+                        return select_recent_lowest(rows, queried_mpn=candidate.queried_mpn,
+                                                    now=self._clock(), currency_rate=self._currency_rate), True
+                    except QuotationPriceUnavailable as exc:
+                        if exc.code.startswith("QUOTE_FX"):
+                            raise V12Fault(FaultScope.GLOBAL_STOP, "V13_FX_UNAVAILABLE") from None
+                        raise V13SourceRowError(RowErrorReason.QUOTE_PRICE_UNCOMPARABLE) from None
                 except InsoQuotationAuthenticationError:
                     self._operations.preserve()
                     raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED") from None

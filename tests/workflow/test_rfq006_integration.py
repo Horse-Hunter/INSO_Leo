@@ -258,7 +258,7 @@ def test_reason_change_new_notification_episode(tmp_path):
         (QuotationOutcome.NO_RECENT_QUOTE, "等待采购报价", "legacy"),
         (QuotationOutcome.ROW_FAILED, "报价处理异常，需人工处理", "error"),
         (QuotationOutcome.UPDATED_INSERTED, "采购已报价", "completed"),
-        (QuotationOutcome.UPDATED_ALREADY_EXISTS, "采购已报价", "completed"),
+        (QuotationOutcome.UPDATED_ALREADY_EXISTS, "已有报价，已跳过", "completed"),
     ],
 )
 def test_gui_projection(outcome, label, style):
@@ -565,3 +565,25 @@ def test_typed_row_local_updater_source_error_still_holds_only_that_row(tmp_path
         raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
     assert make(local_error).run(WS)[0].outcome is QuotationOutcome.ROW_FAILED
     assert len(holds.active()) == 1
+
+
+
+def test_existing_price_skip_with_unsettled_status_is_yellow_durable_warning_to_229(tmp_path):
+    from tests.inso.test_v13_quotation_read import quote
+    from tests.workflow.test_v13_quote_update import service
+
+    db, _, sheets, holds, _, _, make, observed = fixture(tmp_path, [(quote(),)])
+    updater, source_reader, _, actions, _ = service()
+    source_reader.after = ["发给采购"]
+    actions.popups = ["更新完成 成功填入：0行 已有价跳过：1行"]
+    make(updater.update_one).run(WS)
+    assert observed[-1][0].row_error_reason is RowErrorReason.SOURCE_STATUS_NOT_UPDATED
+    assert len(holds.active()) == 1 and sheets.rows[0].cells["A"] == "发给采购"
+    with sqlite3.connect(db) as connection:
+        assert connection.execute("SELECT count(*) FROM workflow_v12_notification_commands").fetchone()[0] == 1
+        assert connection.execute("SELECT address FROM workflow_v12_notification_recipients").fetchall() == [("linan229@qq.com",)]
+    dto = quotation_gui(observed[-1][0], observed[-1][1])
+    assert _v12_status_text(dto, "") == "报价已处理，表格状态待人工更新"
+    assert _order_row_style(SimpleNamespace(), v12_state=dto) == "warning"
+    make().run(WS)
+    assert actions.clicks == 1 and len(holds.active()) == 1

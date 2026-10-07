@@ -1820,3 +1820,87 @@ Rebuild, backup/deploy V1.3 assets and own config; preserve V1.2 executable/conf
 Read-only metadata/DOM only. No business write/click/Script/Save/Send or actual procurement.
 Real button DOM and live popup/status/delay remain UNKNOWN unless safely read-only verified.
 Final status REVIEW_REQUIRED; REVIEW.md is CEO-owned and must remain unchanged.
+
+
+## Owner single-row read-only test correction — 2026-10-07
+Owner selected read-only query plus simulated update for DRV8833PWR. No real quotation
+input write, update click, Apps Script, Save/Send or procurement is authorized. Existing
+canonical query/session components may be reused for the single MPN, not the full scheduler.
+Verified native lower quotation table sixth column: label 供方税点, data-field Tax.
+Owner explicitly confirmed replacing the old 供方返点 requirement with 供方税点 in
+QUOTATION_COLUMNS position6; read/display text remains unchanged, no numeric interpretation.
+This supersedes earlier RFQ-004/RFQ-006 sixth-column wording; all other raw14 positions remain.
+Real query finds13 exact history records, latest2026-09-30 16:31 Asia/Shanghai, no recent72h quote.
+Only isolated test clock may make this old quotation eligible for in-memory fake updating;
+production rolling72h rule and actual quote date must remain unchanged.
+
+
+## Owner lowest-price selection correction — 2026-10-07
+Replaces latest-by-date selection: among exact MPN quotations in inclusive rolling72h,
+choose the lowest seventh-column 报价 after conversion to RMB through existing official FX.
+Owner selected using existing rates across currencies. RMB/CNY, USD and HKD use the existing
+provider capability; unsupported currencies fail row-local rather than compare raw mixed numbers.
+Blank/unparseable/nonfinite/negative prices are skipped; zero remains comparable, consistent
+with the existing INSO price parser. Same normalized price chooses the newer record; equal
+price/time retains first captured row. Original14strings/date/currency/price remain unchanged.
+Missing official FX is a shared GLOBAL_STOP V13_FX_UNAVAILABLE, never a fabricated quote.
+No real write/Script/procurement is authorized by this rule correction or simulation.
+
+
+## Owner final price-field / zero correction — 2026-10-07
+Supersedes the immediately preceding seventh-column and zero-valid comparison assumptions.
+Use eighth-column 供方未税价 (native InPrice), not seventh-column 报价 (QuotePrice).
+Only finite strictly-positive net prices compete. Zero including decimal/signed-zero forms,
+negative, blank and unparseable values are excluded. Exact MPN, inclusive72h, RMB conversion
+and same-price tie rules above remain. The original14strings are still copied unchanged.
+
+
+## Owner final zero-only fallback — 2026-10-07
+If exact MPN records inside72h contain positive supplier net prices, select the lowest
+positive RMB-equivalent net price and ignore zero records. If comparable valid records
+contain only zero, select the newer zero record and copy its original14strings, including
+the original zero display, unchanged. Zero fallback needs no FX conversion. If there are
+no valid nonnegative prices, keep NO_RECENT_QUOTE. Stale/future/fuzzy records never compete.
+This supersedes the previous unconditional exclusion of zero; other requirements remain.
+
+
+## Owner actual single-row authorization and verified control — 2026-10-07
+Owner explicitly authorized actual DRV8833PWR quote-input write and update click for this
+controlled old-quote test. The test clock is isolated; no production72h override or procurement.
+Metadata-bound 报价输入 has one visible div.waffle-borderless-embedded-object-overlay with
+aria-label 绘图：; a second matching DOM overlay is hidden. Owner screenshot verifies the sole
+visible drawing as 更新报价. Use this narrow visible selector, require exactly1 before write
+and again before click; no coordinates/O3/image matching or direct Script URL. Named exact
+button remains supported; missing/ambiguous controls stop before writes.
+
+## Owner resumed button-path acceptance — 2026-10-07
+Owner explicitly requests testing whether the existing update path can complete, and reporting
+the exact blocker if it cannot. Reuse fixed Chrome/CDP and existing reviewed DRV8833PWR input.
+Read input/source first, click the verified drawing once after page/custom-menu readiness;
+observe all frames/native dialogs and source status. No procurement, Save/Send, full scheduler,
+RFQ-007 changes or deployment. Do not call Script directly or bypass authorization.
+
+## Owner live result clarification — 2026-10-07
+Actual modal: 更新完成 / 成功填入：0 行 / 已有价跳过：1 行. Owner confirms
+source 发给采购 was manually restored after an earlier quote; Script already-priced skip
+intentionally does not alter that status. This is expected for the test, not a Script failure.
+Button/Script/popup path CONFIRMED. Do not manually change source status or repeat update.
+Wait for observed 报价工具 readiness (bounded30s, no fixed sleep) plus unique visible drawing;
+recognize actual body/title/counts while retaining strict single-row popup validation.
+This does not authorize new-insert acceptance or change source-status completion policy.
+
+Owner additionally confirms result modal appears after Script execution delay and Executor
+dismissed it. Canonical readiness and result visibility waits each have separate bounded30s
+timeouts; prompt appearance returns immediately. No repeat click merely because Script runs.
+
+## Owner final status deadline and follow-on recipient — 2026-10-07
+Supersedes the previous unconditional successful-existing-skip status exception.
+Both inserted1 and existing-price-skip1 prove successful Script execution. After confirmed result
+and Script completion, poll exact-bound source for30s (monotonic deadline / interruptible wait).
+If still not 采购已报价, log WARNING, pale-yellow row, send durable existing SMTP reminder to229;
+retain existing status-unconfirmed hold to avoid repeating an already successful Script.
+No source overwrite. Owner handles source correction; existing hold reconciliation clears on quoted.
+Script clears input; Executor only waits for execution settlement before next row. No manual clear.
+RFQ-007 now REVIEWED_DONE at2c9f704; increment preserved verbatim.
+After V1.3 implementation, only RESEARCH / NO_MATCHING_PRODUCT exception additionally notifies
+shawn@inso-hk.com; other recipient sets and SMTP path unchanged. No real SMTP acceptance.

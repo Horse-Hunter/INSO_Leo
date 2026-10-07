@@ -2,6 +2,7 @@
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .duplicate_history import (
@@ -21,7 +22,7 @@ except ZoneInfoNotFoundError:
     # or add a new dependency just to consume this existing INSO contract.
     SHANGHAI = timezone(timedelta(hours=8), "Asia/Shanghai")
 QUOTATION_COLUMNS = (
-    "日期", "型号", "品牌", "数量", "币种", "供方返点", "报价", "供方未税价",
+    "日期", "型号", "品牌", "数量", "币种", "供方税点", "报价", "供方未税价",
     "平台数量", "批号", "货期", "备注", "备注2", "制单人",
 )
 
@@ -39,13 +40,23 @@ class V13QuotationRow:
             raise ValueError("quotation display must have fourteen text cells")
 
 
-def select_recent_latest(
-    records: Iterable[V13QuotationRow], *, queried_mpn: str, now: datetime,
-) -> V13QuotationRow | None:
-    """Inclusive rolling 72h in Shanghai; exact MPN, latest time only.
+class QuotationPriceUnavailable(RuntimeError):
+    """A closed comparison failure, never raw quotation/provider text."""
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
 
-    Equal timestamps retain the first fully captured row: both are equally
-    latest; no price/quantity/brand/creator tie-breaking business rule is added.
+
+def select_recent_lowest(
+    records: Iterable[V13QuotationRow], *, queried_mpn: str, now: datetime,
+    currency_rate: Callable[[str], Decimal] | None = None,
+) -> V13QuotationRow | None:
+    """Exact MPN, inclusive 72h; lowest RMB-equivalent supplier net price, newest on ties.
+
+    Conversion only chooses a row; all fourteen display strings remain untouched.
+    Blank/unparseable/nonfinite/negative net prices are skipped.
+    Positive prices compete first; if only zero prices remain, newest zero wins.
+    Unknown currencies or missing FX never silently compete as raw numeric prices.
     """
     if now.utcoffset() is None:
         raise ValueError("query clock must be aware")
@@ -54,10 +65,39 @@ def select_recent_latest(
         raise ValueError("query MPN is required")
     end = now.astimezone(SHANGHAI)
     cutoff = end - timedelta(hours=72)
-    eligible = [row for row in records
-                if canonical_history_mpn(row.payload[1]) == target
-                and cutoff <= row.quote_record_time.astimezone(SHANGHAI) <= end]
-    return max(eligible, key=lambda row: row.quote_record_time, default=None)
+    eligible, zero_rows = [], []
+    rates = {"RMB": Decimal(1)}
+    currencies = {"RMB": "RMB", "CNY": "RMB", "人民币": "RMB", "CNY人民币": "RMB",
+                  "USD": "USD", "美元": "USD", "HKD": "HKD", "港币": "HKD", "HKD港币": "HKD"}
+    for row in records:
+        if (canonical_history_mpn(row.payload[1]) != target
+                or not cutoff <= row.quote_record_time.astimezone(SHANGHAI) <= end):
+            continue
+        try:
+            price = Decimal(row.payload[7].strip().replace(",", ""))
+        except InvalidOperation:
+            continue
+        if not price.is_finite() or price < 0:
+            continue
+        if price == 0:
+            zero_rows.append(row)
+            continue
+        currency = currencies.get(row.payload[4].strip().upper())
+        if currency is None:
+            raise QuotationPriceUnavailable("QUOTE_CURRENCY_UNSUPPORTED")
+        if currency not in rates:
+            if currency_rate is None:
+                raise QuotationPriceUnavailable("QUOTE_FX_REQUIRED")
+            rate = currency_rate(currency)
+            if not isinstance(rate, Decimal) or not rate.is_finite() or rate <= 0:
+                raise QuotationPriceUnavailable("QUOTE_FX_INVALID")
+            rates[currency] = rate
+        eligible.append((price * rates[currency], row))
+    if not eligible:
+        return max(zero_rows, key=lambda row: row.quote_record_time, default=None)
+    lowest = min(price for price, _ in eligible)
+    return max((row for price, row in eligible if price == lowest),
+               key=lambda row: row.quote_record_time)
 
 
 class InsoQuotationAuthenticationError(SecurityViolation):

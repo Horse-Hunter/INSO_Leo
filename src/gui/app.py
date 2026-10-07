@@ -74,6 +74,8 @@ def _order_row_style(
     if v12_state is not None:
         if v12_state.business_label is V12BusinessLabel.QUOTATION_COMPLETED:
             return "completed"
+        if v12_state.business_label is V12BusinessLabel.QUOTATION_STATUS_PENDING:
+            return "warning"
         if v12_state.business_label is V12BusinessLabel.QUOTATION_FAILED:
             return "error"
         if v12_state.business_label is V12BusinessLabel.QUOTATION_WAITING:

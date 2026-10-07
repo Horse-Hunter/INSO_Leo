@@ -1,6 +1,7 @@
 """RFQ-005 serial idempotent Google update over frozen RFQ-004 quote results."""
 from collections.abc import Callable, Iterable
 from dataclasses import replace
+from time import monotonic
 from typing import Protocol
 
 from src.quotation.update_result import UpdatePopupOutcome, parse_update_popup
@@ -104,12 +105,14 @@ class V13QuotationUpdater:
     def __init__(self, *, source: WorkflowQuotationSource, quotation_input: QuotationInput,
                  actions: QuotationUpdateActions, wait: Callable[[float], bool],
                  stop_requested: Callable[[], bool] = lambda: False,
-                 status_reads: int = 3, status_interval: float = 1.0):
-        if not 1 <= status_reads <= 3 or not 0 <= status_interval <= 5:
+                 status_reads: int = 31, status_interval: float = 1.0,
+                 clock: Callable[[], float] = monotonic):
+        if not 1 <= status_reads <= 31 or not 0 < status_interval <= 5:
             raise ValueError("status polling must be short and bounded")
         self._source, self._input, self._actions = source, quotation_input, actions
         self._wait, self._stop = wait, stop_requested
         self._status_reads, self._status_interval = status_reads, status_interval
+        self._clock = clock
 
     def run(self, results: Iterable[V13QuotationResult]) -> tuple[V13QuotationResult, ...]:
         output = []
@@ -188,11 +191,17 @@ class V13QuotationUpdater:
         return status
 
     def _verify_status(self, result, popup):
+        # Both inserted and already-priced Script results are accepted execution.
+        # Status must settle independently within a bounded 30-second window.
+        deadline = self._clock() + 30.0
         for read_number in range(self._status_reads):
             self._check_stop()
             if self._current_status(result) == "采购已报价":
                 return self._success(result, popup)
-            if read_number + 1 < self._status_reads and self._wait(self._status_interval):
+            remaining = deadline - self._clock()
+            if remaining <= 0 or read_number + 1 == self._status_reads:
+                break
+            if self._wait(min(self._status_interval, remaining)):
                 raise V13Stopped("STOP_REQUESTED")
         return self._failed(result, RowErrorReason.SOURCE_STATUS_NOT_UPDATED)
 

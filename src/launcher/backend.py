@@ -39,6 +39,7 @@ from src.inso.write_safety import OwnerAuthorizedSaveAndSendGate
 from src.launcher.purchase_completion import PurchaseCompletionActions
 from src.research import ResearchInput, ResearchResult
 from src.research.credentials import CoreLoginBridge
+from src.research.ecb_fx import EcbDailyUsdRmbProvider
 from src.research.excel_output import ResearchExcelOutput
 from src.research.inso_history import INSO_SITE_ID
 from src.research.runtime import (
@@ -729,10 +730,12 @@ class ProductionBackend(GuiBackend):
                 self._v13_ledger_ready = True
                 location = quotation_location(cfg)  # Missing/unknown config stops before business.
 
+                quotation_fx = EcbDailyUsdRmbProvider()
+
                 def run_quotation(worksheet):
                     cycle = V13QuotationCycle(reader=reader, store=self._store,
                         operations=self._v13_operations(rc, cfg), clock=utc_now,
-                        wait=self._stop.wait, stop_requested=self._stop.is_set)
+                        wait=self._stop.wait, stop_requested=self._stop.is_set, fx_provider=quotation_fx)
                     def updater():
                         handle = self._v13_browser(rc, cfg)
                         try:
@@ -935,6 +938,8 @@ class ProductionBackend(GuiBackend):
         log.warning("combined cycle result",extra={"cycle_id":getattr(self,"_cycle_id",None),
             "business_module":"V1.3","inquiry_id":result.inquiry_id,"stage":"quotation",
             "reason":result.row_error_reason.value if result.row_error_reason else result.outcome.value})
+        if result.row_error_reason is not None and result.row_error_reason.value == "SOURCE_STATUS_NOT_UPDATED":
+            self._append_log("WARNING", "报价脚本已成功，30秒内表格状态未更新；已安排229异常提醒，请人工核对。")
         self._refresh()
         self._notify()
 

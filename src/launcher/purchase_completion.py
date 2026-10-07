@@ -79,8 +79,13 @@ class PurchaseCompletionActions:
 
     def notify(self, inquiry_id, phase, reason, *, at):
         command_id = f"purchase-exception:{inquiry_id}:{phase}:{reason}"
+        recipients = (OWNER,)
+        if phase == "RESEARCH" and reason == "NO_MATCHING_PRODUCT":
+            recipients += (NotificationRecipient("ops", "shawn@inso-hk.com"),)
+            # Old owner-only commands are immutable. Version only this changed payload.
+            command_id += ":recipients-v2"
         if self.v12_store.notification_already_created(
-            command_id, inquiry_id, NotificationKind.PURCHASE_EXCEPTION, (OWNER,),
+            command_id, inquiry_id, NotificationKind.PURCHASE_EXCEPTION, recipients,
         ):
             return
         item = self.workflow_store.get_by_inquiry_id(inquiry_id)
@@ -131,6 +136,6 @@ class PurchaseCompletionActions:
         self.v12_store.enqueue_notification(NotificationCommand(
             command_id=command_id,
             inquiry_id=inquiry_id, kind=NotificationKind.PURCHASE_EXCEPTION,
-            recipients=(OWNER,), subject=f"【INSO】订单处理异常：{item.mpn}",
+            recipients=recipients, subject=f"【INSO】订单处理异常：{item.mpn}",
             text_body=body, html_body=None, created_at=at,
         ))

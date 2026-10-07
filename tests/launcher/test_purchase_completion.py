@@ -131,4 +131,17 @@ def test_no_price_exception_mail_explains_five_sources_and_is_idempotent():
     assert "五个价格来源均无报价" in command.text_body
     assert "未进入采购提交" in command.text_body
     assert "不等于型号一定填错" in command.text_body
+    assert [r.address for r in command.recipients] == ["linan229@qq.com", "shawn@inso-hk.com"]
+
+
+@pytest.mark.parametrize("phase,reason", [
+    ("RESEARCH", "RESEARCH_FAILED"), ("RESEARCH", "SOURCE_UNAVAILABLE"),
+    ("PURCHASE", "NO_MATCHING_PRODUCT"), ("SESSION", "LOGIN_REQUIRED"),
+    ("SHEETS_WRITE_BACK", "GoogleSheetsReadError"),
+])
+def test_only_all_no_result_research_exception_adds_shawn(phase, reason):
+    handler, sheet, state = actions(PurchaseOutcome.PRE_SAVE_READY)
+    handler.notify("synthetic-inquiry", phase, reason, at=NOW)
+    command = next(iter(state.commands.values()))
     assert [r.address for r in command.recipients] == ["linan229@qq.com"]
+    assert not command.command_id.endswith(":recipients-v2") and sheet.calls == 0

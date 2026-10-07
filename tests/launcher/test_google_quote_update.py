@@ -15,11 +15,20 @@ class Locator:
     def __init__(self, page, role, name):
         self.page, self.role, self.name = page, role, name
     def count(self):
+        if self.role == "text" and self.name == "正在运行脚本":
+            return int(self.page.script_running)
         if self.role == "text":
-            return int(self.name in self.page.login_markers)
+            return int(self.page.menu_ready) if self.name == "报价工具" else int(self.name in self.page.login_markers)
+        if self.role == "drawing":
+            return self.page.drawings
+        if self.role == "button" and self.name == "更新报价":
+            return self.page.update_buttons
         if self.role == "dialog":
-            return int(bool(self.page.popup))
+            return int(bool(self.page.popup) and (not hasattr(self, "pattern") or bool(self.pattern.search(self.page.popup))))
         return 1
+    def filter(self, *, has_text):
+        self.pattern = has_text
+        return self
     def click(self, **kwargs):
         self.page.clicks.append(self.name)
         if self.name == "更新报价":
@@ -27,6 +36,22 @@ class Locator:
         else:
             self.page.popup = None
     def wait_for(self, **kwargs):
+        if self.role == "text" and self.name == "正在运行脚本":
+            self.page.script_waits.append(kwargs)
+            if self.page.script_stuck:
+                raise TimeoutError("script still running")
+            self.page.script_running = False
+            return
+        if self.role == "dialog":
+            self.page.result_waits.append(kwargs["timeout"])
+        if self.role == "text" and self.name == "报价工具":
+            self.page.ready_waits.append(kwargs["timeout"])
+            if self.page.menu_failure:
+                raise TimeoutError("script menu not ready")
+            self.page.menu_ready = True
+            return
+        if self.role == "drawing" and self.page.drawings == 1:
+            return
         if not self.page.popup:
             raise TimeoutError("missing popup")
     def inner_text(self, **kwargs):
@@ -40,13 +65,20 @@ class Page:
         self.context, self.closed = context, False
         self.url, self.popup = "about:blank", None
         self.login_markers, self.clicks = set(), []
+        self.update_buttons, self.drawings = 1, 0
+        self.menu_ready, self.menu_failure, self.ready_waits = True, False, []
+        self.result_waits = []
+        self.script_running, self.script_stuck, self.script_waits = True, False, []
     def goto(self, url, **kwargs):
         self.url = url
-    def get_by_role(self, role, *, name, exact):
-        assert exact and role in {"button", "dialog"}
+    def get_by_role(self, role, *, name=None, exact=None):
+        assert role in {"button", "dialog"}
         return Locator(self, role, name)
+    def locator(self, selector):
+        assert selector == 'div.waffle-borderless-embedded-object-overlay[aria-label="绘图："]:visible'
+        return Locator(self, "drawing", "更新报价")
     def get_by_text(self, text, *, exact):
-        assert exact
+        assert exact or text == "正在运行脚本"
         return Locator(self, "text", text)
     def is_closed(self):
         return self.closed
@@ -203,3 +235,83 @@ def test_initial_navigation_hang_is_safe_retry_not_shared_auth_fault():
         actions.open_quote_input()
     actions.close()
     assert context.pages[-1].closed and not context.pages[0].closed and browser.connected
+
+
+@pytest.mark.parametrize("visible_count", [0, 1, 2])
+def test_verified_drawing_requires_exactly_one_visible_target_before_write(visible_count):
+    actions, browser = adapter()
+    context = browser.contexts[0]
+    def fresh():
+        page = Page(context)
+        page.update_buttons, page.drawings = 0, visible_count
+        context.pages.append(page)
+        return page
+    context.new_page = fresh
+    if visible_count != 1:
+        with pytest.raises(UpdateAttemptUnconfirmed):
+            actions.open_quote_input()
+        assert context.pages[-1].clicks == []
+    else:
+        actions.open_quote_input()
+        actions.click_update_quote()
+        assert context.pages[-1].clicks == ["更新报价"]
+        assert actions.read_update_result().startswith("报价更新完成")
+    actions.close()
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_drawing_shell_cannot_click_before_script_menu_ready(fails):
+    actions, browser = adapter()
+    context = browser.contexts[0]
+    def fresh():
+        page = Page(context)
+        page.update_buttons, page.drawings = 0, 1
+        page.menu_ready, page.menu_failure = False, fails
+        context.pages.append(page)
+        return page
+    context.new_page = fresh
+    if fails:
+        with pytest.raises(UpdateAttemptUnconfirmed):
+            actions.open_quote_input()
+        assert context.pages[-1].clicks == []
+    else:
+        actions.open_quote_input()
+        page = context.pages[-1]
+        assert page.menu_ready and page.ready_waits == [30000]
+        actions.click_update_quote()
+        assert page.clicks == ["更新报价"]
+    actions.close()
+
+
+def test_live_unnamed_dialog_is_read_dismissed_and_rejected_if_stale():
+    actions, browser = adapter()
+    actions.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    page.popup = "更新完成\n成功填入：0 行\n已有价跳过：1 行\n确定"
+    with pytest.raises(UpdateAttemptUnconfirmed, match="UPDATE_RESULT_STALE"):
+        actions.click_update_quote()
+    assert page.clicks == []
+    assert actions.read_update_result() == page.popup
+    assert page.result_waits == [30000]
+    actions.dismiss_result()
+    assert page.popup is None and page.clicks == ["确定"]
+    assert page.script_waits == [{"state": "hidden", "timeout": 30000}]
+    assert not page.script_running
+    actions.close()
+
+
+def test_script_settlement_timeout_preserves_surface_and_prevents_next_row():
+    actions, browser = adapter()
+    actions.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    page.popup = "更新完成 成功填入：0行 已有价跳过：1行"
+    page.script_stuck = True
+    with pytest.raises(V12Fault) as fault:
+        actions.dismiss_result()
+    assert fault.value.scope is FaultScope.GLOBAL_STOP
+    assert fault.value.reason == "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"
+    actions.close()
+    assert not page.closed and browser.connected
+    with pytest.raises(V12Fault, match="GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"):
+        actions.open_quote_input()
+    assert page.clicks == ["确定"]

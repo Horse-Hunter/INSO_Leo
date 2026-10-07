@@ -1,69 +1,66 @@
-# RFQ-006 CEO repair submission — 2026-10-07
+# RFQ-006 Owner closeout increment — 2026-10-07
 
 Status: REVIEW_REQUIRED. Branch: feature/v1-3-integration.
-Updated from CEO commit 80d8f3b6ae45ecd3c418896d5c4168637e8c0d30 with fetch / pull --ff-only.
-No new branch or architecture. REVIEW.md unchanged (SHA256
-2432263F4E89B57CCBFD610156B52BBA86567429A387B12F4AB098B59D662B79).
+Base: RFQ-007 CEO reviewed2c9f7043313ab0092c29c7a54a76dfd176645ef5, including
+RFQ-006 reviewed2a32007. Fast-forward reuse of approved sync, with pending Owner quotation
+changes restored without conflict. CEO REVIEW.md files are preserved. This report supersedes
+older baseline-only release/live-UNKNOWN reports; historical delivery facts remain in git/log.
 
-## Repairs
-- B1: src/workflow/v13_integration.py:222. Strict relocation first; original worksheet/observed
-  position only blocks automation or reads Owner completion status. Snapshot mutations while sent
-  cannot trigger query/update/new hold/mail or new inquiry. Quoted closes hold; missing/unknown retains
-  hold while unrelated orders continue. No fuzzy or business identity fallback.
-- B2: src/workflow/v13_quotation.py:176 /258; src/workflow/v13_integration.py:261.
-  Unknown reader/operation/factory/update/close/result-contract failures globally stop with fixed
-  V13_INTERNAL_FAILURE. No row hold or later query. Typed V13SourceRowError and normal RFQ-005
-  retry exhaustion stay row-local; shared DB/Sheets/CDP/auth faults keep reviewed global scope.
-- Website229: src/launcher/v13_integration.py:103; src/launcher/backend.py:945.
-  Every SOURCE_UNAVAILABLE site is notified via the existing ledger/QQ SMTP worker. Closed categories,
-  inquiry/site/category durable dedup, known MPN, owner linan229@qq.com; no raw provider error/HTML/token.
-  IC.net pauses V1.2, INSO authentication stops globally, other sites continue. Existing IC/INSO duplicate
-  manual/fault alerts suppressed. Pending SMTP retry changes no business scope.
-- Headerless input: src/sheets/quotation_input.py:21 /86 and src/launcher/v13_integration.py:15.
-  Removed header_row/header_range and header reads/equality checks. RAW14 order remains INSO canonical
-  QUOTATION_COLUMNS. Metadata binding remains mandatory before every write and UI open; malformed
-  title/gid globally stops with zero write/open/click. Exact blank/leading zero/decimal/whitespace/newline
-  payload and readback remain verified offline.
+## Final implementation
+| File / location | Change |
+| --- | --- |
+| src/inso/quotation_read.py:50 | Exact inclusive72h lowest positive supplier net (column8), existing RMB FX comparison, newest/stable tie and newest zero fallback; raw14 untouched; column6供方税点. |
+| src/workflow/v13_quotation.py | Existing FX provider integrated, typed unsupported-price row failure and unavailable-FX global stop. |
+| src/launcher/google_quote_update.py:71 | Observed menu readiness30s, unique drawing/actionable click, strict stale-result guard; independent result wait30s. |
+| src/launcher/google_quote_update.py:119 | Exact confirmation followed by bounded Script settlement; no input clearing. Unconfirmed settlement preserves page and globally stops. |
+| src/quotation/update_result.py | Actual 更新完成 / 已有价跳过 aliases with unchanged strict single-row outcome counts. |
+| src/workflow/v13_quote_update.py:193 | Both inserted1 and existing-skip1 require source采购已报价 within30s; source remains read-only; no confirmed-Script repeat. |
+| src/launcher/v13_integration.py:40; src/gui/app.py:77 | SOURCE_STATUS_NOT_UPDATED projects pale-yellow warning; existing durable hold/outbox notifies229, with fixed warning log in backend. Other failures unchanged. |
+| src/launcher/purchase_completion.py:83 | Only RESEARCH / NO_MATCHING_PRODUCT adds shawn@inso-hk.com alongside229. Version only that immutable command payload; existing worker/retry reused. |
 
-## Configuration and read-only evidence
-QUOTE_INPUT_GEOMETRY CONFIRMED; header NONE / NOT APPLICABLE.
-Target: 报价输入!A1:N1. Own V1.3 production config: gid=489913321, input_row=1,
-first_column=1, header_row absent. Existing V1.2 config bytes unchanged.
-Read-only API metadata again proved unique title 报价输入 and sheetId=489913321.
-Only spreadsheets.get metadata requested; no grid reads/writes in this acceptance.
-更新报价 DOM UNKNOWN: native Chrome window inventory only about:blank; browser DOM surfaces
-expose Edge/IAB, not fixed production Chrome. Edge is not substituted. No UI input/click/navigation.
+The latest Owner30s rule supersedes earlier unconditional manually-restored existing-price success.
+A successful popup confirms Script execution; unresolved source status is a separate warning/hold.
+Notification is queued durably, not claimed delivered. No alternate mail/cooldown/browser/identity
+system and no dependency were introduced. V1.2 purchase and V1.3 quotation terminal states remain
+independent. A/B/C eligibility unchanged; S is never automatically mapped.
 
-## Exact-source checks
-- Hold mutation regression:12 status/mutation cases + deleted/unrelated-row continuation PASS.
-- Unknown exceptions:12 RuntimeError/ValueError reader/operation/factory/update/contract/close cases PASS;
-  typed row-local updater error remains ROW_FAILED; no new hold/mail/inquiry for unknown errors.
-- Website229 regression:24 six-site/four-reason cases PASS, durable dedup, fake retry transport,
-  fixed recipient and sanitized body, preserved scope. Research optional-site continuation PASS.
-- RFQ-004:47 passed0.67s. RFQ-005:93 passed0.59s.
-- Combined RFQ-006 workflow/backend/GUI:102 passed6.97s.
-- Focused read/update/integration total:242 passed across the three disjoint suites above.
-- V1.2 workflow/RFQ-003/backend:243 passed,1 skipped16.86s.
-- Full safe/offline:1334 passed,1 skipped58.66s; exit0, no outbound-mail attempts.
-- Ruff src/tests PASS; git diff --check PASS.
+## Approved RFQ-007 preservation
+Five original production patches remain in the approved base: v12_store direct recovery,
+v12_gui legacy read-only projection, contracts additive deadline, backend V1.2-only wrapper,
+and app minimum QUOTATION_RUNNING compatibility. RFQ-003 B1 remains equivalent/unchanged.
+Focused/full PASS includes corrected S→A recovery, unrelated customer alert retained, read-only
+legacy projection, stop-interruptible180s deadline and no cooldown after last purchase.
+V1.3 normal rows remain0s; RFQ006 backend binding/projection asserts no inherited180s.
+RFQ007 GUI RUNNING/cooldown/in-progress/countdown and QUOTATION_RUNNING cases all PASS.
+No cherry-pick of f515a14 whole commit and no whole-file V1.3 overwrite.
+
+## Actual live evidence and limits
+One previously authorized DRV8833PWR existing-price click was actually confirmed:
+更新完成 / 成功填入0行 / 已有价跳过1行, then exact确定 and Script completion.
+Source stayed发给采购 after Owner manual reset. Owner confirms Script deletes input after popup.
+The new30s warning behavior is verified offline; no repeat live click or real SMTP test was made.
+First-new-insert live transition, live mixed-currency acceptance and actual SMTP delivery remain
+UNKNOWN. Production payload/screenshots/helper outputs remain ignored and are not committed.
+During this closeout no history replay, real procurement, Save/Save-and-Send or real SMTP.
+The earlier single authorized quote input/update test is recorded separately; do not claim it never
+occurred. No source status force-write, Script modification or manual input clear.
+
+## Exact-source verification
+- Final focused:462 passed24.32s, including RFQ003/004/005/006 shared regressions, GUI,
+  button/results/status windows, lowest-price/raw14 and narrowly scoped Research recipients.
+- Final full safe/offline:1393 passed,1 skipped55.85s; exit0, SMTP guards enabled.
+- Ruff src/tests --no-cache PASS; git diff --check PASS.
 - Canonical build_windows_release.ps1 -Version1.3 -BuildOnly exit0.
-- Frozen/deployed self-check exit0; staged RELEASE_SCAN_OK.
-- Idle GUI exit0: INSO_V1.3, 已停止, gui_rendered=true, business_thread_started=false.
-  Start was disabled by the diagnostic; no business worker was invoked.
+- Frozen --self-check exit0; RELEASE_SCAN_OK.
+- Separate ignored candidate --idle-self-check exit0: INSO_V1.3, 已停止,
+  gui_rendered=true, business_thread_started=false; Start disabled by diagnostic.
+- Candidate EXE SHA256:6B9248BB591F4A43885CA32399F2835F9FB3051AFF20BB31A4633B9F8C3625EB.
+- Candidate path: build/windows-release-stage-1.3/dist/INSO_V1.3/INSO_V1.3.exe.
+- Installed V1.3/V1.2 releases/configs were not replaced. This new increment requires independent
+  CEO Review before deployment, as previously specified. No profile/cookie/manual verification changes.
 
-## Local deployment and rollback
-New V1.3 EXE SHA256: 96765BB7BD59E627A33CC5621BECAEEC03D0BE677B628085969C2AA3C5DAFDD0
-Backup: D:\Program_Leo\INSO_Leo\dist\release-backups\RFQ-006-before-ceo-repair-20261007-153211\INSO_V1.3
-Backup old EXE SHA256: FB8AA11FC2B300BA1B56D08FD2AC9B6122405E67C31A0361DF21CC09B700EC16
-Deployed executable/_internal only;2178 internal files verified against staged hashes.
-V1.3 own runtime configs retained during asset replacement; shared DB/OAuth/profile paths unchanged.
-V1.2 EXE SHA256 unchanged:1A49C9650BA531F2299326FFC89761D0391CD5F2C0FE32327DDD0736BD5C3E84.
-V1.2 production/research JSON byte hashes match pre-repair values.
-No dependencies installed. No credentials, generated release files or production payload committed.
-
-未执行真实 A1:N1 报价写入、更新报价、Apps Script、Save、Save-and-Send或真实采购。
-Live-only UNKNOWN: actual INSO quotation DOM, 更新报价 role/locator uniqueness, Google login/session,
-Apps Script execution/popup, inserted/already-existing feedback, source-status transition and refresh delay.
-Separate Owner authorization is still needed for one controlled live acceptance.
-The previous geometry BLOCKED LIVE CONFIG conclusion is superseded by Owner confirmation;
-live business acceptance itself remains UNKNOWN. CEO review is required; no follow-on task started.
+## Delivery
+Commit/push feature/v1-3-integration; verify local==remote HEAD and clean active worktree.
+RFQ-006 increment remains REVIEW_REQUIRED; RFQ-007 approved record remains REVIEWED_DONE.
+No new CEO product decision conflict was found. Remaining approval is independent review and then
+release installation; no further source implementation issue is known after these checks.

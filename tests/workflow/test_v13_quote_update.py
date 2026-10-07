@@ -110,8 +110,13 @@ class Actions:
 def service():
     src, io = Source(), Input()
     actions, waits = Actions(src), []
+    elapsed = [0.0]
+    def wait(seconds):
+        waits.append(seconds)
+        elapsed[0] += seconds
+        return False
     updater = V13QuotationUpdater(source=src, quotation_input=io, actions=actions,
-        wait=lambda seconds: waits.append(seconds) or False)
+        wait=wait, clock=lambda: elapsed[0])
     return updater, src, io, actions, waits
 
 
@@ -216,7 +221,7 @@ def test_confirmed_popup_status_still_sent_is_row_failure_not_an_update_retry():
     src.after = ["发给采购"]
     result = updater.update_one(found())
     assert result.row_error_reason is RowErrorReason.SOURCE_STATUS_NOT_UPDATED
-    assert actions.clicks == actions.opened == actions.closed == 1 and waits == [1.0, 1.0]
+    assert actions.clicks == actions.opened == actions.closed == 1 and waits == [1.0] * 30
 
 
 def test_dismiss_failure_after_success_does_not_retry_submission():
@@ -457,3 +462,36 @@ def test_actual_api_headerless_binding_raw_readback_and_popup_success(popup, out
     assert [kind for kind, _ in values.calls][:2] == ["metadata", "metadata"]
     assert sum(kind == "update" for kind, _ in values.calls) == actions.clicks == 1
     assert actions.opened == actions.closed == 1
+
+
+
+def test_owner_restored_status_after_successful_skip_warns_only_after_30s_without_resubmit():
+    updater, src, io, actions, waits = service()
+    src.after = ["发给采购"]
+    actions.popups = ["更新完成 成功填入：0行 已有价跳过：1行"]
+    result = updater.update_one(found())
+    assert result.outcome is QuotationOutcome.ROW_FAILED
+    assert result.row_error_reason is RowErrorReason.SOURCE_STATUS_NOT_UPDATED and src.after == ["发给采购"]
+    assert actions.clicks == actions.dismissed == actions.opened == actions.closed == 1
+    assert len(io.writes) == 1 and waits == [1.0] * 30
+
+
+def test_existing_quote_popup_still_requires_exact_unchanged_source_binding():
+    updater, src, _, actions, _ = service()
+    src.after = ["source changed"]
+    actions.popups = ["更新完成 成功填入：0行 已有价跳过：1行"]
+    result = updater.update_one(found())
+    assert result.outcome is QuotationOutcome.ROW_FAILED
+    assert result.row_error_reason is RowErrorReason.SOURCE_CHANGED
+    assert actions.clicks == 1
+
+
+@pytest.mark.parametrize("popup", [POPUP, "更新完成 成功填入：0行 已有价跳过：1行"])
+def test_status_change_at_30_second_boundary_is_success_not_warning(popup):
+    updater, src, _, actions, waits = service()
+    src.after = ["发给采购"] * 30 + ["采购已报价"]
+    actions.popups = [popup]
+    result = updater.update_one(found())
+    assert result.row_error_reason is None
+    assert result.outcome in {QuotationOutcome.UPDATED_INSERTED, QuotationOutcome.UPDATED_ALREADY_EXISTS}
+    assert waits == [1.0] * 30 and actions.clicks == 1

@@ -14,7 +14,7 @@ from src.inso.quotation_read import (
     InsoQuotationReader,
     V13QuotationRow,
     capture_quotation_page,
-    select_recent_latest,
+    select_recent_lowest,
 )
 from tests.inso.test_procurement_duplicate_history import LowerFrame, row
 
@@ -22,8 +22,8 @@ NOW = datetime(2026, 10, 7, 0, 5, tzinfo=ZoneInfo("Asia/Shanghai"))
 
 
 def quote(at=NOW, model="MPN", **kwargs):
-    payload = (at.strftime("%Y-%m-%d %H:%M:%S"), model, "different brand", "", "奇币", "",
-               "0001.2300", "", "0000", "", "", "  原样\n备注  ", "备注2\t", "")
+    payload = (at.strftime("%Y-%m-%d %H:%M:%S"), model, "different brand", "", "RMB", "",
+               "0001.2300", "0001.2300", "0000", "", "", "  原样\n备注  ", "备注2\t", "")
     return V13QuotationRow(at, kwargs.get("payload", payload))
 
 
@@ -33,7 +33,7 @@ def quote(at=NOW, model="MPN", **kwargs):
 ])
 def test_inclusive_72h_boundaries_and_future(age, accepted):
     record = quote(NOW-age)
-    assert (select_recent_latest([record], queried_mpn="MPN", now=NOW) is record) is accepted
+    assert (select_recent_lowest([record], queried_mpn="MPN", now=NOW) is record) is accepted
 
 
 @pytest.mark.parametrize("now", [
@@ -43,7 +43,7 @@ def test_inclusive_72h_boundaries_and_future(age, accepted):
 ])
 def test_midnight_month_and_year_transitions(now):
     accepted, old = quote(now-timedelta(hours=72)), quote(now-timedelta(hours=72, seconds=1))
-    assert select_recent_latest([old, accepted], queried_mpn="MPN", now=now) is accepted
+    assert select_recent_lowest([old, accepted], queried_mpn="MPN", now=now) is accepted
 
 
 def test_empty_one_multiple_unsorted_old_and_exact_normalization():
@@ -51,18 +51,18 @@ def test_empty_one_multiple_unsorted_old_and_exact_normalization():
     older = quote(NOW-timedelta(hours=2))
     stale = quote(NOW-timedelta(hours=73))
     fuzzy = quote(NOW, model="MPN suffix")
-    assert select_recent_latest([], queried_mpn="MPN", now=NOW) is None
-    assert select_recent_latest([older], queried_mpn="MPN", now=NOW) is older
-    assert select_recent_latest([older, latest, stale, fuzzy], queried_mpn="MPN", now=NOW) is latest
+    assert select_recent_lowest([], queried_mpn="MPN", now=NOW) is None
+    assert select_recent_lowest([older], queried_mpn="MPN", now=NOW) is older
+    assert select_recent_lowest([older, latest, stale, fuzzy], queried_mpn="MPN", now=NOW) is latest
 
 
 def test_aware_clocks_only_and_same_instant_other_zone():
     with pytest.raises(ValueError):
-        select_recent_latest([], queried_mpn="MPN", now=NOW.replace(tzinfo=None))
+        select_recent_lowest([], queried_mpn="MPN", now=NOW.replace(tzinfo=None))
     with pytest.raises(ValueError):
         quote(NOW.replace(tzinfo=None))
     record = quote(NOW.astimezone(ZoneInfo("UTC")))
-    assert select_recent_latest([record], queried_mpn="MPN", now=NOW) is record
+    assert select_recent_lowest([record], queried_mpn="MPN", now=NOW) is record
 
 
 class DisplayFrame(LowerFrame):
@@ -88,7 +88,7 @@ def test_real_native_pagination_then_raw_reader_latest_across_all_pages():
                          [[list(old.payload), list(old.payload)], [list(latest.payload)]], 3)
     records = InsoQuotationReader().read(access(frame), " mpn ")
     assert len(records) == 3
-    selected = select_recent_latest(records, queried_mpn="MPN", now=NOW)
+    selected = select_recent_lowest(records, queried_mpn="MPN", now=NOW)
     assert selected.payload == latest.payload
     assert frame.number == 2
     assert frame.value == "MPN"
@@ -140,7 +140,7 @@ def test_native_empty_query_is_successfully_captured():
 
 def test_same_timestamp_selects_one_latest_without_content_tiebreaking():
     first, second = quote(), quote(model="mpn")
-    assert select_recent_latest([first, second], queried_mpn="MPN", now=NOW) is first
+    assert select_recent_lowest([first, second], queried_mpn="MPN", now=NOW) is first
 
 
 def test_raw_capture_rejects_wrong_model_and_preserves_headers_contract():
@@ -157,3 +157,100 @@ def test_raw_capture_rejects_wrong_model_and_preserves_headers_contract():
 def test_capture_hook_does_not_change_default_v12_native_payload():
     frame = LowerFrame([[row(1)]], total=1)
     assert PlaywrightProcurementHistoryPage(frame).query_exact_response("MPN") == {"rows": [row(1)]}
+
+
+@pytest.mark.parametrize("tax_display", ["", "0", "13.0000", " 13\n "])
+def test_owner_verified_live_tax_header_in_sixth_position_preserves_raw_text(tax_display):
+    # Independent observed lower-history header fixture, 2026-10-07.
+    actual_headers = ("日期", "型号", "品牌", "数量", "币种", "供方税点", "报价", "供方未税价",
+                      "平台数量", "批号", "货期", "备注", "备注2", "制单人")
+    raw = list(quote().payload)
+    raw[5] = tax_display
+    class LiveHeaderFixture:
+        def evaluate(self, expression, arg):
+            return [raw] if tuple(arg["columns"]) == actual_headers else None
+    captured = capture_quotation_page(LiveHeaderFixture(), [row(1)])
+    assert captured[0]["quotation_display"] == tuple(raw)
+    assert captured[0]["quotation_display"][5] == tax_display
+
+
+def priced(at, price, currency="RMB"):
+    from dataclasses import replace
+    record = quote(at)
+    payload = list(record.payload)
+    payload[4], payload[7] = currency, price
+    return replace(record, payload=tuple(payload))
+
+
+def test_lowest_price_beats_latest_and_preserves_exact_payload():
+    older = priced(NOW-timedelta(hours=70), "0001.2000")
+    newest = priced(NOW-timedelta(minutes=1), "9.000")
+    stale = priced(NOW-timedelta(hours=73), "0")
+    future = priced(NOW+timedelta(seconds=1), "0")
+    selected = select_recent_lowest([newest, stale, future, older], queried_mpn="MPN", now=NOW)
+    assert selected is older and selected.payload[7] == "0001.2000"
+
+
+def test_currency_conversion_ranks_rmb_not_raw_numbers_and_calls_each_rate_once():
+    from decimal import Decimal
+    usd = priced(NOW, "1", "USD")
+    rmb = priced(NOW-timedelta(hours=1), "6.0000", "人民币")
+    hkd = priced(NOW-timedelta(hours=2), "5.00", "HKD")
+    calls = []
+    def rate(currency):
+        calls.append(currency)
+        return {"USD": Decimal(7), "HKD": Decimal("0.9")}[currency]
+    selected = select_recent_lowest([usd, usd, rmb, hkd], queried_mpn="MPN", now=NOW, currency_rate=rate)
+    assert selected is hkd and selected.payload[4] == "HKD" and selected.payload[7] == "5.00"
+    assert calls == ["USD", "HKD"]
+
+
+@pytest.mark.parametrize("price", ["", "unknown", "NaN", "Infinity", "-1"])
+def test_unusable_prices_do_not_win_or_change_captured_payload(price):
+    bad = priced(NOW, price)
+    valid = priced(NOW-timedelta(hours=1), "2")
+    assert select_recent_lowest([bad, valid], queried_mpn="MPN", now=NOW) is valid
+    assert select_recent_lowest([bad], queried_mpn="MPN", now=NOW) is None
+
+
+def test_equal_price_chooses_newer_but_equal_time_retains_first():
+    first = priced(NOW, "1.00")
+    same = priced(NOW, "1")
+    older = priced(NOW-timedelta(hours=1), "1.000")
+    assert select_recent_lowest([older, first, same], queried_mpn="MPN", now=NOW) is first
+
+
+def test_unknown_currency_and_unavailable_fx_fail_closed():
+    from src.inso.quotation_read import QuotationPriceUnavailable
+    with pytest.raises(QuotationPriceUnavailable, match="QUOTE_CURRENCY_UNSUPPORTED"):
+        select_recent_lowest([priced(NOW, "1", "UNKNOWN")], queried_mpn="MPN", now=NOW)
+    with pytest.raises(QuotationPriceUnavailable, match="QUOTE_FX_REQUIRED"):
+        select_recent_lowest([priced(NOW, "1", "USD")], queried_mpn="MPN", now=NOW)
+
+
+def test_supplier_net_price_is_used_even_when_quote_column_would_choose_opposite():
+    from dataclasses import replace
+    lower_net = priced(NOW-timedelta(hours=1), "2.0000")
+    lower_quote = priced(NOW, "8.00")
+    a, b = list(lower_net.payload), list(lower_quote.payload)
+    a[6], b[6] = "100", "0"
+    lower_net, lower_quote = replace(lower_net, payload=tuple(a)), replace(lower_quote, payload=tuple(b))
+    chosen = select_recent_lowest([lower_quote, lower_net], queried_mpn="MPN", now=NOW)
+    assert chosen is lower_net and chosen.payload[6:8] == ("100", "2.0000")
+
+
+def test_positive_net_price_preferred_to_zero_and_zero_only_falls_back_unchanged():
+    zero = priced(NOW, "000.0000")
+    positive = priced(NOW-timedelta(hours=1), "2.0000")
+    assert select_recent_lowest([zero, positive], queried_mpn="MPN", now=NOW) is positive
+    older_zero = priced(NOW-timedelta(hours=2), "-0")
+    selected = select_recent_lowest([older_zero, zero], queried_mpn="MPN", now=NOW)
+    assert selected is zero and selected.payload[7] == "000.0000"
+
+
+def test_zero_fallback_ignores_stale_fuzzy_and_future_rows_and_needs_no_fx():
+    zero = priced(NOW, "0", "USD")
+    stale = priced(NOW-timedelta(hours=73), "0")
+    future = priced(NOW+timedelta(seconds=1), "0")
+    assert select_recent_lowest([stale, future], queried_mpn="MPN", now=NOW) is None
+    assert select_recent_lowest([zero], queried_mpn="MPN", now=NOW) is zero

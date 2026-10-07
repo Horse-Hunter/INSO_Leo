@@ -15,16 +15,16 @@ V1.2 config remains byte-for-byte unchanged. Required quotation_input keys:
 - input_row=1; first_column=1; header_row does not exist
 QUOTE_INPUT_GEOMETRY CONFIRMED by Owner, 2026-10-07. Header NONE / NOT APPLICABLE.
 The target is '报价输入'!A1:N1, intentionally blank and headerless. QUOTATION_COLUMNS
-specifies the INSO raw14 order, never Google header text. Write all14 strings with RAW;
+specifies the INSO raw14 order, never Google header text. Position6 is 供方税点
+(native data-field Tax), verified live and explicitly confirmed by Owner on2026-10-07;
+the previous 供方返点 spelling was incorrect. Write all14 strings with RAW;
 readback preserves leading zeros, decimals, whitespace, newlines and empty cells.
 Metadata title/gid is revalidated before each write and before UI opening. Missing/invalid
 geometry or metadata mismatch globally stops before write/open/click. No header reads.
-READ_ONLY metadata target count1/gid489913321 was confirmed; this does not authorize writes.
-Fixed Chrome only exposes an about:blank window; browser DOM tools expose Edge, not the
-fixed production Chrome. 更新报价 exact role/name/count remains UNKNOWN. Do not guess coordinates,
-a drawing role, cell O3, or a locator based only on screenshot text. Popup/Script/status transition
-and refresh delay remain live-only UNKNOWN. One controlled live acceptance still needs separate
-Owner authorization. No quote input write, update click or Script run was performed.
+Actual fixed Chrome/CDP acceptance confirmed the unique drawing button and existing-price
+Script result. Use exact visible 报价工具 menu readiness (30s), then a unique actionable
+named 更新报价 control or observed drawing overlay. Ambiguous/missing controls fail closed.
+No coordinates, direct Script invocation, new browser, profile or cookie changes.
 
 ## Durable state / rollback
 V13 holds share the existing workflow DB, with a single additive table. Final ROW_FAILED
@@ -59,3 +59,36 @@ inquiry, known MPN and a fixed reason are included, with 请人工检查网站�
 INSO authentication globally stops; IC.net pauses V1.2 and lets V1.3 continue; other websites
 continue Research. Existing IC/INSO manual/fault alerts are suppressed for the same incident.
 Delivery retry remains pending without changing business scope.
+
+## Owner quotation policy and bounded completion
+Exact MPN + inclusive rolling72h selects the lowest positive eighth-column 供方未税价
+(InPrice), comparing supported currencies in RMB through the existing ECB USD/HKD provider.
+Ties prefer newest, then first capture. Invalid/negative values are skipped; if valid prices
+are all zero, select newest zero without FX. Preserve raw14, source dates and currency.
+Unknown currencies fail row-locally; unavailable official FX stops globally.
+
+Result dialog waits30s independently of click/navigation10s. The parser accepts observed
+更新完成 / 成功填入 / 已有价跳过 and reviewed legacy aliases, with strict single-row counts.
+Reject stale/ambiguous results before click. A confirmed inserted1 or skip1 is Script success.
+After unique 确定, wait up to30s for Script running notice to end before advancing; retain the
+page and stop globally on unconfirmed settlement. Script owns input cleanup; never clear it.
+
+Both successful result types then require the original source row to become 采购已报价 within
+30s. If it remains unsettled, log a warning, project the existing pale-yellow warning style,
+and enqueue the existing durable owner229 SMTP notification. SOURCE_STATUS_NOT_UPDATED retains
+its automation barrier; no second Script click or forced source status write. Owner correction
+closes the hold. Other failures retain reviewed semantics and other rows can continue.
+
+## Evidence and release boundary
+One previously authorized DRV8833PWR existing-price path actually produced 更新完成 / 成功填入0行 /
+已有价跳过1行. Exact 确定 was dismissed, Script ended, source remained manually restored 发给采购.
+Owner confirms delayed Script cleanup. No repeat live acceptance was performed for these fixes.
+First-insert live status transition and real SMTP delivery remain UNKNOWN; offline regressions
+cover both result kinds, delayed status at30s, warning/hold/dedup and interruptible waits.
+BuildOnly and frozen self-check produce a review candidate. This new increment needs independent
+review; do not overwrite the installed release before review. See RFQ-006 FINAL_REPORT for checks.
+
+## Research no-result recipient
+Only RESEARCH / NO_MATCHING_PRODUCT exception mail additionally targets shawn@inso-hk.com.
+Other phases/reasons/recipients are unchanged. Reuse existing recipient ledger/worker/SMTP;
+version only this changed immutable command payload. No historical replay or real test mail.

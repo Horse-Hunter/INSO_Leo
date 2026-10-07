@@ -36,9 +36,11 @@ def quotation_gui(result, key):
         QuotationOutcome.UPDATED_INSERTED: V12BusinessLabel.QUOTATION_COMPLETED,
         QuotationOutcome.UPDATED_ALREADY_EXISTS: V12BusinessLabel.QUOTATION_COMPLETED,
     }.get(result.outcome)
-    return (
-        V12OrderStateDTO(key, label, None, waiting_label=label.value) if label else None
-    )
+    if result.row_error_reason is not None and result.row_error_reason.value == "SOURCE_STATUS_NOT_UPDATED":
+        label = V12BusinessLabel.QUOTATION_STATUS_PENDING
+    waiting = ("已有报价，已跳过" if result.outcome is QuotationOutcome.UPDATED_ALREADY_EXISTS
+               else label.value if label else None)
+    return V12OrderStateDTO(key, label, None, waiting_label=waiting) if label else None
 
 
 def notify_quotation(store, result, key, episode, *, at):
@@ -50,7 +52,7 @@ def notify_quotation(store, result, key, episode, *, at):
     ):
         return
     action = {
-        "SOURCE_STATUS_NOT_UPDATED": "更新报价结果已确认，但源订单状态未变为采购已报价，请人工检查。",
+        "SOURCE_STATUS_NOT_UPDATED": "报价脚本已确认成功，但30秒内源表状态仍未变成采购已报价。请人工核对并更新状态；程序不会重复执行更新报价。",
         "UPDATE_RESULT_UNCONFIRMED": "更新报价多次无法确认，请人工检查该订单；程序已跳过并继续其他订单。",
     }.get(reason, "请人工核对该订单及报价输入；处理完成后将源订单改为采购已报价。")
     # Only explicit business identity/location and a closed reason, never provider exceptions.

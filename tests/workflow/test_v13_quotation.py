@@ -91,7 +91,7 @@ class Quotes:
         return response
 
 
-def cycle(responses, *, sources=None, items=None, wait=None, stop=lambda: False):
+def cycle(responses, *, sources=None, items=None, wait=None, stop=lambda: False, fx=None):
     sheets = Sheets(sources if sources is not None else [source(2)])
     store = Store(items if items is not None else [item(2)])
     operations, quotes, waits = Operations(), Quotes(responses), []
@@ -101,7 +101,7 @@ def cycle(responses, *, sources=None, items=None, wait=None, stop=lambda: False)
         return False if wait is None else wait(seconds)
     service = V13QuotationCycle(reader=sheets, store=store, operations=operations,
                                clock=lambda: NOW, wait=fake_wait, stop_requested=stop,
-                               quote_reader=quotes)
+                               quote_reader=quotes, fx_provider=fx)
     return service, operations, quotes, waits
 
 
@@ -252,3 +252,30 @@ def test_stop_before_first_query_and_empty_source():
     service, operations, _, waits = cycle([], sources=[], items=[])
     assert service.run(WS) == ()
     assert operations.tabs == [] and waits == []
+
+
+def test_cycle_selects_lower_rmb_equivalent_not_newest_and_preserves_original():
+    from decimal import Decimal
+
+    from tests.inso.test_v13_quotation_read import priced
+    newer = priced(NOW, "1", "USD")
+    older = priced(NOW-timedelta(hours=1), "6.0000", "RMB")
+    fx = SimpleNamespace(get_quote=lambda: SimpleNamespace(rate=Decimal(7)))
+    service, operations, quotes, waits = cycle([(newer, older)], fx=fx)
+    result, = service.run(WS)
+    assert result.quotation is older and result.quotation.payload[7] == "6.0000"
+    assert len(quotes.calls) == 1 and waits == [] and operations.active is None
+
+
+def test_official_fx_failure_is_global_stop_and_never_queries_next_order():
+    from src.research.ecb_fx import EcbFxError
+    from tests.inso.test_v13_quotation_read import priced
+    def fail():
+        raise EcbFxError("synthetic")
+    fx = SimpleNamespace(get_quote=fail)
+    service, _operations, quotes, _waits = cycle([(priced(NOW, "1", "USD"),)], fx=fx,
+        sources=[source(2), source(3, model="OTHER")], items=[item(2), item(3, model="OTHER")])
+    with pytest.raises(V12Fault) as raised:
+        service.run(WS)
+    assert raised.value.scope is FaultScope.GLOBAL_STOP and raised.value.reason == "V13_FX_UNAVAILABLE"
+    assert len(quotes.calls) == 1

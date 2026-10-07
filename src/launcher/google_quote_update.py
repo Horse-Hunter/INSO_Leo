@@ -1,8 +1,9 @@
 """Narrow Google quotation UI role/text contract on the existing protected CDP.
 
-LIVE_SELECTOR_ACCEPTANCE = UNKNOWN. Configured quote geometry/gid is mandatory;
+Named button or Owner-verified sole visible drawing. Configured geometry/gid is mandatory;
 this module never discovers credentials, launches a browser, or calls Script URLs.
 """
+import re
 from urllib.parse import urlsplit
 
 from src.inso.quotation_read import QUOTATION_COLUMNS
@@ -17,11 +18,15 @@ from src.workflow.v13_quote_update import (
 
 class GoogleQuotationUpdateActions:
     def __init__(self, *, browser_handle, location: QuotationInputLocation,
-                 timeout_ms: int = 10000):
+                 timeout_ms: int = 10000, readiness_timeout_ms: int = 30000,
+                 result_timeout_ms: int = 30000):
         if browser_handle.owned:
             raise ValueError("quotation UI must reuse the protected shared CDP handle")
         self._handle, self._location, self._timeout = browser_handle, location, timeout_ms
+        self._ready_timeout = readiness_timeout_ms
+        self._result_timeout = result_timeout_ms
         self._page, self._protected = None, False
+        self._script_pending = False
 
     def _guard(self):
         browser = self._handle.browser
@@ -46,6 +51,8 @@ class GoogleQuotationUpdateActions:
             raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
 
     def open_quote_input(self):
+        if self._script_pending:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED")
         if self._protected:
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_AUTHENTICATION_REQUIRED")
         if self._page is not None:
@@ -59,34 +66,75 @@ class GoogleQuotationUpdateActions:
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE") from None
         self._attempt(lambda: self._page.goto(self._location.url, wait_until="domcontentloaded", timeout=self._timeout))
         self._guard()
+        self._ready_control()  # Prove readiness/uniqueness before any input write.
+
+    def _ready_control(self):
+        # Real Sheets exposes the drawing shell before onOpen/menu initialization.
+        # Wait for observed script readiness, not a fixed sleep or a shell-only click.
+        menu = self._page.get_by_text("报价工具", exact=True)
+        self._attempt(lambda: menu.wait_for(state="visible", timeout=self._ready_timeout))
+        if menu.count() != 1:
+            raise UpdateAttemptUnconfirmed("UPDATE_CONTROL_UNCONFIRMED")
+        self._guard()
+        return self._update_control()
+
+    def _result_dialog(self):
+        # Live dialog has an observed title in its body; accessible name can be absent.
+        return self._page.get_by_role("dialog").filter(
+            has_text=re.compile(r"^(?:报价更新完成|更新完成)"))
+
+    def _update_control(self):
+        button = self._page.get_by_role("button", name="更新报价", exact=True)
+        if button.count() == 1:
+            return button
+        if button.count() > 1:
+            raise UpdateAttemptUnconfirmed("UPDATE_CONTROL_UNCONFIRMED")
+        # Verified on the exact metadata-bound quote-input sheet, 2026-10-07:
+        # two DOM overlays, only one visible; Owner screenshot identifies it.
+        drawing = self._page.locator(
+            'div.waffle-borderless-embedded-object-overlay[aria-label="绘图："]:visible'
+        )
+        if drawing.count() == 0:
+            self._attempt(lambda: drawing.wait_for(state="visible", timeout=self._timeout))
+        if drawing.count() != 1:
+            raise UpdateAttemptUnconfirmed("UPDATE_CONTROL_UNCONFIRMED")
+        return drawing
 
     def click_update_quote(self):
         self._guard()
-        button = self._page.get_by_role("button", name="更新报价", exact=True)
-        if button.count() != 1:
-            raise UpdateAttemptUnconfirmed("UPDATE_CONTROL_UNCONFIRMED")
+        button = self._ready_control()
         # Stale result dialogs cannot be mistaken for this attempt's result.
-        if self._page.get_by_role("dialog", name="报价更新完成", exact=True).count():
+        if self._result_dialog().count():
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_STALE")
         self._attempt(lambda: button.click(timeout=self._timeout))
 
     def read_update_result(self):
         self._guard()
-        dialog = self._page.get_by_role("dialog", name="报价更新完成", exact=True)
-        self._attempt(lambda: dialog.wait_for(state="visible", timeout=self._timeout))
+        dialog = self._result_dialog()
+        self._attempt(lambda: dialog.wait_for(state="visible", timeout=self._result_timeout))
         if dialog.count() != 1:
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED")
         return self._attempt(lambda: dialog.inner_text(timeout=self._timeout))
 
     def dismiss_result(self):
         self._guard()
-        dialog = self._page.get_by_role("dialog", name="报价更新完成", exact=True)
+        dialog = self._result_dialog()
         if dialog.count() != 1:
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED")
         button = dialog.get_by_role("button", name="确定", exact=True)
         if button.count() != 1:
             raise UpdateAttemptUnconfirmed("UPDATE_DISMISS_UNCONFIRMED")
-        self._attempt(lambda: button.click(timeout=self._timeout))
+        # Script clears input after UI confirmation. Do not write the next row until
+        # this observed execution ends; never clear the shared input ourselves.
+        self._script_pending = True
+        try:
+            self._attempt(lambda: button.click(timeout=self._timeout))
+            notice = self._page.get_by_text("正在运行脚本", exact=False)
+            self._attempt(lambda: notice.wait_for(state="hidden", timeout=self._result_timeout))
+            self._guard()
+        except UpdateAttemptUnconfirmed:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED") from None
+        self._script_pending = False
 
     def _attempt(self, operation):
         try:
@@ -98,7 +146,7 @@ class GoogleQuotationUpdateActions:
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from None
 
     def close(self):
-        if self._protected or self._page is None:
+        if self._protected or self._script_pending or self._page is None:
             return
         try:
             self._guard()

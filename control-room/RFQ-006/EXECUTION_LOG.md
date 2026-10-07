@@ -245,3 +245,51 @@ Apps Script execution/popup, inserted/already-existing feedback, source-status t
 Separate Owner authorization is still needed for one controlled live acceptance.
 The previous geometry BLOCKED LIVE CONFIG conclusion is superseded by Owner confirmation;
 live business acceptance itself remains UNKNOWN. CEO review is required; no follow-on task started.
+
+## Controlled button path acceptance / readiness repair — 2026-10-07
+Owner resumed the single existing quotation test; this is separate from RFQ-007 offline sync.
+Fixed Chrome/CDP reused; no browser/profile/cookie reset, no procurement/full scheduler.
+Initial DOM capture proved drawing overlay existed before visible drawing/custom menu finished
+loading. After observed 报价工具 readiness, one canonical click returned and one Script execution
+request was observed. Real modal body: 更新完成 / 成功填入0行 / 已有价跳过1行.
+Dismissed only that exact modal's unique 确定; script running notice ended. Three bounded read-only
+status checks remained 发给采购. Owner confirms this is expected: source was manually restored
+and existing-price Script skip does not rewrite status. Do not repeat submission or alter source.
+Button -> Script -> already-priced popup path CONFIRMED; first-insert path remains UNKNOWN.
+
+Canonical source improvements:
+- GoogleQuotationUpdateActions waits for exact observed 报价工具 menu visibility, bounded30s,
+  before unique control discovery/writes and again before clicking. Returns promptly when ready;
+  no fixed sleep, coordinates, cell clicking or direct Script invocation. Playwright click retains
+  its visibility/stability/hit-target checks; ambiguous/missing controls fail closed.
+- Result dialog identified by observed body title (accessible name may be absent); both original
+  报价更新完成 and actual 更新完成 supported. Stale result prevents another click.
+- Pure popup parser accepts actual 已有价跳过 while keeping strict single-row counts;
+  contradictory, duplicate, negative, multi-row and unknown feedback remain UNCONFIRMED.
+- Source-status completion policy and Script code unchanged. Expected manual-reset status is
+  not represented as new status-write acceptance. No production data adjusted to force success.
+
+Verification: button/parser/updater focused101 passed0.58s; full safe/offline1367 passed,
+1 skipped56.16s; Ruff --no-cache PASS; git diff --check PASS.
+The first focused iteration found only a fake-locator Match-to-int error; fixed fake boolean
+conversion and reran; no failed production tests remain. No additional live click for verification.
+Changes are in existing RFQ-006 worktree source, not RFQ-007 reviewed sync delivery; no build,
+deployment or published runtime change for this repair. Raw screenshots/output stay ignored .tmp.
+
+Owner-confirmed popup latency: read_update_result now waits up to30s independently of
+click/navigation10s; separate readiness/result settings. Focused101 passed0.59s, Ruff/diff PASS.
+A pending Script result remains an explicit wait, not immediate success.
+
+## Final Owner rule / verification — 2026-10-07
+Latest30s status requirement supersedes earlier unconditional existing-price acceptance.
+Inserted1 and skip1 both pass Script parsing; unresolved source status creates existing durable
+SOURCE_STATUS_NOT_UPDATED hold, pale-yellow GUI, warning log and229 notification. Script is never
+repeated after confirmed success; Script alone clears input. Research NO_MATCHING_PRODUCT alone
+adds Shawn; other recipients unchanged, command payload version changed only in this case.
+Final focused462 PASS24.32s; full1393 PASS/1 SKIP55.85s; Ruff/diff PASS.
+BuildOnly/frozen self-check/scan PASS; separate candidate idle GUI PASS/no business thread.
+Candidate EXE6B9248BB591F4A43885CA32399F2835F9FB3051AFF20BB31A4633B9F8C3625EB.
+New increment REVIEW_REQUIRED; installed release/configs not overwritten pending independent review.
+RFQ007 approved five-file patch/B1/cooldown preserved; CEO review files untouched.
+No additional live update, replay, procurement, Save-and-Send or SMTP acceptance after known skip.
+See final report for file-level implementation locations and exact current evidence/UNKNOWN limits.

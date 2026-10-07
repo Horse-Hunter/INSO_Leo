@@ -41,6 +41,7 @@ class V12BusinessLabel(StrEnum):
     QUOTATION_WAITING = "等待采购报价"
     QUOTATION_COMPLETED = "采购已报价"
     QUOTATION_FAILED = "报价处理异常，需人工处理"
+    QUOTATION_STATUS_PENDING = "报价已处理，表格状态待人工更新"
     INTERRUPTED_UNSENT = "处理中断（未发送）"
     INTERRUPTED_POSSIBLY_SENT = "处理中断（可能已发送，请先核对）"
     HUMAN_COMPLETED = "人工处理完成"
