@@ -8,4 +8,6 @@
 
 | RFQ-004 | V1.3 INSO quotation read pipeline | REVIEWED_DONE | `feature/v1-3` | REQUIRED | `control-room/RFQ-004/TASK_SPEC.md` |
 
+| RFQ-005 | V1.3 Google quotation update pipeline | REVIEW_REQUIRED | `feature/v1-3` | REQUIRED | `control-room/RFQ-005/TASK_SPEC.md` |
+
 Status is changed by the active executor/reviewer. Requirement meaning is changed only by Owner/CEO.

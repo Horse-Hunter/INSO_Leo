@@ -22,9 +22,21 @@ def relocate_quotation_source(
     Position anchors the EXISTING identity only after strict status/snapshot/
     expected-brand validation. Never generate or rewrite business identity.
     """
+    return relocate_quotation_status(
+        identity, rows, expected_brand=expected_brand, accepted_statuses=("发给采购",),
+    )
+
+
+def relocate_quotation_status(
+    identity: SheetRecordIdentity, rows: Iterable[WorksheetRow], *, expected_brand: object,
+    accepted_statuses: tuple[str, ...],
+) -> WorksheetRow:
+    """Same reviewed locator, with an explicit read-only status-transition scope."""
+    if not accepted_statuses or any(status not in {"发给采购", "采购已报价"} for status in accepted_statuses):
+        raise ValueError("unsupported quotation status read scope")
     schema = worksheet_schema(identity.worksheet.worksheet)
     eligible = tuple(row for row in rows
-                     if row.cells.get(schema.status_column) == "发给采购"
+                     if row.cells.get(schema.status_column) in accepted_statuses
                      and row.cells.get(schema.brand_column) == expected_brand)
     normalized = tuple(replace(row, cells={**row.cells, schema.status_column: "未发"})
                        for row in eligible)

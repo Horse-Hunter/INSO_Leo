@@ -75,3 +75,7 @@ Reviewer verifies this flag and grant exclusion from Git/release artifacts.
 ## RFQ-004 V1.3 read-only source
 
 `query_quotation_candidates` reads exact 发给采购 through the existing schema/row parser; V1.2 pending entry remains exact 未发. `quotation_candidates.relocate_quotation_source` reuses existing exact relocation with sent-state expectation and explicit persisted expected brand, preserving the opaque original identity. No write, poll or new ID. Workflow binds existing ledger inquiry IDs; orphan/ambiguous sources return a row-level failure. CEO B1: strictly verify original position first; only then use unique exact relocation fallback, including expected brand. Never rewrite the original identity.
+
+## RFQ-005 quotation input/status boundary
+
+`quotation_input.GoogleQuotationInput` consumes an explicit `QuotationInputLocation` (no default geometry), validates the exact fourteen headers supplied by RFQ-004 composition, writes all raw strings with RAW and reads them back without coercion/trim; missing trailing cells are empty strings. Shared schema/auth/API failures differ from targeted attempt failures. `relocate_quotation_status` is the existing reviewed original-anchor/unique-fallback read with explicit sent/quoted status scope; sent-only RFQ-004 wrapper unchanged. No Python source 采购已报价 writer exists. Actual geometry remains UNKNOWN.
