@@ -281,6 +281,7 @@ class RunSession:
     in_progress: int = 0
     pending: int = 0
     next_poll_at: datetime | None = None
+    row_cooldown_until: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)

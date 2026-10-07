@@ -85,6 +85,18 @@ def test_canonical_poll_combines_empty_purchase_quotation_and_interruptible_900s
         root=tmp_path,
         browser_acquirer=lambda *a, **k: browser_calls.append(True),
     )
+    cycle_factory = launcher.V13QuotationCycle
+    quotation_waits = []
+
+    def checked_cycle(**kwargs):
+        # Retry wait stays the original event, never the purchase display wrapper.
+        assert kwargs["wait"] == backend._stop.wait
+        assert kwargs["wait"] != backend._wait_between_rows
+        assert backend.get_status().row_cooldown_until is None
+        quotation_waits.append(kwargs["wait"])
+        return cycle_factory(**kwargs)
+
+    monkeypatch.setattr(launcher, "V13QuotationCycle", checked_cycle)
     try:
         backend.start()
         if fault is FaultScope.GLOBAL_STOP:
@@ -102,6 +114,8 @@ def test_canonical_poll_combines_empty_purchase_quotation_and_interruptible_900s
             assert events == ["V12", "V13"] and not browser_calls
             expected = RunState.QUOTATION_RUNNING if fault else RunState.RUNNING
             assert backend.get_status().state is expected
+            assert quotation_waits and backend.get_status().row_cooldown_until is None
+            assert backend._v12_composition.coordinator._row_wait == backend._wait_between_rows
             first = backend._thread
             backend.start()
             assert (
@@ -162,3 +176,38 @@ def test_website_issue_uses_durable_229_alert_dedup_and_preserves_scope(tmp_path
         assert backend._state is RunState.RUNNING and not backend._stop.is_set()
     assert len(store.all_items()) == 1
     backend.shutdown()
+
+
+
+def test_purchase_cooldown_uses_real_stop_event_and_clears_deadline(tmp_path):
+    from threading import Thread
+
+    backend = launcher.ProductionBackend(root=tmp_path)
+    backend._state = RunState.RUNNING
+    results = []
+    thread = Thread(target=lambda: results.append(backend._wait_between_rows(180)))
+    try:
+        thread.start()
+        assert _wait_until(lambda: backend.get_status().row_cooldown_until is not None)
+        backend._stop.set()
+        thread.join(timeout=2)
+        assert not thread.is_alive() and results == [True]
+        assert backend.get_status().row_cooldown_until is None
+    finally:
+        backend._stop.set()
+        thread.join(timeout=2)
+        backend.shutdown()
+
+
+def test_purchase_cooldown_deadline_cleared_if_original_wait_raises(tmp_path):
+    backend = launcher.ProductionBackend(root=tmp_path)
+    def failed_wait(seconds):
+        assert seconds == 180 and backend.get_status().row_cooldown_until is not None
+        raise RuntimeError("synthetic wait failure")
+    backend._stop = SimpleNamespace(wait=failed_wait, set=lambda: None)
+    try:
+        with pytest.raises(RuntimeError, match="synthetic wait failure"):
+            backend._wait_between_rows(180)
+        assert backend.get_status().row_cooldown_until is None
+    finally:
+        backend.shutdown()

@@ -12,7 +12,7 @@ import threading
 import uuid
 from contextlib import nullcontext
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -468,6 +468,7 @@ class ProductionBackend(GuiBackend):
         self._state = RunState.STOPPED
         self._started = self._stopped = self._last_poll = None
         self._next_poll_at = None
+        self._row_cooldown_until = None
         self._inquiries = []
         self._results = ()
         self._history = ()
@@ -704,7 +705,7 @@ class ProductionBackend(GuiBackend):
                     stop_requested=self._immediate_stop_requested,
                     on_result=self._complete_inquiry,
                     inquiry_ids=self._inquiry_scope,
-                    row_wait=self._stop.wait,
+                    row_wait=self._wait_between_rows,
                 )
                 self._v12_composition.coordinator.initialize_run_state(now=utc_now())
             else:
@@ -1604,7 +1605,18 @@ class ProductionBackend(GuiBackend):
                     for i in items
                 ),
                 self._next_poll_at if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING} else None,
+                self._row_cooldown_until,
             )
+
+    def _wait_between_rows(self, seconds):
+        """Expose the existing interruptible row wait without changing its policy."""
+        with self._lock:
+            self._row_cooldown_until = utc_now() + timedelta(seconds=seconds)
+        try:
+            return self._stop.wait(seconds)
+        finally:
+            with self._lock:
+                self._row_cooldown_until = None
 
     def _business_completed(self, inquiry_id):
         if self._v12_store is None:

@@ -107,6 +107,12 @@ def _order_row_style(
 def _countdown_text(status: RunSession, now: datetime | None = None) -> str:
     if status.state not in {RunState.RUNNING, RunState.QUOTATION_RUNNING}:
         return "00:00"
+    if status.state is RunState.RUNNING and status.row_cooldown_until is not None:
+        now = now or datetime.now(timezone.utc)
+        seconds = max(0, int((status.row_cooldown_until - now).total_seconds() + 0.999))
+        return f"冷却 {seconds // 60:02d}:{seconds % 60:02d}"
+    if status.in_progress:
+        return "订单处理中"
     if status.next_poll_at is None:
         return "即将轮询"
     now = now or datetime.now(timezone.utc)
