@@ -276,7 +276,11 @@ def ensure_inso_authenticated(
     status = guard.ensure_authenticated()
     if status.outcome is InsoSessionOutcome.DEAD:
         try:
-            if guard.opened_page is not None and not guard.opened_page.is_closed():
+            if (
+                status.reason_code != "MANUAL_VERIFICATION_REQUIRED"
+                and guard.opened_page is not None
+                and not guard.opened_page.is_closed()
+            ):
                 guard.opened_page.close()
         except Exception:  # noqa: BLE001 - retain the original authentication failure
             _log.warning("failed to close the new INSO authentication tab")

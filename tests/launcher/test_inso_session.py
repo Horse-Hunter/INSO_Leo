@@ -233,6 +233,75 @@ def test_failed_fresh_lease_closes_only_the_new_tab(monkeypatch):
     assert all(not page.closed for page in context.pages)
 
 
+@pytest.mark.parametrize("challenge", ["CAPTCHA", "手机验证码", "设备验证"])
+def test_fresh_manual_verification_page_survives_backend_cleanup(tmp_path, monkeypatch, challenge):
+    from src.gui.contracts import RunState
+    from src.launcher import backend as launcher
+    from src.launcher.browser_bootstrap import BrowserBootstrapError, BrowserHandle
+
+    context = FakeContext()
+    old_pages = tuple(context.pages)
+    page = _LoginPage(context, body_text=challenge)
+
+    def new_page():
+        context.pages.append(page)
+        return page
+
+    monkeypatch.setattr(context, "new_page", new_page)
+    browser = FakeBrowser([context])
+    playwright = FakePlaywright(browser)
+    closures = []
+    handle = BrowserHandle(owned=False, browser=browser, playwright=playwright,
+        close_fn=lambda: closures.append("browser"), cleanup_fn=lambda: closures.append("profile"))
+    backend = launcher.ProductionBackend(root=tmp_path, browser_acquirer=lambda *_a, **_k: handle)
+    monkeypatch.setattr(launcher, "assess_readiness", lambda *_a, **_k: SimpleNamespace(ready=True))
+    monkeypatch.setattr(launcher, "CoreLoginBridge", lambda: SimpleNamespace(login=lambda _site: _Login()))
+    monkeypatch.setattr(backend, "_alert_owner_of_login", lambda **_k: None)
+    parks = []
+    monkeypatch.setattr(launcher, "park_shared_cdp", lambda browser: parks.append(browser))
+    config = SimpleNamespace(cdp=SimpleNamespace(cdp_url="http://127.0.0.1:9222"))
+
+    with pytest.raises(BrowserBootstrapError) as error:
+        backend._open_research_session(config, object())
+    assert isinstance(error.value.__cause__, InsoAuthenticationError)
+    assert error.value.__cause__.reason_code == "MANUAL_VERIFICATION_REQUIRED"
+    assert not page.closed and page.clicks == 0
+    backend._runtime_error(error.value)
+    assert backend.get_status().state is RunState.MANUAL_REVIEW
+    assert backend._immediate_stop_requested()
+    backend._close_inso_order_tab()
+    # Also exercise the existing MANUAL_REVIEW guard with a retained attachment.
+    backend._browser_handle = SimpleNamespace(browser=browser)
+    backend._close_inso_order_tab()
+    backend._browser_handle = None
+    backend.shutdown()
+    assert parks == [browser], "only the pre-inquiry park is allowed"
+    assert not page.closed and all(not p.closed for p in old_pages)
+    assert browser.connected and browser.contexts == [context]
+    assert page in context.pages and closures == []
+    assert playwright.stop_count == 1, "disconnect the client, never close Chrome"
+
+
+@pytest.mark.parametrize("failure", ["AUTHENTICATION_REQUIRED", "AUTHENTICATED_SHELL_UNAVAILABLE"])
+def test_ordinary_fresh_authentication_failure_still_closes_only_owned_tab(monkeypatch, failure):
+    context = FakeContext()
+    old_pages = tuple(context.pages)
+    page = _LoginPage(context)
+    context.pages.append(page)
+    monkeypatch.setattr(context, "new_page", lambda: page)
+
+    def fail_login(_guard, _page):
+        raise InsoAuthenticationError(failure)
+
+    monkeypatch.setattr(InsoSessionGuard, "_log_in", fail_login)
+    browser = FakeBrowser([context])
+    with pytest.raises(InsoAuthenticationError) as error:
+        ensure_inso_authenticated(browser, _Login(), fresh_page=True)
+    assert error.value.reason_code == failure
+    assert page.closed and all(not p.closed for p in old_pages)
+    assert browser.connected and browser.contexts == [context]
+
+
 def test_login_guard_stays_on_the_current_order_page(monkeypatch):
     context = FakeContext(shell_pages=2)
     selected = context.pages[-1]

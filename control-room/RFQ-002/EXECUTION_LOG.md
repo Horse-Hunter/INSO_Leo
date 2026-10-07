@@ -1,5 +1,57 @@
 # RFQ-002 Execution Log — sanitized publication record
 
+## CEO B1 manual-verification page repair — 2026-10-07
+
+Fast-forward synchronized feature/v1-2 to CEO Review commit
+`2de59c7ad6e030c0db3689912a261f3ab2d1fd64`. Read current Review, execution
+history, Task Spec and module/session/release rules. B1 is the only repair.
+The earlier statement that manual verification pages survive was incomplete:
+backend MANUAL_REVIEW already prevents parking, but fresh authentication closed
+its owned page BEFORE that state transition. This entry corrects that evidence
+gap, not the normal blank-only closed-row policy or previous business results.
+
+Reuse audit: kept existing InsoSessionGuard, session attachment, protected
+BrowserHandle disconnect, backend error/state/park guards, fake login fixtures
+and release pipeline. Only production change is a reason-code exclusion in
+ensure_inso_authenticated: MANUAL_VERIFICATION_REQUIRED retains opened_page;
+ordinary DEAD outcomes still close only their fresh owned tab and raise the
+original sanitized error. No new adapter/browser/state/config or lifecycle
+refactor. Production uses the existing protected owned=False handle; disconnect
+stops its Playwright client, never Chrome/context/profile. Backend remains
+unchanged and transitions the propagated authentication failure to MANUAL_REVIEW.
+
+Offline regressions use synthetic CAPTCHA, phone-code and device challenges
+through actual backend session preparation and authentication, then error
+handling, order cleanup and shutdown. They assert a fresh page remains open,
+no credential-submit click, stopped MANUAL_REVIEW, no post-challenge park even
+with a retained attachment, unchanged context/browser and zero browser/profile
+close callbacks. Separate ordinary authentication and unavailable-shell cases
+prove fresh owned-tab cleanup still applies; prior invalid lease tests retained.
+No production credentials, orders, CAPTCHA or external transports are used.
+
+Actual checks:
+- `python -m pytest -q tests/launcher/test_inso_session.py tests/launcher/test_backend.py tests/launcher/test_release_infrastructure.py --basetemp=.tmp/rfq002-manual-focused-20261007 --tb=short`:
+  133 passed, 12.03 seconds.
+- `python -m pytest -q tests --basetemp=.tmp/rfq002-manual-full-20261007 --tb=short`:
+  979 passed, 11 skipped, 39.50 seconds; no real SMTP.
+- `python -m ruff check src tests`: PASS. `git diff --check`: PASS.
+- No real order, Save/Save-and-Send, SMTP, Sheets write or manufactured online
+  verification scenario. No protected CDP interaction for this repair.
+
+Release: reused `scripts/build_windows_release.ps1 -Version 1.2 -BuildOnly`.
+Build, frozen self-check and clean staged release scan PASS (exit 0). Existing
+guarded deployment helper moved only old EXE/_internal to primary-project
+`dist/release-backups/INSO_V1.2-20261007-before-manual-page-fix`, then replaced
+these generic assets. Runtime junction target verified unchanged; no data,
+grants or browser-profile changes. Deployed frozen self-check exit 0.
+New EXE SHA256:
+`7803C90E5AD34415CDF1BE9FDF4F373364C7955CE916BF16A6BF5BFBC7E1FC0A`.
+Computer-use normally closed old GUI and launched the new exact-path window
+idle, without Start Inquiry. No pixel-level or real challenge verification
+claimed. Only source file modified: src/launcher/inso_session.py; tests expanded
+in tests/launcher/test_inso_session.py. Records updated and REVIEW_REQUIRED for
+independent CEO B1 re-review; CEO REVIEW.md preserved, no executor PASS verdict.
+
 ## All-no-quotes presentation closeout — 2026-10-06
 
 Owner-approved narrow follow-up, starting source HEAD
