@@ -23,6 +23,7 @@ class RunState(str, Enum):
     STOPPING_AFTER_CYCLE = "本轮结束后停止"
     MANUAL_REVIEW = "需要人工处理"
     MODULE_PAUSED = "采购模块暂停"
+    QUOTATION_RUNNING = "V1.2暂停 / V1.3正常"
     GLOBAL_STOP = "全局基础设施故障"
 
 
@@ -37,6 +38,9 @@ class OrderStatus(str, Enum):
 
 
 class V12BusinessLabel(StrEnum):
+    QUOTATION_WAITING = "等待采购报价"
+    QUOTATION_COMPLETED = "采购已报价"
+    QUOTATION_FAILED = "报价处理异常，需人工处理"
     INTERRUPTED_UNSENT = "处理中断（未发送）"
     INTERRUPTED_POSSIBLY_SENT = "处理中断（可能已发送，请先核对）"
     HUMAN_COMPLETED = "人工处理完成"

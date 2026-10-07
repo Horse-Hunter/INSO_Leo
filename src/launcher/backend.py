@@ -82,6 +82,8 @@ from src.workflow.v12_store import (
     V12Store,
     migrate_v12,
 )
+from src.workflow.v13_integration import CombinedCycle, V13HoldStore, V13IntegratedCycle
+from src.workflow.v13_quotation import V13QuotationCycle, V13Stopped
 
 from .browser_bootstrap import (
     BrowserBootstrapError,
@@ -90,6 +92,7 @@ from .browser_bootstrap import (
     park_shared_cdp,
 )
 from .diagnostics import log_step
+from .google_quote_update import build_v13_quotation_updater
 from .inso_session import (
     InsoAuthenticationError,
     InsoResearchSession,
@@ -108,6 +111,13 @@ from .v12_composition import (
     compose_v12_production,
 )
 from .v12_gui import read_startup_interruptions, read_v12_order_state
+from .v13_integration import (
+    notify_quotation,
+    notify_runtime_fault,
+    quotation_gui,
+    quotation_location,
+)
+from .v13_quotation import V13QuotationOperations
 
 log = logging.getLogger(__name__)
 
@@ -441,6 +451,11 @@ class ProductionBackend(GuiBackend):
         self._research_acquire_failure = None
         self._research_gate = threading.Lock()
         self._lock = threading.RLock()
+        self._v13_states = {}
+        self._v13_unbound = {}
+        self._combined = None
+        self._v13_ledger_ready = False
+        self._v13_enabled = False
         self._stop = threading.Event()
         self._drain_due_on_stop = threading.Event()
         self._poll_gate = threading.Lock()
@@ -512,11 +527,16 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             if (
                 self._closed
-                or self._state in (RunState.RUNNING, RunState.STOPPING_AFTER_CYCLE)
+                or self._state in (RunState.RUNNING, RunState.QUOTATION_RUNNING, RunState.STOPPING_AFTER_CYCLE)
                 or (self._thread is not None and self._thread.is_alive())
                 or (self._login_all_thread is not None and self._login_all_thread.is_alive())
             ):
                 return
+            self._combined = None
+            self._v13_ledger_ready = False
+            self._v13_enabled = False
+            self._v13_states.clear()
+            self._v13_unbound.clear()
             self._run_id = "run_" + str(uuid.uuid4())
             self._started = utc_now()
             self._stopped = None
@@ -539,7 +559,7 @@ class ProductionBackend(GuiBackend):
 
     def request_stop_after_cycle(self):
         with self._lock:
-            if self._state is RunState.RUNNING:
+            if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}:
                 self._state = RunState.STOPPING_AFTER_CYCLE
                 self._next_poll_at = None
                 with self._poll_gate:
@@ -601,12 +621,19 @@ class ProductionBackend(GuiBackend):
             )
             self._v12_store = V12Store(db)
             status_writer = None
+            write_service = None
+
+            def get_write_service():
+                nonlocal write_service
+                if write_service is None:
+                    write_service = build_read_write_google_sheets_service(client, allow_interactive=False)
+                return write_service
 
             def get_status_writer():
                 nonlocal status_writer
                 if status_writer is None:
                     status_writer = GoogleSheetsPurchaseStatusWriter(
-                        build_read_write_google_sheets_service(client, allow_interactive=False)
+                        get_write_service()
                     )
                 return status_writer
 
@@ -692,6 +719,48 @@ class ProductionBackend(GuiBackend):
                 WorkflowWorker(self._store, research_observer, brand_updater=None),
                 worksheets,
             )
+            self._v13_enabled = cfg.get("v13_enabled") is True or (
+                getattr(sys, "frozen", False) and Path(sys.executable).stem == "INSO_V1.3")
+            if self._v13_enabled:
+                holds = V13HoldStore(db)
+                holds.migrate()
+                self._v13_ledger_ready = True
+                location = quotation_location(cfg)  # Missing/unknown config stops before business.
+
+                def run_quotation(worksheet):
+                    cycle = V13QuotationCycle(reader=reader, store=self._store,
+                        operations=self._v13_operations(rc, cfg), clock=utc_now,
+                        wait=self._stop.wait, stop_requested=self._stop.is_set)
+                    def updater():
+                        handle = self._v13_browser(rc, cfg)
+                        try:
+                            service = get_write_service()
+                        except Exception:  # noqa: BLE001 - shared cached Sheets authorization boundary
+                            raise V12Fault(FaultScope.GLOBAL_STOP,"SHEETS_AUTH_UNAVAILABLE") from None
+                        return build_v13_quotation_updater(
+                            service=service, source_reader=reader,
+                            store=self._store, browser_handle=handle, location=location,
+                            wait=self._stop.wait, stop_requested=self._immediate_stop_requested)
+                    integrated = V13IntegratedCycle(reader=reader, store=self._store,
+                        holds=holds, cycle=cycle, updater_factory=updater,
+                        notify=lambda result,key,episode: notify_quotation(self._v12_store,
+                            result,key,episode,at=utc_now()), observe=self._observe_quotation,
+                        stop_requested=self._stop.is_set)
+                    for recovery in range(4):
+                        try:
+                            integrated.run(worksheet)
+                            break
+                        except V12Fault as exc:
+                            if exc.reason != "CDP_SESSION_UNAVAILABLE" or recovery == 3:
+                                raise
+                            handle = self._browser_handle
+                            if handle is not None:
+                                handle.disconnect()
+                            self._browser_handle = None
+                            self._v13_browser(rc,cfg)
+                self._combined = CombinedCycle(self._v12_composition.coordinator,
+                    run_quotation, on_pause=self._pause_v12,
+                    stop_requested=self._stop.is_set)
             self._refresh_history(force=True)
             self._set_health(("正常", "待命", "正常", "正常"), "正常")
 
@@ -710,20 +779,15 @@ class ProductionBackend(GuiBackend):
                             self._poll_idle.clear()
                         try:
                             self._last_poll = utc_now()
-                            self._v12_composition.coordinator.begin_poll_cycle()
-                            if self._v12_composition is None:
-                                raise V12DatabaseError("V1.2 production composition is unavailable")
-                            # V1.2 owns the poll-to-research handoff.  It still
-                            # reads through the same Sheets adapter, but never
-                            # falls back to the V1.1-only runtime path.
-                            for worksheet in worksheets:
-                                if self._immediate_stop_requested():
-                                    return
-                                cycle_results = self._v12_composition.coordinator.poll_and_process(
-                                    reader, worksheet, now=self._last_poll
-                                )
-                                for flow_result in cycle_results:
-                                    self._seen(flow_result.inquiry_id)
+                            self._cycle_id = "cycle_" + uuid.uuid4().hex
+                            if self._combined is not None:
+                                self._combined.run(reader, worksheets, now=self._last_poll)
+                            else:
+                                self._v12_composition.coordinator.begin_poll_cycle()
+                                for worksheet in worksheets:
+                                    if self._immediate_stop_requested():
+                                        return
+                                    self._v12_composition.coordinator.poll_and_process(reader,worksheet,now=self._last_poll)
                             if self._immediate_stop_requested():
                                 return
                             self._purchase_completion.retry_saved_statuses(at=utc_now())
@@ -731,18 +795,29 @@ class ProductionBackend(GuiBackend):
                                 now=utc_now()
                             )
                             with self._lock:
-                                if self._state is RunState.RUNNING:
+                                if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}:
                                     self._next_poll_at = utc_now() + runtime.poll_interval
                             browser_state = "已连接" if self._research_ready else "待命"
                             self._set_health(("正常", browser_state, "正常", "正常"), "正常")
+                        except V12Fault as exc:
+                            if exc.scope is FaultScope.GLOBAL_STOP:
+                                self._state = RunState.GLOBAL_STOP  # Preserve human-needed pages before finally.
+                            raise
+                        except (sqlite3.Error, V12DatabaseError):
+                            self._state = RunState.GLOBAL_STOP
+                            raise
                         finally:
                             self._close_inso_order_tab()
                             self._poll_idle.set()
                         if self._stop.wait(runtime.poll_interval.total_seconds()):
                             return
+                except V13Stopped:
+                    pass
                 except Exception as exc:  # noqa: BLE001 - fail closed at runtime boundary
                     self._runtime_error(exc)
                 finally:
+                    if self._v13_enabled:
+                        self._release_idle_browser(force=True)
                     BrowserHandle.drain_deferred_stops()
 
             def worker_loop():
@@ -792,6 +867,73 @@ class ProductionBackend(GuiBackend):
                     self._state = RunState.STOPPED
                 self._stopped = utc_now()
                 self._notify()
+
+    def _pause_v12(self, fault):
+        with self._lock:
+            self._state = RunState.QUOTATION_RUNNING
+        inquiry = self._active_inso_inquiry or (self._inquiries[-1] if self._inquiries else None)
+        if inquiry is not None:
+            self._record_fault_alert(inquiry,"FAULT",fault.reason)
+        else:
+            notify_runtime_fault(self._v12_store,self._run_id or "run",fault.reason,at=utc_now())
+        self._append_log("WARNING", "采购模块暂停，报价模块继续；请检查采购网站或订单。")
+        self._notify()
+
+    def _v13_browser(self, rc, cfg):
+        for attempt in range(4):
+            handle = self._browser_handle
+            if handle is not None and handle.browser is not None and handle.browser.is_connected():
+                return handle
+            try:
+                if handle is not None:
+                    handle.disconnect()
+                self._browser_handle = self._browser_acquirer(rc.cdp.cdp_url,self.root,cfg,
+                    probe=self.cdp_probe or probe_loopback_endpoint)
+                if self._browser_handle.browser.is_connected():
+                    return self._browser_handle
+            except Exception:  # noqa: BLE001 - only shared CDP acquisition
+                log.warning("V1.3 shared CDP recovery attempt failed")
+        raise V12Fault(FaultScope.GLOBAL_STOP,"CDP_RECONNECT_EXHAUSTED")
+
+    def _v13_operations(self, rc, cfg):
+        backend = self
+        class SharedOperations:
+            current = None
+            def open(self, inquiry_id):
+                backend._seen(inquiry_id)
+                backend._active_inso_inquiry = inquiry_id
+                handle = backend._v13_browser(rc,cfg)
+                try:
+                    login = CoreLoginBridge().login(INSO_SITE_ID)
+                except Exception:  # noqa: BLE001 - only the shared login bridge
+                    raise V12Fault(FaultScope.GLOBAL_STOP,"INSO_AUTHENTICATION_REQUIRED") from None
+                self.current = V13QuotationOperations(browser_handle=handle,login=login)
+                return self.current.open(inquiry_id)
+            def preserve(self):
+                if self.current:
+                    self.current.preserve()
+            def close(self):
+                if self.current:
+                    self.current.close()
+                    self.current = None
+                backend._active_inso_inquiry = None
+        return SharedOperations()
+
+    def _observe_quotation(self, result, key):
+        dto = quotation_gui(result,key)
+        if dto is not None:
+            with self._lock:
+                self._v13_states[key] = dto
+                if result.inquiry_id is None:
+                    self._v13_unbound[key] = Order(key,result.queried_mpn or "",None,0,
+                        "",None,None,OrderStatus.ERROR,remark=dto.waiting_label,run_id=self._run_id or "")
+            if result.inquiry_id:
+                self._seen(result.inquiry_id)
+        log.warning("combined cycle result",extra={"cycle_id":getattr(self,"_cycle_id",None),
+            "business_module":"V1.3","inquiry_id":result.inquiry_id,"stage":"quotation",
+            "reason":result.row_error_reason.value if result.row_error_reason else result.outcome.value})
+        self._refresh()
+        self._notify()
 
     def _seen(self, inquiry):
         with self._lock:
@@ -887,6 +1029,9 @@ class ProductionBackend(GuiBackend):
     def _complete_inquiry(self, result):
         """Settle each row before starting the next; never defer to batch drain."""
         try:
+            log.warning("combined cycle result", extra={"cycle_id":getattr(self,"_cycle_id",None),
+                "business_module":"V1.2","inquiry_id":result.inquiry_id,"stage":"purchase",
+                "reason":getattr(getattr(result,"business_state",None),"value","UNKNOWN")})
             self._seen(result.inquiry_id)
             settled = self._purchase_completion.process(result, at=utc_now())
             self._v12_composition.coordinator.run_notifications(now=utc_now())
@@ -1231,7 +1376,13 @@ class ProductionBackend(GuiBackend):
             cause = cause.__cause__
         if fault_inquiry not in self._manual_inquiries:
             self._record_fault_alert(fault_inquiry, "FAULT", reason)
-        if self._purchase_completion is None or fault_inquiry is None:
+        if fault_inquiry is None and self._v13_ledger_ready:
+            try:
+                notify_runtime_fault(self._v12_store,self._run_id or "run",reason,at=utc_now())
+                self._v12_composition.coordinator.run_notifications(now=utc_now())
+            except (sqlite3.Error,V12DatabaseError):
+                self._alert_owner_of_login(stop_reason=self._state.value)
+        elif self._purchase_completion is None or fault_inquiry is None:
             self._alert_owner_of_login(stop_reason=self._state.value)
 
     def _record_fault_alert(self, inquiry_id, phase, reason):
@@ -1266,8 +1417,9 @@ class ProductionBackend(GuiBackend):
             self._state = (RunState.GLOBAL_STOP if "inso" in lower or "英索" in lower else RunState.MODULE_PAUSED)
             self._next_poll_at = None
             self._drain_due_on_stop.clear()
-            with self._poll_gate:
-                self._stop.set()
+            if not (self._v13_enabled and self._state is RunState.MODULE_PAUSED):
+                with self._poll_gate:
+                    self._stop.set()
             self._health = HealthReport(
                 tuple(
                     HealthItem(
@@ -1378,7 +1530,7 @@ class ProductionBackend(GuiBackend):
                 )
             )
         with self._lock:
-            self._results = tuple(results)
+            self._results = tuple(results) + tuple(self._v13_unbound.values())
 
     def _refresh_history(self, *, force=False):
         if not self._excel:
@@ -1445,7 +1597,7 @@ class ProductionBackend(GuiBackend):
                     i.status in (WorkflowStatus.QUEUED, WorkflowStatus.RETRY_WAIT)
                     for i in items
                 ),
-                self._next_poll_at if self._state is RunState.RUNNING else None,
+                self._next_poll_at if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING} else None,
             )
 
     def _business_completed(self, inquiry_id):
@@ -1477,6 +1629,8 @@ class ProductionBackend(GuiBackend):
             return self._history
 
     def get_v12_order_state(self, inquiry_id):
+        if inquiry_id in self._v13_states:
+            return self._v13_states[inquiry_id]
         if self._v12_store is None:
             preview = self._startup_interruptions.get(inquiry_id)
             return preview[0] if preview else None
@@ -1499,7 +1653,7 @@ class ProductionBackend(GuiBackend):
                 return
             if self._login_all_thread is not None and self._login_all_thread.is_alive():
                 return
-            if self._state in (RunState.RUNNING, RunState.STOPPING_AFTER_CYCLE):
+            if self._state in (RunState.RUNNING, RunState.QUOTATION_RUNNING, RunState.STOPPING_AFTER_CYCLE):
                 self._append_log(
                     "WARNING", "正在询价，请先等待本轮结束再执行一键登录"
                 )

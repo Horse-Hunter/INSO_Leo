@@ -582,7 +582,7 @@ def test_windowed_startup_duplicate_does_not_construct_backend(tmp_path, monkeyp
     monkeypatch.setattr(sys, "argv", ["INSO_V1.2.exe"])
     assert main_module.main(guard_factory=lambda: guard, backend_factory=lambda: constructed.append(True)) == 0
     assert constructed == []
-    assert messages == ["INSO_V1.2 已在运行。"]
+    assert messages == ["INSO_V1.3 已在运行。"]
     assert guard.released
 
 
@@ -602,10 +602,10 @@ def test_windowed_startup_error_is_sanitized_and_points_to_log(tmp_path, monkeyp
     monkeypatch.setattr(sys, "argv", ["INSO_V1.2.exe"])
     monkeypatch.setattr(main_module, "ProductionBackend", lambda: (_ for _ in ()).throw(ValueError("private-token-value")))
     assert main_module.main(guard_factory=Guard) == 1
-    log_text = (tmp_path / "runtime/logs/INSO_V1.2.log").read_text(encoding="utf-8")
+    log_text = (tmp_path / "runtime/logs/INSO_V1.3.log").read_text(encoding="utf-8")
     assert "ValueError" in log_text
     assert "private-token-value" not in log_text
-    assert "INSO_V1.2.log" in messages[0]
+    assert "INSO_V1.3.log" in messages[0]
     assert "private-token-value" not in messages[0]
 
 

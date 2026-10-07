@@ -6,7 +6,7 @@ import os
 
 repo_root = Path(SPECPATH).parent
 release_version = os.environ.get("INSO_BUILD_VERSION", "1.1")
-if release_version not in {"1.1", "1.2"}:
+if release_version not in {"1.1", "1.2", "1.3"}:
     raise ValueError("unsupported release version")
 release_name = "INSO_V" + release_version
 

@@ -1,4 +1,4 @@
-param([switch]$BuildOnly, [ValidateSet("1.1", "1.2")][string]$Version = "1.1")
+param([switch]$BuildOnly, [ValidateSet("1.1", "1.2", "1.3")][string]$Version = "1.1")
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repo

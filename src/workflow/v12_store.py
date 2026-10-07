@@ -209,7 +209,7 @@ def _create_verified_backup_impl(
     destination = _connect(temp_path)
     source_count = -1
     try:
-        _verify_v1_baseline(source)
+        _verify_backup_schema(source)
         source_count = int(
             source.execute("SELECT count(*) FROM workflow_items").fetchone()[0]
         )
@@ -231,7 +231,7 @@ def _create_verified_backup_impl(
     _fsync_file(temp_path)
     with _connect(temp_path, read_only=True) as backup:
         _verify_integrity(backup)
-        _verify_v1_baseline(backup)
+        _verify_backup_schema(backup)
         backup_count = int(
             backup.execute("SELECT count(*) FROM workflow_items").fetchone()[0]
         )
@@ -568,8 +568,9 @@ class V12Store:
                     connection.execute(
                         "INSERT INTO workflow_v12_notification_recipients "
                         "(command_id, recipient_id, address, outcome, attempt_count) "
-                        "VALUES (?, ?, ?, 'PENDING', 0)",
-                        (command.command_id, recipient.recipient_id, recipient.address),
+                        "VALUES (?, ?, ?, ?, 0)",
+                        (command.command_id, recipient.recipient_id, recipient.address,
+                            "OPERATIONAL_PENDING" if command.inquiry_id is None else "PENDING"),
                     )
                 else:
                     prior = connection.execute(
@@ -597,7 +598,7 @@ class V12Store:
                 "c.payload_version, r.attempt_count "
                 "FROM workflow_v12_notification_recipients r "
                 "JOIN workflow_v12_notification_commands c USING(command_id) "
-                "WHERE r.outcome IN ('PENDING', 'RETRYABLE_FAILURE') "
+                "WHERE r.outcome IN ('PENDING', 'RETRYABLE_FAILURE', 'OPERATIONAL_PENDING', 'OPERATIONAL_RETRYABLE_FAILURE') "
                 "AND (r.next_attempt_at IS NULL OR r.next_attempt_at <= ?) "
                 "ORDER BY r.next_attempt_at, r.command_id, r.recipient_id LIMIT ?",
                 (_time_text(now), limit),
@@ -606,10 +607,11 @@ class V12Store:
             for row in rows:
                 connection.execute(
                     "UPDATE workflow_v12_notification_recipients "
-                    "SET outcome='SENDING', attempt_count=attempt_count+1 "
+                    "SET outcome=?, attempt_count=attempt_count+1 "
                     "WHERE command_id=? AND recipient_id=? "
-                    "AND outcome IN ('PENDING', 'RETRYABLE_FAILURE')",
-                    (row["command_id"], row["recipient_id"]),
+                    "AND outcome IN ('PENDING', 'RETRYABLE_FAILURE', 'OPERATIONAL_PENDING', 'OPERATIONAL_RETRYABLE_FAILURE')",
+                    ("OPERATIONAL_SENDING" if row["inquiry_id"] is None else "SENDING",
+                     row["command_id"], row["recipient_id"]),
                 )
                 command_id = row["command_id"]
                 if command_id not in grouped:
@@ -656,7 +658,7 @@ class V12Store:
             ).fetchone()
             if row is None:
                 raise KeyError((command_id, recipient_id))
-            if row["outcome"] != DeliveryOutcome.SENDING.value:
+            if row["outcome"] not in {DeliveryOutcome.SENDING.value,"OPERATIONAL_SENDING"}:
                 raise V12DatabaseError("recipient is not in a sending attempt")
             attempt = int(row["attempt_count"])
             next_at: datetime | None = None
@@ -671,7 +673,8 @@ class V12Store:
                 "next_attempt_at=?, reason_code=?, last_attempt_at=? "
                 "WHERE command_id=? AND recipient_id=?",
                 (
-                    persisted_outcome.value,
+                    ("OPERATIONAL_RETRYABLE_FAILURE" if row["inquiry_id"] is None
+                        and persisted_outcome is DeliveryOutcome.RETRYABLE_FAILURE else persisted_outcome.value),
                     _time_text(next_at),
                     _reason(reason_code),
                     _time_text(at),
@@ -692,7 +695,7 @@ class V12Store:
                 reason_code=reason_code, attempt=attempt,
             )
             _insert_event(connection, event)
-            if persisted_outcome is not DeliveryOutcome.SENT:
+            if inquiry_id is not None and persisted_outcome is not DeliveryOutcome.SENT:
                 alert_to_raise = (
                     _new_id("alt"), inquiry_id, AlertType.NOTIFICATION_FAILED,
                     reason_code or ReasonCode.NOTIFICATION_UNKNOWN,
@@ -711,7 +714,7 @@ class V12Store:
                     deduplicate_by_type=True,
                     scope_key=command_id,
                 )
-            if _all_recipients_sent(connection, command_id):
+            if inquiry_id is not None and _all_recipients_sent(connection, command_id):
                 _recover_alerts(
                     connection,
                     inquiry_id,
@@ -737,7 +740,7 @@ class V12Store:
         with _transaction(self.database_path) as connection:
             rows = connection.execute(
                 "SELECT command_id, recipient_id FROM workflow_v12_notification_recipients "
-                "WHERE outcome='SENDING'"
+                "WHERE outcome IN ('SENDING','OPERATIONAL_SENDING')"
             ).fetchall()
             for row in rows:
                 connection.execute(
@@ -758,6 +761,8 @@ class V12Store:
                     reason_code=ReasonCode.NOTIFICATION_UNKNOWN,
                 )
                 _insert_event(connection, event)
+                if inquiry["inquiry_id"] is None:
+                    continue
                 _raise_alert(
                     connection,
                     alert_id=_new_id("alt"),
@@ -1139,7 +1144,7 @@ class V12Store:
             RecipientDeliveryResult(
                 command_id,
                 row["recipient_id"],
-                DeliveryOutcome(row["outcome"]),
+                DeliveryOutcome(row["outcome"].removeprefix("OPERATIONAL_")),
                 int(row["attempt_count"]),
                 _parse_time(row["last_attempt_at"])
                 if row["last_attempt_at"] else _parse_time(row["created_at"]),
@@ -1301,6 +1306,14 @@ def _verify_v1_baseline(connection: sqlite3.Connection) -> None:
     _verify_integrity(connection)
 
 
+def _verify_backup_schema(connection: sqlite3.Connection) -> None:
+    if connection.execute("PRAGMA user_version").fetchone()[0] == V12_SCHEMA_VERSION:
+        _verify_v12_schema(connection)
+        _verify_integrity(connection)
+    else:
+        _verify_v1_baseline(connection)
+
+
 def _verify_v12_schema(connection: sqlite3.Connection) -> None:
     version = int(connection.execute("PRAGMA user_version").fetchone()[0])
     if version != V12_SCHEMA_VERSION:
@@ -1350,6 +1363,8 @@ def _verify_v12_schema(connection: sqlite3.Connection) -> None:
 
 
 def _insert_event(connection: sqlite3.Connection, event: WorkflowEvent) -> None:
+    if event.inquiry_id is None:
+        return  # Operational notifications have no fabricated business inquiry.
     if event.occurred_at.tzinfo is None:
         raise ValueError("event timestamp must be timezone-aware")
     if event.attempt is not None and event.attempt < 0:

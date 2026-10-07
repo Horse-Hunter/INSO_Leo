@@ -110,6 +110,9 @@ class BusinessState(StrEnum):
 
 
 class BusinessLabel(StrEnum):
+    QUOTATION_WAITING = "等待采购报价"
+    QUOTATION_COMPLETED = "采购已报价"
+    QUOTATION_FAILED = "报价处理异常，需人工处理"
     INTERRUPTED_UNSENT = "处理中断（未发送）"
     INTERRUPTED_POSSIBLY_SENT = "处理中断（可能已发送，请先核对）"
     HUMAN_COMPLETED = "人工处理完成"
@@ -256,7 +259,7 @@ class NotificationRecipient:
 @dataclass(frozen=True, slots=True)
 class NotificationCommand:
     command_id: str
-    inquiry_id: str
+    inquiry_id: str | None
     kind: NotificationKind
     recipients: tuple[NotificationRecipient, ...]
     subject: str

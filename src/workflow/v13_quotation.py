@@ -173,15 +173,18 @@ class V13QuotationCycle:
         self._clock, self._wait, self._stop = clock, wait, stop_requested
         self._quotes = quote_reader or InsoQuotationReader()
 
-    def run(self, worksheet: WorksheetIdentity) -> tuple[V13QuotationResult, ...]:
+    def run(self, worksheet: WorksheetIdentity, *, skip=lambda _: False, on_result=lambda result: result) -> tuple[V13QuotationResult, ...]:
         candidates = read_v13_candidates(self._reader, worksheet, self._store)
         results = []
         for candidate in candidates:
             if self._stop():
                 raise V13Stopped("STOP_REQUESTED")
 
+            if skip(candidate):
+                continue
+
             if isinstance(candidate, V13QuotationResult):
-                results.append(candidate)
+                results.append(on_result(candidate))
                 continue
 
             def operation(candidate=candidate):
@@ -231,10 +234,10 @@ class V13QuotationCycle:
                 )
             except V13SourceRowError as exc:
                 self._operations.close()
-                results.append(V13QuotationResult(
+                results.append(on_result(V13QuotationResult(
                     candidate.inquiry_id, candidate.record_identity, candidate.queried_mpn,
                     QuotationOutcome.ROW_FAILED, None, exc.reason, worksheet, candidate.source_row_position,
-                ))
+                )))
                 continue
             except V12Fault:
                 # Engine closes failed query tabs before exhaustion; auth tabs protected.
@@ -242,15 +245,19 @@ class V13QuotationCycle:
             except V13Stopped:
                 self._operations.close()
                 raise
-            except Exception:
+            except Exception:  # noqa: BLE001 - isolated V1.3 adapter failure
                 self._operations.close()
-                raise
+                results.append(on_result(V13QuotationResult(
+                    candidate.inquiry_id,candidate.record_identity,candidate.queried_mpn,
+                    QuotationOutcome.ROW_FAILED,None,RowErrorReason.SOURCE_CHANGED,
+                    worksheet,candidate.source_row_position)))
+                continue
             self._operations.close()
-            results.append(V13QuotationResult(
+            results.append(on_result(V13QuotationResult(
                 candidate.inquiry_id, candidate.record_identity, candidate.queried_mpn,
                 QuotationOutcome.QUOTE_FOUND if quote is not None else QuotationOutcome.NO_RECENT_QUOTE,
                 quote, source_worksheet=worksheet, source_row_position=candidate.source_row_position,
-            ))
+            )))
         return tuple(results)
 
 

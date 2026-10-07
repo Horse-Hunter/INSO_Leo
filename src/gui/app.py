@@ -1,4 +1,4 @@
-"""INSO_V1.2 single-page Dashboard implemented with customtkinter.
+"""INSO_V1.3 single-page Dashboard implemented with customtkinter.
 
 The app owns no automation logic; it consumes a GuiBackend implementation and
 updates its widgets from the main thread via tkinter.after.
@@ -71,6 +71,13 @@ def _order_row_style(
     now: datetime | None = None,
     v12_state: V12OrderStateDTO | None = None,
 ) -> str:
+    if v12_state is not None:
+        if v12_state.business_label is V12BusinessLabel.QUOTATION_COMPLETED:
+            return "completed"
+        if v12_state.business_label is V12BusinessLabel.QUOTATION_FAILED:
+            return "error"
+        if v12_state.business_label is V12BusinessLabel.QUOTATION_WAITING:
+            return "legacy"
     if v12_state is not None and v12_state.latest_active_alert is not None:
         if v12_state.business_label.value in {"已发采购（待确认）", "采购已处理，表格状态待人工更新"}:
             return "warning"
@@ -98,7 +105,7 @@ def _order_row_style(
 
 
 def _countdown_text(status: RunSession, now: datetime | None = None) -> str:
-    if status.state is not RunState.RUNNING:
+    if status.state not in {RunState.RUNNING, RunState.QUOTATION_RUNNING}:
         return "00:00"
     if status.next_poll_at is None:
         return "即将轮询"
@@ -186,7 +193,7 @@ def _event_display_text(event: Any) -> str:
 
 
 class InsoDashboardApp:
-    """Single-page INSO_V1.2 operator dashboard."""
+    """Single-page INSO_V1.3 operator dashboard."""
 
     def __init__(self, backend: GuiBackend) -> None:
         global ctk
@@ -209,7 +216,7 @@ class InsoDashboardApp:
         self._shown_login_report: SiteLoginReport | None = None
 
         self._root = ctk.CTk()
-        self._root.title("INSO_V1.2")
+        self._root.title("INSO_V1.3")
         self._root.geometry("1200x800")
         self._root.configure(fg_color=_BG)
         self._root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -255,7 +262,7 @@ class InsoDashboardApp:
 
         title = ctk.CTkLabel(
             frame,
-            text="INSO_V1.2",
+            text="INSO_V1.3",
             font=_FONT_TITLE,
             text_color=_TEXT,
         )
@@ -466,6 +473,7 @@ class InsoDashboardApp:
             font=_FONT_SMALL,
         )
         style.map("Treeview", background=[("selected", "#334155")], foreground=[("selected", "#FFFFFF")])
+        self._tree.tag_configure("completed", background="#A7F3D0", foreground="#065F46")
         self._tree.tag_configure("recent", background=_RECENT_BLUE, foreground="#111827")
         self._tree.tag_configure("legacy", background=_HISTORY_WHITE, foreground="#111827")
         self._tree.tag_configure("warning", background=_WARNING_BG, foreground="#111827")
@@ -592,7 +600,7 @@ class InsoDashboardApp:
         # the only other route, and the session is exactly what was fixed.
         if self._status.state in {RunState.STOPPED, RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}:
             self._backend.start()
-        elif self._status.state == RunState.RUNNING:
+        elif self._status.state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}:
             self._backend.request_stop_after_cycle()
             self._update_status(self._backend.get_status())
         else:
@@ -601,7 +609,7 @@ class InsoDashboardApp:
     def _on_login_all(self) -> None:
         if self._login_all_running:
             return
-        if self._status.state in {RunState.RUNNING, RunState.STOPPING_AFTER_CYCLE}:
+        if self._status.state in {RunState.RUNNING, RunState.QUOTATION_RUNNING, RunState.STOPPING_AFTER_CYCLE}:
             messagebox.showwarning(
                 "一键登录",
                 "正在询价，请先停止本轮询价后再执行一键登录。",
@@ -624,6 +632,7 @@ class InsoDashboardApp:
         self._login_all_running = running
         busy = running or self._status.state in {
             RunState.RUNNING,
+            RunState.QUOTATION_RUNNING,
             RunState.STOPPING_AFTER_CYCLE,
         }
         if busy:
@@ -687,7 +696,7 @@ class InsoDashboardApp:
                 hover_color="#059669",
                 state="normal",
             )
-        elif status.state == RunState.RUNNING:
+        elif status.state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}:
             self._action_button.configure(
                 text="本轮结束后停止",
                 fg_color=_YELLOW,
@@ -894,7 +903,7 @@ class InsoDashboardApp:
         self._after_id = None
 
         status = self._backend.get_status()
-        if status.state is RunState.RUNNING:
+        if status.state in {RunState.RUNNING,RunState.QUOTATION_RUNNING}:
             self._backend.request_stop_after_cycle()
 
         self._status_badge.configure(text="正在退出", fg_color=_YELLOW)
@@ -916,7 +925,7 @@ class InsoDashboardApp:
         if self._backend.login_all_running():
             return False
         status = self._backend.get_status()
-        if status.state not in {RunState.STOPPED, RunState.MANUAL_REVIEW}:
+        if status.state not in {RunState.STOPPED, RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}:
             return False
         diagnostics = self._backend.get_diagnostics()
         return diagnostics.worker_state.casefold() in {"stopped", "已停止"}

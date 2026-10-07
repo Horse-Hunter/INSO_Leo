@@ -65,6 +65,16 @@ def _sanitized_line(record: logging.LogRecord) -> str:
     in either one degrades to the generic line instead of leaking it.
     """
 
+    cycle = getattr(record,"cycle_id",None)
+    module = getattr(record,"business_module",None)
+    inquiry = getattr(record,"inquiry_id",None)
+    stage = getattr(record,"stage",None)
+    reason = getattr(record,"reason",None)
+    if (isinstance(cycle,str) and re.fullmatch(r"cycle_[a-f0-9]{32}",cycle)
+            and module in {"V1.2","V1.3"} and stage in {"purchase","quotation"}
+            and (inquiry is None or isinstance(inquiry,str) and re.fullmatch(r"inq_[a-f0-9]{24,32}",inquiry))
+            and isinstance(reason,str) and re.fullmatch(r"[A-Z_]{1,64}",reason)):
+        return f"cycle={cycle} module={module} inquiry={inquiry or 'UNKNOWN'} stage={stage} result={reason}"
     step = getattr(record, "inso_step", None)
     if not isinstance(step, str) or _STEP_LABEL.fullmatch(step) is None:
         return f"launcher event ({record.levelname})"
@@ -80,7 +90,7 @@ def _sanitized_line(record: logging.LogRecord) -> str:
 def _configure_startup_log(root: Path) -> Path:
     log_dir = root / "runtime" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
-    path = log_dir / "INSO_V1.2.log"
+    path = log_dir / "INSO_V1.3.log"
     handler = RotatingFileHandler(path, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
     handler.addFilter(_SafeRuntimeLogFilter())
@@ -96,7 +106,7 @@ def _configure_startup_log(root: Path) -> Path:
     return path
 
 
-def _show_error(message: str, title: str = "INSO_V1.2") -> None:
+def _show_error(message: str, title: str = "INSO_V1.3") -> None:
     try:
         tkinter.messagebox.showerror(title, message)
     except (tkinter.TclError, RuntimeError):
@@ -126,7 +136,7 @@ def main(*, guard_factory=None, backend_factory=None) -> int:
         args = parser.parse_args()
         guard = (guard_factory or SingleInstanceGuard)()
         if not guard.acquire():
-            _show_error("INSO_V1.2 已在运行。")
+            _show_error("INSO_V1.3 已在运行。")
             return 0
         backend = (
             MockBackend(cycle_seconds=12.0)
@@ -139,7 +149,7 @@ def main(*, guard_factory=None, backend_factory=None) -> int:
         logging.getLogger("inso.startup").error(
             "Application startup failed (%s)", type(exc).__name__
         )
-        message = "INSO_V1.2 启动失败。"
+        message = "INSO_V1.3 启动失败。"
         if log_path is not None:
             message += f"\n请查看本地日志：{log_path}"
         else:
