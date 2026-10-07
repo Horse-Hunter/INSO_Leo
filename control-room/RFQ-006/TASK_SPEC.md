@@ -1914,3 +1914,8 @@ quotation normal rows retain0s; scheduler900s.
 Prior180s fixed-wait clauses are historical and superseded by this request.
 Chrome bootstrap maximum allowed configured timeout180s is a validation limit, not a fixed
 180s wait; existing default30s and browser configuration/protection are unchanged.
+
+## Owner idle login requirement
+See tasks/2026-10-07-idle-login-keepalive.md: optional serial maintenance after two empty
+polls AND30min, canonical all-site background login,229 error mail, no popup or workflow
+hold/pause/stop. Preserve manual pages; no production acceptance or installed release change.

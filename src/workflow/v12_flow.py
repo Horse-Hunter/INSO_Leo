@@ -155,6 +155,7 @@ class V12WorkflowCoordinator:
         self._inquiry_ids = inquiry_ids
         self._row_wait = row_wait or (lambda _seconds: False)
         self._row_closed = False
+        self.pending_rows_seen = 0
         self._records: dict[str, PendingSheetRecord] = {}
         self._duplicate_results: dict[str, DuplicateCheckResult] = {}
         self._research_results: dict[str, ResearchResult] = {}
@@ -163,6 +164,7 @@ class V12WorkflowCoordinator:
 
     def begin_poll_cycle(self) -> None:
         self._row_closed = False
+        self.pending_rows_seen = 0
 
     def _before_next_row(self) -> bool:
         if self._row_closed and self._row_wait(120):
@@ -207,6 +209,7 @@ class V12WorkflowCoordinator:
 
         self._current_reader = reader
         records = query_pending_records(reader, worksheet)
+        self.pending_rows_seen += len(records)
         for item in self._workflow_store.all_items():
             if item.record_identity.worksheet != worksheet:
                 continue

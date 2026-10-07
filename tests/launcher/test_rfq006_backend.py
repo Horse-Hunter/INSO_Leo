@@ -86,6 +86,11 @@ def test_canonical_poll_combines_empty_purchase_quotation_and_interruptible_900s
         browser_acquirer=lambda *a, **k: browser_calls.append(True),
     )
     cycle_factory = launcher.V13QuotationCycle
+    idle_tick = backend._idle_login_tick
+    def maintenance(*, now):
+        events.append("MAINTENANCE")
+        return idle_tick(now=now)
+    monkeypatch.setattr(backend, "_idle_login_tick", maintenance)
     quotation_waits = []
 
     def checked_cycle(**kwargs):
@@ -111,7 +116,7 @@ def test_canonical_poll_combines_empty_purchase_quotation_and_interruptible_900s
                 backend.get_status().next_poll_at - backend._last_poll
             ).total_seconds()
             assert 899 <= delta <= 910
-            assert events == ["V12", "V13"] and not browser_calls
+            assert events == ["V12", "V13", "MAINTENANCE"] and not browser_calls
             expected = RunState.QUOTATION_RUNNING if fault else RunState.RUNNING
             assert backend.get_status().state is expected
             assert quotation_waits and backend.get_status().row_cooldown_until is None

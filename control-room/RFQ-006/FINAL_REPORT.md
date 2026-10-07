@@ -82,3 +82,36 @@ This candidate supersedes the prior candidate hash/test totals; prior idle diagn
 historical evidence only, not a new idle run. Installed release/configs not overwritten.
 All earlier quote robustness/status-warning/Research-mail changes remain in this branch.
 No real business action/SMTP/order replay; no dependencies. Independent review remains REQUIRED.
+
+## Idle Research login keepalive — 2026-10-07
+Owner requests independent V1.3 maintenance after consecutive empty Research polls and actual
+30 minutes. Base d8204b5; previous120s interval, quote selection/update/status warning and
+Research-only Shawn recipient changes retained. New increment remains REVIEW_REQUIRED.
+
+Canonical V12FlowCoordinator observes pending未发 records across all worksheets without an
+extra Sheets read; begin_poll_cycle resets observation. Any pending row resets idle window,
+including invalid/preexisting rows, avoiding false empty detection. Failed reads never reach
+the maintenance boundary; purchase pause/manual/global/stop conditions skip maintenance.
+V1.3 backend runs maintenance serially AFTER completed combined business work and BEFORE
+notifications/next900s countdown. Two empty polls AND elapsed30min are required; the immediate
+startup poll cannot cause a15min refresh. Restart begins a fresh idle window.
+
+Reuse _run_login_sweep/sweep_sites and all existing site login recipes. Borrow active poller
+CDP rather than creating a second Playwright; otherwise attach fixed Chrome using existing
+acquirer. No new scheduler/worker, login recipe, browser/profile/cookie or SMTP system.
+Background sweep does not publish SiteLoginReport/callback/popup or bring failed tabs to front.
+Site failures continue other sites, generate sanitized operational owner229 outbox commands,
+and never produce business hold/pause/global stop. Notification insertion errors log warning.
+Stop checked between sites and immediately after sweep, respecting existing bounded site waits.
+
+All-success cleanup uses existing park_shared_cdp with a blank background tab. Failed/manual
+or preexisting nonblank pages are preserved; successful owned sweep page is closed, Chrome stays
+open. Existing manual one-click report/foreground behavior remains intact. New idle window begins
+after sweep completion, followed by ordinary15min countdown; failure does not block that countdown.
+
+Exact verification: focused273 PASS16.49s; final maintenance20 PASS1.17s;
+full safe/offline1414 PASS/1 SKIP55.90s; Ruff/diff PASS. BuildOnly/frozen self-check/scan PASS.
+Latest candidate EXE6FE03F2442377CA49A1A919A1715C401F83B8C481033F98802017AE8F11157B9,
+superseding earlier candidate hashes. Installed release/configs not overwritten pending Review.
+No real login/SMTP/order replay/quotation update/purchase; real keepalive login and SMTP delivery
+remain UNKNOWN. No dependency added; CEO review files unchanged.

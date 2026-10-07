@@ -188,6 +188,8 @@ class SiteLoginSweep:
         new_tab: Callable[..., Any] = new_background_page,
         wait: Callable[[float], None] = sleep,
         clock: Callable[[], float] = monotonic,
+        present_failures: bool = True,
+        stop_requested: Callable[[], bool] = lambda: False,
     ) -> None:
         contexts = tuple(getattr(browser, "contexts", ()) or ())
         if len(contexts) != 1:
@@ -201,12 +203,19 @@ class SiteLoginSweep:
         self._new_tab = new_tab
         self._wait = wait
         self._clock = clock
+        self._present_failures = present_failures
+        self._stop_requested = stop_requested
         self._page: Any | None = None
 
     def run(self, steps: Sequence[SiteSignInStep]) -> tuple[SiteLoginResult, ...]:
         """Try every step once, in order, and never let one stop the next."""
 
-        return tuple(self._attempt(step) for step in steps)
+        results = []
+        for step in steps:
+            if self._stop_requested():
+                break
+            results.append(self._attempt(step))
+        return tuple(results)
 
     def close(self) -> None:
         """Give back the tab this sweep opened; the session lives in the cookies."""
@@ -228,7 +237,7 @@ class SiteLoginSweep:
             # Leave the exact failed page for the operator. The next site gets
             # a fresh tab in the SAME context, never another browser/profile.
             page, self._page = self._page, None
-            if page is not None:
+            if page is not None and self._present_failures:
                 try:
                     page.bring_to_front()
                 except Exception as presentation_error:  # noqa: BLE001
@@ -410,11 +419,21 @@ def sweep_sites(
     wait: Callable[[float], None] = sleep,
     clock: Callable[[], float] = monotonic,
     sweep_factory: Callable[..., SiteLoginSweep] = SiteLoginSweep,
+    present_failures: bool = True,
+    stop_requested: Callable[[], bool] = lambda: False,
 ) -> tuple[SiteLoginResult, ...]:
     """Sweep the shared browser, closing only the successful reusable tab."""
 
+    options = {}
+    if not present_failures:
+        options["present_failures"] = False
+    if stop_requested():
+        return ()
+    if not present_failures:
+        options["stop_requested"] = stop_requested
     sweep = sweep_factory(
         browser,
+        **options,
         timeout_ms=timeout_ms,
         settle_ms=settle_ms,
         wait=wait,

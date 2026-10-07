@@ -38,6 +38,7 @@ from src.inso.purchase_writer import InsoPurchaseWriter, PlaywrightParentProduct
 from src.inso.write_safety import OwnerAuthorizedSaveAndSendGate
 from src.launcher.purchase_completion import PurchaseCompletionActions
 from src.research import ResearchInput, ResearchResult
+from src.research.cdp_pages import new_background_page
 from src.research.credentials import CoreLoginBridge
 from src.research.ecb_fx import EcbDailyUsdRmbProvider
 from src.research.excel_output import ResearchExcelOutput
@@ -69,6 +70,8 @@ from src.workflow.inso_query import run_inso_query
 from src.workflow.v12_contracts import (
     DeliveryOutcome,
     EventType,
+    NotificationCommand,
+    NotificationKind,
     NotificationRecipient,
     PurchaseDraftResult,
     PurchaseOutcome,
@@ -469,6 +472,8 @@ class ProductionBackend(GuiBackend):
         self._state = RunState.STOPPED
         self._started = self._stopped = self._last_poll = None
         self._next_poll_at = None
+        self._idle_empty_polls = 0
+        self._idle_login_since = utc_now()
         self._row_cooldown_until = None
         self._inquiries = []
         self._results = ()
@@ -540,6 +545,8 @@ class ProductionBackend(GuiBackend):
             self._v13_enabled = False
             self._v13_states.clear()
             self._v13_unbound.clear()
+            self._idle_empty_polls = 0
+            self._idle_login_since = utc_now()
             self._run_id = "run_" + str(uuid.uuid4())
             self._started = utc_now()
             self._stopped = None
@@ -793,6 +800,9 @@ class ProductionBackend(GuiBackend):
                                     if self._immediate_stop_requested():
                                         return
                                     self._v12_composition.coordinator.poll_and_process(reader,worksheet,now=self._last_poll)
+                            if self._immediate_stop_requested():
+                                return
+                            self._idle_login_tick(now=utc_now())
                             if self._immediate_stop_requested():
                                 return
                             self._purchase_completion.retry_saved_statuses(at=utc_now())
@@ -1662,6 +1672,51 @@ class ProductionBackend(GuiBackend):
         except KeyError:
             return None
 
+    def _idle_login_tick(self, *, now):
+        """Optional maintenance at the serial poll boundary; never a business fault."""
+        if not self._v13_enabled:
+            return
+        paused = self._combined is not None and self._combined.v12_paused
+        if self._state is not RunState.RUNNING or paused or self._immediate_stop_requested():
+            self._idle_empty_polls = 0
+            self._idle_login_since = now
+            return
+        if self._v12_composition.coordinator.pending_rows_seen:
+            self._idle_empty_polls = 0
+            self._idle_login_since = now
+            return
+        self._idle_empty_polls += 1
+        if self._idle_empty_polls < 2 or now - self._idle_login_since < timedelta(minutes=30):
+            return
+        self._idle_empty_polls = 0
+        self._idle_login_since = now
+        self._append_log("INFO", "连续空闲30分钟，开始后台网站登录保活。")
+        try:
+            results = tuple(self._run_login_sweep(background=True))
+            if (not results and not self._immediate_stop_requested()) or any(
+                    not isinstance(r, SiteLoginResult) or not isinstance(r.outcome, SiteLoginOutcome)
+                    or not isinstance(r.site, str) for r in results):
+                raise ValueError("idle login result unavailable")
+        except Exception:  # noqa: BLE001 - optional maintenance cannot stop business
+            results = (SiteLoginResult("登录保活", SiteLoginOutcome.UNAVAILABLE),)
+        for result in results:
+            if result.outcome in {SiteLoginOutcome.SIGNED_IN, SiteLoginOutcome.ALREADY_SIGNED_IN}:
+                continue
+            self._append_log("WARNING", f"网站登录保活异常：{result.site}；{result.outcome.value}")
+            try:
+                recipients = (NotificationRecipient("owner", "linan229@qq.com"),)
+                command_id = f"idle-login:{self._cycle_id}:{result.site}:{result.outcome.value}"
+                if not self._v12_store.notification_already_created(
+                        command_id, None, NotificationKind.PURCHASE_EXCEPTION, recipients):
+                    self._v12_store.enqueue_notification(NotificationCommand(
+                        command_id, None, NotificationKind.PURCHASE_EXCEPTION, recipients,
+                        "网站登录保活异常",
+                        f"网站：{result.site}\n结果：{result.outcome.value}\n请人工检查网站登录；询价轮询继续。",
+                        None, now))
+            except Exception:  # noqa: BLE001 - log maintenance/outbox failure without changing business state
+                self._append_log("WARNING", "登录保活异常提醒未入队，请检查通知台账。")
+        self._idle_login_since = utc_now()  # New idle window begins after the sweep finishes.
+
     def start_login_all_sites(self) -> None:
         """Walk every site once, in one background thread, and report back.
 
@@ -1714,6 +1769,8 @@ class ProductionBackend(GuiBackend):
             log_step("login-sweep-worker", cause=exc)
             results = (SiteLoginResult("登录检查", SiteLoginOutcome.UNAVAILABLE,
                                        "登录检查未完成，请在 Chrome 检查后重试"),)
+        self._idle_empty_polls = 0
+        self._idle_login_since = utc_now()
         report = SiteLoginReport(tuple(results), started_at, utc_now())
         with self._lock:
             self._login_all_report = report
@@ -1724,7 +1781,7 @@ class ProductionBackend(GuiBackend):
             except Exception as exc:  # noqa: BLE001 - fail closed at runtime boundary
                 log.debug("login sweep callback failed (%s)", type(exc).__name__)
 
-    def _run_login_sweep(self) -> tuple[SiteLoginResult, ...]:
+    def _run_login_sweep(self, *, background=False) -> tuple[SiteLoginResult, ...]:
         """Attach the approved CDP browser, sweep it, then give it back."""
 
         try:
@@ -1743,7 +1800,8 @@ class ProductionBackend(GuiBackend):
             )
         probe = self.cdp_probe or probe_loopback_endpoint
         try:
-            handle = self._browser_acquirer(
+            borrowed = background and self._browser_handle is not None
+            handle = self._browser_handle if borrowed else self._browser_acquirer(
                 research_config.cdp.cdp_url,
                 self.root,
                 production_config,
@@ -1759,11 +1817,26 @@ class ProductionBackend(GuiBackend):
                 ),
             )
         try:
-            return sweep_sites(
+            existing_pages = tuple(handle.browser.contexts[0].pages) if background else ()
+            options = ({"present_failures": False,
+                        "stop_requested": self._immediate_stop_requested,
+                        "wait": self._stop.wait} if background else {})
+            results = sweep_sites(
                 handle.browser,
                 bom_ai=research_config.bom_ai,
                 timeout_ms=research_config.browser.timeout_ms,
+                **options,
             )
+            if background and not self._immediate_stop_requested():
+                context, = handle.browser.contexts
+                if not any(not p.is_closed() and p.url == "about:blank" for p in context.pages):
+                    new_background_page(handle.browser, context, timeout_ms=research_config.browser.timeout_ms)
+                if all(r.outcome in {SiteLoginOutcome.SIGNED_IN,
+                                     SiteLoginOutcome.ALREADY_SIGNED_IN} for r in results) and results and not any(
+                        not p.is_closed() and p.url != "about:blank" for p in existing_pages):
+                    park_shared_cdp(handle.browser)
+                # Failed or pre-existing nonblank pages are retained for human review.
+            return results
         except SiteSweepError as exc:
             log_step("login-sweep-start", cause=exc)
             return (
@@ -1774,7 +1847,8 @@ class ProductionBackend(GuiBackend):
                 ),
             )
         finally:
-            self._release_sweep_browser(handle)
+            if not borrowed:
+                self._release_sweep_browser(handle)
 
     @staticmethod
     def _release_sweep_browser(handle: BrowserHandle) -> None:
