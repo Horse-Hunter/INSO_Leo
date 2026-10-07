@@ -2,6 +2,14 @@
 
 ## Owner follow-up authorization — 2026-10-07
 
+Owner later identified a customer-entered model typo, corrected the Google source,
+and explicitly requested removing only that unsent no-quote local work item so
+Owner can rerun. One-time scoped runtime maintenance is authorized after proving
+zero purchase/dispatch evidence, backing up SQLite, and stopping the local GUI.
+Remove only the identified item's dependent ledger rows transactionally; preserve
+all other orders, audit backup, Research Excel history, source Sheets and fixed CDP.
+No generic reset feature, production business test, auto rerun or source-code change.
+
 After B1 approval, Owner requested following the already-started current four
 genuine orders to procurement completion, diagnosing/fixing confirmed defects,
 offline verification, rebuilding/overwriting V1.2, and preparing a CEO report so

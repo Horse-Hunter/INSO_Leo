@@ -330,3 +330,27 @@ documentation-only update; prior code results are historical, not rerun numbers.
 git diff --check and staged diff reviewed before commit/push.
 Later requested Start action could not observe screenshot/button; no blind click,
 no verified polling start. Owner canceled it. Current polling must not be claimed.
+
+## Owner-requested single unsent typo archive cleanup — 2026-10-07
+
+Owner corrected a customer model typo in the source sheet and requested removal
+of the old no-quote item before personally rerunning. Explicit one-time runtime
+maintenance, not a code change or general replay/reset capability.
+Read-only checks found exactly one FAILED / NO_MATCHING_PRODUCT item with
+RESEARCH_FAILED state, zero purchase/armed/clicked/saved evidence, zero active
+Research and zero referencing V1.3 hold. GUI closed normally via computer-use;
+EXE absence verified. No source Sheets writes or credential/profile changes.
+Full SQLite backup verified: runtime/production/maintenance-backups/
+owner-typo-20261007T141925Z/workflow-before.sqlite3 (private local, not Git).
+First delete attempt hit append-only protection and completely rolled back.
+For explicit Owner archive purge, only the event-delete trigger was temporarily
+removed inside BEGIN IMMEDIATE; identical definition restored before commit.
+Both original triggers compared equal afterward; audit history retained in backup.
+Removed exactly one work item/business state/duplicate result, ten events, two
+notification commands and three recipients; zero purchase rows. All unrelated
+table rows compared equal, foreign_key_check unchanged, integrity_check OK,
+target absent. No whole DB reset. Research Excel history unchanged; existing upsert
+replaces it on Owner rerun. Original deployed GUI idle-launched, unique window
+confirmed; no Start, Research, INSO action, SMTP or Sheets write executed here.
+No src/tests/EXE change or rebuild. TASK_SPEC records narrow authorization;
+private helper/backup excluded from Git. Documentation diff check passed.
