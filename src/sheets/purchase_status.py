@@ -25,27 +25,41 @@ def current_purchase_status(reader: WorksheetRowReader, identity: SheetRecordIde
     return str(actual.cells[column])
 
 
-def write_purchase_status_safely(
-    reader: WorksheetRowReader, writer: PurchaseStatusWriter, identity: SheetRecordIdentity,
-) -> bool:
-    """Unique relocation, fresh read and read-back; idempotent after a prior write."""
+def _locate_purchase_record(reader, identity, expected_brand):
     if identity.identifying_snapshot.status != "未发":
         raise SheetRecordConflict("original purchase status must be pending")
-    def locate():
-        rows = tuple(reader.read_rows(identity.worksheet))
-        column = worksheet_schema(identity.worksheet.worksheet).status_column
-        eligible = [r for r in rows if r.cells.get(column) in {"未发", "发给采购"}]
-        normalized = [replace(r, cells={**r.cells, column: "未发"}) for r in eligible]
-        target = relocate_record(identity, normalized)
-        original = next(r for r in eligible if r.row_position == target.row_position)
-        return original, original.cells[column] == "发给采购"
+    rows = tuple(reader.read_rows(identity.worksheet))
+    schema = worksheet_schema(identity.worksheet.worksheet)
+    eligible = [r for r in rows if r.cells.get(schema.status_column)
+                in {"未发", "发给采购", "采购已报价"}]
+    normalized = [replace(r, cells={**r.cells, schema.status_column: "未发"}) for r in eligible]
+    target = relocate_record(identity, normalized)
+    original = next(r for r in eligible if r.row_position == target.row_position)
+    if original.cells[schema.status_column] != "未发":
+        brand = identity.identifying_snapshot.brand if expected_brand is None else expected_brand
+        if original.cells.get(schema.brand_column) != brand:
+            raise SheetRecordConflict("completed source brand changed")
+    return original, original.cells[schema.status_column] != "未发"
 
-    locate()
-    row, already_sent = locate()
-    if already_sent:
+
+def purchase_status_satisfied(reader, identity, *, expected_brand=None) -> bool:
+    """Fresh read-only identity proof of sent or further quotation-complete status."""
+    _, satisfied = _locate_purchase_record(reader, identity, expected_brand)
+    if not satisfied:
+        return False
+    return _locate_purchase_record(reader, identity, expected_brand)[1]
+
+
+def write_purchase_status_safely(
+    reader: WorksheetRowReader, writer: PurchaseStatusWriter, identity: SheetRecordIdentity,
+    *, expected_brand=None,
+) -> bool:
+    """Unique fresh relocation; later quotation state satisfies rather than regresses."""
+    _locate_purchase_record(reader, identity, expected_brand)
+    row, satisfied = _locate_purchase_record(reader, identity, expected_brand)
+    if satisfied:
         return False
     writer.write_purchase_status(identity.worksheet, row.row_position)
-    _, sent = locate()
-    if not sent:
+    if not _locate_purchase_record(reader, identity, expected_brand)[1]:
         raise SheetRecordConflict("purchase status read-back did not confirm the write")
     return True

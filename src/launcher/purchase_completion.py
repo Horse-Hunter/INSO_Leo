@@ -1,8 +1,12 @@
 """Completion side effects, separate from irreversible INSO dispatch."""
+import logging
 import uuid
 from datetime import UTC, datetime
 
-from src.sheets.purchase_status import write_purchase_status_safely
+from src.sheets.purchase_status import (
+    purchase_status_satisfied,
+    write_purchase_status_safely,
+)
 from src.workflow.v12_contracts import (
     BusinessState,
     EventType,
@@ -12,6 +16,8 @@ from src.workflow.v12_contracts import (
     PurchaseOutcome,
     WorkflowEvent,
 )
+
+log = logging.getLogger(__name__)
 
 OWNER = NotificationRecipient("owner", "linan229@qq.com")
 
@@ -57,7 +63,12 @@ class PurchaseCompletionActions:
         if item.inquiry_id in self._settled_status_ids:
             return True
         try:
-            changed = write_purchase_status_safely(self.reader, self.writer_factory(), item.record_identity)
+            brand = item.resolved_brand or item.brand
+            if purchase_status_satisfied(self.reader, item.record_identity, expected_brand=brand):
+                changed = False
+            else:
+                changed = write_purchase_status_safely(self.reader, self.writer_factory(),
+                    item.record_identity, expected_brand=brand)
         except Exception as exc:  # noqa: BLE001 - retry only status, never purchase
             self.v12_store.set_business_state(item.inquiry_id, BusinessState.STATUS_WRITE_PENDING,
                 WorkflowEvent(f"evt_{uuid.uuid4().hex}", item.inquiry_id,
@@ -75,13 +86,26 @@ class PurchaseCompletionActions:
         for item in self.workflow_store.all_items():
             if item.inquiry_id in self._settled_status_ids:
                 continue
-            if self.v12_store.business_state(item.inquiry_id) is BusinessState.STATUS_WRITE_PENDING:
-                continue
+            pending = self.v12_store.business_state(item.inquiry_id) is BusinessState.STATUS_WRITE_PENDING
             try:
                 saved = self.v12_store.purchase_state(item.inquiry_id) is PurchaseOutcome.SAVED
             except KeyError:
                 continue
-            if saved:
+            if saved and pending:
+                # A held status write never becomes another write or purchase.
+                # Only a fresh source proof can resolve its local projection.
+                try:
+                    satisfied = purchase_status_satisfied(self.reader, item.record_identity,
+                        expected_brand=item.resolved_brand or item.brand)
+                except Exception as exc:  # noqa: BLE001 - failed read retains the existing pending hold
+                    log.warning("Pending purchase status remains unresolved (%s)", type(exc).__name__)
+                    continue
+                if satisfied:
+                    self.v12_store.set_business_state(item.inquiry_id, BusinessState.PURCHASE_RECORDED,
+                        WorkflowEvent(f"evt_{uuid.uuid4().hex}", item.inquiry_id,
+                            EventType.HUMAN_RESOLUTION_RECORDED, at, "sheets"))
+                    self._settled_status_ids.add(item.inquiry_id)
+            elif saved:
                 self._write_back(item, at=at)
 
     def notify(self, inquiry_id, phase, reason, *, at):
@@ -106,7 +130,7 @@ class PurchaseCompletionActions:
             PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED,
         }
         explanation = {
-            "SHEETS_WRITE_BACK": "采购已处理，但表格状态写回失败。请人工将该行改成‘发给采购’。不要重发采购单。",
+            "SHEETS_WRITE_BACK": "采购已处理，但表格状态写回未能确认。请核对对应行；若已是‘发给采购’或‘采购已报价’，保持原状态。只有确认仍为‘未发’且采购已发送时，才修正为‘发给采购’。不要重发采购单。",
             "RESEARCH": "调研异常，未完成采购提交。",
             "DUPLICATE_CHECK": "重复订单查询无法确认，采购提交未继续。",
             "SESSION": "网站登录不可用，订单处理已停止。",

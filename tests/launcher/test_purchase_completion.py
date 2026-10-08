@@ -40,12 +40,12 @@ def actions(outcome, *, writer_fails=False):
     class Sheet:
         def __init__(self):
             self.calls = 0
-            self.rows = [WorksheetRow(4, {"A":"未发", "C":"A", "E":"TEST-MPN", "G":8})]
+            self.rows = [WorksheetRow(4, {"A":"未发", "C":"A", "E":"TEST-MPN", "F":"Brand", "G":8})]
         def read_rows(self, _worksheet): return self.rows
         def write_purchase_status(self, _worksheet, _row):
             self.calls += 1
             if writer_fails: raise RuntimeError("sensitive-provider-message")
-            self.rows = [WorksheetRow(4, {"A":"发给采购", "C":"A", "E":"TEST-MPN", "G":8})]
+            self.rows = [WorksheetRow(4, {"A":"发给采购", "C":"A", "E":"TEST-MPN", "F":"Brand", "G":8})]
     sheet, state = Sheet(), V12(outcome)
     class Episodes:
         def __init__(self): self.records = []
@@ -96,7 +96,7 @@ def test_sheet_failure_preserves_saved_and_sends_safe_specific_mail():
     assert state.state is BusinessState.STATUS_WRITE_PENDING
     assert state.outcome is PurchaseOutcome.SAVED and sheet.calls == 1
     body = next(iter(state.commands.values())).text_body
-    assert "表格状态写回失败" in body and "RuntimeError" in body
+    assert "表格状态写回未能确认" in body and "保持原状态" in body and "RuntimeError" in body
     assert "sensitive-provider-message" not in body
 
 
@@ -105,7 +105,7 @@ def test_saved_status_recovery_never_reenters_purchase_and_stops_after_success()
     handler.workflow_store.all_items = lambda: [handler.workflow_store.get_by_inquiry_id("synthetic-inquiry")]
     handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
     assert sheet.calls == 1 and state.outcome is PurchaseOutcome.SAVED
-    sheet.rows = [WorksheetRow(4, {"A":"发给采购", "C":"A", "E":"TEST-MPN", "G":8})]
+    sheet.rows = [WorksheetRow(4, {"A":"发给采购", "C":"A", "E":"TEST-MPN", "F":"Brand", "G":8})]
     # An acknowledged/unknown network response can still have completed the cell write.
     handler.retry_saved_statuses(at=NOW)
     handler.retry_saved_statuses(at=NOW)
@@ -169,7 +169,7 @@ def test_status_write_records_actual_confirmation_timestamp_once():
 
 def test_legacy_already_sent_status_does_not_backfill_a_timestamp():
     handler, sheet, state = actions(PurchaseOutcome.SAVED)
-    sheet.rows = [WorksheetRow(4, {"A":"发给采购", "C":"A", "E":"TEST-MPN", "G":8})]
+    sheet.rows = [WorksheetRow(4, {"A":"发给采购", "C":"A", "E":"TEST-MPN", "F":"Brand", "G":8})]
     handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
     assert not state.events and sheet.calls == 0
     assert not handler.follow_up_store.records
@@ -206,3 +206,68 @@ def test_unconfirmed_google_readback_does_not_create_episode():
     handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
     assert not handler.follow_up_store.records
     assert state.state is BusinessState.STATUS_WRITE_PENDING
+
+
+def quoted(handler, sheet, state, *, pending=False):
+    item = handler.workflow_store.get_by_inquiry_id("synthetic-inquiry")
+    handler.workflow_store.all_items = lambda: [item]
+    sheet.rows = [WorksheetRow(4, {"A": "采购已报价", "C": "A", "E": "TEST-MPN", "F": "Brand", "G": 8})]
+    if pending:
+        state.state = BusinessState.STATUS_WRITE_PENDING
+    return item
+
+
+def test_restart_saved_quoted_order_never_writes_notifies_or_creates_episode():
+    handler, sheet, state = actions(PurchaseOutcome.SAVED)
+    quoted(handler, sheet, state)
+    handler.writer_factory = lambda: pytest.fail("quoted row must not even construct writer")
+    handler.retry_saved_statuses(at=NOW)
+    assert state.state is BusinessState.PURCHASE_RECORDED and not state.commands
+    assert sheet.calls == 0 and handler.follow_up_store.records == []
+    # Restart, with no in-memory settled cache, remains idempotent.
+    handler._settled_status_ids.clear()
+    handler.retry_saved_statuses(at=NOW)
+    assert sheet.calls == 0 and not state.commands
+
+
+@pytest.mark.parametrize("status", ["发给采购", "采购已报价"])
+def test_pending_saved_projection_recovers_only_by_read_no_backward_write(status):
+    handler, sheet, state = actions(PurchaseOutcome.SAVED)
+    quoted(handler, sheet, state, pending=True)
+    sheet.rows[0] = WorksheetRow(4, {**sheet.rows[0].cells, "A": status})
+    state.commands["historical-mail"] = object()
+    handler.writer_factory = lambda: pytest.fail("pending recovery may never construct writer")
+    handler.retry_saved_statuses(at=NOW)
+    assert state.state is BusinessState.PURCHASE_RECORDED
+    assert list(state.commands) == ["historical-mail"]
+    assert sheet.calls == 0 and handler.follow_up_store.records == []
+
+
+@pytest.mark.parametrize("column,value", [("A", "未发"), ("E", "CHANGED"), ("G", 9),
+                                          ("C", "B"), ("F", "OTHER")])
+def test_pending_projection_retains_hold_for_pending_or_changed_source(column, value):
+    handler, sheet, state = actions(PurchaseOutcome.SAVED)
+    quoted(handler, sheet, state, pending=True)
+    sheet.rows[0] = WorksheetRow(4, {**sheet.rows[0].cells, column: value})
+    handler.retry_saved_statuses(at=NOW)
+    assert state.state is BusinessState.STATUS_WRITE_PENDING
+    assert sheet.calls == 0 and not state.commands and handler.follow_up_store.records == []
+
+
+def test_ambiguous_quoted_rows_still_fail_closed_and_alert():
+    handler, sheet, state = actions(PurchaseOutcome.SAVED)
+    quoted(handler, sheet, state)
+    sheet.rows.append(WorksheetRow(5, dict(sheet.rows[0].cells)))
+    handler.retry_saved_statuses(at=NOW)
+    assert state.state is BusinessState.STATUS_WRITE_PENDING and len(state.commands) == 1
+    body = next(iter(state.commands.values())).text_body
+    assert "保持原状态" in body and "SheetRecordConflict" in body
+    assert sheet.calls == 0
+
+
+def test_unknown_submit_pending_never_resolves_by_sheet_status_alone():
+    handler, sheet, state = actions(PurchaseOutcome.UNKNOWN_WRITE_OUTCOME)
+    quoted(handler, sheet, state, pending=True)
+    handler.retry_saved_statuses(at=NOW)
+    assert state.state is BusinessState.STATUS_WRITE_PENDING and not state.commands
+    assert state.outcome is PurchaseOutcome.UNKNOWN_WRITE_OUTCOME and sheet.calls == 0

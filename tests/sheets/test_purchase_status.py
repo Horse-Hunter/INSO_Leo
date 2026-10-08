@@ -87,3 +87,44 @@ def test_google_writer_only_uses_status_cell(title, column):
     assert service.kwargs["range"] == f"'{title}'!{column}7"
     assert service.kwargs["body"]["values"] == [["发给采购"]]
     assert service.kwargs["valueInputOption"] == "RAW"
+
+
+@pytest.mark.parametrize("title", ["2026", "SHAHAB"])
+def test_quotation_terminal_is_satisfied_without_purchase_status_downgrade(title):
+    from src.sheets.purchase_status import purchase_status_satisfied
+    sheet = Sheet(title, status="采购已报价")
+    assert purchase_status_satisfied(sheet, sheet.identity)
+    assert not write_purchase_status_safely(sheet, sheet, sheet.identity)
+    assert sheet.calls == []
+
+
+@pytest.mark.parametrize("column,value", [("E", "CHANGED"), ("G", 9), ("C", "B"), ("F", "OTHER")])
+def test_changed_quoted_snapshot_is_not_a_completed_purchase_proof(column, value):
+    from src.sheets.purchase_status import purchase_status_satisfied
+    sheet = Sheet(status="采购已报价")
+    sheet.rows[0] = replace(sheet.rows[0], cells={**sheet.rows[0].cells, column: value})
+    with pytest.raises(SheetRecordConflict):
+        purchase_status_satisfied(sheet, sheet.identity)
+    assert sheet.calls == []
+
+
+def test_quotation_completion_between_fresh_reads_never_writes_backward():
+    sheet = Sheet()
+    original = sheet.read_rows
+    calls = []
+    def read(worksheet):
+        calls.append(worksheet)
+        if len(calls) == 2:
+            sheet.rows[0] = replace(sheet.rows[0], cells={**sheet.rows[0].cells, "A": "采购已报价"})
+        return original(worksheet)
+    sheet.read_rows = read
+    assert not write_purchase_status_safely(sheet, sheet, sheet.identity)
+    assert sheet.calls == []
+
+
+def test_mixed_pending_and_quoted_candidates_remain_ambiguous():
+    sheet = Sheet(status="采购已报价")
+    sheet.rows.append(replace(sheet.rows[0], row_position=10, cells={**sheet.rows[0].cells, "A": "未发"}))
+    with pytest.raises(SheetRecordConflict):
+        write_purchase_status_safely(sheet, sheet, sheet.identity)
+    assert sheet.calls == []
