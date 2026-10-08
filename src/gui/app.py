@@ -347,9 +347,9 @@ class InsoDashboardApp:
 
         self._run_info_labels: dict[str, ctk.CTkLabel] = {}
         info_items = [
-            ("本轮发现订单", "0"),
-            ("已完成", "0"),
-            ("正在处理", "0"),
+            ("新订单", "--"),
+            ("采购未报价", "--"),
+            ("采购超时未报价", "--"),
             ("下轮询价倒计时", "00:00"),
         ]
         positions = [(1, 0), (1, 1), (1, 2), (2, 0)]
@@ -722,9 +722,10 @@ class InsoDashboardApp:
             )
 
         # Run info
-        self._run_info_labels["本轮发现订单"].configure(text=str(status.orders_found))
-        self._run_info_labels["已完成"].configure(text=str(status.completed))
-        self._run_info_labels["正在处理"].configure(text=str(status.in_progress))
+        for label, count in (("新订单", status.new_orders),
+                             ("采购未报价", status.awaiting_quotation),
+                             ("采购超时未报价", status.overdue_quotation)):
+            self._run_info_labels[label].configure(text="--" if count is None else str(count))
         self._run_info_labels["下轮询价倒计时"].configure(
             text=_countdown_text(status)
         )

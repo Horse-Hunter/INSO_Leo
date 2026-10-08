@@ -283,6 +283,9 @@ class RunSession:
     pending: int = 0
     next_poll_at: datetime | None = None
     row_cooldown_until: datetime | None = None
+    new_orders: int | None = None
+    awaiting_quotation: int | None = None
+    overdue_quotation: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

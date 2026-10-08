@@ -39,6 +39,11 @@ def elapsed_working_time(start: datetime, end: datetime) -> timedelta:
     return total
 
 
+def purchase_episode_overdue(episode, now: datetime) -> bool:
+    """Use the same strict working-time threshold for reminders and display."""
+    return episode is not None and elapsed_working_time(episode.confirmed_at, now) > FOLLOW_UP_AFTER
+
+
 class PurchaseFollowUp:
     """Observe all current candidates, including durable quotation holds; no CDP/write."""
     def __init__(self, *, reader, workflow_store, v12_store, clock, episodes=None):
@@ -56,7 +61,7 @@ class PurchaseFollowUp:
             episode = self.episodes.latest(candidate.inquiry_id)
             if episode is None:
                 continue  # Historical rows remain untimed.
-            if elapsed_working_time(episode.confirmed_at, now) <= FOLLOW_UP_AFTER:
+            if not purchase_episode_overdue(episode, now):
                 continue
             # Stable episode identity survives poll/restart. Old readers know
             # PURCHASE_EXCEPTION; subject/body/command ID distinguish this reminder.

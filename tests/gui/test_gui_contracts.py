@@ -272,7 +272,7 @@ def test_stopping_state_keeps_action_disabled_until_backend_stopped():
     app._status_badge = _Widget()
     app._action_button = _Widget()
     app._run_info_labels = {key: _Widget() for key in (
-        "本轮发现订单", "已完成", "正在处理", "下轮询价倒计时"
+        "新订单", "采购未报价", "采购超时未报价", "下轮询价倒计时"
     )}
     app._health_labels = {}
     app._backend = _Backend()
@@ -348,7 +348,7 @@ def _login_all_app(backend):
     app._status_badge = _Widget()
     app._run_info_labels = {
         key: _Widget()
-        for key in ("本轮发现订单", "已完成", "正在处理", "下轮询价倒计时")
+        for key in ("新订单", "采购未报价", "采购超时未报价", "下轮询价倒计时")
     }
     app._health_labels = {}
     app._refresh_results = lambda: None
@@ -689,3 +689,20 @@ def test_close_cancels_after_and_unregisters_before_backend_shutdown():
         ("shutdown",),
         ("destroy",),
     ]
+
+
+def test_dashboard_displays_source_counts_and_keeps_countdown_semantics():
+    from src.gui.contracts import RunSession
+
+    backend = _LoginAllBackend()
+    app = _login_all_app(backend)
+    session = RunSession(None, RunState.RUNNING, None, None,
+                         orders_found=14, completed=14, in_progress=0,
+                         new_orders=2, awaiting_quotation=9, overdue_quotation=3)
+    app._update_status(session)
+    assert app._run_info_labels["新订单"].values["text"] == "2"
+    assert app._run_info_labels["采购未报价"].values["text"] == "9"
+    assert app._run_info_labels["采购超时未报价"].values["text"] == "3"
+    assert "已完成" not in app._run_info_labels and "正在处理" not in app._run_info_labels
+    app._update_status(RunSession(None, RunState.STOPPED, None, None))
+    assert app._run_info_labels["新订单"].values["text"] == "--"

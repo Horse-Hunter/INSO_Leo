@@ -68,6 +68,7 @@ from src.workflow import (
     WorkflowStatus,
     WorkflowWorker,
 )
+from src.workflow.dashboard_counts import read_dashboard_counts
 from src.workflow.inso_query import run_inso_query
 from src.workflow.purchase_follow_up import PurchaseFollowUp
 from src.workflow.v12_contracts import (
@@ -496,6 +497,7 @@ class ProductionBackend(GuiBackend):
         self._inquiries = []
         self._poll_inquiries = set()
         self._poll_quotation_completed = set()
+        self._dashboard_counts = None
         self._results = ()
         self._history = ()
         self._history_fingerprint = None
@@ -576,6 +578,7 @@ class ProductionBackend(GuiBackend):
             self._manual_result = None
             self._poll_inquiries.clear()
             self._poll_quotation_completed.clear()
+            self._dashboard_counts = None
             self._manual_inquiries.clear()
             self._results = ()
             self._last_poll = None
@@ -832,6 +835,8 @@ class ProductionBackend(GuiBackend):
                             self._last_poll = utc_now()
                             self._cycle_id = "cycle_" + uuid.uuid4().hex
                             self._begin_poll_projection()
+                            self._refresh_dashboard_counts(reader, worksheets,
+                                episodes=follow_up_store, now=self._last_poll)
                             if self._combined is not None:
                                 self._combined.run(reader, worksheets, now=self._last_poll)
                             else:
@@ -1130,6 +1135,13 @@ class ProductionBackend(GuiBackend):
             self._manual_result = ManualOrderResult(request_id, inquiry, action, success, message)
         self._append_log("INFO" if success else "WARNING", message)
         self._refresh()
+
+    def _refresh_dashboard_counts(self, reader, worksheets, *, episodes, now):
+        counts = read_dashboard_counts(reader, worksheets, store=self._store,
+                                       episodes=episodes, now=now)
+        with self._lock:
+            self._dashboard_counts = counts
+        self._notify()
 
     def _begin_poll_projection(self):
         with self._lock:
@@ -1852,6 +1864,9 @@ class ProductionBackend(GuiBackend):
                 ),
                 self._next_poll_at if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING} else None,
                 self._row_cooldown_until,
+                new_orders=self._dashboard_counts.new_orders if self._dashboard_counts else None,
+                awaiting_quotation=self._dashboard_counts.awaiting_quotation if self._dashboard_counts else None,
+                overdue_quotation=self._dashboard_counts.overdue_quotation if self._dashboard_counts else None,
             )
 
     def _wait_between_rows(self, seconds):
