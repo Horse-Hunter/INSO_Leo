@@ -1,7 +1,7 @@
 # V1.3 readiness repair verification report
 
 Date: 2026-10-08
-Status: REVIEW_REQUIRED; Owner chose CEO Review first. Keep the current formal release unchanged.
+Status: Owner deferred CEO Review to add purchase follow-up. Current formal release remains unchanged.
 Base: feature/v1-3-integration, 03f4bf3328b0931b4bdc5dc05865b9f35322cf7e.
 Repair branch: codex/v13-readiness-repair. Approved integration branch preserved.
 
@@ -16,7 +16,7 @@ A narrow --cdp-self-check attaches/detaches the frozen driver to the existing se
 ## Candidate and deployment boundary
 
 Final candidate EXE SHA256:
-18D31392A2F7D1810A04E187675E86076C5D44268971EFAB68601E6497F64E06
+22756C738C7DE7DEB278ABB17E8738A4B99C781E0116A71E4A8C1C7FF20E8431
 
 Candidate path:
 C:/Users/Leo/.codex/worktrees/rfq-006-integration/INSO_Leo/build/windows-release-stage-1.3/dist/INSO_V1.3
@@ -50,7 +50,7 @@ The hash differs because this candidate contains the repairs and frozen diagnost
 ## Checks
 
 - Focused RFQ-003/004/005/006/008, launcher, GUI and Findchips: 720 passed.
-- Final follow-up full safe/offline: 1527 passed, 1 skipped. Skip: Windows test environment cannot create the symlink required by one evidence/safety test.
+- Final combined full safe/offline: 1550 passed, 1 skipped. Skip: Windows test environment cannot create the symlink required by one evidence/safety test.
 - Ruff src tests scripts/windows_release_entry.py: PASS.
 - git diff --check: PASS.
 - V1.3 BuildOnly: PASS; frozen dependency self-check: PASS; release scan: PASS.
@@ -83,3 +83,15 @@ Owner reported that ordinary additional login clicks work. On the existing fixed
 The existing sweep opened/settled the login page, but ensure_findchips_signed_in navigated to it again, discarding passive verification readiness. The helper now reuses an already-open own-host sign-in form, waits for load, an enabled unique visible button and the site's passive verification token (when present), skips form submission after an authenticated redirect, and retries only a submit with no confirmed outcome once (at most two ordinary submits). Explicit CAPTCHA or password refusals are not retried or bypassed.
 
 Follow-up regression: 104 focused tests passed, including form reuse without navigation, delayed readiness, bounded retry, immediate success, existing session and refusal handling. Final follow-up BuildOnly/release scan and frozen dependency/idle GUI/CDP checks passed. The new SHA256 above replaces the earlier F73A42E8 candidate; it is not deployed. Formal release remains 7ECE6917. No purchase or email was sent.
+
+## Owner purchase follow-up addition
+
+Owner chose local-only timestamps and one reminder per sending episode. Implementation
+and 144 focused / 1550 full passing offline checks are documented in
+2026-10-08-purchase-follow-up.md. Weekday working hours are 09:00–12:30 and 13:30–18:00,
+Beijing time; lunch, nights and weekends do not accrue. Reminder threshold is strictly
+more than three working hours, source must still be 发给采购, and both Owner229/Shawn
+are addressed through the existing outbox. Historical untimed rows are skipped.
+The final EXE hash above includes this addition, supersedes the Findchips-only build,
+and passed BuildOnly, release scan and frozen dependency/idle/CDP checks. It remains
+undeployed. Owner requested no CEO Review dispatch yet.

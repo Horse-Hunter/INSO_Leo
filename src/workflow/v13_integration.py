@@ -176,13 +176,17 @@ class V13IntegratedCycle:
         updater_factory,
         notify,
         observe,
+        follow_up=lambda worksheet: None,
         stop_requested=lambda: False,
     ):
         self.reader, self.store, self.holds = reader, store, holds
         self.cycle, self.updater_factory = cycle, updater_factory
         self.notify, self.observe, self.stop = notify, observe, stop_requested
+        self.follow_up = follow_up
 
     def run(self, worksheet):
+        if not self.stop():
+            self.follow_up(worksheet)  # Even held rows can require human follow-up.
         blocked_ids, blocked_locations = set(), set()
         # Strict identity first; original location is a human-status barrier only.
         from src.sheets import (

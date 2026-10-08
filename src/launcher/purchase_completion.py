@@ -1,5 +1,6 @@
 """Completion side effects, separate from irreversible INSO dispatch."""
 import uuid
+from datetime import UTC, datetime
 
 from src.sheets.purchase_status import write_purchase_status_safely
 from src.workflow.v12_contracts import (
@@ -16,11 +17,12 @@ OWNER = NotificationRecipient("owner", "linan229@qq.com")
 
 
 class PurchaseCompletionActions:
-    def __init__(self, *, workflow_store, v12_store, reader, writer_factory):
+    def __init__(self, *, workflow_store, v12_store, reader, writer_factory, clock=None):
         self.workflow_store = workflow_store
         self.v12_store = v12_store
         self.reader = reader
         self.writer_factory = writer_factory
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._settled_status_ids: set[str] = set()
 
     def process(self, result, *, at):
@@ -54,7 +56,14 @@ class PurchaseCompletionActions:
         if item.inquiry_id in self._settled_status_ids:
             return True
         try:
-            write_purchase_status_safely(self.reader, self.writer_factory(), item.record_identity)
+            changed = write_purchase_status_safely(self.reader, self.writer_factory(), item.record_identity)
+            if changed:
+                # Reuse the existing local append-only ledger; do not backfill
+                # already-sent historical rows from old purchase/observation dates.
+                self.v12_store.append_event(WorkflowEvent(
+                    f"evt_{uuid.uuid4().hex}", item.inquiry_id,
+                    EventType.PURCHASE_STATUS_RECORDED, self._clock(), "sheets",
+                ))
             self._settled_status_ids.add(item.inquiry_id)
             return True
         except Exception as exc:  # noqa: BLE001 - retry only status, never purchase

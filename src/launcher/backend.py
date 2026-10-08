@@ -69,6 +69,7 @@ from src.workflow import (
     WorkflowWorker,
 )
 from src.workflow.inso_query import run_inso_query
+from src.workflow.purchase_follow_up import PurchaseFollowUp
 from src.workflow.v12_contracts import (
     DeliveryOutcome,
     EventType,
@@ -784,6 +785,8 @@ class ProductionBackend(GuiBackend):
                             wait=self._stop.wait, stop_requested=self._immediate_stop_requested)
                     integrated = V13IntegratedCycle(reader=active_reader, store=active_store,
                         holds=active_holds, cycle=cycle, updater_factory=updater,
+                        follow_up=PurchaseFollowUp(reader=active_reader, workflow_store=active_store,
+                            v12_store=self._v12_store, clock=utc_now).run,
                         notify=lambda result,key,episode: notify_quotation(self._v12_store,
                             result,key,episode,at=utc_now()), observe=self._observe_quotation,
                         stop_requested=self._stop.is_set)

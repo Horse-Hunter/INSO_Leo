@@ -19,12 +19,14 @@ class V12:
     def __init__(self, outcome):
         self.outcome = outcome
         self.commands = {}
+        self.events = []
         self.state = BusinessState.PURCHASE_RECORDED if outcome is PurchaseOutcome.SAVED else BusinessState.PURCHASE_EXCEPTION
     def business_state(self, _iid): return self.state
     def set_business_state(self, _iid, state, _event): self.state = state
     def submit_click_proven(self, _iid): return self.outcome is PurchaseOutcome.SUBMIT_UNCONFIRMED
     def purchase_state(self, _iid): return self.outcome
-    def event_history(self, _iid): return ()
+    def event_history(self, _iid): return tuple(self.events)
+    def append_event(self, event): self.events.append(event)
     def notification_already_created(self, cid, *_args): return cid in self.commands
     def enqueue_notification(self, cmd): self.commands[cmd.command_id] = cmd
 
@@ -145,3 +147,32 @@ def test_only_all_no_result_research_exception_adds_shawn(phase, reason):
     command = next(iter(state.commands.values()))
     assert [r.address for r in command.recipients] == ["linan229@qq.com"]
     assert not command.command_id.endswith(":recipients-v2") and sheet.calls == 0
+
+
+def test_status_write_records_actual_confirmation_timestamp_once():
+    from datetime import timedelta
+
+    from src.workflow.v12_contracts import EventType
+    handler, sheet, state = actions(PurchaseOutcome.SAVED)
+    after_write = NOW + timedelta(seconds=8)
+    handler._clock = lambda: after_write
+    handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
+    handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
+    assert sheet.calls == 1
+    assert len(state.events) == 1
+    assert state.events[0].event_type is EventType.PURCHASE_STATUS_RECORDED
+    assert state.events[0].occurred_at == after_write
+
+
+def test_legacy_already_sent_status_does_not_backfill_a_timestamp():
+    handler, sheet, state = actions(PurchaseOutcome.SAVED)
+    sheet.rows = [WorksheetRow(4, {"A":"发给采购", "C":"A", "E":"TEST-MPN", "G":8})]
+    handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
+    assert not state.events and sheet.calls == 0
+
+
+def test_failed_status_write_does_not_start_follow_up_clock():
+    handler, _sheet, state = actions(PurchaseOutcome.SAVED, writer_fails=True)
+    handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
+    assert not state.events
+    assert state.state is BusinessState.STATUS_WRITE_PENDING
