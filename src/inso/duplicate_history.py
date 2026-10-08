@@ -357,7 +357,7 @@ class InsoDuplicateHistoryReader:
         if (not isinstance(search_value, str) or not search_value.strip()
                 or (self._procurement_history and not lookup_mpn_prefix(search_value))):
             raise InsoDuplicateHistoryError(DuplicateHistoryFailure.RECORD_FIELDS_INVALID)
-        target = search_value.strip()
+        target = search_value if self._procurement_history else search_value.strip()
         url = self.list_url
         access = self._resolve_access()
         try:

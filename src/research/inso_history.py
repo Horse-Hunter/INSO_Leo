@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from ipaddress import ip_address
 from typing import Protocol
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from src.core.mpn import inso_lookup_query, lookup_mpn_matches
 from src.inso.session import InsoOperationAccess
@@ -166,7 +166,7 @@ def _is_loopback_host(hostname: str) -> bool:
 
 
 def build_inso_stock_venquote_form(mpn: str) -> str:
-    return _INSO_STOCK_VENQUOTE_FORM.replace("{MPN}", mpn)
+    return _INSO_STOCK_VENQUOTE_FORM.replace("{MPN}", quote(mpn, safe=""))
 
 
 def parse_inso_history_rows(rows: object) -> tuple[InsoHistoryRecord, ...]:
@@ -279,7 +279,7 @@ class PlaywrightInsoReadOnlyBrowser:
             f"{self._config.login_url.rstrip('/')}"
             "/services/stock/select.ashx"
             "?action=Stock_VenQuote"
-            f"&para={mpn_clean}"
+            f"&para={quote(mpn_clean, safe="")}"
             "&DetailField=PartNo"
             "&BillPage=Stock_VenQuote"
             f"&pageindex=1&pagesize={self._config.pagesize}"

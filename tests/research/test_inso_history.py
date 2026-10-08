@@ -279,8 +279,8 @@ def test_concrete_browser_uses_cdp_and_posts_stock_venquote() -> None:
         " ABC-1 ", InsoLogin("u", "p")
     )
 
-    assert "searchData[DetailFieldValue]=AB&" in captured["data"]
-    assert "para=AB&" in captured["url"]
+    assert "searchData[DetailFieldValue]=%20ABC-1%20&" in captured["data"]
+    assert "para=%20ABC-1%20&" in captured["url"]
     assert capture.records[0].mpn == "ABC-1"
     assert captured["headers"]["Content-Type"].startswith(
         "application/x-www-form-urlencoded"
@@ -392,7 +392,20 @@ def test_separated_model_research_api_uses_literal_token_and_converts_usd():
     browser = PlaywrightInsoReadOnlyBrowser(InsoBrowserConfig(login_url="https://inso.example/"),
         settle_ms=0, operation_access=FakeOperationAccess(page))
     capture = browser.fetch_procurement_temporary_inquiry_history("RM342-059-581-7200", InsoLogin("u", "p"))
-    assert "searchData[DetailFieldValue]=RM342&" in captured["data"]
-    assert "para=RM342&" in captured["url"]
+    assert "searchData[DetailFieldValue]=RM342-059-581-7200&" in captured["data"]
+    assert "para=RM342-059-581-7200&" in captured["url"]
     assert capture.records[0].mpn == "RM342-059-581-7200"
     assert InsoHistoryAdapter._to_normalized_rmb(capture.records[0], Fx().get_quote()) == Decimal("8.75")
+
+
+def test_http_query_preserves_raw_model_as_encoded_data_not_form_or_url_syntax():
+    import json
+    from urllib.parse import parse_qs, urlsplit
+    source = " Ab+C&12 _- "
+    captured = {}
+    page = FakePage(json.dumps({"rows": []}), captured)
+    browser = PlaywrightInsoReadOnlyBrowser(InsoBrowserConfig(login_url="https://inso.example/"),
+        settle_ms=0, operation_access=FakeOperationAccess(page))
+    browser.fetch_procurement_temporary_inquiry_history(source, InsoLogin("u", "p"))
+    assert parse_qs(captured["data"])["searchData[DetailFieldValue]"] == [source]
+    assert parse_qs(urlsplit(captured["url"]).query)["para"] == [source]

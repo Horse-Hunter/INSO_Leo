@@ -91,7 +91,7 @@ def test_real_native_pagination_then_raw_reader_latest_across_all_pages():
     selected = select_recent_lowest(records, queried_mpn="MPN", now=NOW)
     assert selected.payload == latest.payload
     assert frame.number == 2
-    assert frame.value == "M"
+    assert frame.value == " mpn "
     assert len(selected.payload) == 14
     assert selected.payload[3] == ""
     assert selected.payload[6] == "0001.2300"
@@ -269,7 +269,7 @@ def test_owner_suffix_reader_and_lowest_price_across_pages_preserve_raw14():
     frame = DisplayFrame([[first, second], [third]],
                          [[list(exact.payload), list(suffixed.payload)], [list(other.payload)]], 3)
     records = InsoQuotationReader().read(access(frame), "WGI210IT")
-    assert frame.value == "WGI210"
+    assert frame.value == "WGI210IT"
     assert len(records) == 2
     selected = select_recent_lowest(records, queried_mpn="WGI210IT", now=NOW)
     assert selected.payload == suffixed.payload
@@ -286,7 +286,7 @@ def test_separated_model_no_stock_quote_is_retrieved_and_selected_without_fx():
     other_quote = quote(model=other["PartNo"])
     frame = DisplayFrame([[matched, other]], [[values, list(other_quote.payload)]], 2)
     records = InsoQuotationReader().read(access(frame), original.payload[1])
-    assert frame.value == "RM342"
+    assert frame.value == "RM342-059-581-7200"
     assert len(records) == 1
     selected = select_recent_lowest(records, queried_mpn=original.payload[1], now=NOW,
         currency_rate=lambda _: pytest.fail("zero quote must not fetch FX"))

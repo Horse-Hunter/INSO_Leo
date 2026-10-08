@@ -211,7 +211,7 @@ def test_procurement_reader_queries_prefix_once_and_filters_full_original_target
     reader = InsoDuplicateHistoryReader(list_url="https://yingsuo.alperp.cn",
         procurement_history=True, operation_access=access)
     capture = reader.read("WGI210IT")
-    assert frame.value == "WGI210"
+    assert frame.value == "WGI210IT"
     assert len(capture.records) == 1
     assert capture.records[0].mpn == matched["PartNo"]
 
@@ -225,5 +225,5 @@ def test_separated_model_query_keeps_duplicate_matching_and_rejects_other_models
     reader = InsoDuplicateHistoryReader(list_url="https://yingsuo.alperp.cn",
         procurement_history=True, operation_access=access)
     capture = reader.read("RM342-059-581-7200")
-    assert frame.value == "RM342"
+    assert frame.value == "RM342-059-581-7200"
     assert [record.mpn for record in capture.records] == [matched["PartNo"]]

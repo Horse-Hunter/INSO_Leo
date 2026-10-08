@@ -31,12 +31,16 @@ def test_normalization_removes_only_authorized_separators():
     assert normalize_lookup_mpn("A/+().B") == "A/+().B"
 
 
-@pytest.mark.parametrize("target, expected", [
-    ("RM342-059-581-7200", "RM342"), ("WGI210IT", "WGI210"),
-    ("  WGI210IT  ", "WGI210"), ("WGI210_IT", "WGI210"),
-    ("RM342–059_581 7200", "RM342"), (" A_B ", "A"),
-    ("ABC-1", "AB"), (" _− ", ""), (None, ""),
+@pytest.mark.parametrize("target", [
+    "RM342-059-581-7200", "WGI210IT", "  WGI210IT  ", "WGI210_IT",
+    "RM342–059_581 7200", " A_B ", "ABC-1", "Ab+C&12", "\tAb_12\n",
 ])
-def test_inso_literal_candidate_query_does_not_concatenate_separators(target, expected):
+def test_inso_query_is_original_full_model_without_normalization(target):
     from src.core.mpn import inso_lookup_query
-    assert inso_lookup_query(target) == expected
+    assert inso_lookup_query(target) == target
+
+
+@pytest.mark.parametrize("target", [" _− ", "", None])
+def test_inso_query_rejects_empty_normalized_model(target):
+    from src.core.mpn import inso_lookup_query
+    assert inso_lookup_query(target) == ""

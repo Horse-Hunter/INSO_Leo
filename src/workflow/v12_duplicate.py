@@ -60,7 +60,7 @@ class InsoDuplicateHistoryChecker:
             )
         try:
             if getattr(self._reader, "procurement_history", False):
-                capture = self._reader.read(canonical, since=at - timedelta(hours=168))
+                capture = self._reader.read(mpn, since=at - timedelta(hours=168))
             else:
                 capture = self._reader.read(canonical)
         except InsoDuplicateHistoryError as exc:

@@ -60,3 +60,5 @@ V1.2 Production Write Gate 当前 **CLOSED**。
 - Owner 2026-10-08：Research 全部网站、采临时询价防重复/报价识别统一使用 `core.mpn`：NFKC/大小写规范化，去空白、下划线及横线，Google 型号清理后去末尾两位；结果必须以此前缀开头，前缀之后最多10个清理后字符。清理后1–2位型号仅精确匹配，空型号不匹配。匹配是方向性的。采购提交及 Google 行身份仍按原精确规则。窗口、价格、库存、采购提交安全规则不变。
 
 - Owner 2026-10-08：报价输入B列必须等于源表型号原文；若选中报价型号原文不同，L列在已有备注之后换行追加“报价实际型号：XXX”，并通过既有队列提醒229与shawn。重试不重复追加或重复创建同一报价差异邮件；INSO raw14记录保持原样。
+
+Owner clarification 2026-10-08: INSO Research/procurement-history duplicate/quotation searches use the original full source model verbatim (HTTP transport encoding only). Cleaned-prefix/initial-token retrieval is superseded. Normalization and two-character-tail removal apply only to returned-model comparison; no effect on other website queries or exact source identity.

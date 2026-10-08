@@ -276,3 +276,18 @@ def test_bridge_exposes_no_write_or_send_capability() -> None:
     source = Path(module.__file__).read_text(encoding="utf-8")
     for forbidden in ("btnSave", "btnSave2", "bcSend", "smtplib"):
         assert forbidden not in source
+
+
+def test_procurement_bridge_searches_full_raw_model_and_compares_normalized_results():
+    class LowerReader:
+        procurement_history = True
+
+        def read(self, model, *, since):
+            self.query, self.since = model, since
+            return capture(record(mpn="WGI210IT S LJXS"))
+    reader = LowerReader()
+    source = " wgi210_it "
+    result = InsoDuplicateHistoryChecker(reader).check(INQUIRY, source, 10, at=NOW)
+    assert reader.query == source
+    assert reader.since == NOW - timedelta(hours=168)
+    assert result.repeated is True
