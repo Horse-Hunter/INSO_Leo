@@ -125,3 +125,159 @@ The repair is fully testable offline. No repeat real purchase, Save-and-Send, qu
 ## Final state
 
 `PENDING CEO REVIEW -> CHANGES_REQUESTED`
+
+---
+# B1 rollback-compatibility repair — CEO Independent Re-Review
+
+Date: 2026-10-08  
+Status: COMPLETE  
+Verdict: **PASS / REVIEWED_DONE**  
+Reviewed repair HEAD: `e3137a6fa280d0b9c649e7f762d4039da7b67ecb`  
+Repair base: `e0ea036ca90437e7a31794d5a15323785f450b45`
+
+## Decision
+
+The rollback-compatibility blocker from the preceding review is closed.
+
+The repaired implementation no longer writes either rejected new enum value into V1.2-owned persistence. Purchase-follow-up timing is isolated in an additive V1.3 sidecar table, and the reminder continues through the existing outbox using the old-compatible `PURCHASE_EXCEPTION` notification kind.
+
+No new production blocker was found in the repair diff.
+
+## B1 closure — persisted values remain readable by preserved rollback binaries
+
+PASS.
+
+The repair removes:
+
+- persisted `EventType.PURCHASE_STATUS_RECORDED`;
+- persisted `NotificationKind.PURCHASE_FOLLOW_UP`;
+- the GUI projection that depended on that new persisted event.
+
+The new table is:
+
+`workflow_v13_purchase_follow_up_episodes`
+
+with only:
+
+- `episode_id`;
+- canonical `inquiry_id` foreign key;
+- timezone-aware `confirmed_at`.
+
+It does not change the V1.2 schema version. Existing V1.2/V1.3 schema verification permits the additive table.
+
+A confirmed episode is written only after the existing canonical Google status transition returns `changed=True`, which already means the `未发 -> 发给采购` write and readback were confirmed. A row that was already `发给采购` returns `changed=False` and is not backfilled.
+
+If the remote status has been confirmed but the sidecar insert fails, the sidecar store maps the SQLite/ledger failure to `GLOBAL_STOP / WORKFLOW_LEDGER_UNAVAILABLE`. The already-durable SAVED/PURCHASE_RECORDED state and remote `发给采购` state are preserved; the purchase path is not requeued or replayed.
+
+## Reminder compatibility
+
+PASS.
+
+Follow-up commands now persist as the already-supported:
+
+`NotificationKind.PURCHASE_EXCEPTION`
+
+with a dedicated deterministic command identity:
+
+`purchase-follow-up:<SHA256(episode_id)>`
+
+The subject/body remain follow-up-specific, both Owner and Shawn remain recipients, and the existing recipient-level worker/retry behavior is reused.
+
+This avoids introducing an unknown notification kind while preserving once-per-sending-episode deduplication.
+
+## Rollback compatibility evidence
+
+PASS.
+
+The new compatibility regression does not emulate the old enums with current code. It extracts the actual historical `src` trees with `git archive` and executes them in isolated subprocesses against a DB produced by the repaired implementation.
+
+Preserved revisions reviewed:
+
+- formal V1.3 source: `03f4bf3328b0931b4bdc5dc05865b9f35322cf7e`;
+- current V1.2 branch source: `d75a1fa1db5371b59363bd733538f7fd0fb245e6`.
+
+The current remote `feature/v1-2` HEAD was independently confirmed to be exactly `d75a1fa1db5371b59363bd733538f7fd0fb245e6`.
+
+For both preserved revisions the regression covers outstanding reminder state in both:
+
+- `PENDING`;
+- `RETRYABLE_FAILURE`.
+
+The old code successfully performs:
+
+- V12Store construction/schema verification;
+- `migrate_v12`;
+- `event_history()`;
+- startup `initialize_run_state()`;
+- `claim_due_notifications()`.
+
+It also proves:
+
+- no `PURCHASE_STATUS_RECORDED` exists in the old event table;
+- no `PURCHASE_FOLLOW_UP` exists in the old notification table;
+- the follow-up command is parsed as old-compatible `PURCHASE_EXCEPTION`;
+- the V1.3 sidecar table is safely ignored;
+- `PRAGMA user_version` remains 1201;
+- durable SAVED state remains non-replayable.
+
+This directly closes the blocker identified in the previous review.
+
+## Sidecar migration / failure behavior
+
+PASS.
+
+The first sidecar creation takes a verified backup before the additive table is created. Repeated migration is idempotent, foreign-key checks remain clean, and the old schema version is unchanged.
+
+The reviewed failure regression uses a real SQLite trigger to abort the sidecar insert after the source status has already been confirmed. The result is fail-closed global stop with no second purchase write and no reconstructed historical timestamp.
+
+The documented limitation remains intentional: a crash after remote confirmation but before local episode persistence does not guess the missing timestamp on restart; that row remains untimed for this reminder feature.
+
+## Previously accepted readiness repairs
+
+The rollback repair does not rewrite the areas already accepted in the prior review:
+
+- bounded CDP attach and `CDP_SESSION_INITIALIZATION_TIMEOUT` diagnosis;
+- frozen `--cdp-self-check`;
+- Findchips existing-form reuse, passive-verification readiness and bounded submit retry;
+- manual-login protected pages;
+- working-time calculation and strict >3-hour threshold;
+- canonical source binding and held-row follow-up check;
+- RFQ-003 through RFQ-008 reviewed safety boundaries.
+
+## Verification evidence reviewed
+
+Executor reports for `e3137a6...`:
+
+- focused: **760 passed**;
+- full safe/offline: **1559 passed / 1 skipped**;
+- Ruff: **PASS**;
+- `git diff --check`: **PASS**;
+- V1.3 BuildOnly: **PASS**;
+- release scan: **PASS**;
+- frozen `--self-check`: **PASS**;
+- frozen `--idle-self-check`: **PASS**;
+- frozen `--cdp-self-check`: **PASS**.
+
+New candidate EXE SHA256:
+
+`4777E6000A861EC4E1C881CD9692E18B8B21FB8A1F6672DD82DF2115E5D6E6CC`
+
+The rejected candidate `22756C738C7DE7DEB278ABB17E8738A4B99C781E0116A71E4A8C1C7FF20E8431` remains superseded.
+
+## Live / release boundary
+
+The repair candidate remains undeployed. The formal V1.3 `7ECE6917...` and V1.2 `340D7F7E...` remain unchanged.
+
+No new real procurement, Save/Save-and-Send, quotation write/update, Apps Script, SMTP delivery, production Google mutation or unguarded production poll was required for this repair.
+
+## Release decision
+
+**PASS / REVIEWED_DONE.**
+
+Candidate `4777E600...` is approved for the controlled formal V1.3 deployment step.
+
+Deployment must still preserve the existing V1.2 release, production workflow DB, credentials/OAuth, production/research/SMTP configuration and fixed Chrome profile/CDP assets, with a backup of the current formal V1.3 release before replacement.
+
+## Final state
+
+`CHANGES_REQUESTED -> REVIEW_REQUIRED -> REVIEWED_DONE`
