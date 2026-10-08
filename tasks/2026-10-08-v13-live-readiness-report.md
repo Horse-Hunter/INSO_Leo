@@ -1,7 +1,7 @@
 # V1.3 readiness repair verification report
 
 Date: 2026-10-08
-Status: REVIEW_REQUIRED; repaired candidate verified, formal deployment pending Owner decision.
+Status: REVIEW_REQUIRED; Owner chose CEO Review first. Keep the current formal release unchanged.
 Base: feature/v1-3-integration, 03f4bf3328b0931b4bdc5dc05865b9f35322cf7e.
 Repair branch: codex/v13-readiness-repair. Approved integration branch preserved.
 
@@ -69,3 +69,9 @@ No unguarded production business loop, real purchase, Save/Save-and-Send, real S
 Remaining external prerequisite: Findchips manual CAPTCHA/account login. New-insert live evidence remains unavailable because current real data has no eligible recent quote. No claim that every site is authenticated or that real insertion was exercised. The repaired EXE requires an Owner deployment decision and subsequent formal deployed checks; the current formal EXE is still the original reviewed version.
 
 Sanitized local evidence is under ignored .tmp. Raw production rows, OAuth contents, credentials, DB copies and generated release assets are excluded from Git.
+
+## Owner disposition
+
+Owner explicitly chose CEO Review first and preservation of the current formal release.
+Implementation commit: cee231918369b81200e093e63b1c11b9f31eed84.
+No repaired release deployment was performed. This document does not mark CEO approval complete.

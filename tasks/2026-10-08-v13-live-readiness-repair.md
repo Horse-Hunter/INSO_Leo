@@ -28,4 +28,4 @@ until failures resolved and required functional verification finished.
 
 ## Result
 Implementation and permitted verification complete. See 2026-10-08-v13-live-readiness-report.md.
-The formal reviewed EXE remains unchanged pending the Owner decision required for a different rebuilt hash.
+The formal reviewed EXE remains unchanged as Owner chose CEO Review first for the different rebuilt hash.
