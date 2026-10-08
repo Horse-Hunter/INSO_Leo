@@ -16,7 +16,7 @@ A narrow --cdp-self-check attaches/detaches the frozen driver to the existing se
 ## Candidate and deployment boundary
 
 Final candidate EXE SHA256:
-F73A42E8F8ACBFED16DF622D5607A3C1F6E073C0884D0238C64AE1F69C50F5C5
+18D31392A2F7D1810A04E187675E86076C5D44268971EFAB68601E6497F64E06
 
 Candidate path:
 C:/Users/Leo/.codex/worktrees/rfq-006-integration/INSO_Leo/build/windows-release-stage-1.3/dist/INSO_V1.3
@@ -33,7 +33,7 @@ The hash differs because this candidate contains the repairs and frozen diagnost
 | Feature | Evidence / result |
 |---|---|
 | Fixed CDP / frozen driver | PASS; final frozen attachment also passed with an actual normal Sheets quote-input page open. Existing Chrome process/profile reused. |
-| One-click/background login reuse | Five sites authenticated; Findchips requires manual CAPTCHA. Six-site sweep completes, failed pages preserved. |
+| One-click/background login reuse | Five sites authenticated in the original sweep; Findchips existing tab subsequently reached /account after one normal login click. Its canonical production sweep then confirmed ALREADY_SIGNED_IN. Failed pages remain protected. |
 | Research | Real read-only six-source query completed successfully; source-specific no-price results retained. Findchips public price search worked despite account CAPTCHA. |
 | Google source reading | Real configured worksheets read successfully using existing OAuth grants. |
 | INSO quotations | Live quotation rows have all 14 payload fields. All 12 currently eligible source rows returned NO_RECENT_QUOTE under real rolling72h; no date fabrication. |
@@ -50,7 +50,7 @@ The hash differs because this candidate contains the repairs and frozen diagnost
 ## Checks
 
 - Focused RFQ-003/004/005/006/008, launcher, GUI and Findchips: 720 passed.
-- Full safe/offline: 1519 passed, 1 skipped. Skip: Windows test environment cannot create the symlink required by one evidence/safety test.
+- Final follow-up full safe/offline: 1527 passed, 1 skipped. Skip: Windows test environment cannot create the symlink required by one evidence/safety test.
 - Ruff src tests scripts/windows_release_entry.py: PASS.
 - git diff --check: PASS.
 - V1.3 BuildOnly: PASS; frozen dependency self-check: PASS; release scan: PASS.
@@ -66,7 +66,7 @@ Production workflow DB matched its deployment baseline hash after probes; live b
 
 No unguarded production business loop, real purchase, Save/Save-and-Send, real SMTP or historical purchase replay was executed. The Owner-authorized quote duplicate update was executed once; historical quote dates were preserved. No fake recent quotation was introduced.
 
-Remaining external prerequisite: Findchips manual CAPTCHA/account login. New-insert live evidence remains unavailable because current real data has no eligible recent quote. No claim that every site is authenticated or that real insertion was exercised. The repaired EXE requires an Owner deployment decision and subsequent formal deployed checks; the current formal EXE is still the original reviewed version.
+Findchips account login is now live confirmed after the Owner-requested existing-tab click; a future explicit challenge still requires manual handling. New-insert live evidence remains unavailable because current real data has no eligible recent quote. No claim that every site is authenticated or that real insertion was exercised. The repaired EXE requires an Owner deployment decision and subsequent formal deployed checks; the current formal EXE is still the original reviewed version.
 
 Sanitized local evidence is under ignored .tmp. Raw production rows, OAuth contents, credentials, DB copies and generated release assets are excluded from Git.
 
@@ -75,3 +75,11 @@ Sanitized local evidence is under ignored .tmp. Raw production rows, OAuth conte
 Owner explicitly chose CEO Review first and preservation of the current formal release.
 Implementation commit: cee231918369b81200e093e63b1c11b9f31eed84.
 No repaired release deployment was performed. This document does not mark CEO approval complete.
+
+## Findchips Owner follow-up (supersedes the earlier current-login limitation)
+
+Owner reported that ordinary additional login clicks work. On the existing fixed-CDP tab, one real click on the unique visible #j-signin button.signin navigated to /account and removed the sign-in form. A fresh canonical production Findchips sweep recognized ALREADY_SIGNED_IN. The Owner tab was preserved.
+
+The existing sweep opened/settled the login page, but ensure_findchips_signed_in navigated to it again, discarding passive verification readiness. The helper now reuses an already-open own-host sign-in form, waits for load, an enabled unique visible button and the site's passive verification token (when present), skips form submission after an authenticated redirect, and retries only a submit with no confirmed outcome once (at most two ordinary submits). Explicit CAPTCHA or password refusals are not retried or bypassed.
+
+Follow-up regression: 104 focused tests passed, including form reuse without navigation, delayed readiness, bounded retry, immediate success, existing session and refusal handling. Final follow-up BuildOnly/release scan and frozen dependency/idle GUI/CDP checks passed. The new SHA256 above replaces the earlier F73A42E8 candidate; it is not deployed. Formal release remains 7ECE6917. No purchase or email was sent.

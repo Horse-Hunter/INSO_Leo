@@ -24,6 +24,7 @@ from .site_login import (
     await_login_outcome,
     challenge_present,
     submit_login_form,
+    unique_visible_control,
 )
 from .source_contracts import (
     EvidenceField,
@@ -367,27 +368,59 @@ def ensure_findchips_signed_in(
 
     if login is None:
         raise SiteLoginError("CREDENTIALS_UNAVAILABLE")
-    page.goto(  # type: ignore[attr-defined]
-        FINDCHIPS_LOGIN_URL,
-        wait_until="domcontentloaded",
-        timeout=timeout_ms,
-    )
-    if challenge_present(page, FINDCHIPS_LOGIN_FORM):
-        raise SiteLoginError("MANUAL_VERIFICATION_REQUIRED")
-    submit_login_form(
-        page,
-        form=FINDCHIPS_LOGIN_FORM,
-        login=login,
-        timeout_ms=timeout_ms,
-    )
-    await_login_outcome(
-        page,
-        form=FINDCHIPS_LOGIN_FORM,
-        is_login_page=_findchips_login_pending,
-        timeout_ms=timeout_ms,
-        wait=wait,
-        clock=clock,
-    )
+    # The sweep already opened this form. Reloading it here discards the
+    # passive verification which may have just finished in the current tab.
+    if not (_is_findchips_response_url(page.url) and findchips_login_page_open(page)):
+        page.goto(  # type: ignore[attr-defined]
+            FINDCHIPS_LOGIN_URL,
+            wait_until="domcontentloaded",
+            timeout=timeout_ms,
+        )
+    # An existing session redirects /signin to /account or /dashboard.
+    if _is_findchips_response_url(page.url) and not findchips_login_page_open(page):
+        return
+    for attempt in range(2):
+        _wait_findchips_submit_ready(page, timeout_ms=timeout_ms, wait=wait, clock=clock)
+        submit_login_form(
+            page, form=FINDCHIPS_LOGIN_FORM, login=login, timeout_ms=timeout_ms,
+        )
+        try:
+            await_login_outcome(
+                page, form=FINDCHIPS_LOGIN_FORM,
+                is_login_page=_findchips_login_pending,
+                timeout_ms=timeout_ms, wait=wait, clock=clock,
+            )
+            if not _is_findchips_response_url(page.url):
+                raise SiteLoginError("UNEXPECTED_RESPONSE_HOST")
+            return
+        except SiteLoginError as error:
+            # Retry only an ordinary submit with no confirmed site verdict.
+            # CAPTCHA/password refusals are not fixed by repeated clicks.
+            if error.reason_code != "LOGIN_NOT_CONFIRMED" or attempt:
+                raise
+
+
+def _wait_findchips_submit_ready(
+    page: object, *, timeout_ms: int,
+    wait: Callable[[float], None], clock: Callable[[], float],
+) -> None:
+    """Wait for site scripts and passive verification before the normal click."""
+    page.wait_for_load_state("load", timeout=timeout_ms)
+    deadline = clock() + timeout_ms / 1000.0
+    while True:
+        if challenge_present(page, FINDCHIPS_LOGIN_FORM):
+            raise SiteLoginError("MANUAL_VERIFICATION_REQUIRED")
+        button = unique_visible_control(page, FINDCHIPS_LOGIN_FORM.submit)
+        ready = page.evaluate("""() => {
+            const token = document.querySelector('[name="cf-turnstile-response"]');
+            return document.readyState === 'complete' && (!token || !!token.value);
+        }""")
+        if button is not None and button.is_enabled() and ready:
+            return
+        if clock() >= deadline:
+            raise SiteLoginError("LOGIN_NOT_READY")
+        wait(min(0.25, max(0.0, deadline - clock())))
+
 
 
 def _parse_stock_presence(value: str | None) -> bool | None:

@@ -29,3 +29,9 @@ until failures resolved and required functional verification finished.
 ## Result
 Implementation and permitted verification complete. See 2026-10-08-v13-live-readiness-report.md.
 The formal reviewed EXE remains unchanged as Owner chose CEO Review first for the different rebuilt hash.
+
+## Owner Findchips follow-up
+Owner observed manual repeated login clicks succeed and requests robust automatic login.
+Inspect the existing site form/readiness, reuse canonical submit/outcome helpers, bound retries and confirm actual session success. Live login verification authorized; no purchase/email. Keep formal release unchanged pending CEO Review.
+
+Follow-up implemented and live existing-tab click/session recognition verified. Formal release preserved; updated candidate remains REVIEW_REQUIRED.

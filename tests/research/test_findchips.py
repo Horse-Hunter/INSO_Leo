@@ -310,3 +310,67 @@ def test_findchips_only_own_signin_refusal_is_interpreted(url, pending):
 
     from src.research.findchips import _findchips_login_pending
     assert _findchips_login_pending(SimpleNamespace(url=url)) is pending
+
+
+@pytest.mark.parametrize("verdict, expected_clicks", [
+    ("success", 1), ("silent_then_success", 2),
+    ("silent", 2), ("MANUAL_VERIFICATION_REQUIRED", 1),
+    ("CREDENTIAL_REJECTED", 1),
+])
+def test_findchips_submit_retry_is_bounded_and_stops_on_confirmed_verdict(monkeypatch, verdict, expected_clicks):
+    from types import SimpleNamespace
+
+    from src.research import findchips as module
+    from src.research.site_login import SiteLoginError
+    page = SimpleNamespace(url=module.FINDCHIPS_LOGIN_URL)
+    page.goto = lambda *args, **kwargs: pytest.fail("must reuse the already opened login form")
+    calls = []
+    monkeypatch.setattr(module, "_wait_findchips_submit_ready", lambda *args, **kwargs: calls.append("ready"))
+    monkeypatch.setattr(module, "submit_login_form", lambda *args, **kwargs: calls.append("click"))
+    def outcome(*args, **kwargs):
+        clicks = calls.count("click")
+        if verdict == "success" or (verdict == "silent_then_success" and clicks == 2):
+            page.url = "https://www.findchips.com/account"
+            return
+        raise SiteLoginError("LOGIN_NOT_CONFIRMED" if verdict.startswith("silent") else verdict)
+    monkeypatch.setattr(module, "await_login_outcome", outcome)
+    if verdict in {"success", "silent_then_success"}:
+        module.ensure_findchips_signed_in(page, login=object(), timeout_ms=1000)
+    else:
+        with pytest.raises(SiteLoginError):
+            module.ensure_findchips_signed_in(page, login=object(), timeout_ms=1000)
+    assert calls == ["ready", "click"] * expected_clicks
+
+
+def test_findchips_existing_session_does_not_submit_again(monkeypatch):
+    from types import SimpleNamespace
+
+    from src.research import findchips as module
+    page = SimpleNamespace(url="https://www.findchips.com/dashboard", goto=lambda *a, **k: None)
+    monkeypatch.setattr(module, "submit_login_form", lambda *a, **k: pytest.fail("already signed in"))
+    module.ensure_findchips_signed_in(page, login=object(), timeout_ms=1000)
+
+
+@pytest.mark.parametrize("becomes_ready", [True, False])
+def test_findchips_waits_for_passive_verification_before_click(monkeypatch, becomes_ready):
+    from types import SimpleNamespace
+
+    from src.research import findchips as module
+    from src.research.site_login import SiteLoginError
+    time = [0.0]
+    waits = []
+    def wait(seconds):
+        waits.append(seconds)
+        time[0] += seconds
+    page = SimpleNamespace(wait_for_load_state=lambda *a, **k: None,
+                           evaluate=lambda _: becomes_ready and time[0] >= .5)
+    monkeypatch.setattr(module, "challenge_present", lambda *a: False)
+    monkeypatch.setattr(module, "unique_visible_control", lambda *a: SimpleNamespace(is_enabled=lambda: True))
+    if becomes_ready:
+        module._wait_findchips_submit_ready(page, timeout_ms=1000, wait=wait, clock=lambda: time[0])
+        assert time[0] == .5
+    else:
+        with pytest.raises(SiteLoginError, match="LOGIN_NOT_READY"):
+            module._wait_findchips_submit_ready(page, timeout_ms=1000, wait=wait, clock=lambda: time[0])
+        assert time[0] == 1.0
+    assert waits
