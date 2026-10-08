@@ -177,7 +177,8 @@ class V12WorkflowCoordinator:
         if not self._workflow_store.revive_item(item.id, record, now=now, manual_retry=True):
             raise ValueError("inquiry is still running")
         self._v12_store.reset_unsubmitted_purchase_for_manual_retry(inquiry_id)
-        self._set_state(inquiry_id, BusinessState.QUEUED, EventType.HUMAN_RESOLUTION_RECORDED, now)
+        self._set_state(inquiry_id, BusinessState.QUEUED, EventType.HUMAN_RESOLUTION_RECORDED, now,
+            manual_purchase_retry=True)
         self._research_results.pop(inquiry_id, None)
         self._duplicate_results.pop(inquiry_id, None)
         self._current_reader = reader
@@ -778,6 +779,8 @@ class V12WorkflowCoordinator:
         event_type: EventType,
         at: datetime,
         reason_code: ReasonCode | None = None,
+        *,
+        manual_purchase_retry: bool = False,
     ) -> None:
         self._v12_store.set_business_state(
             inquiry_id,
@@ -790,6 +793,7 @@ class V12WorkflowCoordinator:
                 "workflow",
                 reason_code,
             ),
+            manual_purchase_retry=manual_purchase_retry,
         )
 
     def _result(

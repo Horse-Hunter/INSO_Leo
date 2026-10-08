@@ -171,7 +171,7 @@ def test_invalid_edit_is_rejected_before_queue_or_write(tmp_path, monkeypatch, f
 
 
 def test_quote_rerun_changed_fields_binds_only_selected_original_row(tmp_path, monkeypatch):
-    from src.launcher.manual_order import InquiryHolds
+    from src.launcher.manual_order import ManualRetryHolds
     from src.workflow.v13_quotation import QuotationOutcome, V13QuotationCycle
     from tests.workflow.test_v13_quotation import Operations, Quotes
     backend, _, store, _, source, _, _, inquiry = prepared(tmp_path, monkeypatch)
@@ -182,15 +182,17 @@ def test_quote_rerun_changed_fields_binds_only_selected_original_row(tmp_path, m
     closed, outcomes = [], []
     quotes = Quotes([()])
     def runner(worksheet, *, source_reader, source_store, hold_store):
-        assert isinstance(hold_store, InquiryHolds) and hold_store.active() == ()
+        assert isinstance(hold_store, ManualRetryHolds) and hold_store.active() == ()
         assert source_store.get_by_inquiry_id(inquiry).mpn == "FIXED"
-        outcomes.extend(V13QuotationCycle(reader=source_reader, store=source_store,
+        result = V13QuotationCycle(reader=source_reader, store=source_store,
             operations=Operations(), clock=lambda: NOW, wait=lambda _: False,
-            quote_reader=quotes).run(worksheet))
+            quote_reader=quotes).run(worksheet)
+        outcomes.extend(result)
+        return result
     backend._manual_quote = runner, holds
     backend._execute_order_action(("request", inquiry, "quotation", None, None))
     assert backend.get_manual_order_result().success
-    assert closed == [inquiry] and len(quotes.calls) == 1 and quotes.calls[0][1] == "FIXED"
+    assert closed == [] and len(quotes.calls) == 1 and quotes.calls[0][1] == "FIXED"
     assert len(outcomes) == 1 and outcomes[0].inquiry_id == inquiry
     assert outcomes[0].outcome is QuotationOutcome.NO_RECENT_QUOTE
     assert store.get_by_inquiry_id(inquiry) == original

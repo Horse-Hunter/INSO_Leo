@@ -132,6 +132,15 @@ class V13HoldStore:
                 FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE"
             ) from None
 
+    def close_many(self, keys):
+        """Atomically settle selected old barriers after an explicit manual attempt."""
+        try:
+            with sqlite3.connect(self.path) as db:
+                db.executemany("UPDATE workflow_v13_holds SET active=0 WHERE hold_key=?",
+                    ((key,) for key in keys))
+        except sqlite3.Error:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
+
 
 def restore_result(payload):
     from src.sheets import IdentifyingSnapshot, SheetRecordIdentity, WorksheetIdentity

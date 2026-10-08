@@ -1,9 +1,12 @@
 """Narrow Owner command inputs; business execution stays in canonical workflows."""
+import json
 from dataclasses import replace
 from decimal import Decimal, InvalidOperation
 
 from src.sheets import query_pending_records
 from src.sheets.worksheet_schema import worksheet_schema
+from src.workflow.v12_faults import FaultScope, V12Fault
+from src.workflow.v13_quotation import QuotationOutcome
 
 
 class SingleRowReader:
@@ -63,13 +66,64 @@ class CurrentQuotationStore:
         return self.item
 
 
-class InquiryHolds:
-    """Scope the existing durable hold store to the selected inquiry."""
-    def __init__(self, holds, inquiry):
-        self.holds, self.inquiry = holds, inquiry
+class ManualRetryHolds:
+    """One invocation bypass; matching barriers stay durable until settlement."""
+    def __init__(self, holds, inquiry, identity):
+        self.holds, self.inquiry, self.identity = holds, inquiry, identity
+        self.matched_old = []
+        self.new_hold_keys = set()
+        for row in holds.active():
+            key = row[0]
+            matched = key == inquiry
+            if key.startswith("unresolved:"):
+                try:
+                    observed = json.loads(row[2])
+                    matched = (observed["worksheet"] == {
+                        "spreadsheet": identity.worksheet.spreadsheet,
+                        "worksheet": identity.worksheet.worksheet}
+                        and observed["row_position"] == identity.row_position)
+                except (ValueError, TypeError, KeyError):
+                    raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
+            if matched:
+                self.matched_old.append(row)
+        self.matched_old_keys = {row[0] for row in self.matched_old}
+
     def active(self):
-        return tuple(row for row in self.holds.active() if row[0] == self.inquiry)
+        # Other inquiries/locations are outside the selected-row invocation.
+        return tuple(row for row in self.holds.active()
+            if row[0] in self.new_hold_keys and row[0] not in self.matched_old_keys)
+
     def hold(self, result, observed):
-        return self.holds.hold(result, observed)
+        key, episode = self.holds.hold(result, observed)
+        self.new_hold_keys.add(key)
+        return key, episode
+
     def close(self, key):
-        return self.holds.close(key)
+        if key in self.new_hold_keys and key not in self.matched_old_keys:
+            return self.holds.close(key)
+
+    def finalize(self, results):
+        # A selected-row runner must return exactly one terminal row result.
+        if not isinstance(results, tuple) or len(results) != 1:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "V13_MANUAL_RETRY_UNSETTLED")
+        result, = results
+        location = result.record_identity
+        worksheet = result.source_worksheet or (location.worksheet if location else None)
+        row = result.source_row_position or (location.row_position if location else None)
+        if (worksheet != self.identity.worksheet or row != self.identity.row_position
+                or result.inquiry_id not in {None, self.inquiry}):
+            raise V12Fault(FaultScope.GLOBAL_STOP, "V13_MANUAL_RETRY_UNSETTLED")
+        if result.outcome is QuotationOutcome.ROW_FAILED:
+            active = {row[0]: row for row in self.holds.active()}
+            current = self.new_hold_keys & active.keys()
+            if not current or not any(active[key][3] == result.row_error_reason.value for key in current):
+                raise V12Fault(FaultScope.GLOBAL_STOP, "V13_MANUAL_RETRY_UNSETTLED")
+            # Never deactivate a newly updated bound key that equals the old key.
+            to_close = self.matched_old_keys - current
+        elif result.outcome in {QuotationOutcome.NO_RECENT_QUOTE,
+                QuotationOutcome.UPDATED_INSERTED, QuotationOutcome.UPDATED_ALREADY_EXISTS}:
+            to_close = self.matched_old_keys
+        else:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "V13_MANUAL_RETRY_UNSETTLED")
+        if to_close:
+            self.holds.close_many(sorted(to_close))

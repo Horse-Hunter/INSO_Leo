@@ -13,3 +13,19 @@ Owner accepts original row anchor even when model/brand/quantity change; no fuzz
 After manual action restart15min countdown. Preserve prior RFQ safety and reviewed records.
 Offline tests and BuildOnly allowed; no production, actual mail, credentials or deployment.
 Public GUI optional command contract and explicit workflow retry entry require CEO review.
+
+
+## CHANGES_REQUESTED repair (2026-10-08)
+Latest baseline43b9bccea94b71f5727662aaba7fd37f0d5077a1, CEO reviewbbd16d8.
+Only B1/B2 lifecycle repair; accepted GUI/edit/counters/timer/CDP/SMTP paths unchanged.
+B1: manual_purchase_retry=True only at accepted QUEUED/HUMAN_RESOLUTION event,
+recover PURCHASE_EXCEPTION/ai-recognition and DUPLICATE_ORDER/empty scope, preserving
+existing invalid-quantity recovery and unrelated alerts/history. New failure can raise new episode.
+B2: selected original worksheet/row one-shot hold bypass; old matching keys remain durable active.
+Match bound inquiry id or unresolved identity exact worksheet + row_position only, no fuzzy inputs.
+Finalize only one selected terminal result: NO_RECENT_QUOTE or UPDATED_* closes old keys;
+ROW_FAILED requires durable current hold, excludes its key from old closure; exceptions/stop preserve.
+SOURCE_STATUS_NOT_UPDATED matching unchanged model/brand/quantity remains non-repeatable.
+Multiple old closures are atomic through existing canonical V13HoldStore.close_many.
+Focused/full offline + BuildOnly/self-check/scan required; no deployment/live actions.
+CEO REVIEW.md remains exclusively CEO-owned and unchanged.

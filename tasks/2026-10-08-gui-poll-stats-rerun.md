@@ -22,7 +22,7 @@ Fake polling/counters/history retention; menu capability and idle-only dispatch;
 binding/model correction; duplicate requests/stop/scheduler serialization; existing shared regression.
 Full safe/offline, Ruff/diff and BuildOnly/frozen candidate only. Commit/push clean equality.
 
-## Completion
+## Original implementation completion (bc4c1e4)
 Implementation complete; RFQ-008 REVIEW_REQUIRED, previous RFQ006 approval unchanged.
 Changed: GUI/contracts/backend/manual source adapter, single-cell writer, canonical explicit retry APIs, tests.
 Verified: final focused523 PASS; full safe/offline1475 PASS/1 SKIP; new targeted45 PASS; Ruff/diff PASS.
@@ -39,3 +39,16 @@ update GUI row. Source status gate uses existing未发/purchase and发给采购/
 Owner steering. Owner additionally authorizes double-click edits for model/brand/quantity/tier,
 single-cell RAW write + readback, same serial countdown-only command boundary. No live test.
 SHAHAB tier is fixedA with no physical column, so it cannot be edited through fabricated mapping.
+
+## CHANGES_REQUESTED repair authority (2026-10-08)
+Continue from43b9bcc, only CEO B1 alert lifecycle and B2 one-shot hold lifecycle.
+Reuse existing recovery event/transaction; recover only manual ai-recognition and duplicate scopes.
+Keep matching bound/unbound old holds durable until selected quote result settles.
+Full offline/focused, BuildOnly/self-check/scan; no deployment or live business.
+CEO REVIEW.md must remain unchanged.
+
+## B1/B2 repair completion
+Complete implementation only; RFQ008 REVIEW_REQUIRED, CEO REVIEW unchanged.
+Changed:manual alert recovery flag, ManualRetryHolds/finalizer, canonical runner return, atomic close_many.
+Focused451 PASS; full1507 PASS/1 SKIP; Ruff/diff/build/frozen/scan PASS.
+No new decision conflict; no live business/deployment. New candidate:7ECE6917BF77E263E1E56BC528A63EE0798404DB1D03D494499B94A4A16B663F.

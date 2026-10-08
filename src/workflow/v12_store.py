@@ -268,6 +268,8 @@ class V12Store:
         inquiry_id: str,
         state: BusinessState,
         event: WorkflowEvent,
+        *,
+        manual_purchase_retry: bool = False,
     ) -> None:
         if event.inquiry_id != inquiry_id:
             raise ValueError("event inquiry identity mismatch")
@@ -283,6 +285,11 @@ class V12Store:
             if state is BusinessState.QUEUED and event.event_type is EventType.HUMAN_RESOLUTION_RECORDED:
                 _recover_alerts(connection, inquiry_id, AlertType.DATA_QUALITY, event,
                     event.occurred_at, scope_key="invalid-quantity")
+                if manual_purchase_retry:
+                    _recover_alerts(connection, inquiry_id, AlertType.PURCHASE_EXCEPTION, event,
+                        event.occurred_at, scope_key="ai-recognition")
+                    _recover_alerts(connection, inquiry_id, AlertType.DUPLICATE_ORDER, event,
+                        event.occurred_at, scope_key="")
 
     def record_missing_customer(self, inquiry_id: str, at: datetime) -> None:
         event = WorkflowEvent(

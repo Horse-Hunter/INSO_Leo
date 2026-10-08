@@ -108,7 +108,7 @@ from .inso_session import (
 )
 from .manual_order import (
     CurrentQuotationStore,
-    InquiryHolds,
+    ManualRetryHolds,
     SingleRowReader,
     current_record,
     editable_value,
@@ -789,8 +789,7 @@ class ProductionBackend(GuiBackend):
                         stop_requested=self._stop.is_set)
                     for recovery in range(4):
                         try:
-                            integrated.run(worksheet)
-                            break
+                            return integrated.run(worksheet)
                         except V12Fault as exc:
                             if exc.reason != "CDP_SESSION_UNAVAILABLE" or recovery == 3:
                                 raise
@@ -1086,14 +1085,16 @@ class ProductionBackend(GuiBackend):
                 if status != "发给采购":
                     raise ValueError("报价重跑要求当前Google状态为发给采购，未修改状态。")
                 runner, holds = self._manual_quote
-                for key, _, observed, reason, _ in holds.active():
-                    if key == inquiry and reason == "SOURCE_STATUS_NOT_UPDATED":
+                manual_holds = ManualRetryHolds(holds, inquiry, identity)
+                for key, _, observed, reason, _ in manual_holds.matched_old:
+                    if reason == "SOURCE_STATUS_NOT_UPDATED":
                         snapshot = json.loads(observed)["identifying_snapshot"]
                         if all(snapshot[name] == getattr(record, name) for name in ("model", "brand", "quantity")):
                             raise ValueError("此前报价脚本已成功，主表状态待核对；不会重复更新报价。")
-                holds.close(inquiry)  # Explicit manual retry releases only this inquiry's existing barrier.
-                runner(identity.worksheet, source_reader=scoped_reader,
-                    source_store=CurrentQuotationStore(item, record), hold_store=InquiryHolds(holds, inquiry))
+                results = runner(identity.worksheet, source_reader=scoped_reader,
+                    source_store=CurrentQuotationStore(item, record), hold_store=manual_holds)
+                if not self._stop.is_set():
+                    manual_holds.finalize(results)
                 message = "报价流程本次处理结束，请查看订单状态。"
             if action != "edit":
                 record, _ = current_record(self._manual_reader, identity.worksheet, identity.row_position)
