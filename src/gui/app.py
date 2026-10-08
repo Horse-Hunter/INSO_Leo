@@ -10,7 +10,7 @@ import logging
 import threading
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from tkinter import messagebox, ttk
+from tkinter import Menu, messagebox, simpledialog, ttk
 from typing import Any
 
 from .contracts import (
@@ -222,6 +222,7 @@ class InsoDashboardApp:
         self._close_finalized = False
         self._login_all_running = False
         self._shown_login_report: SiteLoginReport | None = None
+        self._shown_manual_result = None
 
         self._root = ctk.CTk()
         self._root.title("INSO_V1.3")
@@ -495,6 +496,8 @@ class InsoDashboardApp:
         )
 
         self._tree.bind("<<TreeviewSelect>>", self._on_row_select)
+        self._tree.bind("<Button-3>", self._on_order_context)
+        self._tree.bind("<Double-1>", self._on_order_edit)
 
         detail_card = ctk.CTkFrame(frame, fg_color=_CARD_BG, corner_radius=16)
         detail_card.grid(row=1, column=1, sticky="nsew", padx=(12, 0))
@@ -728,6 +731,7 @@ class InsoDashboardApp:
 
         # Refresh results
         self._refresh_results()
+        self._sync_manual_result()
 
         # Health
         health = self._backend.get_health()
@@ -735,6 +739,54 @@ class InsoDashboardApp:
             lbl = self._health_labels.get(item.component)
             if lbl is not None:
                 lbl.configure(text=item.status, text_color=_status_color(item.status))
+
+    def _on_order_context(self, event):
+        inquiry = self._tree.identify_row(event.y)
+        if not inquiry:
+            return
+        self._tree.selection_set(inquiry)
+        menu = Menu(self._tree, tearoff=False)
+        for label, action in (("重跑采购流程", "purchase"), ("重跑报价流程", "quotation")):
+            enabled = self._backend.can_order_action(inquiry, action)
+            menu.add_command(label=label, state="normal" if enabled else "disabled",
+                command=lambda action=action: self._request_order_action(inquiry, action))
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def _request_order_action(self, inquiry, action, **kwargs):
+        error = self._backend.request_order_action(inquiry, action, **kwargs)
+        if error:
+            messagebox.showwarning("订单操作未执行", error)
+
+    def _on_order_edit(self, event):
+        inquiry = self._tree.identify_row(event.y)
+        column = self._tree.identify_column(event.x)
+        fields = {"#1": ("型号", "model"), "#2": ("品牌", "brand"),
+                  "#3": ("数量", "quantity"), "#4": ("重要程度", "importance")}
+        if inquiry not in self._displayed_orders or column not in fields:
+            return
+        if not self._backend.can_order_action(inquiry, "edit"):
+            messagebox.showinfo("暂不能编辑", "请在15分钟倒计时期间编辑可定位的源表订单。")
+            return
+        label, field = fields[column]
+        order = self._displayed_orders[inquiry]
+        initial = getattr(order, field)
+        value = simpledialog.askstring(f"编辑{label}",
+            f"仅同步源表原行的{label}单元格，其他项不变。",
+            initialvalue=str(initial) if initial is not None else "", parent=self._root)
+        if value is not None:
+            self._request_order_action(inquiry, "edit", field=field, value=value)
+
+    def _sync_manual_result(self):
+        getter = getattr(self._backend, "get_manual_order_result", None)
+        result = getter() if callable(getter) else None
+        if result is None or result.request_id == getattr(self, "_shown_manual_result", None):
+            return
+        self._shown_manual_result = result.request_id
+        if not result.success:
+            messagebox.showwarning("订单操作结果", result.message)
 
     def _refresh_results(self, now: datetime | None = None) -> None:
         self._assert_main_thread()

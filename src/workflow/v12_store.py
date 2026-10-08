@@ -779,6 +779,43 @@ class V12Store:
                 )
             return len(rows)
 
+    def manual_purchase_retry_allowed(self, inquiry_id):
+        try:
+            state = self.business_state(inquiry_id)
+        except KeyError:
+            return False
+        if state in {BusinessState.PURCHASE_RECORDED, BusinessState.SUBMIT_UNCONFIRMED,
+                     BusinessState.STATUS_WRITE_PENDING, BusinessState.HUMAN_COMPLETED,
+                     BusinessState.INTERRUPTED_POSSIBLY_SENT}:
+            return False
+        try:
+            outcome = self.purchase_state(inquiry_id)
+        except KeyError:
+            outcome = None
+        if outcome not in {None, PurchaseOutcome.PRE_SAVE_READY, PurchaseOutcome.AI_RECOGNIZED,
+                            PurchaseOutcome.VALIDATION_FAILED}:
+            return False
+        return not any(event.event_type in {EventType.SAVE_DISPATCH_ARMED,
+            EventType.SAVE_CLICK_COMPLETED, EventType.SAVE_OUTCOME_UNKNOWN,
+            EventType.PURCHASE_DATA_SAVED} for event in self.event_history(inquiry_id))
+
+    def reset_unsubmitted_purchase_for_manual_retry(self, inquiry_id):
+        """Reset only the mutable pre-submit projection; preserve every event/receipt."""
+        if not self.manual_purchase_retry_allowed(inquiry_id):
+            raise ValueError("purchase retry requires a proven unsubmitted inquiry")
+        with _transaction(self.database_path) as connection:
+            # No business worker can overlap the serial idle command. Recheck dispatch
+            # evidence in this transaction so a durable armed flag is never removed.
+            armed = connection.execute(
+                "SELECT 1 FROM workflow_v12_events WHERE inquiry_id=? AND event_type IN (?,?,?,?)",
+                (inquiry_id, EventType.SAVE_DISPATCH_ARMED.value, EventType.SAVE_CLICK_COMPLETED.value,
+                 EventType.SAVE_OUTCOME_UNKNOWN.value, EventType.PURCHASE_DATA_SAVED.value)).fetchone()
+            if armed:
+                raise ValueError("purchase dispatch evidence blocks retry")
+            connection.execute("DELETE FROM workflow_v12_purchase_state WHERE inquiry_id=? AND outcome IN (?,?,?)",
+                (inquiry_id, PurchaseOutcome.PRE_SAVE_READY.value, PurchaseOutcome.AI_RECOGNIZED.value,
+                 PurchaseOutcome.VALIDATION_FAILED.value))
+
     def set_purchase_state(
         self,
         inquiry_id: str,

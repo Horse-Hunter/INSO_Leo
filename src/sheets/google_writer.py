@@ -45,6 +45,17 @@ class GoogleSheetsBrandWriter(TargetedBrandWriter):
         brand_column = worksheet_schema(worksheet.worksheet).brand_column
         self._write_cell(worksheet, row_position, brand_column, brand)
 
+    def write_order_field(self, worksheet, row_position, field, value):
+        """Owner-initiated whitelist; reuse the canonical single-cell RAW writer."""
+        if row_position < 1 or field not in {"model", "brand", "quantity", "importance"}:
+            raise ValueError("invalid editable field or row")
+        schema = worksheet_schema(worksheet.worksheet)
+        column = getattr(schema, {"model": "model_column", "brand": "brand_column",
+                                 "quantity": "quantity_column", "importance": "importance_column"}[field])
+        if column is None:
+            raise ValueError("此工作表的重要程度固定为A，没有可编辑列。")
+        self._write_cell(worksheet, row_position, column, value)
+
     def _write_cell(self, worksheet, row_position, column, value) -> None:
         try:
             (

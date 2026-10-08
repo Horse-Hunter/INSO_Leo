@@ -87,7 +87,8 @@ def fake_inso_session_attachment(monkeypatch):
 
 def test_run_counters_count_business_completion_not_research_completion(tmp_path):
     backend = ProductionBackend(root=tmp_path)
-    backend._inquiries = ["research-only", "sent"]
+    backend._seen("research-only")
+    backend._seen("sent")
     backend._store = SimpleNamespace(all_items=lambda: tuple(
         SimpleNamespace(inquiry_id=iid, status=WorkflowStatus.COMPLETED)
         for iid in backend._inquiries))
@@ -588,7 +589,11 @@ def test_startup_releases_a_research_claim_left_by_an_interrupted_run(
         lambda: backend._store.get(stranded.id).status is WorkflowStatus.MANUAL_REVIEW,
         timeout=8,
     ), "an interrupted inquiry must be quarantined, never resumed automatically"
-    assert backend._v12_store.business_state(stranded.inquiry_id) is BusinessState.INTERRUPTED_UNSENT
+    # Quarantine and its business projection are successive startup transactions.
+    assert _wait_until(
+        lambda: backend._v12_store.business_state(stranded.inquiry_id) is BusinessState.INTERRUPTED_UNSENT,
+        timeout=8,
+    ), "startup must finish the durable interrupted-unsent projection"
 
     backend.request_stop_after_cycle()
     backend._thread.join(timeout=5)
@@ -1612,3 +1617,37 @@ def test_releasing_verified_shell_does_not_trigger_a_second_login(monkeypatch):
     assert len(calls) == 1
     assert "login" not in calls[0]
     assert backend._research_ready is True
+
+
+def test_poll_counters_reset_without_erasing_run_result_identity_or_history(tmp_path):
+    backend = ProductionBackend(root=tmp_path)
+    states = {"first": "RESEARCH_FAILED", "second": "RESEARCHING"}
+    backend._store = SimpleNamespace(all_items=lambda: tuple(SimpleNamespace(inquiry_id=iid, status=WorkflowStatus.COMPLETED) for iid in states))
+    backend._v12_store = SimpleNamespace(business_state=lambda iid: SimpleNamespace(value=states[iid]))
+    backend._seen("first")
+    backend._seen("second")
+    assert backend.get_status().orders_found == 2 and backend.get_status().completed == 1
+    states["second"] = "PURCHASE_RECORDED"
+    assert backend.get_status().completed == 2
+    backend._begin_poll_projection()
+    assert backend.get_status().orders_found == backend.get_status().completed == 0
+    assert backend._inquiries == ["first", "second"]
+    backend._seen("second")
+    assert backend.get_status().orders_found == backend.get_status().completed == 1
+
+
+def test_quotation_terminal_updates_current_poll_counts_without_purchase_completion(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from src.workflow.v13_quotation import QuotationOutcome
+    from tests.workflow.test_v13_quote_update import found
+    backend = ProductionBackend(root=tmp_path)
+    monkeypatch.setattr(backend, "_refresh", lambda: None)
+    monkeypatch.setattr(backend, "_notify", lambda: None)
+    pending = found()
+    backend._observe_quotation(pending, pending.inquiry_id)
+    assert backend.get_status().orders_found == 1 and backend.get_status().completed == 0
+    backend._observe_quotation(replace(pending, outcome=QuotationOutcome.UPDATED_INSERTED), pending.inquiry_id)
+    assert backend.get_status().orders_found == backend.get_status().completed == 1
+    backend._begin_poll_projection()
+    assert backend.get_status().orders_found == backend.get_status().completed == 0

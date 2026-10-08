@@ -93,3 +93,25 @@ def test_google_write_failure_is_sheets_owned() -> None:
         writer.write_brand(worksheet(), 12, "Resolved Brand")
 
     assert isinstance(raised.value.__cause__, RuntimeError)
+
+
+@pytest.mark.parametrize("title,field,column", [
+    ("2026", "model", "E"), ("2026", "brand", "F"),
+    ("2026", "quantity", "G"), ("2026", "importance", "C"),
+    ("SHAHAB", "model", "D"), ("SHAHAB", "brand", "E"), ("SHAHAB", "quantity", "F"),
+])
+def test_owner_edit_exact_schema_cell_and_raw_literal(title, field, column):
+    service = FakeSheetsService()
+    target = WorksheetIdentity("fake-id", title)
+    GoogleSheetsBrandWriter(service).write_order_field(target, 8, field, "=literal")
+    call, = service.values_resource.update_calls
+    assert call["range"] == f"'{title}'!{column}8"
+    assert call["valueInputOption"] == "RAW" and call["body"]["values"] == [["=literal"]]
+
+
+@pytest.mark.parametrize("title,field", [("SHAHAB", "importance"), ("2026", "status"), ("2026", "A")])
+def test_owner_edit_forbidden_or_absent_column_never_writes(title, field):
+    service = FakeSheetsService()
+    with pytest.raises(ValueError):
+        GoogleSheetsBrandWriter(service).write_order_field(WorksheetIdentity("fake-id", title), 8, field, "A")
+    assert service.values_resource.update_calls == []

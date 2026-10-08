@@ -15,6 +15,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from time import monotonic
 
 from src.core.app_paths import app_root, resolve_app_path, runtime_config_path
 from src.gui.contracts import (
@@ -23,6 +24,7 @@ from src.gui.contracts import (
     HealthItem,
     HealthReport,
     LogEntry,
+    ManualOrderResult,
     Order,
     OrderStatus,
     RunSession,
@@ -103,6 +105,13 @@ from .inso_session import (
     InsoSessionGuard,
     InsoSessionOutcome,
     attach_inso_research_session,
+)
+from .manual_order import (
+    CurrentQuotationStore,
+    InquiryHolds,
+    SingleRowReader,
+    current_record,
+    editable_value,
 )
 from .site_login_sweep import SiteSweepError, sweep_sites
 from .v12_composition import (
@@ -456,6 +465,12 @@ class ProductionBackend(GuiBackend):
         self._research_acquire_failure = None
         self._research_gate = threading.Lock()
         self._lock = threading.RLock()
+        self._manual_condition = threading.Condition(self._lock)
+        self._manual_request = None
+        self._manual_busy = False
+        self._manual_result = None
+        self._manual_reader = self._manual_write_service = self._manual_quote = None
+        self._source_overrides = {}
         self._v13_states = {}
         self._v13_unbound = {}
         self._combined = None
@@ -477,6 +492,8 @@ class ProductionBackend(GuiBackend):
         self._idle_login_since = utc_now()
         self._row_cooldown_until = None
         self._inquiries = []
+        self._poll_inquiries = set()
+        self._poll_quotation_completed = set()
         self._results = ()
         self._history = ()
         self._history_fingerprint = None
@@ -552,6 +569,11 @@ class ProductionBackend(GuiBackend):
             self._started = utc_now()
             self._stopped = None
             self._inquiries = []
+            self._manual_request = None
+            self._manual_busy = False
+            self._manual_result = None
+            self._poll_inquiries.clear()
+            self._poll_quotation_completed.clear()
             self._manual_inquiries.clear()
             self._results = ()
             self._last_poll = None
@@ -576,6 +598,7 @@ class ProductionBackend(GuiBackend):
                 with self._poll_gate:
                     self._drain_due_on_stop.set()
                     self._stop.set()
+                    self._manual_condition.notify_all()
                 self._notify()
 
     def _immediate_stop_requested(self):
@@ -633,6 +656,8 @@ class ProductionBackend(GuiBackend):
             self._v12_store = V12Store(db)
             status_writer = None
             write_service = None
+
+            self._manual_reader = reader
 
             def get_write_service():
                 nonlocal write_service
@@ -740,8 +765,11 @@ class ProductionBackend(GuiBackend):
 
                 quotation_fx = EcbDailyUsdRmbProvider()
 
-                def run_quotation(worksheet):
-                    cycle = V13QuotationCycle(reader=reader, store=self._store,
+                def run_quotation(worksheet, *, source_store=None, source_reader=None, hold_store=None):
+                    active_reader = source_reader or reader
+                    active_store = source_store or self._store
+                    active_holds = hold_store or holds
+                    cycle = V13QuotationCycle(reader=active_reader, store=active_store,
                         operations=self._v13_operations(rc, cfg), clock=utc_now,
                         wait=self._stop.wait, stop_requested=self._stop.is_set, fx_provider=quotation_fx)
                     def updater():
@@ -751,11 +779,11 @@ class ProductionBackend(GuiBackend):
                         except Exception:  # noqa: BLE001 - shared cached Sheets authorization boundary
                             raise V12Fault(FaultScope.GLOBAL_STOP,"SHEETS_AUTH_UNAVAILABLE") from None
                         return build_v13_quotation_updater(
-                            service=service, source_reader=reader,
-                            store=self._store, browser_handle=handle, location=location,
+                            service=service, source_reader=active_reader,
+                            store=active_store, browser_handle=handle, location=location,
                             wait=self._stop.wait, stop_requested=self._immediate_stop_requested)
-                    integrated = V13IntegratedCycle(reader=reader, store=self._store,
-                        holds=holds, cycle=cycle, updater_factory=updater,
+                    integrated = V13IntegratedCycle(reader=active_reader, store=active_store,
+                        holds=active_holds, cycle=cycle, updater_factory=updater,
                         notify=lambda result,key,episode: notify_quotation(self._v12_store,
                             result,key,episode,at=utc_now()), observe=self._observe_quotation,
                         stop_requested=self._stop.is_set)
@@ -771,9 +799,11 @@ class ProductionBackend(GuiBackend):
                                 handle.disconnect()
                             self._browser_handle = None
                             self._v13_browser(rc,cfg)
+                self._manual_quote = (run_quotation, holds)
                 self._combined = CombinedCycle(self._v12_composition.coordinator,
                     run_quotation, on_pause=self._pause_v12,
                     stop_requested=self._stop.is_set)
+            self._manual_write_service = get_write_service
             self._refresh_history(force=True)
             self._set_health(("正常", "待命", "正常", "正常"), "正常")
 
@@ -793,6 +823,7 @@ class ProductionBackend(GuiBackend):
                         try:
                             self._last_poll = utc_now()
                             self._cycle_id = "cycle_" + uuid.uuid4().hex
+                            self._begin_poll_projection()
                             if self._combined is not None:
                                 self._combined.run(reader, worksheets, now=self._last_poll)
                             else:
@@ -825,7 +856,7 @@ class ProductionBackend(GuiBackend):
                         finally:
                             self._close_inso_order_tab()
                             self._poll_idle.set()
-                        if self._stop.wait(runtime.poll_interval.total_seconds()):
+                        if self._wait_between_polls(runtime.poll_interval.total_seconds()):
                             return
                 except V13Stopped:
                     pass
@@ -938,6 +969,11 @@ class ProductionBackend(GuiBackend):
 
     def _observe_quotation(self, result, key):
         dto = quotation_gui(result,key)
+        with self._lock:
+            inquiry = result.inquiry_id or key
+            self._poll_inquiries.add(inquiry)
+            if result.outcome.value in {"NO_RECENT_QUOTE", "ROW_FAILED", "UPDATED_INSERTED", "UPDATED_ALREADY_EXISTS"}:
+                self._poll_quotation_completed.add(inquiry)
         if dto is not None:
             with self._lock:
                 self._v13_states[key] = dto
@@ -954,8 +990,147 @@ class ProductionBackend(GuiBackend):
         self._refresh()
         self._notify()
 
+    def _manual_idle(self):
+        return (self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}
+            and self._next_poll_at is not None and self._next_poll_at > utc_now()
+            and self._poll_idle.is_set() and not self._stop.is_set()
+            and not self._manual_busy and self._manual_request is None)
+
+    def can_order_action(self, inquiry_id, action):
+        with self._lock:
+            if not self._manual_idle() or self._store is None or self._manual_reader is None:
+                return False
+            try:
+                self._store.get_by_inquiry_id(inquiry_id)
+                if action == "purchase":
+                    return (self._state is RunState.RUNNING and self._v12_store is not None
+                        and self._v12_store.manual_purchase_retry_allowed(inquiry_id))
+                return action == "edit" or (action == "quotation" and self._manual_quote is not None)
+            except (KeyError, sqlite3.Error, V12DatabaseError):
+                return False
+
+    def request_order_action(self, inquiry_id, action, *, field=None, value=None):
+        with self._manual_condition:
+            if not self.can_order_action(inquiry_id, action):
+                return "仅能在倒计时期间操作可定位的订单；已发送或结果不明的采购不能重发。"
+            try:
+                if action == "edit":
+                    value = editable_value(field, value)
+            except ValueError as exc:
+                return str(exc)
+            self._manual_request = (uuid.uuid4().hex, inquiry_id, action, field, value)
+            self._manual_result = None
+            self._manual_condition.notify_all()
+        self._notify()
+        return None
+
+    def get_manual_order_result(self):
+        with self._lock:
+            return self._manual_result
+
+    def _wait_between_polls(self, seconds):
+        deadline = monotonic() + seconds
+        while not self._stop.is_set():
+            with self._manual_condition:
+                if self._stop.is_set():
+                    self._manual_request = None
+                    return True
+                request, self._manual_request = self._manual_request, None
+                if request is None:
+                    remaining = deadline - monotonic()
+                    if remaining <= 0:
+                        return False
+                    self._manual_condition.wait(min(remaining, 0.25))
+                    continue
+                self._manual_busy = True
+                self._next_poll_at = None
+                self._poll_idle.clear()
+            self._notify()
+            try:
+                self._execute_order_action(request)
+            finally:
+                self._close_inso_order_tab()
+                with self._lock:
+                    self._manual_busy = False
+                    self._poll_idle.set()
+                    if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING} and not self._stop.is_set():
+                        self._next_poll_at = utc_now() + timedelta(seconds=seconds)
+                self._notify()
+            deadline = monotonic() + seconds
+        return True
+
+    def _execute_order_action(self, request):
+        request_id, inquiry, action, field, value = request
+        success, message = False, "操作未执行。"
+        try:
+            item = self._store.get_by_inquiry_id(inquiry)
+            identity = item.record_identity
+            record, status = current_record(self._manual_reader, identity.worksheet, identity.row_position)
+            scoped_reader = SingleRowReader(self._manual_reader, identity.worksheet, identity.row_position)
+            if action == "edit":
+                from src.sheets.google_writer import GoogleSheetsBrandWriter
+                writer = GoogleSheetsBrandWriter(self._manual_write_service())
+                writer.write_order_field(identity.worksheet, identity.row_position, field, value)
+                record, _ = current_record(self._manual_reader, identity.worksheet, identity.row_position)
+                if getattr(record, "importance_raw" if field == "importance" else field) != value:
+                    raise ValueError("写入结果未能确认，请重新读取表格；不会自动重复写入。")
+                message = "单元格已同步并读回确认。"
+            elif action == "purchase":
+                if status != "未发":
+                    raise ValueError("采购重跑要求当前Google状态为未发，未修改状态。")
+                self._poll_quotation_completed.discard(inquiry)
+                self._v13_states.pop(inquiry, None)
+                self._v12_composition.coordinator.rerun_unsubmitted(inquiry, record, scoped_reader, now=utc_now())
+                message = "采购流程本次处理结束，请查看订单状态。"
+            else:
+                if status != "发给采购":
+                    raise ValueError("报价重跑要求当前Google状态为发给采购，未修改状态。")
+                runner, holds = self._manual_quote
+                for key, _, observed, reason, _ in holds.active():
+                    if key == inquiry and reason == "SOURCE_STATUS_NOT_UPDATED":
+                        snapshot = json.loads(observed)["identifying_snapshot"]
+                        if all(snapshot[name] == getattr(record, name) for name in ("model", "brand", "quantity")):
+                            raise ValueError("此前报价脚本已成功，主表状态待核对；不会重复更新报价。")
+                holds.close(inquiry)  # Explicit manual retry releases only this inquiry's existing barrier.
+                runner(identity.worksheet, source_reader=scoped_reader,
+                    source_store=CurrentQuotationStore(item, record), hold_store=InquiryHolds(holds, inquiry))
+                message = "报价流程本次处理结束，请查看订单状态。"
+            if action != "edit":
+                record, _ = current_record(self._manual_reader, identity.worksheet, identity.row_position)
+            with self._lock:
+                self._source_overrides[inquiry] = {"model": record.model, "brand": record.brand,
+                    "quantity": _integer(record.quantity, 0), "importance": record.importance_raw}
+            success = True
+            self._refresh_history(force=True)
+        except V12Fault as exc:
+            if exc.scope is FaultScope.GLOBAL_STOP:
+                self._state = RunState.GLOBAL_STOP
+                raise
+            if self._combined is not None:
+                self._combined.v12_paused = True
+            self._pause_v12(exc)
+            message = "采购流程需要人工处理，报价轮询保持原有独立策略。"
+        except (KeyError, ValueError) as exc:
+            message = str(exc) if isinstance(exc, ValueError) else "找不到订单的源表定位，未执行操作。"
+        except Exception:  # noqa: BLE001 - targeted edit/read failure is shown without raw provider text
+            if action != "edit":
+                raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE" if action == "quotation" else "V12_MANUAL_RETRY_FAILED") from None
+            message = "单元格同步失败或结果未确认，请重新读取表格；不会自动重复写入。"
+        with self._lock:
+            self._manual_result = ManualOrderResult(request_id, inquiry, action, success, message)
+        self._append_log("INFO" if success else "WARNING", message)
+        self._refresh()
+
+    def _begin_poll_projection(self):
+        with self._lock:
+            self._poll_inquiries.clear()
+            self._poll_quotation_completed.clear()
+            self._next_poll_at = None
+        self._notify()
+
     def _seen(self, inquiry):
         with self._lock:
+            self._poll_inquiries.add(inquiry)
             if inquiry not in self._inquiries:
                 self._inquiries.append(inquiry)
 
@@ -1650,18 +1825,17 @@ class ProductionBackend(GuiBackend):
     def get_status(self):
         with self._lock:
             items = self._store.all_items() if self._store else ()
+            known_ids = {item.inquiry_id for item in items}
             return RunSession(
                 self._run_id,
                 self._state,
                 self._started,
                 self._stopped,
-                len(self._inquiries),
-                sum(
-                    i.inquiry_id in self._inquiries
-                    and self._business_completed(i.inquiry_id)
-                    for i in items
-                ),
-                int(self._active_inso_inquiry is not None),
+                len(self._poll_inquiries),
+                sum(inquiry in self._poll_quotation_completed or
+                    (inquiry in known_ids and self._business_completed(inquiry))
+                    for inquiry in self._poll_inquiries),
+                int(self._active_inso_inquiry is not None or self._manual_busy),
                 sum(
                     i.status in (WorkflowStatus.QUEUED, WorkflowStatus.RETRY_WAIT)
                     for i in items
@@ -1706,7 +1880,8 @@ class ProductionBackend(GuiBackend):
 
     def get_result_history(self):
         with self._lock:
-            return self._history
+            return tuple(replace(order, **self._source_overrides[order.inquiry_id])
+                if order.inquiry_id in self._source_overrides else order for order in self._history)
 
     def get_v12_order_state(self, inquiry_id):
         if inquiry_id in self._v13_states:

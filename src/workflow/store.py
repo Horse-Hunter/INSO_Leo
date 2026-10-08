@@ -399,6 +399,7 @@ class WorkflowStateStore:
         record: PendingSheetRecord,
         *,
         now: datetime | None = None,
+        manual_retry: bool = False,
     ) -> bool:
         """Re-queue a row that was held back for invalid input.
 
@@ -412,14 +413,16 @@ class WorkflowStateStore:
 
         changed_at = _as_utc(now or datetime.now(UTC))
         with self._connect() as connection:
+            extra = "research_status=NULL, resolved_brand=NULL, brand_update_status=NULL," if manual_retry else ""
+            statuses = "'FAILED', 'MANUAL_REVIEW', 'COMPLETED', 'QUEUED', 'RETRY_WAIT'" if manual_retry else "'FAILED', 'MANUAL_REVIEW'"
             cursor = connection.execute(
-                """
+                f"""
                 UPDATE workflow_items
-                SET status = 'QUEUED', attempt_count = 0, next_attempt_at = ?,
+                SET {extra} status = 'QUEUED', attempt_count = 0, next_attempt_at = ?,
                     record_identity_json = ?, mpn_json = ?, brand_json = ?,
                     quantity_json = ?, importance_raw_json = ?,
                     last_error = NULL, updated_at = ?
-                WHERE id = ? AND status IN ('FAILED', 'MANUAL_REVIEW')
+                WHERE id = ? AND status IN ({statuses})
                 """,
                 (
                     _time_to_text(changed_at),

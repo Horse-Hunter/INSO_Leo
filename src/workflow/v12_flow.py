@@ -166,6 +166,24 @@ class V12WorkflowCoordinator:
         self._row_closed = False
         self.pending_rows_seen = 0
 
+    def rerun_unsubmitted(self, inquiry_id, record, reader, *, now):
+        """Explicit Owner retry through the original coordinator and submit guard."""
+        item = self._workflow_store.get_by_inquiry_id(inquiry_id)
+        if (record.status != "未发" or record.record_identity.worksheet != item.record_identity.worksheet
+                or record.row_position != item.record_identity.row_position):
+            raise ValueError("source row/status does not allow purchase retry")
+        if not self._v12_store.manual_purchase_retry_allowed(inquiry_id):
+            raise ValueError("purchase retry is unsafe")
+        if not self._workflow_store.revive_item(item.id, record, now=now, manual_retry=True):
+            raise ValueError("inquiry is still running")
+        self._v12_store.reset_unsubmitted_purchase_for_manual_retry(inquiry_id)
+        self._set_state(inquiry_id, BusinessState.QUEUED, EventType.HUMAN_RESOLUTION_RECORDED, now)
+        self._research_results.pop(inquiry_id, None)
+        self._duplicate_results.pop(inquiry_id, None)
+        self._current_reader = reader
+        self.begin_poll_cycle()
+        return self.process_pending((record,), now=now)
+
     def _before_next_row(self) -> bool:
         if self._row_closed and self._row_wait(120):
             return False

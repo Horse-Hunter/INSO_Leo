@@ -272,7 +272,7 @@ def test_actual_poll_finally_preserves_keepalive_targets_and_next_cycle(tmp_path
                 return True
             return False
         return original_wait(seconds)
-    backend._stop.wait = wait
+    backend._wait_between_polls = wait
     try:
         backend.start()
         backend._thread.join(timeout=8)

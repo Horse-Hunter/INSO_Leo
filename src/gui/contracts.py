@@ -322,6 +322,15 @@ class LogEntry:
     message: str
 
 
+@dataclass(frozen=True, slots=True)
+class ManualOrderResult:
+    request_id: str
+    inquiry_id: str
+    action: str
+    success: bool
+    message: str
+
+
 class GuiBackend(ABC):
     """Abstract production/mock backend that the INSO_V1.0 GUI drives.
 
@@ -357,6 +366,17 @@ class GuiBackend(ABC):
     def get_v12_order_state(self, inquiry_id: str) -> V12OrderStateDTO | None:
         """Return optional V1.2 state without changing the V1.1 dashboard contract."""
 
+        return None
+
+    def can_order_action(self, inquiry_id: str, action: str) -> bool:
+        """Optional idle-only single-order capability."""
+        return False
+
+    def request_order_action(self, inquiry_id: str, action: str, *, field=None, value=None) -> str | None:
+        """Queue one serial action; return a safe rejection message, or None."""
+        return "当前后端不支持此操作。"
+
+    def get_manual_order_result(self) -> ManualOrderResult | None:
         return None
 
     def start_login_all_sites(self) -> None:
