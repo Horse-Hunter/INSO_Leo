@@ -23,10 +23,10 @@ baseline2a32007 and RFQ-007 reviewed2c9f704 remain approved; RFQ-007 status is u
 
 ## V1.3 post-review Owner increment sync — 2026-10-08
 
-Increment review status: REVIEW_REQUIRED on `codex/v13-readiness-repair`.
+Increment review status: REVIEWED_DONE on `codex/v13-readiness-repair`.
 Scope: background Chrome, purchase-completion false alarm, fuzzy model comparison,
 source B/actual-model L notification, final INSO original-full-model search.
-Owner-authorized production deployment is recorded separately from CEO PASS.
+Owner-authorized production deployment is recorded separately; CEO independent PASS is recorded in `control-room/RFQ-008/CEO_SYNC_REPORT_2026-10-08.md`.
 Report: `control-room/RFQ-008/CEO_SYNC_REPORT_2026-10-08.md`.
 Historical RFQ REVIEWED_DONE records above are unchanged. Existing quotation hold
 in Owner's selected case remains unresolved; no automatic replay was performed.
