@@ -214,3 +214,16 @@ def test_procurement_reader_queries_prefix_once_and_filters_full_original_target
     assert frame.value == "WGI210"
     assert len(capture.records) == 1
     assert capture.records[0].mpn == matched["PartNo"]
+
+
+def test_separated_model_query_keeps_duplicate_matching_and_rejects_other_models():
+    from contextlib import nullcontext
+    matched, other = row(1), row(2)
+    matched["PartNo"], other["PartNo"] = "RM342-059-581-7200", "RM342-999-581-7200"
+    frame = LowerFrame([[matched, other]], total=2)
+    access = SimpleNamespace(operation_page=lambda: nullcontext(SimpleNamespace(shell_frame=frame)))
+    reader = InsoDuplicateHistoryReader(list_url="https://yingsuo.alperp.cn",
+        procurement_history=True, operation_access=access)
+    capture = reader.read("RM342-059-581-7200")
+    assert frame.value == "RM342"
+    assert [record.mpn for record in capture.records] == [matched["PartNo"]]

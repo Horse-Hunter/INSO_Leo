@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from src.core.mpn import lookup_mpn_matches, lookup_mpn_prefix
+from src.core.mpn import inso_lookup_query, lookup_mpn_matches, lookup_mpn_prefix
 
 from .duplicate_history import (
     DuplicateHistoryFailure,
@@ -165,7 +165,7 @@ class InsoQuotationReader:
         try:
             with access.operation_page() as operation:
                 payload = self._page_factory(operation.shell_frame).query_exact_response(
-                    lookup_mpn_prefix(mpn), capture_page=capture_quotation_page,
+                    inso_lookup_query(mpn), capture_page=capture_quotation_page,
                 )
             rows = payload.get("rows")
             if not isinstance(rows, list):

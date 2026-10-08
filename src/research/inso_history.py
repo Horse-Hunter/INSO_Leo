@@ -19,7 +19,7 @@ from ipaddress import ip_address
 from typing import Protocol
 from urllib.parse import urlsplit
 
-from src.core.mpn import lookup_mpn_matches, lookup_mpn_prefix
+from src.core.mpn import inso_lookup_query, lookup_mpn_matches
 from src.inso.session import InsoOperationAccess
 
 from .fx import UsdRmbProvider, UsdRmbQuote
@@ -272,7 +272,7 @@ class PlaywrightInsoReadOnlyBrowser:
             else self._operation_access
         )
 
-        mpn_clean = lookup_mpn_prefix(mpn)
+        mpn_clean = inso_lookup_query(mpn)
         if not mpn_clean:
             raise InsoReadError("QUERY_MPN_REQUIRED")
         url = (

@@ -382,3 +382,17 @@ def test_inso_history_filters_actual_models_before_price_and_keeps_suffix_eviden
     assert result.price_candidate.raw_price == Decimal("1.25")
     assert result.price_candidate.matched_mpn == "WGI210IT S LJXS"
     assert result.evidence.matched_mpn == "WGI210IT S LJXS"
+
+
+def test_separated_model_research_api_uses_literal_token_and_converts_usd():
+    import json
+    captured = {}
+    page = FakePage(json.dumps({"rows": [{"CreateTime": "2026-09-24 08:00:00",
+        "InPrice": "1.25", "CurrencyID": "USD", "PartNo": "RM342-059-581-7200"}]}), captured)
+    browser = PlaywrightInsoReadOnlyBrowser(InsoBrowserConfig(login_url="https://inso.example/"),
+        settle_ms=0, operation_access=FakeOperationAccess(page))
+    capture = browser.fetch_procurement_temporary_inquiry_history("RM342-059-581-7200", InsoLogin("u", "p"))
+    assert "searchData[DetailFieldValue]=RM342&" in captured["data"]
+    assert "para=RM342&" in captured["url"]
+    assert capture.records[0].mpn == "RM342-059-581-7200"
+    assert InsoHistoryAdapter._to_normalized_rmb(capture.records[0], Fx().get_quote()) == Decimal("8.75")

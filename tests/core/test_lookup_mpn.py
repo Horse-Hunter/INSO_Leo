@@ -29,3 +29,14 @@ def test_directional_short_empty_and_preserved_symbols(target, observed, expecte
 def test_normalization_removes_only_authorized_separators():
     assert normalize_lookup_mpn("w_g\u200b i\ufeff-210−it\u2060") == "WGI210IT"
     assert normalize_lookup_mpn("A/+().B") == "A/+().B"
+
+
+@pytest.mark.parametrize("target, expected", [
+    ("RM342-059-581-7200", "RM342"), ("WGI210IT", "WGI210"),
+    ("  WGI210IT  ", "WGI210"), ("WGI210_IT", "WGI210"),
+    ("RM342–059_581 7200", "RM342"), (" A_B ", "A"),
+    ("ABC-1", "AB"), (" _− ", ""), (None, ""),
+])
+def test_inso_literal_candidate_query_does_not_concatenate_separators(target, expected):
+    from src.core.mpn import inso_lookup_query
+    assert inso_lookup_query(target) == expected

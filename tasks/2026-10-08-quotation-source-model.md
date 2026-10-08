@@ -23,3 +23,6 @@ pending
 
 ## additional Owner read-only checks
 After the input fix, inspect currency handling in all lower-history consumers and read-only source/INSO/local logs for RM342-059-581-7200 no-stock quote. Authorizes targeted read-only production diagnosis, not replay/update/SMTP. Preserve UNKNOWN until evidence is read.
+
+## read-only diagnosis and necessary correction
+Actual ERP evidence proves normalized separator-concatenated query misses a valid separated model. Correct only the three canonical INSO candidate queries using a shared initial literal token; retain full normalized Owner match, bounded verified pagination, date/currency/zero rules. No live update/replay/SMTP. Add separator retrieval regressions and re-run full validation/build.

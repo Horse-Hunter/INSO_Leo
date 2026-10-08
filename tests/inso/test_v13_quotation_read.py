@@ -275,3 +275,19 @@ def test_owner_suffix_reader_and_lowest_price_across_pages_preserve_raw14():
     assert selected.payload == suffixed.payload
     assert selected.payload[1] == "WGI210IT S LJXS"
     assert selected.payload[7] == "0000.7500"
+
+
+def test_separated_model_no_stock_quote_is_retrieved_and_selected_without_fx():
+    original = quote(model="RM342-059-581-7200")
+    values = list(original.payload)
+    values[4], values[7], values[11] = "USD", "0", "无货"
+    matched, other = row(1), row(2)
+    matched["PartNo"], other["PartNo"] = original.payload[1], "RM342-999-581-7200"
+    other_quote = quote(model=other["PartNo"])
+    frame = DisplayFrame([[matched, other]], [[values, list(other_quote.payload)]], 2)
+    records = InsoQuotationReader().read(access(frame), original.payload[1])
+    assert frame.value == "RM342"
+    assert len(records) == 1
+    selected = select_recent_lowest(records, queried_mpn=original.payload[1], now=NOW,
+        currency_rate=lambda _: pytest.fail("zero quote must not fetch FX"))
+    assert selected.payload == tuple(values)

@@ -33,7 +33,7 @@ from time import monotonic
 from typing import Protocol
 from urllib.parse import parse_qs, urlsplit
 
-from src.core.mpn import lookup_mpn_matches, lookup_mpn_prefix
+from src.core.mpn import inso_lookup_query, lookup_mpn_matches, lookup_mpn_prefix
 
 from .session import InsoOperationAccess, SecurityViolation
 
@@ -369,7 +369,7 @@ class InsoDuplicateHistoryReader:
                     )
                     live_page = page_type(operation_page.shell_frame, timeout_ms=self._timeout_ms)
                     payload = live_page.query_exact_response(
-                        lookup_mpn_prefix(target) if self._procurement_history else target
+                        inso_lookup_query(target) if self._procurement_history else target
                     )
                     records = self._records_from_response(payload, since=since, target_mpn=target)
                 else:
