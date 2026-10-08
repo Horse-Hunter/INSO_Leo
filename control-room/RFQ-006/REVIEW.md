@@ -295,3 +295,25 @@ No additional live business action is required to repair B1/B2. Both can and sho
 ## State transition
 
 `REVIEW_REQUIRED -> CHANGES_REQUESTED`
+
+---
+# RFQ-006 Final Repair CEO Review — 2026-10-08
+
+**Verdict:** PASS / REVIEWED_DONE
+**Reviewed HEAD:** `ebb79754dd3ce1354b252d36d52f54703638f090`
+**Base:** `c596adafd4e14881e292851e51c7375841e92c20`
+
+B1 PASS: Google quote result dismissal now proves both Script start and Script settlement. The latch is armed before the exact 确定 click; immediate absence of 正在运行脚本 is not accepted as completion. Never-start, never-settle and CDP/DOM uncertainty fail closed as `GLOBAL_STOP / GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED`; `_script_pending` remains true, the page is preserved, and another row cannot open/write/click.
+
+B2 PASS: idle-login/manual and pre-existing nonblank pages are protected by stable CDP target IDs and all backend park paths are preservation-aware. They survive poll-finally cleanup and reconnect wrappers. Owner-closed targets are pruned and normal exactly-one-`about:blank` parking resumes. Keepalive failure still only queues owner notification and does not create business hold/pause/global-stop.
+
+Owner S-as-A PASS: canonical `_tier()` maps raw `S` to effective `A`; A/B/C remain unchanged and other values remain invalid. Raw S is preserved in PendingSheetRecord, WorkItem and source identity; no source cell is rewritten. Fresh S rows run Research and use A-equivalent important-order/purchase routing; legacy skipped S revives the same inquiry and recovers only the stale invalid-input alert.
+
+Regression evidence reported for this exact HEAD: focused 459 passed; full safe/offline 1431 passed / 1 skipped; Ruff PASS; git diff check PASS; V1.3 BuildOnly PASS; frozen self-check PASS; release scan PASS.
+
+Candidate EXE SHA256:
+`77A861A40AE042BDC75A6AB1FBA7E6A5C0794052B9A972A28DEEAFBECC9CA126`
+
+No new live purchase, Save-and-Send, quotation write/update, Apps Script or real SMTP was executed in this repair. Remaining live-only unknowns are first-insert source transition, mixed-currency live acceptance, real all-site idle keepalive, and actual SMTP delivery.
+
+**State:** CHANGES_REQUESTED -> REVIEW_REQUIRED -> REVIEWED_DONE.
