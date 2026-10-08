@@ -87,3 +87,174 @@
 3. Owner 已授权部署与独立 CEO Review 状态分开记录。本次增量请求 REVIEW_REQUIRED，不自行改成 REVIEWED_DONE。
 
 本 report 与实现同步到现有分支，未另建架构/浏览器/通知系统，未发送跨任务消息。实现/测试/部署验证未执行真实采购、Save-and-Send、Google 报价输入写入/更新报价、Apps Script、SMTP 测试或历史订单重放；Owner 自行运行的业务不计为部署验证。
+
+---
+
+# CEO Independent Review — V1.3 post-review Owner increment
+
+Date: 2026-10-08  
+Status: COMPLETE  
+Verdict: **PASS / REVIEWED_DONE**  
+Reviewed sync HEAD: `e62f3265c359d394f4b276add0a07cb03ee9ca65`  
+Reviewed production-code HEAD: `20fad4938a8312da00b1bd48e10af4f3c1bdbc8f`  
+Reviewed baseline: `df64762ae6ad0893879814e847888246f5b5a93f`
+
+## Decision
+
+PASS. No new production blocker was found in the increment from the previously reviewed dashboard baseline through the final original-full-model INSO search correction.
+
+The reviewed implementation preserves the existing irreversible-purchase and quotation replay barriers, source identity rules, durable quotation holds, notification outbox and fixed-CDP architecture.
+
+## Chrome background operation
+
+PASS.
+
+Automatic operation/cleanup surfaces that previously used foreground `context.new_page()` now use the existing CDP background-target primitive for:
+
+- Google quotation input;
+- quote last-tab keepalive;
+- INSO login/recovery pages;
+- shared-CDP parking blank pages.
+
+There is no second Chrome/profile, focus-restoring timer, persistent hiding loop or fallback to foreground page creation after protocol failure.
+
+When the context is empty, the first target requests a new minimized window at creation. Explicit Owner-triggered login sweep failures still retain/present the human-verification page; automatic maintenance remains non-presenting.
+
+The reported live probe is correctly limited to the existing minimized fixed Chrome and does not overclaim cold-start or universal OS focus behavior.
+
+## Purchase-status completion / false-alarm repair
+
+PASS.
+
+A uniquely relocated source row in either `发给采购` or the later `采购已报价` state now satisfies the already-sent purchase-status obligation without writing the source backward.
+
+The completion proof remains strict on:
+
+- canonical source identity;
+- exact model;
+- exact quantity;
+- exact importance/tier source snapshot;
+- unique relocation;
+- canonical expected source brand, with only the already-approved AI_BRAND_V1 fuzzy brand policy.
+
+A durable `SAVED + STATUS_WRITE_PENDING` row may recover its local V1.2 projection to `PURCHASE_RECORDED` only after a fresh read-only proof that the same source row is already `发给采购` or `采购已报价`. The repair does not infer purchase success from Google status alone, does not call Save/Save-and-Send again, and does not create a new purchase-follow-up sending episode for an already-satisfied row.
+
+The revised operator message also no longer instructs a downgrade from `采购已报价`.
+
+## Shared fuzzy MPN comparison
+
+PASS.
+
+The shared `src/core/mpn.py` policy implements the Owner-defined comparison rule:
+
+- NFKC and case normalization;
+- remove whitespace, underscore, Unicode dash punctuation/minus and specified invisible separators;
+- for cleaned targets longer than two characters, remove the last two characters to form the comparison prefix;
+- the returned model must start with that prefix and may contain at most ten cleaned characters after it;
+- cleaned 1–2 character targets remain exact;
+- empty values never match.
+
+Research result comparison, lower procurement-history duplicate filtering and quotation candidate filtering reuse this single policy. Exact Google source identity and purchase submission validation do not use the fuzzy policy.
+
+The broader native-query behavior on the five non-INSO Research sources remains the approved fuzzy-search behavior from this increment; live-site recall/pagination limits remain an acknowledged external limitation rather than being presented as exhaustive.
+
+## Final INSO search boundary
+
+PASS.
+
+The final Owner clarification is correctly reflected in all three lower INSO consumers:
+
+- Research INSO;
+- procurement-history duplicate check;
+- V1.3 quotation read.
+
+They now send the original complete source-model string through the INSO search boundary. Case, whitespace, underscore and dash characters are not normalized before search; HTTP paths/forms encode the original string only as transport data. The duplicate bridge no longer substitutes its canonical comparison key.
+
+Normalization and two-tail-character removal are applied only when returned models are compared.
+
+This final behavior supersedes the intermediate cleaned-prefix / first-literal-token retrieval commits; those intermediate behaviors are not treated as current production semantics.
+
+## Quotation input B/L and model-difference notification
+
+PASS.
+
+The selected INSO raw14 remains immutable evidence. A separate derived fourteen-field payload is created only after a fresh canonical source rebind:
+
+- B is replaced with the current exact source-model text;
+- if the selected quote model is literally different, L retains its original remark and appends `报价实际型号：<actual>` on a new line;
+- all other fields remain derived from the selected raw14 unchanged.
+
+The updater rechecks the exact source model before writing/submitting; a source-model change between preparation and action fails closed as `SOURCE_CHANGED`.
+
+Model differences enqueue one durable command to both:
+
+- `linan229@qq.com`;
+- `shawn@inso-hk.com`.
+
+Deduplication includes inquiry id, exact source model and selected immutable quote payload. The existing outbox owns per-recipient independent retry. The message explicitly reports a detected model difference and does not claim that Apps Script or source-status settlement completed.
+
+No new SMTP implementation/schema was introduced.
+
+## Existing quotation safety / WGI210IT
+
+PASS with an explicit unresolved operational item.
+
+The existing `UPDATE_RESULT_UNCONFIRMED` durable hold for WGI210IT has not been cleared, replayed or reclassified by this increment. That is the safe behavior.
+
+The available historical log cannot prove whether the original uncertainty occurred at the button action, popup appearance or popup/result interpretation. Therefore this review does **not** mark WGI210IT complete and does **not** authorize an automatic replay.
+
+A future manual quotation rerun for that selected row remains a separate Owner action under the already-reviewed one-shot manual hold-bypass rules.
+
+## Currency boundary
+
+PASS.
+
+The reviewed implementation/documentation does not overclaim currency support:
+
+- Research INSO: RMB/USD;
+- V1.3 quotation comparison: RMB/CNY aliases, USD and HKD;
+- unsupported positive quotation currency: fail closed;
+- valid zero quotation: no FX required;
+- quote input retains original source currency/price.
+
+Apps Script internal currency transformation remains UNKNOWN and was not silently inferred or expanded.
+
+## Regression / release evidence reviewed
+
+Final reported verification for the current production-code HEAD:
+
+- focused: **406 passed**;
+- full safe/offline: **1669 passed / 1 skipped**;
+- Ruff: **PASS**;
+- `git diff --check`: **PASS**;
+- BuildOnly: **PASS**;
+- release scan: **PASS**;
+- frozen self-check: **PASS**;
+- isolated idle GUI: **PASS**;
+- deployed frozen / idle GUI / fixed-CDP / scan: **PASS**.
+
+Formal deployed EXE SHA256:
+
+`BFFEFA407375211E758EC793AF5388D4FBCEF6A7BB01E456251DFE8213EDD98C`
+
+The report states V1.2 remained:
+
+`340D7F7E7E818FA74DE36B138B205F5905F320406FD8D391EF860BD052529E5F`
+
+and the final deployment preserved the production workflow DB/backups, OAuth, credentials, production/Research/SMTP configuration and fixed Chrome profile/CDP assets.
+
+## Live-evidence boundary
+
+This review does not convert offline/unit evidence into claims that were not observed live.
+
+Still not proven by this review:
+
+- a fresh real first-insert quotation ending in automatic source transition to `采购已报价`;
+- Apps Script internal FX behavior;
+- automatic closure of the historical WGI210IT hold.
+
+No additional real procurement, Save-and-Send, quotation update, Apps Script or SMTP execution is required merely for this review.
+
+## Final state
+
+`REVIEW_REQUIRED -> REVIEWED_DONE`
