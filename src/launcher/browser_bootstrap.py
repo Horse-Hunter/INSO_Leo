@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 from src.core.app_paths import resolve_app_path
+from src.research.cdp_pages import new_background_page
 
 
 class BrowserBootstrapError(RuntimeError):
@@ -35,7 +36,7 @@ def park_shared_cdp(browser) -> None:
     pages = tuple(context.pages)
     blank = next((p for p in pages if not p.is_closed() and p.url == "about:blank"), None)
     if blank is None:
-        blank = context.new_page()  # Keep a live tab BEFORE closing any old page.
+        blank = new_background_page(browser, context, timeout_ms=10000)  # Keep a live tab before cleanup.
     for page in pages:
         if page is not blank and not page.is_closed():
             page.close()

@@ -122,6 +122,8 @@ class Context:
 class Browser:
     def __init__(self):
         self.contexts, self.connected = [Context()], True
+        from tests.research.background_targets import attach_background_protocol
+        attach_background_protocol(self.contexts[0], self)
     def is_connected(self):
         return self.connected
 

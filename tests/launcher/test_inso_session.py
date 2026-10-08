@@ -111,6 +111,8 @@ class FakePage:
 
 class FakeContext:
     def __init__(self, *, shell_pages: int = 1, grid: str = "visible") -> None:
+        from tests.research.background_targets import attach_background_protocol
+        attach_background_protocol(self)
         self.pages = [FakePage(self, shell=False)]
         self.pages.extend(
             FakePage(self, shell=True, grid=grid) for _ in range(shell_pages)

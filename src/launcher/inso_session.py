@@ -48,6 +48,7 @@ from src.inso.session import (
     PageIdentity,
     SecurityViolation,
 )
+from src.research.cdp_pages import new_background_page
 
 _INSO_ORIGIN = "https://yingsuo.alperp.cn"
 _INSO_HOSTNAME = "yingsuo.alperp.cn"
@@ -501,7 +502,7 @@ class InsoSessionGuard:
             if self._page is not None:
                 page, opened_here = self._page(), False
             elif self._fresh_page:
-                page, opened_here = self._context().new_page(), True
+                page, opened_here = _new_background_login_page(self._context()), True
             else:
                 page, opened_here = _existing_or_new_login_page(self._context())
         except Exception:  # noqa: BLE001 - an unusable page becomes a status, not an exception
@@ -599,6 +600,10 @@ class InsoSessionGuard:
             _wait_page_events(page, self._wait, min(_RENDER_POLL_SECONDS, max(0.0, deadline - self._clock())))
 
 
+def _new_background_login_page(context):
+    return new_background_page(context.browser, context, timeout_ms=10000)
+
+
 def _existing_or_new_login_page(context: Any) -> tuple[Any, bool]:
     """Pick the page to log in on, and say whether this call opened it.
 
@@ -630,7 +635,7 @@ def _existing_or_new_login_page(context: Any) -> tuple[Any, bool]:
             return page, False
     if candidates:
         return candidates[0], False
-    return context.new_page(), True
+    return _new_background_login_page(context), True
 
 
 def _submit_ordinary_login(page: Any, login: Any | None) -> None:

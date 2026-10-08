@@ -1,4 +1,6 @@
 """Dashboard snapshot counts with synthetic Sheets and the real local ledger."""
+import sqlite3
+from contextlib import closing
 from dataclasses import replace
 
 import pytest
@@ -10,14 +12,21 @@ from tests.workflow.test_purchase_follow_up import local, setup_follow_up
 from tests.workflow.test_v13_quotation import WS, source
 
 
+def ledger_snapshot(db):
+    # Read-only connections can checkpoint WAL pages on close; compare the
+    # entire logical schema/data, not checkpoint-dependent main-file bytes.
+    with closing(sqlite3.connect(db)) as connection:
+        return tuple(connection.iterdump())
+
+
 def test_source_counts_include_invalid_new_rows_history_and_holds_without_side_effects(tmp_path):
     db, store, sheets, holds, _, _, _, follow, now, _ = setup_follow_up(tmp_path)
     sheets.rows += [source(3, "未发", model="BAD"), source(4, "采购已报价"),
                     source(5, model="UNBOUND"), source(6, "成交")]
-    before = db.read_bytes()
+    before = ledger_snapshot(db)
     counts = read_dashboard_counts(sheets, (WS,), store=store, episodes=follow.episodes, now=now[0])
     assert counts == DashboardCounts(1, 2, 1)
-    assert db.read_bytes() == before
+    assert ledger_snapshot(db) == before
     assert holds.active() == ()
     # Repeated snapshots do not accumulate or depend on notification delivery.
     assert read_dashboard_counts(sheets, (WS,), store=store, episodes=follow.episodes, now=now[0]) == counts
@@ -112,10 +121,10 @@ def test_held_overdue_order_is_counted_and_new_sending_resets_timeout(tmp_path):
     identity = store.get_by_inquiry_id(iid).record_identity
     holds.hold(V13QuotationResult(iid, identity, "MPN", QuotationOutcome.ROW_FAILED, None,
                                  RowErrorReason.UPDATE_RESULT_UNCONFIRMED, WS, 2), identity)
-    before = db.read_bytes()
+    before = ledger_snapshot(db)
     assert read_dashboard_counts(sheets, (WS,), store=store, episodes=follow.episodes,
                                  now=now[0]) == DashboardCounts(0, 1, 1)
-    assert db.read_bytes() == before and len(holds.active()) == 1
+    assert ledger_snapshot(db) == before and len(holds.active()) == 1
     follow.episodes.record_confirmed(iid, confirmed_at=now[0])
     assert read_dashboard_counts(sheets, (WS,), store=store, episodes=follow.episodes,
                                  now=now[0]) == DashboardCounts(0, 1, 0)

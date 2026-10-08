@@ -90,6 +90,11 @@ def new_background_page(
     try:
         with context.expect_page(timeout=timeout_ms) as pending:
             params = {"url": "about:blank", "background": True}
+            # A windowless bootstrap has no existing tab/window to reuse.
+            # Ask Chrome to create that first window minimized, rather than
+            # creating a normal window and hiding it after a visible flash.
+            if not context.pages:
+                params.update(newWindow=True, windowState="minimized")
             if browser_context_id is not None:
                 params["browserContextId"] = browser_context_id
             target_id = session.send("Target.createTarget", params)["targetId"]

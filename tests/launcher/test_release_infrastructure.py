@@ -48,6 +48,8 @@ def test_dedicated_cdp_parks_one_blank_before_closing_business_tabs(urls):
 
     browser = SimpleNamespace(is_connected=lambda: True,
         contexts=[SimpleNamespace(pages=pages, new_page=new_page)])
+    from tests.research.background_targets import attach_background_protocol
+    attach_background_protocol(browser.contexts[0], browser)
     park_shared_cdp(browser)
     assert len(pages) == 1 and pages[0].url == "about:blank"
     if urls and "about:blank" not in urls:

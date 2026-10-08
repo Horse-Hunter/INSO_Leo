@@ -7,6 +7,7 @@ import re
 from urllib.parse import urlsplit
 
 from src.inso.quotation_read import QUOTATION_COLUMNS
+from src.research.cdp_pages import new_background_page
 from src.sheets.quotation_input import GoogleQuotationInput, QuotationInputLocation
 from src.workflow.v12_faults import FaultScope, V12Fault
 from src.workflow.v13_quote_update import (
@@ -92,7 +93,7 @@ class GoogleQuotationUpdateActions:
         if browser is None or not browser.is_connected() or len(browser.contexts) != 1:
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")
         try:
-            self._page = browser.contexts[0].new_page()
+            self._page = new_background_page(browser, browser.contexts[0], timeout_ms=self._timeout)
         except Exception:  # noqa: BLE001 - shared context cannot create the owned operation
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE") from None
         self._attempt(lambda: self._page.goto(self._location.url, wait_until="domcontentloaded", timeout=self._timeout))
@@ -198,7 +199,7 @@ class GoogleQuotationUpdateActions:
             # Keep the protected browser alive if this has become its last tab.
             context = self._page.context
             if not any(page is not self._page and not page.is_closed() for page in context.pages):
-                blank = context.new_page()
+                blank = new_background_page(self._handle.browser, context, timeout_ms=self._timeout)
                 if blank is self._page or blank.is_closed() or blank.url != "about:blank":
                     raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_OPERATION_NOT_CLOSED")
             self._page.close()

@@ -22,6 +22,7 @@ class Session:
 class Context:
     def __init__(self, *, fail: bool = False) -> None:
         self.page = object()
+        self.pages = [self.page]
         self.fail = fail
 
     def expect_page(self, *, timeout: int) -> "Context":
@@ -137,3 +138,16 @@ def test_shared_factory_falls_back_to_a_private_session(
     )
 
     assert shared_playwright_factory(provider)() is sentinel
+
+
+def test_windowless_first_target_is_minimized_without_activation_or_foreground_fallback():
+    session = Session()
+    context = Context()
+    context.pages = []
+    new_background_page(SimpleNamespace(new_browser_cdp_session=lambda: session),
+                        context, timeout_ms=1234)
+    assert session.calls == [("Target.createTarget", {
+        "url": "about:blank", "background": True,
+        "newWindow": True, "windowState": "minimized",
+    })]
+    assert session.detached
