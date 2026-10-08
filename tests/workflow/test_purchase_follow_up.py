@@ -15,6 +15,7 @@ from src.workflow.v12_notifications import (
     V12NotificationWorker,
 )
 from src.workflow.v12_store import V12Store
+from src.workflow.v13_follow_up_store import V13PurchaseFollowUpStore
 from tests.workflow.test_rfq006_integration import fixture
 from tests.workflow.test_v13_quotation import WS, source
 
@@ -49,9 +50,10 @@ def setup_follow_up(tmp_path, *, stamp=True):
     db, store, sheets, holds, ledger, quotes, make, _observed = fixture(tmp_path, [(), ()])
     iid = store.all_items()[0].inquiry_id
     start = local("2026-10-09T17:00")
+    episodes = V13PurchaseFollowUpStore(db)
+    episodes.migrate()
     if stamp:
-        ledger.append_event(WorkflowEvent("sent-episode-1", iid,
-            EventType.PURCHASE_STATUS_RECORDED, start, "sheets"))
+        episodes.record_confirmed(iid, confirmed_at=start)
     now = [local("2026-10-12T11:00:01")]
     follow = PurchaseFollowUp(reader=sheets, workflow_store=store, v12_store=ledger, clock=lambda: now[0])
     return db, store, sheets, holds, ledger, quotes, make, follow, now, iid
@@ -59,7 +61,7 @@ def setup_follow_up(tmp_path, *, stamp=True):
 
 def command_count(db):
     with sqlite3.connect(db) as connection:
-        return connection.execute("SELECT count(*) FROM workflow_v12_notification_commands WHERE kind='PURCHASE_FOLLOW_UP'").fetchone()[0]
+        return connection.execute("SELECT count(*) FROM workflow_v12_notification_commands WHERE command_id LIKE 'purchase-follow-up:%'").fetchone()[0]
 
 
 def test_threshold_is_strict_and_restart_deduplicates_both_recipients(tmp_path):
@@ -82,10 +84,9 @@ def test_threshold_is_strict_and_restart_deduplicates_both_recipients(tmp_path):
 
 
 def test_new_confirmed_sending_episode_resets_clock_and_allows_one_new_reminder(tmp_path):
-    db, _, _, _, ledger, _, _, follow, now, iid = setup_follow_up(tmp_path)
+    db, _, _, _, _ledger, _, _, follow, now, iid = setup_follow_up(tmp_path)
     assert follow.run(WS) == 1
-    ledger.append_event(WorkflowEvent("sent-episode-2", iid,
-        EventType.PURCHASE_STATUS_RECORDED, now[0], "sheets"))
+    follow.episodes.record_confirmed(iid, confirmed_at=now[0])
     assert follow.run(WS) == 0
     now[0] = local("2026-10-12T15:00:02")
     assert follow.run(WS) == 1 and follow.run(WS) == 0
@@ -104,8 +105,7 @@ def test_untimed_history_is_not_backfilled_or_notified(tmp_path):
     ledger.append_event(WorkflowEvent("legacy-saved", iid, EventType.PURCHASE_DATA_SAVED,
                                       local("2026-10-01T09:00"), "inso"))
     assert follow.run(WS) == 0 and command_count(db) == 0
-    assert all(event.event_type is not EventType.PURCHASE_STATUS_RECORDED
-               for event in ledger.event_history(iid))
+    assert follow.episodes.latest(iid) is None
 
 
 def test_moved_row_uses_canonical_identity_and_reports_current_location(tmp_path):
@@ -141,3 +141,22 @@ def test_follow_up_runs_before_hold_skip_and_does_not_change_hold_or_quote_outco
     assert integrated.run(WS) == ()
     assert command_count(db) == 1 and len(holds.active()) == 1
     assert not quotes.calls
+
+
+def test_follow_up_recipient_retry_keeps_successful_recipient_settled(tmp_path):
+    from src.workflow.v12_contracts import NotificationKind
+    db, _, _, _, ledger, _, _, follow, now, _ = setup_follow_up(tmp_path)
+    assert follow.run(WS) == 1
+    transport = FakeNotificationTransport({"owner": (DeliveryOutcome.SENT,),
+        "ops": (DeliveryOutcome.RETRYABLE_FAILURE, DeliveryOutcome.SENT)})
+    worker = V12NotificationWorker(ledger, transport)
+    assert worker.run_due(now=now[0]) == 2
+    assert follow.run(WS) == 0
+    now[0] += timedelta(minutes=2)
+    assert worker.run_due(now=now[0]) == 1
+    assert [recipient for _, recipient in transport.calls].count("owner") == 1
+    assert [recipient for _, recipient in transport.calls].count("ops") == 2
+    with sqlite3.connect(db) as connection:
+        kinds = {row[0] for row in connection.execute("SELECT kind FROM workflow_v12_notification_commands")}
+    assert kinds == {NotificationKind.PURCHASE_EXCEPTION.value}
+    assert command_count(db) == 1

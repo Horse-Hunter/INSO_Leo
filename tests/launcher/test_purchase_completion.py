@@ -47,8 +47,13 @@ def actions(outcome, *, writer_fails=False):
             if writer_fails: raise RuntimeError("sensitive-provider-message")
             self.rows = [WorksheetRow(4, {"A":"发给采购", "C":"A", "E":"TEST-MPN", "G":8})]
     sheet, state = Sheet(), V12(outcome)
+    class Episodes:
+        def __init__(self): self.records = []
+        def record_confirmed(self, inquiry_id, *, confirmed_at):
+            self.records.append((inquiry_id, confirmed_at))
+    episodes = Episodes()
     handler = PurchaseCompletionActions(workflow_store=SimpleNamespace(get_by_inquiry_id=lambda _i:item),
-        v12_store=state, reader=sheet, writer_factory=lambda:sheet)
+        v12_store=state, reader=sheet, writer_factory=lambda:sheet, follow_up_store=episodes)
     return handler, sheet, state
 
 
@@ -152,16 +157,14 @@ def test_only_all_no_result_research_exception_adds_shawn(phase, reason):
 def test_status_write_records_actual_confirmation_timestamp_once():
     from datetime import timedelta
 
-    from src.workflow.v12_contracts import EventType
     handler, sheet, state = actions(PurchaseOutcome.SAVED)
     after_write = NOW + timedelta(seconds=8)
     handler._clock = lambda: after_write
     handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
     handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
     assert sheet.calls == 1
-    assert len(state.events) == 1
-    assert state.events[0].event_type is EventType.PURCHASE_STATUS_RECORDED
-    assert state.events[0].occurred_at == after_write
+    assert not state.events
+    assert handler.follow_up_store.records == [("synthetic-inquiry", after_write)]
 
 
 def test_legacy_already_sent_status_does_not_backfill_a_timestamp():
@@ -169,10 +172,37 @@ def test_legacy_already_sent_status_does_not_backfill_a_timestamp():
     sheet.rows = [WorksheetRow(4, {"A":"发给采购", "C":"A", "E":"TEST-MPN", "G":8})]
     handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
     assert not state.events and sheet.calls == 0
+    assert not handler.follow_up_store.records
 
 
 def test_failed_status_write_does_not_start_follow_up_clock():
     handler, _sheet, state = actions(PurchaseOutcome.SAVED, writer_fails=True)
     handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
-    assert not state.events
+    assert not state.events and not handler.follow_up_store.records
+    assert state.state is BusinessState.STATUS_WRITE_PENDING
+
+
+def test_sidecar_failure_after_confirmed_status_is_global_stop_not_purchase_requeue():
+    from src.workflow.v12_faults import FaultScope, V12Fault
+    handler, sheet, state = actions(PurchaseOutcome.SAVED)
+    def failed(*args, **kwargs):
+        raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE")
+    handler.follow_up_store.record_confirmed = failed
+    with pytest.raises(V12Fault) as error:
+        handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
+    assert error.value.scope is FaultScope.GLOBAL_STOP
+    assert error.value.reason == "WORKFLOW_LEDGER_UNAVAILABLE"
+    assert state.state is BusinessState.PURCHASE_RECORDED
+    assert state.outcome is PurchaseOutcome.SAVED
+    assert sheet.rows[0].cells["A"] == "发给采购" and sheet.calls == 1
+    # Same source is already sent: even status settlement does not replay dispatch.
+    handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
+    assert sheet.calls == 1 and not state.commands
+
+
+def test_unconfirmed_google_readback_does_not_create_episode():
+    handler, sheet, state = actions(PurchaseOutcome.SAVED)
+    sheet.write_purchase_status = lambda *args: None  # API returned, source never changed.
+    handler.process(flow(PurchaseOutcome.SAVED), at=NOW)
+    assert not handler.follow_up_store.records
     assert state.state is BusinessState.STATUS_WRITE_PENDING

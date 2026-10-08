@@ -179,7 +179,6 @@ def _event_display_text(event: Any) -> str:
         "DATA_QUALITY_INVALID_QUANTITY": "数量资料无效",
         "DATA_QUALITY_INVALID_INPUT": "源订单关键字段不合法，已跳过",
         "HUMAN_RESOLUTION_RECORDED": "人工处理已记录",
-        "PURCHASE_STATUS_RECORDED": "表格已改为发给采购，开始报价跟进计时",
         "SAVE_DISPATCH_ARMED": "提交前检查已完成（不代表发送成功）",
         "SAVE_CLICK_COMPLETED": "保存并发送已点击一次",
         "SAVE_OUTCOME_UNKNOWN": "保存结果待核实",

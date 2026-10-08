@@ -17,11 +17,12 @@ OWNER = NotificationRecipient("owner", "linan229@qq.com")
 
 
 class PurchaseCompletionActions:
-    def __init__(self, *, workflow_store, v12_store, reader, writer_factory, clock=None):
+    def __init__(self, *, workflow_store, v12_store, reader, writer_factory, clock=None, follow_up_store=None):
         self.workflow_store = workflow_store
         self.v12_store = v12_store
         self.reader = reader
         self.writer_factory = writer_factory
+        self.follow_up_store = follow_up_store
         self._clock = clock or (lambda: datetime.now(UTC))
         self._settled_status_ids: set[str] = set()
 
@@ -57,21 +58,18 @@ class PurchaseCompletionActions:
             return True
         try:
             changed = write_purchase_status_safely(self.reader, self.writer_factory(), item.record_identity)
-            if changed:
-                # Reuse the existing local append-only ledger; do not backfill
-                # already-sent historical rows from old purchase/observation dates.
-                self.v12_store.append_event(WorkflowEvent(
-                    f"evt_{uuid.uuid4().hex}", item.inquiry_id,
-                    EventType.PURCHASE_STATUS_RECORDED, self._clock(), "sheets",
-                ))
-            self._settled_status_ids.add(item.inquiry_id)
-            return True
         except Exception as exc:  # noqa: BLE001 - retry only status, never purchase
             self.v12_store.set_business_state(item.inquiry_id, BusinessState.STATUS_WRITE_PENDING,
                 WorkflowEvent(f"evt_{uuid.uuid4().hex}", item.inquiry_id,
                     EventType.HUMAN_RESOLUTION_RECORDED, at, "sheets"))
             self.notify(item.inquiry_id, "SHEETS_WRITE_BACK", type(exc).__name__, at=at)
             return True
+        # This is outside the status-write exception handler: a failed local
+        # ledger is GLOBAL_STOP, not STATUS_WRITE_PENDING or another purchase.
+        if changed and self.follow_up_store is not None:
+            self.follow_up_store.record_confirmed(item.inquiry_id, confirmed_at=self._clock())
+        self._settled_status_ids.add(item.inquiry_id)
+        return True
 
     def retry_saved_statuses(self, *, at):
         for item in self.workflow_store.all_items():

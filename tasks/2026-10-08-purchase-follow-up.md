@@ -1,5 +1,5 @@
 # Task: purchase quotation follow-up by working hours
-status: complete
+status: review_required
 owner: Integration Executor
 created: 2026-10-08
 
@@ -14,7 +14,7 @@ without a new timestamp are skipped. CEO Review is deferred until this addition.
 ## Rules / boundaries
 Asia/Shanghai, Monday-Friday 09:00-12:30 and 13:30-18:00.
 Exclude lunch, nights and weekends; no separate public-holiday calendar was specified.
-Reuse canonical source relocation, local append-only event ledger and recipient-scoped
+Reuse canonical source relocation, V1.3-only additive episode sidecar and recipient-scoped
 notification outbox/worker. Never create a second scheduler or SMTP implementation.
 Record only confirmed source writes, never old SAVED timestamps or first observation.
 Skip unresolved/ambiguous/changed identities. Reminder does not block quotation flow.
@@ -28,7 +28,7 @@ source movement/ambiguity/status completion; held rows included; production comp
 Run focused/full safe-offline, Ruff, diff-check and final candidate BuildOnly/self-check.
 Record final source/candidate hashes and verification limits before renewed CEO report.
 
-## Completion
+## Superseded implementation (fa8201f, never deployed)
 Implemented with local PURCHASE_STATUS_RECORDED append-only events after confirmed
 status transitions; historical already-sent rows never acquire an artificial timestamp.
 PURCHASE_FOLLOW_UP commands reuse the existing recipient-specific notification worker;
@@ -49,3 +49,9 @@ no timestamp is invented on restart; such an untimed row is skipped rather than 
 While the application is stopped there is no separate reminder service; overdue reminders
 are evaluated at the next normal quotation poll when the application runs again.
 Owner explicitly deferred CEO Review; no review was dispatched or marked complete.
+
+## Current repaired representation
+Confirmed timestamps/episodes now use workflow_v13_purchase_follow_up_episodes.
+Old EventType/kind additions were removed; reminder kind is PURCHASE_EXCEPTION.
+See 2026-10-08-follow-up-rollback-report.md for canonical implementation and compatibility evidence.
+Current status: REVIEW_REQUIRED.

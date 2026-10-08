@@ -1,7 +1,7 @@
 # V1.3 readiness repair verification report
 
 Date: 2026-10-08
-Status: Owner deferred CEO Review to add purchase follow-up. Current formal release remains unchanged.
+Status: REVIEW_REQUIRED after CEO B1 rollback repair. Current formal release remains unchanged.
 Base: feature/v1-3-integration, 03f4bf3328b0931b4bdc5dc05865b9f35322cf7e.
 Repair branch: codex/v13-readiness-repair. Approved integration branch preserved.
 
@@ -16,7 +16,7 @@ A narrow --cdp-self-check attaches/detaches the frozen driver to the existing se
 ## Candidate and deployment boundary
 
 Final candidate EXE SHA256:
-22756C738C7DE7DEB278ABB17E8738A4B99C781E0116A71E4A8C1C7FF20E8431
+4777E6000A861EC4E1C881CD9692E18B8B21FB8A1F6672DD82DF2115E5D6E6CC
 
 Candidate path:
 C:/Users/Leo/.codex/worktrees/rfq-006-integration/INSO_Leo/build/windows-release-stage-1.3/dist/INSO_V1.3
@@ -95,3 +95,10 @@ are addressed through the existing outbox. Historical untimed rows are skipped.
 The final EXE hash above includes this addition, supersedes the Findchips-only build,
 and passed BuildOnly, release scan and frozen dependency/idle/CDP checks. It remains
 undeployed. Owner requested no CEO Review dispatch yet.
+
+## CEO B1 repair supersedes the prior follow-up persistence description
+The new event/kind persistence above was rejected and never deployed. Canonical episodes
+now live in a V1.3-only additive table; notifications retain old-compatible PURCHASE_EXCEPTION.
+The latest candidate SHA above supersedes 22756C73. Full: 1559 passed/1 skipped; focused: 760 passed.
+See 2026-10-08-follow-up-rollback-report.md for rollback tests and final deployment boundaries.
+CEO original CHANGES_REQUESTED review is preserved; resubmission status is REVIEW_REQUIRED.

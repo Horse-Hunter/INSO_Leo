@@ -89,6 +89,7 @@ from src.workflow.v12_store import (
     V12Store,
     migrate_v12,
 )
+from src.workflow.v13_follow_up_store import V13PurchaseFollowUpStore
 from src.workflow.v13_integration import CombinedCycle, V13HoldStore, V13IntegratedCycle
 from src.workflow.v13_quotation import V13QuotationCycle, V13Stopped
 
@@ -655,6 +656,11 @@ class ProductionBackend(GuiBackend):
                 quiesce=lambda: nullcontext(),
             )
             self._v12_store = V12Store(db)
+            follow_up_store = None
+            if cfg.get("v13_enabled") is True or (
+                    getattr(sys, "frozen", False) and Path(sys.executable).stem == "INSO_V1.3"):
+                follow_up_store = V13PurchaseFollowUpStore(db)
+                follow_up_store.migrate()
             status_writer = None
             write_service = None
 
@@ -676,7 +682,7 @@ class ProductionBackend(GuiBackend):
 
             self._purchase_completion = PurchaseCompletionActions(
                 workflow_store=self._store, v12_store=self._v12_store,
-                reader=reader, writer_factory=get_status_writer,
+                reader=reader, writer_factory=get_status_writer, follow_up_store=follow_up_store,
             )
             # RFQ-003: historical unfinished rows are quarantined below before
             # workers start. Never release an old claim for automatic replay.
@@ -786,7 +792,7 @@ class ProductionBackend(GuiBackend):
                     integrated = V13IntegratedCycle(reader=active_reader, store=active_store,
                         holds=active_holds, cycle=cycle, updater_factory=updater,
                         follow_up=PurchaseFollowUp(reader=active_reader, workflow_store=active_store,
-                            v12_store=self._v12_store, clock=utc_now).run,
+                            v12_store=self._v12_store, clock=utc_now, episodes=follow_up_store).run,
                         notify=lambda result,key,episode: notify_quotation(self._v12_store,
                             result,key,episode,at=utc_now()), observe=self._observe_quotation,
                         stop_requested=self._stop.is_set)
