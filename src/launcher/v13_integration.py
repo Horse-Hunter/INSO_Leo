@@ -1,5 +1,8 @@
 """Production composition over existing config, browser and notification capability."""
 
+import json
+from hashlib import sha256
+
 from src.gui.contracts import V12BusinessLabel, V12OrderStateDTO
 from src.sheets import WorksheetIdentity
 from src.sheets.quotation_input import QuotationInputLocation, QuotationInputUnavailable
@@ -122,4 +125,41 @@ def notify_website_issue(store, inquiry_id, site, code, *, mpn=None, at):
         "询价网站不可用",
         f"网站：{site.value}\ninquiry_id：{inquiry_id}\nMPN：{mpn or 'UNKNOWN'}\nreason：{reason}\n请人工检查网站登录/可用性。",
         None, at,
+    ))
+
+
+def notify_quotation_model_difference(store, result, source_model, *, at):
+    """Enqueue a durable two-recipient reminder before preparing a differing model.
+
+    Original raw quote identity and exact source B determine dedup; row movement,
+    write retries, another poll or process restart never create another command.
+    Existing recipient worker owns independent retries, not the quote engine.
+    """
+    if result.inquiry_id is None or result.quotation is None:
+        raise ValueError("model reminder requires a bound quotation")
+    actual_model = result.quotation.payload[1]
+    if actual_model == source_model:
+        return
+    fingerprint = sha256(json.dumps(
+        [source_model, result.quotation.payload], ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+    command_id = f"v13:model-difference:{result.inquiry_id}:{fingerprint}"
+    recipients = (NotificationRecipient("owner", "linan229@qq.com"),
+                  NotificationRecipient("ops", "shawn@inso-hk.com"))
+    if store.notification_already_created(
+        command_id, result.inquiry_id, NotificationKind.PURCHASE_EXCEPTION, recipients,
+    ):
+        return
+    body = (
+        f"模块：V1.3报价\ninquiry_id：{result.inquiry_id}\n"
+        f"worksheet：{result.source_worksheet.worksheet if result.source_worksheet else 'UNKNOWN'}\n"
+        f"source row（定位信息）：{result.source_row_position}\n"
+        f"原表型号：{source_model}\n报价实际型号：{actual_model}\n"
+        "模糊匹配发现型号原文不同。报价输入B列保留原表型号，L列追加报价实际型号并保留原备注。"
+        "请人工核对该型号差异；本邮件仅说明检测结果，不代表报价脚本已完成。"
+    )
+    store.enqueue_notification(NotificationCommand(
+        command_id, result.inquiry_id, NotificationKind.PURCHASE_EXCEPTION,
+        recipients, "V1.3报价型号差异提醒", body, None, at,
     ))

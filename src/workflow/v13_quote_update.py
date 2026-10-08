@@ -53,6 +53,11 @@ class WorkflowQuotationSource:
         self._reader, self._store = reader, store
 
     def status(self, result: V13QuotationResult) -> str:
+        """Compatibility projection of the same freshly verified source read."""
+        return self.read_state(result)[0]
+
+    def read_state(self, result: V13QuotationResult) -> tuple[str, str]:
+        """Return status and exact source model from one canonical binding proof."""
         if result.inquiry_id is None or result.record_identity is None:
             raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
         try:
@@ -97,7 +102,24 @@ class WorkflowQuotationSource:
                 bindings.append(other.inquiry_id)
         if bindings != [result.inquiry_id]:
             raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
-        return str(target.cells[worksheet_schema(worksheet.worksheet).status_column])
+        schema = worksheet_schema(worksheet.worksheet)
+        model = target.cells.get(schema.model_column)
+        if not isinstance(model, str) or not model.strip():
+            raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
+        return str(target.cells[schema.status_column]), model
+
+
+def quotation_input_payload(result: V13QuotationResult, source_model: str) -> tuple[str, ...]:
+    """Derive input B/L without changing the selected immutable raw14 evidence."""
+    if result.quotation is None or not isinstance(source_model, str) or not source_model.strip():
+        raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
+    raw = result.quotation.payload
+    values = list(raw)
+    values[1] = source_model
+    if raw[1] != source_model:
+        note = f"报价实际型号：{raw[1]}"
+        values[11] = f"{raw[11]}\n{note}" if raw[11] else note
+    return tuple(values)
 
 
 class V13QuotationUpdater:
@@ -106,13 +128,15 @@ class V13QuotationUpdater:
                  actions: QuotationUpdateActions, wait: Callable[[float], bool],
                  stop_requested: Callable[[], bool] = lambda: False,
                  status_reads: int = 31, status_interval: float = 1.0,
-                 clock: Callable[[], float] = monotonic):
+                 clock: Callable[[], float] = monotonic,
+                 notify_model_difference: Callable[[V13QuotationResult, str], None] = lambda _r, _m: None):
         if not 1 <= status_reads <= 31 or not 0 < status_interval <= 5:
             raise ValueError("status polling must be short and bounded")
         self._source, self._input, self._actions = source, quotation_input, actions
         self._wait, self._stop = wait, stop_requested
         self._status_reads, self._status_interval = status_reads, status_interval
         self._clock = clock
+        self._notify_model_difference = notify_model_difference
 
     def run(self, results: Iterable[V13QuotationResult]) -> tuple[V13QuotationResult, ...]:
         output = []
@@ -129,12 +153,19 @@ class V13QuotationUpdater:
             return self._failed(result, RowErrorReason.SOURCE_CHANGED)
         if self._input.worksheet.spreadsheet != result.record_identity.worksheet.spreadsheet:
             raise V12Fault(FaultScope.GLOBAL_STOP, "QUOTE_INPUT_LOCATION_INVALID")
-        payload = result.quotation.payload
+        payload = None
         try:
             for _attempt in range(4):
                 self._check_stop()
-                if self._current_status(result) == "采购已报价":
+                status, source_model = self._current_state(result)
+                if status == "采购已报价":
                     return self._success(result, UpdatePopupOutcome.ALREADY_EXISTS)
+                if payload is None:
+                    payload = quotation_input_payload(result, source_model)
+                    if result.quotation.payload[1] != source_model:
+                        self._notify_model_difference(result, source_model)
+                elif source_model != payload[1]:
+                    raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
                 # Binding/header faults must stop before opening a possibly wrong gid.
                 self._input.validate_schema()
                 try:
@@ -142,7 +173,7 @@ class V13QuotationUpdater:
                     write_reason = RowErrorReason.QUOTE_INPUT_WRITE_FAILED
                     for _write_attempt in range(4):
                         self._check_stop()
-                        if self._current_status(result) == "采购已报价":
+                        if self._current_status(result, expected_model=payload[1]) == "采购已报价":
                             return self._success(result, UpdatePopupOutcome.ALREADY_EXISTS)
                         self._input.validate_schema()
                         try:
@@ -152,7 +183,7 @@ class V13QuotationUpdater:
                                 continue
                             # Source is still this order; final exact input read occurs
                             # immediately before the only submit action (no write in between).
-                            if self._current_status(result) == "采购已报价":
+                            if self._current_status(result, expected_model=payload[1]) == "采购已报价":
                                 return self._success(result, UpdatePopupOutcome.ALREADY_EXISTS)
                             if self._input.read_payload() != payload:
                                 continue
@@ -184,9 +215,15 @@ class V13QuotationUpdater:
         except QuotationInputUnavailable as exc:
             raise V12Fault(FaultScope.GLOBAL_STOP, exc.reason) from None
 
-    def _current_status(self, result):
-        status = self._source.status(result)
+    def _current_state(self, result):
+        status, model = self._source.read_state(result)
         if status not in {"发给采购", "采购已报价"}:
+            raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
+        return status, model
+
+    def _current_status(self, result, *, expected_model=None):
+        status, model = self._current_state(result)
+        if status != "采购已报价" and expected_model is not None and model != expected_model:
             raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
         return status
 

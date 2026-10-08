@@ -211,7 +211,8 @@ class GoogleQuotationUpdateActions:
 
 
 def build_v13_quotation_updater(*, service, source_reader, store, browser_handle,
-                                location: QuotationInputLocation, wait, stop_requested=lambda: False):
+                                location: QuotationInputLocation, wait, stop_requested=lambda: False,
+                                notify_model_difference=lambda _r, _m: None):
     """Service supplied by existing cached write-grant/OAuth builder, never replaced.
 
     RFQ-006 owns production scheduling/wiring. This factory performs no I/O.
@@ -221,4 +222,5 @@ def build_v13_quotation_updater(*, service, source_reader, store, browser_handle
         quotation_input=GoogleQuotationInput(service, location, expected_columns=QUOTATION_COLUMNS),
         actions=GoogleQuotationUpdateActions(browser_handle=browser_handle, location=location),
         wait=wait, stop_requested=stop_requested,
+        notify_model_difference=notify_model_difference,
     )

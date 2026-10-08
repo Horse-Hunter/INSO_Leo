@@ -587,3 +587,38 @@ def test_existing_price_skip_with_unsettled_status_is_yellow_durable_warning_to_
     assert _order_row_style(SimpleNamespace(), v12_state=dto) == "warning"
     make().run(WS)
     assert actions.clicks == 1 and len(holds.active()) == 1
+
+
+def test_model_difference_mail_reuses_durable_outbox_two_recipients_restart_and_partial_retry(tmp_path):
+    from src.launcher.v13_integration import notify_quotation_model_difference
+    from tests.inso.test_v13_quotation_read import quote
+    from tests.workflow.test_v13_quote_update import found
+    db, _store, _sheets, _holds, ledger, _quotes, _make, _ = fixture(tmp_path, [])
+    result = found()
+    iid = ledger.claim_due_notifications(now=NOW)
+    assert iid == ()
+    # Bind to the real synthetic fixture's existing inquiry FK.
+    with sqlite3.connect(db) as c:
+        inquiry = c.execute("SELECT inquiry_id FROM workflow_items").fetchone()[0]
+    result = replace(result, inquiry_id=inquiry, quotation=quote(model="MPN suffix"))
+    notify_quotation_model_difference(ledger, result, "MPN", at=NOW)
+    notify_quotation_model_difference(V12Store(db), replace(result, source_row_position=20), "MPN", at=NOW)
+    with sqlite3.connect(db) as c:
+        assert c.execute("SELECT count(*) FROM workflow_v12_notification_commands").fetchone()[0] == 1
+        assert c.execute("SELECT address FROM workflow_v12_notification_recipients ORDER BY recipient_id").fetchall() == [("shawn@inso-hk.com",), ("linan229@qq.com",)]
+        subject, body = c.execute("SELECT subject,text_body FROM workflow_v12_notification_commands").fetchone()
+        assert subject == "V1.3报价型号差异提醒"
+        assert "原表型号：MPN" in body and "报价实际型号：MPN suffix" in body
+        assert "不代表报价脚本已完成" in body
+    transport = FakeNotificationTransport({"owner": (DeliveryOutcome.SENT,), "ops": (DeliveryOutcome.RETRYABLE_FAILURE, DeliveryOutcome.SENT)})
+    V12NotificationWorker(ledger, transport).run_due(now=NOW)
+    notify_quotation_model_difference(V12Store(db), result, "MPN", at=NOW)
+    V12NotificationWorker(V12Store(db), transport).run_due(now=NOW + __import__('datetime').timedelta(minutes=30))
+    assert [recipient for _command, recipient in transport.calls].count("owner") == 1
+    assert [recipient for _command, recipient in transport.calls].count("ops") == 2
+    with sqlite3.connect(db) as c:
+        assert c.execute("SELECT DISTINCT outcome FROM workflow_v12_notification_recipients").fetchall() == [("SENT",)]
+        assert c.execute("PRAGMA foreign_key_check").fetchall() == []
+    notify_quotation_model_difference(ledger, replace(result, quotation=quote(model="MPN")), "MPN", at=NOW)
+    with sqlite3.connect(db) as c:
+        assert c.execute("SELECT count(*) FROM workflow_v12_notification_commands").fetchone()[0] == 1

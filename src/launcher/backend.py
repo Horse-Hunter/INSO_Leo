@@ -129,6 +129,7 @@ from .v12_composition import (
 from .v12_gui import read_startup_interruptions, read_v12_order_state
 from .v13_integration import (
     notify_quotation,
+    notify_quotation_model_difference,
     notify_runtime_fault,
     notify_website_issue,
     quotation_gui,
@@ -791,7 +792,9 @@ class ProductionBackend(GuiBackend):
                         return build_v13_quotation_updater(
                             service=service, source_reader=active_reader,
                             store=active_store, browser_handle=handle, location=location,
-                            wait=self._stop.wait, stop_requested=self._immediate_stop_requested)
+                            wait=self._stop.wait, stop_requested=self._immediate_stop_requested,
+                            notify_model_difference=lambda result, model: notify_quotation_model_difference(
+                                self._v12_store, result, model, at=utc_now()))
                     integrated = V13IntegratedCycle(reader=active_reader, store=active_store,
                         holds=active_holds, cycle=cycle, updater_factory=updater,
                         follow_up=PurchaseFollowUp(reader=active_reader, workflow_store=active_store,

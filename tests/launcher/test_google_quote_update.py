@@ -388,3 +388,12 @@ def test_cdp_error_during_settlement_maps_to_settlement_stop_and_preserves_page(
         actions.dismiss_result()
     actions.close()
     assert actions._script_pending and not page.closed
+
+
+def test_production_factory_keeps_model_difference_callback():
+    handle = SimpleNamespace(owned=False)
+    notices = []
+    notify = lambda result, model: notices.append((result, model))
+    updater = build_v13_quotation_updater(service=object(), source_reader=object(), store=object(),
+        browser_handle=handle, location=location(), wait=lambda _: False, notify_model_difference=notify)
+    assert updater._notify_model_difference is notify

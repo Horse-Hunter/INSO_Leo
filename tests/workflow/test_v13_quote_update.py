@@ -41,6 +41,8 @@ class Source:
         self.before = "发给采购"
         self.calls = []
         self.error = None
+    def read_state(self, result):
+        return self.status(result), getattr(self, "model", result.queried_mpn)
     def status(self, result):
         self.calls.append(result)
         if self.error:
@@ -323,6 +325,9 @@ def test_actual_source_status_reader_with_script_fake_closes_success_bad_success
     store = Store([item(2), item(3, model="BAD"), item(4, model="C")])
     original_verifier = WorkflowQuotationSource(reader=reader, store=store)
     class Verifier:
+        def read_state(self, result):
+            self.last = result
+            return original_verifier.read_state(result)
         def status(self, result):
             self.last = result
             return original_verifier.status(result)
@@ -505,3 +510,77 @@ def test_script_settlement_fault_prevents_second_row_open_write_and_click():
         updater.run((found(), found(3)))
     assert actions.opened == actions.clicks == 1
     assert len(inp.writes) == 1 and not waits
+
+
+@pytest.mark.parametrize("remarks", ["", "原备注", "  原备注\n第二行\t ", "原备注\n"])
+@pytest.mark.parametrize("popup", [POPUP, EXISTS])
+def test_source_model_b_actual_quote_model_l_and_notice_once_on_retries(remarks, popup):
+    updater, _src, io, actions, _ = service()
+    upstream = found(model=" WGI210IT ")
+    values = list(upstream.quotation.payload)
+    values[1], values[11] = "WGI210IT S LJXS", remarks
+    upstream = replace(upstream, quotation=replace(upstream.quotation, payload=tuple(values)))
+    notices = []
+    updater._notify_model_difference = lambda result, model: notices.append((result, model))
+    io.readbacks = [("stale",) * 14]
+    actions.popups = [popup]
+    result = updater.update_one(upstream)
+    expected = list(values)
+    expected[1] = " WGI210IT "
+    expected[11] = (remarks + "\n" if remarks else "") + "报价实际型号：WGI210IT S LJXS"
+    assert result.outcome in {QuotationOutcome.UPDATED_INSERTED, QuotationOutcome.UPDATED_ALREADY_EXISTS}
+    assert io.writes == [tuple(expected)] * 2
+    assert notices == [(upstream, " WGI210IT ")]
+    assert upstream.quotation.payload == tuple(values) and result.quotation is upstream.quotation
+    assert actions.clicks == 1
+
+
+def test_input_preparation_same_literal_model_keeps_all_raw14_and_no_notice():
+    updater, _, io, _, _ = service()
+    notices = []
+    updater._notify_model_difference = lambda *args: notices.append(args)
+    original = found(model=" W_GI-210IT ")
+    assert updater.update_one(original).outcome is QuotationOutcome.UPDATED_INSERTED
+    assert io.writes == [original.quotation.payload] and notices == []
+
+
+@pytest.mark.parametrize("change_phase", ["before_write", "before_click", "retry"])
+def test_raw_source_model_changes_never_submit_stale_b(change_phase):
+    updater, src, io, actions, _ = service()
+    state = src.read_state
+    count = [0]
+    def changing(result):
+        count[0] += 1
+        status, model = state(result)
+        threshold = 2 if change_phase == "before_write" else 3 if change_phase == "before_click" else 4
+        return status, model if count[0] < threshold else model.lower()
+    src.read_state = changing
+    if change_phase == "retry":
+        actions.popups = [None]
+        src.after = ["发给采购"]
+    result = updater.update_one(found(model="WGI210IT"))
+    assert result.row_error_reason is RowErrorReason.SOURCE_CHANGED
+    assert actions.clicks == (1 if change_phase == "retry" else 0)
+    assert len(io.writes) == (0 if change_phase == "before_write" else 1)
+
+
+@pytest.mark.parametrize("worksheet_title, model_column, status_column", [("2026", "E", "A"), ("SHAHAB", "D", "B")])
+def test_verified_source_state_projects_physical_raw_model_without_cleaning(worksheet_title, model_column, status_column):
+    from src.sheets import (
+        IdentifyingSnapshot,
+        SheetRecordIdentity,
+        WorksheetIdentity,
+        WorksheetRow,
+    )
+    raw = " W_GI-210IT "
+    ws = WorksheetIdentity("fake-sheet", worksheet_title)
+    snapshot = IdentifyingSnapshot("未发", "A" if worksheet_title == "2026" else None, raw, "Brand", 7)
+    identity = SheetRecordIdentity(ws, 2, snapshot)
+    original = item(2)
+    original.record_identity = identity
+    cells = ({"A": "发给采购", "C": "A", "D": "Customer", "E": raw, "F": "Brand", "G": 7}
+             if worksheet_title == "2026" else {"B": "发给采购", "D": raw, "E": "Brand", "F": 7})
+    reader = SimpleNamespace(read_rows=lambda requested: [WorksheetRow(2, cells)] if requested == ws else [])
+    result = replace(found(), inquiry_id=original.inquiry_id, record_identity=identity, queried_mpn=raw)
+    verifier = WorkflowQuotationSource(reader=reader, store=Store([original]))
+    assert verifier.read_state(result) == (cells[status_column], cells[model_column])
