@@ -156,3 +156,102 @@ After repair, rebuild a new candidate and resubmit RFQ-008 for independent CEO R
 ## State transition
 
 `REVIEW_REQUIRED -> CHANGES_REQUESTED`
+
+---
+# RFQ-008 B1/B2 Repair CEO Independent Review — 2026-10-08
+
+**Status:** COMPLETE  
+**Verdict:** PASS / REVIEWED_DONE  
+**Reviewed repair HEAD:** `5275fc37adbfb73d704acadda993b1cb084d0887`  
+**Repair base:** `43b9bccea94b71f5727662aaba7fd37f0d5077a1`
+
+## Decision
+
+Both blockers from the prior RFQ-008 review are closed. No new blocker was found in the reviewed repair diff.
+
+## B1 closure — manual purchase rerun supersedes only the stale pre-submit alert episode
+
+PASS.
+
+The explicit manual purchase path reuses the existing `HUMAN_RESOLUTION_RECORDED` transition and adds a narrow `manual_purchase_retry=True` flag. Inside the existing V12 transaction, the retry now recovers only:
+
+- `PURCHASE_EXCEPTION` with scope `ai-recognition`;
+- `DUPLICATE_ORDER` with the existing empty scope.
+
+The existing invalid-input recovery remains unchanged. Customer-name, other data-quality, security, notification, save-outcome and uncertain-submit alerts are not recovered.
+
+Recovery continues through the canonical `_recover_alerts()` path, preserving old rows/events and appending recovery evidence. If the new retry fails again, the canonical workflow can raise a new active alert for the new episode.
+
+The durable no-resend gates for armed/clicked/unknown/saved submission evidence remain unchanged.
+
+## B2 closure — manual quotation retry is now a one-shot durable-hold bypass
+
+PASS.
+
+`ManualRetryHolds` does not delete a matching old barrier before execution. It identifies only:
+
+- a bound hold whose key exactly equals the selected inquiry id;
+- an unbound `unresolved:` hold whose stored worksheet and original row position exactly match the selected row.
+
+No MPN/brand/quantity fuzzy matching was introduced.
+
+For the selected invocation, matching old holds are hidden from the canonical integrated cycle while remaining durable in SQLite. New ROW_FAILED holds are still delegated to the real hold store.
+
+Final settlement is conservative:
+
+- `NO_RECENT_QUOTE`, `UPDATED_INSERTED`, `UPDATED_ALREADY_EXISTS`: matching old holds close only after exactly one selected terminal result is returned;
+- `ROW_FAILED`: a new/current durable hold with the current reason must already be active before superseded old keys may close; a same-key bound hold remains active;
+- global fault, unexpected exception, stop/interruption, empty/nonterminal result, or close transaction failure: old barriers remain active.
+
+The existing `SOURCE_STATUS_NOT_UPDATED` same-snapshot no-repeat rule is checked before the bypass and remains intact, including matching unbound holds.
+
+`V13HoldStore.close_many()` uses one SQLite transaction, so a batch-close failure rolls back instead of partially dropping barriers.
+
+## Regression and safety review
+
+The repair preserves the previously accepted RFQ-008 behavior:
+
+- single-cell RAW source edits and readback;
+- SHAHAB fixed-A edit restriction;
+- current 15-minute cycle counters;
+- serial idle-countdown manual commands;
+- full countdown restart after a command;
+- current source reread before rerun;
+- purchase requires current `未发`;
+- quotation requires current `发给采购`;
+- original worksheet/row manual anchor;
+- existing V1.2/V1.3 workflow, identity, browser/CDP, SMTP and notification implementations.
+
+RFQ-003 through RFQ-007 reviewed safety boundaries remain unchanged.
+
+## Verification evidence reviewed
+
+Executor reports for the exact repair HEAD:
+
+- focused: **451 passed**;
+- full safe/offline: **1507 passed / 1 skipped**;
+- Ruff: **PASS**;
+- `git diff --check`: **PASS**;
+- V1.3 BuildOnly: **PASS**;
+- frozen self-check: **PASS**;
+- release scan: **PASS**.
+
+The focused repair tests cover stale AI/duplicate alert recovery, unrelated-alert preservation, repeated-failure re-alerting, append-only history, bound/unbound hold settlement, unresolved-to-bound replacement, global-fault preservation, transaction rollback, other-hold isolation and confirmed-Script no-repeat behavior.
+
+New candidate EXE SHA256:
+
+`7ECE6917BF77E263E1E56BC528A63EE0798404DB1D03D494499B94A4A16B663F`
+
+The prior `136902DD...` candidate remains superseded.
+
+## Live boundary
+
+No real procurement, Save-and-Send, quotation write, 更新报价, Apps Script or real SMTP was executed in this repair. The candidate remains BuildOnly and is not yet deployed.
+
+## Release decision
+
+RFQ-008 source/offline review is approved. The `7ECE6917...` candidate is eligible for the controlled deployment step, preserving the existing runtime DB, OAuth/grants, credentials, fixed Chrome profile, production configuration and V1.2 release.
+
+## Final state
+
+`CHANGES_REQUESTED -> REVIEW_REQUIRED -> REVIEWED_DONE`
