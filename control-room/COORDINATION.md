@@ -19,4 +19,4 @@ Status is changed by the active executor/reviewer. Requirement meaning is change
 RFQ-006 Owner closeout increment (2026-10-07) requires independent review. Prior reviewed
 baseline2a32007 and RFQ-007 reviewed2c9f704 remain approved; RFQ-007 status is unchanged.
 
-| RFQ-008 | GUI poll counters, source field edits and selected-row rerun | REVIEW_REQUIRED | `feature/v1-3-integration` | REQUIRED | `control-room/RFQ-008/TASK_SPEC.md` |
+| RFQ-008 | GUI poll counters, source field edits and selected-row rerun | CHANGES_REQUESTED | `feature/v1-3-integration` | REQUIRED | `control-room/RFQ-008/TASK_SPEC.md` |
