@@ -40,3 +40,6 @@ Owner requests a new version because Chrome steals focus and occupies the deskto
 - Limits: live probe covers existing minimized Chrome and blank-target lifecycle, not actual purchase/quotation websites or browser cold launch. Fixed Chrome was not shut down or a second Chrome created to test cold startup; first-window behaviour is covered by protocol support and offline regression. No claim of universal OS focus immunity.
 - Untracked evidence: main .tmp/v13-background-build.log, v13-background-frozen-report.json, v13-background-focus-probe.json. Only sanitized summary included here.
 - State: REVIEW_REQUIRED; independent CEO approval and explicit approved-candidate deployment remain pending. Audit/report commit is local; no new remote upload is included without authorization.
+
+## Owner release authorization update
+Owner subsequently explicitly authorized direct deployment of this verified candidate without waiting for another CEO Review. See tasks/2026-10-08-chrome-background-deploy.md for completed controlled deployment and protection checks. This authorization does not change or invent a CEO independent Review verdict.
