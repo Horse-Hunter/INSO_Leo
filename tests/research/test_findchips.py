@@ -279,3 +279,34 @@ def test_fx_or_acquisition_failure_is_technical_failure() -> None:
     ).search("ABC", 1)
     assert unavailable.outcome is SourceOutcome.SOURCE_UNAVAILABLE
     assert fx_failed.outcome is SourceOutcome.SOURCE_UNAVAILABLE
+
+
+@pytest.mark.parametrize("message, code", [
+    ("Bad captcha", "MANUAL_VERIFICATION_REQUIRED"),
+    ("Invalid login", "LOGIN_REJECTED"),
+])
+def test_findchips_explicit_login_error_stops_wait_with_safe_reason(message, code):
+    from types import SimpleNamespace
+    from urllib.parse import quote
+
+    from src.research.findchips import _findchips_login_pending
+    from src.research.site_login import SiteLoginError
+
+    page = SimpleNamespace(url="https://www.findchips.com/signin?login_error=" + quote(message))
+    with pytest.raises(SiteLoginError) as error:
+        _findchips_login_pending(page)
+    assert error.value.reason_code == code
+    assert message not in str(error.value)
+
+
+@pytest.mark.parametrize("url, pending", [
+    ("https://www.findchips.com/signin", True),
+    ("https://www.findchips.com/signin?login_error=false", True),
+    ("https://www.findchips.com/search/DRV8833PWR?login_error=Bad+captcha", False),
+    ("https://untrusted.example/signin?login_error=Bad+captcha", True),
+])
+def test_findchips_only_own_signin_refusal_is_interpreted(url, pending):
+    from types import SimpleNamespace
+
+    from src.research.findchips import _findchips_login_pending
+    assert _findchips_login_pending(SimpleNamespace(url=url)) is pending

@@ -12,7 +12,7 @@ from html.parser import HTMLParser
 from time import monotonic, sleep
 from typing import Protocol
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 from urllib.request import Request, urlopen
 
 from .cdp_pages import new_background_page
@@ -172,6 +172,20 @@ def findchips_login_page_open(page: object) -> bool:
     """Settle predicate: has Findchips' own script carried us off the form?"""
 
     return _is_findchips_signin_url(getattr(page, "url", "") or "")
+
+
+def _findchips_login_pending(page: object) -> bool:
+    """Recognize the site's explicit post-login refusal without leaking its text."""
+    parsed = urlsplit(getattr(page, "url", "") or "")
+    if _is_findchips_response_url(parsed.geturl()) and _is_findchips_signin_url(parsed.geturl()):
+        errors = parse_qs(parsed.query).get("login_error", ())
+        errors = [value.casefold() for value in errors
+                  if value.strip() and value.casefold() not in {"0", "false"}]
+        if errors:
+            if any("captcha" in value for value in errors):
+                raise SiteLoginError("MANUAL_VERIFICATION_REQUIRED")
+            raise SiteLoginError("LOGIN_REJECTED")
+    return findchips_login_page_open(page)
 
 
 class FindchipsHttpClient:
@@ -369,7 +383,7 @@ def ensure_findchips_signed_in(
     await_login_outcome(
         page,
         form=FINDCHIPS_LOGIN_FORM,
-        is_login_page=findchips_login_page_open,
+        is_login_page=_findchips_login_pending,
         timeout_ms=timeout_ms,
         wait=wait,
         clock=clock,

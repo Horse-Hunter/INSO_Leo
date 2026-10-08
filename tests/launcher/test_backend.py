@@ -1208,7 +1208,7 @@ class _SweepHandle:
     owned = False
 
     def __init__(self) -> None:
-        self.browser = SimpleNamespace(contexts=(SimpleNamespace(),))
+        self.browser = SimpleNamespace(contexts=(SimpleNamespace(pages=[]),))
         self.disconnected = False
         self.closed = False
 

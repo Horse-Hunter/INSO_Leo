@@ -792,3 +792,121 @@ def test_drain_from_another_thread_leaves_a_foreign_client_parked() -> None:
 
     assert BrowserHandle.drain_deferred_stops() == 1
     assert client.stops == 1
+
+
+def test_loading_existing_pages_gets_one_useful_attach_window():
+    clock = _Clock()
+    started = []
+    timeouts = []
+
+    def connect(_url, *, timeout):
+        timeouts.append(timeout)
+        assert timeout >= 4000, "existing Sheets pages may need more than three seconds"
+        clock.wait(4)
+        return _FakeBrowser()
+
+    playwright, browser = wait_for_cdp_ready(
+        "http://127.0.0.1:9222", process=None,
+        version_reader=lambda _url: "ws://127.0.0.1/devtools/browser/test",
+        playwright_factory=_factory_for(connect, started),
+        monotonic=clock.monotonic, wait=clock.wait, timeout_seconds=20,
+    )
+    assert browser.is_connected() and playwright is started[0]
+    assert timeouts == [10000]
+    assert started[0].stop_count == 0
+
+
+def test_live_endpoint_initialization_timeout_is_specific_and_detaches_only():
+    clock = _Clock()
+    started = []
+
+    def connect(_url, *, timeout):
+        clock.wait(timeout / 1000)
+        raise TimeoutError("unresponsive existing page; must not expose page text")
+
+    with pytest.raises(BrowserBootstrapError) as error:
+        wait_for_cdp_ready(
+            "http://127.0.0.1:9222", process=None,
+            version_reader=lambda _url: "ws://127.0.0.1/devtools/browser/test",
+            playwright_factory=_factory_for(connect, started),
+            monotonic=clock.monotonic, wait=clock.wait, timeout_seconds=20,
+        )
+    assert error.value.reason_code == "CDP_SESSION_INITIALIZATION_TIMEOUT"
+    assert started and all(client.stop_count == 1 for client in started)
+    assert clock.monotonic() <= 20.001
+
+
+def test_frozen_cdp_probe_only_detaches_and_never_starts_business(tmp_path, monkeypatch):
+    import runpy
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from src.core import app_paths
+    from src.launcher import browser_bootstrap
+    from src.research import runtime
+
+    directory = tmp_path / "runtime"
+    directory.mkdir()
+    (directory / "production.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(app_paths, "app_root", lambda: tmp_path)
+    monkeypatch.setattr(runtime, "load_runtime_config", lambda _: SimpleNamespace(
+        cdp=SimpleNamespace(cdp_url="http://127.0.0.1:9222")))
+    monkeypatch.setattr(browser_bootstrap, "_read_cdp_version", lambda _: "ws://test")
+    calls = []
+    handle = SimpleNamespace(browser=SimpleNamespace(is_connected=lambda: True,
+        contexts=[SimpleNamespace(pages=[object(), object()])]),
+        disconnect=lambda: calls.append("disconnect"))
+    def acquire(*args, **kwargs):
+        calls.append("attach")
+        return handle
+    monkeypatch.setattr(browser_bootstrap, "acquire_cdp_browser", acquire)
+    entry = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts/windows_release_entry.py"))
+    assert entry["_cdp_self_check"]() == 0
+    assert calls == ["attach", "disconnect"]
+    report = json.loads((directory / "logs/v13-cdp-self-check.json").read_text())
+    assert report == {"connected": True, "business_started": False,
+        "unique_context": True, "page_count": 2}
+
+
+def test_frozen_cdp_probe_without_endpoint_never_launches_browser(tmp_path, monkeypatch):
+    import runpy
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from src.core import app_paths
+    from src.launcher import browser_bootstrap
+    from src.research import runtime
+
+    directory = tmp_path / "runtime"
+    directory.mkdir()
+    (directory / "production.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(app_paths, "app_root", lambda: tmp_path)
+    monkeypatch.setattr(runtime, "load_runtime_config", lambda _: SimpleNamespace(
+        cdp=SimpleNamespace(cdp_url="http://127.0.0.1:9222")))
+    monkeypatch.setattr(browser_bootstrap, "_read_cdp_version", lambda _: None)
+    monkeypatch.setattr(browser_bootstrap, "acquire_cdp_browser", lambda *a, **kw:
+        pytest.fail("diagnostic must never launch Chrome"))
+    entry = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts/windows_release_entry.py"))
+    assert entry["_cdp_self_check"]() == 1
+    report = json.loads((directory / "logs/v13-cdp-self-check.json").read_text())
+    assert report["reason"] == "CDP_ATTACH_FAILED" and not report["business_started"]
+
+
+def test_login_sweep_explains_live_chrome_session_initialization_timeout(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from src.launcher import backend as launcher
+
+    backend = ProductionBackend(root=tmp_path)
+    backend.production_path.parent.mkdir(parents=True, exist_ok=True)
+    backend.production_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(launcher, "load_runtime_config", lambda _: SimpleNamespace(
+        cdp=SimpleNamespace(cdp_url="http://127.0.0.1:9222")))
+    def failed(*args, **kwargs):
+        raise BrowserBootstrapError("CDP_SESSION_INITIALIZATION_TIMEOUT")
+    backend._browser_acquirer = failed
+    result, = backend._run_login_sweep()
+    assert "Chrome 已启动" in result.detail and "标签页可能无响应" in result.detail
+    assert "未保存内容" in result.detail
+    assert "请先打开" not in result.detail
+    assert backend._thread is None

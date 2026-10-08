@@ -104,6 +104,7 @@ _DETAILS: dict[str, str] = {
     "MANUAL_VERIFICATION_REQUIRED": "站点要求人工验证（滑块／验证码／短信）",
     "INTERACTIVE_CHALLENGE_REQUIRED": "站点要求人工验证（滑块／验证码／短信）",
     "CREDENTIAL_REJECTED": "站点拒绝了账号或密码",
+    "LOGIN_REJECTED": "站点返回登录失败，请检查账号或站点验证",
     "CREDENTIALS_UNAVAILABLE": "凭证库中没有可用的登录信息",
     "CREDENTIAL_NOT_CONFIGURED": "凭证库中没有可用的登录信息",
     "LOGIN_REQUIRED": "站点要求登录，但凭证不可用",

@@ -131,6 +131,7 @@ class BrowserHandle:
 _LOG = logging.getLogger(__name__)
 _CDP_READY_TIMEOUT_SECONDS = 20.0
 _CDP_RETRY_INTERVAL_SECONDS = 0.4
+_CDP_ATTACH_ATTEMPT_TIMEOUT_SECONDS = 10.0
 
 
 def _hide_owned_windows(process_id: int) -> None:
@@ -364,6 +365,7 @@ def wait_for_cdp_ready(
 
     deadline = monotonic() + min(timeout_seconds, _CDP_READY_TIMEOUT_SECONDS)
     consecutive_versions = 0
+    last_attach_timed_out = False
     while monotonic() < deadline:
         if process is not None and process.poll() is not None:
             raise BrowserBootstrapError("CDP_ATTACH_FAILED")
@@ -372,13 +374,16 @@ def wait_for_cdp_ready(
             consecutive_versions += 1
         else:
             consecutive_versions = 0
+            last_attach_timed_out = False
         if consecutive_versions >= 2:
             playwright = None
             try:
                 playwright = _start_playwright(playwright_factory)
                 browser = playwright.chromium.connect_over_cdp(
                     cdp_url,
-                    timeout=max(1, int(min(3.0, deadline - monotonic()) * 1000)),
+                    timeout=max(1, int(min(
+                        _CDP_ATTACH_ATTEMPT_TIMEOUT_SECONDS, deadline - monotonic()
+                    ) * 1000)),
                 )
                 if (
                     browser.is_connected()
@@ -386,6 +391,7 @@ def wait_for_cdp_ready(
                 ):
                     return playwright, browser
             except Exception as exc:  # noqa: BLE001 - classify only within deadline
+                last_attach_timed_out = type(exc).__name__ == "TimeoutError"
                 _LOG.debug("CDP attach attempt failed (%s)", type(exc).__name__)
             if playwright is not None:
                 try:
@@ -396,7 +402,10 @@ def wait_for_cdp_ready(
         remaining = deadline - monotonic()
         if remaining > 0:
             wait(min(_CDP_RETRY_INTERVAL_SECONDS, remaining))
-    raise BrowserBootstrapError("CDP_ATTACH_FAILED")
+    raise BrowserBootstrapError(
+        "CDP_SESSION_INITIALIZATION_TIMEOUT"
+        if last_attach_timed_out else "CDP_ATTACH_FAILED"
+    )
 
 
 def _devtools_active_port_status(

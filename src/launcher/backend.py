@@ -2055,7 +2055,10 @@ class ProductionBackend(GuiBackend):
                 SiteLoginResult(
                     "浏览器（CDP）",
                     SiteLoginOutcome.UNAVAILABLE,
-                    "无法连接或启动已授权的 Chrome，请先打开该浏览器",
+                    ("Chrome 已启动，但会话初始化超时；标签页可能无响应。"
+                     "请先保留未保存内容，恢复或关闭无响应标签页后重试"
+                     if getattr(exc, "reason_code", None) == "CDP_SESSION_INITIALIZATION_TIMEOUT"
+                     else "无法连接或启动已授权的 Chrome，请先打开该浏览器"),
                 ),
             )
         try:
@@ -2077,7 +2080,7 @@ class ProductionBackend(GuiBackend):
                 timeout_ms=research_config.browser.timeout_ms,
                 **options,
             )
-            if background and any(r.outcome not in {
+            if any(r.outcome not in {
                     SiteLoginOutcome.SIGNED_IN, SiteLoginOutcome.ALREADY_SIGNED_IN} for r in results):
                 self._protect_keepalive_pages(handle.browser.contexts[0].pages)
             if background and not self._immediate_stop_requested():

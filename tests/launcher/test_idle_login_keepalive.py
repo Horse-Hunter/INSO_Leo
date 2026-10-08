@@ -336,3 +336,27 @@ def test_stop_page_without_inso_session_is_not_closed_by_backend_release(tmp_pat
     backend._inso_session = None
     backend._release_idle_browser(force=True)
     assert released == ["detach"]
+
+
+def test_manual_login_failure_page_survives_later_research_cleanup(tmp_path, monkeypatch):
+    result = SiteLoginResult("TEST", SiteLoginOutcome.NEEDS_HUMAN)
+    backend, handle = _sweep_backend(tmp_path, monkeypatch, [result])
+    context = ProtectedContext()
+    handle.browser.contexts = [context]
+    handle.browser.is_connected = lambda: True
+    failed = []
+    def sweep(browser, **options):
+        assert "present_failures" not in options  # Manual button still presents its result.
+        failed.append(ProtectedPage(context, "https://captcha.example/"))
+        return (result,)
+    monkeypatch.setattr(launcher, "sweep_sites", sweep)
+    assert backend._run_login_sweep() == (result,)
+    assert handle.disconnected and not handle.closed
+    assert failed[0].target_id in backend._keepalive_protected_targets
+    backend._park_browser(handle.browser)
+    assert not failed[0].closed
+    assert any(page.url == "about:blank" for page in context.pages)
+    failed[0].close()  # Owner resolves/closes the human page.
+    backend._park_browser(handle.browser)
+    assert backend._keepalive_protected_targets == set()
+    assert len(context.pages) == 1 and context.pages[0].url == "about:blank"

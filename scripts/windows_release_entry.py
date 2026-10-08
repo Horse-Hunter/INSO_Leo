@@ -120,7 +120,45 @@ def _idle_self_check() -> int:
         backend.shutdown()
 
 
+def _cdp_self_check() -> int:
+    """Prove the frozen driver attaches; never launch/close Chrome or run business."""
+    from src.core.app_paths import app_root, runtime_config_path
+    from src.launcher.browser_bootstrap import (
+        BrowserBootstrapError,
+        _read_cdp_version,
+        acquire_cdp_browser,
+    )
+    from src.research.runtime import load_runtime_config
+
+    root = app_root()
+    handle = None
+    report = {"connected": False, "business_started": False}
+    try:
+        config = json.loads(runtime_config_path("production.json", root=root).read_text(encoding="utf-8"))
+        research = load_runtime_config(runtime_config_path("research.json", root=root))
+        if _read_cdp_version(research.cdp.cdp_url) is None:
+            raise BrowserBootstrapError("CDP_ATTACH_FAILED")
+        # A diagnostic only attaches to the already-running fixed session.
+        handle = acquire_cdp_browser(research.cdp.cdp_url, root, config, probe=lambda _: True)
+        report.update(connected=handle.browser.is_connected(),
+                      unique_context=len(handle.browser.contexts) == 1,
+                      page_count=sum(len(context.pages) for context in handle.browser.contexts))
+    except Exception as exc:  # noqa: BLE001 - never persist raw browser/provider exceptions
+        reason = getattr(exc, "reason_code", None)
+        report["reason"] = reason if isinstance(reason, str) and re.fullmatch(r"[A-Z_]+", reason) else "CDP_CHECK_FAILED"
+        report["error_class"] = type(exc).__name__
+    finally:
+        if handle is not None:
+            handle.disconnect()  # No Browser.close, tab cleanup, workflow or SMTP.
+    directory = root / "runtime" / "logs"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "v13-cdp-self-check.json").write_text(json.dumps(report), encoding="utf-8")
+    return 0 if report["connected"] and report.get("unique_context") else 1
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--cdp-self-check"]:
+        raise SystemExit(_cdp_self_check())
     if sys.argv[1:] == ["--idle-self-check"]:
         raise SystemExit(_idle_self_check())
     if sys.argv[1:] == ["--self-check"]:
