@@ -39,7 +39,7 @@ class Fx:
 
 
 def _rec(price: str | Decimal, currency: str, observed: datetime) -> InsoHistoryRecord:
-    return InsoHistoryRecord(Decimal(price), currency, observed)
+    return InsoHistoryRecord(Decimal(price), currency, observed, "ABC")
 
 
 def test_inso_uses_lowest_rmb_normalized_price_and_first_nonempty_window() -> None:
@@ -51,7 +51,7 @@ def test_inso_uses_lowest_rmb_normalized_price_and_first_nonempty_window() -> No
     )
 
     result = InsoHistoryAdapter(Client(records), Fx(), clock=lambda: NOW).search(
-        "QUERY-MPN", 999
+        "ABC", 999
     )
 
     assert result.outcome is SourceOutcome.SUCCESS
@@ -69,7 +69,7 @@ def test_inso_three_month_window() -> None:
         _rec("3", "USD", datetime(2026, 7, 1, tzinfo=UTC)),
     )
     result = InsoHistoryAdapter(Client(records), Fx(), clock=lambda: NOW).search(
-        "ANY-MPN", 1
+        "ABC", 1
     )
     assert result.price_candidate is not None
     assert result.price_candidate.age_months == 3
@@ -279,7 +279,9 @@ def test_concrete_browser_uses_cdp_and_posts_stock_venquote() -> None:
         " ABC-1 ", InsoLogin("u", "p")
     )
 
-    assert "ABC-1" in captured["data"]
+    assert "searchData[DetailFieldValue]=AB&" in captured["data"]
+    assert "para=AB&" in captured["url"]
+    assert capture.records[0].mpn == "ABC-1"
     assert captured["headers"]["Content-Type"].startswith(
         "application/x-www-form-urlencoded"
     )
@@ -366,3 +368,17 @@ def test_browser_config_validates_https_and_loopback_cdp() -> None:
         pass
     else:
         raise AssertionError("non-positive pagesize must be rejected")
+
+
+def test_inso_history_filters_actual_models_before_price_and_keeps_suffix_evidence():
+    capture = Client((
+        InsoHistoryRecord(Decimal("0.01"), "RMB", NOW, "WGI211IT"),
+        InsoHistoryRecord(Decimal("0.02"), "RMB", NOW),
+        InsoHistoryRecord(Decimal("1.25"), "RMB", NOW, "WGI210IT S LJXS"),
+        InsoHistoryRecord(Decimal(3), "RMB", NOW, "WGI210IT"),
+        InsoHistoryRecord(Decimal("0.03"), "RMB", NOW, "WGI210" + "A" * 11),
+    ))
+    result = InsoHistoryAdapter(capture, Fx(), clock=lambda: NOW).search("WGI210IT", 1)
+    assert result.price_candidate.raw_price == Decimal("1.25")
+    assert result.price_candidate.matched_mpn == "WGI210IT S LJXS"
+    assert result.evidence.matched_mpn == "WGI210IT S LJXS"

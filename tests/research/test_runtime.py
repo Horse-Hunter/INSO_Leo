@@ -182,7 +182,7 @@ def test_load_runtime_config_reads_non_secret_values(tmp_path: Path) -> None:
 
     assert config.excel_output_path == Path("data/调研价格.xlsx")
     assert config.bom_ai.login_url == "https://www.bom.ai/login"
-    assert config.bom_ai.result_url("ABC") == "https://www.bom.ai/search/ABC"
+    assert config.bom_ai.result_url("ABC") == "https://www.bom.ai/search/A"
     assert config.inso.login_url == "https://inso.example/login"
     assert config.inso.cdp_url == "http://127.0.0.1:9222"
     assert config.inso.pagesize == 20

@@ -50,7 +50,7 @@ def test_empty_one_multiple_unsorted_old_and_exact_normalization():
     latest = quote(NOW-timedelta(minutes=1), model=" ｍｐｎ ")
     older = quote(NOW-timedelta(hours=2))
     stale = quote(NOW-timedelta(hours=73))
-    fuzzy = quote(NOW, model="MPN suffix")
+    fuzzy = quote(NOW, model="XMPN suffix")
     assert select_recent_lowest([], queried_mpn="MPN", now=NOW) is None
     assert select_recent_lowest([older], queried_mpn="MPN", now=NOW) is older
     assert select_recent_lowest([older, latest, stale, fuzzy], queried_mpn="MPN", now=NOW) is latest
@@ -91,7 +91,7 @@ def test_real_native_pagination_then_raw_reader_latest_across_all_pages():
     selected = select_recent_lowest(records, queried_mpn="MPN", now=NOW)
     assert selected.payload == latest.payload
     assert frame.number == 2
-    assert frame.value == "MPN"
+    assert frame.value == "M"
     assert len(selected.payload) == 14
     assert selected.payload[3] == ""
     assert selected.payload[6] == "0001.2300"
@@ -121,8 +121,8 @@ def test_native_failure_does_not_return_empty_and_fuzzy_result_does_not_compete(
     with pytest.raises(InsoDuplicateHistoryError):
         InsoQuotationReader().read(access(frame), "MPN")
     fuzzy = row(1)
-    fuzzy["PartNo"] = "MPN suffix"
-    frame = DisplayFrame([[fuzzy]], [[list(quote(model="MPN suffix").payload)]], 1)
+    fuzzy["PartNo"] = "XMPN suffix"
+    frame = DisplayFrame([[fuzzy]], [[list(quote(model="XMPN suffix").payload)]], 1)
     assert InsoQuotationReader().read(access(frame), "MPN") == ()
 
 
@@ -254,3 +254,24 @@ def test_zero_fallback_ignores_stale_fuzzy_and_future_rows_and_needs_no_fx():
     future = priced(NOW+timedelta(seconds=1), "0")
     assert select_recent_lowest([stale, future], queried_mpn="MPN", now=NOW) is None
     assert select_recent_lowest([zero], queried_mpn="MPN", now=NOW) is zero
+
+
+def test_owner_suffix_reader_and_lowest_price_across_pages_preserve_raw14():
+    from dataclasses import replace
+    original = quote(model="WGI210IT S LJXS")
+    cheap = list(original.payload)
+    cheap[7] = "0000.7500"
+    suffixed = replace(original, payload=tuple(cheap))
+    other = quote(model="WGI211IT")
+    first, second, third = row(1), row(2), row(3)
+    first["PartNo"], second["PartNo"], third["PartNo"] = "WGI210IT", original.payload[1], other.payload[1]
+    exact = quote(model="WGI210IT")
+    frame = DisplayFrame([[first, second], [third]],
+                         [[list(exact.payload), list(suffixed.payload)], [list(other.payload)]], 3)
+    records = InsoQuotationReader().read(access(frame), "WGI210IT")
+    assert frame.value == "WGI210"
+    assert len(records) == 2
+    selected = select_recent_lowest(records, queried_mpn="WGI210IT", now=NOW)
+    assert selected.payload == suffixed.payload
+    assert selected.payload[1] == "WGI210IT S LJXS"
+    assert selected.payload[7] == "0000.7500"

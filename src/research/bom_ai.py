@@ -13,6 +13,8 @@ from time import monotonic, sleep
 from typing import Protocol
 from urllib.parse import quote, urlsplit
 
+from src.core.mpn import lookup_mpn_prefix
+
 from .cdp_pages import new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .site_login import (
@@ -315,7 +317,7 @@ class BomAiBrowserConfig:
         """Build the target model page URL from the trimmed MPN."""
 
         return self.result_url_template.replace(
-            "{mpn}", quote(mpn.strip(), safe="")
+            "{mpn}", quote(lookup_mpn_prefix(mpn), safe="")
         )
 
 

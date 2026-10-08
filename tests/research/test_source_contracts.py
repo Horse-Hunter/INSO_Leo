@@ -107,14 +107,14 @@ def test_strict_mpn_match_accepts_only_edge_whitespace_and_case_differences(
 @pytest.mark.parametrize(
     ("target", "observed"),
     [
-        ("ABC123", "ABC123TR"),
-        ("ABC123-7", "ABC123-13"),
-        ("ABC 123", "ABC123"),
+        ("ABC123", "XABC123TR"),
+        ("ABC123-7", "AXC123-13"),
+        ("ABC 123", "XABC123"),
         ("ABC/123", "ABC-123"),
         ("ABC.123", "ABC123"),
     ],
 )
-def test_strict_mpn_match_does_not_normalize_variants(
+def test_icnet_mpn_match_rejects_wrong_prefix_or_preserved_punctuation(
     target: str,
     observed: str,
 ) -> None:
@@ -128,16 +128,17 @@ def test_strict_mpn_match_does_not_normalize_variants(
         ("ABC123-T", MpnMatchKind.SUFFIX),
         ("ABC123ABCDE", MpnMatchKind.SUFFIX),
         ("ABC123ABCDEF", MpnMatchKind.SUFFIX),
-        ("ABC123ABCDEFG", None),
+        ("ABC123ABCDEFG", MpnMatchKind.SUFFIX),
+        ("ABC123ABCDEFGHI", None),
         ("a-b c\t123", MpnMatchKind.EXACT),
         ("A B C-123-ABC DEF", MpnMatchKind.SUFFIX),
         ("ABX123ABCDEF", None),
         ("XABC123", None),
-        ("ABC12X", None),
-        ("ABC12", None),
+        ("ABC12X", MpnMatchKind.SUFFIX),
+        ("ABC12", MpnMatchKind.SUFFIX),
     ],
 )
-def test_price_source_mpn_match_only_accepts_exact_or_short_tail_suffix(
+def test_price_source_mpn_match_uses_owner_prefix_and_ten_character_limit(
     observed: str, expected: MpnMatchKind | None
 ) -> None:
     assert price_source_mpn_match(" ABC123 ", f" {observed} ") is expected

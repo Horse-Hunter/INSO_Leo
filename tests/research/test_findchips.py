@@ -65,7 +65,7 @@ def _row(
 
 
 def test_url_and_http_response_host_boundary(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert build_findchips_search_url("  Ab c-1  ").endswith("/Ab%20c-1")
+    assert build_findchips_search_url("  Ab c-1  ").endswith("/AB")
 
     class Headers:
         def get_content_type(self) -> str:
@@ -110,7 +110,7 @@ def test_parser_retains_only_safe_offer_facts_and_fails_closed() -> None:
 
 
 def test_explicit_target_empty_result_without_offer_table_is_normal() -> None:
-    html = '<p class="alert alert-info no-results">No results were found for TEST-MPN.</p>'
+    html = '<p class="alert alert-info no-results">No results were found for TESTM.</p>'
     assert parse_findchips_offers(html, "TEST-MPN") == ()
     result = FindchipsAdapter(Client(html), Fx()).search("TEST-MPN", 40)
     assert result.outcome is SourceOutcome.NO_STRICT_MPN_MATCH
@@ -118,8 +118,8 @@ def test_explicit_target_empty_result_without_offer_table_is_normal() -> None:
 
 @pytest.mark.parametrize("html", [
     '<p class="alert alert-info no-results">No results were found for OTHER.</p>',
-    '<script>No results were found for TEST-MPN.</script>',
-    '<p>No results were found for TEST-MPN.</p>',
+    '<script>No results were found for TESTM.</script>',
+    '<p>No results were found for TESTM.</p>',
     '<p class="alert alert-info no-results">Temporarily unavailable</p>',
 ])
 def test_empty_result_requires_authoritative_marker_and_matching_query(html):
@@ -255,10 +255,10 @@ def test_dated_quotes_use_one_natural_month_and_undated_quotes_remain_valid() ->
     assert result.price_candidate.raw_price == Decimal("2.00")
 
 
-def test_suffix_over_six_or_internal_mutation_does_not_match() -> None:
+def test_suffix_over_ten_or_prefix_mutation_does_not_match() -> None:
     html = _page(
-        _row("ABC-1ABCDEFG", "1", '[[1,"USD","0.01"]]'),
-        _row("ABX-1", "1", '[[1,"USD","0.01"]]'),
+        _row("ABC-1ABCDEFGHI", "1", '[[1,"USD","0.01"]]'),
+        _row("AXX-1", "1", '[[1,"USD","0.01"]]'),
     )
     result = FindchipsAdapter(Client(html), Fx()).search("ABC-1", 1)
     assert result.outcome is SourceOutcome.NO_STRICT_MPN_MATCH
@@ -374,3 +374,11 @@ def test_findchips_waits_for_passive_verification_before_click(monkeypatch, beco
             module._wait_findchips_submit_ready(page, timeout_ms=1000, wait=wait, clock=lambda: time[0])
         assert time[0] == 1.0
     assert waits
+
+
+def test_owner_wgi_suffix_price_is_compared_and_wrong_prefix_excluded():
+    html = _page(_row("WGI210IT S LJXS", "1", '[[1,"USD","1.25"]]'),
+                 _row("WGI211IT", "1", '[[1,"USD","0.01"]]'))
+    result = FindchipsAdapter(Client(html), Fx()).search("WGI210IT", 1)
+    assert result.price_candidate.matched_mpn == "WGI210IT S LJXS"
+    assert result.price_candidate.raw_price == Decimal("1.25")

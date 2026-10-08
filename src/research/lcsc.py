@@ -14,6 +14,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
+from src.core.mpn import lookup_mpn_prefix, normalize_lookup_mpn
+
 from .cdp_pages import new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .site_login import (
@@ -218,7 +220,7 @@ class LcscBrowserClient:
 
     def fetch_product_page(self, mpn: str) -> LcscPage:
         query = mpn.strip()
-        search_url = "https://so.szlcsc.com/global.html?" + urlencode({"k": query})
+        search_url = "https://so.szlcsc.com/global.html?" + urlencode({"k": lookup_mpn_prefix(query)})
         factory = self._playwright_factory
         timeout_error: type[Exception] = TimeoutError
         if factory is None:
@@ -342,7 +344,7 @@ class CdpLcscClient:
         self._playwright_factory = playwright_factory
 
     def fetch_product_page(self, mpn: str) -> LcscPage:
-        search_url = "https://so.szlcsc.com/global.html?" + urlencode({"k": mpn.strip()})
+        search_url = "https://so.szlcsc.com/global.html?" + urlencode({"k": lookup_mpn_prefix(mpn)})
         factory = self._playwright_factory
         if factory is None:
             try:
@@ -671,9 +673,7 @@ def parse_lcsc_search_product(
             raise LcscParseError("PRICE_TIERS_UNPARSEABLE") from exc
         if stock is not None and (isinstance(stock, bool) or not isinstance(stock, int)):
             raise LcscParseError("STOCK_UNPARSEABLE")
-        suffix_length = len(re.sub(r"[\s-]", "", mpn)) - len(
-            re.sub(r"[\s-]", "", target_mpn)
-        )
+        suffix_length = len(normalize_lookup_mpn(mpn)) - len(lookup_mpn_prefix(target_mpn))
         product = LcscProduct(
             mpn,
             bool(vo.get("isPreSale", False)),

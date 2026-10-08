@@ -8,6 +8,8 @@ from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
 
+from src.core.mpn import lookup_mpn_matches, normalize_lookup_mpn
+
 
 class ResearchSource(str, Enum):
     """Stable identifiers for the confirmed V1 Research sources."""
@@ -44,26 +46,19 @@ class MpnMatchKind(str, Enum):
 
 
 def is_strict_mpn_match(target_mpn: str, observed_mpn: str) -> bool:
-    """IC.net match: trim edges and ignore case, with no suffix allowance."""
-
-    return target_mpn.strip().casefold() == observed_mpn.strip().casefold()
+    """Legacy IC.net entry point now applies the shared Owner lookup policy."""
+    return lookup_mpn_matches(target_mpn, observed_mpn)
 
 
 def price_source_mpn_match(
     target_mpn: str, observed_mpn: str
 ) -> MpnMatchKind | None:
-    """Ignore hyphens/whitespace/case, then allow a tail of at most 6 chars."""
-
-    target = "".join(char for char in target_mpn if char != "-" and not char.isspace()).casefold()
-    observed = "".join(char for char in observed_mpn if char != "-" and not char.isspace()).casefold()
-    if not target or not observed:
+    """Use shared prefix policy; keep EXACT/SUFFIX evidence DTO compatibility."""
+    if not lookup_mpn_matches(target_mpn, observed_mpn):
         return None
-    if observed == target:
-        return MpnMatchKind.EXACT
-    if not observed.startswith(target):
-        return None
-    suffix_length = len(observed) - len(target)
-    return MpnMatchKind.SUFFIX if 1 <= suffix_length <= 6 else None
+    return (MpnMatchKind.EXACT
+            if normalize_lookup_mpn(target_mpn) == normalize_lookup_mpn(observed_mpn)
+            else MpnMatchKind.SUFFIX)
 
 
 def calendar_month_cutoff(now: datetime, months: int = 1) -> datetime:

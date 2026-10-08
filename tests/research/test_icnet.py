@@ -287,7 +287,7 @@ def test_brand_frequency_and_confirmed_tie_rules() -> None:
 def test_certified_stock_strict_match_and_both_certifications_count_once() -> None:
     rows = list(parse_icnet_rows(FIXTURE.read_text(encoding="utf-8")))
 
-    assert sum_certified_stock(rows, " abc-123 ") == (35, 3)
+    assert sum_certified_stock(rows, " abc-123 ") == (10034, 4)
 
 
 def test_certified_stock_does_not_filter_by_brand() -> None:
@@ -323,10 +323,10 @@ def test_successful_adapter_result_has_evidence_and_no_price_candidate() -> None
     assert result.resolved_brand == "Acme"
     assert result.stock_label == "货多"
     assert fields["first_page_rows_inspected"] == 4
-    assert fields["strict_mpn_rows"] == 3
-    assert fields["brand_frequency_rows_used"] == 3
-    assert fields["qualified_certified_rows"] == 3
-    assert fields["certified_stock_total"] == 35
+    assert fields["strict_mpn_rows"] == 4
+    assert fields["brand_frequency_rows_used"] == 4
+    assert fields["qualified_certified_rows"] == 4
+    assert fields["certified_stock_total"] == 10034
     assert fields["customer_quantity"] == 10
     assert fields["stock_threshold"] == 30
     assert fields["stock_label"] == "货多"
@@ -357,7 +357,7 @@ def test_brand_frequency_uses_at_most_first_twenty_rows() -> None:
 
 
 def test_no_strict_match_is_not_source_unavailability() -> None:
-    html = _page_html(_row_html("ABC-123-T", "Acme", "99", "SSCP"))
+    html = _page_html(_row_html("XABC-123-T", "Acme", "99", "SSCP"))
     result = IcNetAdapter(FakeClient(html)).search("ABC-123", None, 10)
 
     assert result.source_result.outcome is SourceOutcome.NO_STRICT_MPN_MATCH
@@ -443,7 +443,7 @@ def _cdp_client(
     ],
 )
 def test_cdp_client_accepts_loopback_endpoints(cdp_url: str) -> None:
-    target_url = "https://www.ic.net.cn/search/ABC-123.html"
+    target_url = "https://www.ic.net.cn/search/ABC1.html"
     page = FakeCdpPage(target_url, FIXTURE.read_text(encoding="utf-8"))
     client, chromium = _cdp_client(
         [page],
@@ -469,7 +469,7 @@ def test_cdp_client_rejects_remote_endpoint() -> None:
 
 
 def test_cdp_client_attach_only_reads_exact_existing_page() -> None:
-    target_url = "https://www.ic.net.cn/search/ABC-123.html"
+    target_url = "https://www.ic.net.cn/search/ABC1.html"
     page = FakeCdpPage(target_url, FIXTURE.read_text(encoding="utf-8"))
     client, chromium = _cdp_client([page], navigate=False)
 
@@ -499,7 +499,7 @@ def test_cdp_client_opens_its_own_page_and_closes_it() -> None:
     captured = client.fetch_first_page("  ABC-123  ")
 
     context = chromium.browser.contexts[0]
-    target_url = "https://www.ic.net.cn/search/ABC-123.html"
+    target_url = "https://www.ic.net.cn/search/ABC1.html"
     assert captured.url == target_url
     assert stale.goto_calls == [], "an earlier tab must not be reused"
     assert len(context.pages) == 2
@@ -586,7 +586,7 @@ def test_cdp_client_recovers_one_expired_session_with_existing_provider() -> Non
     captured = client.fetch_first_page("ABC-123")
 
     page = chromium.browser.contexts[0].pages[-1]
-    assert captured.url == "https://www.ic.net.cn/search/ABC-123.html"
+    assert captured.url == "https://www.ic.net.cn/search/ABC1.html"
     assert ("#username", "test-user") in page.fills
     assert ("#password", "test-password") in page.fills
     assert page.clicks == ["#btn_login"]
@@ -615,7 +615,7 @@ def test_cdp_client_classifies_http_forbidden_before_parser() -> None:
     with pytest.raises(IcNetPageUnavailable, match="HTTP_STATUS_403") as caught:
         client.fetch_first_page("ABC-123")
 
-    assert caught.value.source_url == "https://www.ic.net.cn/search/ABC-123.html"
+    assert caught.value.source_url == "https://www.ic.net.cn/search/ABC1.html"
 
 
 def test_cdp_client_spaces_queries_to_the_same_site(
@@ -658,7 +658,7 @@ def test_cdp_client_navigation_does_not_reuse_unrelated_page() -> None:
 
     captured = client.fetch_first_page("ABC-123")
 
-    target_url = "https://www.ic.net.cn/search/ABC-123.html"
+    target_url = "https://www.ic.net.cn/search/ABC1.html"
     context = chromium.browser.contexts[0]
     assert captured.url == target_url
     assert unrelated.goto_calls == []
@@ -682,7 +682,7 @@ def test_cdp_client_attach_only_requires_target_page_to_be_open() -> None:
 
 
 def test_cdp_client_fails_closed_when_attached_page_has_no_body() -> None:
-    target_url = "https://www.ic.net.cn/search/ABC-123.html"
+    target_url = "https://www.ic.net.cn/search/ABC1.html"
     page = FakeCdpPage(
         target_url,
         "<html></html>",
@@ -709,3 +709,12 @@ def test_cdp_client_identifies_visible_search_challenge() -> None:
         IcNetPageUnavailable, match="INTERACTIVE_CHALLENGE_REQUIRED"
     ):
         client.fetch_first_page("ABC-123")
+
+
+def test_owner_wgi_suffix_brand_and_certified_stock_use_same_filter():
+    html = _page_html(_row_html("WGI210IT S LJXS", "Intel", "100", "SSCP"),
+                      _row_html("WGI211IT", "WrongBrand", "99999", "ICCP"))
+    result = IcNetAdapter(FakeClient(html)).search("WGI210IT", None, 1)
+    assert result.resolved_brand == "Intel"
+    assert _fields(result)["certified_stock_total"] == 100
+    assert _fields(result)["strict_mpn_rows"] == 1

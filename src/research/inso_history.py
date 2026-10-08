@@ -19,6 +19,7 @@ from ipaddress import ip_address
 from typing import Protocol
 from urllib.parse import urlsplit
 
+from src.core.mpn import lookup_mpn_matches, lookup_mpn_prefix
 from src.inso.session import InsoOperationAccess
 
 from .fx import UsdRmbProvider, UsdRmbQuote
@@ -51,6 +52,7 @@ class InsoHistoryRecord:
     price: Decimal = field(repr=False)
     currency: str = field(repr=False)  # "RMB" or "USD"
     observed_at: datetime
+    mpn: str = field(default="", repr=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.price, Decimal) or not self.price.is_finite():
@@ -199,7 +201,10 @@ def parse_inso_history_rows(rows: object) -> tuple[InsoHistoryRecord, ...]:
             observed = _parse_inso_datetime(raw_date)
         except InsoReadError:
             continue
-        records.append(InsoHistoryRecord(price, raw_currency, observed))
+        records.append(InsoHistoryRecord(
+            price, raw_currency, observed,
+            row.get("PartNo") if isinstance(row.get("PartNo"), str) else "",
+        ))
     return tuple(records)
 
 
@@ -267,7 +272,9 @@ class PlaywrightInsoReadOnlyBrowser:
             else self._operation_access
         )
 
-        mpn_clean = mpn.strip()
+        mpn_clean = lookup_mpn_prefix(mpn)
+        if not mpn_clean:
+            raise InsoReadError("QUERY_MPN_REQUIRED")
         url = (
             f"{self._config.login_url.rstrip('/')}"
             "/services/stock/select.ashx"
@@ -386,7 +393,8 @@ class InsoHistoryAdapter:
         positive = tuple(
             record
             for record in capture.records
-            if record.price > 0 and record.observed_at <= now
+            if (record.price > 0 and record.observed_at <= now
+                and lookup_mpn_matches(target_mpn, record.mpn))
         )
         selected: InsoHistoryRecord | None = None
         selected_months = 1
@@ -423,19 +431,19 @@ class InsoHistoryAdapter:
         normalized = self._to_normalized_rmb(selected, quote)
         candidate = PriceCandidate(
             ResearchSource.INSO,
-            target_mpn.strip(),
+            selected.mpn,
             selected.price,
             selected.currency,
             normalized,
             capture.captured_at,
             capture.url,
-            None,
+            selected.mpn if selected.mpn != target_mpn else None,
             selected_months,
         )
         evidence = SourceEvidence(
             ResearchSource.INSO,
             target_mpn,
-            None,
+            selected.mpn,
             SourceOutcome.SUCCESS,
             capture.captured_at,
             capture.url,

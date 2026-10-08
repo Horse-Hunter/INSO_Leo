@@ -33,3 +33,5 @@ sheets | research | inso | quotation -> core
 - 临时 discovery / live-verification helper 不得演变为长期第二生产路径；验证结论必须回收到 canonical module。
 - 如果现有模块无法承载需求，必须先在 RFQ Execution Log 证明边界冲突，再升级 CEO 决定是否调整模块职责。
 - 模块职责、依赖方向或跨模块 Public Contract 变化必须升级 CEO。
+
+Owner 2026-10-08 授权共享 `core.mpn` 纯型号读取策略，由 Research、INSO 与 Workflow 复用；不扩展 source-row identity 或 purchase submission 匹配。模块依赖方向保持不变。

@@ -33,7 +33,7 @@ def test_duplicate_rule_exact_match_rolling_window_latest_and_quantity_independe
         HistoricalInquiryRecord(
             " abc-123 ", NOW - timedelta(hours=2), 9, "latest", Decimal(4), "CNY"
         ),
-        HistoricalInquiryRecord("ABC123", NOW, 7, "not-same", Decimal(6), "CNY"),
+        HistoricalInquiryRecord("XABC123", NOW, 7, "not-same", Decimal(6), "CNY"),
     )
     result = evaluate_duplicate_history(
         inquiry_id="inq_0123456789abcdef01234567",
@@ -218,3 +218,20 @@ def test_ai_recognition_accepts_a_partial_brand_but_not_an_unrelated_one() -> No
     assert outcome("Hirose") is PurchaseOutcome.AI_RECOGNIZED
     assert outcome("hrs(hirose)") is PurchaseOutcome.AI_RECOGNIZED
     assert outcome("Nexperia") is PurchaseOutcome.VALIDATION_FAILED
+
+
+def test_owner_suffix_duplicate_latest_and_ambiguity_keep_submission_exact():
+    old = HistoricalInquiryRecord("WGI210IT", NOW - timedelta(hours=1), 9, "old", Decimal(0))
+    newest = HistoricalInquiryRecord("WGI210IT S LJXS", NOW, 7, "new", Decimal(0))
+    result = evaluate_duplicate_history(inquiry_id="inq_0123456789abcdef01234567",
+        target_mpn="WGI210IT", current_quantity=7, records=(old, newest), checked_at=NOW)
+    assert result.repeated and result.quantity_equal
+    assert result.historical_mpn == newest.mpn and result.creator == "new"
+    tied = evaluate_duplicate_history(inquiry_id=result.inquiry_id,
+        target_mpn="WGI210IT", current_quantity=7,
+        records=(newest, HistoricalInquiryRecord("WGI210XX", NOW, 7, "tie", Decimal(0))), checked_at=NOW)
+    assert tied.outcome is DuplicateOutcome.AMBIGUOUS and tied.repeated is None
+    ai = validate_ai_recognition(command_id="draft-1", completed_at=NOW,
+        expected_mpn="WGI210IT", expected_brand="Brand", expected_quantity=7,
+        recognized_mpn=newest.mpn, recognized_brand="Brand", recognized_quantity=7)
+    assert ai.outcome is PurchaseOutcome.VALIDATION_FAILED

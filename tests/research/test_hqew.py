@@ -243,7 +243,7 @@ def test_cdp_client_opens_its_own_page_and_closes_it(
     captured = client.fetch_first_page(" ABC ")
 
     context = chromium.browser.contexts[0]
-    target = "https://p.hqew.com/yunquote/ABC.html?y4=1"
+    target = "https://p.hqew.com/yunquote/A.html?y4=1"
     assert captured.url == target
     assert stale.goto_calls == [], "an earlier tab must not be reused"
     assert len(context.pages) == 2
@@ -253,7 +253,7 @@ def test_cdp_client_opens_its_own_page_and_closes_it(
 def test_cdp_client_accepts_verified_same_site_result_redirect() -> None:
     redirected = (
         "https://p.hqew.com/yunquote?"
-        "toUrl=http%3A%2F%2Fp.hqew.com%2Fyunquote%2FABC.html&y4=1"
+        "toUrl=http%3A%2F%2Fp.hqew.com%2Fyunquote%2FA.html&y4=1"
     )
     page = FakeCdpPage(redirected, _row("ABC", "1.25"))
     client, _ = _cdp_client([page], navigate=False)
@@ -276,7 +276,7 @@ def test_cdp_client_does_not_reuse_unrelated_page(
     captured = client.fetch_first_page("ABC")
 
     context = chromium.browser.contexts[0]
-    assert captured.url == "https://p.hqew.com/yunquote/ABC.html?y4=1"
+    assert captured.url == "https://p.hqew.com/yunquote/A.html?y4=1"
     assert unrelated.goto_calls == []
     assert len(context.pages) == 2
 
@@ -291,7 +291,7 @@ def test_cdp_client_attach_only_requires_exact_result_page() -> None:
 
 def test_cdp_client_challenge_fails_closed_after_authenticated_navigation() -> None:
     html = '<html><body>安全验证</body></html>'
-    page = FakeCdpPage("https://p.hqew.com/yunquote/ABC.html?y4=1", html)
+    page = FakeCdpPage("https://p.hqew.com/yunquote/A.html?y4=1", html)
     client, _ = _cdp_client([page], navigate=False)
 
     with pytest.raises(HqewPageUnavailable, match="INTERACTIVE_CHALLENGE_REQUIRED"):
@@ -303,3 +303,10 @@ def test_package_api_prefers_authenticated_browser_client() -> None:
 
     assert hqew_module.HqewAdapter is HqewAdapter
     assert hqew_module.CdpHqewClient is CdpHqewClient
+
+
+def test_owner_wgi_suffix_price_and_wrong_prefix_filter():
+    html = _row("WGI210IT S LJXS", "1.25") + _row("WGI211IT", "0.01")
+    result = HqewAdapter(Client(html)).search("WGI210IT", 1)
+    assert result.price_candidate.matched_mpn == "WGI210IT S LJXS"
+    assert result.price_candidate.raw_price == Decimal("1.25")

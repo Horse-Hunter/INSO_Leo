@@ -140,3 +140,5 @@ profile 为 `D:\Program_Leo\INSO_CDP\chrome-profile`（见 `CDP_SESSION_POLICY.m
 ## 边界
 
 Research 只做调研与本地 Excel 持久化；不读写 Google Sheets，不执行主动采购，不决定 V1.2 通知/采购业务规则。Credential 只走 Core Provider。普通 browser/session readiness 复用共享 runtime；CAPTCHA/OTP/设备验证才需要人工。
+
+Owner 2026-10-08: all source MPN filtering now delegates to core.mpn.lookup_mpn_matches; native query URLs use lookup_mpn_prefix exactly once, result parsers retain the full original target. INSO history records retain observed PartNo for filtering/evidence; records without an observed model cannot supply a price. Existing source-specific windows/stock/price rules remain. Research native first-page coverage limits remain unchanged.

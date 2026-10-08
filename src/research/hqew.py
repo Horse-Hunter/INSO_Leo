@@ -12,6 +12,8 @@ from time import monotonic, sleep
 from typing import Protocol
 from urllib.parse import parse_qs, quote, urlsplit
 
+from src.core.mpn import lookup_mpn_prefix
+
 from .cdp_pages import new_background_page
 from .site_login import (
     REJECTED_PASSWORD_TEXT,
@@ -106,7 +108,7 @@ class HqewPageClient(Protocol):
 
 
 def build_hqew_result_url(mpn: str) -> str:
-    return f"{HQEW_RESULT_URL}{quote(mpn.strip(), safe='')}.html?y4=1"
+    return f"{HQEW_RESULT_URL}{quote(lookup_mpn_prefix(mpn), safe='')}.html?y4=1"
 
 
 def _is_hqew_url(url: str) -> bool:
@@ -128,7 +130,7 @@ def _is_loopback_hostname(hostname: str) -> bool:
 
 def _is_expected_result_url(url: str, mpn: str) -> bool:
     parsed = urlsplit(url)
-    encoded_mpn = quote(mpn.strip(), safe="")
+    encoded_mpn = quote(lookup_mpn_prefix(mpn), safe="")
     expected_path = f"/yunquote/{encoded_mpn}.html"
     if not _is_hqew_url(url):
         return False

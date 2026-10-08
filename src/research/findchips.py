@@ -15,6 +15,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, urlsplit
 from urllib.request import Request, urlopen
 
+from src.core.mpn import lookup_mpn_prefix
+
 from .cdp_pages import new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .site_login import (
@@ -135,9 +137,9 @@ class FindchipsPageClient(Protocol):
 
 
 def build_findchips_search_url(mpn: str) -> str:
-    """Build the normal search path after trimming edge whitespace only."""
+    """Build the native prefix search while retaining full targets in adapters."""
 
-    return f"{FINDCHIPS_SEARCH_URL}{quote(mpn.strip(), safe='')}"
+    return f"{FINDCHIPS_SEARCH_URL}{quote(lookup_mpn_prefix(mpn), safe='')}"
 
 
 def _is_findchips_response_url(url: str) -> bool:
@@ -561,7 +563,7 @@ class _FindchipsParser(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag == "p" and self._empty_message is not None:
             message = " ".join("".join(self._empty_message).split())
-            expected = (f"No results were found for {self.target_mpn.strip()}."
+            expected = (f"No results were found for {lookup_mpn_prefix(self.target_mpn)}."
                         if self.target_mpn is not None else None)
             self.explicit_no_results = (
                 message == expected if expected is not None

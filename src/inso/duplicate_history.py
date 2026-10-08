@@ -33,6 +33,8 @@ from time import monotonic
 from typing import Protocol
 from urllib.parse import parse_qs, urlsplit
 
+from src.core.mpn import lookup_mpn_matches, lookup_mpn_prefix
+
 from .session import InsoOperationAccess, SecurityViolation
 
 # ---------------------------------------------------------------------------
@@ -352,7 +354,8 @@ class InsoDuplicateHistoryReader:
         Workflow layer, which owns that decision.
         """
 
-        if not isinstance(search_value, str) or not search_value.strip():
+        if (not isinstance(search_value, str) or not search_value.strip()
+                or (self._procurement_history and not lookup_mpn_prefix(search_value))):
             raise InsoDuplicateHistoryError(DuplicateHistoryFailure.RECORD_FIELDS_INVALID)
         target = search_value.strip()
         url = self.list_url
@@ -365,7 +368,9 @@ class InsoDuplicateHistoryReader:
                         else PlaywrightDuplicateHistoryPage
                     )
                     live_page = page_type(operation_page.shell_frame, timeout_ms=self._timeout_ms)
-                    payload = live_page.query_exact_response(target)
+                    payload = live_page.query_exact_response(
+                        lookup_mpn_prefix(target) if self._procurement_history else target
+                    )
                     records = self._records_from_response(payload, since=since, target_mpn=target)
                 else:
                     # Deterministic fake/page adapters can keep the narrow
@@ -423,10 +428,10 @@ class InsoDuplicateHistoryReader:
                 # this read window. Invalid relevant quantities still fail closed.
                 if since is not None and quoted_at < since:
                     continue
-                # Native lower search is fuzzy. Different exact MPNs are not
-                # quantity/creator inputs for this inquiry (same dup-mpn-v1).
+                # Filter native candidates with the shared Owner prefix rule.
+                # Nonmatching quantities/creators are irrelevant to this inquiry.
                 if (self._procurement_history and target_mpn is not None
-                        and _dup_mpn_key(mpn) != _dup_mpn_key(target_mpn)):
+                        and not lookup_mpn_matches(target_mpn, mpn)):
                     continue
                 quote_raw = row.get(fields.inso_quote) if fields.inso_quote else None
                 currency_raw = row.get(fields.currency) if fields.currency else None

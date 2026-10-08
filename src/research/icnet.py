@@ -15,6 +15,8 @@ from time import monotonic, sleep
 from typing import Protocol
 from urllib.parse import quote, urlsplit
 
+from src.core.mpn import lookup_mpn_prefix
+
 from .cdp_pages import new_background_page
 from .site_login import (
     REJECTED_PASSWORD_TEXT,
@@ -457,6 +459,7 @@ class PlaywrightIcNetClient:
         self._channel = channel
 
     def fetch_first_page(self, mpn: str) -> IcNetPage:
+        mpn = lookup_mpn_prefix(mpn)
         login = self._login_provider.get_login(ICNET_SITE_ID)
         if login is None:
             raise IcNetPageUnavailable("CREDENTIAL_NOT_CONFIGURED")
@@ -507,7 +510,7 @@ class PlaywrightIcNetClient:
                     ):
                         raise IcNetPageUnavailable("SEARCH_FORM_UNAVAILABLE")
                     search_input.fill(mpn)
-                    exact.check()
+                    exact.uncheck()
                     submit.click()
                     page.wait_for_timeout(5_000)
                     if page.locator("body").count() == 0:
@@ -560,7 +563,7 @@ class CdpIcNetClient:
         self._playwright_factory = playwright_factory
 
     def fetch_first_page(self, mpn: str) -> IcNetPage:
-        mpn = mpn.strip()
+        mpn = lookup_mpn_prefix(mpn)
         factory = self._playwright_factory
         timeout_error: type[Exception] = TimeoutError
         if factory is None:

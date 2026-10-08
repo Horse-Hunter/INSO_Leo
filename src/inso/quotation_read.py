@@ -5,6 +5,8 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from src.core.mpn import lookup_mpn_matches, lookup_mpn_prefix
+
 from .duplicate_history import (
     DuplicateHistoryFailure,
     InsoDuplicateHistoryError,
@@ -51,7 +53,7 @@ def select_recent_lowest(
     records: Iterable[V13QuotationRow], *, queried_mpn: str, now: datetime,
     currency_rate: Callable[[str], Decimal] | None = None,
 ) -> V13QuotationRow | None:
-    """Exact MPN, inclusive 72h; lowest RMB-equivalent supplier net price, newest on ties.
+    """Owner prefix MPN, inclusive 72h; lowest RMB-equivalent supplier net price, newest on ties.
 
     Conversion only chooses a row; all fourteen display strings remain untouched.
     Blank/unparseable/nonfinite/negative net prices are skipped.
@@ -61,7 +63,7 @@ def select_recent_lowest(
     if now.utcoffset() is None:
         raise ValueError("query clock must be aware")
     target = canonical_history_mpn(queried_mpn)
-    if not target:
+    if not target or not lookup_mpn_prefix(queried_mpn):
         raise ValueError("query MPN is required")
     end = now.astimezone(SHANGHAI)
     cutoff = end - timedelta(hours=72)
@@ -70,7 +72,7 @@ def select_recent_lowest(
     currencies = {"RMB": "RMB", "CNY": "RMB", "人民币": "RMB", "CNY人民币": "RMB",
                   "USD": "USD", "美元": "USD", "HKD": "HKD", "港币": "HKD", "HKD港币": "HKD"}
     for row in records:
-        if (canonical_history_mpn(row.payload[1]) != target
+        if (not lookup_mpn_matches(queried_mpn, row.payload[1])
                 or not cutoff <= row.quote_record_time.astimezone(SHANGHAI) <= end):
             continue
         try:
@@ -158,12 +160,12 @@ class InsoQuotationReader:
 
     def read(self, access: InsoOperationAccess, mpn: str) -> tuple[V13QuotationRow, ...]:
         target = canonical_history_mpn(mpn)
-        if not target:
+        if not target or not lookup_mpn_prefix(mpn):
             raise InsoDuplicateHistoryError(DuplicateHistoryFailure.RECORD_FIELDS_INVALID)
         try:
             with access.operation_page() as operation:
                 payload = self._page_factory(operation.shell_frame).query_exact_response(
-                    target, capture_page=capture_quotation_page,
+                    lookup_mpn_prefix(mpn), capture_page=capture_quotation_page,
                 )
             rows = payload.get("rows")
             if not isinstance(rows, list):
@@ -172,8 +174,8 @@ class InsoQuotationReader:
             for row in rows:
                 if not isinstance(row, dict):
                     raise TypeError
-                # Fuzzy native matches never compete with exact queried MPN.
-                if canonical_history_mpn(row.get("PartNo")) != target:
+                # Apply the same Owner rule before reading and before price selection.
+                if not lookup_mpn_matches(mpn, row.get("PartNo")):
                     continue
                 raw = row.get("quotation_display")
                 if not isinstance(raw, tuple):

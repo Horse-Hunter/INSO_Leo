@@ -57,7 +57,7 @@ def test_suffix_match_expiry_and_overlong_suffix() -> None:
         clock=lambda: NOW,
     ).search("ABC", 1)
     mismatch = BomAiAdapter(
-        Client((BomAiPriceRecord("ABC-ABCDEFG", Decimal(1), NOW),)),
+        Client((BomAiPriceRecord("ABC-ABCDEFGHI", Decimal(1), NOW),)),
         clock=lambda: NOW,
     ).search("ABC", 1)
     assert suffix.price_candidate is not None
@@ -164,3 +164,12 @@ def test_login_repr_hides_secret_and_client_only_exposes_read_capture() -> None:
 
 def test_raw_currency_selector_is_not_a_package_public_api() -> None:
     assert not hasattr(research, "select_bom_ai_price")
+
+
+def test_owner_wgi_suffix_price_and_wrong_prefix_filter():
+    result = BomAiAdapter(Client((
+        BomAiPriceRecord("WGI210IT S LJXS", Decimal("1.25"), NOW),
+        BomAiPriceRecord("WGI211IT", Decimal("0.01"), NOW),
+    )), clock=lambda: NOW).search("WGI210IT", 1)
+    assert result.price_candidate.matched_mpn == "WGI210IT S LJXS"
+    assert result.price_candidate.raw_price == Decimal("1.25")

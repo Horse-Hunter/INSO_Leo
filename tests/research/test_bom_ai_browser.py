@@ -47,7 +47,7 @@ def test_config_rejects_insecure_incomplete_or_mismatched_settings() -> None:
 def test_result_url_quotes_the_trimmed_mpn() -> None:
     config = _config()
 
-    assert config.result_url("  Ab c-1  ") == "https://www.bom.ai/search/Ab%20c-1"
+    assert config.result_url("  Ab c-1  ") == "https://www.bom.ai/search/AB"
 
 
 class CdpLocator:
@@ -223,7 +223,7 @@ def test_cdp_browser_recovers_one_expired_session_then_retries_original_page(
     assert ("click", "账号登录", None) in page.calls
     assert ("fill", "#accountName", "user") in page.calls
     assert ("fill", "#smspassword", "secret") in page.calls
-    assert page.calls.count(("goto", "https://www.bom.ai/search/ABC", None)) == 2
+    assert page.calls.count(("goto", "https://www.bom.ai/search/A", None)) == 2
     assert capture.html == "<html>result</html>"
     assert page.closed is True, "the call must give its tab back"
 
@@ -237,7 +237,7 @@ def test_cdp_browser_reports_changed_login_ui_without_retrying(monkeypatch) -> N
         )
 
     assert error.value.code == "RESULT_CHANGED"
-    assert page.calls.count(("goto", "https://www.bom.ai/search/ABC", None)) == 1
+    assert page.calls.count(("goto", "https://www.bom.ai/search/A", None)) == 1
     assert page.closed is True
 
 

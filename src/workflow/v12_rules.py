@@ -7,6 +7,8 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 
+from src.core.mpn import lookup_mpn_matches, normalize_lookup_mpn
+
 from .v12_contracts import (
     DuplicateCheckResult,
     DuplicateOutcome,
@@ -125,7 +127,7 @@ def evaluate_duplicate_history(
     records: tuple[HistoricalInquiryRecord, ...],
     checked_at: datetime,
 ) -> DuplicateCheckResult:
-    """Decide from exact canonical MPNs in the rolling inclusive 168h window.
+    """Decide from Owner prefix-matched MPNs in the rolling inclusive 168h window.
 
     Same-timestamp latest rows remain AMBIGUOUS until a live, stable INSO
     identity and an approved tie policy are established.
@@ -139,7 +141,7 @@ def evaluate_duplicate_history(
         canonical = normalize_mpn(target_mpn, policy=MpnPolicy.DUP_MPN_V1)
     except (TypeError, ValueError):
         return _duplicate_invalid(inquiry_id, target_mpn, checked_at)
-    if not canonical:
+    if not canonical or not normalize_lookup_mpn(target_mpn):
         return _duplicate_invalid(inquiry_id, canonical, checked_at)
 
     now_utc = checked_at.astimezone(UTC)
@@ -168,7 +170,7 @@ def evaluate_duplicate_history(
             )
             if not historical_canonical:
                 return _duplicate_invalid(inquiry_id, canonical, checked_at)
-            if cutoff <= observed <= now_utc and historical_canonical == canonical:
+            if cutoff <= observed <= now_utc and lookup_mpn_matches(target_mpn, record.mpn):
                 exact_recent.append(record)
     except (TypeError, ValueError):
         return _duplicate_invalid(inquiry_id, canonical, checked_at)

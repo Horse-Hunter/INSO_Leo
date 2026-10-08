@@ -46,7 +46,7 @@ def test_window_does_not_require_quantity_from_irrelevant_old_records():
 def test_fuzzy_other_model_quantity_is_not_current_order_validation():
     reader = InsoDuplicateHistoryReader(list_url="https://yingsuo.alperp.cn", procurement_history=True)
     unrelated = row(1, quantity="0")
-    unrelated["PartNo"] = "MPN suffix"
+    unrelated["PartNo"] = "XMPN suffix"
     assert reader._records_from_response({"rows": [unrelated]}, target_mpn="MPN") == ()
     with pytest.raises(InsoDuplicateHistoryError):
         reader._records_from_response({"rows": [row(2, quantity="0")]}, target_mpn="MPN")
@@ -109,7 +109,7 @@ class LowerFrame:
                 self.value = SimpleNamespace(
                     status=200,
                     url="https://yingsuo.alperp.cn/services/stock/select.ashx"
-                    f"?action=Stock_VenQuote&para=MPN&pageindex={frame.number}",
+                    f"?action=Stock_VenQuote&para={frame.value}&pageindex={frame.number}",
                     json=lambda: {"rows": frame.pages[frame.number - 1], "total": -1},
                 )
                 assert predicate(self.value)
@@ -187,3 +187,30 @@ def test_lower_query_has_one_overall_deadline(monkeypatch):
     frame = LowerFrame([[row(1), row(2)], [row(3)]], total=3)
     with pytest.raises(InsoDuplicateHistoryError):
         PlaywrightProcurementHistoryPage(frame, timeout_ms=5000).query_exact_response("MPN")
+
+
+def test_owner_suffix_duplicate_keeps_zero_price_and_relevant_quantity_guard():
+    reader = InsoDuplicateHistoryReader(list_url="https://yingsuo.alperp.cn", procurement_history=True)
+    matched, wrong = row(1), row(2, quantity="bad")
+    matched["PartNo"], wrong["PartNo"] = "WGI210IT S LJXS", "WGI211IT"
+    records = reader._records_from_response({"rows": [matched, wrong]}, target_mpn="WGI210IT")
+    assert len(records) == 1
+    assert records[0].mpn == matched["PartNo"] and records[0].inso_quote == 0
+    matched["Qty"] = "bad"
+    with pytest.raises(InsoDuplicateHistoryError):
+        reader._records_from_response({"rows": [matched]}, target_mpn="WGI210IT")
+
+
+def test_procurement_reader_queries_prefix_once_and_filters_full_original_target():
+    from contextlib import nullcontext
+    matched, too_long = row(1), row(2, quantity="bad")
+    matched["PartNo"] = "WGI210IT S LJXS"
+    too_long["PartNo"] = "WGI210" + "A" * 11
+    frame = LowerFrame([[matched, too_long]], total=2)
+    access = SimpleNamespace(operation_page=lambda: nullcontext(SimpleNamespace(shell_frame=frame)))
+    reader = InsoDuplicateHistoryReader(list_url="https://yingsuo.alperp.cn",
+        procurement_history=True, operation_access=access)
+    capture = reader.read("WGI210IT")
+    assert frame.value == "WGI210"
+    assert len(capture.records) == 1
+    assert capture.records[0].mpn == matched["PartNo"]

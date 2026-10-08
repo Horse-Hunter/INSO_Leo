@@ -111,7 +111,7 @@ def test_stocked_suffix_and_rmb_prices_are_supported() -> None:
 
 
 def test_overlong_suffix_and_unsupported_currency_have_no_candidate() -> None:
-    mismatch = LcscAdapter(Client(_html("ABC-1ABCDEFG")), Fx()).search("ABC-1", 1)
+    mismatch = LcscAdapter(Client(_html("ABC-1ABCDEFGHI")), Fx()).search("ABC-1", 1)
     unsupported = LcscAdapter(Client(_html(currency="EUR")), Fx()).search(
         "ABC-1", 1
     )
@@ -299,7 +299,7 @@ def test_browser_client_uses_chinese_search_then_verified_product_page() -> None
     capture = client.fetch_product_page("ADXL355BEZ-RL7")
 
     assert page.goto_calls == [
-        "https://so.szlcsc.com/global.html?k=ADXL355BEZ-RL7",
+        "https://so.szlcsc.com/global.html?k=ADXL355BEZR",
         "https://item.szlcsc.com/531509.html",
     ]
     assert capture.product is not None
@@ -528,7 +528,7 @@ def test_cdp_client_initializes_lcsc_sso_before_background_search(
 
     assert page.goto_calls == [
         "https://www.szlcsc.com/",
-        "https://so.szlcsc.com/global.html?k=ADXL355BEZ-RL7",
+        "https://so.szlcsc.com/global.html?k=ADXL355BEZR",
     ]
     assert capture.product is not None
     assert page.closed
@@ -555,7 +555,7 @@ def _owned_cdp_page(
     )
 
 
-SEARCH_URL = "https://so.szlcsc.com/global.html?k=ADXL355BEZ-RL7"
+SEARCH_URL = "https://so.szlcsc.com/global.html?k=ADXL355BEZR"
 
 
 def test_cdp_client_opens_its_own_tab_and_closes_it(monkeypatch) -> None:
@@ -790,3 +790,9 @@ def test_cdp_client_keeps_the_manual_verdict_when_the_slider_will_not_clear(
 
     assert page.gestures == 0, "verification is manual, never retried by dragging"
     assert page.closed
+
+
+def test_owner_wgi_suffix_product_is_accepted_with_display_preserved():
+    result = LcscAdapter(Client(_html("WGI210IT S LJXS", preorder=False, stock=100)), Fx()).search("WGI210IT", 1)
+    assert result.outcome is SourceOutcome.SUCCESS
+    assert result.price_candidate.matched_mpn == "WGI210IT S LJXS"

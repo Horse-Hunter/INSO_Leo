@@ -89,3 +89,6 @@ except CredentialError as exc:
 - Provider 接口在 Windows + Windows DPAPI 主机上保证可用；在其他主机上
   `default_provider()` 会以 `CredentialProviderUnavailableError` 失败。
 - 跨平台抽象不在 V1 范围内。
+
+## Shared lookup MPN policy (Owner 2026-10-08)
+`src.core.mpn` publicly provides normalize_lookup_mpn, lookup_mpn_prefix and lookup_mpn_matches for Research and INSO procurement-history reads/Workflow duplicate decisions. Pure, no I/O/dependencies; NFKC/upper case, remove whitespace/underscore/dash punctuation/minus and invisible whitespace; directional cleaned-target-minus-two prefix with at most ten tail characters. Empty inputs reject, one/two-character targets exact. Forbidden for Sheets identity or purchase submission verification.
