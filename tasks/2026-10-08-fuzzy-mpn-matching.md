@@ -1,6 +1,6 @@
 # Task: Unified Owner-defined MPN matching and V1.3 deployment
 
-status: in_progress
+status: complete
 owner: Codex
 created: 2026-10-08
 updated: 2026-10-08
@@ -23,10 +23,21 @@ Offline matcher boundaries, each Research adapter, native query keywords, duplic
 Live sites may limit native prefix-search results/pagination; offline tests prove filtering/query construction, not exhaustive remote recall. This task does not bypass native limits or authentication.
 
 ## completion
-pending
+Complete; implementation and controlled asset-only deployment verified.
 
 ## pre-deployment verification
 - Full safe/offline release environment: 1636 passed / 1 skipped (existing Windows symlink capability). Restricted preliminary run: 1626 passed / 11 environment skips, all ten extra skips verified in release environment.
 - Core boundary cases, six Research adapters, prefix-query construction, lower-history full pagination/settlement, fuzzy duplicate latest/tie ambiguity, quotation suffix selection/raw14, exact AI validation all PASS in full suite. Existing RFQ-003/004/005/006, GUI, retry, status repair, purchase follow-up and background Chrome tests retained PASS.
 - Ruff and git diff --check PASS; source/test diff manually reviewed, changes scoped. No credentials/live-business access during implementation.
-- Packaging and controlled deployment pending.
+- Packaging and controlled deployment completed (details below).
+
+## final package / deployment
+- Production source commit: 9bd601ebd6cb15cfbd511d031af69e4a8448523a on codex/v13-readiness-repair. Local commit only; no report/source push implied or performed.
+- BuildOnly / candidate release scan / frozen self-check / isolated idle GUI: PASS. Final deployed self-check / idle GUI / existing fixed-CDP check / deployed-asset release scan: PASS.
+- Formal path: `D:\Program_Leo\INSO_Leo\dist\INSO_V1.3`. EXE SHA256: `0BF58DF4CF0DF95999B6E3CC8F089FB4608B09ECE55D1D93A8761799C804B773`. All 2179 installed release asset hashes match the verified candidate.
+- Fresh complete backup: `D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.3_20261008_184720_7f39e155`; all 2184 original files copied and hashes verified before replacement. Previous backups retained.
+- All 3953 protected inventory file hashes unchanged. Production workflow DB and DB backups, OAuth/credentials/config/Research/SMTP, fixed Chrome profile and CDP settings retained. V1.2 before/after identical SHA256 `340D7F7E7E818FA74DE36B138B205F5905F320406FD8D391EF860BD052529E5F`.
+- Only formal EXE and _internal replaced, no runtime replacement. GUI rendered STOPPED with no business thread; CDP connected to the existing unique context with one page, no second Chrome/profile. Idle validation exited normally.
+- No live market/order replay, procurement/Save/Save-and-Send, Google quotation input/status write/update, Apps Script, SMTP delivery or business polling by this task. No production DB mutation or schema change.
+- Native site result/first-page limits remain; new rule is verified offline against all adapters and packaged lifecycle, not a claim of exhaustive live-site recall. No new decision conflict beyond the explicitly authorized wider model matching; same-time latest duplicate ambiguity remains fail closed.
+- Local evidence `D:\Program_Leo\INSO_Leo\.tmp\v13-deploy-20261008_184720_7f39e155/plan.json`, `verification.json`; `.tmp/fuzzy-mpn-full-final.log`, `.tmp/fuzzy-mpn-build.log`, `.tmp/v13-fuzzy-frozen-report.json`. Evidence remains untracked; no secrets/customer output added to Git.
