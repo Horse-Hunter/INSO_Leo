@@ -284,6 +284,11 @@ class V13QuotationCycle:
         return tuple(results)
 
 
+def expected_source_brand(item: WorkItem) -> object:
+    """Public source-brand contract shared by quote binding and purchase completion."""
+    return _expected_brand(item)
+
+
 def _expected_brand(item: WorkItem) -> object:
     return (item.resolved_brand if item.brand_update_status == "UPDATED"
             else item.record_identity.identifying_snapshot.brand)

@@ -2,6 +2,7 @@
 import logging
 import uuid
 from datetime import UTC, datetime
+from functools import partial
 
 from src.sheets.purchase_status import (
     purchase_status_satisfied,
@@ -18,6 +19,11 @@ from src.workflow.v12_contracts import (
 )
 
 log = logging.getLogger(__name__)
+
+from src.workflow.v12_safety import BrandPolicy, brand_matches
+from src.workflow.v13_quotation import expected_source_brand
+
+SOURCE_BRAND_MATCH = partial(brand_matches, policy=BrandPolicy.AI_BRAND_V1)
 
 OWNER = NotificationRecipient("owner", "linan229@qq.com")
 
@@ -63,12 +69,12 @@ class PurchaseCompletionActions:
         if item.inquiry_id in self._settled_status_ids:
             return True
         try:
-            brand = item.resolved_brand or item.brand
-            if purchase_status_satisfied(self.reader, item.record_identity, expected_brand=brand):
+            brand = expected_source_brand(item)
+            if purchase_status_satisfied(self.reader, item.record_identity, expected_brand=brand, brand_match=SOURCE_BRAND_MATCH):
                 changed = False
             else:
                 changed = write_purchase_status_safely(self.reader, self.writer_factory(),
-                    item.record_identity, expected_brand=brand)
+                    item.record_identity, expected_brand=brand, brand_match=SOURCE_BRAND_MATCH)
         except Exception as exc:  # noqa: BLE001 - retry only status, never purchase
             self.v12_store.set_business_state(item.inquiry_id, BusinessState.STATUS_WRITE_PENDING,
                 WorkflowEvent(f"evt_{uuid.uuid4().hex}", item.inquiry_id,
@@ -96,7 +102,7 @@ class PurchaseCompletionActions:
                 # Only a fresh source proof can resolve its local projection.
                 try:
                     satisfied = purchase_status_satisfied(self.reader, item.record_identity,
-                        expected_brand=item.resolved_brand or item.brand)
+                        expected_brand=expected_source_brand(item), brand_match=SOURCE_BRAND_MATCH)
                 except Exception as exc:  # noqa: BLE001 - failed read retains the existing pending hold
                     log.warning("Pending purchase status remains unresolved (%s)", type(exc).__name__)
                     continue

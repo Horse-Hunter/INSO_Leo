@@ -35,7 +35,7 @@ def actions(outcome, *, writer_fails=False):
     identity = SheetRecordIdentity(WorksheetIdentity("test", "2026"), 4,
                                   IdentifyingSnapshot("未发", "A", "TEST-MPN", "Brand", 8))
     item = SimpleNamespace(inquiry_id="synthetic-inquiry", mpn="TEST-MPN", brand="Brand",
-                           resolved_brand=None, quantity=8, record_identity=identity,
+                           resolved_brand=None, brand_update_status=None, quantity=8, record_identity=identity,
                            status=SimpleNamespace(value="COMPLETED"), last_error=None)
     class Sheet:
         def __init__(self):
@@ -271,3 +271,33 @@ def test_unknown_submit_pending_never_resolves_by_sheet_status_alone():
     handler.retry_saved_statuses(at=NOW)
     assert state.state is BusinessState.STATUS_WRITE_PENDING and not state.commands
     assert state.outcome is PurchaseOutcome.UNKNOWN_WRITE_OUTCOME and sheet.calls == 0
+
+
+@pytest.mark.parametrize("updated", [False, True])
+def test_quoted_binding_uses_only_the_brand_actually_present_in_source(updated):
+    from dataclasses import replace
+    handler, sheet, state = actions(PurchaseOutcome.SAVED)
+    item = quoted(handler, sheet, state, pending=True)
+    item.resolved_brand = "Research display name"
+    if updated:
+        item.brand_update_status = "UPDATED"
+        item.record_identity = replace(item.record_identity,
+            identifying_snapshot=replace(item.record_identity.identifying_snapshot, brand=None))
+        sheet.rows[0] = WorksheetRow(4, {**sheet.rows[0].cells, "F": item.resolved_brand})
+    handler.retry_saved_statuses(at=NOW)
+    assert state.state is BusinessState.PURCHASE_RECORDED
+    assert sheet.calls == 0 and not state.commands and handler.follow_up_store.records == []
+
+
+@pytest.mark.parametrize("source_brand", ["hrs", "HRS(hirose)", "  HRS  "])
+def test_owner_fuzzy_brand_rule_does_not_create_quoted_status_alarm(source_brand):
+    from dataclasses import replace
+    handler, sheet, state = actions(PurchaseOutcome.SAVED)
+    item = quoted(handler, sheet, state, pending=True)
+    item.brand = "HRS"
+    item.record_identity = replace(item.record_identity,
+        identifying_snapshot=replace(item.record_identity.identifying_snapshot, brand="HRS"))
+    sheet.rows[0] = WorksheetRow(4, {**sheet.rows[0].cells, "F": source_brand})
+    handler.retry_saved_statuses(at=NOW)
+    assert state.state is BusinessState.PURCHASE_RECORDED
+    assert sheet.calls == 0 and not state.commands and handler.follow_up_store.records == []

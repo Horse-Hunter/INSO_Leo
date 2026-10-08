@@ -25,7 +25,7 @@ def current_purchase_status(reader: WorksheetRowReader, identity: SheetRecordIde
     return str(actual.cells[column])
 
 
-def _locate_purchase_record(reader, identity, expected_brand):
+def _locate_purchase_record(reader, identity, expected_brand, brand_match=None):
     if identity.identifying_snapshot.status != "未发":
         raise SheetRecordConflict("original purchase status must be pending")
     rows = tuple(reader.read_rows(identity.worksheet))
@@ -37,29 +37,31 @@ def _locate_purchase_record(reader, identity, expected_brand):
     original = next(r for r in eligible if r.row_position == target.row_position)
     if original.cells[schema.status_column] != "未发":
         brand = identity.identifying_snapshot.brand if expected_brand is None else expected_brand
-        if original.cells.get(schema.brand_column) != brand:
+        actual_brand = original.cells.get(schema.brand_column)
+        matches = actual_brand == brand or (brand_match is not None and brand_match(actual_brand, brand))
+        if not matches:
             raise SheetRecordConflict("completed source brand changed")
     return original, original.cells[schema.status_column] != "未发"
 
 
-def purchase_status_satisfied(reader, identity, *, expected_brand=None) -> bool:
+def purchase_status_satisfied(reader, identity, *, expected_brand=None, brand_match=None) -> bool:
     """Fresh read-only identity proof of sent or further quotation-complete status."""
-    _, satisfied = _locate_purchase_record(reader, identity, expected_brand)
+    _, satisfied = _locate_purchase_record(reader, identity, expected_brand, brand_match)
     if not satisfied:
         return False
-    return _locate_purchase_record(reader, identity, expected_brand)[1]
+    return _locate_purchase_record(reader, identity, expected_brand, brand_match)[1]
 
 
 def write_purchase_status_safely(
     reader: WorksheetRowReader, writer: PurchaseStatusWriter, identity: SheetRecordIdentity,
-    *, expected_brand=None,
+    *, expected_brand=None, brand_match=None,
 ) -> bool:
     """Unique fresh relocation; later quotation state satisfies rather than regresses."""
-    _locate_purchase_record(reader, identity, expected_brand)
-    row, satisfied = _locate_purchase_record(reader, identity, expected_brand)
+    _locate_purchase_record(reader, identity, expected_brand, brand_match)
+    row, satisfied = _locate_purchase_record(reader, identity, expected_brand, brand_match)
     if satisfied:
         return False
     writer.write_purchase_status(identity.worksheet, row.row_position)
-    if not _locate_purchase_record(reader, identity, expected_brand)[1]:
+    if not _locate_purchase_record(reader, identity, expected_brand, brand_match)[1]:
         raise SheetRecordConflict("purchase status read-back did not confirm the write")
     return True

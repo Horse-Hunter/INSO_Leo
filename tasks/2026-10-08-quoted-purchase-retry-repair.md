@@ -17,3 +17,6 @@ Owner explicitly requests diagnose, fix, package and overwrite. Investigation id
 
 ## acceptance
 Pending tests and verified deployment. Preserve V1.2, DB/backups, OAuth/credentials/config, fixed Chrome/CDP. Only release assets replaced after ensuring formal program stopped. Local report only, no upload implied.
+
+## Owner steering / canonical brand boundary
+Owner clarified brand fuzzy matching is sufficient. Purchase completion injects the existing v12_safety.brand_matches AI_BRAND_V1 policy into the Sheets helper (dependency direction retained); actual source brand expectation still uses the canonical quotation expected_source_brand rule, not arbitrary Research display names. Model/quantity/tier and globally unique source binding remain strict. No new brand alias/synonym policy.
