@@ -20,3 +20,13 @@ RFQ-006 Owner closeout increment (2026-10-07) requires independent review. Prior
 baseline2a32007 and RFQ-007 reviewed2c9f704 remain approved; RFQ-007 status is unchanged.
 
 | RFQ-008 | GUI poll counters, source field edits and selected-row rerun | REVIEWED_DONE | `feature/v1-3-integration` | REQUIRED | `control-room/RFQ-008/TASK_SPEC.md` |
+
+## V1.3 post-review Owner increment sync — 2026-10-08
+
+Increment review status: REVIEW_REQUIRED on `codex/v13-readiness-repair`.
+Scope: background Chrome, purchase-completion false alarm, fuzzy model comparison,
+source B/actual-model L notification, final INSO original-full-model search.
+Owner-authorized production deployment is recorded separately from CEO PASS.
+Report: `control-room/RFQ-008/CEO_SYNC_REPORT_2026-10-08.md`.
+Historical RFQ REVIEWED_DONE records above are unchanged. Existing quotation hold
+in Owner's selected case remains unresolved; no automatic replay was performed.
