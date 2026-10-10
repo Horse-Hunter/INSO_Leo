@@ -39,16 +39,15 @@ Stable anchors:
 - Handoff files expire after takeover; obsolete blockers/next steps are marked resolved/superseded.
 - Review fails on expired handoffs, stale current-state text or unjustified duplicate active worktrees.
 
-## Build/test/release artifact lifecycle (mandatory)
+## Artifact lifecycle (mandatory)
 
-**Trigger:** any task generating or copying sizeable build, frozen-test, staging, deployment-scan or release artifacts; also success, failure, handoff and release closeout. **Executor** owns this in the generating task.
+**Trigger/owner:** every build/test/staging/deploy task, including failure and handoff; **Executor** retires disposable assets in that task.
 
-1. Prefer reuse of canonical build/test/release paths and existing validated artifacts. Before an expensive copy, decide its owner, expected size, purpose, and retirement point; avoid producing a full dependency bundle for every check.
-2. Keep disposable assets inside task-owned, clearly delimited paths, separate from runtime, unique evidence and necessary rollback. Retire duplicates and intermediate staging/scans **as their purpose ends**, including after failed or abandoned attempts. Keep small useful evidence, not many frozen binaries.
-3. At release completion, keep active installations and the minimum genuinely usable approved rollback assets. Inspect mixed backup folders individually; never delete linked/shared runtime, CDP/session, business state, Vault/OAuth, Git, dirty worktrees or unique evidence. Do not force file locks, change permissions, or require impossible global proof of zero open file handles for otherwise proven-disposable files.
-4. Record briefly in the RFQ `EXECUTION_LOG.md` what large assets were retained/retired and why, plus material space impact; for non-RFQ tasks state the result in the final chat. No extra report or cleanup framework is required.
+1. Reuse canonical paths; give new large temporary copies a purpose, owner and retirement point. Avoid repeated full frozen dependencies.
+2. Retire task-owned, proven-disposable builds/scans/staging when finished. Retain minimal evidence, active release and necessary verified rollback.
+3. Never delete CDP/session, linked/shared runtime, persistent data, credentials, Git, unique evidence or dirty work. Do not force locks/ACLs; missing global handle inventory alone does not block proven-safe cleanup.
 
-**Source of truth:** this baseline and the project's canonical release scripts/docs. **Enforcement:** CEO Review rejects unexplained piles of duplicate frozen builds/scans/backups or unsafe cleanup; normal owned-artifact retirement is part of delivery, not a separate Owner chore.
+**Source:** this baseline and canonical release docs/scripts. **Evidence:** RFQ `EXECUTION_LOG.md` (or non-RFQ final reply) briefly records retained/retired assets and exceptions. **Review:** CEO rejects unexplained duplicate bundles and unsafe deletions; no new cleanup framework.
 
 ## Delivery-first invariant
 

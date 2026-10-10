@@ -2,11 +2,11 @@
 
 Anything shown directly to Owner must be understandable without software-development knowledge.
 
-## Mandatory delivery channel and template (Executor)
+## Mandatory Executor response
 
-**Trigger:** completion, blocked handoff or final status of **any** implementation, bugfix, audit, cleanup, release or RFQ task, including a freshly opened Codex window. **Executor** must use the seven headings below **verbatim, in the same order in the final chat message**. For RFQs, use the same structure in `FINAL_REPORT.md`; writing a report file does **not** replace the required chat reply. Fill each heading concisely in plain Chinese; use `NONE` when no Owner action is needed. Do not replace the template with a free-form paragraph or a technical log. Clearly distinguish safe/offline tests from real business verification; do not claim live PASS without evidence.
+**Trigger:** final status of **every** task, RFQ or not. **Executor** uses the seven headings below **verbatim and in order in the final chat reply** and, for RFQs, `FINAL_REPORT.md`. Keep it concise and business-readable; state real vs. offline verification, RFQ status and one next Owner action (`NONE` if none). Technical detail stays in logs.
 
-**Source of truth:** this file. **Evidence:** the actual final chat reply and, for RFQs, `FINAL_REPORT.md`. **Cleanup:** detailed logs, paths, internal codes and stack traces stay in technical records, not the Owner summary. **Enforcement:** CEO Review requests correction if the final reply or RFQ report omits/reorders the required headings; no new independent paperwork is needed.
+**Source/evidence:** this file and actual chat/`FINAL_REPORT.md`. **Enforcement:** CEO requests correction for missing or altered headings; no extra paperwork.
 
 ## Executor final summary to Owner
 

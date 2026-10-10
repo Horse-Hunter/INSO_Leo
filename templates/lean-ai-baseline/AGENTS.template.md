@@ -2,8 +2,8 @@
 
 Start with `AI_START_HERE.md`.
 
-- **Mandatory task-end report:** for every task (RFQ or not), the final Owner-facing chat response follows the seven exact headings in `docs/REPORTING.md`; RFQ `FINAL_REPORT.md` uses them too. Include actual state, tests vs. live verification and the single Owner action (or NONE). Never substitute a free-form technical recap.
-- **No disposable artifact pileup:** follow the lifecycle in `docs/PROJECT_BASELINE.md`. Reuse canonical builds/staging, retire task-owned test/frozen/scan copies when done (including failed attempts), keep only needed evidence and proven rollback; do not touch persistent runtime, CDP, secrets, Git or unknown dirty workspaces.
+- **Every new window/task:** read `AI_START_HERE.md`; final Owner-facing **chat reply** and RFQ `FINAL_REPORT.md` use the exact seven headings in `docs/REPORTING.md`.
+- **Artifact hygiene:** reuse canonical builds; retire owned disposable frozen/staging/scan copies **in the generating task** (success/failure). Preserve active/rollback packages, runtime, CDP, secrets, Git and dirty work. See `docs/PROJECT_BASELINE.md`.
 
 - Owner + CEO discuss requirements; CEO creates/completes the RFQ Task Spec.
 - Owner opens any implementation agent (Codex / Claude / WorkBuddy or equivalent) and says only `执行 RFQ-XXX`.

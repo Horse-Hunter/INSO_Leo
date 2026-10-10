@@ -1,17 +1,15 @@
 # Windows release
 
-## Release artifact retention / same-task cleanup
+## Build/release retention (binding)
 
-**Trigger:** every Windows build, frozen test, deploy/rollback verification or failed packaging attempt. **Executor owns cleanup in that same task.** Use the existing `scripts/build_windows_release.ps1` / spec / scanner as the one build path; do not create another release or cleanup framework.
+**Trigger:** every build, frozen test, deployment scan, release or failed attempt. **Executor** reuses `scripts/build_windows_release.ps1` and its existing stage/scanner, avoiding repeated full frozen copies.
 
-- Before building, inspect existing `build`, staging, `.tmp`, `dist` and rollback assets relevant to the task. Reuse verification artifacts when safe, rather than manufacturing another full frozen copy for each attempt.
-- Mark every newly created large temporary folder with its generating task, intended lifetime and safe deletion boundary. As soon as its verification purpose ends, remove only its own proven-disposable `_internal`, deployed scan copy or staging assets; preserve concise logs/manifests instead of duplicate binaries.
-- After **successful deploy and verification**, retain the active install and the minimum proven-viable rollback collection, including any real dependent runtime. Retire redundant release backups/scan snapshots as part of the same release task, not in a later project-wide purge. A failed build still retires safe intermediates but retains evidence necessary to diagnose/recover.
-- **Never** delete/move runtime junctions or targets, CDP profile/session/backup, persistent databases/outbox, credential/OAuth material, approved rollback packages, Git state or dirty worktrees. Stop only the risky object on specific uncertainty; lack of global file-handle visibility by itself does not bar safe deletion of clearly disposable copies. Never force unlock or elevate ACL to delete.
-- In the RFQ `EXECUTION_LOG.md`, briefly record retained/retired artifact paths, why a large item remains, and disk delta when material. CEO Review checks that a successful release did not leave unexplained duplicate frozen bundles or deployment scans. Do not trigger a new build or production operation merely to verify cleanup.
+- During the **same task**, retire known disposable staging, `_internal` and scan copies as soon as verification ends; keep small manifests/evidence. On failure, keep only necessary diagnostics/recovery assets.
+- After confirmed deployment, retain live installs, shared operational state and a **verified usable** rollback set; retire redundant historical packages. Inspect mixed backup folders individually.
+- Never delete/follow runtime links, CDP, business DB/outbox, Vault/OAuth, Git, unique evidence or dirty worktrees; never force unlock/elevate. A missing global handle inventory alone is not a blocker for unrelated proven-disposable copies.
+- **Evidence/Review:** summarize retained/retired assets and material disk change in the RFQ `EXECUTION_LOG.md`; CEO rejects unexplained duplicates. No new release pipeline or cleanup report.
 
-This policy governs **future** release tasks. Historical deployment evidence below describes its state at the time and does not override the Owner's latest operating facts.
-
+Historical release facts below are snapshots, not current deployment status.
 
 ## Current RFQ-003 V1.2 refresh (2026-10-07)
 

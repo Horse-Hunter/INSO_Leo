@@ -2,8 +2,8 @@
 
 Start with `AI_START_HERE.md`.
 
-- **Every task, including non-RFQ maintenance:** read `docs/REPORTING.md` before the final response. The final **chat reply** must use its exact seven Executor headings (RFQ `FINAL_REPORT.md` uses them too); status, tests, live verification and the single next Owner action must be explicit. Technical details stay in execution records.
-- **No build/test artifact accumulation:** follow the artifact lifecycle in `docs/PROJECT_BASELINE.md` and release-specific `docs/WINDOWS_RELEASE.md`. Reuse a single canonical build/stage path; clean owned disposable copies during the same task after they cease to be useful, including on failure. Never sweep shared runtime, CDP, credentials, active release/rollback assets or unknown worktrees.
+- **Every new Executor window:** read `AI_START_HERE.md`. For any completed task, use the exact seven headings from `docs/REPORTING.md` in the **final chat reply** (and RFQ `FINAL_REPORT.md`); state true tests and next Owner action.
+- **Every build/test/deploy task:** reuse canonical paths and retire owned disposable frozen/staging/scan copies **in the same task**, including on failure. Keep required rollback, runtime, CDP, secrets, Git and unknown dirty work. See `docs/PROJECT_BASELINE.md` and `docs/WINDOWS_RELEASE.md`.
 
 - Owner + CEO discuss requirements; CEO creates/completes the RFQ Task Spec.
 - Owner may open any implementation-agent session (Codex / Claude / WorkBuddy or equivalent) and say only `执行 RFQ-XXX`.

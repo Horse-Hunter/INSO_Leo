@@ -2,7 +2,7 @@
 
 This project is RFQ-driven.
 
-**New agent window:** read `AGENTS.md` and follow `docs/PROJECT_BASELINE.md` for task-owned artifact retirement. All final Executor chat replies and RFQ `FINAL_REPORT.md` must follow the exact seven headings in `docs/REPORTING.md`.
+**New window:** read `AGENTS.md`. Retire task-owned disposable artifacts per `docs/PROJECT_BASELINE.md`; apply `docs/REPORTING.md` seven headings in final chat and RFQ `FINAL_REPORT.md`.
 
 ## 执行 RFQ-XXX
 

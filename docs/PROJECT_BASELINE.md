@@ -57,22 +57,15 @@
 - `EXECUTION_LOG.md` may preserve history but obsolete current blocker/next-step statements must be marked resolved/superseded.
 - Review requires cleanup evidence and rejects expired handoffs, stale current-state text or unexplained duplicate active worktrees.
 
-## Artifact lifecycle — prevent build/test disk growth (binding)
+## Artifact lifecycle (binding)
 
-**Trigger:** every Executor task that creates, copies, freezes, scans or packages sizeable test/build/release assets; also completion, failure, handoff and deployment verification. This is continuous housekeeping, **not** a separate end-of-month cleanup project.
+**Trigger/owner:** every build, frozen test, deployment scan, handoff and release (success **or** failure); the generating **Executor** owns cleanup in the same task.
 
-**Owner/procedure:**
-1. **Before creating:** reuse existing build scripts, canonical stage and verified artifacts; avoid copying complete frozen apps, dependency trees or worktrees for repeated verification. Estimate size and keep only the minimum simultaneously required; give any necessary temporary copy a clear task/owner and exact path.
-2. **During execution:** keep disposable outputs inside known owned build/test/staging paths; distinguish them from runtime, operational evidence and required rollback. Do not silently retain a new frozen copy for every test or deployment attempt. Prefer reusable test fixtures and small evidence.
-3. **As soon as an intermediate step succeeds, fails or is abandoned:** retire that step's **own** verified-disposable frozen copies, scan directories and temporary build outputs in the same work cycle. On failure retain only minimal useful diagnostic evidence and genuine recovery assets. Do not wait until project-wide disk use becomes large.
-4. **At release closeout:** preserve active versions, shared operational state, and the smallest *actually viable* Owner-approved rollback set; retire superseded duplicate package assets after successful verification. A backup folder can contain irreplaceable runtime or links: inspect individual objects, never bulk-delete on age/name alone.
-5. **At handoff/end:** identify any deliberately retained large artifact, its owner/purpose and retirement condition. Any unexplained duplicate needs cleanup or a concrete blocker before marking work complete. Never require Owner to manually clean normal build/test leftovers.
+1. Reuse canonical build/test/staging paths; avoid unnecessary complete frozen copies. Every new large temporary asset needs a purpose, owner and retirement point.
+2. Once its purpose ends, retire only **known task-owned disposable** builds, scan copies and staging; keep small essential evidence. Retain active releases and the minimum verified, approved rollback set.
+3. Protect CDP/profile, shared runtime/data, Vault/OAuth, Git, unique evidence and dirty worktrees. Never follow/delete reparse-point targets, force file locks or alter permissions. Skip **specific proven risks**, not all cleanup merely because global Windows file-handle inspection is unavailable.
 
-**Protected boundary:** never follow/delete junctions or symlinks into shared data; do not touch CDP Chrome profile/session/backup, business runtime/databases/outbox, Vault/OAuth, current or required rollback releases, Git history or unknown dirty worktrees. If a particular deletion has a **real, specific** dependency/data-loss risk, preserve it and record why; unavailable global Windows file-handle enumeration **alone** is not grounds to block unrelated safe cleanup. Do not circumvent file locks or permissions.
-
-**Source of truth/evidence:** this baseline defines the invariant; `docs/WINDOWS_RELEASE.md` and the existing canonical packaging scripts define release handling. For RFQs, note created/retired/retained large assets and any space impact or justified exception briefly in `EXECUTION_LOG.md`; for a non-RFQ maintenance task use the final chat response. Do not create a new report or cleanup framework solely for this check.
-
-**Review enforcement:** CEO rejects unexplained accumulating frozen bundles, staging/scanning copies, redundant backups or destructive cleanup of protected state, even if feature tests pass. Routine safe cleanup is part of Executor delivery, not a separate Owner approval gate.
+**Source:** this baseline and `docs/WINDOWS_RELEASE.md`. **Evidence:** brief retained/retired items and reason for large exceptions in RFQ `EXECUTION_LOG.md` (non-RFQ: final chat). **Enforcement:** CEO Review rejects unexplained duplicate artifacts or unsafe deletion. No extra cleanup framework or Owner ceremony.
 
 ## Delivery-first invariant
 
