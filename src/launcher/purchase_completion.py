@@ -164,12 +164,11 @@ class PurchaseCompletionActions:
             "V12_INTERNAL_FAILURE": "采购模块内部处理异常，模块已暂停。请查看订单详情与安全日志。",
             "INVALID_INPUT_SKIPPED": "该行型号、品牌、数量或关键格式不合法，已跳过；请修正源表格。",
             "SOURCE_CHANGED": "源订单的关键内容已被修改，本单终止且不会覆盖人工修改。",
-        }.get(reason, "该阶段处理失败，请根据订单识别码查看程序订单详情。")
-        body = (f"{explanation}\n订单识别码：{inquiry_id}\n型号：{item.mpn}\n"
+        }.get(reason)
+        body = (f"型号：{item.mpn}\n"
                 f"品牌：{item.resolved_brand or item.brand}\n数量：{item.quantity}\n"
-                f"工作表：{item.record_identity.worksheet.worksheet}\n"
-                f"原行号：{item.record_identity.row_position}\n"
-                f"失败阶段：{phase}\n具体情况：{reason_text}\n原因代码：{reason}")
+                f"位置：{item.record_identity.worksheet.worksheet}，原行号{item.record_identity.row_position}（定位参考）\n"
+                f"情况：{explanation}" + (f"\n说明：{reason_text}" if reason_text else ""))
         self.v12_store.enqueue_notification(NotificationCommand(
             command_id=command_id,
             inquiry_id=inquiry_id, kind=NotificationKind.PURCHASE_EXCEPTION,

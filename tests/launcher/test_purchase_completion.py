@@ -85,7 +85,8 @@ def test_failure_only_notifies_owner_once_and_never_writes(outcome):
     cmd = next(iter(state.commands.values()))
     assert cmd.kind is NotificationKind.PURCHASE_EXCEPTION
     assert [r.address for r in cmd.recipients] == ["linan229@qq.com"]
-    assert "TEST-MPN" in cmd.text_body and "synthetic-inquiry" in cmd.text_body
+    assert "TEST-MPN" in cmd.text_body and "synthetic-inquiry" not in cmd.text_body
+    assert "原行号4" in cmd.text_body and "原因代码" not in cmd.text_body
     if outcome is not PurchaseOutcome.VALIDATION_FAILED:
         assert "可能已经发送" in cmd.text_body and "禁止直接重跑" in cmd.text_body
 
@@ -96,7 +97,7 @@ def test_sheet_failure_preserves_saved_and_sends_safe_specific_mail():
     assert state.state is BusinessState.STATUS_WRITE_PENDING
     assert state.outcome is PurchaseOutcome.SAVED and sheet.calls == 1
     body = next(iter(state.commands.values())).text_body
-    assert "表格状态写回未能确认" in body and "保持原状态" in body and "RuntimeError" in body
+    assert "表格状态写回未能确认" in body and "保持原状态" in body and "RuntimeError" not in body
     assert "sensitive-provider-message" not in body
 
 
@@ -261,7 +262,7 @@ def test_ambiguous_quoted_rows_still_fail_closed_and_alert():
     handler.retry_saved_statuses(at=NOW)
     assert state.state is BusinessState.STATUS_WRITE_PENDING and len(state.commands) == 1
     body = next(iter(state.commands.values())).text_body
-    assert "保持原状态" in body and "SheetRecordConflict" in body
+    assert "保持原状态" in body and "多个候选" in body and "SheetRecordConflict" not in body
     assert sheet.calls == 0
 
 

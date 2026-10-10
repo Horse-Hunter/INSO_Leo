@@ -904,12 +904,12 @@ def _notification_content(
     market_price = _money(facts.market_minimum_reference_price) if facts else "--"
     total = _money(facts.estimated_total) if facts else "--"
     if kind is NotificationKind.IMPORTANT_ORDER:
-        subject = f"【重要订单】【{tier}】{customer}｜{model}｜¥{total}｜{stock}"
+        subject = f"【重要订单】{customer}｜{model}"
         body = "\n".join((
             f"客户名称：{customer}", f"客户等级：{tier}", f"型号：{model}",
             f"品牌：{brand}", f"数量：{quantity if quantity is not None else '--'}",
             f"库存状态：{stock}", f"市场最低参考价：{market_price}",
-            f"预估订单总价：{total}", "触发原因：重要订单规则命中", "请及时人工跟进该订单",
+            f"预估订单总价：{total}", "处理：请及时跟进该订单。",
         ))
         return subject, body
 
@@ -937,12 +937,12 @@ def _notification_content(
             f"制单人：{duplicate_result.creator or '--'}；INSO报价：{_money(quote)} {duplicate_result.currency or ''}".rstrip(),
             f"本次数量 × INSO报价 = {order_total}",
         ))
-    duplicate_details += f"\nResearch库存：{stock}；市场参考价：{market_price}；预估总价：{total}"
+    duplicate_details += f"\n调研库存：{stock}；市场参考价：{market_price}；预估总价：{total}"
     subject = f"【INSO重复订单】{customer}｜{model}"
     body = "\n".join((
         f"本次订单：客户={customer}；型号={model}；品牌={brand}；数量={quantity if quantity is not None else '--'}",
         duplicate_details,
-        "请及时人工跟进该订单。",
+        "处理：请核对历史订单；本次未继续采购。",
     ))
     return subject, body
 

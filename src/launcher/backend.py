@@ -153,19 +153,19 @@ class ProductionConfigurationError(RuntimeError):
 def _login_alert_body(stop_reason: str) -> str:
     """The alert's plain text: what stopped, and what to do about it."""
 
-    lines = [
-        "INSO_V1.2 程序已停止：采集网站遇到登录或人工验证问题（不一定是 INSO 网站）。",
-        "",
-        "处理步骤：",
-        "1. 打开本机的已授权 Chrome；",
-        "2. 在对应网站完成登录（如出现验证码／滑块／短信验证，需要人工完成）；",
-        "3. 回到 INSO_V1.2 面板，点击「开始询价」继续。",
-        "",
-        "也可以先点击面板上的「一键登录所有网站」，确认各站登录状态。",
-    ]
-    if stop_reason.strip():
-        lines += ["", f"本轮各来源的说明：{stop_reason.strip()}"]
-    return "\n".join(lines)
+    # Keep only closed status hints; never copy raw source remarks.
+    if any(token in stop_reason for token in ("全局", "基础设施", "台账", "GLOBAL_STOP")):
+        return ("情况：询价因运行异常停止。\n"
+            "处理：检查网络、授权和程序订单详情，确认后点击“开始询价”；不要直接重发采购单。")
+    labels = (("IC.NET", "IC.net"), ("IC_NET", "IC.net"), ("INSO", "INSO"),
+        ("英索", "INSO"), ("立创", "立创"), ("LCSC", "立创"),
+        ("华强", "华强"), ("HQEW", "华强"), ("FINDCHIPS", "Findchips"), ("BOM.AI", "Bom.Ai"))
+    sites = list(dict.fromkeys(label for token, label in labels if token in stop_reason.upper()))
+    hint = ("、".join(sites) or "网站") + "需要重新登录或人工验证。"
+    return (f"情况：询价已停止，{hint}\n"
+        "处理：在程序使用的Chrome中完成登录或验证，再点击“开始询价”。\n"
+        "也可点击“一键登录所有网站”检查登录状态。")
+
 
 
 class _Observer:
@@ -1741,12 +1741,12 @@ class ProductionBackend(GuiBackend):
             body = _login_alert_body(stop_reason)
             if inquiry_id is not None and self._store is not None:
                 item = self._store.get_by_inquiry_id(inquiry_id)
-                body += (f"\n订单识别码：{inquiry_id}\n型号：{item.mpn}\n"
+                body += (f"\n型号：{item.mpn}\n"
                          f"品牌：{item.resolved_brand or item.brand}\n数量：{item.quantity}\n"
-                         "阶段：网站登录/调研；本次未完成采购提交。")
+                         "请核对本单处理状态，勿直接重发采购单。")
             result = transport.send_operator_alert(
                 recipient=NotificationRecipient("owner", _LOGIN_ALERT_RECIPIENT),
-                subject="【INSO】询价已停止：需要重新登录网站",
+                subject="【INSO】询价已停止",
                 text_body=body,
             )
         except Exception as exc:  # noqa: BLE001 - fail closed at runtime boundary

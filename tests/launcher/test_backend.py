@@ -1509,8 +1509,8 @@ def test_a_run_stopped_by_a_login_problem_mails_only_the_one_address(
     config, recipient, subject, body = _RecordingTransport.sent[0]
     assert recipient.address == "linan229@qq.com"
     assert recipient.address != config.sender_address
-    assert "登录" in subject
-    assert "立创：需要人工验证" in body
+    assert "询价已停止" in subject
+    assert "立创" in body and "人工验证" in body
     backend.shutdown()
 
 

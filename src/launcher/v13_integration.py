@@ -55,23 +55,25 @@ def notify_quotation(store, result, key, episode, *, at):
     ):
         return
     action = {
-        "SOURCE_STATUS_NOT_UPDATED": "报价脚本已确认成功，但30秒内源表状态仍未变成采购已报价。请人工核对并更新状态；程序不会重复执行更新报价。",
-        "UPDATE_RESULT_UNCONFIRMED": "更新报价多次无法确认，请人工检查该订单；程序已跳过并继续其他订单。",
-    }.get(reason, "请人工核对该订单及报价输入；处理完成后将源订单改为采购已报价。")
+        "SOURCE_STATUS_NOT_UPDATED": "核对源表状态，确认后改为“采购已报价”；无需重复更新报价。",
+        "UPDATE_RESULT_UNCONFIRMED": "本单已跳过，其他订单继续；请核对报价结果后再决定是否重试。",
+    }.get(reason, "核对订单及报价输入，确认报价完成后再更新源表状态。")
     # Only explicit business identity/location and a closed reason, never provider exceptions.
-    body = (
-        f"模块：V1.3报价\ninquiry_id：{result.inquiry_id or 'UNKNOWN'}\n"
-        f"worksheet：{result.source_worksheet.worksheet if result.source_worksheet else 'UNKNOWN'}\n"
-        f"source row（定位信息）：{result.source_row_position}\nMPN：{result.queried_mpn or 'UNKNOWN'}\n"
-        f"reason：{reason}\n{action}"
-    )
+    reason_text = {
+        "SOURCE_STATUS_NOT_UPDATED": "报价更新已确认，源表状态未更新。",
+        "UPDATE_RESULT_UNCONFIRMED": "报价更新结果无法确认。",
+    }.get(reason, "报价处理未完成。")
+    body = (f"型号：{result.queried_mpn or '未能确认'}\n"
+        f"位置：{result.source_worksheet.worksheet if result.source_worksheet else '未能确认'}"
+        f"，行号{result.source_row_position}（定位参考）\n"
+        f"情况：{reason_text}\n处理：{action}")
     store.enqueue_notification(
         NotificationCommand(
             command_id,
             result.inquiry_id,
             NotificationKind.PURCHASE_EXCEPTION,
             owner,
-            "V1.3报价处理异常",
+            "【INSO】报价处理异常",
             body,
             None,
             at,
@@ -91,14 +93,29 @@ def notify_runtime_fault(store, key, reason, *, at):
         command_id, None, NotificationKind.PURCHASE_EXCEPTION, owner
     ):
         return
+    treatment = {
+        "GOOGLE_SHEETS_UNAVAILABLE": "检查VPN网络及Google表格授权，恢复后继续。",
+        "SHEETS_AUTH_UNAVAILABLE": "检查Google表格授权，恢复后继续。",
+        "WORKFLOW_LEDGER_UNAVAILABLE": "检查本机订单台账，恢复后继续。",
+        "CDP_RECONNECT_EXHAUSTED": "检查程序使用的Chrome是否正常，恢复连接后继续。",
+        "INSO_AUTHENTICATION_REQUIRED": "在程序使用的Chrome中完成INSO登录或人工验证后继续。",
+        "QUOTE_INPUT_CONFIGURATION_REQUIRED": "核对报价输入配置，修正后继续。",
+    }.get(reason, "查看程序订单详情及本机运行状态，确认后继续。")
     store.enqueue_notification(
         NotificationCommand(
             command_id,
             None,
             NotificationKind.PURCHASE_EXCEPTION,
             owner,
-            "询价程序运行异常",
-            f"模块：V1.2 / V1.3\nreason：{reason}\n请检查对应网站登录、表格配置或本机运行状态。",
+            "【INSO】询价运行异常",
+            "情况：" + {
+                "GOOGLE_SHEETS_UNAVAILABLE": "Google表格读取或授权不可用。",
+                "SHEETS_AUTH_UNAVAILABLE": "Google表格授权不可用。",
+                "WORKFLOW_LEDGER_UNAVAILABLE": "本机订单台账不可用。",
+                "CDP_RECONNECT_EXHAUSTED": "Chrome连接恢复失败。",
+                "INSO_AUTHENTICATION_REQUIRED": "INSO需要登录或人工验证。",
+                "QUOTE_INPUT_CONFIGURATION_REQUIRED": "报价输入配置缺失或不明确。",
+            }.get(reason, "询价运行出现异常。") + f"\n处理：{treatment}不要直接重发采购单。",
             None,
             at,
         )
@@ -122,8 +139,11 @@ def notify_website_issue(store, inquiry_id, site, code, *, mpn=None, at):
         return
     store.enqueue_notification(NotificationCommand(
         command_id, inquiry_id, NotificationKind.PURCHASE_EXCEPTION, owner,
-        "询价网站不可用",
-        f"网站：{site.value}\ninquiry_id：{inquiry_id}\nMPN：{mpn or 'UNKNOWN'}\nreason：{reason}\n请人工检查网站登录/可用性。",
+        "【INSO】询价网站异常",
+        f"网站：{site.value}\n" + (f"型号：{mpn}\n" if mpn else "")
+        + "情况：" + {"AUTHENTICATION_REQUIRED": "需要登录或人工验证。",
+            "QUERY_TIMEOUT": "查询超时。", "RESULT_UNAVAILABLE": "查询结果未能确认。"
+            }.get(reason, "网站暂不可用。") + "\n处理：请人工检查网站登录/可用性。",
         None, at,
     ))
 
@@ -152,14 +172,13 @@ def notify_quotation_model_difference(store, result, source_model, *, at):
     ):
         return
     body = (
-        f"模块：V1.3报价\ninquiry_id：{result.inquiry_id}\n"
-        f"worksheet：{result.source_worksheet.worksheet if result.source_worksheet else 'UNKNOWN'}\n"
-        f"source row（定位信息）：{result.source_row_position}\n"
         f"原表型号：{source_model}\n报价实际型号：{actual_model}\n"
-        "模糊匹配发现型号原文不同。报价输入B列保留原表型号，L列追加报价实际型号并保留原备注。"
-        "请人工核对该型号差异；本邮件仅说明检测结果，不代表报价脚本已完成。"
+        f"位置：{result.source_worksheet.worksheet if result.source_worksheet else '未能确认'}"
+        f"，行号{result.source_row_position}（定位参考）\n"
+        "情况：匹配到的报价型号与原表不同，报价更新尚未确认。\n"
+        "处理：请核对型号差异；原表型号保留，实际报价型号会追加到备注。"
     )
     store.enqueue_notification(NotificationCommand(
         command_id, result.inquiry_id, NotificationKind.PURCHASE_EXCEPTION,
-        recipients, "V1.3报价型号差异提醒", body, None, at,
+        recipients, "【INSO】报价型号差异", body, None, at,
     ))

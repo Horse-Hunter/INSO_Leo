@@ -116,3 +116,12 @@ Existing PURCHASE_EXCEPTION and EventType are reused. No new enum/schema version
 mail polling or purchase/quotation state changes. Interrupted in-flight sends
 recover UNKNOWN through existing policy and are never blindly resent. A later
 V1.4 invocation resumes this isolated outbox; retry worker ends on app shutdown.
+
+## RFQ-014 notification copy (Owner 2026-10-10)
+All production SMTP message builders to229/shawn were audited, including owner-only
+alerts and separately delivered recipients/retries. Mail presents business identity,
+useful sheet location, actual status/uncertainty and relevant human action. Internal
+inquiry/command/reason/stage codes remain in the ledger but not message text.
+No recipient/trigger/dedup/retry/SMTP/queue mutation change. Already-created payloads
+remain immutable; future messages use revised copy after source reload/authorized
+release. Synthetic previews: control-room/RFQ-014/MAIL_PREVIEWS.md. Review pending.

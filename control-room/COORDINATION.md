@@ -40,3 +40,5 @@ in Owner's selected case remains unresolved; no automatic replay was performed.
 | RFQ-012 | Owner single-click oldest unfilled order | REVIEW_REQUIRED | `codex/v1-4-order-mail-inspection` | REQUIRED | `control-room/RFQ-012/TASK_SPEC.md` |
 
 | RFQ-013 | Owner native PDF upload after field verification | REVIEW_REQUIRED | `codex/v1-4-order-mail-inspection` | REQUIRED | `control-room/RFQ-013/TASK_SPEC.md` |
+
+| RFQ-014 | All229/shawn SMTP message clarity | REVIEW_REQUIRED | `codex/v1-4-order-mail-inspection` | REQUIRED | `control-room/RFQ-014/TASK_SPEC.md` |

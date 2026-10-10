@@ -113,7 +113,7 @@ def test_moved_row_uses_canonical_identity_and_reports_current_location(tmp_path
     sheets.rows = [source(9)]
     assert follow.run(WS) == 1
     commands = ledger.claim_due_notifications(now=now[0])
-    assert "当前行：9" in commands[0].text_body
+    assert "行号9（定位参考）" in commands[0].text_body
     assert command_count(db) == 1
 
 

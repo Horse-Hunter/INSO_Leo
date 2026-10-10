@@ -73,16 +73,14 @@ class PurchaseFollowUp:
             item = self.workflow_store.get_by_inquiry_id(candidate.inquiry_id)
             body = (
                 "该订单发给采购后已超过3个工作小时，源表仍为‘发给采购’，请人工跟进采购报价。\n"
-                f"工作时段：周一至周五09:00–12:30、13:30–18:00（北京时间）\n"
-                f"订单：{candidate.inquiry_id}\n工作表：{worksheet.worksheet}\n"
-                f"当前行：{candidate.source_row_position}\n型号：{candidate.queried_mpn}\n"
+                f"位置：{worksheet.worksheet}，行号{candidate.source_row_position}（定位参考）\n型号：{candidate.queried_mpn}\n"
                 f"品牌：{item.resolved_brand or item.brand}\n数量：{item.quantity}\n"
-                f"发给采购时间：{episode.confirmed_at.astimezone(WORK_ZONE).isoformat()}\n"
-                "程序不会因此重发采购单或阻止正常报价处理。"
+                f"发给采购时间：{episode.confirmed_at.astimezone(WORK_ZONE).strftime('%m-%d %H:%M（北京时间）')}\n"
+                "无需重发采购单。"
             )
             self.v12_store.enqueue_notification(NotificationCommand(
                 command_id, candidate.inquiry_id, NotificationKind.PURCHASE_EXCEPTION,
-                RECIPIENTS, "采购报价待跟进：超过3个工作小时", body, None, now,
+                RECIPIENTS, "【INSO】采购报价待跟进", body, None, now,
             ))
             enqueued += 1
         return enqueued
