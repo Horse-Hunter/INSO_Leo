@@ -1,6 +1,6 @@
 # RFQ-009 Execution Log
 
-## Baseline and reuse
+## Original delivery history (baseline superseded by B1 repair)
 Read root docs/AI_START_HERE.md, task protocol, module index/product baseline,
 then current V1.3 AI_START_HERE/AGENTS/module/Core/GUI/launcher/review evidence.
 Latest independently reviewed source located: df64762. Later branch 1bf4ee0
@@ -68,3 +68,44 @@ workflow state/config/release/production runtime untouched. No V1.4 packaging,
 deployment, external push or subsequent business task performed.
 Business mapping, global subject contract grammar, customer identity/currency/
 tax/rounding/dedup/revisions remain UNKNOWN. Executor does not issue CEO PASS.
+
+## B1 baseline repair — 2026-10-10 (REVIEW_REQUIRED)
+Owner explicitly selects fd7ce8665c65de3f0d1c18cf85369e8eff0a273c as the
+V1.3 REVIEWED_DONE base. Fetched remote and fast-forwarded local V1.4 to
+7588d55 (including CEO review and CHANGES_REQUESTED). Preserved that history on
+local codex/rfq009-before-rebase-7588d55. Rebased all three V1.4 commits from
+df64762 onto fd7ce866; preserved historical CEO review verbatim.
+
+Conflicts: MODULE_INDEX end-of-file additions, COORDINATION end-of-file
+additions and later RFQ009 status edit only. Resolved by retaining V1.3 shared
+core.mpn boundary/reviewed increment section and appending V1.4/status content.
+No old-file whole replacement; launcher applied automatically and was inspected.
+
+Structural proof PASS: exact specified base is ancestor; changed source/test
+path set equals original Phase1 path set; GUI/contracts/order_mail and Phase1
+test blobs equal pre-rebase history; launcher added/deleted lines exactly equal
+original increment. All other src/tests files equal reviewed V1.3 base.
+Focused/full checks PASS (results below). No live email, SMTP, browser, INSO, Sheets, DB,
+package or deployment operations in this repair.
+
+### B1 final verification and resubmission
+- Rebased Phase1 commit:59d7d03; preserved CEO review:495226a and status:3ec9be1.
+- Focused:534 passed in21.32s. Phase1 order_mail/GUI/worker plus new V1.3
+  core lookup, duplicate/quotation readers, background targets, Google update,
+  purchase completion, INSO session/history, purchase status, tier/duplicate
+  rules, quote update and RFQ006 integration all PASS.
+- Full safe/offline:1681 passed / 1 skipped in69.88s.
+- Test environment:Python3.12; ephemeral sys.path append to preinstalled bundled
+  Lib/site-packages for tzdata; no dependency installations/config changes.
+  Focused basetemp:.tmp/pytest-rfq009-rebase-focused;
+  full command:pytest.main([tests,-q,--basetemp=.tmp/pytest-rfq009-rebase-full]).
+- Ruff src/tests --no-cache PASS; diff --check PASS; range-diff reviewed.
+- No source/test changes beyond exact original Phase1 increment; no V1.3
+  reviewed-feature regression found by equality checks and new-base regressions.
+- Updated only RFQ009/task current baseline, status and evidence after rebase.
+  CEO_REVIEW.md retained byte-for-byte; old verdict remains historical.
+- Preserve pre-rebase backup ref. Push rewritten development branch with exact
+  --force-with-lease=refs/heads/codex/v1-4-order-mail-inspection:
+  7588d5544cb869202ef81d2c47f26ea21a9f6c87; abort if remote changed.
+  Post-push local/remote SHA and clean worktree are verified for resubmission.
+- RFQ009 REVIEW_REQUIRED only, no executor CEO PASS; no package/deployment.

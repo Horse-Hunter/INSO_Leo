@@ -9,9 +9,10 @@ mailbox and real order attachments. Owner subsequently explicitly authorized
 configuration of imap.qq.com in the existing encrypted Vault.
 
 ## baseline / reuse
-codex/v1-4-order-mail-inspection starts at df64762 (latest located independent
-V1.3 PASS). Later production increments remain REVIEW_REQUIRED. V1.3 trees and
-release are untouched. Reuse GUI, launcher, Vault provider and openpyxl.
+Current repaired baseline: V1.3 REVIEWED_DONE fd7ce8665c65de3f0d1c18cf85369e8eff0a273c.
+Original df64762 baseline was rejected by CEO B1 and is superseded. Owner
+explicitly authorizes rebase; preserve Phase 1 and all newer V1.3 reviewed fixes.
+Existing V1.3 trees/release remain untouched; reuse GUI, Vault and openpyxl.
 No IMAP receiver exists. Minimal order_mail boundary owns read-only IMAP and
 attachment structure; launcher assembles it and GUI displays sanitized results.
 
@@ -39,3 +40,8 @@ Future global contract grammar and business mapping rules remain UNKNOWN.
   packaging/deployment; global subject grammar and business mapping UNKNOWN.
 - safety: no production INSO/Sheets/DB/SMTP operations; real data never staged.
 - report: control-room/RFQ-009/FINAL_REPORT.md; independent CEO Review pending.
+
+## B1 repair verification (2026-10-10)
+Migration completed; code/test preservation comparisons PASS. Focused534 PASS;
+full safe/offline1681 PASS/1 SKIP; Ruff/diff PASS. REVIEW_REQUIRED. Scope is baseline repair only, no functional
+rewrite, dependency, real mailbox recheck, deployment or business write.
