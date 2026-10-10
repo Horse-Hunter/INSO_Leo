@@ -213,3 +213,11 @@ Every field is read immediately, each row reread, then the whole table reread.
 Numeric comparisons use Decimal; price source is original Excel value, no exchange
 or tax calculation. Header is reread after details too. Phase2 development reuse
 and unconditional RMB selection remain unchanged, with no production deployment.
+
+## RFQ-012 Owner lifecycle update
+
+Single-click order entry now creates a uniquely marked sales page per order and
+uses existing InsoSessionGuard on that page after preflight. All older review
+pages remain protected and untouched. Owner manually verifies/submits/closes;
+program ends at completed header/detail readback and never saves/submits/uploads.
+The earlier testing-only reuse policy is superseded by Owner's explicit update.

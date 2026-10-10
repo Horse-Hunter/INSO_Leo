@@ -273,3 +273,89 @@ def inspect_order_mail(*, credential_getter=get_login, client_factory=imaplib.IM
                 client.logout()  # no CLOSE, which could expunge a writable mailbox
             except Exception:  # noqa: BLE001, S110 - never log raw provider errors
                 pass
+
+
+@dataclass(frozen=True, repr=False)
+class OrderMail:
+    identities: tuple[str, ...]
+    excel: bytes
+
+
+def read_oldest_order_mail(*, is_processed, credential_getter=get_login,
+                           client_factory=imaplib.IMAP4_SSL):
+    """Order candidate metadata only; fetch exactly one oldest unfilled body."""
+    import hashlib
+    client = None
+    try:
+        login = credential_getter(HOST)
+        if login.username.strip().lower() != ACCOUNT:
+            raise ValueError("ACCOUNT_MISMATCH")
+        try:
+            client = client_factory(HOST, 993, ssl_context=ssl.create_default_context(), timeout=20)
+            _ok(client.login(login.username, login.password))
+        finally:
+            del login
+        _ok(client.select("INBOX", readonly=True))
+        if not client.is_readonly:
+            raise ValueError("READ_ONLY_NOT_CONFIRMED")
+        status, values = client.response("UIDVALIDITY")
+        if status != "UIDVALIDITY" or not values or not re.fullmatch(rb"\d+", values[0] or b""):
+            raise ValueError("MAIL_IDENTITY_UNCONFIRMED")
+        validity = values[0]
+        hits = _ok(client.uid("search", "CHARSET", "UTF-8", "SUBJECT", ('"' + PREFIX + '"').encode('utf8')))
+        uids = set(hits[0].split()) if hits and hits[0] else set()
+        if len(uids) > 2000 or any(not re.fullmatch(rb"\d+", uid) for uid in uids):
+            raise ValueError("ORDER_CANDIDATE_LIMIT")
+        def identity(value):
+            return hashlib.sha256(ACCOUNT.encode() + b"\0INBOX\0" + value).hexdigest()
+        before, candidates = {}, []
+        for uid in sorted(uids, key=int):
+            uid_key = identity(b"UID:" + validity + b":" + uid)
+            if is_processed((uid_key,)):
+                continue
+            meta, flags, header = _fetch(client, uid, "(UID FLAGS INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER.FIELDS (SUBJECT MESSAGE-ID)])")
+            before[uid] = flags
+            msg = BytesParser(policy=policy.default).parsebytes(header)
+            if not str(msg.get("Subject", "")).startswith(PREFIX):
+                continue
+            message_id = str(msg.get("Message-ID", "")).strip()
+            keys = (uid_key, identity(b"MID:" + message_id.encode())) if message_id else (uid_key,)
+            if is_processed(keys):
+                continue
+            received = re.search(rb'INTERNALDATE "([^"]+)"', meta)
+            size = re.search(rb"RFC822.SIZE (\d+)", meta)
+            if received is None or size is None:
+                raise ValueError("ORDER_DATE_UNCONFIRMED")
+            date = parsedate_to_datetime(received[1].decode("ascii"))
+            if date.tzinfo is None:
+                raise ValueError("ORDER_DATE_UNCONFIRMED")
+            candidates.append((date, int(uid), uid, keys, int(size[1])))
+        selected = min(candidates, key=lambda c: (c[0], c[1])) if candidates else None
+        mail = None
+        if selected is not None:
+            _, _, uid, keys, size = selected
+            if size > MAX_BYTES:
+                raise ValueError("MESSAGE_SIZE_LIMIT")
+            _, _, raw = _fetch(client, uid, "(UID FLAGS BODY.PEEK[])")
+            if len(raw) > MAX_BYTES:
+                raise ValueError("MESSAGE_SIZE_LIMIT")
+            msg = BytesParser(policy=policy.default).parsebytes(raw)
+            if not str(msg.get("Subject", "")).startswith(PREFIX):
+                raise ValueError("SUBJECT_CHANGED")
+            full_id = str(msg.get("Message-ID", "")).strip()
+            full_keys = (keys[0], identity(b"MID:" + full_id.encode())) if full_id else (keys[0],)
+            if full_keys != keys:
+                raise ValueError("MAIL_IDENTITY_CHANGED")
+            parts = [p for p in msg.walk() if str(p.get_filename() or '').lower().endswith('.xlsx')]
+            if len(parts) != 1:
+                raise ValueError("EXCEL_ATTACHMENT_AMBIGUOUS")
+            mail = OrderMail(keys, parts[0].get_payload(decode=True) or b"")
+        if not all(_fetch(client, uid, "(UID FLAGS)")[1] == flags for uid, flags in before.items()):
+            raise ValueError("MAIL_FLAGS_CHANGED")
+        return mail
+    finally:
+        if client is not None:
+            try:
+                client.logout()
+            except Exception:  # noqa: BLE001, S110 - never log provider data
+                pass

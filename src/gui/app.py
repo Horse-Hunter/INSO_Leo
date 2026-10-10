@@ -341,12 +341,6 @@ class InsoDashboardApp:
         )
         self._order_mail_button.grid(row=0, column=1, sticky="ew", padx=(6, 0))
 
-        self._order_mail_sample = ctk.CTkOptionMenu(
-            card, values=["样本1（10月9日）", "样本2（10月7日）"],
-            font=("Microsoft YaHei UI", 12),
-        )
-        self._order_mail_sample.grid(row=3, column=0, sticky="ew", padx=24, pady=(0, 16))
-
         return card
 
     def _build_run_info(self, parent: ctk.CTkFrame) -> ctk.CTkFrame:
@@ -637,9 +631,7 @@ class InsoDashboardApp:
     def _on_order_mail(self) -> None:
         if self._closing:
             return
-        choice = self._order_mail_sample.get() if hasattr(self, "_order_mail_sample") else "样本1"
-        sample_number = 2 if choice.startswith("样本2") else 1
-        if self._backend.start_order_mail_check(sample_number=sample_number):
+        if self._backend.start_order_mail_check():
             self._shown_order_mail_report = None
             self._order_mail_button.configure(text="正在检查并填写订单…", state="disabled")
         else:
@@ -647,9 +639,8 @@ class InsoDashboardApp:
 
     def _sync_order_mail(self) -> None:
         running = self._backend.order_mail_running()
-        stage = self._backend.get_order_mail_stage()
         self._order_mail_button.configure(
-            text="正在检查并填写订单…" if running else "等待 Owner 复核" if stage == "WAITING_OWNER" else "自动订单录单",
+            text="正在检查并填写订单…" if running else "自动订单录单",
             state="disabled" if running else "normal",
         )
         report = self._backend.get_order_mail_report()

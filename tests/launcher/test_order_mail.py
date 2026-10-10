@@ -42,7 +42,7 @@ def test_sales_worker_does_not_pause_parallel_inquiry(tmp_path, monkeypatch):
     entered, release = threading.Event(), threading.Event()
     inquiry_release = threading.Event()
     def check(**kwargs):
-        assert kwargs["sample_number"] == 2
+        assert "sample_number" not in kwargs
         entered.set()
         assert release.wait(5)
         return "WAITING_OWNER", "safe"
@@ -53,7 +53,7 @@ def test_sales_worker_does_not_pause_parallel_inquiry(tmp_path, monkeypatch):
     inquiry.start()
     backend._thread = inquiry
     try:
-        assert backend.start_order_mail_check(sample_number=2)
+        assert backend.start_order_mail_check()
         assert entered.wait(2)
         assert backend._state is RunState.RUNNING and inquiry.is_alive()
         release.set()

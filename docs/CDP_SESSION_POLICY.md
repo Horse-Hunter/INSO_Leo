@@ -155,3 +155,14 @@ junction (configs stay untouched):
    real directory.
 4. Start Chrome via `scripts\open_cdp_session.ps1` and confirm the authenticated
    shell still opens without a login.
+
+## RFQ-012 one-shot order window (Owner 2026-10-10)
+
+On explicit button click, reserve the invocation's own blank target in canonical
+9222/profile and restore/maximize its Chrome window via CDP, verify maximization
+and foreground that target before mail/preflight. Never borrow/close/navigate
+inquiry targets or earlier sales-review pages. After preflight authenticate the
+new sales target using the existing guard; each order has a distinct owner marker.
+Blank for a no-mail invocation may close only its own unused target. Filled or
+authentication-failure sales tabs remain for Owner. This supersedes development
+reuse for the button; no deployment or automatic order polling is authorized.

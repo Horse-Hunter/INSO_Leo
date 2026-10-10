@@ -69,3 +69,14 @@ Workflow `order_notifications` composes existing V1.2 outbox/worker/1069 transpo
 in an isolated ignored development DB, old schema/enums only. Existing FK uses
 a notification-only MANUAL_REVIEW anchor, no production/purchase/quotation state.
 This Owner-authorized extension is submitted to CEO with RFQ-011 review.
+
+## RFQ-012 Owner single-click receipt queue (2026-10-10)
+
+The latest Owner rule replaces Phase2/3 development reuse for this button: every
+invocation owns a new sales tab, authenticates with the canonical guard, preserves
+older review tabs and releases its worker when fields verify. Launcher maximizes
+the shared Chrome window before mail/business. order_mail owns bounded oldest
+INBOX order-candidate metadata selection and an opaque local filled-mail receipt
+ledger; email flags remain read-only. Successful full readback records processed,
+failures retry, no server flag/production workflow DB state. GUI button always
+returns to idle and is independent of inquiry/procurement. No Save/submit/PDF.

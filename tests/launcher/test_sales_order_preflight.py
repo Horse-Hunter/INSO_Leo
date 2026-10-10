@@ -36,20 +36,6 @@ def test_package_failure_stops_whole_preflight():
     assert 'INTERNAL' not in str(exc.value)
 
 
-@pytest.mark.parametrize('code,field', [('REQUIRED','DC'),('LEAD_TIME','L/T'),('MAIL',None),('STRUCTURE',None)])
-def test_contract_failure_before_any_browser_and_safe_notify(monkeypatch, code, field):
-    from src.order_mail import contracts
-    def fail(*args, **kwargs): raise OrderError(code,field=field,pi_no='SHAWN20260101-01')
-    monkeypatch.setattr(contracts, 'read_selected_contract', fail)
-    monkeypatch.setattr(service,'acquire_cdp_browser',lambda *a,**k:pytest.fail('browser before preflight'))
-    notifications=[]
-    result = service.run_sales_header_check(sample_number=2,config_path='unused',production_path='unused',root='unused',notify=lambda **kw:notifications.append(kw))
-    assert result[0]=='STOPPED' and len(notifications)==1
-    mail = notifications[0]
-    assert all(word not in mail['situation'] for word in ['REQUIRED','LEAD_TIME','MAIL','STRUCTURE','http','Traceback'])
-    assert mail['pi_no']=='SHAWN20260101-01'
-
-
 def setup(monkeypatch):
     from src.inso import sales_details, sales_header
     from src.order_mail import contracts
@@ -57,14 +43,24 @@ def setup(monkeypatch):
     phases, notifications = [], []
     def read(*args,**kwargs):
         phases.append('parse'); return order()
-    monkeypatch.setattr(contracts,'read_selected_contract',read)
+    monkeypatch.setattr(contracts,'parse_contract',read)
     config=SimpleNamespace(cdp=SimpleNamespace(cdp_url='http://127.0.0.1:9222'),browser=SimpleNamespace(timeout_ms=5000))
     monkeypatch.setattr(service,'sales_config',lambda *a:(config,{}))
-    handle=SimpleNamespace(browser=SimpleNamespace(contexts=[SimpleNamespace(pages=[])]),playwright=object(),disconnect=lambda:phases.append('detach'))
+    handle=SimpleNamespace(owned=False, browser=SimpleNamespace(contexts=[SimpleNamespace(pages=[])]),playwright=object(),disconnect=lambda:phases.append('detach'))
     monkeypatch.setattr(service,'acquire_cdp_browser',lambda *a:handle)
+    page=SimpleNamespace(bring_to_front=lambda:None, close=lambda:phases.append('close-blank'))
+    monkeypatch.setattr(service,'new_background_page',lambda *a,**k:page)
+    monkeypatch.setattr(service,'maximize_order_window',lambda *a:phases.append('maximize'))
+    from src.order_mail import filled, inspection
+    monkeypatch.setattr(filled,'FilledOrders',lambda root:SimpleNamespace(contains=lambda keys:False,mark=lambda keys:phases.append('mark')))
+    def mail(**kw):
+        phases.append('mail')
+        return SimpleNamespace(excel=b'test',identities=('opaque',))
+    monkeypatch.setattr(inspection,'read_oldest_order_mail',mail)
+
     monkeypatch.setattr(icnet,'CdpIcNetClient',lambda **kw:object())
     def acquire(**kwargs):
-        phases.append('sales');return handle,object(),True
+        phases.append('sales');return handle,page,False
     monkeypatch.setattr(service,'acquire_sales_tab',acquire)
     header=HeaderPage()
     monkeypatch.setattr(sales_header,'PlaywrightSalesHeaderPage',lambda *a,**kw:header)
@@ -74,7 +70,7 @@ def setup(monkeypatch):
 
 
 def run(notifications):
-    return service.run_sales_header_check(sample_number=2,config_path='unused',production_path='unused',root='unused',notify=lambda **kw:notifications.append(kw))
+    return service.run_sales_header_check(config_path='unused',production_path='unused',root='unused',notify=lambda **kw:notifications.append(kw))
 
 
 def test_all_packages_complete_before_sales_and_success_no_notify(monkeypatch):
@@ -85,7 +81,7 @@ def test_all_packages_complete_before_sales_and_success_no_notify(monkeypatch):
         return expected(3)
     monkeypatch.setattr(service,'prepare_sales_rows',packages)
     assert run(notes)[0]=='WAITING_OWNER'
-    assert phases==['parse','packages','sales','detach'] and not notes and grid.adds==2
+    assert phases==['maximize','mail','parse','packages','sales','mark','detach'] and not notes and grid.adds==2
 
 
 def test_icnet_failure_no_sales_and_notification_once(monkeypatch):
@@ -122,14 +118,52 @@ def test_icnet_login_search_parse_and_empty_each_stop_before_sales(monkeypatch, 
     assert len(notes)==1 and failure not in notes[0]['situation']
 
 
-def test_owner_waiting_does_not_query_or_mutate(monkeypatch):
-    from src.inso import sales_header
+
+@pytest.mark.parametrize('code,field', [('REQUIRED','DC'),('LEAD_TIME','L/T'),('MAIL',None),('STRUCTURE',None)])
+def test_contract_failure_zero_sales_mutation_and_safe_notify(monkeypatch, code, field):
+    from src.order_mail import contracts
     phases,notes,_=setup(monkeypatch)
-    sales=SimpleNamespace(is_closed=lambda:False,url='https://yingsuo.alperp.cn/',
-        evaluate=lambda script:True if '=== true' in script else 'INSO_OWNER_TAB:v14-sales')
-    handle=SimpleNamespace(browser=SimpleNamespace(contexts=[SimpleNamespace(pages=[sales])]),
-        playwright=object(),disconnect=lambda:phases.append('detach'))
-    monkeypatch.setattr(service,'acquire_cdp_browser',lambda *a:handle)
-    monkeypatch.setattr(sales_header,'PlaywrightSalesHeaderPage',lambda *a,**kw:SimpleNamespace(waiting_for_owner=lambda:True))
-    monkeypatch.setattr(service,'prepare_sales_rows',lambda *a:pytest.fail('query while Owner waiting'))
-    assert run(notes)[0]=='WAITING_OWNER' and phases==['parse','detach'] and not notes
+    def fail(*args, **kwargs): raise OrderError(code,field=field,pi_no='SHAWN20260101-01')
+    monkeypatch.setattr(contracts, 'parse_contract', fail)
+    assert run(notes)[0]=='STOPPED' and 'sales' not in phases and 'mark' not in phases
+    assert len(notes)==1 and code not in notes[0]['situation']
+
+
+def test_new_sales_owner_every_click_old_review_page_not_borrowed(monkeypatch):
+    from tests.inso.test_sales_details import expected
+    _phases,notes,_=setup(monkeypatch)
+    owners=[]
+    def acquire(**kwargs):
+        assert kwargs['reuse'] is False
+        owners.append(kwargs['owner'])
+        return SimpleNamespace(disconnect=lambda:None),kwargs['page'],False
+    monkeypatch.setattr(service,'acquire_sales_tab',acquire)
+    monkeypatch.setattr(service,'prepare_sales_rows',lambda *a:expected(3))
+    assert run(notes)[0]=='WAITING_OWNER'
+    assert run(notes)[0]=='WAITING_OWNER'
+    assert len(owners)==2 and owners[0]!=owners[1] and all(o.startswith('v14-sales-') for o in owners)
+
+
+def test_no_orders_end_without_sales_or_exception_notification(monkeypatch):
+    from src.order_mail import inspection
+    phases,notes,_=setup(monkeypatch)
+    monkeypatch.setattr(inspection,'read_oldest_order_mail',lambda **kw:None)
+    assert run(notes)[0]=='NO_ORDER' and phases==['maximize','close-blank','detach'] and not notes
+
+
+def test_failed_fill_has_no_completion_receipt(monkeypatch):
+    from tests.inso.test_sales_details import expected
+    phases,notes,grid=setup(monkeypatch)
+    grid.wrong='quantity'
+    monkeypatch.setattr(service,'prepare_sales_rows',lambda *a:expected(3))
+    assert run(notes)[0]=='STOPPED' and 'mark' not in phases and len(notes)==1
+
+
+def test_mail_failure_has_correct_human_notification(monkeypatch):
+    from src.order_mail import inspection
+    phases,notes,_=setup(monkeypatch)
+    def fail(**kwargs): raise ValueError('SECRET_METADATA_UID_INTERNAL')
+    monkeypatch.setattr(inspection,'read_oldest_order_mail',fail)
+    assert run(notes)[0]=='STOPPED' and 'sales' not in phases
+    assert len(notes)==1 and '229' in notes[0]['situation']
+    assert 'SECRET' not in notes[0]['situation']

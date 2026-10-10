@@ -23,9 +23,10 @@ def test_real_tk_equal_split_and_sanitized_result():
     # Real Tk widget geometry, synthetic backend only: no Vault/network/DB.
     backend = MockBackend()
     checks = []
-    backend.start_order_mail_check = lambda **kwargs: checks.append(kwargs["sample_number"]) or True
+    backend.start_order_mail_check = lambda **kwargs: checks.append(1) or True
     backend.order_mail_running = lambda: False
     backend.get_order_mail_report = lambda: "synthetic sanitized result"
+    backend.get_order_mail_stage = lambda: "WAITING_OWNER"
     app = InsoDashboardApp(backend)
     try:
         deadline = time.monotonic() + 3
@@ -44,6 +45,8 @@ def test_real_tk_equal_split_and_sanitized_result():
         assert right.cget("state") == "disabled"
         app._sync_order_mail()
         assert right.cget("state") == "normal"
+        assert right.cget("text") == "自动订单录单"
+        assert not hasattr(app, "_order_mail_sample")
         assert app._shown_order_mail_report == "synthetic sanitized result"
         assert threading.get_ident() == app._main_thread_id
     finally:

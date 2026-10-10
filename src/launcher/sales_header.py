@@ -28,19 +28,22 @@ def sales_config(config_path, production_path):
     return config, production
 
 
-def acquire_sales_tab(*, config_path, production_path, root, handle=None):
+def acquire_sales_tab(*, config_path, production_path, root, handle=None,
+                      owner=SALES_OWNER, reuse=True, page=None):
     config, production = sales_config(config_path, production_path)
     handle = handle or acquire_cdp_browser(config.cdp.cdp_url, root, production)
     try:
         if handle.owned or len(handle.browser.contexts) != 1:
             raise ValueError("SHARED_CONTEXT_REQUIRED")
         context, = handle.browser.contexts
-        candidates = [p for p in context.pages if not p.is_closed() and page_owner(p) == SALES_OWNER]
-        if len(candidates) > 1:
+        candidates = [p for p in context.pages if not p.is_closed() and page_owner(p) == owner]
+        if reuse and len(candidates) > 1:
             raise ValueError("SALES_TAB_AMBIGUOUS")
-        if candidates:
+        if reuse and candidates:
             return handle, candidates[0], True
-        page = new_background_page(handle.browser, context, timeout_ms=10000, owner=SALES_OWNER)
+        page = page or new_background_page(handle.browser, context, timeout_ms=10000, owner=owner)
+        if page not in context.pages or page_owner(page) != owner:
+            raise ValueError("SALES_TAB_OWNERSHIP_LOST")
         login = get_login("yingsuo.alperp.cn")
         try:
             guard = InsoSessionGuard(login=login, context=lambda: context, page=lambda: page)
@@ -49,12 +52,29 @@ def acquire_sales_tab(*, config_path, production_path, root, handle=None):
             del login
         if status.outcome is InsoSessionOutcome.DEAD:
             raise InsoAuthenticationError(status.reason_code or "AUTHENTICATION_REQUIRED")
-        if page_owner(page) != SALES_OWNER:
+        if page_owner(page) != owner:
             raise ValueError("SALES_TAB_OWNERSHIP_LOST")
         return handle, page, False
     except Exception:
         handle.disconnect()
         raise
+
+
+def maximize_order_window(browser, page):
+    """Show the owned order tab in canonical Chrome before reading mail/business."""
+    session = browser.new_browser_cdp_session()
+    target = page.context.new_cdp_session(page)
+    try:
+        target_id = target.send("Target.getTargetInfo")["targetInfo"]["targetId"]
+        window_id = session.send("Browser.getWindowForTarget", {"targetId": target_id})["windowId"]
+        session.send("Browser.setWindowBounds", {"windowId": window_id, "bounds": {"windowState": "normal"}})
+        session.send("Browser.setWindowBounds", {"windowId": window_id, "bounds": {"windowState": "maximized"}})
+        if session.send("Browser.getWindowBounds", {"windowId": window_id})["bounds"]["windowState"] != "maximized":
+            raise ValueError("WINDOW_MAXIMIZE_UNCONFIRMED")
+        page.bring_to_front()
+    finally:
+        target.detach()
+        session.detach()
 
 
 def prepare_sales_rows(order, client):
@@ -75,8 +95,8 @@ def prepare_sales_rows(order, client):
     return tuple(rows)
 
 
-def run_sales_header_check(*, sample_number=1, config_path, production_path, root, notify=None):
-    """One selected mail; complete preflight before header/detail mutation."""
+def run_sales_header_check(*, config_path, production_path, root, notify=None):
+    """One explicit click -> oldest unfilled mail -> new owned unsaved order."""
     from datetime import UTC, datetime
     from uuid import uuid4
     from zoneinfo import ZoneInfo
@@ -92,31 +112,40 @@ def run_sales_header_check(*, sample_number=1, config_path, production_path, roo
         PlaywrightSalesHeaderPage,
         fill_sales_header,
     )
-    from src.order_mail.contracts import OrderError, read_selected_contract
+    from src.order_mail.contracts import OrderError, parse_contract
+    from src.order_mail.filled import FilledOrders
+    from src.order_mail.inspection import read_oldest_order_mail
     from src.research.cdp_pages import shared_playwright_factory
     from src.research.credentials import CoreResearchCredentials
     from src.research.icnet import CdpIcNetClient
 
     invocation = uuid4().hex
-    handle, order = None, None
+    handle, order, page = None, None, None
+    owner = "v14-sales-" + invocation[:24]
     try:
-        today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
-        order = read_selected_contract(sample_number, today=today)
         config, production = sales_config(config_path, production_path)
-        # Attach canonical browser for ICNET without entering/navigating sales.
         handle = acquire_cdp_browser(config.cdp.cdp_url, root, production)
-        owned = [p for p in handle.browser.contexts[0].pages if page_owner(p) == SALES_OWNER]
-        if len(owned) == 1 and owned[0].evaluate("() => window.__INSO_sales_owner_review === true"):
-            header_probe = PlaywrightSalesHeaderPage(owned[0], owns_page=lambda p: page_owner(p) == SALES_OWNER)
-            if header_probe.waiting_for_owner():
-                return "WAITING_OWNER", "等待 Owner 复核；请先返回销售订单列表。没有修改当前订单。"
+        if handle.owned or len(handle.browser.contexts) != 1:
+            raise OrderError("INSO")
+        page = new_background_page(handle.browser, handle.browser.contexts[0], timeout_ms=10000, owner=owner)
+        maximize_order_window(handle.browser, page)
+        today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+        try:
+            ledger = FilledOrders(root)
+            mail = read_oldest_order_mail(is_processed=ledger.contains)
+        except Exception:  # noqa: BLE001 - safe mailbox/receipt attribution
+            raise OrderError("MAIL", field="订单邮件或本机处理记录") from None
+        if mail is None:
+            page.close()  # Only this invocation's unused blank; no INSO entry.
+            return "NO_ORDER", "收件箱没有未处理的订单录单邮件。按钮已恢复。"
+        order = parse_contract(mail.excel, today=today)
         client = CdpIcNetClient(cdp_url=config.cdp.cdp_url, timeout_ms=config.browser.timeout_ms,
             login_provider=CoreResearchCredentials().icnet, tab_owner="v14-icnet",
             playwright_factory=shared_playwright_factory(lambda: (handle.playwright, handle.browser)))
         expected = prepare_sales_rows(order, client)
         handle, page, _reused = acquire_sales_tab(config_path=config_path,
-            production_path=production_path, root=root, handle=handle)
-        adapter = PlaywrightSalesHeaderPage(page, owns_page=lambda p: page_owner(p) == SALES_OWNER)
+            production_path=production_path, root=root, handle=handle, owner=owner, reuse=False, page=page)
+        adapter = PlaywrightSalesHeaderPage(page, owns_page=lambda p: page_owner(p) == owner)
         result = fill_sales_header(adapter, order.pi_no)
         if result.reason == "OWNER_RETURN_REQUIRED":
             return "WAITING_OWNER", "等待 Owner 复核；请先返回销售订单列表。"
@@ -132,9 +161,15 @@ def run_sales_header_check(*, sample_number=1, config_path, production_path, roo
         for field, value in header_values.items():
             if adapter.read(field) != value:
                 raise OrderError("INSO", pi_no=order.pi_no, field=FIELD_LABELS[field])
-        return "WAITING_OWNER", (f"样本{sample_number}：合同{count}行已完成解析和 ICNET 封装查询（已脱敏）。\n"
+        page.bring_to_front()
+        try:
+            ledger.mark(mail.identities)
+        except Exception:  # noqa: BLE001 - no SQLite/path details in email
+            raise OrderError("RECEIPT", pi_no=order.pi_no) from None
+        return "WAITING_OWNER", (f"本次订单：合同{count}行已完成解析和 ICNET 封装查询（已脱敏）。\n"
             "头部及全部明细字段最终读回一致，等待 Owner 复核。\n"
             "V1.4 worker 已结束，不影响询价；销售订单页面保留。\n"
+            "成功填写已在本机记录；请人工核对、提交审核并关闭本张订单标签页。\n"
             "没有填写总金额/CONDITION，没有上传附件、保存或提交审核。")
     except Exception as exc:  # noqa: BLE001 - closed human text only, no source errors/values
         error = exc if isinstance(exc, OrderError) else OrderError("INSO", pi_no=getattr(order, "pi_no", None))
@@ -144,6 +179,12 @@ def run_sales_header_check(*, sample_number=1, config_path, production_path, roo
         elif error.code == "LEAD_TIME":
             situation = "合同交期格式不支持，自动录单已停止。"
             treatment = "请确认合同交期规则后重新处理。"
+        elif error.code == "RECEIPT":
+            situation = "本机已处理记录未能保存，自动录单已停止。"
+            treatment = "请先核对当前未保存页面及本机记录，再决定是否重新处理。"
+        elif error.code == "MAIL":
+            situation = "229订单邮件或本机处理记录无法确认，自动录单已停止。"
+            treatment = "请检查邮箱授权、网络和本机处理记录后重新处理。"
         elif error.code == "INSO":
             situation = f"INSO“{error.field or '页面'}”控件或读回未通过，自动录单已停止。"
             treatment = "请人工检查当前未保存销售订单页面。"

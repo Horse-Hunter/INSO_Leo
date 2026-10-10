@@ -1990,14 +1990,14 @@ class ProductionBackend(GuiBackend):
                 self._append_log("WARNING", "登录保活异常提醒未入队，请检查通知台账。")
         self._idle_login_since = utc_now()  # New idle window begins after the sweep finishes.
 
-    def start_order_mail_check(self, *, sample_number=1) -> bool:
+    def start_order_mail_check(self) -> bool:
         with self._lock:
             if self._closed or (self._order_mail_thread and self._order_mail_thread.is_alive()):
                 return False
             self._order_mail_report = None
             self._order_mail_stage = "RUNNING"
             self._order_mail_thread = threading.Thread(
-                target=self._order_mail_worker, args=(sample_number,), name="sales-header-owner-review", daemon=True,
+                target=self._order_mail_worker, name="sales-header-owner-review", daemon=True,
             )
             self._order_mail_thread.start()
             return True
@@ -2020,14 +2020,14 @@ class ProductionBackend(GuiBackend):
             self._order_notifications = OrderExceptionNotifications(self.root)
         self._order_notifications.notify(**kwargs)
 
-    def _order_mail_worker(self, sample_number=1) -> None:
+    def _order_mail_worker(self) -> None:
         from .sales_header import run_sales_header_check
         try:
             if self._order_notifications is None and (self.root / ".tmp/v14-notifications/outbox.sqlite3").exists():
                 from src.workflow.order_notifications import OrderExceptionNotifications
                 self._order_notifications = OrderExceptionNotifications(self.root)
             stage, text = run_sales_header_check(
-                sample_number=sample_number, config_path=self.config_path,
+                config_path=self.config_path,
                 production_path=self.production_path, root=self.root, notify=self._notify_order_exception,
             )
         except Exception:  # noqa: BLE001 - never leak provider/customer data
