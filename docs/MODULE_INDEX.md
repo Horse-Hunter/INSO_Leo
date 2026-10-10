@@ -80,3 +80,13 @@ INBOX order-candidate metadata selection and an opaque local filled-mail receipt
 ledger; email flags remain read-only. Successful full readback records processed,
 failures retry, no server flag/production workflow DB state. GUI button always
 returns to idle and is independent of inquiry/procurement. No Save/submit/PDF.
+
+## RFQ-013 native order PDF (Owner 2026-10-10)
+
+Owner extends V1.4 to native PDF attachment upload only. order_mail returns the
+selected mail PDF bytes in memory and verifies unique, parseable, unencrypted
+PDF using existing optional pypdf (unavailable => stop). INSO sales_attachment
+owns file input/start upload/readback; launcher composes it after field checks,
+before local processed receipt. No Save/review-submit/deployment is authorized.
+Earlier no-PDF statements describe historical phases, superseded for this button.
+Boundary extension awaits CEO independent review under RFQ-013.

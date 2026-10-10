@@ -221,3 +221,15 @@ uses existing InsoSessionGuard on that page after preflight. All older review
 pages remain protected and untouched. Owner manually verifies/submits/closes;
 program ends at completed header/detail readback and never saves/submits/uploads.
 The earlier testing-only reuse policy is superseded by Owner's explicit update.
+
+## RFQ-013 PDF upload increment
+
+Latest Owner authorization adds one PDF to the otherwise unsaved owned order.
+Use native a#li_img / #uploader / #filePicker input[type=file], memory file payload,
+then one .uploadBtn start click. Empty existing attachments/queue required; no
+reset/delete. Confirm queued original filename, one success marker, count text
+and visible exact-filename #billdata_image link. Ambiguity stops without replay.
+The only authorized server write in this increment is native PDF upload;
+Save/review-submit remain manual. Local processed receipt follows upload proof.
+Existing canonical CDP/auth and independent owned tabs remain unchanged.
+Live empty-panel selectors observed; end-to-end upload still needs Owner acceptance.

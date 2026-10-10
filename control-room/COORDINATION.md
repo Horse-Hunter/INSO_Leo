@@ -38,3 +38,5 @@ in Owner's selected case remains unresolved; no automatic replay was performed.
 | RFQ-011 | V1.4 unsaved sales details and ICNET package preflight | REVIEW_REQUIRED | `codex/v1-4-order-mail-inspection` | REQUIRED | `control-room/RFQ-011/TASK_SPEC.md` |
 
 | RFQ-012 | Owner single-click oldest unfilled order | REVIEW_REQUIRED | `codex/v1-4-order-mail-inspection` | REQUIRED | `control-room/RFQ-012/TASK_SPEC.md` |
+
+| RFQ-013 | Owner native PDF upload after field verification | REVIEW_REQUIRED | `codex/v1-4-order-mail-inspection` | REQUIRED | `control-room/RFQ-013/TASK_SPEC.md` |

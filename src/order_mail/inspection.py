@@ -276,9 +276,17 @@ def inspect_order_mail(*, credential_getter=get_login, client_factory=imaplib.IM
 
 
 @dataclass(frozen=True, repr=False)
+class MailPdf:
+    name: str
+    data: bytes
+    mime: str
+
+
+@dataclass(frozen=True, repr=False)
 class OrderMail:
     identities: tuple[str, ...]
     excel: bytes
+    pdfs: tuple[MailPdf, ...] = ()
 
 
 def read_oldest_order_mail(*, is_processed, credential_getter=get_login,
@@ -349,7 +357,10 @@ def read_oldest_order_mail(*, is_processed, credential_getter=get_login,
             parts = [p for p in msg.walk() if str(p.get_filename() or '').lower().endswith('.xlsx')]
             if len(parts) != 1:
                 raise ValueError("EXCEL_ATTACHMENT_AMBIGUOUS")
-            mail = OrderMail(keys, parts[0].get_payload(decode=True) or b"")
+            pdfs = tuple(MailPdf(str(p.get_filename()), p.get_payload(decode=True) or b"",
+                                 p.get_content_type()) for p in msg.walk()
+                         if str(p.get_filename() or '').lower().endswith('.pdf'))
+            mail = OrderMail(keys, parts[0].get_payload(decode=True) or b"", pdfs)
         if not all(_fetch(client, uid, "(UID FLAGS)")[1] == flags for uid, flags in before.items()):
             raise ValueError("MAIL_FLAGS_CHANGED")
         return mail
@@ -359,3 +370,22 @@ def read_oldest_order_mail(*, is_processed, credential_getter=get_login,
                 client.logout()
             except Exception:  # noqa: BLE001, S110 - never log provider data
                 pass
+
+
+def verified_order_pdf(mail):
+    """Unique real PDF in memory; no OCR, rewriting, disk or filename logging."""
+    if len(mail.pdfs) != 1:
+        raise ValueError("ORDER_PDF_AMBIGUOUS")
+    pdf = mail.pdfs[0]
+    if (not pdf.name or any(c in pdf.name for c in "/\\\r\n\0")
+            or pdf.mime not in {"application/pdf", "application/octet-stream"}
+            or not pdf.data.startswith(b"%PDF-") or len(pdf.data) > MAX_BYTES):
+        raise ValueError("ORDER_PDF_INVALID")
+    from pypdf import PdfReader
+    try:
+        reader = PdfReader(BytesIO(pdf.data), strict=True)
+        if reader.is_encrypted or len(reader.pages) < 1:
+            raise ValueError("ORDER_PDF_INVALID")
+    except Exception:  # noqa: BLE001 - never expose PDF metadata/content/parser diagnostics
+        raise ValueError("ORDER_PDF_INVALID") from None
+    return pdf

@@ -101,6 +101,7 @@ def run_sales_header_check(*, config_path, production_path, root, notify=None):
     from uuid import uuid4
     from zoneinfo import ZoneInfo
 
+    from src.inso.sales_attachment import PlaywrightSalesPdfUpload, UploadStop
     from src.inso.sales_details import (
         DETAIL_FIELDS,
         DetailStop,
@@ -114,7 +115,7 @@ def run_sales_header_check(*, config_path, production_path, root, notify=None):
     )
     from src.order_mail.contracts import OrderError, parse_contract
     from src.order_mail.filled import FilledOrders
-    from src.order_mail.inspection import read_oldest_order_mail
+    from src.order_mail.inspection import read_oldest_order_mail, verified_order_pdf
     from src.research.cdp_pages import shared_playwright_factory
     from src.research.credentials import CoreResearchCredentials
     from src.research.icnet import CdpIcNetClient
@@ -139,6 +140,10 @@ def run_sales_header_check(*, config_path, production_path, root, notify=None):
             page.close()  # Only this invocation's unused blank; no INSO entry.
             return "NO_ORDER", "收件箱没有未处理的订单录单邮件。按钮已恢复。"
         order = parse_contract(mail.excel, today=today)
+        try:
+            pdf = verified_order_pdf(mail)
+        except Exception:  # noqa: BLE001 - safe preflight failure, no PDF details
+            raise OrderError("PDF", pi_no=order.pi_no) from None
         client = CdpIcNetClient(cdp_url=config.cdp.cdp_url, timeout_ms=config.browser.timeout_ms,
             login_provider=CoreResearchCredentials().icnet, tab_owner="v14-icnet",
             playwright_factory=shared_playwright_factory(lambda: (handle.playwright, handle.browser)))
@@ -161,16 +166,20 @@ def run_sales_header_check(*, config_path, production_path, root, notify=None):
         for field, value in header_values.items():
             if adapter.read(field) != value:
                 raise OrderError("INSO", pi_no=order.pi_no, field=FIELD_LABELS[field])
+        try:
+            PlaywrightSalesPdfUpload(adapter).upload(pdf)
+        except UploadStop:
+            raise OrderError("UPLOAD", pi_no=order.pi_no) from None
         page.bring_to_front()
         try:
             ledger.mark(mail.identities)
         except Exception:  # noqa: BLE001 - no SQLite/path details in email
             raise OrderError("RECEIPT", pi_no=order.pi_no) from None
         return "WAITING_OWNER", (f"本次订单：合同{count}行已完成解析和 ICNET 封装查询（已脱敏）。\n"
-            "头部及全部明细字段最终读回一致，等待 Owner 复核。\n"
+            "头部及全部明细字段读回一致，PDF 已上传1张，等待 Owner 复核。\n"
             "V1.4 worker 已结束，不影响询价；销售订单页面保留。\n"
             "成功填写已在本机记录；请人工核对、提交审核并关闭本张订单标签页。\n"
-            "没有填写总金额/CONDITION，没有上传附件、保存或提交审核。")
+            "没有填写总金额/CONDITION，没有保存或提交审核。")
     except Exception as exc:  # noqa: BLE001 - closed human text only, no source errors/values
         error = exc if isinstance(exc, OrderError) else OrderError("INSO", pi_no=getattr(order, "pi_no", None))
         if error.code == "ICNET":
@@ -179,6 +188,12 @@ def run_sales_header_check(*, config_path, production_path, root, notify=None):
         elif error.code == "LEAD_TIME":
             situation = "合同交期格式不支持，自动录单已停止。"
             treatment = "请确认合同交期规则后重新处理。"
+        elif error.code == "PDF":
+            situation = "邮件PDF缺失、多份、无效或加密，自动录单已停止。"
+            treatment = "请确认唯一有效的合同PDF后重新处理。"
+        elif error.code == "UPLOAD":
+            situation = "PDF上传未通过确认，自动录单已停止。"
+            treatment = "请先检查当前页面附件和上传状态，避免重复上传。"
         elif error.code == "RECEIPT":
             situation = "本机已处理记录未能保存，自动录单已停止。"
             treatment = "请先核对当前未保存页面及本机记录，再决定是否重新处理。"

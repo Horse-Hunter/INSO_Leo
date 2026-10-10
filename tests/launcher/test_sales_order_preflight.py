@@ -37,7 +37,7 @@ def test_package_failure_stops_whole_preflight():
 
 
 def setup(monkeypatch):
-    from src.inso import sales_details, sales_header
+    from src.inso import sales_attachment, sales_details, sales_header
     from src.order_mail import contracts
     from src.research import icnet
     phases, notifications = [], []
@@ -57,6 +57,8 @@ def setup(monkeypatch):
         phases.append('mail')
         return SimpleNamespace(excel=b'test',identities=('opaque',))
     monkeypatch.setattr(inspection,'read_oldest_order_mail',mail)
+    monkeypatch.setattr(inspection,'verified_order_pdf',lambda mail:object())
+    monkeypatch.setattr(sales_attachment,'PlaywrightSalesPdfUpload',lambda header:SimpleNamespace(upload=lambda pdf:phases.append('upload')))
 
     monkeypatch.setattr(icnet,'CdpIcNetClient',lambda **kw:object())
     def acquire(**kwargs):
@@ -81,7 +83,7 @@ def test_all_packages_complete_before_sales_and_success_no_notify(monkeypatch):
         return expected(3)
     monkeypatch.setattr(service,'prepare_sales_rows',packages)
     assert run(notes)[0]=='WAITING_OWNER'
-    assert phases==['maximize','mail','parse','packages','sales','mark','detach'] and not notes and grid.adds==2
+    assert phases==['maximize','mail','parse','packages','sales','upload','mark','detach'] and not notes and grid.adds==2
 
 
 def test_icnet_failure_no_sales_and_notification_once(monkeypatch):
@@ -167,3 +169,24 @@ def test_mail_failure_has_correct_human_notification(monkeypatch):
     assert run(notes)[0]=='STOPPED' and 'sales' not in phases
     assert len(notes)==1 and '229' in notes[0]['situation']
     assert 'SECRET' not in notes[0]['situation']
+
+
+def test_pdf_preflight_failure_no_research_sales_or_receipt(monkeypatch):
+    from src.order_mail import inspection
+    phases,notes,_=setup(monkeypatch)
+    def fail(*a): raise ValueError('PRIVATE_FILENAME')
+    monkeypatch.setattr(inspection,'verified_order_pdf',fail)
+    monkeypatch.setattr(service,'prepare_sales_rows',lambda *a:pytest.fail('no research'))
+    assert run(notes)[0]=='STOPPED' and 'sales' not in phases and 'mark' not in phases
+    assert len(notes)==1 and 'PDF' in notes[0]['situation'] and 'PRIVATE' not in str(notes)
+
+
+def test_upload_failure_no_receipt_and_safe_warning(monkeypatch):
+    from src.inso import sales_attachment
+    from tests.inso.test_sales_details import expected
+    phases,notes,_=setup(monkeypatch)
+    def fail(pdf): raise sales_attachment.UploadStop('PRIVATE_FILENAME')
+    monkeypatch.setattr(sales_attachment,'PlaywrightSalesPdfUpload',lambda h:SimpleNamespace(upload=fail))
+    monkeypatch.setattr(service,'prepare_sales_rows',lambda *a:expected(3))
+    assert run(notes)[0]=='STOPPED' and 'sales' in phases and 'mark' not in phases
+    assert len(notes)==1 and '重复上传' in notes[0]['treatment'] and 'PRIVATE' not in str(notes)

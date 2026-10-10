@@ -11,8 +11,8 @@ from src.order_mail.inspection import read_oldest_order_mail
 
 class Client:
     is_readonly = True
-    def __init__(self, changed=False, validity=b'1'):
-        self.calls=[];self.changed=changed;self.validity=validity
+    def __init__(self, changed=False, validity=b'1', pdf=None):
+        self.calls=[];self.changed=changed;self.validity=validity;self.pdf=pdf
         self.dates={b'9':b'09-Oct-2026 16:00:00 +0800',b'20':b'07-Oct-2026 12:00:00 +0800',b'3':b'10-Oct-2026 10:00:00 +0800'}
     def login(self,*a):return 'OK',[b'ok']
     def select(self,mailbox,readonly):
@@ -29,6 +29,8 @@ class Client:
         stream=BytesIO()
         with ZipFile(stream,'w') as z:z.writestr('synthetic','PRIVATE CUSTOMER')
         msg.add_attachment(stream.getvalue(),maintype='application',subtype='octet-stream',filename='private.xlsx')
+        if self.pdf is not None:
+            msg.add_attachment(self.pdf,maintype='application',subtype='pdf',filename='synthetic.pdf')
         flags=b'\\Seen' if self.changed and fields=='(UID FLAGS)' else b''
         meta=b'1 (UID '+uid+b' FLAGS ('+flags+b') INTERNALDATE "'+self.dates[uid]+b'" RFC822.SIZE 1000)'
         return 'OK',[(meta,msg.as_bytes())] if 'PEEK' in fields else [meta]
@@ -70,3 +72,11 @@ def test_empty_after_all_filled_and_uidvalidity_change_safe_alias(tmp_path):
 def test_flags_changed_and_identity_missing_stop(tmp_path):
     with pytest.raises(ValueError,match='MAIL_FLAGS_CHANGED'):read(Client(changed=True),FilledOrders(tmp_path))
     with pytest.raises(ValueError,match='MAIL_IDENTITY_UNCONFIRMED'):read(Client(validity=None),FilledOrders(tmp_path))
+
+
+def test_selected_mail_pdf_bytes_preserved_readonly(tmp_path):
+    client=Client(pdf=b'%PDF-synthetic')
+    mail=read(client,FilledOrders(tmp_path))
+    assert len(mail.pdfs)==1 and mail.pdfs[0].data==b'%PDF-synthetic'
+    assert mail.pdfs[0].name=='synthetic.pdf' and mail.pdfs[0].mime=='application/pdf'
+    assert all(call[0] in {'search','fetch','logout'} for call in client.calls)
