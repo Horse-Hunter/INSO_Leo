@@ -1,5 +1,18 @@
 # Windows release
 
+## Release artifact retention / same-task cleanup
+
+**Trigger:** every Windows build, frozen test, deploy/rollback verification or failed packaging attempt. **Executor owns cleanup in that same task.** Use the existing `scripts/build_windows_release.ps1` / spec / scanner as the one build path; do not create another release or cleanup framework.
+
+- Before building, inspect existing `build`, staging, `.tmp`, `dist` and rollback assets relevant to the task. Reuse verification artifacts when safe, rather than manufacturing another full frozen copy for each attempt.
+- Mark every newly created large temporary folder with its generating task, intended lifetime and safe deletion boundary. As soon as its verification purpose ends, remove only its own proven-disposable `_internal`, deployed scan copy or staging assets; preserve concise logs/manifests instead of duplicate binaries.
+- After **successful deploy and verification**, retain the active install and the minimum proven-viable rollback collection, including any real dependent runtime. Retire redundant release backups/scan snapshots as part of the same release task, not in a later project-wide purge. A failed build still retires safe intermediates but retains evidence necessary to diagnose/recover.
+- **Never** delete/move runtime junctions or targets, CDP profile/session/backup, persistent databases/outbox, credential/OAuth material, approved rollback packages, Git state or dirty worktrees. Stop only the risky object on specific uncertainty; lack of global file-handle visibility by itself does not bar safe deletion of clearly disposable copies. Never force unlock or elevate ACL to delete.
+- In the RFQ `EXECUTION_LOG.md`, briefly record retained/retired artifact paths, why a large item remains, and disk delta when material. CEO Review checks that a successful release did not leave unexplained duplicate frozen bundles or deployment scans. Do not trigger a new build or production operation merely to verify cleanup.
+
+This policy governs **future** release tasks. Historical deployment evidence below describes its state at the time and does not override the Owner's latest operating facts.
+
+
 ## Current RFQ-003 V1.2 refresh (2026-10-07)
 
 Owner-authorized resilience update, REVIEW_REQUIRED; not V1.3 or live acceptance.

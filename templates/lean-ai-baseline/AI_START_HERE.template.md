@@ -2,6 +2,8 @@
 
 This project is RFQ-driven.
 
+**New agent window:** read `AGENTS.md` and follow `docs/PROJECT_BASELINE.md` for task-owned artifact retirement. All final Executor chat replies and RFQ `FINAL_REPORT.md` must follow the exact seven headings in `docs/REPORTING.md`.
+
 ## 执行 RFQ-XXX
 
 Owner may open any implementation agent (Codex / Claude / WorkBuddy or equivalent) and say only `执行 RFQ-XXX`.
@@ -19,7 +21,7 @@ Before design or coding, Executor performs a mandatory Reuse Audit across:
 
 Existing capability must be reused when it satisfies the requirement. Implement only the minimum incremental gap.
 
-Executor writes reuse decisions, any justified non-reuse, execution log/final report/tests/evidence/commit references; then sets `REVIEW_REQUIRED` or `DONE`.
+Executor retires owned disposable build/test/deploy copies during the task; records needed retained assets; writes reuse decisions, any justified non-reuse, execution log/tests/evidence/commit references and the exact seven-heading final report **and chat reply**; then sets `REVIEW_REQUIRED` or `DONE`.
 
 Ordinary technical problems stay inside the implementation session. Do not solve slow progress by creating a second architecture or duplicate implementation.
 

@@ -1,5 +1,7 @@
 # Human Report
 
+**Mandatory for every Executor task (RFQ or not):** use these exact seven headings in this order in the **final Owner-facing chat reply**, as well as in RFQ `FINAL_REPORT.md`. Do not substitute an unstructured recap. Keep answers brief and plain-language; show actual RFQ status and whether tests included real business verification. Use `NONE` for no Owner action. Source of truth: this file; evidence: final chat and RFQ final report; CEO Review enforces the template. Keep technical logs separate.
+
 ## Executor final summary to Owner
 
 ```text

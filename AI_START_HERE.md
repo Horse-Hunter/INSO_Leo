@@ -2,6 +2,8 @@
 
 This repository is **RFQ-driven**. The Control Room is the task source of truth.
 
+**New Executor window, before doing work:** read the repository-root `AGENTS.md`; it points to the binding artifact-lifecycle policy in `docs/PROJECT_BASELINE.md` and to `docs/REPORTING.md`. Every completed task must use the exact seven-heading Owner-facing template **in the final chat reply**, not merely in `FINAL_REPORT.md`.
+
 ## For implementation agents: 执行 RFQ-XXX
 
 The Owner may open any implementation-agent session (Codex / Claude / WorkBuddy or equivalent) and say only:
@@ -16,9 +18,10 @@ The command alone is sufficient. Do not ask the Owner to restate the task.
 4. **Run a reuse audit before design or coding:** inspect the current implementation, previous stable/release version, existing runtime configs, shared adapters, migrations, scripts, packaging, tests and prior RFQ decisions. Reuse every capability that already satisfies the requirement.
 5. Set RFQ to `IN_PROGRESS` and implement the **minimum incremental change** needed to satisfy acceptance.
 6. Record technical detail in `EXECUTION_LOG.md`: reused capabilities, any justified non-reuse, decisions, changed files/diff range, exact tests/results, evidence references, commits and true blockers.
-7. Write `FINAL_REPORT.md` using the fixed human summary in `docs/REPORTING.md`.
-8. If review is required, set `REVIEW_REQUIRED`; otherwise set `DONE`.
-9. Commit and push implementation + Control Room records.
+7. Retire owned disposable build/test/deployment copies as soon as their purpose ends, and record any justified large retained assets; protect CDP, runtime and approved rollback.
+8. Write `FINAL_REPORT.md` **and the final chat reply** using the exact seven-field Owner summary in `docs/REPORTING.md`.
+9. If review is required, set `REVIEW_REQUIRED`; otherwise set `DONE`.
+10. Commit and push implementation + Control Room records, subject to normal security/release authorization.
 
 Ordinary technical problems stay inside the implementation session.
 
