@@ -517,6 +517,7 @@ class ProductionBackend(GuiBackend):
         self._login_all_callbacks = []
         self._order_mail_thread = None
         self._order_mail_report = None
+        self._order_mail_stage = None
         try:
             configured_excel = load_runtime_config(self.config_path).excel_output_path
             self._excel = (
@@ -1988,13 +1989,14 @@ class ProductionBackend(GuiBackend):
                 self._append_log("WARNING", "登录保活异常提醒未入队，请检查通知台账。")
         self._idle_login_since = utc_now()  # New idle window begins after the sweep finishes.
 
-    def start_order_mail_check(self) -> bool:
+    def start_order_mail_check(self, *, sample_number=1) -> bool:
         with self._lock:
             if self._closed or (self._order_mail_thread and self._order_mail_thread.is_alive()):
                 return False
             self._order_mail_report = None
+            self._order_mail_stage = "RUNNING"
             self._order_mail_thread = threading.Thread(
-                target=self._order_mail_worker, name="order-mail-readonly", daemon=True,
+                target=self._order_mail_worker, args=(sample_number,), name="sales-header-owner-review", daemon=True,
             )
             self._order_mail_thread.start()
             return True
@@ -2007,13 +2009,21 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             return self._order_mail_report
 
-    def _order_mail_worker(self) -> None:
-        from src.order_mail.inspection import inspect_order_mail
-        try:
-            text = inspect_order_mail().text
-        except Exception:  # noqa: BLE001 - never leak provider/customer data
-            text = "邮箱检查未完成；未执行录单，请检查邮箱配置后重试。"
+    def get_order_mail_stage(self):
         with self._lock:
+            return self._order_mail_stage
+
+    def _order_mail_worker(self, sample_number=1) -> None:
+        from .sales_header import run_sales_header_check
+        try:
+            stage, text = run_sales_header_check(
+                sample_number=sample_number, config_path=self.config_path,
+                production_path=self.production_path, root=self.root,
+            )
+        except Exception:  # noqa: BLE001 - never leak provider/customer data
+            stage, text = "STOPPED", "订单头部检查未完成；未保存或提交，请检查配置后重试。"
+        with self._lock:
+            self._order_mail_stage = stage
             self._order_mail_report = text
 
     def start_login_all_sites(self) -> None:

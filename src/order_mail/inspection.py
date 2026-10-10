@@ -199,7 +199,7 @@ def describe_message(message, metadata):
     return lines
 
 
-def inspect_order_mail(*, credential_getter=get_login, client_factory=imaplib.IMAP4_SSL, now=None):
+def inspect_order_mail(*, credential_getter=get_login, client_factory=imaplib.IMAP4_SSL, now=None, _message_consumer=None):
     """One explicit call, no scheduler, storage, SMTP or other production services."""
     client = None
     connected = False
@@ -250,6 +250,8 @@ def inspect_order_mail(*, credential_getter=get_login, client_factory=imaplib.IM
             if not str(message.get("Subject", "")).startswith(PREFIX):
                 raise ValueError("SUBJECT_CHANGED")
             lines.extend(describe_message(message, metadata))
+            if _message_consumer is not None:
+                _message_consumer(message)
         unchanged = all(_fetch(client, uid, "(UID FLAGS)")[1] == flags for uid, flags in before.items())
         lines.append(f"\n找到 {matched} 封标题以订单录单开头的邮件（不是整个邮箱总数）。")
         lines.append("读取前后候选邮件 FLAGS 一致。" if unchanged else "读取前后 FLAGS 有差异；不能确认状态未变，未执行任何修复写入。")

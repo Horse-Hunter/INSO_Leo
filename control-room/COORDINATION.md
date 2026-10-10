@@ -32,3 +32,5 @@ Historical RFQ REVIEWED_DONE records above are unchanged. Existing quotation hol
 in Owner's selected case remains unresolved; no automatic replay was performed.
 
 | RFQ-009 | V1.4 one-shot order email structure inspection | REVIEWED_DONE | `codex/v1-4-order-mail-inspection` | REQUIRED | `control-room/RFQ-009/TASK_SPEC.md` |
+
+| RFQ-010 | V1.4 sales header and Owner review | REVIEW_REQUIRED | `codex/v1-4-order-mail-inspection` | REQUIRED | `control-room/RFQ-010/TASK_SPEC.md` |

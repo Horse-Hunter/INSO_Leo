@@ -23,7 +23,7 @@ def test_real_tk_equal_split_and_sanitized_result():
     # Real Tk widget geometry, synthetic backend only: no Vault/network/DB.
     backend = MockBackend()
     checks = []
-    backend.start_order_mail_check = lambda: checks.append(1) or True
+    backend.start_order_mail_check = lambda **kwargs: checks.append(kwargs["sample_number"]) or True
     backend.order_mail_running = lambda: False
     backend.get_order_mail_report = lambda: "synthetic sanitized result"
     app = InsoDashboardApp(backend)

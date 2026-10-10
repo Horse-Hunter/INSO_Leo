@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 from src.core.app_paths import resolve_app_path
-from src.research.cdp_pages import new_background_page
+from src.research.cdp_pages import new_background_page, page_owner
 
 
 class BrowserBootstrapError(RuntimeError):
@@ -28,7 +28,7 @@ class BrowserBootstrapError(RuntimeError):
 
 
 def park_shared_cdp(browser) -> None:
-    """Owner's dedicated context: retain one blank tab without closing Chrome."""
+    """Retain a blank and independently owned review tabs without closing Chrome."""
     contexts = tuple(browser.contexts)
     if not browser.is_connected() or len(contexts) != 1:
         raise BrowserBootstrapError("CDP_CONTEXT_NOT_UNIQUE")
@@ -37,11 +37,14 @@ def park_shared_cdp(browser) -> None:
     blank = next((p for p in pages if not p.is_closed() and p.url == "about:blank"), None)
     if blank is None:
         blank = new_background_page(browser, context, timeout_ms=10000)  # Keep a live tab before cleanup.
+    protected = tuple(p for p in pages if not p.is_closed() and page_owner(p) is not None)
     for page in pages:
-        if page is not blank and not page.is_closed():
+        # Recheck immediately before closing: another worker may have just reserved it.
+        if page is not blank and not page.is_closed() and page not in protected and page_owner(page) is None:
             page.close()
     remaining = tuple(p for p in context.pages if not p.is_closed())
-    if remaining != (blank,) or blank.url != "about:blank":
+    if (blank not in remaining or blank.url != "about:blank"
+            or any(p is not blank and page_owner(p) is None for p in remaining)):
         raise BrowserBootstrapError("CDP_TAB_CLEANUP_UNCONFIRMED")
 
 

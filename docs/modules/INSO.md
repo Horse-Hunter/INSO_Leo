@@ -186,3 +186,17 @@ AI preview 只接受唯一 row；MPN 按 `ai-mpn-v1` exact、Qty positive intege
 Owner 2026-10-08: selected INSO raw14 remains immutable evidence. Quote-input Workflow derives B from freshly bound exact raw source MPN, and, for any literal MPN difference, appends 报价实际型号：XXX on a new line in L while preserving existing remarks/all other cells. One existing durable mailbox command per inquiry/source/selected-quote identity reminds 229 and shawn independently. No source-status writes introduced.
 
 Owner clarification 2026-10-08: INSO Research/procurement-history duplicate/quotation searches use the original full source model verbatim (HTTP transport encoding only). Cleaned-prefix/initial-token retrieval is superseded. Normalization and two-character-tail removal apply only to returned-model comparison; no effect on other website queries or exact source identity.
+
+## RFQ-010 V1.4 unsaved sales header (REVIEW_REQUIRED)
+
+`fill_sales_header` uses an owned-page adapter, selects the first rendered
+阿尔克 customer match, always selects RMB once, applies only the authorized
+header fields and reads back all eight controls. Any mismatch stops without
+retry. `PlaywrightSalesHeaderPage` scopes dropdown results to each native input
+and visible sales Bill frame, cancels existing-document prompts, and keeps the
+page for Owner review. Only destination/customer-order-number allow text fill.
+No detail, attachment, save, submit or purchase action is exposed. Launcher
+reuses the existing canonical CDP/authentication with a pinned owned page.
+Owner returns to the list before the next sample; worker completion releases
+only V1.4 busy state, while ownership protects the retained tab during inquiry
+parking/default authentication. No new business persistence or scheduler.

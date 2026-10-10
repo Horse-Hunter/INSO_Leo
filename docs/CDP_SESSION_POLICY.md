@@ -88,7 +88,12 @@ Trigger: before starting an inquiry and after a row's normal closed-loop finish.
 Owner: production launcher. Procedure/source: `park_shared_cdp` in the existing
 browser bootstrap module; select the unique dedicated 9222 context, retain or
 create ONE about:blank BEFORE closing other tabs, then verify it is the sole
-live page. Owner explicitly allows cleanup of pre-existing business tabs here;
+unreserved live page. Owner RFQ-010 exception (2026-10-10): V1.4 reserves its
+sales tab before navigation using a browser-visible owner marker. Preserve
+that tab during inquiry parking, keepalive and default authentication; never
+borrow it for inquiry work. Waiting for sales-header review ends only the
+V1.4 one-shot worker and does not pause inquiry execution. The same canonical
+CDP/profile and existing InsoSessionGuard remain the only login path. Owner explicitly allows cleanup of pre-existing business tabs here;
 this does not apply to unrelated Chrome profiles/windows. Cookies, context,
 browser process, profile and port stay untouched. A row awaiting manual
 CAPTCHA/OTP/device verification is not closed: stop and keep its human-needed

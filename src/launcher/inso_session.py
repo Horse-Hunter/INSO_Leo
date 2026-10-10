@@ -48,7 +48,7 @@ from src.inso.session import (
     PageIdentity,
     SecurityViolation,
 )
-from src.research.cdp_pages import new_background_page
+from src.research.cdp_pages import new_background_page, page_owner
 
 _INSO_ORIGIN = "https://yingsuo.alperp.cn"
 _INSO_HOSTNAME = "yingsuo.alperp.cn"
@@ -625,7 +625,7 @@ def _existing_or_new_login_page(context: Any) -> tuple[Any, bool]:
     candidates = tuple(
         page
         for page in tuple(getattr(context, "pages", ()))
-        if _is_inso_origin_page(page)
+        if _is_inso_origin_page(page) and page_owner(page) is None
     )
     for page in candidates:
         if _is_list_page(page):
@@ -835,7 +835,7 @@ def attach_inso_research_session(
         shells = [
             (page, frame)
             for page in tuple(context.pages)
-            if preferred_page is None or page is preferred_page
+            if (preferred_page is None and page_owner(page) is None) or page is preferred_page
             if (frame := _verified_shell_frame(page, context)) is not None
         ]
         if len(shells) != 1:

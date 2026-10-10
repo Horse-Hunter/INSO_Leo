@@ -43,6 +43,7 @@ def test_dedicated_park_creates_background_blank_before_closing_tabs(monkeypatch
     context = browser.contexts[0]
     context.pages[0].url = "https://synthetic.invalid/"
     original = context.pages[0]
+    monkeypatch.setattr(original, "evaluate", lambda script: "")  # unowned tab marker
     calls = background_spy(monkeypatch, browser_bootstrap, browser, context)
     browser_bootstrap.park_shared_cdp(browser)
     assert calls == ["background"] and original.closed

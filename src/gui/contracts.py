@@ -382,9 +382,12 @@ class GuiBackend(ABC):
     def get_manual_order_result(self) -> ManualOrderResult | None:
         return None
 
-    def start_order_mail_check(self) -> bool:
-        """Start one bounded read-only inspection; never starts business work."""
+    def start_order_mail_check(self, *, sample_number=1) -> bool:
+        """Start one bounded mail/header check; never saves or submits."""
         return False
+
+    def get_order_mail_stage(self) -> str | None:
+        return None
 
     def order_mail_running(self) -> bool:
         return False

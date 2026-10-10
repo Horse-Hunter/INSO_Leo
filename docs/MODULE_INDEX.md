@@ -45,3 +45,14 @@ otherwise PDF page count/encryption remains UNKNOWN. No storage or writes.
 Launcher assembles it; GUI receives sanitized text through GuiBackend only.
 No INSO/Sheets/SMTP/workflow-state dependency. This is the minimum new boundary
 for the explicitly authorized receiver; existing SMTP sender remains unchanged.
+
+## V1.4 Phase 2 (RFQ-010, Owner instruction 2026-10-10)
+
+INSO owns unsaved sales-header native UI operations and readback in
+`inso.sales_header`; no line/upload/save/submit API is introduced.
+`order_mail.pi_orders` reads labelled PI No. in memory from the two confirmed
+Excel attachments through the existing bounded read-only receiver. Launcher
+assembles these public capabilities and reuses canonical CDP/InsoSessionGuard.
+The ownership callback is injected into INSO; domain code does not depend on
+Research. GUI receives sanitized status only. No Workflow/SMTP/Sheets/DB writes.
+Boundary extension is submitted for CEO review with RFQ-010 REVIEW_REQUIRED.

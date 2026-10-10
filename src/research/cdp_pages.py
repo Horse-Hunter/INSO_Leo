@@ -3,10 +3,36 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from typing import Any, Self
 
 _LOG = logging.getLogger(__name__)
+
+
+_OWNER_PREFIX = "INSO_OWNER_TAB:"
+
+
+def page_owner(page: Any) -> str | None:
+    """Browser-visible ownership survives CDP clients/threads and navigation."""
+    if page.is_closed():
+        return None
+    url = str(getattr(page, "url", ""))
+    if url.startswith("about:blank#" + _OWNER_PREFIX):
+        return url.split("#", 1)[1][len(_OWNER_PREFIX):]
+    evaluate = getattr(page, "evaluate", None)
+    name = evaluate("() => window.name") if callable(evaluate) else None
+    if isinstance(name, str) and name.startswith(_OWNER_PREFIX):
+        return name[len(_OWNER_PREFIX):]
+    return None
+
+
+def mark_owned_page(page: Any, owner: str) -> None:
+    if not re.fullmatch(r"[a-z][a-z0-9-]{1,40}", owner):
+        raise ValueError("INVALID_TAB_OWNER")
+    page.evaluate("name => { window.name = name; }", _OWNER_PREFIX + owner)
+    if page_owner(page) != owner:
+        raise ValueError("TAB_OWNERSHIP_UNCONFIRMED")
 
 
 class _SharedChromium:
@@ -78,6 +104,7 @@ def new_background_page(
     *,
     timeout_ms: int,
     browser_context_id: str | None = None,
+    owner: str | None = None,
 ) -> Any:
     """Return a tab in the attached context without foreground activation.
 
@@ -89,7 +116,10 @@ def new_background_page(
     target_id: str | None = None
     try:
         with context.expect_page(timeout=timeout_ms) as pending:
-            params = {"url": "about:blank", "background": True}
+            if owner is not None and not re.fullmatch(r"[a-z][a-z0-9-]{1,40}", owner):
+                raise ValueError("INVALID_TAB_OWNER")
+            initial_url = "about:blank" if owner is None else "about:blank#" + _OWNER_PREFIX + owner
+            params = {"url": initial_url, "background": True}
             # A windowless bootstrap has no existing tab/window to reuse.
             # Ask Chrome to create that first window minimized, rather than
             # creating a normal window and hiding it after a visible flash.
@@ -98,9 +128,12 @@ def new_background_page(
             if browser_context_id is not None:
                 params["browserContextId"] = browser_context_id
             target_id = session.send("Target.createTarget", params)["targetId"]
-        return pending.value
+        page = pending.value
+        if owner is not None:
+            mark_owned_page(page, owner)
+        return page
     except Exception:
-        if target_id is not None:
+        if target_id is not None and owner is None:
             session.send("Target.closeTarget", {"targetId": target_id})
         raise
     finally:
