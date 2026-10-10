@@ -46,6 +46,16 @@ def _diagnose_vault() -> int:
             for item in sites
         ],
     }
+    if Path(sys.executable).stem == "INSO_V1.4":
+        from src.core import get_login
+        try:
+            login = get_login("imap.qq.com")
+            try:
+                report["imap_ready"] = login.username.strip().lower() == "linan229@qq.com" and bool(login.password)
+            finally:
+                del login
+        except Exception:  # noqa: BLE001 - readiness only; never expose credential details
+            report["imap_ready"] = False
     log_dir = app_root() / "runtime" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     (log_dir / "credential-readiness.json").write_text(
@@ -60,6 +70,7 @@ def _diagnose_vault() -> int:
             and not report["vault_override_set"]
             and not report["powershell_override_set"]
             and all(item.available for item in sites)
+            and report.get("imap_ready", True)
         )
         else 1
     )
@@ -75,6 +86,18 @@ def _self_check() -> int:
         import customtkinter  # noqa: F401 - import is the packaging check
 
         from src.gui import main  # noqa: F401 - import is the packaging check
+        if Path(sys.executable).stem == "INSO_V1.4":
+            from io import BytesIO
+            from zoneinfo import ZoneInfo
+
+            from pypdf import PdfReader, PdfWriter
+            ZoneInfo("Asia/Shanghai")
+            writer = PdfWriter()
+            writer.add_blank_page(width=100, height=100)
+            stream = BytesIO()
+            writer.write(stream)
+            if len(PdfReader(BytesIO(stream.getvalue()), strict=True).pages) != 1:
+                return 1
     except Exception:  # noqa: BLE001 - frozen dependency probe must return a safe exit code
         return 1
     return 0
@@ -99,6 +122,8 @@ def _idle_self_check() -> int:
             "title": app._root.title(),
             "state": backend.get_status().state.value,
             "business_thread_started": backend._thread is not None,
+            "order_thread_started": backend._order_mail_thread is not None,
+            "order_action": app._order_mail_button.cget("text"),
             "gui_rendered": True,
             "start_action": app._action_button.cget("text"),
         }
@@ -109,9 +134,10 @@ def _idle_self_check() -> int:
         )
         return (
             0
-            if report["title"] == "INSO_V1.3"
+            if report["title"] == ("INSO_V1.4" if Path(sys.executable).stem == "INSO_V1.4" else "INSO_V1.3")
             and backend.get_status().state is RunState.STOPPED
             and not report["business_thread_started"]
+            and not report["order_thread_started"]
             else 1
         )
     finally:

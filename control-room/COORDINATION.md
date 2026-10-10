@@ -42,3 +42,8 @@ in Owner's selected case remains unresolved; no automatic replay was performed.
 | RFQ-013 | Owner native PDF upload after field verification | REVIEWED_DONE | `codex/v1-4-order-mail-inspection` | REQUIRED | `control-room/RFQ-013/TASK_SPEC.md` |
 
 | RFQ-014 | All229/shawn SMTP message clarity | REVIEWED_DONE | `codex/v1-4-order-mail-inspection` | REQUIRED | `control-room/RFQ-014/TASK_SPEC.md` |
+
+Owner2026-10-10 confirmed Review completion and authorized V1.4 packaging/deployment
+of business HEAD7a5728388fc14cd685521d520e23fbfa19536988. Independent PASS is recorded
+in control-room/RFQ-014/CEO_REVIEW.md (review commit3eee69a; status commitc023b60).
+| RFQ-015 | Authorized V1.4 Windows release | DEPLOYED | `codex/v1-4-order-mail-inspection` | Owner authorized | `control-room/RFQ-015/TASK_SPEC.md` |

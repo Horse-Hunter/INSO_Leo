@@ -912,3 +912,22 @@ def test_login_sweep_explains_live_chrome_session_initialization_timeout(tmp_pat
     assert "未保存内容" in result.detail
     assert "请先打开" not in result.detail
     assert backend._thread is None
+
+
+def test_v14_frozen_self_check_requires_pdf_and_timezone(monkeypatch):
+    from scripts import windows_release_entry as entry
+    monkeypatch.setattr(entry.sys,'executable','INSO_V1.4.exe')
+    assert entry._self_check()==0
+
+
+def test_v14_frozen_self_check_rejects_missing_pdf(monkeypatch):
+    import builtins
+
+    from scripts import windows_release_entry as entry
+    monkeypatch.setattr(entry.sys,'executable','INSO_V1.4.exe')
+    original=builtins.__import__
+    def imports(name,*args,**kwargs):
+        if name=='pypdf':raise ImportError('missing PDF dependency')
+        return original(name,*args,**kwargs)
+    monkeypatch.setattr(builtins,'__import__',imports)
+    assert entry._self_check()==1

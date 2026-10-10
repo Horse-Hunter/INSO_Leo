@@ -6,7 +6,7 @@ import os
 
 repo_root = Path(SPECPATH).parent
 release_version = os.environ.get("INSO_BUILD_VERSION", "1.1")
-if release_version not in {"1.1", "1.2", "1.3"}:
+if release_version not in {"1.1", "1.2", "1.3", "1.4"}:
     raise ValueError("unsupported release version")
 release_name = "INSO_V" + release_version
 
@@ -19,14 +19,17 @@ hiddenimports = collect_submodules("src")
 # Tcl/Tk lives in the base Python installation rather than this build venv.
 # Pin its GUI entry points so PyInstaller's Tk hooks collect the runtime too.
 hiddenimports += ["tkinter", "tkinter.ttk", "tkinter.messagebox"]
-for package in (
+release_packages = (
     "customtkinter",
     "googleapiclient",
     "google_auth_oauthlib",
     "google.auth",
     "openpyxl",
     "playwright",
-):
+)
+if release_version == "1.4":
+    release_packages += ("pypdf", "tzdata")
+for package in release_packages:
     package_datas, package_binaries, package_hiddenimports = collect_all(package)
     datas += [
         entry
