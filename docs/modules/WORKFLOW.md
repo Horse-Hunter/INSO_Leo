@@ -102,3 +102,17 @@ binding and headers before opening the configured gid. A binding/header fault
 becomes GLOBAL_STOP with zero tab opening, writes or clicks. Canonical factory
 supplies the same explicit location to Sheets and UI; UI does not guess the title.
 Existing four-write/four-update budgets and three short source reads are unchanged.
+
+## RFQ-011 sales exception notifications
+
+OrderExceptionNotifications composes V12Store/V12NotificationWorker/QQSMTPTransport
+with existing1069 sender/Core Vault. Two recipients retain independent existing
+1/5/15-minute retry classification and dedupe. Payload is only PI, optional model,
+one human situation sentence and treatment; no internal diagnostics.
+Development persistence is .tmp/v14-notifications/outbox.sqlite3, separated from
+production DB. Unchanged old schema requires a V1 FK anchor: notification-only
+MANUAL_REVIEW rows, never eligible for inquiry claiming; no V1.2 business state.
+Existing PURCHASE_EXCEPTION and EventType are reused. No new enum/schema version,
+mail polling or purchase/quotation state changes. Interrupted in-flight sends
+recover UNKNOWN through existing policy and are never blindly resent. A later
+V1.4 invocation resumes this isolated outbox; retry worker ends on app shutdown.

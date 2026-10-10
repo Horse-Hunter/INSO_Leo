@@ -56,3 +56,16 @@ assembles these public capabilities and reuses canonical CDP/InsoSessionGuard.
 The ownership callback is injected into INSO; domain code does not depend on
 Research. GUI receives sanitized status only. No Workflow/SMTP/Sheets/DB writes.
 Boundary extension is submitted for CEO review with RFQ-010 REVIEW_REQUIRED.
+
+## V1.4 Phase 3 (RFQ-011, Owner 2026-10-10)
+
+`order_mail.contracts` owns strict selected-mail Excel detail parsing and authorized
+lead-time rules; no network except the existing read-only mail boundary.
+Research `icnet` adds a public first20 displayed-package parser using its existing
+HTML tree/visibility basis; existing Research brand/stock/matching remain unchanged.
+INSO `sales_details` owns native unsaved detail fields/row addition/readback only.
+Launcher composes preflight and reuses Phase2 owned sales-tab/header lifecycle.
+Workflow `order_notifications` composes existing V1.2 outbox/worker/1069 transport
+in an isolated ignored development DB, old schema/enums only. Existing FK uses
+a notification-only MANUAL_REVIEW anchor, no production/purchase/quotation state.
+This Owner-authorized extension is submitted to CEO with RFQ-011 review.

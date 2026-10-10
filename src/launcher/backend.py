@@ -518,6 +518,7 @@ class ProductionBackend(GuiBackend):
         self._order_mail_thread = None
         self._order_mail_report = None
         self._order_mail_stage = None
+        self._order_notifications = None
         try:
             configured_excel = load_runtime_config(self.config_path).excel_output_path
             self._excel = (
@@ -2013,12 +2014,21 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             return self._order_mail_stage
 
+    def _notify_order_exception(self, **kwargs):
+        from src.workflow.order_notifications import OrderExceptionNotifications
+        if self._order_notifications is None:
+            self._order_notifications = OrderExceptionNotifications(self.root)
+        self._order_notifications.notify(**kwargs)
+
     def _order_mail_worker(self, sample_number=1) -> None:
         from .sales_header import run_sales_header_check
         try:
+            if self._order_notifications is None and (self.root / ".tmp/v14-notifications/outbox.sqlite3").exists():
+                from src.workflow.order_notifications import OrderExceptionNotifications
+                self._order_notifications = OrderExceptionNotifications(self.root)
             stage, text = run_sales_header_check(
                 sample_number=sample_number, config_path=self.config_path,
-                production_path=self.production_path, root=self.root,
+                production_path=self.production_path, root=self.root, notify=self._notify_order_exception,
             )
         except Exception:  # noqa: BLE001 - never leak provider/customer data
             stage, text = "STOPPED", "订单头部检查未完成；未保存或提交，请检查配置后重试。"
@@ -2260,6 +2270,8 @@ class ProductionBackend(GuiBackend):
             login_thread.join()
         if mail_thread and mail_thread is not threading.current_thread():
             mail_thread.join()
+        if self._order_notifications is not None:
+            self._order_notifications.close()
         with self._lock:
             self._status_callbacks.clear()
             self._log_callbacks.clear()

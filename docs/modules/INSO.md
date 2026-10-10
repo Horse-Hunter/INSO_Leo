@@ -200,3 +200,16 @@ reuses the existing canonical CDP/authentication with a pinned owned page.
 Owner returns to the list before the next sample; worker completion releases
 only V1.4 busy state, while ownership protects the retained tab during inquiry
 parking/default authentication. No new business persistence or scheduler.
+
+## RFQ-011 unsaved sales details
+
+Preflight completes all selected-mail fields and serial ICNET package queries
+before the approved Phase2 header flow mutates INSO. `sales_details` exposes only
+row_count/add_row/write/read/preserve. Native detail_add must increase count by
+exactly1; existing excess rows stop, never delete. Field allowlist excludes amount,
+CONDITION, attachment/save/submit. Current native grid uses td[data-field] and
+ordinary layui-table-edit inputs; commits use native Tab/blur, not JS assignments.
+Every field is read immediately, each row reread, then the whole table reread.
+Numeric comparisons use Decimal; price source is original Excel value, no exchange
+or tax calculation. Header is reread after details too. Phase2 development reuse
+and unconditional RMB selection remain unchanged, with no production deployment.

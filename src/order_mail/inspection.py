@@ -199,7 +199,7 @@ def describe_message(message, metadata):
     return lines
 
 
-def inspect_order_mail(*, credential_getter=get_login, client_factory=imaplib.IMAP4_SSL, now=None, _message_consumer=None):
+def inspect_order_mail(*, credential_getter=get_login, client_factory=imaplib.IMAP4_SSL, now=None, _message_consumer=None, selected_date=None):
     """One explicit call, no scheduler, storage, SMTP or other production services."""
     client = None
     connected = False
@@ -237,6 +237,13 @@ def inspect_order_mail(*, credential_getter=get_login, client_factory=imaplib.IM
             message = BytesParser(policy=policy.default).parsebytes(header)
             if not str(message.get("Subject", "")).startswith(PREFIX):
                 continue
+            if selected_date is not None:
+                from email.utils import parsedate_to_datetime
+                try:
+                    if parsedate_to_datetime(str(message.get("Date", ""))).isoformat() != selected_date:
+                        continue
+                except (ValueError, TypeError):
+                    continue
             matched += 1
             lines.append(f"\n邮件 {matched}：")
             size = re.search(rb"RFC822.SIZE (\d+)", metadata)

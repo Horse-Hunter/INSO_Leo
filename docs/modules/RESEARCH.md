@@ -142,3 +142,15 @@ profile 为 `D:\Program_Leo\INSO_CDP\chrome-profile`（见 `CDP_SESSION_POLICY.m
 Research 只做调研与本地 Excel 持久化；不读写 Google Sheets，不执行主动采购，不决定 V1.2 通知/采购业务规则。Credential 只走 Core Provider。普通 browser/session readiness 复用共享 runtime；CAPTCHA/OTP/设备验证才需要人工。
 
 Owner 2026-10-08: all source MPN filtering now delegates to core.mpn.lookup_mpn_matches; native query URLs use lookup_mpn_prefix exactly once, result parsers retain the full original target. INSO history records retain observed PartNo for filtering/evidence; records without an observed model cannot supply a price. Existing source-specific windows/stock/price rules remain. Research native first-page coverage limits remain unchanged.
+
+## RFQ-011 ICNET package-read extension
+
+`parse_icnet_packages`/`select_icnet_package` reuse the existing HTML tree and hidden
+text handling. They use first20 displayed product rows in DOM order, require one
+visible result_pakaging column per row, ignore empty text, mode/first-seen tie.
+No secondary MPN matching, manufacturer or stock filtering in this capability.
+`CdpIcNetClient` default login/search/prefix/cooldown remain unchanged; optional
+tab_owner reserves V1.4 query tabs against parallel inquiry parking. Only the
+client's own query tab is closed in its existing finally path. Launcher reuses
+CoreResearchCredentials, shared9222 attachment and this client, no second login
+or search implementation. Exact repeated contract models cache per invocation.

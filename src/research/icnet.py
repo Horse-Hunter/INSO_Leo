@@ -547,12 +547,14 @@ class CdpIcNetClient:
         min_interval_seconds: float = 90.0,
         login_provider: IcNetLoginProvider | None = None,
         playwright_factory: Callable[[], object] | None = None,
+        tab_owner: str | None = None,
     ) -> None:
         hostname = urlsplit(cdp_url).hostname
         if hostname is None or not _is_loopback_hostname(hostname):
             raise IcNetPageUnavailable("CDP_REMOTE_ENDPOINT_FORBIDDEN")
         if min_interval_seconds < 0:
             raise ValueError("min_interval_seconds must not be negative")
+        self._tab_owner = tab_owner
         self._cdp_url = cdp_url
         self._timeout_ms = timeout_ms
         self._settle_ms = settle_ms
@@ -594,7 +596,8 @@ class CdpIcNetClient:
                     # tab back. Reusing an earlier call's tab is what let a
                     # stale document look like a fresh answer.
                     page = new_background_page(
-                        browser, context, timeout_ms=self._timeout_ms
+                        browser, context, timeout_ms=self._timeout_ms,
+                        **({"owner": self._tab_owner} if self._tab_owner else {}),
                     )
                     owned = True
                 else:
@@ -929,3 +932,31 @@ class IcNetAdapter:
             resolved_brand=resolved_brand,
             stock_label=stock_label,
         )
+
+
+def parse_icnet_packages(html: str) -> tuple[str | None, ...]:
+    """First20 displayed rows in page order; deliberately no MPN matching."""
+    parser = _TreeParser()
+    parser.feed(html)
+    nodes = parser.root.descendants()
+    if not any(_has_class(n, "right_results") or _has_id(n, "resultList") for n in nodes):
+        raise IcNetParseError("RESULT_CONTAINER_MISSING")
+    hidden = _hidden_classes(html)
+    rows = [n for n in nodes if n.tag == "li" and _has_class(n, "stair_tr")
+            and _nodes_with_class(n, "product_number") and not _is_hidden(n, parser.root, hidden)]
+    values = []
+    for row in rows[:20]:
+        cells = [n for n in _nodes_with_class(row, "result_pakaging") if not _is_hidden(n, row, hidden)]
+        if len(cells) != 1:
+            raise IcNetParseError("PACKAGE_COLUMN_UNCONFIRMED")
+        text = _visible_text(cells[0], row, hidden).strip()
+        values.append(text or None)
+    return tuple(values)
+
+
+def select_icnet_package(page: IcNetPage) -> str:
+    values = [value for value in parse_icnet_packages(page.html) if value]
+    if not values:
+        raise IcNetParseError("PACKAGE_EMPTY")
+    counts = Counter(values)
+    return max(values, key=counts.__getitem__)  # stable first occurrence wins ties

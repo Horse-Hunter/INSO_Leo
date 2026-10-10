@@ -641,7 +641,7 @@ class InsoDashboardApp:
         sample_number = 2 if choice.startswith("样本2") else 1
         if self._backend.start_order_mail_check(sample_number=sample_number):
             self._shown_order_mail_report = None
-            self._order_mail_button.configure(text="正在填写订单头部…", state="disabled")
+            self._order_mail_button.configure(text="正在检查并填写订单…", state="disabled")
         else:
             messagebox.showinfo("邮箱检查", "检查尚未启动或正在进行，请等待后重试。")
 
@@ -649,7 +649,7 @@ class InsoDashboardApp:
         running = self._backend.order_mail_running()
         stage = self._backend.get_order_mail_stage()
         self._order_mail_button.configure(
-            text="正在填写订单头部…" if running else "等待 Owner 复核" if stage == "WAITING_OWNER" else "自动订单录单",
+            text="正在检查并填写订单…" if running else "等待 Owner 复核" if stage == "WAITING_OWNER" else "自动订单录单",
             state="disabled" if running else "normal",
         )
         report = self._backend.get_order_mail_report()
@@ -657,7 +657,7 @@ class InsoDashboardApp:
             return
         self._shown_order_mail_report = report
         window = ctk.CTkToplevel(self._root)
-        window.title("销售订单头部检查结果")
+        window.title("销售订单检查结果")
         window.geometry("850x650")
         box = ctk.CTkTextbox(window, wrap="word", font=("Microsoft YaHei UI", 13))
         box.pack(fill="both", expand=True, padx=16, pady=16)

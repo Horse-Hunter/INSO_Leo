@@ -94,6 +94,9 @@ class PlaywrightSalesHeaderPage:
             raise HeaderStop("page", "SALES_FORM_UNCONFIRMED")
         return frames[0]
 
+    def waiting_for_owner(self):
+        return bool(self._frames("bill")) and self.page.evaluate("() => window.__INSO_sales_owner_review === true")
+
     def open_for_header(self):
         self._assert_owner()
         bills = self._frames("bill")
