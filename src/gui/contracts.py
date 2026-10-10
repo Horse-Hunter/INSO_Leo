@@ -382,6 +382,17 @@ class GuiBackend(ABC):
     def get_manual_order_result(self) -> ManualOrderResult | None:
         return None
 
+    def start_order_mail_check(self) -> bool:
+        """Start one bounded read-only inspection; never starts business work."""
+        return False
+
+    def order_mail_running(self) -> bool:
+        return False
+
+    def get_order_mail_report(self) -> str | None:
+        """Sanitized display text only; no raw message/attachment object."""
+        return None
+
     def start_login_all_sites(self) -> None:
         """Begin the sequential "sign in to every site" sweep.
 

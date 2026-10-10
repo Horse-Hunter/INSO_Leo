@@ -30,3 +30,5 @@ Owner-authorized production deployment is recorded separately; CEO independent P
 Report: `control-room/RFQ-008/CEO_SYNC_REPORT_2026-10-08.md`.
 Historical RFQ REVIEWED_DONE records above are unchanged. Existing quotation hold
 in Owner's selected case remains unresolved; no automatic replay was performed.
+
+| RFQ-009 | V1.4 one-shot order email structure inspection | REVIEW_REQUIRED | `codex/v1-4-order-mail-inspection` | REQUIRED | `control-room/RFQ-009/TASK_SPEC.md` |

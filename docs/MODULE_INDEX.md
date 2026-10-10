@@ -35,3 +35,13 @@ sheets | research | inso | quotation -> core
 - 模块职责、依赖方向或跨模块 Public Contract 变化必须升级 CEO。
 
 Owner 2026-10-08 授权共享 `core.mpn` 纯型号读取策略，由 Research、INSO 与 Workflow 复用；不扩展 source-row identity 或 purchase submission 匹配。模块依赖方向保持不变。
+
+## V1.4 phase 1 (Owner instruction 2026-10-10)
+
+`order_mail` (`src/order_mail/`, `tests/order_mail/`) owns bounded read-only IMAP
+and order attachment structure inspection. Depends on Core Credential Provider
+and existing openpyxl/standard library only. Optional pypdf is used if available;
+otherwise PDF page count/encryption remains UNKNOWN. No storage or writes.
+Launcher assembles it; GUI receives sanitized text through GuiBackend only.
+No INSO/Sheets/SMTP/workflow-state dependency. This is the minimum new boundary
+for the explicitly authorized receiver; existing SMTP sender remains unchanged.

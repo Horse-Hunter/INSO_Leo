@@ -1,4 +1,4 @@
-"""INSO_V1.3 single-page Dashboard implemented with customtkinter.
+"""INSO_V1.4 single-page Dashboard implemented with customtkinter.
 
 The app owns no automation logic; it consumes a GuiBackend implementation and
 updates its widgets from the main thread via tkinter.after.
@@ -201,7 +201,7 @@ def _event_display_text(event: Any) -> str:
 
 
 class InsoDashboardApp:
-    """Single-page INSO_V1.3 operator dashboard."""
+    """Single-page INSO_V1.4 operator dashboard."""
 
     def __init__(self, backend: GuiBackend) -> None:
         global ctk
@@ -223,9 +223,10 @@ class InsoDashboardApp:
         self._login_all_running = False
         self._shown_login_report: SiteLoginReport | None = None
         self._shown_manual_result = None
+        self._shown_order_mail_report = None
 
         self._root = ctk.CTk()
-        self._root.title("INSO_V1.3")
+        self._root.title("INSO_V1.4")
         self._root.geometry("1200x800")
         self._root.configure(fg_color=_BG)
         self._root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -271,7 +272,7 @@ class InsoDashboardApp:
 
         title = ctk.CTkLabel(
             frame,
-            text="INSO_V1.3",
+            text="INSO_V1.4",
             font=_FONT_TITLE,
             text_color=_TEXT,
         )
@@ -318,8 +319,11 @@ class InsoDashboardApp:
         # Owner rule (2026-10-01): signing every site in is its own action, run
         # *before* a round of inquiry, and reported either way. A run started
         # with dead sessions is what produced "采集需要人工处理" mid-cycle.
+        actions = ctk.CTkFrame(card, fg_color="transparent")
+        actions.grid(row=2, column=0, sticky="ew", padx=24, pady=(0, 20))
+        actions.grid_columnconfigure((0, 1), weight=1, uniform="mail-actions")
         self._login_all_button = ctk.CTkButton(
-            card,
+            actions,
             text="一键登录所有网站",
             font=("Microsoft YaHei UI", 13, "bold"),
             fg_color=_BLUE,
@@ -329,7 +333,13 @@ class InsoDashboardApp:
             corner_radius=12,
             command=self._on_login_all,
         )
-        self._login_all_button.grid(row=2, column=0, sticky="ew", padx=24, pady=(0, 20))
+        self._login_all_button.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        self._order_mail_button = ctk.CTkButton(
+            actions, text="自动订单录单", font=("Microsoft YaHei UI", 13, "bold"),
+            fg_color=_BLUE, hover_color="#2563EB", text_color="white",
+            height=44, corner_radius=12, command=self._on_order_mail,
+        )
+        self._order_mail_button.grid(row=0, column=1, sticky="ew", padx=(6, 0))
 
         return card
 
@@ -593,6 +603,7 @@ class InsoDashboardApp:
                 self._show_login_all_report(event.payload)
         self._update_status(self._backend.get_status())
         self._sync_login_all()
+        self._sync_order_mail()
         self._after_id = self._root.after(1000, self._schedule_tick)
 
     def _assert_main_thread(self) -> None:
@@ -616,6 +627,33 @@ class InsoDashboardApp:
             self._update_status(self._backend.get_status())
         else:
             logger.debug("忽略操作：当前状态 %s", self._status.state.value)
+
+    def _on_order_mail(self) -> None:
+        if self._closing:
+            return
+        if self._backend.start_order_mail_check():
+            self._shown_order_mail_report = None
+            self._order_mail_button.configure(text="正在检查邮箱…", state="disabled")
+        else:
+            messagebox.showinfo("邮箱检查", "检查尚未启动或正在进行，请等待后重试。")
+
+    def _sync_order_mail(self) -> None:
+        running = self._backend.order_mail_running()
+        self._order_mail_button.configure(
+            text="正在检查邮箱…" if running else "自动订单录单",
+            state="disabled" if running else "normal",
+        )
+        report = self._backend.get_order_mail_report()
+        if report is None or report == self._shown_order_mail_report:
+            return
+        self._shown_order_mail_report = report
+        window = ctk.CTkToplevel(self._root)
+        window.title("229邮箱检查结果（只读）")
+        window.geometry("850x650")
+        box = ctk.CTkTextbox(window, wrap="word", font=("Microsoft YaHei UI", 13))
+        box.pack(fill="both", expand=True, padx=16, pady=16)
+        box.insert("1.0", report)
+        box.configure(state="disabled")
 
     def _on_login_all(self) -> None:
         if self._login_all_running:
@@ -972,6 +1010,8 @@ class InsoDashboardApp:
         self._login_all_button.configure(
             text="正在退出", fg_color=_GRAY, state="disabled"
         )
+        if hasattr(self, "_order_mail_button"):
+            self._order_mail_button.configure(text="正在退出", state="disabled")
         self._check_close_complete()
 
     def _check_close_complete(self) -> None:
@@ -983,6 +1023,8 @@ class InsoDashboardApp:
         self._close_after_id = self._root.after(100, self._check_close_complete)
 
     def _backend_stopped(self) -> bool:
+        if getattr(self._backend, "order_mail_running", lambda: False)():
+            return False
         if self._backend.login_all_running():
             return False
         status = self._backend.get_status()
