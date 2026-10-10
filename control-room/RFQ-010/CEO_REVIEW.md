@@ -177,3 +177,84 @@ Executor reports:
 ## Final state
 
 `REVIEW_REQUIRED -> CHANGES_REQUESTED`
+
+---
+
+# Owner clarification / CEO re-evaluation — 2026-10-10
+
+**Status:** COMPLETE  
+**Verdict:** **PASS / REVIEWED_DONE for Phase 2 development scope**  
+**Reviewed implementation HEAD:** `22bd9c760de118bd38332a9fb589657a96f38eff`
+
+Owner clarified two requirements after the first CEO review. These clarifications supersede B1/B2 as Phase 2 blockers.
+
+## Owner clarification A — current sales-tab reuse is intentionally development-only
+
+Owner explicitly states that the current Phase 2 test mode is designed to reuse the existing V1.4 sales-order tab so development does not allocate excessive new XS sales-order numbers.
+
+During development:
+
+- Owner manually returns the retained V1.4 tab to the sales-order list after inspection;
+- the next test reuses that same tab/unsubmitted sales document flow;
+- the tab is intentionally retained for repeated controlled testing.
+
+Therefore, the first-review B1 is **not a Phase 2 acceptance blocker**.
+
+It remains a **future production requirement**:
+
+> The final V1.4 workflow must use a separately owned INSO tab, establish/verify login for that order workflow, complete the order, and close its own tab at the end of the closed loop.
+
+The current reuse behavior must not silently become the final production lifecycle. Before V1.4 production deployment / irreversible Save work is approved, the final implementation must restore canonical session-proof semantics for each new order execution and retain tab ownership/isolation.
+
+## Owner clarification B — unconditional RMB selection is intentional in Phase 2
+
+Owner confirms the current Phase 2 behavior is deliberate:
+
+- even when the current currency already displays RMB,
+- the development flow should open the currency dropdown and select RMB,
+- so the RMB interaction path is actually exercised and proven during development.
+
+Therefore the current implementation:
+
+`page.select("currency", "RMB")`
+
+is consistent with the Owner-authorized Phase 2 test requirement.
+
+This is not a defect.
+
+The existing evidence that both samples re-selected RMB and read back RMB is accepted. The implementation still does not directly edit exchange-rate/price fields.
+
+## Final Phase 2 decision
+
+With the Owner clarification applied, no unresolved Phase 2 blocker remains.
+
+Accepted evidence at `22bd9c760...`:
+
+- both authorized Excel samples produced unique PI No. values;
+- the independent V1.4 sales tab was reused as intended for development;
+- customer selection used the first rendered candidate containing 阿尔克;
+- RMB dropdown selection was exercised deliberately;
+- all eight controls were read back consistently;
+- V1.4 worker did not alter V1.2/V1.3 run state in offline concurrency verification;
+- shared parking/login discovery preserved/excluded the owned V1.4 tab;
+- the page was retained for Owner review;
+- no details, PDF upload, Save, submit-review, SMTP, Google write, production DB mutation, 15-minute automation or deployment occurred;
+- focused **248 passed**;
+- full safe/offline **1715 passed / 1 skipped**;
+- Ruff PASS.
+
+The lack of a full real procurement/notification mixed-run test remains an explicitly documented UNKNOWN and is not required for Phase 2 approval.
+
+## Deferred production gate
+
+Before V1.4 can be approved for final production order execution, CEO review must verify at minimum:
+
+1. each new order execution owns a separate INSO tab;
+2. canonical INSO authentication/session proof is performed for the new order execution;
+3. the V1.4 tab cannot navigate/close V1.2/V1.3 tabs and vice versa;
+4. after the order workflow reaches its final safe terminal state, V1.4 closes only its own tab;
+5. WAITING_OWNER / irreversible Save boundaries are handled according to the later Owner-approved workflow.
+
+## Final state
+
+`REVIEW_REQUIRED -> CHANGES_REQUESTED -> Owner clarification -> REVIEWED_DONE`
