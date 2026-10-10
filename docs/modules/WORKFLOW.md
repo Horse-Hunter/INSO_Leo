@@ -125,3 +125,10 @@ inquiry/command/reason/stage codes remain in the ledger but not message text.
 No recipient/trigger/dedup/retry/SMTP/queue mutation change. Already-created payloads
 remain immutable; future messages use revised copy after source reload/authorized
 release. Synthetic previews: control-room/RFQ-014/MAIL_PREVIEWS.md. Review pending.
+
+Latest RFQ-014 Owner recipient exception: V1.4 sales-entry exceptions now go only
+to229. An owner-address guard delegates to unchanged QQSMTPTransport and returns
+terminal PERMANENT_FAILURE for obsolete non229 recipients before SMTP, including
+old queued shawn entries; existing command payloads are not rewritten. This only
+applies to isolated V1.4 notification service, not inquiry/quotation/follow-up mail.
+Active loaded GUI retains old behavior until next source reload/authorized release.

@@ -14,3 +14,12 @@ wording narrowed after review and8 targeted cases PASS; final full1845 PASS/1 SK
 Ruff/diff PASS; REVIEW_REQUIRED.
 No live mail, customer data, production access/write, GUI restart or deployment.
 Local network diagnosis/sample-reset task files are unrelated and will not be staged.
+
+Latest Owner instruction: only229 for V1.4 order-entry exceptions. Changed the
+new-command recipient tuple and scoped owner-address transport guard. Old queued
+non229 entries cannot reach SMTP after updated service loads; terminal old enum
+settles policy retirement, immutable command remains. Other SMTP routes untouched.
+Fake legacy-queue regression plus owner retry/dedup verified; focused67/full1846
+PASS/1 SKIP/Ruff/diff. CEO_REPORT.md consolidates pending V1.4 increments and
+explicit UNKNOWN/live acceptance limits. No packaging until CEO review and Owner
+request. No live email/queue write/GUI restart/release performed in this increment.

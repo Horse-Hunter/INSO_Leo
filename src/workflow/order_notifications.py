@@ -7,13 +7,20 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .store import WorkflowStateStore
-from .v12_contracts import NotificationCommand, NotificationKind, NotificationRecipient
+from .v12_contracts import (
+    DeliveryOutcome,
+    NotificationCommand,
+    NotificationKind,
+    NotificationRecipient,
+    NotificationTransportResult,
+    ReasonCode,
+)
 from .v12_notifications import V12NotificationWorker
 from .v12_smtp_transport import QQSMTPConfig, QQSMTPTransport
 from .v12_store import V12Store, migrate_v12
 
-RECIPIENTS = (NotificationRecipient("owner", "linan229@qq.com"),
-              NotificationRecipient("shawn", "shawn@inso-hk.com"))
+OWNER_ADDRESS = "linan229@qq.com"
+RECIPIENTS = (NotificationRecipient("owner", OWNER_ADDRESS),)
 
 
 def exception_command(*, invocation_id, pi_no, part_number=None, situation, treatment, at):
@@ -27,6 +34,19 @@ def exception_command(*, invocation_id, pi_no, part_number=None, situation, trea
         "\n".join(lines), None, at)
 
 
+class _OwnerOnlyTransport:
+    """Latest Owner rule also applies to recipients persisted by older versions."""
+    def __init__(self, transport):
+        self.transport = transport
+
+    def send_one(self, command, recipient):
+        if recipient.address.strip().casefold() != OWNER_ADDRESS:
+            # No SMTP dispatch or command rewrite; settle the obsolete recipient.
+            return NotificationTransportResult(DeliveryOutcome.PERMANENT_FAILURE,
+                                               ReasonCode.NOTIFICATION_PERMANENT)
+        return self.transport.send_one(command, recipient)
+
+
 class OrderExceptionNotifications:
     """Independent recipient retries, isolated dev DB; never inquiry state."""
     def __init__(self, root, *, transport=None, background=True):
@@ -36,8 +56,8 @@ class OrderExceptionNotifications:
         migrate_v12(database, directory / "backups", quiesce=lambda: nullcontext())
         self.store = V12Store(database)
         self.store.recover_abandoned_notification_attempts(at=datetime.now(UTC))
-        self.worker = V12NotificationWorker(self.store, transport or
-            QQSMTPTransport(config=QQSMTPConfig(sender_address="1069599116@qq.com")))
+        self.worker = V12NotificationWorker(self.store, _OwnerOnlyTransport(transport or
+            QQSMTPTransport(config=QQSMTPConfig(sender_address="1069599116@qq.com"))))
         self._stop = threading.Event()
         self._thread = None
         if background:

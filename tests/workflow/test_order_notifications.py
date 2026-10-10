@@ -17,8 +17,7 @@ def args():
 
 
 def test_simple_old_enum_safe_notification_and_per_recipient_retry(tmp_path):
-    fake = FakeNotificationTransport({'owner': (DeliveryOutcome.SENT,),
-        'shawn': (DeliveryOutcome.RETRYABLE_FAILURE, DeliveryOutcome.SENT)})
+    fake = FakeNotificationTransport({'owner': (DeliveryOutcome.RETRYABLE_FAILURE, DeliveryOutcome.SENT)})
     service = OrderExceptionNotifications(tmp_path, transport=fake, background=False)
     command = exception_command(**args())
     assert command.kind is NotificationKind.PURCHASE_EXCEPTION and command.inquiry_id == 'v14-notify:synthetic-call'
@@ -29,7 +28,8 @@ def test_simple_old_enum_safe_notification_and_per_recipient_retry(tmp_path):
     service.worker.run_due(now=NOW)
     service.enqueue(command)
     service.worker.run_due(now=NOW + timedelta(minutes=1))
-    assert [who for _,who in fake.calls] == ['owner','shawn','shawn']
+    assert [who for _,who in fake.calls] == ['owner','owner']
+    assert [(r.recipient_id,r.address) for r in command.recipients]==[('owner','linan229@qq.com')]
     with sqlite3.connect(service.store.database_path) as db:
         assert db.execute('select status from workflow_items').fetchone()[0] == 'MANUAL_REVIEW'
         assert db.execute('select count(*) from workflow_v12_inquiry_state').fetchone()[0] == 0
@@ -47,4 +47,22 @@ def test_multiple_invocations_have_independent_compatible_anchors(tmp_path):
         assert db.execute('select count(*) from workflow_items').fetchone()[0] == 2
         assert db.execute('select count(*) from workflow_v12_notification_commands').fetchone()[0] == 2
         assert db.execute('select count(*) from workflow_v12_inquiry_state').fetchone()[0] == 0
+    service.close()
+
+
+def test_legacy_dual_recipient_queue_never_dispatches_shawn(tmp_path):
+    from dataclasses import replace
+
+    from src.workflow.v12_contracts import NotificationRecipient
+    fake=FakeNotificationTransport({'owner':(DeliveryOutcome.SENT,)})
+    service=OrderExceptionNotifications(tmp_path,transport=fake,background=False)
+    legacy=replace(exception_command(**args()),recipients=(NotificationRecipient('owner','linan229@qq.com'),NotificationRecipient('shawn','shawn@inso-hk.com')))
+    service.enqueue(legacy)
+    service.worker.run_due(now=NOW)
+    service.worker.run_due(now=NOW+timedelta(minutes=15))
+    assert [who for _,who in fake.calls]==['owner']
+    with sqlite3.connect(service.store.database_path) as db:
+        rows=db.execute('select recipient_id,outcome from workflow_v12_notification_recipients order by recipient_id').fetchall()
+        assert rows==[('owner','SENT'),('shawn','PERMANENT_FAILURE')]
+        assert db.execute('select count(*) from workflow_v12_notification_commands').fetchone()[0]==1
     service.close()

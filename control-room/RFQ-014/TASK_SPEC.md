@@ -15,3 +15,15 @@ review diff, commit/push on existing V1.4 branch; REVIEW_REQUIRED.
 Completion:11 categories/19 synthetic previews audited; focused292 PASS plus8
 final action-copy cases; final full1845 PASS/1 SKIP; Ruff/diff PASS. CEO independent
 review pending. No current GUI reload/release or already-created-message rewrite.
+
+## Latest Owner recipient correction / 2026-10-10
+Order-entry exceptions only go to229, not shawn. Explicit exception to prior
+recipient-no-change scope: V1.4 order_notifications only; all other routes unchanged.
+Owner-only transport guard blocks historical queued non229 recipients when revised
+service loads, without rewriting immutable command payload. No live queue mutation
+or mail test. Add routing/legacy queue regressions and consolidated CEO report.
+Remain REVIEW_REQUIRED; packaging only after CEO PASS and new Owner instruction.
+
+Recipient correction complete: focused67 PASS, final full1846 PASS/1 SKIP,
+Ruff/diff PASS. CEO_REPORT.md is consolidated review packet. No package/deployment,
+GUI restart or live SMTP performed. Active loaded code requires later reload.
