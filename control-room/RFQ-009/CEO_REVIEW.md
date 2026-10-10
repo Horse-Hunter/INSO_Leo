@@ -85,3 +85,160 @@ Phase 1 的功能实现本身方向正确：GUI 一次性检查入口、229 IMAP
 `REVIEW_REQUIRED -> CHANGES_REQUESTED`
 
 修复重点只有一个：**把已经完成的 V1.4 Phase 1 增量重新落到当前 V1.3 REVIEWED_DONE HEAD 上，不能继续从 df64762 开发。**
+
+---
+
+# B1 Re-review — 2026-10-10
+
+**Status:** COMPLETE  
+**Verdict:** PASS / REVIEWED_DONE  
+**Reviewed HEAD:** `dcb8a6266e0dc1b63d804e86aeb27a3fa75ca534`  
+**Reviewed repaired Phase 1 commit:** `59d7d034589378df2168c1e0ad1ba0b2ff1ce45f`  
+**Reviewed V1.3 base:** `fd7ce8665c65de3f0d1c18cf85369e8eff0a273c`
+
+## B1 resolution
+
+PASS.
+
+The repaired Phase 1 commit is now directly based on the required V1.3 REVIEWED_DONE HEAD:
+
+`59d7d034... -> fd7ce866...`
+
+The branch therefore inherits the complete reviewed V1.3 increment set instead of the obsolete `df64762...` baseline.
+
+Independent range review from `fd7ce866...` to the resubmitted HEAD shows that production source changes are limited to the intended Phase 1 surface:
+
+- `src/gui/app.py`
+- `src/gui/contracts.py`
+- `src/launcher/backend.py`
+- new `src/order_mail/`
+
+plus Phase 1 tests/docs/control-room records.
+
+No other V1.3 source or test file is replaced or reverted by the V1.4 increment.
+
+## Phase 1 re-review
+
+PASS.
+
+### GUI
+
+The existing login action row is split into equal weighted columns:
+
+- left: `一键登录所有网站`
+- right: `自动订单录单`
+
+The new action is one-shot only. It does not start the V1.2/V1.3 business loop and does not add the future 15-minute V1.4 scheduler yet.
+
+The mail check runs on its own worker thread; GUI presentation remains on the Tk main-thread polling path. Shutdown waits for the mail worker before final close.
+
+### IMAP / credential boundary
+
+PASS.
+
+The receiver:
+
+- uses `imap.qq.com:993` over TLS;
+- reads credentials only through the Core Credential Provider using `site_id=imap.qq.com`;
+- requires the configured username to be exactly `linan229@qq.com`;
+- does not embed an authorization code in source/config/report/logging.
+
+Existing `smtp.qq.com` sending behavior is untouched.
+
+### Read-only mailbox boundary
+
+PASS.
+
+The implementation:
+
+- opens `INBOX` with `readonly=True`;
+- verifies the client reports the mailbox as read-only before searching;
+- uses UID SEARCH/FETCH only;
+- uses `BODY.PEEK[...]` / `BODY.PEEK[]`;
+- records candidate FLAGS before content reads and compares them after;
+- has no STORE/COPY/MOVE/EXPUNGE/SMTP/reply path;
+- does not issue CLOSE before logout.
+
+If read-only mode is not confirmed, it fails closed before search.
+
+A FLAGS difference is surfaced as `FLAGS_DIFFER`; it is not silently treated as success.
+
+### Bounded discovery / data minimization
+
+PASS.
+
+The inspection is intentionally bounded:
+
+- INBOX only;
+- last 30 days;
+- tail window of at most 200 messages;
+- at most the newest 5 candidates;
+- subject must begin with exact `订单录单` before full-body inspection;
+- 20 MB message cap;
+- bounded attachment and Excel inspection limits.
+
+No mailbox-wide export or persistent mail cache is introduced.
+
+### Attachment inspection / privacy
+
+PASS.
+
+Excel/PDF payloads are inspected in memory only.
+
+The public report boundary exports only sanitized structure information. Excel reporting exposes coordinates, cell type, standard label vocabulary, formulas/merge/hidden counts and dimensions, not customer cell values. PDF inspection exposes signature/page/encryption and fixed contract-structure vocabulary signals, not document text.
+
+The implementation does not write the real attachments to production runtime, workflow DB or Git.
+
+The two live samples remain historical evidence from the original Phase 1 probe; the B1 repair correctly did not re-read production mail merely to prove a rebase.
+
+### Business isolation
+
+PASS.
+
+Phase 1 does not:
+
+- enter INSO sales-order pages;
+- operate purchase or quotation flows;
+- write Google Sheets;
+- write the production workflow database;
+- upload contract PDFs;
+- save/submit sales orders;
+- send SMTP mail.
+
+The new receiver has no workflow-state dependency in this phase.
+
+## Regression evidence
+
+Executor reports after the repaired baseline migration:
+
+- focused: **534 passed**;
+- full safe/offline: **1681 passed / 1 skipped**;
+- Ruff: **PASS**;
+- diff check: **PASS**;
+- no deployment.
+
+The branch history and range diff independently confirm that the previously reviewed V1.3 source/test set is retained and the repaired V1.4 increment is additive over `fd7ce866...`.
+
+## Remaining Phase 2 decisions
+
+Correctly still UNKNOWN / Owner-defined:
+
+- authoritative contract-number source and conflict rule;
+- BUYER/customer mapping into INSO;
+- multiple-line-item handling;
+- L/T / CONDITION / DC mappings;
+- currency/tax/price/rounding rules;
+- duplicate/re-send/revision semantics;
+- missing/multiple attachment handling.
+
+None of those were guessed in Phase 1.
+
+## Release decision
+
+**RFQ-009 Phase 1 is approved as REVIEWED_DONE.**
+
+This approval is for the V1.4 Phase 1 development baseline and discovery implementation. It does not authorize production V1.4 deployment and does not authorize Phase 2 business mapping or INSO sales-order automation without a new Owner-defined task.
+
+## Final state
+
+`CHANGES_REQUESTED -> REVIEW_REQUIRED -> REVIEWED_DONE`
