@@ -2,6 +2,9 @@
 
 Start with `AI_START_HERE.md`.
 
+- **Every new Executor window:** read `AI_START_HERE.md`. For any completed task, use the exact seven headings from `docs/REPORTING.md` in the **final chat reply** (and RFQ `FINAL_REPORT.md`); state true tests and next Owner action.
+- **Every build/test/deploy task:** reuse canonical paths and retire owned disposable frozen/staging/scan copies **in the same task**, including on failure. Keep required rollback, runtime, CDP, secrets, Git and unknown dirty work. See `docs/PROJECT_BASELINE.md` and `docs/WINDOWS_RELEASE.md`.
+
 - Owner + CEO discuss requirements; CEO creates/completes the RFQ Task Spec.
 - Owner may open any implementation-agent session (Codex / Claude / WorkBuddy or equivalent) and say only `执行 RFQ-XXX`.
 - `Review RFQ-XXX` belongs to CEO/Architect/Safety, not the implementation agent.

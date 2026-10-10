@@ -1,5 +1,16 @@
 # Windows release
 
+## Build/release retention (binding)
+
+**Trigger:** every build, frozen test, deployment scan, release or failed attempt. **Executor** reuses `scripts/build_windows_release.ps1` and its existing stage/scanner, avoiding repeated full frozen copies.
+
+- During the **same task**, retire known disposable staging, `_internal` and scan copies as soon as verification ends; keep small manifests/evidence. On failure, keep only necessary diagnostics/recovery assets.
+- After confirmed deployment, retain live installs, shared operational state and a **verified usable** rollback set; retire redundant historical packages. Inspect mixed backup folders individually.
+- Never delete/follow runtime links, CDP, business DB/outbox, Vault/OAuth, Git, unique evidence or dirty worktrees; never force unlock/elevate. A missing global handle inventory alone is not a blocker for unrelated proven-disposable copies.
+- **Evidence/Review:** summarize retained/retired assets and material disk change in the RFQ `EXECUTION_LOG.md`; CEO rejects unexplained duplicates. No new release pipeline or cleanup report.
+
+Historical release facts below are snapshots, not current deployment status.
+
 ## Current RFQ-003 V1.2 refresh (2026-10-07)
 
 Owner-authorized resilience update, REVIEW_REQUIRED; not V1.3 or live acceptance.

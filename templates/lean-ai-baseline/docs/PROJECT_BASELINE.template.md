@@ -39,6 +39,16 @@ Stable anchors:
 - Handoff files expire after takeover; obsolete blockers/next steps are marked resolved/superseded.
 - Review fails on expired handoffs, stale current-state text or unjustified duplicate active worktrees.
 
+## Artifact lifecycle (mandatory)
+
+**Trigger/owner:** every build/test/staging/deploy task, including failure and handoff; **Executor** retires disposable assets in that task.
+
+1. Reuse canonical paths; give new large temporary copies a purpose, owner and retirement point. Avoid repeated full frozen dependencies.
+2. Retire task-owned, proven-disposable builds/scans/staging when finished. Retain minimal evidence, active release and necessary verified rollback.
+3. Never delete CDP/session, linked/shared runtime, persistent data, credentials, Git, unique evidence or dirty work. Do not force locks/ACLs; missing global handle inventory alone does not block proven-safe cleanup.
+
+**Source:** this baseline and canonical release docs/scripts. **Evidence:** RFQ `EXECUTION_LOG.md` (or non-RFQ final reply) briefly records retained/retired assets and exceptions. **Review:** CEO rejects unexplained duplicate bundles and unsafe deletions; no new cleanup framework.
+
 ## Delivery-first invariant
 
 - Correct working delivery of Owner requirements is primary; governance is subordinate.

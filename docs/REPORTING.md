@@ -2,6 +2,12 @@
 
 Anything shown directly to Owner must be understandable without software-development knowledge.
 
+## Mandatory Executor response
+
+**Trigger:** final status of **every** task, RFQ or not. **Executor** uses the seven headings below **verbatim and in order in the final chat reply** and, for RFQs, `FINAL_REPORT.md`. Keep it concise and business-readable; state real vs. offline verification, RFQ status and one next Owner action (`NONE` if none). Technical detail stays in logs.
+
+**Source/evidence:** this file and actual chat/`FINAL_REPORT.md`. **Enforcement:** CEO requests correction for missing or altered headings; no extra paperwork.
+
 ## Executor final summary to Owner
 
 ```text

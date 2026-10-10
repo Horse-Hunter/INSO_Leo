@@ -2,6 +2,9 @@
 
 Start with `AI_START_HERE.md`.
 
+- **Every new window/task:** read `AI_START_HERE.md`; final Owner-facing **chat reply** and RFQ `FINAL_REPORT.md` use the exact seven headings in `docs/REPORTING.md`.
+- **Artifact hygiene:** reuse canonical builds; retire owned disposable frozen/staging/scan copies **in the generating task** (success/failure). Preserve active/rollback packages, runtime, CDP, secrets, Git and dirty work. See `docs/PROJECT_BASELINE.md`.
+
 - Owner + CEO discuss requirements; CEO creates/completes the RFQ Task Spec.
 - Owner opens any implementation agent (Codex / Claude / WorkBuddy or equivalent) and says only `执行 RFQ-XXX`.
 - `Review RFQ-XXX` belongs to CEO/Architect/Safety.

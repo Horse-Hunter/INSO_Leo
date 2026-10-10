@@ -57,6 +57,16 @@
 - `EXECUTION_LOG.md` may preserve history but obsolete current blocker/next-step statements must be marked resolved/superseded.
 - Review requires cleanup evidence and rejects expired handoffs, stale current-state text or unexplained duplicate active worktrees.
 
+## Artifact lifecycle (binding)
+
+**Trigger/owner:** every build, frozen test, deployment scan, handoff and release (success **or** failure); the generating **Executor** owns cleanup in the same task.
+
+1. Reuse canonical build/test/staging paths; avoid unnecessary complete frozen copies. Every new large temporary asset needs a purpose, owner and retirement point.
+2. Once its purpose ends, retire only **known task-owned disposable** builds, scan copies and staging; keep small essential evidence. Retain active releases and the minimum verified, approved rollback set.
+3. Protect CDP/profile, shared runtime/data, Vault/OAuth, Git, unique evidence and dirty worktrees. Never follow/delete reparse-point targets, force file locks or alter permissions. Skip **specific proven risks**, not all cleanup merely because global Windows file-handle inspection is unavailable.
+
+**Source:** this baseline and `docs/WINDOWS_RELEASE.md`. **Evidence:** brief retained/retired items and reason for large exceptions in RFQ `EXECUTION_LOG.md` (non-RFQ: final chat). **Enforcement:** CEO Review rejects unexplained duplicate artifacts or unsafe deletion. No extra cleanup framework or Owner ceremony.
+
 ## Delivery-first invariant
 
 - The project's primary objective is correct, working delivery of Owner requirements. Governance serves that objective and must not compete with it.

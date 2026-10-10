@@ -1,5 +1,7 @@
 # Human Report
 
+**Every Executor task (RFQ or not):** final Owner-facing **chat reply** must use these exact seven headings, in order; RFQ `FINAL_REPORT.md` must match. State actual status, test vs. live verification and one Owner action (`NONE` if none). Source/evidence: this file and final responses; CEO Review enforces. Technical detail stays in logs.
+
 ## Executor final summary to Owner
 
 ```text
