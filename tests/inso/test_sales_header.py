@@ -148,3 +148,58 @@ def test_owner_waiting_form_must_not_be_reopened_or_overwritten():
     with pytest.raises(HeaderStop, match="OWNER_RETURN_REQUIRED"):
         adapter.open_for_header()
     assert not page.adds and not page.cancels
+
+
+class LoadingPage(PromptPage):
+    def __init__(self):
+        super().__init__()
+        self.elapsed=0;self.menu_clicks=0;self.list_after=300;self.button_after=600
+        self.menu=Action(self.open_menu)
+        self.add.count=lambda: int(self.elapsed >= self.button_after)
+    def open_menu(self): self.menu_clicks+=1
+    def locator(self,selector):
+        if selector=='a#iframe_XiaoShou_menu': return self.menu
+        if selector=='iframe#iframe_XiaoShou_frame': return SimpleNamespace(wait_for=lambda **kw:None)
+        raise AssertionError(selector)
+    def wait_for_timeout(self,ms): self.elapsed+=ms
+    def loaded_frames(self,kind):
+        if kind=='bill': return [self.form] if self.bill else []
+        return [self.list] if self.elapsed >= self.list_after else []
+
+
+def test_cold_shell_waits_for_list_navigation_and_add_control_once(monkeypatch):
+    from src.inso import sales_header
+    page=LoadingPage()
+    monkeypatch.setattr(sales_header,'monotonic',lambda:page.elapsed/1000)
+    adapter=PlaywrightSalesHeaderPage(page,owns_page=lambda p:True)
+    adapter._frames=page.loaded_frames
+    adapter.open_for_header()
+    assert page.elapsed>=600 and page.menu_clicks==1 and page.adds==1
+    assert page.cancels==1 and adapter.frame is page.form and not page.listeners
+
+
+def test_already_open_list_waits_for_button_without_menu_click(monkeypatch):
+    from src.inso import sales_header
+    page=LoadingPage();page.list_after=0
+    monkeypatch.setattr(sales_header,'monotonic',lambda:page.elapsed/1000)
+    adapter=PlaywrightSalesHeaderPage(page,owns_page=lambda p:True);adapter._frames=page.loaded_frames
+    adapter.open_for_header()
+    assert page.menu_clicks==0 and page.adds==1 and page.elapsed>=600
+
+
+def test_list_load_timeout_never_clicks_add(monkeypatch):
+    from src.inso import sales_header
+    page=LoadingPage();page.list_after=20000
+    monkeypatch.setattr(sales_header,'monotonic',lambda:page.elapsed/1000)
+    adapter=PlaywrightSalesHeaderPage(page,owns_page=lambda p:True);adapter._frames=page.loaded_frames
+    with pytest.raises(HeaderStop,match='SALES_LIST_UNCONFIRMED'): adapter.open_for_header()
+    assert page.menu_clicks==1 and page.adds==0 and page.elapsed==15000
+
+
+def test_ambiguous_list_and_ownership_loss_do_not_add():
+    page=LoadingPage();adapter=PlaywrightSalesHeaderPage(page,owns_page=lambda p:False)
+    with pytest.raises(HeaderStop,match='TAB_OWNERSHIP_LOST'): adapter.open_for_header()
+    adapter._owns_page=lambda p:True
+    adapter._frames=lambda kind: [page.list,page.list] if kind=='list' else []
+    with pytest.raises(HeaderStop,match='SALES_LIST_UNCONFIRMED'): adapter.open_for_header()
+    assert not page.adds and not page.menu_clicks

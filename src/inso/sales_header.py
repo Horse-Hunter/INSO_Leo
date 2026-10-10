@@ -97,6 +97,22 @@ class PlaywrightSalesHeaderPage:
     def waiting_for_owner(self):
         return bool(self._frames("bill")) and self.page.evaluate("() => window.__INSO_sales_owner_review === true")
 
+    def _wait_sales_list(self):
+        """Iframe attachment precedes navigation/control readiness; no extra clicks."""
+        deadline = monotonic() + 15
+        while monotonic() < deadline:
+            lists = self._frames("list")
+            if len(lists) > 1:
+                raise HeaderStop("page", "SALES_LIST_UNCONFIRMED")
+            if len(lists) == 1:
+                add = lists[0].locator("button#product_add_:visible")
+                if add.count() > 1:
+                    raise HeaderStop("page", "ADD_DOCUMENT_UNCONFIRMED")
+                if add.count() == 1 and add.is_enabled():
+                    return lists[0]
+            self.page.wait_for_timeout(100)  # Pump loading events, never repeat navigation/add.
+        raise HeaderStop("page", "SALES_LIST_UNCONFIRMED")
+
     def open_for_header(self):
         self._assert_owner()
         bills = self._frames("bill")
@@ -112,16 +128,14 @@ class PlaywrightSalesHeaderPage:
                 raise HeaderStop("page", "SALES_MENU_UNCONFIRMED")
             menu.click(timeout=10000)
             self.page.locator("iframe#iframe_XiaoShou_frame").wait_for(state="attached", timeout=15000)
-            lists = self._frames("list")
-        if len(lists) != 1:
-            raise HeaderStop("page", "SALES_LIST_UNCONFIRMED")
+        sales_list = self._wait_sales_list()
         # Native confirm is always cancelled, never accept a fresh XS allocation.
         def cancel_native(dialog):
             dialog.dismiss()
             self.cancelled_existing_prompt = True
         self.page.on("dialog", cancel_native)
         try:
-            add = lists[0].locator("button#product_add_:visible")
+            add = sales_list.locator("button#product_add_:visible")
             if add.count() != 1:
                 raise HeaderStop("page", "ADD_DOCUMENT_UNCONFIRMED")
             add.click(timeout=10000)

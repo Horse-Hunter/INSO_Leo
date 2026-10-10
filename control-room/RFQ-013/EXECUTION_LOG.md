@@ -15,3 +15,14 @@ extraction case added while full suite was running; no runtime change afterwards
 Owner closed development GUI; source GUI will be reopened without auto-clicking
 or deploying, preserving Chrome orders and all existing filled receipts.
 Status REVIEW_REQUIRED; Owner live upload acceptance and CEO review pending.
+
+Owner follow-up: source GUI button stopped with generic header message. Read-only
+CDP inspection found one owned unique V1.4 list, native add control, no bill; no
+other business tab navigated. Original stop reason not persisted (UNKNOWN), so
+no claim of tracing the precise historical exception. Verified premature-list
+check after iframe attachment is repaired with bounded readiness/control wait.
+Added delayed-navigation/control, timeout, ambiguous-list, ownership-loss and
+page-stage report regression cases. Focused92 PASS; read-only ready-list probe
+PASS on retained page (no add/click/upload/notify/receipt writes).
+Owner confirmed source GUI closed for reload. Full1837 PASS/1 SKIP, Ruff/diff PASS.
+Correction remains REVIEW_REQUIRED; no deployment or live business rerun.

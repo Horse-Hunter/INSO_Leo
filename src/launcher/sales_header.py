@@ -155,7 +155,15 @@ def run_sales_header_check(*, config_path, production_path, root, notify=None):
         if result.reason == "OWNER_RETURN_REQUIRED":
             return "WAITING_OWNER", "等待 Owner 复核；请先返回销售订单列表。"
         if result.status != "WAITING_OWNER":
-            raise OrderError("INSO", pi_no=order.pi_no, field=FIELD_LABELS.get(result.field, "订单头部"))
+            page_labels = {"SALES_LIST_UNCONFIRMED": "销售订单列表加载",
+                "SALES_MENU_UNCONFIRMED": "销售订单菜单",
+                "ADD_DOCUMENT_UNCONFIRMED": "新增单据按钮",
+                "SALES_FORM_UNCONFIRMED": "销售订单新增页面加载",
+                "UNEXPECTED_ADD_PROMPT": "新增单据提示",
+                "TAB_OWNERSHIP_LOST": "V1.4标签页归属"}
+            label = (page_labels.get(result.reason, "销售订单页面") if result.field == "page"
+                     else FIELD_LABELS.get(result.field, "订单头部"))
+            raise OrderError("INSO", pi_no=order.pi_no, field=label)
         header_values = {field: adapter.read(field) for field in FIELD_LABELS}
         try:
             count = fill_sales_details(PlaywrightSalesDetailsPage(adapter), expected)

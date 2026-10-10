@@ -233,3 +233,8 @@ The only authorized server write in this increment is native PDF upload;
 Save/review-submit remain manual. Local processed receipt follows upload proof.
 Existing canonical CDP/auth and independent owned tabs remain unchanged.
 Live empty-panel selectors observed; end-to-end upload still needs Owner acceptance.
+
+RFQ-013 Owner header-stop correction: a newly attached sales iframe can still be
+navigating/loading. Wait up to15s for exactly one visible canonical sales list and
+one enabled native add button before dispatching add once. Multiple lists/buttons
+or timeout stop. No navigation/add retry, no change to prompt cancel or ownership.

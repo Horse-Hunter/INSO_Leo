@@ -32,3 +32,17 @@ bundled environment; unavailable parser stops safely rather than uploading blind
 Changed implementation: order_mail/inspection, inso/sales_attachment,
 launcher/sales_header; corresponding parser/UI/preflight tests and task/module docs.
 CEO independent review and Owner actual-button acceptance remain pending.
+
+## Owner header-stop correction — REVIEW_REQUIRED
+
+Retained unique V1.4 page was still at sales list, not a bill form. Exact original
+stop reason UNKNOWN because not persisted. Verified readiness race: iframe
+attachment was followed by immediate list lookup; iframe navigation/control load
+can complete later. Corrected to bounded15s wait for canonical visible list and
+enabled unique add button before one add click. Cancellation/ownership rules,
+fields/PDF/receipt/other-business logic unchanged. Page failures now distinguish
+sales list loading/menu/add/form instead of generic order header.
+Focused92 PASS, full1837 PASS/1 SKIP, Ruff/diff PASS; retained live owned list
+passed read-only readiness probe. No add/upload/save/submit/SMTP/business replay
+performed during correction. Owner source GUI reload authorized; real retry and
+end-to-end PDF acceptance still pending, no deployment.

@@ -190,3 +190,16 @@ def test_upload_failure_no_receipt_and_safe_warning(monkeypatch):
     monkeypatch.setattr(service,'prepare_sales_rows',lambda *a:expected(3))
     assert run(notes)[0]=='STOPPED' and 'sales' in phases and 'mark' not in phases
     assert len(notes)==1 and '重复上传' in notes[0]['treatment'] and 'PRIVATE' not in str(notes)
+
+
+def test_list_load_failure_report_identifies_page_stage(monkeypatch):
+    from src.inso import sales_header
+    from tests.inso.test_sales_details import expected
+    phases,notes,_=setup(monkeypatch)
+    class LoadingFailure(HeaderPage):
+        def open_for_header(self): raise sales_header.HeaderStop('page','SALES_LIST_UNCONFIRMED')
+    monkeypatch.setattr(sales_header,'PlaywrightSalesHeaderPage',lambda *a,**kw:LoadingFailure())
+    monkeypatch.setattr(service,'prepare_sales_rows',lambda *a:expected(3))
+    stage,report=run(notes)
+    assert stage=='STOPPED' and '销售订单列表加载' in report
+    assert 'SALES_LIST_UNCONFIRMED' not in report and 'mark' not in phases and 'upload' not in phases
