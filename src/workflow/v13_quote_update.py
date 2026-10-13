@@ -75,8 +75,8 @@ class WorkflowQuotationSource:
         worksheet = result.record_identity.worksheet
         try:
             rows = tuple(self._reader.read_rows(worksheet))
-        except Exception:  # noqa: BLE001 - only shared Sheets read
-            raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE") from None
+        except Exception as exc:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE") from exc
         def locate(original):
             brand = (original.resolved_brand if original.brand_update_status == "UPDATED"
                      else original.record_identity.identifying_snapshot.brand)

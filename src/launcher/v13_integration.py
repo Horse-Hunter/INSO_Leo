@@ -57,11 +57,17 @@ def notify_quotation(store, result, key, episode, *, at):
     action = {
         "SOURCE_STATUS_NOT_UPDATED": "核对源表状态，确认后改为“采购已报价”；无需重复更新报价。",
         "UPDATE_RESULT_UNCONFIRMED": "本单已跳过，其他订单继续；请核对报价结果后再决定是否重试。",
+        "SOURCE_IDENTITY_UNRESOLVED": "核对该行与原订单的型号、数量及品牌是否一致；本行报价已暂停，其他订单继续。不要重发采购单。",
+        "SOURCE_IDENTITY_AMBIGUOUS": "源表有多个匹配候选，请核对重复行；本行报价已暂停，其他订单继续。不要重发采购单。",
+        "SOURCE_CHANGED": "核对该行型号、数量及品牌的改动；本行报价已暂停，程序不会覆盖人工修改。不要重发采购单。",
     }.get(reason, "核对订单及报价输入，确认报价完成后再更新源表状态。")
     # Only explicit business identity/location and a closed reason, never provider exceptions.
     reason_text = {
         "SOURCE_STATUS_NOT_UPDATED": "报价更新已确认，源表状态未更新。",
         "UPDATE_RESULT_UNCONFIRMED": "报价更新结果无法确认。",
+        "SOURCE_IDENTITY_UNRESOLVED": "该行无法与本机原订单安全匹配，未执行报价更新。",
+        "SOURCE_IDENTITY_AMBIGUOUS": "该行匹配到多张原订单，未执行报价更新。",
+        "SOURCE_CHANGED": "源表关键字段与原订单记录不一致，未执行报价更新。",
     }.get(reason, "报价处理未完成。")
     body = (f"型号：{result.queried_mpn or '未能确认'}\n"
         f"位置：{result.source_worksheet.worksheet if result.source_worksheet else '未能确认'}"
@@ -73,7 +79,9 @@ def notify_quotation(store, result, key, episode, *, at):
             result.inquiry_id,
             NotificationKind.PURCHASE_EXCEPTION,
             owner,
-            "【INSO】报价处理异常",
+            ("【INSO】报价暂停：原订单匹配失败"
+             if reason in {"SOURCE_IDENTITY_UNRESOLVED", "SOURCE_IDENTITY_AMBIGUOUS", "SOURCE_CHANGED"}
+             else "【INSO】报价处理异常"),
             body,
             None,
             at,
@@ -94,7 +102,11 @@ def notify_runtime_fault(store, key, reason, *, at):
     ):
         return
     treatment = {
-        "GOOGLE_SHEETS_UNAVAILABLE": "检查VPN网络及Google表格授权，恢复后继续。",
+        "GOOGLE_SHEETS_UNAVAILABLE": "检查VPN网络及Google表格授权，恢复后点击“重新开始询价”。",
+        "SHEETS_READ_UNAVAILABLE": "检查VPN及Google表格是否能正常读取，恢复后点击“重新开始询价”。",
+        "GOOGLE_READ_RETRY_EXHAUSTED": "本轮已跳过，15分钟后自动再试；恢复后继续原流程，无需手动重启。",
+        "SHEETS_SCHEMA_UNAVAILABLE": "核对源表列结构，恢复后点击“重新开始询价”。",
+        "SHEETS_WRITE_UNAVAILABLE": "核对Google表格写入权限与网络；先确认对应单元格现状，再恢复程序。",
         "SHEETS_AUTH_UNAVAILABLE": "检查Google表格授权，恢复后继续。",
         "WORKFLOW_LEDGER_UNAVAILABLE": "检查本机订单台账，恢复后继续。",
         "CDP_RECONNECT_EXHAUSTED": "检查程序使用的Chrome是否正常，恢复连接后继续。",
@@ -107,15 +119,21 @@ def notify_runtime_fault(store, key, reason, *, at):
             None,
             NotificationKind.PURCHASE_EXCEPTION,
             owner,
-            "【INSO】询价运行异常",
+            ("【INSO】Google表格暂不可用，15分钟后重试"
+             if reason == "GOOGLE_READ_RETRY_EXHAUSTED" else "【INSO】运行已停止：Google表格读取失败"
+             if reason == "SHEETS_READ_UNAVAILABLE" else "【INSO】询价运行异常"),
             "情况：" + {
-                "GOOGLE_SHEETS_UNAVAILABLE": "Google表格读取或授权不可用。",
+                "GOOGLE_SHEETS_UNAVAILABLE": "Google表格读取或授权不可用，询价和采购报价流程已停止。",
+                "SHEETS_READ_UNAVAILABLE": "Google表格读取失败，询价和采购报价流程已停止；尚不能确定是网络还是授权问题。",
+                "GOOGLE_READ_RETRY_EXHAUSTED": "Google表格读取失败，重试一次仍未成功。",
+                "SHEETS_SCHEMA_UNAVAILABLE": "源表列结构未能确认，询价和采购报价流程已停止。",
+                "SHEETS_WRITE_UNAVAILABLE": "Google表格写入未能确认，程序已停止。",
                 "SHEETS_AUTH_UNAVAILABLE": "Google表格授权不可用。",
                 "WORKFLOW_LEDGER_UNAVAILABLE": "本机订单台账不可用。",
                 "CDP_RECONNECT_EXHAUSTED": "Chrome连接恢复失败。",
                 "INSO_AUTHENTICATION_REQUIRED": "INSO需要登录或人工验证。",
                 "QUOTE_INPUT_CONFIGURATION_REQUIRED": "报价输入配置缺失或不明确。",
-            }.get(reason, "询价运行出现异常。") + f"\n处理：{treatment}不要直接重发采购单。",
+            }.get(reason, "运行故障，程序已停止；具体原因需查看本机安全日志。") + f"\n处理：{treatment}\n不要直接重发采购单。",
             None,
             at,
         )
@@ -180,5 +198,5 @@ def notify_quotation_model_difference(store, result, source_model, *, at):
     )
     store.enqueue_notification(NotificationCommand(
         command_id, result.inquiry_id, NotificationKind.PURCHASE_EXCEPTION,
-        recipients, "【INSO】报价型号差异", body, None, at,
+        recipients, "【INSO】采购报价差异", body, None, at,
     ))

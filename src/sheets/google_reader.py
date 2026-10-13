@@ -1,5 +1,6 @@
 """Read-only Google Sheets API adapter for worksheet rows."""
 
+import socket
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
@@ -8,6 +9,19 @@ from .pending import WorksheetIdentity, WorksheetRow
 
 class GoogleSheetsReadError(RuntimeError):
     """A Google Sheets read failed or returned an invalid response."""
+
+
+class GoogleSheetsReadUnavailable(GoogleSheetsReadError):
+    """A transient read failed its single retry; next normal poll may resume."""
+
+
+def _temporary_read_failure(exc: Exception) -> bool:
+    status = getattr(getattr(exc, "resp", None), "status", None)
+    if isinstance(status, int):
+        return status == 429 or 500 <= status < 600
+    return isinstance(exc, (TimeoutError, ConnectionError, socket.gaierror)) or type(exc).__name__ in {
+        "ServerNotFoundError", "TransportError", "ConnectTimeout", "ReadTimeout",
+    }
 
 
 class GoogleSheetsRequest(Protocol):
@@ -46,17 +60,21 @@ class GoogleSheetsRowReader:
     ) -> tuple[WorksheetRow, ...]:
         read_range = _a1_range(worksheet.worksheet, self._first_row)
         try:
-            response = (
-                self._service.spreadsheets()
-                .values()
-                .get(
-                    spreadsheetId=worksheet.spreadsheet,
-                    range=read_range,
-                    majorDimension="ROWS",
-                    valueRenderOption="UNFORMATTED_VALUE",
-                )
-                .execute()
-            )
+            for attempt in range(2):
+                try:
+                    response = (
+                        self._service.spreadsheets().values().get(
+                            spreadsheetId=worksheet.spreadsheet,
+                            range=read_range, majorDimension="ROWS",
+                            valueRenderOption="UNFORMATTED_VALUE",
+                        ).execute()
+                    )
+                    break
+                except Exception as exc:
+                    if not _temporary_read_failure(exc):
+                        raise
+                    if attempt == 1:
+                        raise GoogleSheetsReadUnavailable("Google read retry exhausted") from exc
             values = response.get("values", [])
             return _to_worksheet_rows(values, first_row=self._first_row)
         except GoogleSheetsReadError:

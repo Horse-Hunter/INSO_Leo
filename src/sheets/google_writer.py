@@ -53,7 +53,7 @@ class GoogleSheetsBrandWriter(TargetedBrandWriter):
         column = getattr(schema, {"model": "model_column", "brand": "brand_column",
                                  "quantity": "quantity_column", "importance": "importance_column"}[field])
         if column is None:
-            raise ValueError("此工作表的重要程度固定为A，没有可编辑列。")
+            raise ValueError("此工作表使用独立客户规则，没有可编辑的重要程度列。")
         self._write_cell(worksheet, row_position, column, value)
 
     def _write_cell(self, worksheet, row_position, column, value) -> None:
@@ -90,6 +90,16 @@ class GoogleSheetsPurchaseStatusWriter(GoogleSheetsBrandWriter):
             raise ValueError("row_position must be positive")
         column = worksheet_schema(worksheet.worksheet).status_column
         self._write_cell(worksheet, row_position, column, "发给采购")
+
+
+class GoogleSheetsIntentStatusWriter(GoogleSheetsBrandWriter):
+    """V1.4 fixed status only; cannot change other fields or whole rows."""
+
+    def write_intent_status(self, worksheet: WorksheetIdentity, row_position: int) -> None:
+        if row_position < 1:
+            raise ValueError("row_position must be positive")
+        column = worksheet_schema(worksheet.worksheet).status_column
+        self._write_cell(worksheet, row_position, column, "意向订单")
 
 
 def _brand_cell_range(

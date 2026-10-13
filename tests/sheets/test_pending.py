@@ -169,7 +169,7 @@ def test_shahab_pending_row_maps_to_unified_record_with_source_provenance() -> N
     record = query_pending_records(reader, worksheet)[0]
 
     assert record.status == "未发"
-    assert record.importance_raw == "A"
+    assert record.importance_raw == "SHAHAB"
     assert record.model == "SHAHAB-MPN"
     assert record.brand == "Source Brand"
     assert record.quantity == 40
@@ -218,7 +218,7 @@ def test_uppercase_shahab_title_uses_shahab_schema_without_changing_identity() -
     records = query_pending_records(reader, worksheet)
 
     assert [record.model for record in records] == ["SHAHAB-MPN"]
-    assert records[0].importance_raw == "A"
+    assert records[0].importance_raw == "SHAHAB"
     assert records[0].record_identity.worksheet == worksheet
 
 
@@ -278,7 +278,7 @@ def test_shahab_customer_name_is_fixed_value_without_tier_inference() -> None:
 
     assert record.customer_name == "SHAHAB"
     assert record.customer_name_source is CustomerNameSource.SHAHAB_FIXED
-    assert record.importance_raw == "A"
+    assert record.importance_raw == "SHAHAB"
 
 
 def test_brand_placeholder_cell_is_not_a_usable_brand() -> None:

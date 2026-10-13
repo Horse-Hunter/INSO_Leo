@@ -136,6 +136,7 @@ def test_no_price_exception_mail_explains_five_sources_and_is_idempotent():
     handler.process(result, at=NOW)
     assert sheet.calls == 0 and len(state.commands) == 1
     command = next(iter(state.commands.values()))
+    assert command.subject == "【INSO】询价处理异常：TEST-MPN"
     assert "五个价格来源均无报价" in command.text_body
     assert "未进入采购提交" in command.text_body
     assert "不等于型号一定填错" in command.text_body

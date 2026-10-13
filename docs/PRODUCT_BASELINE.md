@@ -62,3 +62,56 @@ V1.2 Production Write Gate 当前 **CLOSED**。
 - Owner 2026-10-08：报价输入B列必须等于源表型号原文；若选中报价型号原文不同，L列在已有备注之后换行追加“报价实际型号：XXX”，并通过既有队列提醒229与shawn。重试不重复追加或重复创建同一报价差异邮件；INSO raw14记录保持原样。
 
 Owner clarification 2026-10-08: INSO Research/procurement-history duplicate/quotation searches use the original full source model verbatim (HTTP transport encoding only). Cleaned-prefix/initial-token retrieval is superseded. Normalization and two-character-tail removal apply only to returned-model comparison; no effect on other website queries or exact source identity.
+
+
+## Owner correction: missing brand (2026-10-12)
+
+Blank or case-insensitive `UNKNOWN` Brand means no known brand, not invalid
+inquiry input. Valid model/quantity/tier records enter the existing Research path
+with `brand=None`; existing ICNET resolves the brand. Procurement still requires
+a real brand after Research. This overrides the RFQ-003 pre-Research brand gate;
+model/quantity/tier checks and procurement validation remain in force. Previously
+input-skipped records may resume on the next normal poll without a brand edit.
+
+
+## Owner brand writeback repair (2026-10-12)
+
+The canonical V1.2 inquiry worker now uses the existing safe BrandUpdater.
+Resolved missing/UNKNOWN brands are written to only the uniquely relocated
+Brand cell using the existing cached noninteractive write service, then read back.
+An existing real source brand is never overwritten. The post-Research source
+check accepts the resolved brand only when the ledger records confirmed UPDATED;
+other source changes remain conflicts. Completed procurement is never rerun for
+brand writeback. Executor deployment does not independently write live cells.
+
+
+## Owner Google transient-read correction (2026-10-13)
+
+Transient source Google GET failures get one retry at the existing read boundary.
+If both attempts fail, skip the current poll and notify229 once per failed cycle,
+then use the existing15-minute poll wait and continue normally when reads recover.
+No new timer/state machine, business retry, write retry or V1.4 order polling.
+Permanent auth/permission, schema, database and INSO failures retain stop guards.
+This supersedes GLOBAL_STOP only for identified exhausted transient Google reads.
+
+
+## Owner SHAHAB / inquiry-mail correction (2026-10-13)
+
+SHAHAB is an independent customer rule, overriding the old normalized A default.
+Estimated RMB total >=20,000 (including equality) uses 颜浩坚 / 需要问全价格
+and important inquiry notice; below uses 陈熙 / 普通询价 without important notice.
+Inventory does not alter this rule. Unknown total does not guess ordinary routing
+or send important notice. Other A/S, B/C and duplicate-stop rules remain unchanged.
+Source snapshots/IDs and existing submission/dedup guards stay intact; no replay
+or migration. New SHAHAB sheet records display SHAHAB instead of invented A.
+Important/duplicate/exception email copy uses 询价; model-difference email subject
+is 【INSO】采购报价差异. Historical outbox payloads remain immutable.
+# V1.4 sales completion -> Google intent status (2026-10-13 Owner decision)
+
+Only after INSO fields/PDF and local filled-mail receipt are confirmed, match each
+contract line by model and quantity across both configured worksheets, limited
+to 已报价给客户 / 意向订单. Unique matches transition to 意向订单; existing intent
+is success without change. Missing/ambiguous/failed rows are listed by model in
+the existing GUI result popup for Owner manual repair. The completed INSO page
+and local processed receipt remain retained; never rerun sales entry for Sheets
+repair. No INSO save/submit or new browser/login/scheduler is authorized.

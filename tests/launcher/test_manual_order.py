@@ -151,6 +151,45 @@ def test_actor_is_serial_and_restarts_full_countdown_after_command(tmp_path, mon
     assert not thread.is_alive() and len(observed) == 1
 
 
+@pytest.mark.parametrize("action", ["purchase", "quotation"])
+def test_manual_rerun_reconnect_drains_foreign_thread_client(tmp_path, monkeypatch, action):
+    """Use real sync clients, without connecting to Chrome or any website."""
+    from playwright.sync_api import sync_playwright
+
+    from src.launcher.browser_bootstrap import BrowserHandle, _start_playwright
+
+    backend = launcher.ProductionBackend(root=tmp_path)
+    old_client = sync_playwright().start()
+    handle = BrowserHandle(owned=False, playwright=old_client, browser=object())
+    worker = Thread(target=handle.disconnect)
+    worker.start()
+    worker.join(timeout=2)
+    assert not worker.is_alive()
+    completed = []
+
+    def execute(request):
+        assert request[2] == action
+        assert backend._manual_busy and not backend._poll_idle.is_set()
+        try:
+            client = _start_playwright(None)
+            try:
+                completed.append(request[2])
+            finally:
+                client.stop()
+        finally:
+            backend._stop.set()
+
+    monkeypatch.setattr(backend, "_execute_order_action", execute)
+    monkeypatch.setattr(backend, "_close_inso_order_tab", lambda: None)
+    backend._manual_request = ("offline-request", "synthetic-inquiry", action, None, None)
+    try:
+        assert backend._wait_between_polls(900)
+        assert completed == [action]
+        assert BrowserHandle.drain_deferred_stops() == 0
+    finally:
+        BrowserHandle.drain_deferred_stops()
+
+
 def test_current_source_reads_exact_original_row_and_refuses_deleted_row():
     source = Reader()
     source.rows.append(WorksheetRow(4, {"A": "未发", "E": "OTHER"}))

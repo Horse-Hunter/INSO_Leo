@@ -146,7 +146,7 @@ def test_poll_scans_all_worksheets_enqueues_all_and_deduplicates_after_restart(
     assert reader.calls == [first, second]
     original = store.all_items()
     assert [item.mpn for item in original] == ["ONE", "TWO", "THREE"]
-    assert [item.importance_raw for item in original] == [" B ", "C", "A"]
+    assert [item.importance_raw for item in original] == [" B ", "C", "SHAHAB"]
 
     restarted = WorkflowStateStore(database)
     assert WorkflowPoller(restarted, reader).poll((first, second), now=NOW) == 0

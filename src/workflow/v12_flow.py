@@ -24,7 +24,12 @@ from src.sheets import (
 from src.sheets.brand_write import SheetRecordConflict
 from src.sheets.purchase_status import current_purchase_status
 
-from .service import ResearchExecutor, ResearchPreparationError, WorkflowWorker
+from .service import (
+    BrandUpdater,
+    ResearchExecutor,
+    ResearchPreparationError,
+    WorkflowWorker,
+)
 from .store import WorkflowStateStore
 from .v12_contracts import (
     EXECUTION_EVENT_TYPES,
@@ -141,6 +146,7 @@ class V12WorkflowCoordinator:
         on_result: Callable[[V12FlowResult], None] | None = None,
         inquiry_ids: frozenset[str] | None = None,
         row_wait: Callable[[float], bool] | None = None,
+        brand_updater: BrandUpdater | None = None,
     ) -> None:
         self._workflow_store = workflow_store
         self._v12_store = v12_store
@@ -154,6 +160,7 @@ class V12WorkflowCoordinator:
         self._on_result = on_result
         self._inquiry_ids = inquiry_ids
         self._row_wait = row_wait or (lambda _seconds: False)
+        self._brand_updater = brand_updater
         self._row_closed = False
         self.pending_rows_seen = 0
         self._records: dict[str, PendingSheetRecord] = {}
@@ -272,6 +279,8 @@ class V12WorkflowCoordinator:
         # The row is queued before it is held back: V1.2 state, events and
         # alerts are keyed to the queue's inquiry identity, so a reason can only
         # be recorded for a row the queue already knows about.
+        # A blank/UNKNOWN brand reaches the existing ICNET Research resolver.
+        # Procurement still requires a real brand after Research.
         for record in records:
             inquiry_id = self._workflow_store.inquiry_id_for(record.record_identity)
             enqueued_now = self._workflow_store.enqueue(record, now=now)
@@ -283,7 +292,7 @@ class V12WorkflowCoordinator:
                     held[inquiry_id] = "SOURCE_CHANGED"
                     continue
             if (_quantity(record.quantity) is not None and isinstance(record.model, str)
-                    and record.model.strip() and usable_brand(record.brand) and _tier(record.importance_raw)):
+                    and record.model.strip() and _business_tier(record)):
                 if not enqueued_now and self._is_skipped(inquiry_id):
                     self._resume_after_input_fix(inquiry_id, record, now=now)
                 if enqueued_now:
@@ -325,7 +334,9 @@ class V12WorkflowCoordinator:
             )
 
         wrapped_research = _DuplicateThenResearch(self, now)
-        worker = WorkflowWorker(self._workflow_store, wrapped_research)
+        worker = WorkflowWorker(
+            self._workflow_store, wrapped_research, brand_updater=self._brand_updater
+        )
         results: list[V12FlowResult] = list(skipped)
         # The durable queue is the only bound on this drain. Bounding it to the
         # rows this poll inserted stranded every inquiry an earlier poll had
@@ -564,8 +575,8 @@ class V12WorkflowCoordinator:
 
         record = self._records.get(inquiry_id) or self._pending_record(inquiry_id)
         facts = self._research_facts.get(inquiry_id)
-        tier = _tier(record.importance_raw)
-        if facts is None or tier not in {"A", "B", "C"}:
+        tier = _business_tier(record)
+        if facts is None or tier not in {"A", "B", "C", "SHAHAB"}:
             self._set_state(inquiry_id, BusinessState.ROUTING, EventType.IMPORTANT_ORDER_DECIDED, now)
             return self._result(inquiry_id, route=route, waiting_reason="RESEARCH_FACTS_OR_TIER_UNKNOWN")
 
@@ -600,7 +611,13 @@ class V12WorkflowCoordinator:
         brand = research_result.resolved_brand or usable_brand(record.brand) or ""
         if self._current_reader is not None:
             try:
-                if current_purchase_status(self._current_reader, record.record_identity) != "未发":
+                source_identity = record.record_identity
+                item = self._workflow_store.get_by_inquiry_id(inquiry_id)
+                if item.brand_update_status == "UPDATED" and usable_brand(record.brand) is None:
+                    source_identity = replace(source_identity, identifying_snapshot=replace(
+                        source_identity.identifying_snapshot, brand=item.resolved_brand,
+                    ))
+                if current_purchase_status(self._current_reader, source_identity) != "未发":
                     raise SheetRecordConflict("source status changed")
             except SheetRecordConflict:
                 self._set_state(inquiry_id, BusinessState.SOURCE_CHANGED, EventType.SECURITY_CHECK_FAILED, now)
@@ -694,7 +711,7 @@ class V12WorkflowCoordinator:
                 or duplicate.repeated is not False):
             return
         record = self._records.get(inquiry_id) or self._pending_record(inquiry_id)
-        if _tier(record.importance_raw) == "A":
+        if _business_tier(record) == "A":
             self._enqueue_notification(
                 inquiry_id, NotificationKind.IMPORTANT_ORDER, research_result, now,
                 facts=self._research_facts.get(inquiry_id), tier="A",
@@ -840,6 +857,14 @@ class _DuplicateThenResearch:
         return result
 
 
+def _business_tier(record: PendingSheetRecord) -> str | None:
+    """Customer-specific routing also covers persisted legacy SHAHAB default A."""
+    if (record.record_identity.worksheet.worksheet.casefold() == "shahab"
+            or (record.customer_name or "").strip().casefold() == "shahab"):
+        return "SHAHAB"
+    return _tier(record.importance_raw)
+
+
 def _tier(value: object) -> str | None:
     if not isinstance(value, str):
         return None
@@ -904,12 +929,12 @@ def _notification_content(
     market_price = _money(facts.market_minimum_reference_price) if facts else "--"
     total = _money(facts.estimated_total) if facts else "--"
     if kind is NotificationKind.IMPORTANT_ORDER:
-        subject = f"【重要订单】{customer}｜{model}"
+        subject = f"【重要询价】{customer}｜{model}"
         body = "\n".join((
             f"客户名称：{customer}", f"客户等级：{tier}", f"型号：{model}",
             f"品牌：{brand}", f"数量：{quantity if quantity is not None else '--'}",
             f"库存状态：{stock}", f"市场最低参考价：{market_price}",
-            f"预估订单总价：{total}", "处理：请及时跟进该订单。",
+            f"预估询价总价：{total}", "处理：请及时跟进该询价。",
         ))
         return subject, body
 
@@ -938,11 +963,11 @@ def _notification_content(
             f"本次数量 × INSO报价 = {order_total}",
         ))
     duplicate_details += f"\n调研库存：{stock}；市场参考价：{market_price}；预估总价：{total}"
-    subject = f"【INSO重复订单】{customer}｜{model}"
+    subject = f"【INSO重复询价】{customer}｜{model}"
     body = "\n".join((
-        f"本次订单：客户={customer}；型号={model}；品牌={brand}；数量={quantity if quantity is not None else '--'}",
+        f"本次询价：客户={customer}；型号={model}；品牌={brand}；数量={quantity if quantity is not None else '--'}",
         duplicate_details,
-        "处理：请核对历史订单；本次未继续采购。",
+        "处理：请核对历史询价；本次未继续采购。",
     ))
     return subject, body
 

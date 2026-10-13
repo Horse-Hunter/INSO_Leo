@@ -44,3 +44,59 @@ def test_stop_reminder_has_specific_safe_site_and_no_raw_details():
     assert 'SECRET' not in body and 'http' not in body and 'INSO_V1.2' not in body
     fault=_login_alert_body('全局基础设施故障')
     assert '运行异常' in fault and '网络' in fault and '重新登录或人工验证' not in fault
+
+
+def test_google_read_fault_mail_identifies_boundary_and_does_not_guess_auth():
+    mailbox = Mailbox()
+    notify_runtime_fault(mailbox, "test-run", "SHEETS_READ_UNAVAILABLE", at=NOW)
+    command = next(iter(mailbox.commands.values()))
+    assert command.inquiry_id is None
+    assert "Google表格读取失败" in command.subject
+    assert "Google表格读取失败" in command.text_body
+    assert "尚不能确定是网络还是授权" in command.text_body
+    assert "重新开始询价" in command.text_body
+    assert "SHEETS_READ_UNAVAILABLE" not in command.text_body
+
+
+def test_unbound_quote_mail_is_a_source_identity_problem_not_missing_supplier_price():
+    mailbox = Mailbox()
+    result = SimpleNamespace(row_error_reason=SimpleNamespace(value="SOURCE_IDENTITY_UNRESOLVED"),
+        inquiry_id=None, queried_mpn="TEST-MODEL", source_worksheet=SimpleNamespace(worksheet="示例表"),
+        source_row_position=12)
+    notify_quotation(mailbox, result, "key", 1, at=NOW)
+    command = next(iter(mailbox.commands.values()))
+    assert "原订单匹配失败" in command.subject
+    assert "原订单安全匹配" in command.text_body
+    assert "未执行报价更新" in command.text_body
+    assert "其他订单继续" in command.text_body
+    assert "数量及品牌" in command.text_body
+    assert "采购已报价" not in command.text_body
+
+
+def test_safe_runtime_log_contains_closed_reason_class_only():
+    import logging
+
+    from src.gui.main import _SafeRuntimeLogFilter
+
+    record = logging.LogRecord("src.launcher.backend", logging.WARNING, "private", 1,
+        "SECRET_CUSTOMER_PROVIDER_MESSAGE", (), None)
+    record.runtime_reason = "SHEETS_READ_UNAVAILABLE"
+    record.runtime_cause = "TimeoutError"
+    assert _SafeRuntimeLogFilter().filter(record)
+    assert record.getMessage() == "runtime fault reason=SHEETS_READ_UNAVAILABLE cause=TimeoutError"
+    assert "SECRET" not in record.getMessage()
+    record.runtime_reason = "SECRET with spaces https://private"
+    assert _SafeRuntimeLogFilter().filter(record)
+    assert record.getMessage() == "launcher event (WARNING)"
+
+
+def test_google_retry_alert_promises_next_normal_poll_not_manual_restart():
+    mailbox = Mailbox()
+    notify_runtime_fault(mailbox, "failed-cycle", "GOOGLE_READ_RETRY_EXHAUSTED", at=NOW)
+    notify_runtime_fault(mailbox, "failed-cycle", "GOOGLE_READ_RETRY_EXHAUSTED", at=NOW)
+    command = next(iter(mailbox.commands.values()))
+    assert len(mailbox.commands) == 1
+    assert command.inquiry_id is None
+    assert [r.address for r in command.recipients] == ["linan229@qq.com"]
+    assert "重试一次" in command.text_body and "15分钟后自动再试" in command.text_body
+    assert "无需手动重启" in command.text_body and "程序已停止" not in command.text_body

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -745,6 +746,16 @@ class ProductionBackend(GuiBackend):
                         target_for_inquiry=lambda inquiry_id: self._save_target(inquiry_id),
                     ),
                 )
+            class AutomaticBrandUpdater:
+                def update_brand(self, identity, brand):
+                    from src.sheets.google_writer import GoogleSheetsBrandWriter
+                    from src.workflow import SheetsSafeBrandUpdater
+
+                    SheetsSafeBrandUpdater(
+                        reader, GoogleSheetsBrandWriter(get_write_service()),
+                        verify_readback=True,
+                    ).update_brand(identity, brand)
+
             if self._v12_adapters is not None:
                 self._v12_composition = compose_v12_production(
                     workflow_store=self._store,
@@ -755,6 +766,7 @@ class ProductionBackend(GuiBackend):
                     on_result=self._complete_inquiry,
                     inquiry_ids=self._inquiry_scope,
                     row_wait=self._wait_between_rows,
+                    brand_updater=AutomaticBrandUpdater(),
                 )
                 self._v12_composition.coordinator.initialize_run_state(now=utc_now())
             else:
@@ -866,13 +878,14 @@ class ProductionBackend(GuiBackend):
                                     self._next_poll_at = utc_now() + runtime.poll_interval
                             browser_state = "已连接" if self._research_ready else "待命"
                             self._set_health(("正常", browser_state, "正常", "正常"), "正常")
-                        except V12Fault as exc:
-                            if exc.scope is FaultScope.GLOBAL_STOP:
-                                self._state = RunState.GLOBAL_STOP  # Preserve human-needed pages before finally.
-                            raise
                         except (sqlite3.Error, V12DatabaseError):
                             self._state = RunState.GLOBAL_STOP
                             raise
+                        except Exception as exc:
+                            if not self._defer_google_read_poll(exc, runtime.poll_interval):
+                                if isinstance(exc, V12Fault) and exc.scope is FaultScope.GLOBAL_STOP:
+                                    self._state = RunState.GLOBAL_STOP
+                                raise
                         finally:
                             self._close_inso_order_tab()
                             self._poll_idle.set()
@@ -1590,6 +1603,31 @@ class ProductionBackend(GuiBackend):
             return None
         return SaveReconciliationTarget(item.mpn, brand, item.quantity)
 
+    def _defer_google_read_poll(self, exc, interval):
+        from src.sheets.google_reader import GoogleSheetsReadUnavailable
+
+        cause, visited = exc, set()
+        while cause is not None and id(cause) not in visited:
+            visited.add(id(cause))
+            if isinstance(cause, GoogleSheetsReadUnavailable):
+                break
+            cause = cause.__cause__ or cause.__context__
+        if not isinstance(cause, GoogleSheetsReadUnavailable):
+            return False
+        with self._lock:
+            if self._stop.is_set():
+                return True
+            self._next_poll_at = utc_now() + interval
+            self._set_health(("等待下一轮重试", "待命", "未核验", "已暂停"), "等待Google恢复")
+        log.warning("Google read retry exhausted", extra={
+            "runtime_reason": "GOOGLE_READ_RETRY_EXHAUSTED",
+            "runtime_cause": type(cause.__cause__).__name__,
+        })
+        notify_runtime_fault(self._v12_store, self._cycle_id or self._run_id or "run",
+            "GOOGLE_READ_RETRY_EXHAUSTED", at=utc_now())
+        self._notify()
+        return True
+
     def _runtime_error(self, exc):
         log.warning("Production runtime worker failed (%s)", type(exc).__name__)
         with self._lock:
@@ -1620,6 +1658,15 @@ class ProductionBackend(GuiBackend):
                     HealthItem(name, "需要人工处理", "运行组件停止")
                     for name in self._components()
                 )
+            if isinstance(cause, V12Fault) and cause.reason in {
+                "SHEETS_READ_UNAVAILABLE", "SHEETS_SCHEMA_UNAVAILABLE", "GOOGLE_SHEETS_UNAVAILABLE",
+            }:
+                statuses = (
+                    HealthItem("Google Sheets", "需要人工处理", "读取或结构确认失败；网络/授权原因尚未确定"),
+                    HealthItem("Browser/CDP", "已暂停", "随共享业务暂停，未确认独立故障"),
+                    HealthItem("Credential", "未核验", "此次故障不能证明凭据失效"),
+                    HealthItem("Research", "已暂停", "等待Google表格恢复"),
+                )
             self._health = HealthReport(statuses, "需要人工处理")
         message = (
             "需要配置：请补齐本地生产数据源与授权文件"
@@ -1628,7 +1675,8 @@ class ProductionBackend(GuiBackend):
         )
         self._append_log("ERROR", message)
         self._notify()
-        fault_inquiry = self._active_inso_inquiry or (self._inquiries[-1] if self._inquiries else None)
+        # A shared fault is not a failure of the last historical order.
+        fault_inquiry = self._active_inso_inquiry
         reason = "V12_INTERNAL_FAILURE"
         cause = exc
         while cause is not None:
@@ -1645,9 +1693,22 @@ class ProductionBackend(GuiBackend):
                 reason = "GOOGLE_SHEETS_UNAVAILABLE"
                 break
             cause = cause.__cause__
-        if fault_inquiry not in self._manual_inquiries:
+        shared_fault = self._state is RunState.GLOBAL_STOP
+        safe_reason = reason if isinstance(reason, str) and re.fullmatch(r"[A-Z_]{1,64}", reason) else "V12_INTERNAL_FAILURE"
+        root_cause, visited = exc, set()
+        while root_cause.__cause__ is not None and id(root_cause) not in visited:
+            visited.add(id(root_cause))
+            root_cause = root_cause.__cause__
+        log.warning("Runtime fault", extra={
+            "runtime_reason": safe_reason, "runtime_cause": type(root_cause).__name__,
+        })
+        # The canonical manual-login path already mailed this exact legacy pause.
+        if (isinstance(exc, V12Fault) and exc.reason == "Research requires session repair"
+                and self._inquiries and self._inquiries[-1] in self._manual_inquiries):
+            return
+        if not shared_fault and fault_inquiry not in self._manual_inquiries:
             self._record_fault_alert(fault_inquiry, "FAULT", reason)
-        if fault_inquiry is None and self._v13_ledger_ready:
+        if (shared_fault or fault_inquiry is None) and self._v13_ledger_ready:
             try:
                 notify_runtime_fault(self._v12_store,self._run_id or "run",reason,at=utc_now())
                 self._v12_composition.coordinator.run_notifications(now=utc_now())

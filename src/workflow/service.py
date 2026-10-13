@@ -62,12 +62,17 @@ class SheetsSafeBrandUpdater:
         self,
         reader: WorksheetRowReader,
         writer: TargetedBrandWriter,
+        *,
+        verify_readback: bool = False,
     ) -> None:
         self._reader = reader
         self._writer = writer
+        self._verify_readback = verify_readback
 
     def update_brand(self, identity: SheetRecordIdentity, brand: str) -> None:
-        write_brand_safely(self._reader, self._writer, identity, brand)
+        write_brand_safely(
+            self._reader, self._writer, identity, brand, verify_readback=self._verify_readback
+        )
 
 
 class WorkflowPoller:
@@ -209,6 +214,7 @@ class WorkflowWorker:
             allowed_final_status is None
             or final_status is not allowed_final_status
             or not result.resolved_brand
+            or usable_brand(item.brand) is not None
         ):
             return
         if self._brand_updater is None:

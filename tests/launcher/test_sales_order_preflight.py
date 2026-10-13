@@ -86,6 +86,49 @@ def test_all_packages_complete_before_sales_and_success_no_notify(monkeypatch):
     assert phases==['maximize','mail','parse','packages','sales','upload','mark','detach'] and not notes and grid.adds==2
 
 
+def test_sheets_failure_after_upload_and_receipt_retains_success_and_lists_models(monkeypatch):
+    from src.launcher import sales_intent
+    from src.sheets.intent_status import IntentLine, IntentResult
+    from tests.inso.test_sales_details import expected
+    phases, notes, _ = setup(monkeypatch)
+    monkeypatch.setattr(service, 'prepare_sales_rows', lambda *a: expected(3))
+    def mark(order, **kwargs):
+        assert phases[-2:] == ['upload', 'mark']
+        phases.append('sheets')
+        return (IntentResult(IntentLine('TEST-A', 2), False, 'MATCH_NOT_UNIQUE'),)
+    monkeypatch.setattr(sales_intent, 'mark_sales_intent', mark)
+    stage, text = run(notes)
+    assert stage == 'WAITING_OWNER' and '手动补表' in text and 'TEST-A' in text
+    assert phases[-2:] == ['sheets', 'detach'] and 'close-blank' not in phases and not notes
+
+
+def test_sheets_not_called_when_upload_failed(monkeypatch):
+    from src.inso import sales_attachment
+    from src.launcher import sales_intent
+    from tests.inso.test_sales_details import expected
+    phases, notes, _ = setup(monkeypatch)
+    monkeypatch.setattr(service, 'prepare_sales_rows', lambda *a: expected(3))
+    def fail(pdf):
+        raise sales_attachment.UploadStop('UPLOAD_UNCONFIRMED')
+    monkeypatch.setattr(sales_attachment, 'PlaywrightSalesPdfUpload',
+        lambda header: SimpleNamespace(upload=fail))
+    monkeypatch.setattr(sales_intent, 'mark_sales_intent', lambda *a, **kw: pytest.fail('premature Sheets write'))
+    assert run(notes)[0] == 'STOPPED' and 'mark' not in phases
+
+
+def test_sheets_not_called_when_completion_receipt_failed(monkeypatch):
+    from src.launcher import sales_intent
+    from src.order_mail import filled
+    from tests.inso.test_sales_details import expected
+    phases, notes, _ = setup(monkeypatch)
+    monkeypatch.setattr(service, 'prepare_sales_rows', lambda *a: expected(3))
+    def fail(keys):
+        raise OSError('PRIVATE_PATH')
+    monkeypatch.setattr(filled, 'FilledOrders', lambda root: SimpleNamespace(contains=lambda keys:False, mark=fail))
+    monkeypatch.setattr(sales_intent, 'mark_sales_intent', lambda *a, **kw: pytest.fail('premature Sheets write'))
+    assert run(notes)[0] == 'STOPPED' and 'upload' in phases and len(notes) == 1
+
+
 def test_icnet_failure_no_sales_and_notification_once(monkeypatch):
     phases,notes,_=setup(monkeypatch)
     def fail(*a): raise OrderError('ICNET',pi_no=order().pi_no,part_number='TEST-A')

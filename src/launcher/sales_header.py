@@ -183,11 +183,13 @@ def run_sales_header_check(*, config_path, production_path, root, notify=None):
             ledger.mark(mail.identities)
         except Exception:  # noqa: BLE001 - no SQLite/path details in email
             raise OrderError("RECEIPT", pi_no=order.pi_no) from None
+        from .sales_intent import intent_report, mark_sales_intent
+        sheets_report = intent_report(mark_sales_intent(order, production=production, root=root))
         return "WAITING_OWNER", (f"本次订单：合同{count}行已完成解析和 ICNET 封装查询（已脱敏）。\n"
             "头部及全部明细字段读回一致，PDF 已上传1张，等待 Owner 复核。\n"
             "V1.4 worker 已结束，不影响询价；销售订单页面保留。\n"
             "成功填写已在本机记录；请人工核对、提交审核并关闭本张订单标签页。\n"
-            "没有填写总金额/CONDITION，没有保存或提交审核。")
+            "没有填写总金额/CONDITION，没有保存或提交审核。\n" + sheets_report)
     except Exception as exc:  # noqa: BLE001 - closed human text only, no source errors/values
         error = exc if isinstance(exc, OrderError) else OrderError("INSO", pi_no=getattr(order, "pi_no", None))
         if error.code == "ICNET":

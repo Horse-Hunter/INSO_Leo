@@ -1651,3 +1651,93 @@ def test_quotation_terminal_updates_current_poll_counts_without_purchase_complet
     assert backend.get_status().orders_found == backend.get_status().completed == 1
     backend._begin_poll_projection()
     assert backend.get_status().orders_found == backend.get_status().completed == 0
+
+
+def test_shared_sheets_fault_does_not_blame_last_historical_order(caplog):
+    from src.launcher.v13_integration import notify_runtime_fault
+    from src.workflow.v12_faults import FaultScope, V12Fault
+    from tests.launcher.test_mail_clarity import Mailbox
+
+    backend = ProductionBackend()
+    backend._inquiries = ["historical-order"]
+    backend._active_inso_inquiry = None
+    backend._v13_ledger_ready = True
+    backend._run_id = "test-runtime"
+    mailbox = Mailbox()
+    backend._v12_store = mailbox
+    delivered = []
+    backend._v12_composition = SimpleNamespace(coordinator=SimpleNamespace(
+        run_notifications=lambda **kwargs: delivered.append(True)))
+    backend._purchase_completion = SimpleNamespace(
+        notify=lambda *args, **kwargs: pytest.fail("must not send an order failure"))
+    failure = V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE")
+    failure.__cause__ = TimeoutError("SECRET_PROVIDER_BODY customer address")
+    backend._runtime_error(failure)
+    assert backend.get_status().state is RunState.GLOBAL_STOP
+    command = next(iter(mailbox.commands.values()))
+    assert command.inquiry_id is None and "historical-order" not in command.text_body
+    assert "Google表格读取失败" in command.text_body and len(delivered) == 1
+    health = backend.get_health()
+    assert [i.status for i in health.items].count("需要人工处理") == 1
+    records = [r for r in caplog.records if getattr(r, "runtime_reason", None) == "SHEETS_READ_UNAVAILABLE"]
+    assert records and records[-1].runtime_cause == "TimeoutError"
+    assert "SECRET_PROVIDER_BODY" not in caplog.text
+    notify_runtime_fault(mailbox, "test-runtime", "SHEETS_READ_UNAVAILABLE", at=launcher.utc_now())
+    assert len(mailbox.commands) == 1
+    backend.shutdown()
+
+
+def test_real_poll_google_outage_uses_existing_fifteen_minute_wait_then_recovers(tmp_path, monkeypatch):
+    from src.sheets.google_reader import GoogleSheetsReadUnavailable
+    from src.workflow.v12_faults import FaultScope, V12Fault
+
+    production, config, rows = _write_runtime_configs(tmp_path)
+    settings = json.loads(production.read_text(encoding="utf-8"))
+    settings.update(v13_enabled=True, quotation_input={"input_row": 2, "first_column": 1, "gid": "0"})
+    production.write_text(json.dumps(settings), encoding="utf-8")
+    _RecordingTransport.sent = []
+    monkeypatch.setattr("src.launcher.v12_composition.QQSMTPTransport", _RecordingTransport)
+    monkeypatch.setattr(launcher, "build_read_only_google_sheets_service", lambda path: _SheetsService(rows, Event()))
+    monkeypatch.setattr(launcher, "assess_readiness", lambda *args, **kwargs: SimpleNamespace(ready=True, missing_site_ids=()))
+    backend = ProductionBackend(config_path=config, production_config_path=production,
+        cdp_probe=lambda url: True, browser_acquirer=lambda *args, **kwargs: BrowserHandle(owned=False))
+    original = backend._refresh_dashboard_counts
+    rounds, waits = [], []
+    def refresh(*args, **kwargs):
+        rounds.append(True)
+        if len(rounds) == 1:
+            failure = V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE")
+            failure.__cause__ = GoogleSheetsReadUnavailable("synthetic retry exhausted")
+            raise failure
+        return original(*args, **kwargs)
+    def wait(seconds):
+        waits.append(seconds)
+        assert not backend._stop.is_set()
+        assert backend.get_status().next_poll_at is not None
+        if len(waits) == 1:
+            backend._v12_composition.coordinator.run_notifications(now=launcher.utc_now())
+            return False  # virtual next poll, no actual15-minute sleep
+        backend._stop.set()
+        return True
+    monkeypatch.setattr(backend, "_refresh_dashboard_counts", refresh)
+    monkeypatch.setattr(backend, "_wait_between_polls", wait)
+    backend.start()
+    backend._thread.join(10)
+    assert not backend._thread.is_alive()
+    assert len(rounds) == 2 and waits == [900, 900]
+    assert backend.get_health().overall == "正常"
+    assert len(_RecordingTransport.sent) == 1
+    assert _RecordingTransport.sent[0][1].address == "linan229@qq.com"
+    assert "15分钟后重试" in _RecordingTransport.sent[0][2]
+    assert backend._store.all_items() == ()
+    backend.shutdown()
+
+
+def test_google_defer_does_not_hide_permanent_or_other_global_failures():
+    from datetime import timedelta
+
+    from src.workflow.v12_faults import FaultScope, V12Fault
+    backend = ProductionBackend()
+    for reason in ["SHEETS_SCHEMA_UNAVAILABLE", "WORKFLOW_LEDGER_UNAVAILABLE", "INSO_AUTHENTICATION_REQUIRED"]:
+        assert not backend._defer_google_read_poll(V12Fault(FaultScope.GLOBAL_STOP, reason), timedelta(minutes=15))
+    backend.shutdown()

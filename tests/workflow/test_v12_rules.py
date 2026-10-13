@@ -142,7 +142,7 @@ def test_purchase_full_price_policy_ignores_stock_and_uses_confirmed_purchasers(
         assert actual.purchaser is purchaser
 
 
-@pytest.mark.parametrize("tier", ["B", "C"])
+@pytest.mark.parametrize("tier", ["B", "C", "SHAHAB"])
 def test_missing_b_or_c_estimated_total_is_indeterminate(tier: str) -> None:
     decision = purchase_routing_decision(tier=tier, estimated_total=None)
 
@@ -235,3 +235,17 @@ def test_owner_suffix_duplicate_latest_and_ambiguity_keep_submission_exact():
         expected_mpn="WGI210IT", expected_brand="Brand", expected_quantity=7,
         recognized_mpn=newest.mpn, recognized_brand="Brand", recognized_quantity=7)
     assert ai.outcome is PurchaseOutcome.VALIDATION_FAILED
+
+
+@pytest.mark.parametrize("total,high", [("19999.99", False), ("20000", True), ("20000.01", True)])
+@pytest.mark.parametrize("stock", ["货少", "货足", "待验证"])
+def test_shahab_independent_routing_and_notification_threshold(total, high, stock):
+    amount = Decimal(total)
+    decision = purchase_routing_decision(tier="SHAHAB", estimated_total=amount)
+    assert decision.outcome is PurchaseRoutingOutcome.READY
+    assert decision.purchaser is (Purchaser.FULL_PRICE if high else Purchaser.ORDINARY)
+    assert decision.quotation_type is (QuotationType.FULL_PRICE if high else QuotationType.ORDINARY)
+    assert should_send_important_order_notification(
+        tier="SHAHAB", estimated_total=amount, inventory_status=stock) is high
+    assert not should_send_important_order_notification(
+        tier="SHAHAB", estimated_total=None, inventory_status=stock)

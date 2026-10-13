@@ -556,8 +556,9 @@ class UnresolvedBrandResearch:
         return ResearchResult(item.inquiry_id, ResearchStatus.SUCCESS, resolved_brand=None)
 
 
+@pytest.mark.parametrize("brand", ["UNKNOWN", "unknown", "  UnKnOwN  ", "", "   "])
 def test_a_placeholder_sheet_brand_is_asked_for_rather_than_trusted(
-    tmp_path: Path,
+    tmp_path: Path, brand: str,
 ) -> None:
     """Owner decision (2026-09-30): Brand ``unknown`` must be looked up.
 
@@ -573,12 +574,13 @@ def test_a_placeholder_sheet_brand_is_asked_for_rather_than_trusted(
     unresolved = UnresolvedBrandResearch()
     flow._research = unresolved
 
-    results = flow.poll_and_process(FakeSheetsReader(brand="UNKNOWN"), SHEET, now=NOW)
+    results = flow.poll_and_process(FakeSheetsReader(brand=brand), SHEET, now=NOW)
 
-    assert unresolved.inputs == []  # RFQ-003: unusable brand is a row data error.
+    assert len(unresolved.inputs) == 1
+    assert unresolved.inputs[0].brand is None
     assert writer.commands == []
-    assert results[0].business_state is BusinessState.INVALID_INPUT_SKIPPED
-    assert results[0].waiting_reason == "INVALID_QUANTITY_SKIPPED"
+    assert results[0].business_state is BusinessState.PURCHASE_EXCEPTION
+    assert results[0].waiting_reason == "PURCHASE_INPUT_INVALID"
 
 
 @pytest.mark.parametrize("duplicate", [False, True])
@@ -610,3 +612,165 @@ def test_other_invalid_tiers_are_not_effective_a(tmp_path, tier):
     result, = flow.poll_and_process(FakeSheetsReader(tier=tier), SHEET, now=NOW)
     assert result.business_state is BusinessState.INVALID_INPUT_SKIPPED
     assert not research.inputs and not writer.commands and vs.active_alerts(result.inquiry_id)
+
+
+@pytest.mark.parametrize("brand", ["UNKNOWN", ""])
+def test_missing_brand_uses_research_resolution_for_procurement(tmp_path, brand):
+    flow, _ws, _vs, research, _checker, _facts, writer, _notifications = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("货足", Decimal(10), Decimal(2)),
+    )
+    result, = flow.poll_and_process(FakeSheetsReader(brand=brand), SHEET, now=NOW)
+    assert len(research.inputs) == 1 and research.inputs[0].brand is None
+    assert len(writer.commands) == 1
+    assert writer.commands[0].brand == "Brand-X"
+    assert result.business_state is BusinessState.PURCHASE_DRAFTING
+
+
+def test_previously_skipped_unknown_brand_resumes_without_source_edit(tmp_path):
+    flow, ws, vs, research, _checker, _facts, writer, _notifications = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("货足", Decimal(10), Decimal(2)),
+    )
+    from src.sheets import query_pending_records
+
+    reader = FakeSheetsReader(brand="UNKNOWN")
+    record, = query_pending_records(reader, SHEET)
+    ws.enqueue(record, now=NOW)
+    iid = ws.inquiry_id_for(record.record_identity)
+    ws.mark_skipped_input(ws.get_by_inquiry_id(iid).id, now=NOW)
+    vs.skip_invalid_quantity(iid, at=NOW, reason_code=ReasonCode.INQUIRY_INPUT_INVALID)
+
+    result, = flow.poll_and_process(reader, SHEET, now=NOW + timedelta(minutes=15))
+    assert result.inquiry_id == iid
+    assert len(ws.all_items()) == 1
+    assert len(research.inputs) == 1 and research.inputs[0].brand is None
+    assert len(writer.commands) == 1 and writer.commands[0].brand == "Brand-X"
+    assert result.business_state is BusinessState.PURCHASE_DRAFTING
+    assert not vs.active_alerts(iid)
+
+
+@pytest.mark.parametrize("brand", ["UNKNOWN", ""])
+def test_active_coordinator_writes_resolved_missing_brand(tmp_path, brand):
+    from src.sheets import WorksheetRow
+    from src.workflow import SheetsSafeBrandUpdater
+
+    flow, ws, _vs, _research, _checker, _facts, writer, _notifications = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("货足", Decimal(10), Decimal(2)),
+    )
+    class MutableSheet(FakeSheetsReader):
+        def __init__(self):
+            super().__init__(brand=brand)
+            self.writes = []
+        def write_brand(self, worksheet, row_position, value):
+            self.writes.append((row_position, value))
+            cells = dict(self.row.cells)
+            cells["F"] = value
+            self.row = WorksheetRow(row_position, cells)
+
+    sheet = MutableSheet()
+    flow._brand_updater = SheetsSafeBrandUpdater(sheet, sheet, verify_readback=True)
+    result, = flow.poll_and_process(sheet, SHEET, now=NOW)
+    assert sheet.writes == [(3, "Brand-X")]
+    assert ws.get_by_inquiry_id(result.inquiry_id).brand_update_status == "UPDATED"
+    assert writer.commands[0].brand == "Brand-X"
+
+
+@pytest.mark.parametrize("total,high", [("19999.99", False), ("20000", True), ("20000.01", True)])
+@pytest.mark.parametrize("legacy_a", [False, True])
+def test_shahab_workflow_uses_independent_rule_and_retains_identity(tmp_path, total, high, legacy_a):
+    from dataclasses import replace
+
+    from src.sheets.pending import query_pending_records
+
+    worksheet = WorksheetIdentity("synthetic-sheet", "SHAHAB")
+    class Reader:
+        def read_rows(self, target):
+            assert target == worksheet
+            return (WorksheetRow(3, {"B": "未发", "D": "Mpn-1", "E": "Brand-X", "F": 7}),)
+    record = query_pending_records(Reader(), worksheet)[0]
+    if legacy_a:
+        record = replace(record, importance_raw="A")
+    flow, ws, store, research, _checker, _provider, writer, _worker = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("货足", Decimal(total), Decimal(1)))
+    result = flow.process_pending((record,), now=NOW)[0]
+    assert result.inquiry_id == ws.inquiry_id_for(record.record_identity)
+    assert ws.get_by_inquiry_id(result.inquiry_id).record_identity.identifying_snapshot.importance_raw is None
+    assert len(research.inputs) == len(writer.commands) == 1
+    command = writer.commands[0]
+    assert command.customer_tier == "SHAHAB"
+    assert command.purchaser == ("颜浩坚" if high else "陈熙")
+    assert command.quotation_type == ("需要问全价格" if high else "普通询价")
+    notices = store.claim_due_notifications(now=NOW)
+    assert len(notices) == int(high)
+    if high:
+        assert notices[0].kind is NotificationKind.IMPORTANT_ORDER
+        assert notices[0].subject == "【重要询价】SHAHAB｜Mpn-1"
+        assert "客户等级：SHAHAB" in notices[0].text_body
+        assert "订单" not in notices[0].text_body
+
+
+@pytest.mark.parametrize("tier", ["A", "S"])
+def test_other_a_s_customers_still_full_price_and_always_notified(tmp_path, tier):
+    flow, _ws, store, _research, _checker, _provider, writer, _worker = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("货足", Decimal(1), Decimal(1)))
+    flow.poll_and_process(FakeSheetsReader(tier=tier), SHEET, now=NOW)
+    assert writer.commands[0].purchaser == "颜浩坚"
+    assert writer.commands[0].quotation_type == "需要问全价格"
+    notices = store.claim_due_notifications(now=NOW)
+    assert len(notices) == 1
+    assert notices[0].subject == "【重要询价】Synthetic Customer｜Mpn-1"
+
+
+@pytest.mark.parametrize("failed_research", [False, True])
+def test_shahab_missing_total_never_falls_back_to_a_or_low_amount(tmp_path, failed_research):
+    reader = FakeSheetsReader(tier="A")
+    reader.row.cells["D"] = "SHAHAB"
+    flow, _ws, store, research, _checker, _provider, writer, _worker = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("货少", None, None))
+    if failed_research:
+        research.execute = lambda item: ResearchResult(item.inquiry_id, ResearchStatus.EXCEPTION)
+    result = flow.poll_and_process(reader, SHEET, now=NOW)[0]
+    assert result.waiting_reason == ("RESEARCH_NOT_SUCCESSFUL" if failed_research else "PURCHASE_ROUTING_INDETERMINATE")
+    assert not writer.commands
+    assert not store.claim_due_notifications(now=NOW)
+
+
+def test_shahab_duplicate_remains_stopped_with_only_duplicate_notice(tmp_path):
+    reader = FakeSheetsReader(tier="A")
+    reader.row.cells["D"] = "SHAHAB"
+    flow, _ws, store, _research, checker, _provider, writer, _worker = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("货少", Decimal(20000), Decimal(1)))
+    checker.check = lambda iid, mpn, qty, at: _confirmed_duplicate(iid, at=at, repeated=True)
+    result = flow.poll_and_process(reader, SHEET, now=NOW)[0]
+    assert result.business_state is BusinessState.DUPLICATE_STOPPED
+    assert not writer.commands
+    notices = store.claim_due_notifications(now=NOW)
+    assert len(notices) == 1 and notices[0].kind is NotificationKind.DUPLICATE_ORDER
+    assert notices[0].subject == "【INSO重复询价】SHAHAB｜Mpn-1"
+    assert "本次询价" in notices[0].text_body and "历史询价" in notices[0].text_body
+
+
+@pytest.mark.parametrize("total,expected_purchaser", [("19999.99", "陈熙"), ("20000", "颜浩坚")])
+def test_persisted_shahab_a_resumes_with_new_rule_after_restart(tmp_path, total, expected_purchaser):
+    from dataclasses import replace
+
+    from src.sheets.pending import query_pending_records
+
+    reader = FakeSheetsReader(tier="A")
+    reader.row.cells["D"] = "SHAHAB"
+    record = replace(query_pending_records(reader, SHEET)[0], importance_raw="A")
+    flow, ws, store, _research, _checker, provider, _writer, worker = _make_flow(
+        tmp_path, duplicate_failure=True,
+        facts=ResearchBusinessFacts("货足", Decimal(total), Decimal(1)))
+    pending = flow.process_pending((record,), now=NOW)[0]
+    assert pending.waiting_reason == "DUPLICATE_CONFIRMATION_REQUIRED"
+    writer = FakePurchaseDraftWriter(completed_at=NOW)
+    restarted = V12WorkflowCoordinator(ws, store, FakeResearch(), FakeDuplicateChecker(),
+        provider, writer, worker, (NotificationRecipient("synthetic-recipient", "fake@example.invalid"),))
+    result = restarted.confirm_duplicate_and_route(pending.inquiry_id,
+        _confirmed_duplicate(pending.inquiry_id, at=NOW, repeated=False), now=NOW)
+    assert result.inquiry_id == pending.inquiry_id
+    assert len(writer.commands) == 1
+    assert writer.commands[0].customer_tier == "SHAHAB"
+    assert writer.commands[0].purchaser == expected_purchaser
+    notices = store.claim_due_notifications(now=NOW)
+    assert len(notices) == int(expected_purchaser == "颜浩坚")

@@ -82,6 +82,8 @@ def should_send_important_order_notification(
 ) -> bool:
     """Apply notification-only rules; stock is the canonical Research result."""
 
+    if tier == "SHAHAB":
+        return estimated_total is not None and estimated_total >= Decimal(20000)
     if tier == "A":
         return True
     if inventory_status != "货少" or estimated_total is None:
@@ -98,10 +100,14 @@ def purchase_routing_decision(
 ) -> PurchaseRoutingDecision:
     """Apply procurement quotation rules independently from email decisions."""
 
-    if tier in {"B", "C"} and estimated_total is None:
+    if tier in {"B", "C", "SHAHAB"} and estimated_total is None:
         return PurchaseRoutingDecision(PurchaseRoutingOutcome.INDETERMINATE, None, None)
 
     full_price = tier == "A" or (
+        tier == "SHAHAB"
+        and estimated_total is not None
+        and estimated_total >= Decimal(20000)
+    ) or (
         tier == "B"
         and estimated_total is not None
         and estimated_total > Decimal(50000)

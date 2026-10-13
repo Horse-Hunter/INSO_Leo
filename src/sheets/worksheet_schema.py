@@ -37,7 +37,7 @@ SHAHAB_SCHEMA = WorksheetSchema(
     model_column="D",
     brand_column="E",
     quantity_column="F",
-    default_importance="A",
+    default_importance="SHAHAB",
     fixed_customer_name="SHAHAB",
 )
 

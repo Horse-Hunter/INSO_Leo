@@ -64,6 +64,8 @@ def write_brand_safely(
     writer: TargetedBrandWriter,
     identity: SheetRecordIdentity,
     brand: str,
+    *,
+    verify_readback: bool = False,
 ) -> BrandWriteResult:
     """Relocate, re-read, enforce blank-only Brand, and write one cell."""
 
@@ -90,6 +92,11 @@ def write_brand_safely(
         raise
     except Exception as exc:
         raise SheetsWriteError("Targeted Brand write failed") from exc
+
+    if verify_readback:
+        confirmed = _unique_brand_candidate(identity, tuple(reader.read_rows(identity.worksheet)))
+        if confirmed.cells.get(schema.brand_column) != brand:
+            raise SheetsWriteError("Brand write readback mismatch; do not automatically repeat write")
 
     return BrandWriteResult(
         worksheet=identity.worksheet,

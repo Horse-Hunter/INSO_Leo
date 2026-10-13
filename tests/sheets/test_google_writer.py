@@ -6,6 +6,16 @@ from src.sheets import WorksheetIdentity
 from src.sheets.google_writer import GoogleSheetsBrandWriter, GoogleSheetsWriteError
 
 
+@pytest.mark.parametrize('title,column', [('2026', 'A'), ('SHAHAB', 'B')])
+def test_intent_writer_updates_only_fixed_status_cell(title, column):
+    from src.sheets.google_writer import GoogleSheetsIntentStatusWriter
+    service = FakeSheetsService()
+    GoogleSheetsIntentStatusWriter(service).write_intent_status(WorksheetIdentity('test', title), 12)
+    assert service.values_resource.update_calls == [{'spreadsheetId': 'test',
+        'range': f"'{title}'!{column}12", 'valueInputOption': 'RAW',
+        'body': {'majorDimension': 'ROWS', 'values': [['意向订单']]}}]
+
+
 class FakeRequest:
     def __init__(self, failure: Exception | None = None) -> None:
         self._failure = failure

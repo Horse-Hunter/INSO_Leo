@@ -343,6 +343,9 @@ def _read_cdp_version(cdp_url: str) -> str | None:
 
 
 def _start_playwright(playwright_factory: Callable[[], object] | None):
+    # Manual work can resume during the poll wait, before its next owner-thread
+    # drain. Finish parked clients before starting another sync event loop.
+    BrowserHandle.drain_deferred_stops()
     if playwright_factory is None:
         from playwright.sync_api import sync_playwright
 

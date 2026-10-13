@@ -217,10 +217,10 @@ class V13IntegratedCycle:
                 blocked_ids.add(result.inquiry_id)
             try:
                 rows = tuple(self.reader.read_rows(worksheet))
-            except Exception:  # noqa: BLE001 - shared read boundary or isolated row adapter
+            except Exception as exc:
                 raise V12Fault(
                     FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE"
-                ) from None
+                ) from exc
             try:
                 located = relocate_quotation_status(
                     identity,
@@ -262,8 +262,8 @@ class V13IntegratedCycle:
 
         try:
             observed_records = query_quotation_candidates(self.reader, worksheet)
-        except Exception:  # noqa: BLE001 - shared read boundary or isolated row adapter
-            raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE") from None
+        except Exception as exc:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE") from exc
 
         def skip(candidate):
             return (

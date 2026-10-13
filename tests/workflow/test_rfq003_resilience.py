@@ -58,7 +58,7 @@ def test_stop_interrupts_cooldown_without_starting_second_row(tmp_path):
     assert len(research.inputs) == 1
 
 
-@pytest.mark.parametrize("bad", ["model", "brand", "quantity"])
+@pytest.mark.parametrize("bad", ["model", "quantity"])
 def test_invalid_row_skips_research_but_next_row_runs(tmp_path, bad):
     f, _ws, _vs, research, *_rest = _make_flow(tmp_path)
     first, second = rows()
@@ -588,3 +588,14 @@ def test_row_cooldown_is_visible_and_stop_still_interrupts_wait(tmp_path):
     assert backend._wait_between_rows(120)
     assert texts == ["冷却 02:00"] and backend.get_status().row_cooldown_until is None
     backend.shutdown()
+
+
+def test_missing_brand_research_does_not_block_next_row(tmp_path):
+    f, _ws, _vs, research, *_rest = _make_flow(tmp_path)
+    first, second = rows()
+    first = replace(first, brand="UNKNOWN")
+    results = f.process_pending((first, second), now=NOW)
+    assert len(results) == 2 and len(research.inputs) == 2
+    assert research.inputs[0].brand is None
+    assert research.inputs[1].brand == second.brand
+    assert all(r.business_state is not BusinessState.INVALID_INPUT_SKIPPED for r in results)

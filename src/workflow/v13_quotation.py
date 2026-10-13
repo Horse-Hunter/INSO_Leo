@@ -98,8 +98,8 @@ def _read_source_rows(reader, worksheet):
         return tuple(reader.read_rows(worksheet))
     except V12Fault:
         raise
-    except Exception:  # noqa: BLE001 - this boundary contains only the shared Sheets read
-        raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE") from None
+    except Exception as exc:
+        raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE") from exc
 
 
 def _ledger_items(store):

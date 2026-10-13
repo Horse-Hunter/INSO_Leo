@@ -165,3 +165,42 @@ def test_api_failure_is_raised_as_sheets_read_error_not_empty_rows() -> None:
 
 def test_oauth_scope_is_read_only() -> None:
     assert READ_ONLY_SCOPE == "https://www.googleapis.com/auth/spreadsheets.readonly"
+
+
+def test_transient_read_retries_once_and_recovers():
+    service = FakeSheetsService()
+    calls = []
+    def execute():
+        calls.append(True)
+        if len(calls) == 1:
+            raise TimeoutError("synthetic read timeout")
+        return {"values": [["未发"]]}
+    service.values_resource._request.execute = execute
+    assert len(GoogleSheetsRowReader(service).read_rows(worksheet())) == 1
+    assert len(calls) == 2
+
+
+def test_transient_read_exhaustion_is_distinct_from_invalid_response():
+    import pytest
+
+    from src.sheets.google_reader import GoogleSheetsReadUnavailable
+
+    service = FakeSheetsService(failure=TimeoutError("synthetic timeout"))
+    with pytest.raises(GoogleSheetsReadUnavailable):
+        GoogleSheetsRowReader(service).read_rows(worksheet())
+    assert len(service.values_resource.get_calls) == 2
+    broken = FakeSheetsService(response={"values": None})
+    with pytest.raises(GoogleSheetsReadError) as error:
+        GoogleSheetsRowReader(broken).read_rows(worksheet())
+    assert not isinstance(error.value, GoogleSheetsReadUnavailable)
+    assert len(broken.values_resource.get_calls) == 1
+
+
+def test_permission_denied_is_not_transient_or_retried():
+    import pytest
+    class Denied(Exception):
+        resp = type("Response", (), {"status": 403})()
+    service = FakeSheetsService(failure=Denied("synthetic permission denied"))
+    with pytest.raises(GoogleSheetsReadError):
+        GoogleSheetsRowReader(service).read_rows(worksheet())
+    assert len(service.values_resource.get_calls) == 1

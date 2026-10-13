@@ -366,3 +366,24 @@ def test_a_real_brand_is_still_never_overwritten() -> None:
         write_brand_safely(reader, writer, identity(), "Resolved Brand")
 
     assert writer.calls == []
+
+
+@pytest.mark.parametrize("confirmed", [True, False])
+def test_brand_write_requires_readback_when_enabled(confirmed):
+    class Sheet:
+        brand = "UNKNOWN"
+        writes = 0
+        def read_rows(self, worksheet):
+            return (row(4, brand=self.brand),)
+        def write_brand(self, worksheet, row_position, brand):
+            self.writes += 1
+            if confirmed:
+                self.brand = brand
+
+    sheet = Sheet()
+    if confirmed:
+        write_brand_safely(sheet, sheet, identity(), "Resolved", verify_readback=True)
+    else:
+        with pytest.raises(SheetsWriteError, match="readback mismatch"):
+            write_brand_safely(sheet, sheet, identity(), "Resolved", verify_readback=True)
+    assert sheet.writes == 1

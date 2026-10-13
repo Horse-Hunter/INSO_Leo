@@ -138,8 +138,8 @@ class PurchaseCompletionActions:
         explanation = {
             "SHEETS_WRITE_BACK": "采购已处理，但表格状态写回未能确认。请核对对应行；若已是‘发给采购’或‘采购已报价’，保持原状态。只有确认仍为‘未发’且采购已发送时，才修正为‘发给采购’。不要重发采购单。",
             "RESEARCH": "调研异常，未完成采购提交。",
-            "DUPLICATE_CHECK": "重复订单查询无法确认，采购提交未继续。",
-            "SESSION": "网站登录不可用，订单处理已停止。",
+            "DUPLICATE_CHECK": "重复询价查询无法确认，采购提交未继续。",
+            "SESSION": "网站登录不可用，询价处理已停止。",
             "FAULT": "运行故障已停止对应模块。请按具体情况处理；不要重发历史采购单。",
             "PURCHASE": ("提交结果无法确认，可能已经发送。请查看 INSO，禁止直接重跑。"
                          if uncertain else "采购录单或校验失败，未完成采购提交。"),
@@ -147,23 +147,23 @@ class PurchaseCompletionActions:
         reason_text = {
             "NO_MATCHING_PRODUCT": "五个价格来源均无报价，未进入采购提交。请核对型号；无报价不等于型号一定填错。",
             "CONTROL_NOT_FOUND": "采购页面控件或 AI 结果未就绪，未能继续录单。",
-            "AI_RECOGNITION_MISMATCH": "AI 录单的型号、品牌或数量与订单不符。",
-            "RECONCILIATION_UNREADABLE": "无法读取并确认 INSO 订单记录。",
+            "AI_RECOGNITION_MISMATCH": "AI 录单的型号、品牌或数量与询价不符。",
+            "RECONCILIATION_UNREADABLE": "无法读取并确认 INSO 询价记录。",
             "SAVE_OUTCOME_UNKNOWN": "提交后的记录未能确认，禁止直接重发。",
-            "DUPLICATE_LOOKUP_UNAVAILABLE": "七天重复订单历史查询不可用。",
+            "DUPLICATE_LOOKUP_UNAVAILABLE": "七天重复询价历史查询不可用。",
             "GoogleSheetsAuthorizationError": "Google 写入授权不可用，请检查原授权；程序不会重复弹出授权。",
-            "SheetRecordConflict": "表格行移动、内容/状态变化或多个候选，已阻止写错行。",
+            "SheetRecordConflict": "源表型号、数量、品牌或状态与原询价不一致，或有多个候选；已阻止写错行。",
             "GoogleSheetsReadError": "Google 表格重新读取或写回确认失败。",
             "GoogleSheetsWriteError": "Google 表格状态更新失败。",
-            "WORKFLOW_LEDGER_UNAVAILABLE": "订单数据库或关键状态不可用，全部共享业务已停止。",
+            "WORKFLOW_LEDGER_UNAVAILABLE": "询价数据库或关键状态不可用，全部共享业务已停止。",
             "GOOGLE_SHEETS_UNAVAILABLE": "Google 表格读取或授权不可用，全部共享业务已停止。",
             "CDP_RECONNECT_EXHAUSTED": "固定 Chrome/CDP 自动恢复仍失败，全部共享业务已停止。",
             "INSO_QUERY_RETRIES_EXHAUSTED": "INSO 查询初次尝试及三次重试均失败，全部共享业务已停止。",
             "INSO_AUTHENTICATION_REQUIRED": "请在固定 Chrome 完成 INSO 登录或人工验证；共享业务已停止，验证页应保留。",
             "IC_NET_UNAVAILABLE": "IC.net 不可用，采购模块已暂停；请在固定 Chrome 检查登录或验证页面。",
-            "V12_INTERNAL_FAILURE": "采购模块内部处理异常，模块已暂停。请查看订单详情与安全日志。",
+            "V12_INTERNAL_FAILURE": "采购模块内部处理异常，模块已暂停。请查看询价详情与安全日志。",
             "INVALID_INPUT_SKIPPED": "该行型号、品牌、数量或关键格式不合法，已跳过；请修正源表格。",
-            "SOURCE_CHANGED": "源订单的关键内容已被修改，本单终止且不会覆盖人工修改。",
+            "SOURCE_CHANGED": "源询价的关键内容已被修改，本单终止且不会覆盖人工修改。",
         }.get(reason)
         body = (f"型号：{item.mpn}\n"
                 f"品牌：{item.resolved_brand or item.brand}\n数量：{item.quantity}\n"
@@ -172,6 +172,6 @@ class PurchaseCompletionActions:
         self.v12_store.enqueue_notification(NotificationCommand(
             command_id=command_id,
             inquiry_id=inquiry_id, kind=NotificationKind.PURCHASE_EXCEPTION,
-            recipients=recipients, subject=f"【INSO】订单处理异常：{item.mpn}",
+            recipients=recipients, subject=f"【INSO】询价处理异常：{item.mpn}",
             text_body=body, html_body=None, created_at=at,
         ))

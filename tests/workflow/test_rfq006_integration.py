@@ -607,7 +607,7 @@ def test_model_difference_mail_reuses_durable_outbox_two_recipients_restart_and_
         assert c.execute("SELECT count(*) FROM workflow_v12_notification_commands").fetchone()[0] == 1
         assert c.execute("SELECT address FROM workflow_v12_notification_recipients ORDER BY recipient_id").fetchall() == [("shawn@inso-hk.com",), ("linan229@qq.com",)]
         subject, body = c.execute("SELECT subject,text_body FROM workflow_v12_notification_commands").fetchone()
-        assert subject == "【INSO】报价型号差异"
+        assert subject == "【INSO】采购报价差异"
         assert "原表型号：MPN" in body and "报价实际型号：MPN suffix" in body
         assert "报价更新尚未确认" in body
     transport = FakeNotificationTransport({"owner": (DeliveryOutcome.SENT,), "ops": (DeliveryOutcome.RETRYABLE_FAILURE, DeliveryOutcome.SENT)})

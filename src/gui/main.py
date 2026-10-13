@@ -65,6 +65,12 @@ def _sanitized_line(record: logging.LogRecord) -> str:
     in either one degrades to the generic line instead of leaking it.
     """
 
+    runtime_reason = getattr(record, "runtime_reason", None)
+    runtime_cause = getattr(record, "runtime_cause", None)
+    if (isinstance(runtime_reason, str) and re.fullmatch(r"[A-Z_]{1,64}", runtime_reason)
+            and isinstance(runtime_cause, str) and _CAUSE_NAME.fullmatch(runtime_cause)):
+        return f"runtime fault reason={runtime_reason} cause={runtime_cause}"
+
     cycle = getattr(record,"cycle_id",None)
     module = getattr(record,"business_module",None)
     inquiry = getattr(record,"inquiry_id",None)

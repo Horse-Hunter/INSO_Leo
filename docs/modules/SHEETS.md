@@ -18,7 +18,7 @@ Sheets 执行 Workflow 明确调用的单次读/写操作。对外返回标准�
 | worksheet | status | importance | MPN | Brand | qty | pending |
 | --- | --- | --- | --- | --- | --- | --- |
 | 标准表 | A | C | E | F | G | A == `未发` |
-| SHAHAB | B | 固定标准化为 A | D | E | F | B == `未发` |
+| SHAHAB | B | 独立规则 SHAHAB（无等级列） | D | E | F | B == `未发` |
 
 V1.2 customer：
 - worksheet `2026`：D 列，trim
@@ -89,3 +89,13 @@ bool), and str(sheetId) must equal explicit gid. Metadata failures are sanitized
 shared QuotationInputUnavailable. validate_schema runs binding then exact14
 headers; write_payload independently repeats both before every RAW update.
 Production gid/range geometry remains UNKNOWN; no defaults or live acceptance.
+# V1.4 intent-order status (Owner decision 2026-10-13)
+
+After verified unsaved sales header/details and native PDF upload, search both
+configured source worksheets by exact model and numeric quantity. Only rows with
+status 已报价给客户 or 意向订单 are candidates. Exactly one candidate across both
+worksheets is required per line; an already-intent row is success without writing.
+Fresh re-read validates the row snapshot before one status-cell RAW update and
+readback; schema-specific status is A for 2026 and B for SHAHAB. No match, duplicate,
+source change, permission failure or uncertain write yields a per-model manual
+repair result without a repeated write, whole-row overwrite or status regression.
