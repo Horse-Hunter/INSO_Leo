@@ -380,3 +380,51 @@ no reset, force push or duplicate branch/report. Evidence is synthetic tests and
 sanitized passive counts only. No EXE/release/config/profile changes are included.
 Next: CEO independently reviews this safety seam and the operational UNKNOWN;
 release remains on hold until that review, with no deployment performed here.
+
+
+## CEO fourth independent review — 2026-10-15
+
+**CODE REVIEW PASS; DEPLOYMENT ON HOLD — operational preflight anomaly.**
+
+Independently inspected `a421dc2..53a9746` on GitHub:
+`src/launcher/browser_bootstrap.py`, its release-infrastructure tests,
+and this existing evidence record. Only these three files changed.
+The owned-process cleanup no longer performs CDP discovery, WebSocket
+`Browser.close`, arbitrary PID/taskkill fallback, or endpoint-based shutdown.
+It requires the original `subprocess.Popen` child and Windows retained process
+handle; unknown ownership skips cleanup. The historic fake-process test now
+mocks cleanup and blocks direct socket connections; dedicated tests cover
+owned/unowned, exited, invalid-handle and timeout branches. Protected
+persistent/shared browser is not assigned an owned close callback.
+This closes the specific prior unsafe shutdown path in code.
+
+Executor reports focused 297 PASS, isolated full 2123 PASS / 1 skipped,
+Ruff/diff PASS; CEO reviewed source and test cases but did not run a local
+test suite or perform business/browser checks. This code review does not
+establish live tray behavior or authentication acceptance. A verifiable owned
+Chrome child might leave descendants on Windows after handle-only termination;
+avoid risky fallback and assess only if operational symptoms arise.
+
+**Operational hold, not a further code change request:** Executor's passive
+15:02–15:04 +08 snapshot did not find the formal V1.4 process, any Chrome
+process or a 9222 listener. This is an operational ANOMALY as observed, but
+historical causation and preserved session/login status are UNKNOWN.
+No current run-status claim is independently verified by CEO. A successful
+isolated test cannot prove the earlier live browser was unaffected.
+
+**Next release gate:** do not package/overwrite, relaunch Chrome or EXE,
+attach CDP, repair profile/login, replay business, or alter DB on review
+authority. First use passive read-only inventory to confirm formal EXE
+presence/hash, protected profile/session backup and runtime junction/DB
+integrity **without reading/exporting secrets**, plus application and
+Windows event logs if available (record only sanitized conclusions).
+Then arrange a controlled Owner-attended restoration of the *existing*
+approved Chrome/profile and V1.4 (not a duplicate instance), with explicit
+Owner authorization before launch, checking session/auth and normal app
+behavior without creating test orders. Keep original rollback and
+unknown dirty state intact. If any prerequisite is unsafe, hold and escalate
+only that concrete issue.
+
+**Disposition:** all 2026-10-15 fixes including INSO retry and CDP test
+isolation have completed static code review; no new business changes
+requested. Do not confuse CODE PASS with DEPLOYMENT PASS.
