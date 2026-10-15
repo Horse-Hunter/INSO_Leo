@@ -212,84 +212,33 @@ def _launch(executable: Path, profile: Path, port: int):
     )
 
 
-def _close_owned_process(process, cdp_url: str) -> None:
-    if process.poll() is None:
-        # Chrome's documented CDP Browser.close command shuts down the browser tree
-        # cleanly. This is called only for a session launched by this backend.
-        browser_close_sent = False
-        try:
-            import websocket
-        except ImportError:
-            websocket = None
-        if websocket is not None:
-            try:
-                endpoint = cdp_url.rstrip("/") + "/json/version"
-                with urlopen(endpoint, timeout=3) as response:
-                    debugger_url = json.load(response).get("webSocketDebuggerUrl")
-                if debugger_url:
-                    connection = websocket.create_connection(
-                        debugger_url, timeout=3, suppress_origin=True
-                    )
-                    try:
-                        connection.send(json.dumps({"id": 1, "method": "Browser.close"}))
-                        browser_close_sent = True
-                        try:
-                            connection.recv()
-                        except websocket.WebSocketConnectionClosedException:
-                            pass
-                    finally:
-                        connection.close()
-            except (
-                OSError,
-                ValueError,
-                KeyError,
-                TypeError,
-                websocket.WebSocketException,
-            ):
-                browser_close_sent = False
-        if not browser_close_sent and process.poll() is None:
-            # Fall back only to the process tree returned by our own Popen.
-            if os.name == "nt" and getattr(process, "pid", None) is not None:
-                subprocess.run(
-                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL, check=False,
-                )
-            else:
-                process.terminate()
+def _close_owned_process(process: object) -> None:
+    """Close only the child Popen handle returned by our launch, never a CDP port.
+
+    On Windows Popen.terminate uses the retained OS process handle, so a reused
+    PID or an existing browser on the same port cannot become the target.
+    An injected/unverifiable process is not permission to kill by PID or CDP.
+    """
+    if (not isinstance(process, subprocess.Popen)
+            or not getattr(process, "_child_created", False)
+            or (os.name == "nt" and not getattr(process, "_handle", None))):
+        _LOG.warning("Skipping Chrome cleanup: owned child handle is unverified")
+        return
     try:
+        if process.poll() is None:
+            process.terminate()
         process.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        if os.name == "nt" and getattr(process, "pid", None) is not None:
-            subprocess.run(
-                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL, check=False,
-            )
-            process.wait(timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        # No endpoint/PID fallback: incomplete cleanup is safer than closing an
+        # unrelated browser. In particular never issue Browser.close on 9222.
+        _LOG.warning("Owned Chrome child cleanup could not be confirmed")
 
 
 def _reap_failed_launch(process: object) -> None:
-    """Terminate only a just-launched, never-ready Chrome process tree.
-
-    This never addresses the CDP endpoint, so it can never touch an unrelated
-    (for example, already authenticated) browser that may serve the same port.
-    """
-
+    """Apply the same proven-child-only cleanup to a never-ready launch."""
     try:
-        if process.poll() is None:
-            if os.name == "nt" and getattr(process, "pid", None) is not None:
-                subprocess.run(
-                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                )
-            else:
-                process.terminate()
-        process.wait(timeout=10)
-    except Exception:  # noqa: BLE001 - expose only the stable reason code
+        _close_owned_process(process)
+    except Exception:  # noqa: BLE001 - expose only the stable launch failure
         return
 
 
@@ -504,7 +453,7 @@ def acquire_cdp_browser(
         owned=not persistent,
         process=process,
         close_fn=(
-            None if persistent else (lambda: _close_owned_process(process, cdp_url))
+            None if persistent else (lambda: _close_owned_process(process))
         ),
         cleanup_fn=None if persistent else _start_owned_window_hider(process),
     )

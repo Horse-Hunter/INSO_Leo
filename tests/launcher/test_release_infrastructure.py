@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import socket
 import sys
 import threading
+from unittest.mock import Mock
 
 import pytest
 
@@ -17,6 +19,16 @@ from src.launcher.browser_bootstrap import (
 )
 from src.launcher.single_instance import ERROR_ALREADY_EXISTS, SingleInstanceGuard
 from src.research import ResearchResult, ResearchStatus
+
+
+@pytest.fixture(autouse=True)
+def no_real_browser_network(monkeypatch):
+    """These lifecycle tests have no permission to contact any real endpoint."""
+    def forbidden(*args, **kwargs):
+        pytest.fail('release infrastructure test attempted real network I/O')
+    monkeypatch.setattr(socket.socket, 'connect', forbidden)
+    monkeypatch.setattr(socket.socket, 'connect_ex', forbidden)
+    monkeypatch.setattr(socket, 'create_connection', forbidden)
 
 
 @pytest.mark.parametrize("urls", [[], ["https://yingsuo.alperp.cn/", "https://www.ic.net.cn/"],
@@ -329,6 +341,14 @@ def test_cdp_launches_only_explicit_existing_profile_and_closes_owned(
     calls = []
     hider_stopped = []
     process = _Process()
+    existing_process = _Process()
+    cleaned = []
+    def close_test_process(candidate):
+        assert candidate is process
+        cleaned.append(candidate)
+        candidate.terminate()
+    monkeypatch.setattr(browser_module, '_close_owned_process', close_test_process)
+    monkeypatch.setattr(browser_module, 'urlopen', lambda *a, **kw: pytest.fail('no real CDP HTTP'))
     monkeypatch.setattr(
         browser_module,
         "_start_owned_window_hider",
@@ -360,6 +380,7 @@ def test_cdp_launches_only_explicit_existing_profile_and_closes_owned(
     assert calls == [(executable, profile, 9222)]
     handle.close()
     assert process.terminated
+    assert cleaned == [process] and not existing_process.terminated
     assert hider_stopped == [process]
 
 
@@ -407,6 +428,56 @@ def test_persistent_session_is_never_owned_and_never_closes_the_browser(
     assert process.terminated is False
     assert hider_calls == []
     assert started[0].stop_count == 1
+
+
+@pytest.mark.parametrize('ended', [True, False])
+@pytest.mark.parametrize('cleanup', ['_close_owned_process', '_reap_failed_launch'])
+def test_owned_cleanup_only_uses_original_child_handle(ended, cleanup, monkeypatch):
+    import src.launcher.browser_bootstrap as browser_module
+
+    child = Mock(spec=browser_module.subprocess.Popen)
+    child._child_created = True
+    child._handle = object()
+    child.poll.return_value = 0 if ended else None
+    unrelated = _Process()
+    monkeypatch.setattr(browser_module, 'urlopen', lambda *a, **kw: pytest.fail('no CDP discovery'))
+    monkeypatch.setattr(browser_module.subprocess, 'run', lambda *a, **kw: pytest.fail('no PID/taskkill fallback'))
+    getattr(browser_module, cleanup)(child)
+    assert child.terminate.call_count == (0 if ended else 1)
+    child.wait.assert_called_once_with(timeout=10)
+    assert not unrelated.terminated
+
+
+@pytest.mark.parametrize('proof', ['pid_only', 'no_child', 'no_handle'])
+@pytest.mark.parametrize('cleanup', ['_close_owned_process', '_reap_failed_launch'])
+def test_unverified_owned_cleanup_safely_skips(proof, cleanup, monkeypatch):
+    import src.launcher.browser_bootstrap as browser_module
+
+    child = Mock(spec=browser_module.subprocess.Popen) if proof != 'pid_only' else Mock()
+    child.pid = 9222  # A PID/port number alone is never ownership evidence.
+    child._child_created = proof != 'no_child'
+    child._handle = None if proof == 'no_handle' else object()
+    monkeypatch.setattr(browser_module, 'urlopen', lambda *a, **kw: pytest.fail('no CDP discovery'))
+    monkeypatch.setattr(browser_module.subprocess, 'run', lambda *a, **kw: pytest.fail('no PID fallback'))
+    getattr(browser_module, cleanup)(child)
+    child.poll.assert_not_called()
+    child.terminate.assert_not_called()
+    child.wait.assert_not_called()
+
+
+@pytest.mark.parametrize('cleanup', ['_close_owned_process', '_reap_failed_launch'])
+def test_owned_cleanup_timeout_never_falls_back_to_cdp_or_pid(cleanup, monkeypatch):
+    import src.launcher.browser_bootstrap as browser_module
+
+    child = Mock(spec=browser_module.subprocess.Popen)
+    child._child_created, child._handle = True, object()
+    child.poll.return_value = None
+    child.wait.side_effect = browser_module.subprocess.TimeoutExpired('synthetic', 10)
+    monkeypatch.setattr(browser_module, 'urlopen', lambda *a, **kw: pytest.fail('no CDP discovery'))
+    monkeypatch.setattr(browser_module.subprocess, 'run', lambda *a, **kw: pytest.fail('no PID fallback'))
+    getattr(browser_module, cleanup)(child)
+    child.terminate.assert_called_once_with()
+    child.wait.assert_called_once_with(timeout=10)
 
 
 def test_persistent_session_refuses_to_start_a_blank_profile(tmp_path):
@@ -535,7 +606,7 @@ def test_cdp_timeout_closes_only_just_launched_process(tmp_path):
     monkeypatch.setattr(
         browser_module,
         "_close_owned_process",
-        lambda owned_process, _url: owned_process.terminate(),
+        lambda owned_process: owned_process.terminate(),
     )
     launched = []
 

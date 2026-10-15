@@ -306,3 +306,77 @@ Keep existing V1.4 installed version and rollback untouched, do not
 package/overwrite until isolated-test fix and passive operational
 preflight are reviewed. No live orders or Google writes. This is a
 separate safety gate, not another INSO retry revision.
+
+
+## Executor response to CEO third review — 2026-10-15
+
+Status: REVIEW_REQUIRED; INSO business-code REVIEW PASS and RELEASE HOLD above
+remain the CEO verdict. No business-code revision, packaging, deployment, browser
+start/stop, active CDP connection, profile/login/runtime/database change or real
+order was performed in this task. Scope: browser_bootstrap.py, its existing
+release-infrastructure tests and this evidence only; review parent
+`a421dc2e6eab467c4e6f9074d9992779dcb3266a`.
+
+Reuse / safety correction: removed CDP discovery and WebSocket Browser.close
+entirely from owned cleanup. A matching endpoint/port is never ownership proof.
+The close callback captures the original launch-returned child object. Cleanup
+requires an actual Popen child and, on Windows, its retained OS process handle;
+Popen.terminate addresses that handle, not a rediscovered endpoint or naked PID.
+Unverifiable objects/missing handles skip cleanup; exit/timeouts/OSError never
+fall back to CDP, taskkill or PID-based shutdown. Never-ready launch cleanup
+reuses this same guard instead of a second PID-based cleanup implementation.
+Persistent/shared and already-attached browser ownership rules are unchanged.
+This safety-first fallback may retain an unconfirmed child instead of forcing a
+browser-tree kill; no live owned-Chrome shutdown acceptance was attempted.
+
+The named historical test now injects a cleanup function which accepts only its
+exact fake child, records that cleanup and leaves an unrelated fake process
+untouched. Module-wide socket connect/connect_ex/create_connection guards fail
+before network I/O. Direct production-cleanup regressions use Popen-spec mocks
+and cover live/exited child handles, PID-only objects, missing child/handle proof,
+cleanup timeout and both normal/never-ready cleanup. They forbid real HTTP and
+PID/taskkill fallback. The original launch-timeout fake cleanup signature was
+adapted to the endpoint-free API. No real Chrome process is created by these tests.
+
+Passive operational snapshot (2026-10-15 approximately15:02–15:04 +08:00):
+- Elevated Win32_Process plus independent Get-Process queries found no Chrome
+  and no INSO-named process. Formal V1.4 running: ANOMALY / not observed.
+- OS listening table returned zero9222 listeners. Chrome/CDP availability:
+  ANOMALY / absent at snapshot; no TCP/HTTP/WebSocket probe was made.
+- LastBootUpTime:2026-10-13 22:05:04. This alone cannot prove session continuity.
+- Prior failed fake-process assertion is credible evidence of possible earlier
+  interference, not proof of exact real-process closure. Cause, original-process
+  continuity, tabs and login/session impact remain UNKNOWN. No automatic recovery
+  was attempted; existing EXE/profile/login/runtime/DB and dirty work were retained.
+
+Verification uses the existing release libraries and a temporary pre-import
+socket guard: deny all external/pre-existing endpoints, including9222; allow only
+an ephemeral listener actually bound by the test process for the existing socket
+unit test. The lifecycle test module has its additional permanent fail-fast guard.
+Full isolated offline regression:2123 passed /1 skipped in76.20s. Selected Ruff
+and diff whitespace PASS. An intermediate focused run identified a stale mock
+signature (fixed); a restricted-sandbox rerun had one frozen self-check resource
+failure, while the same final code passed that test in the full elevated isolated
+run. Final targeted result and cleanup are recorded below.
+
+
+Final targeted isolated result:297 passed in7.92s. The passive Application crash
+history query returned unavailable/no usable events; no causal conclusion is
+possible. Current operational ANOMALY and historical session impact UNKNOWN are
+separate conclusions. Do not restart/repair the session automatically on this
+report's authority.
+
+Cleanup: retired focused, focused-final, focused-verified and full task-owned
+basetemps after absolute-path/reparse checks. Only focused-last could not be
+enumerated (UnauthorizedAccessException), so it is specifically retained without
+ACL changes/force deletion. Retire the tiny ignored execution/publication helpers
+after push; no harness, log, build or staging is selected for Git. No protected
+production artifact or unknown dirty work was deleted.
+
+Publication: sensitive-content/diff review selects exactly the3 files above on
+the CEO review parent. Uses the established isolated-index normal push to the
+existing V1.4 branch, preserving local HEAD/index and all other uncommitted work;
+no reset, force push or duplicate branch/report. Evidence is synthetic tests and
+sanitized passive counts only. No EXE/release/config/profile changes are included.
+Next: CEO independently reviews this safety seam and the operational UNKNOWN;
+release remains on hold until that review, with no deployment performed here.
