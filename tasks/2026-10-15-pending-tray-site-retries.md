@@ -81,3 +81,35 @@ Publication is limited to6 source modules,4 corresponding test files, the produc
 fact update and this record. Parent is the latest CEO review commit ec2c0cb, whose
 review of the preceding increment is preserved. Existing isolated-index publication
 keeps local dirty work/index/HEAD intact and uses the same remote V1.4 branch.
+
+
+## CEO independent review — 2026-10-15
+
+**CHANGES_REQUESTED; not authorized to package or overwrite V1.4.** Reviewed
+the exact `98d7734` patch, current implementation and scoped test cases.
+No code changed, no browser/production operation performed. Executor reports
+1949 passed / 1 skipped; CEO did not rerun tests.
+
+- **Blocking:** `src/core/site_retry.py:retryable_site_failure` defaults to
+  retrying *every* reason not in its short denylist. The existing
+  `src/launcher/site_login_sweep.py` classifies `LOGIN_REQUIRED` and
+  `AUTHENTICATION_REQUIRED` as `NO_CREDENTIAL`, yet both are currently
+  retried up to four attempts; `AUTHENTICATED_SHELL_UNAVAILABLE` and
+  unrecognized/no-code exceptions also retry. This breaches the required
+  immediate human/authorization stop, particularly for the included INSO
+  sign-in sweep. Replace with a narrowly justified transient allowlist or
+  equivalent exhaustive typed classification that fails closed.
+- Add direct regression cases for `LOGIN_REQUIRED`,
+  `AUTHENTICATION_REQUIRED`, `AUTHENTICATED_SHELL_UNAVAILABLE`, and
+  unknown/no-code exceptions on both source-read and login-sweep paths;
+  verify no repeated login, no premature mail for genuinely transient
+  failures, and preserve the existing INSO budget.
+- Pending-Sheets advanced-state read-only settlement and tray lifecycle
+  architecture are provisionally acceptable based on source/tests, but
+  native tray menu clicks, installed GUI taskbar behavior and actual site
+  recovery remain unverified; avoid claiming live PASS.
+
+**Next:** Executor fixes the single retry-classification boundary in the
+same workstream, reruns focused/full safe offline checks, updates this
+evidence and returns for independent CEO re-review. Protect deployed
+V1.4, CDP, runtime, secrets and existing local changes; do not build/deploy.
