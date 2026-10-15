@@ -113,3 +113,50 @@ No code changed, no browser/production operation performed. Executor reports
 same workstream, reruns focused/full safe offline checks, updates this
 evidence and returns for independent CEO re-review. Protect deployed
 V1.4, CDP, runtime, secrets and existing local changes; do not build/deploy.
+
+## Executor response to CEO review — 2026-10-15
+
+Status: REVIEW_REQUIRED; original CHANGES_REQUESTED remains the historical CEO
+verdict above. This response does not claim independent PASS or release permission.
+Scope is only the retry-classification blocker; tray and pending-status code are
+unchanged. No package, executable, production CDP, credentials, runtime or business
+data was accessed in this repair task.
+
+Replaced the retry-by-default denylist with exact transient adapter codes:
+BROWSER_TIMEOUT, LOGIN_PAGE_UNAVAILABLE, LOGIN_NOT_CONFIRMED,
+RESULT_NAVIGATION_FAILED, SEARCH_NAVIGATION_FAILED, PRODUCT_NAVIGATION_FAILED.
+These come from existing browser/load/navigation/readiness paths. The existing
+LOGIN_NOT_CONFIRMED recipe checks rejection/challenge first; it is not a catch-all
+authorization result. HTTP_REQUEST_FAILED, LOGIN_NOT_READY, SOURCE_UNAVAILABLE,
+unknown/missing/non-string codes and unclassified exceptions fail closed.
+LOGIN_REQUIRED, AUTHENTICATION_REQUIRED and AUTHENTICATED_SHELL_UNAVAILABLE
+never repeat login in either the five-source wrapper or any of six sign-in steps.
+The sweep passes an actual missing reason to the classifier without fabricating
+a generic retry reason. No login recipes, credentials or submission actions changed.
+
+Compatibility correction at the existing INSO observer: only login/security
+results enter immediate auth-stop handling there. Generic INSO read-query
+SOURCE_UNAVAILABLE remains under its existing initial+three120-second budget,
+without new nested login retries or premature notifications. Typed authorization
+stops still propagate before reset/wait. This is necessary because making the
+shared classifier closed would otherwise send generic INSO read failures to its
+auth observer before the existing query budget completed.
+
+Tests cover the closed allowlist, named auth reasons, missing/generic/unknown
+reasons, no-code exceptions across all5 source paths and all6 sign-in steps,
+fourth-attempt transient recovery without intermediate failure notification,
+stop interruption, INSO auth-before-reset and preserved generic INSO query budget.
+Focused258 passed in4.68s; selected Ruff/diff passed. Full offline result and cleanup
+are recorded below once completed. Changed files limited to core/site_retry.py,
+launcher/backend.py, launcher/site_login_sweep.py, the corresponding existing
+launcher test file and this original evidence record.
+
+Final verification: full safe/offline2083 passed /1 skipped in77.40s; focused258
+passed; Ruff and diff PASS. No real browser/site/security/login acceptance was run.
+The full basetemp was retired after absolute-path and reparse checks. The two
+task-owned focused basetemps failed enumeration with UnauthorizedAccessException;
+retained specifically for that proven access risk without permission changes or
+forced deletion. No frozen build/staging was generated. No temporary artifact is
+selected for publication. Parent review675308ec4794dcbeda9e45324d037cf986899877
+and the original CEO comments above are preserved. Scope is5 files only; source
+tray/status files and all other pre-existing local changes remain untouched.

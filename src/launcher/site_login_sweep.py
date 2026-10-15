@@ -243,7 +243,7 @@ class SiteLoginSweep:
                     break
                 except Exception as error:
                     if (attempt == 3 or self._stop_requested()
-                            or not retryable_site_failure(_reason_code(error) or "SOURCE_UNAVAILABLE")):
+                            or not retryable_site_failure(_reason_code(error))):
                         raise
                     self._wait(SITE_RETRY_DELAYS[attempt])
         except Exception as exc:  # noqa: BLE001 - one site's failure is not the next one's

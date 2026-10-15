@@ -1216,7 +1216,12 @@ class ProductionBackend(GuiBackend):
                 return False
             code = next((str(f.value) for f in result.evidence.fields if f.key == "failure_code"), "SOURCE_UNAVAILABLE")
             from src.core.site_retry import retryable_site_failure
-            if not retryable_site_failure(code) and "FX" not in code:
+            # Keep INSO's existing read-query budget; only authentication /
+            # security results enter its immediate login-stop observer here.
+            login_failure = any(token in code for token in (
+                "LOGIN", "AUTHENTIC", "CREDENTIAL", "VERIFICATION", "CHALLENGE", "SESSION", "SECURITY",
+            ))
+            if login_failure and not retryable_site_failure(code):
                 self._observe_source_failure(inquiry_id, result)
             return result.outcome is not SourceOutcome.SOURCE_UNAVAILABLE or "FX" in code
 

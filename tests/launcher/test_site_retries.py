@@ -5,7 +5,7 @@ import pytest
 from src.core.site_retry import retryable_site_failure
 from src.launcher.backend import ProductionBackend
 from src.research.source_contracts import ResearchSource, SourceOutcome
-from src.workflow.v12_faults import V12Fault
+from src.workflow.v12_faults import FaultScope, V12Fault
 
 
 def result(site, code='LOGIN_NOT_CONFIRMED', success=False):
@@ -61,7 +61,8 @@ def test_inso_keeps_existing_query_retry_budget_not_nested_login_retry(monkeypat
     backend.shutdown()
 
 
-def test_inso_transient_login_failure_does_not_notify_before_query_retries(monkeypatch):
+@pytest.mark.parametrize('code', ['LOGIN_NOT_CONFIRMED', 'SOURCE_UNAVAILABLE'])
+def test_inso_transient_login_failure_does_not_notify_before_query_retries(monkeypatch, code):
     backend = ProductionBackend()
     calls, notes, waits = [], [], []
     monkeypatch.setattr(backend._stop, 'wait', lambda seconds: waits.append(seconds) or False)
@@ -70,13 +71,14 @@ def test_inso_transient_login_failure_does_not_notify_before_query_retries(monke
     monkeypatch.setattr(backend, '_observe_source_failure', lambda *args: notes.append(args))
     def operation():
         calls.append(1)
-        return result(ResearchSource.INSO, success=len(calls) == 4)
+        return result(ResearchSource.INSO, code, success=len(calls) == 4)
     assert backend._run_inso_query('synthetic', operation, lambda: None).outcome is SourceOutcome.SUCCESS
     assert len(calls) == 4 and waits == [120, 120, 120] and not notes
     backend.shutdown()
 
 
-def test_login_sweep_retries_same_owned_tab_then_reports_only_final_verdict():
+@pytest.mark.parametrize('site', tuple(ResearchSource))
+def test_login_sweep_retries_same_owned_tab_then_reports_only_final_verdict(site):
     from src.gui.contracts import SiteLoginOutcome
     from src.launcher.site_login_sweep import SiteLoginSweep, SiteSignInStep
     from src.research.site_login import SiteLoginError
@@ -93,8 +95,94 @@ def test_login_sweep_retries_same_owned_tab_then_reports_only_final_verdict():
             raise SiteLoginError('LOGIN_NOT_CONFIRMED')
         return False
     try:
-        verdict, = sweep.run([SiteSignInStep('lcsc', '立创', sign_in)])
+        verdict, = sweep.run([SiteSignInStep(site.value, site.value, sign_in)])
         assert verdict.outcome is SiteLoginOutcome.SIGNED_IN
         assert len(pages) == 1 and attempts == [page]*4 and waits == [2, 5, 10]
+    finally:
+        sweep.close()
+
+
+@pytest.mark.parametrize('code', ['LOGIN_REQUIRED', 'AUTHENTICATION_REQUIRED', 'AUTHENTICATED_SHELL_UNAVAILABLE'])
+def test_inso_authorization_still_stops_before_reset_or_retry(code, monkeypatch):
+    backend = ProductionBackend()
+    calls = []
+    monkeypatch.setattr(backend._stop, 'wait', lambda seconds: pytest.fail('unsafe auth retry'))
+    monkeypatch.setattr(backend, '_close_inso_order_tab', lambda: pytest.fail('must retain auth page'))
+    def stop(iid, source):
+        raise V12Fault(FaultScope.GLOBAL_STOP, 'INSO_AUTHENTICATION_REQUIRED')
+    monkeypatch.setattr(backend, '_observe_source_failure', stop)
+    def operation():
+        calls.append(1)
+        return result(ResearchSource.INSO, code)
+    with pytest.raises(V12Fault, match='INSO_AUTHENTICATION_REQUIRED'):
+        backend._run_inso_query('synthetic', operation, lambda: None)
+    assert calls == [1]
+    backend.shutdown()
+
+
+STOP_CODES = ('LOGIN_REQUIRED', 'AUTHENTICATION_REQUIRED', 'AUTHENTICATED_SHELL_UNAVAILABLE',
+    'CREDENTIALS_UNAVAILABLE', 'CREDENTIAL_REJECTED', 'MANUAL_VERIFICATION_REQUIRED',
+    'UNRECOGNIZED_SITE_ERROR', 'SOURCE_UNAVAILABLE', '')
+
+
+@pytest.mark.parametrize('code', [*STOP_CODES, None, 0, 'BROWSER_TIMEOUT_UNKNOWN',
+    'HTTP_REQUEST_FAILED', 'LOGIN_NOT_READY', 'SESSION_IDENTITY_UNVERIFIED'])
+def test_retry_policy_is_closed_for_auth_missing_and_unknown_codes(code):
+    assert not retryable_site_failure(code)
+
+
+@pytest.mark.parametrize('code', ['BROWSER_TIMEOUT', 'LOGIN_PAGE_UNAVAILABLE', 'LOGIN_NOT_CONFIRMED',
+    'RESULT_NAVIGATION_FAILED', 'SEARCH_NAVIGATION_FAILED', 'PRODUCT_NAVIGATION_FAILED'])
+def test_only_explicit_adapter_transient_codes_allow_retry(code):
+    assert retryable_site_failure(code)
+
+
+@pytest.mark.parametrize('site', [ResearchSource.IC_NET, ResearchSource.FINDCHIPS,
+    ResearchSource.HQEW, ResearchSource.LCSC, ResearchSource.BOM_AI])
+@pytest.mark.parametrize('code', STOP_CODES)
+def test_every_research_site_stops_auth_and_unknown_without_repeat(site, code, monkeypatch):
+    backend = ProductionBackend()
+    calls = []
+    monkeypatch.setattr(backend._stop, 'wait', lambda seconds: pytest.fail('unsafe retry wait'))
+    def operation():
+        calls.append(1)
+        return result(site, code)
+    backend._run_source_query('synthetic', site, operation, lambda: pytest.fail('unsafe reconnect'))
+    assert calls == [1]
+    backend.shutdown()
+
+
+@pytest.mark.parametrize('site', [ResearchSource.IC_NET, ResearchSource.FINDCHIPS,
+    ResearchSource.HQEW, ResearchSource.LCSC, ResearchSource.BOM_AI])
+def test_unknown_no_code_source_exception_never_repeats(site, monkeypatch):
+    backend = ProductionBackend()
+    calls = []
+    monkeypatch.setattr(backend._stop, 'wait', lambda seconds: pytest.fail('unsafe retry wait'))
+    def operation():
+        calls.append(1)
+        raise RuntimeError('synthetic unclassified failure')
+    with pytest.raises(RuntimeError):
+        backend._run_source_query('synthetic', site, operation, lambda: pytest.fail('unsafe reconnect'))
+    assert calls == [1]
+    backend.shutdown()
+
+
+@pytest.mark.parametrize('site', tuple(ResearchSource))
+@pytest.mark.parametrize('code', (*STOP_CODES[:-1], None))
+def test_every_login_sweep_step_including_inso_stops_auth_and_unknown(site, code):
+    from src.launcher.site_login_sweep import SiteLoginSweep, SiteSignInStep
+    from src.research.site_login import SiteLoginError
+    calls, waits = [], []
+    page = SimpleNamespace(close=lambda: None)
+    sweep = SiteLoginSweep(SimpleNamespace(contexts=[object()]), timeout_ms=500,
+        new_tab=lambda *a, **kw: page, wait=lambda seconds: waits.append(seconds), present_failures=False)
+    def sign_in(tab):
+        calls.append(1)
+        if code is None:
+            raise RuntimeError('synthetic unclassified failure')
+        raise SiteLoginError(code)
+    try:
+        verdict, = sweep.run([SiteSignInStep(site.value, site.value, sign_in)])
+        assert calls == [1] and not waits and verdict.site == site.value
     finally:
         sweep.close()
