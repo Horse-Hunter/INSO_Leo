@@ -428,3 +428,63 @@ only that concrete issue.
 **Disposition:** all 2026-10-15 fixes including INSO retry and CDP test
 isolation have completed static code review; no new business changes
 requested. Do not confuse CODE PASS with DEPLOYMENT PASS.
+
+
+## Owner-authorized restoration / deployment — 2026-10-15
+
+Owner explicitly requests one CDP blank page, package/overwrite and launch V1.4.
+This is new launch/deployment authority after CEO static CODE PASS; it supersedes
+historical no-launch/no-package instructions for this release only. No new
+business changes, test orders, inquiry start, Sheets writes or SMTP are authorized.
+Reuse canonical CDP helper on the existing profile/9222 and canonical V1.4
+BuildOnly release pipeline. First inventory protected assets passively; preserve
+EXE rollback, runtime/config/DB/grants and unique dirty work. Verify staged scan,
+frozen self-check, installed assets and idle launch; retire task staging after
+verification. Session authentication/business acceptance remains UNKNOWN unless
+separately observed without performing business operations.
+
+
+Restoration/deployment completion: DEPLOYED under the Owner's explicit new
+request, not on prior CEO review authority. All121 build input files matched
+reviewed remote e31044b before building; no business/source code was changed.
+Preflight verified the existing EXE, canonical used profile/Default,3 session
+backup files, persistent=true/9222 and read-only receipt DB quick_check. The
+configured workflow ledger also passed a subsequent read-only quick_check.
+
+Used canonical open_cdp_session.ps1 -NoWindow with the existing production config,
+then created one about:blank via the existing9222 endpoint. No INSO business page
+was opened; no replacement profile/browser implementation was created. Blank page
+retained throughout deployment. Session authentication is UNKNOWN (not inspected).
+
+Canonical V1.4 BuildOnly succeeded; frozen dependency self-check and
+RELEASE_SCAN_OK passed. Old installed self-check exit0 before overwrite;2 changed
+assets backed up and rollback hashes verified. All2875 installed assets equal
+build; all10 target non-build file hashes remained unchanged through installed
+self/idle/CDP checks (all exit0); prior CDP tab IDs preserved. External business
+state/config/grants were not copied or overwritten. Live GUI was not running
+before deployment, so no GUI/process forced termination occurred.
+
+Installed EXE SHA256:
+a4703edae2f1708ac88be5bee539e66594e8dbd267e13985e2b6a4a3e7508e07
+Old verified EXE SHA256:
+ad9207243cb69af35b0d26f9ce8b786e83dbfee8543a0035538eb28eb657e577
+Rollback: ignored .tmp/cdp-release-20261015/rollback (only changed assets plus
+small verification manifests). Retired marked/reparse-checked staging267782586
+bytes; PyInstaller work was already retired by canonical script. Tiny task
+execution helper retired; small build/verification evidence and rollback retained.
+
+Formal GUI started at the original installed path, PID35004, visible window
+handle591502, Responding=true. Chrome has a visible window; CDP blank page and
+9222 readiness passed. Frozen idle check confirmed no inquiry/order worker start;
+Executor clicked no business button. Startup command approval timed out once;
+the simpler authorized launch retry succeeded, with no duplicate GUI launched.
+Future real login, Google recovery, native tray interaction and live business
+acceptance remain UNKNOWN.
+
+Owner's immediate yellow-row question: read-only local aggregate still shows7
+STATUS_WRITE_PENDING entries, all purchase outcome SAVED. Installation preserves
+that ledger. The reviewed settlement logic runs at the next normal poll (after
+fresh source identity/brand/status proof), not on idle startup. No local pending
+state was force-cleared; no purchase or quotation was replayed. Current Google
+row statuses were not freshly read during this release; historical source facts
+do not prove today's7 rows will all settle.
