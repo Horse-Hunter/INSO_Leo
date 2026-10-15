@@ -192,3 +192,74 @@ cleanup. All other parts provisionally pass static review.
 
 **Evidence:** GitHub source/diff and Executor offline report (2083 pass,
 1 skip); CEO did not independently run tests or live business verification.
+
+## Executor response to CEO second review — 2026-10-15
+
+Status: REVIEW_REQUIRED. The second CEO CHANGES_REQUESTED verdict above is
+preserved; no independent PASS or release permission is claimed. The prior
+Executor's substring-based INSO classification claim is SUPERSEDED by this fix.
+
+Reuse: retained workflow/inso_query.py's initial+three120-second query budget,
+existing source adapter, actual source observer/manual-stop handling and existing
+deduplicated notification queue. Only launcher/backend.py, the existing
+tests/launcher/test_site_retries.py and this original evidence record change
+relative to review parent1329ca5cf975feb59e71acc7e3808309d0a79310.
+
+INSO query and observer now share exact authentication/security stop codes.
+AUTHENTICATED_SESSION_REQUIRED, LOGIN_REQUIRED, AUTHENTICATION_REQUIRED,
+AUTHORIZATION_REQUIRED, AUTHENTICATED_SHELL_UNAVAILABLE, missing/rejected
+credentials, invalid session/lease and explicit human-verification codes stop
+before tab reset, wait or another login/read attempt. Typed InsoAuthenticationError
+also propagates immediately. These results use the existing authentication mail
+category, including the previously missed AUTHENTICATED_SESSION_REQUIRED.
+AUTHENTICATED_READ_UNAVAILABLE, AUTHENTICATED_READ_EMPTY and ordinary response
+read failures are observed only on exhausted query retries, once at the final
+boundary. Recovery and stop interruption do not produce intermediate failure
+notifications. Existing FX/no-price handling and query reset/delay budget remain.
+
+Regression uses real InsoHistoryAdapter failure results, real backend source
+observer, real manual-stop behavior and real notification formatter against an
+in-memory deduplicating outbox. No observer-to-raise mock is used in the replaced
+auth regression. Cases cover17 explicit auth/security codes, read recovery on
+attempt2/4, exhaustion across4 real adapter read codes, typed auth propagation
+and stop interruption. Assertions check queue silence at every read/reset/wait,
+one final mail on exhaustion, authentication classification, immediate global
+stop and no auth-page reset/reopen. Focused298 passed in4.47s; scoped Ruff and
+whitespace checks passed.
+
+Validation caveat / incident: the first full collection with the system test
+interpreter lacked existing release tzdata/PDF dependencies (11 collection
+errors). After adding the existing release-library path, full execution returned
+2110 passed /1 failed /1 skipped in79.41s. The failure was the unchanged
+test_cdp_launches_only_explicit_existing_profile_and_closes_owned: its fake
+process cleanup still calls real localhost9222 HTTP/WebSocket code when the
+release websocket library is available. The fake process was not terminated;
+source inspection shows this can follow a real Browser.close send path. This
+was an unintended validation isolation failure; the current production-session
+state is UNKNOWN and was not inspected or recovered. Owner was informed. Do not
+interpret this run as proof of no CDP contact. No real order, Sheets write, SMTP,
+Vault/runtime read, packaging or EXE replacement was intentionally performed.
+
+Subsequent full regression blocks socket connections before suite import:
+external and pre-existing local endpoints (explicitly9222) are refused; only
+ephemeral listeners bound by the test process are allowed. This is a temporary
+execution harness, not a change to CDP/product/test-suite modules. The pre-existing
+test isolation defect is recorded for CEO; it is outside this surgical source
+repair scope. Five-site allowlist, login sweep, tray/pending and browser bootstrap
+files were compared to the reviewed remote base and remain unchanged.
+
+Final guarded full result:2111 passed /1 skipped in76.85s. No live authentication,
+real query recovery or business acceptance was verified. Focused298 passed;
+selected Ruff/whitespace PASS. Both full-run temporary directories were retired
+after absolute-path/reparse checks. The task-owned focused and focused-final
+directories could not be enumerated (UnauthorizedAccessException) and remain
+specifically retained; no permission changes, forced deletion or unknown cleanup.
+No build/staging was generated; no temporary harness, output or log is published.
+
+Publication uses the existing isolated-index procedure on the reviewed remote
+parent, selecting exactly the above3 files; it preserves the older local HEAD,
+actual index and unrelated dirty work. No reset, force push, replacement branch
+or duplicate report. Scope/sensitive-content review contains only synthetic
+test data and technical evidence, not credentials, raw mail, customer records,
+attachments or production databases. CEO next action: independent re-review of
+this INSO observer correction, with the validation caveat above retained.

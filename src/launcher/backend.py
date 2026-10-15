@@ -146,6 +146,17 @@ log = logging.getLogger(__name__)
 _LOGIN_ALERT_SENDER = "1069599116@qq.com"
 _LOGIN_ALERT_RECIPIENT = "linan229@qq.com"
 
+# Shared by the INSO query boundary and final source observer. Authenticated
+# READ_EMPTY/READ_UNAVAILABLE are read failures, not authentication failures.
+_INSO_AUTH_STOP_CODES = frozenset({
+    "LOGIN_REQUIRED", "AUTHENTICATION_REQUIRED", "AUTHORIZATION_REQUIRED",
+    "AUTHENTICATED_SESSION_REQUIRED", "AUTHENTICATED_SHELL_UNAVAILABLE",
+    "VERIFIED_SESSION_LEASE_REQUIRED", "SESSION_IDENTITY_UNVERIFIED", "SESSION_STALE",
+    "CREDENTIALS_UNAVAILABLE", "CREDENTIAL_NOT_CONFIGURED", "CREDENTIAL_REJECTED",
+    "LOGIN_REJECTED", "MANUAL_VERIFICATION_REQUIRED", "INTERACTIVE_CHALLENGE_REQUIRED",
+    "SECURITY_EVENT", "CAPTCHA_REQUIRED", "OTP_REQUIRED",
+})
+
 
 class ProductionConfigurationError(RuntimeError):
     """Safe startup failure for missing local production configuration."""
@@ -1180,11 +1191,14 @@ class ProductionBackend(GuiBackend):
         if result.outcome is not SourceOutcome.SOURCE_UNAVAILABLE:
             return
         code = next((str(f.value) for f in result.evidence.fields if f.key == "failure_code"), "SOURCE_UNAVAILABLE")
+        inso_auth_stop = result.source is ResearchSource.INSO and code in _INSO_AUTH_STOP_CODES
         notified = self._v12_store is not None
         if notified:
             mpn = self._store.get_by_inquiry_id(inquiry_id).mpn if self._store is not None else None
-            notify_website_issue(self._v12_store, inquiry_id, result.source, code, mpn=mpn, at=utc_now())
-        login = any(token in code for token in ("LOGIN", "CREDENTIAL", "AUTHENTICATION", "VERIFICATION", "CHALLENGE", "SESSION_STALE"))
+            notify_website_issue(self._v12_store, inquiry_id, result.source,
+                "AUTHENTICATION_REQUIRED" if inso_auth_stop else code, mpn=mpn, at=utc_now())
+        login = (inso_auth_stop if result.source is ResearchSource.INSO else
+                 any(token in code for token in ("LOGIN", "CREDENTIAL", "AUTHENTICATION", "VERIFICATION", "CHALLENGE", "SESSION_STALE")))
         if result.source is ResearchSource.IC_NET:
             self._manual_review(inquiry_id, "IC.net：需要人工验证" if login else "IC.net：查询不可用", notify=False)
             raise V12Fault(FaultScope.V12_PAUSE, "IC_NET_UNAVAILABLE")
@@ -1194,6 +1208,7 @@ class ProductionBackend(GuiBackend):
 
     def _run_inso_query(self, inquiry_id, operation, prepare):
         first_attempt = True
+        last_result = None
 
         def prepare_attempt():
             nonlocal first_attempt
@@ -1204,31 +1219,33 @@ class ProductionBackend(GuiBackend):
             prepare()
 
         def read_attempt():
+            nonlocal last_result
             try:
-                return operation()
-            except (sqlite3.Error, V12DatabaseError, V12Fault):
+                last_result = operation()
+                return last_result
+            except (sqlite3.Error, V12DatabaseError, V12Fault, InsoAuthenticationError):
                 raise
             except Exception:  # noqa: BLE001 - failed reads never become empty history
+                last_result = None
                 return None
 
         def succeeded(result):
             if result is None:
                 return False
             code = next((str(f.value) for f in result.evidence.fields if f.key == "failure_code"), "SOURCE_UNAVAILABLE")
-            from src.core.site_retry import retryable_site_failure
-            # Keep INSO's existing read-query budget; only authentication /
-            # security results enter its immediate login-stop observer here.
-            login_failure = any(token in code for token in (
-                "LOGIN", "AUTHENTIC", "CREDENTIAL", "VERIFICATION", "CHALLENGE", "SESSION", "SECURITY",
-            ))
-            if login_failure and not retryable_site_failure(code):
+            if result.outcome is SourceOutcome.SOURCE_UNAVAILABLE and code in _INSO_AUTH_STOP_CODES:
                 self._observe_source_failure(inquiry_id, result)
             return result.outcome is not SourceOutcome.SOURCE_UNAVAILABLE or "FX" in code
 
-        return run_inso_query(
-            read_attempt, prepare=prepare_attempt, succeeded=succeeded,
-            reset=self._close_inso_order_tab, wait=self._stop.wait,
-        )
+        try:
+            return run_inso_query(
+                read_attempt, prepare=prepare_attempt, succeeded=succeeded,
+                reset=self._close_inso_order_tab, wait=self._stop.wait,
+            )
+        except V12Fault as exc:
+            if exc.reason == "INSO_QUERY_RETRIES_EXHAUSTED" and last_result is not None:
+                self._observe_source_failure(inquiry_id, last_result)
+            raise
 
     def _run_source_query(self, inquiry_id, site, operation, reconnect):
         from src.core.site_retry import SITE_RETRY_DELAYS, retryable_site_failure

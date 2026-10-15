@@ -1,10 +1,18 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
 
 from src.core.site_retry import retryable_site_failure
+from src.gui.contracts import RunState
 from src.launcher.backend import ProductionBackend
-from src.research.source_contracts import ResearchSource, SourceOutcome
+from src.research.inso_history import InsoHistoryAdapter, InsoReadError
+from src.research.source_contracts import (
+    ResearchSource,
+    SourceEvidence,
+    SourceOutcome,
+    SourceResult,
+)
 from src.workflow.v12_faults import FaultScope, V12Fault
 
 
@@ -102,21 +110,133 @@ def test_login_sweep_retries_same_owned_tab_then_reports_only_final_verdict(site
         sweep.close()
 
 
-@pytest.mark.parametrize('code', ['LOGIN_REQUIRED', 'AUTHENTICATION_REQUIRED', 'AUTHENTICATED_SHELL_UNAVAILABLE'])
+class InsoTestOutbox:
+    """In-memory notification ledger; production observer and mail formatter stay real."""
+
+    def __init__(self):
+        self.commands = {}
+
+    def notification_already_created(self, key, *args):
+        return key in self.commands
+
+    def enqueue_notification(self, command):
+        self.commands[command.command_id] = command
+
+
+def inso_failure(code):
+    def fetch_history(mpn):
+        raise InsoReadError(code)
+    adapter = InsoHistoryAdapter(SimpleNamespace(fetch_history=fetch_history),
+        SimpleNamespace(get_quote=lambda: pytest.fail('failure must not request FX')))
+    return adapter.search('TEST-MPN', 1)
+
+
+@pytest.mark.parametrize('code', ['LOGIN_REQUIRED', 'AUTHENTICATION_REQUIRED',
+    'AUTHORIZATION_REQUIRED', 'AUTHENTICATED_SESSION_REQUIRED', 'AUTHENTICATED_SHELL_UNAVAILABLE',
+    'CREDENTIALS_UNAVAILABLE', 'CREDENTIAL_NOT_CONFIGURED', 'CREDENTIAL_REJECTED', 'LOGIN_REJECTED',
+    'MANUAL_VERIFICATION_REQUIRED', 'INTERACTIVE_CHALLENGE_REQUIRED', 'VERIFIED_SESSION_LEASE_REQUIRED',
+    'SESSION_IDENTITY_UNVERIFIED', 'SESSION_STALE', 'SECURITY_EVENT', 'CAPTCHA_REQUIRED', 'OTP_REQUIRED'])
 def test_inso_authorization_still_stops_before_reset_or_retry(code, monkeypatch):
+    backend = ProductionBackend()
+    backend._v12_store = outbox = InsoTestOutbox()
+    calls = []
+    monkeypatch.setattr(backend._stop, 'wait', lambda seconds: pytest.fail('unsafe auth retry'))
+    monkeypatch.setattr(backend, '_close_inso_order_tab', lambda: pytest.fail('must retain auth page'))
+    monkeypatch.setattr(backend, '_begin_inso_inquiry', lambda iid: pytest.fail('must not reopen auth page'))
+    def operation():
+        calls.append(1)
+        return inso_failure(code)
+    with pytest.raises(V12Fault, match='INSO_AUTHENTICATION_REQUIRED') as failure:
+        backend._run_inso_query('synthetic', operation, lambda: pytest.fail('unsafe prepare retry'))
+    assert calls == [1]
+    assert failure.value.scope is FaultScope.GLOBAL_STOP
+    assert backend._state is RunState.GLOBAL_STOP and backend._stop.is_set()
+    assert 'synthetic' in backend._manual_inquiries
+    assert len(outbox.commands) == 1
+    command = next(iter(outbox.commands.values()))
+    assert '需要登录或人工验证' in command.text_body
+    assert command.command_id.endswith(':AUTHENTICATION_REQUIRED')
+    backend.shutdown()
+
+
+@pytest.mark.parametrize('code', ['AUTHENTICATED_READ_UNAVAILABLE', 'AUTHENTICATED_READ_EMPTY',
+    'RESPONSE_NOT_JSON', 'RESPONSE_ROWS_MISSING'])
+@pytest.mark.parametrize('recover_at', [2, 4, None])
+def test_inso_authenticated_reads_observe_only_after_retry_exhaustion(code, recover_at, monkeypatch):
+    backend = ProductionBackend()
+    backend._v12_store = outbox = InsoTestOutbox()
+    calls, waits, resets, prepares = [], [], [], []
+    def still_silent():
+        assert not outbox.commands and not backend._manual_inquiries
+    def wait(seconds):
+        still_silent()
+        waits.append(seconds)
+        return False
+    def reset():
+        still_silent()
+        resets.append(1)
+    def prepare():
+        still_silent()
+        prepares.append(1)
+    monkeypatch.setattr(backend._stop, 'wait', wait)
+    monkeypatch.setattr(backend, '_close_inso_order_tab', reset)
+    monkeypatch.setattr(backend, '_begin_inso_inquiry', lambda iid: None)
+    def operation():
+        still_silent()
+        calls.append(1)
+        if len(calls) == recover_at:
+            evidence = SourceEvidence(ResearchSource.INSO, 'TEST-MPN', None,
+                SourceOutcome.NO_VALID_PRICE, datetime.now(UTC))
+            return SourceResult(ResearchSource.INSO, SourceOutcome.NO_VALID_PRICE, evidence)
+        return inso_failure(code)
+    if recover_at:
+        final = backend._run_inso_query('synthetic', operation, prepare)
+        backend._observe_source_failure('synthetic', final)
+        assert final.outcome is SourceOutcome.NO_VALID_PRICE
+        assert not outbox.commands and len(resets) == recover_at - 1
+    else:
+        with pytest.raises(V12Fault, match='INSO_QUERY_RETRIES_EXHAUSTED') as failure:
+            backend._run_inso_query('synthetic', operation, prepare)
+        assert failure.value.scope is FaultScope.GLOBAL_STOP
+        assert len(outbox.commands) == 1 and len(resets) == 4
+        command = next(iter(outbox.commands.values()))
+        assert not command.command_id.endswith(':AUTHENTICATION_REQUIRED')
+        assert '需要登录或人工验证' not in command.text_body
+    attempts = recover_at or 4
+    assert len(calls) == attempts and waits == [120] * (attempts - 1)
+    assert len(prepares) == attempts - 1 and not backend._manual_inquiries
+    assert not backend._stop.is_set()
+    backend.shutdown()
+
+
+def test_inso_typed_auth_exception_is_not_swallowed_as_retryable_read(monkeypatch):
+    from src.launcher.inso_session import InsoAuthenticationError
+
     backend = ProductionBackend()
     calls = []
     monkeypatch.setattr(backend._stop, 'wait', lambda seconds: pytest.fail('unsafe auth retry'))
     monkeypatch.setattr(backend, '_close_inso_order_tab', lambda: pytest.fail('must retain auth page'))
-    def stop(iid, source):
-        raise V12Fault(FaultScope.GLOBAL_STOP, 'INSO_AUTHENTICATION_REQUIRED')
-    monkeypatch.setattr(backend, '_observe_source_failure', stop)
     def operation():
         calls.append(1)
-        return result(ResearchSource.INSO, code)
-    with pytest.raises(V12Fault, match='INSO_AUTHENTICATION_REQUIRED'):
+        raise InsoAuthenticationError('AUTHENTICATION_REQUIRED')
+    with pytest.raises(InsoAuthenticationError):
         backend._run_inso_query('synthetic', operation, lambda: None)
     assert calls == [1]
+    backend.shutdown()
+
+
+def test_inso_stop_during_read_retry_never_notifies_failure(monkeypatch):
+    backend = ProductionBackend()
+    backend._v12_store = outbox = InsoTestOutbox()
+    calls, resets = [], []
+    monkeypatch.setattr(backend._stop, 'wait', lambda seconds: True)
+    monkeypatch.setattr(backend, '_close_inso_order_tab', lambda: resets.append(1))
+    def operation():
+        calls.append(1)
+        return inso_failure('AUTHENTICATED_READ_UNAVAILABLE')
+    with pytest.raises(V12Fault, match='STOP_REQUESTED'):
+        backend._run_inso_query('synthetic', operation, lambda: None)
+    assert calls == [1] and resets == [1] and not outbox.commands
     backend.shutdown()
 
 
