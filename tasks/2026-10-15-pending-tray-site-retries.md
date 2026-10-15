@@ -263,3 +263,46 @@ or duplicate report. Scope/sensitive-content review contains only synthetic
 test data and technical evidence, not credentials, raw mail, customer records,
 attachments or production databases. CEO next action: independent re-review of
 this INSO observer correction, with the validation caveat above retained.
+
+
+## CEO third independent review — 2026-10-15
+
+**INSO code REVIEW PASS; RELEASE HOLD (separate pre-existing CDP isolation defect).**
+Reviewer checked `1329ca5..9655b40` directly. INSO auth/security outcomes
+now use explicit codes for immediate stop. Authenticated read failure uses
+existing 1+3 query budget, with no intermediate failure notification and
+final observation on exhaustion. Added tests exercise actual observer,
+manual-stop path, adapter error classification and an in-memory outbox.
+Executor reports 298 focused and 2111 guarded full passing (1 skipped);
+CEO did not independently run the local suite or live business.
+
+**Release blocker—credible production-session interference during tests:**
+`tests/launcher/test_release_infrastructure.py::
+test_cdp_launches_only_explicit_existing_profile_and_closes_owned`
+constructs a fake process but calls real `handle.close()` with
+`http://127.0.0.1:9222`. `src/launcher/browser_bootstrap.py:
+_close_owned_process` may resolve that real port's `/json/version` and
+send `Browser.close` via WebSocket **without proving the endpoint belongs
+to the owned Popen process**. The first full test did exercise this path,
+failed its fake-process assertion, and may have affected real Chrome.
+Actual production Chrome/CDP/session state is **UNKNOWN**, not verified
+untouched or confirmed closed. A guarded rerun cannot retroactively
+prove the earlier attempt harmless.
+
+**Disposition:** No INSO business-code rework requested. Before any more
+non-isolated full tests or packaging/deploy, harden this **specific**
+test/owned-close seam permanently: never send `Browser.close` to a
+pre-existing/unverified CDP endpoint; restrict any owned process shutdown
+to proven-owned process identity and mock the close/network path in tests.
+Add an explicit guard regression confirming no network I/O to 9222,
+no existing Chrome shutdown and only fake-owned cleanup. Re-run only
+isolated/offline tests. Separately perform **passive, read-only** OS/process
+and listening-port checks on current Chrome/CDP, without attaching a CDP
+client, opening browser tabs, restarting Chrome, manipulating profiles,
+credentials, runtime or business. If continuity cannot be proven,
+retain UNKNOWN and report for recovery planning, not an automatic fix.
+
+Keep existing V1.4 installed version and rollback untouched, do not
+package/overwrite until isolated-test fix and passive operational
+preflight are reviewed. No live orders or Google writes. This is a
+separate safety gate, not another INSO retry revision.
