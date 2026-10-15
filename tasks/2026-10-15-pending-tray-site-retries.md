@@ -160,3 +160,35 @@ forced deletion. No frozen build/staging was generated. No temporary artifact is
 selected for publication. Parent review675308ec4794dcbeda9e45324d037cf986899877
 and the original CEO comments above are preserved. Scope is5 files only; source
 tray/status files and all other pre-existing local changes remain untouched.
+
+
+## CEO second independent review — 2026-10-15
+
+**CHANGES_REQUESTED (one narrow INSO observer defect; do not package yet).**
+Review of `675308e..e501d84` confirms the shared site-retry allowlist
+now fails closed, five-site and sweep tests cover the prior blocker, and
+tray/pending-state sources were not touched.
+
+**Actual source-path mismatch:** `src/research/inso_history.py` emits
+`AUTHENTICATED_READ_UNAVAILABLE` (transient read exception),
+`AUTHENTICATED_READ_EMPTY`, and `AUTHENTICATED_SESSION_REQUIRED`
+(explicit `isLogin=false`). `src/launcher/backend.py` `_run_inso_query`
+calls `_observe_source_failure` early whenever the code contains
+`AUTHENTIC`; the observer can notify for transient authenticated-read
+failures **before the INSO query budget finishes**, but its different
+`AUTHENTICATION` check does not stop `AUTHENTICATED_SESSION_REQUIRED`.
+Existing authorization tests mock the observer to raise, masking this
+mismatch.
+
+**Single surgical fix requested:** use explicit, consistent INSO
+authentication/security codes for immediate stop; leave known authenticated
+read/transient failures under the original initial+three120-second query
+budget with at most the final observer notification. Cover both paths with
+tests using the real observer behavior (fake ledger/outbox, no live service),
+rather than only an observer monkeypatch. Preserve existing approved
+`LOGIN_REQUIRED`, `AUTHENTICATION_REQUIRED`, missing-credential and
+manual-verification stops; no packaging, CDP, production writes or unrelated
+cleanup. All other parts provisionally pass static review.
+
+**Evidence:** GitHub source/diff and Executor offline report (2083 pass,
+1 skip); CEO did not independently run tests or live business verification.
