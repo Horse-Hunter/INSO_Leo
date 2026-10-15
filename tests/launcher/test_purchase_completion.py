@@ -232,7 +232,7 @@ def test_restart_saved_quoted_order_never_writes_notifies_or_creates_episode():
     assert sheet.calls == 0 and not state.commands
 
 
-@pytest.mark.parametrize("status", ["发给采购", "采购已报价"])
+@pytest.mark.parametrize("status", ["发给采购", "采购已报价", "已报价给客户", "意向订单", "成交"])
 def test_pending_saved_projection_recovers_only_by_read_no_backward_write(status):
     handler, sheet, state = actions(PurchaseOutcome.SAVED)
     quoted(handler, sheet, state, pending=True)
@@ -243,6 +243,15 @@ def test_pending_saved_projection_recovers_only_by_read_no_backward_write(status
     assert state.state is BusinessState.PURCHASE_RECORDED
     assert list(state.commands) == ["historical-mail"]
     assert sheet.calls == 0 and handler.follow_up_store.records == []
+
+
+@pytest.mark.parametrize('status', ['已报价给客户', '意向订单', '成交'])
+def test_advanced_status_still_checks_source_brand_and_never_hides_conflict(status):
+    handler, sheet, state = actions(PurchaseOutcome.SAVED)
+    quoted(handler, sheet, state, pending=True)
+    sheet.rows[0] = WorksheetRow(4, {**sheet.rows[0].cells, 'A': status, 'F': 'HUMAN-CHANGED'})
+    handler.retry_saved_statuses(at=NOW)
+    assert state.state is BusinessState.STATUS_WRITE_PENDING and sheet.calls == 0
 
 
 @pytest.mark.parametrize("column,value", [("A", "未发"), ("E", "CHANGED"), ("G", 9),

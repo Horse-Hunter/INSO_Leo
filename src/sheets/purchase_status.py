@@ -6,6 +6,8 @@ from .brand_write import SheetRecordConflict, relocate_record
 from .pending import SheetRecordIdentity, WorksheetIdentity, WorksheetRowReader
 from .worksheet_schema import worksheet_schema
 
+PURCHASE_COMPLETED_STATUSES = frozenset({"发给采购", "采购已报价", "已报价给客户", "意向订单", "成交"})
+
 
 class PurchaseStatusWriter(Protocol):
     def write_purchase_status(self, worksheet: WorksheetIdentity, row_position: int) -> None: ...
@@ -31,7 +33,7 @@ def _locate_purchase_record(reader, identity, expected_brand, brand_match=None):
     rows = tuple(reader.read_rows(identity.worksheet))
     schema = worksheet_schema(identity.worksheet.worksheet)
     eligible = [r for r in rows if r.cells.get(schema.status_column)
-                in {"未发", "发给采购", "采购已报价"}]
+                in {"未发", *PURCHASE_COMPLETED_STATUSES}]
     normalized = [replace(r, cells={**r.cells, schema.status_column: "未发"}) for r in eligible]
     target = relocate_record(identity, normalized)
     original = next(r for r in eligible if r.row_position == target.row_position)

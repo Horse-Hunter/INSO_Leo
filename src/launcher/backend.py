@@ -1214,8 +1214,10 @@ class ProductionBackend(GuiBackend):
         def succeeded(result):
             if result is None:
                 return False
-            self._observe_source_failure(inquiry_id, result)
             code = next((str(f.value) for f in result.evidence.fields if f.key == "failure_code"), "SOURCE_UNAVAILABLE")
+            from src.core.site_retry import retryable_site_failure
+            if not retryable_site_failure(code) and "FX" not in code:
+                self._observe_source_failure(inquiry_id, result)
             return result.outcome is not SourceOutcome.SOURCE_UNAVAILABLE or "FX" in code
 
         return run_inso_query(
@@ -1224,6 +1226,22 @@ class ProductionBackend(GuiBackend):
         )
 
     def _run_source_query(self, inquiry_id, site, operation, reconnect):
+        from src.core.site_retry import SITE_RETRY_DELAYS, retryable_site_failure
+
+        for attempt in range(4):
+            if self._stop.is_set():
+                raise V12Fault(FaultScope.V12_PAUSE, "STOP_REQUESTED")
+            result = self._run_source_query_once(inquiry_id, site, operation, reconnect)
+            source = result.source_result if site is ResearchSource.IC_NET else result
+            code = next((str(f.value) for f in source.evidence.fields if f.key == "failure_code"), "")
+            if (source.outcome is not SourceOutcome.SOURCE_UNAVAILABLE or site is ResearchSource.INSO
+                    or not retryable_site_failure(code) or attempt == 3):
+                return result
+            if self._stop.wait(SITE_RETRY_DELAYS[attempt]):
+                raise V12Fault(FaultScope.V12_PAUSE, "STOP_REQUESTED")
+        raise AssertionError("bounded source loop exhausted")
+
+    def _run_source_query_once(self, inquiry_id, site, operation, reconnect):
         """Three bounded shared-CDP recoveries, independent of per-query retry."""
         for attempt in range(4):
             result = operation()

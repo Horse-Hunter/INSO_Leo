@@ -224,12 +224,13 @@ class InsoDashboardApp:
         self._shown_login_report: SiteLoginReport | None = None
         self._shown_manual_result = None
         self._shown_order_mail_report = None
+        self._tray = None
 
         self._root = ctk.CTk()
         self._root.title("INSO_V1.4")
         self._root.geometry("1200x800")
         self._root.configure(fg_color=_BG)
-        self._root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._root.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("dark-blue")
@@ -601,6 +602,10 @@ class InsoDashboardApp:
                 self._append_log(event.payload)
             elif event.kind == "login_all":
                 self._show_login_all_report(event.payload)
+            elif event.kind == "tray":
+                self._on_tray_command(event.payload)
+                if self._closing:
+                    return
         self._update_status(self._backend.get_status())
         self._sync_login_all()
         self._sync_order_mail()
@@ -992,6 +997,29 @@ class InsoDashboardApp:
     def run(self) -> None:
         self._root.mainloop()
 
+    def _on_window_close(self) -> None:
+        self._assert_main_thread()
+        if self._closing:
+            return
+        if self._tray is None:
+            from .tray import WindowsTray
+            self._tray = WindowsTray(lambda command: self._events.publish(BackendEvent("tray", command)))
+        if not self._tray.start():
+            self._tray.stop()
+            self._tray = None
+            if messagebox.askyesno("暂不能隐藏", "系统托盘暂不可用。是否退出程序？选择“否”保留窗口继续运行。"):
+                self._on_close()
+            return
+        self._root.withdraw()
+
+    def _on_tray_command(self, command) -> None:
+        self._assert_main_thread()
+        if command == "exit":
+            self._on_close()
+        elif command == "show" and not self._closing:
+            self._root.deiconify()
+            self._root.lift()
+
     def _on_close(self) -> None:
         """Request a graceful backend stop and keep Tk responsive while it drains."""
         if self._closing:
@@ -1050,6 +1078,9 @@ class InsoDashboardApp:
         except Exception as exc:  # noqa: BLE001 - always destroy after safe shutdown attempt
             logger.error("Backend shutdown error: %s", exc)
         finally:
+            tray = getattr(self, "_tray", None)
+            if tray is not None:
+                tray.stop()
             self._root.destroy()
 
     def _cancel_after(self, callback_id: str | None) -> None:

@@ -115,3 +115,17 @@ is success without change. Missing/ambiguous/failed rows are listed by model in
 the existing GUI result popup for Owner manual repair. The completed INSO page
 and local processed receipt remain retained; never rerun sales entry for Sheets
 repair. No INSO save/submit or new browser/login/scheduler is authorized.
+
+## Owner pending-state / tray / site retry correction (2026-10-15)
+
+Confirmed saved procurement may settle its local pending-Sheets warning by fresh,
+unique source identity/brand proof when source is 发给采购, 采购已报价, 已报价给客户,
+意向订单 or 成交. Do not rewrite advanced statuses or replay procurement.
+Window X hides the GUI from the taskbar into a native tray icon while workers
+continue. Tray Open restores; tray Exit uses existing graceful shutdown. If tray
+creation fails, keep the window and offer explicit normal exit, never lose access.
+External research-site transient failures get initial plus three stop-aware retries
+before final observation/notification; login sweep follows the same classification.
+INSO reuses its existing three query retries. Known security challenges, rejected
+credentials, missing credentials and unverified session identity keep immediate
+human-handling safeguards. Genuine no-result/no-price is not a technical retry.

@@ -141,7 +141,8 @@ def _sweep(browser: _Browser | None = None) -> tuple[SiteLoginSweep, list[_Page]
         pages.append(page)
         return page
 
-    return SiteLoginSweep(browser or _Browser(), timeout_ms=TIMEOUT_MS, new_tab=new_tab), pages
+    return SiteLoginSweep(browser or _Browser(), timeout_ms=TIMEOUT_MS, new_tab=new_tab,
+                         wait=lambda seconds: None), pages
 
 
 def _step(key: str, run) -> SiteSignInStep:

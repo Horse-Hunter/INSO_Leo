@@ -234,7 +234,18 @@ class SiteLoginSweep:
 
     def _attempt(self, step: SiteSignInStep) -> SiteLoginResult:
         try:
-            already = bool(step.run(self._tab()))
+            from src.core.site_retry import SITE_RETRY_DELAYS, retryable_site_failure
+            for attempt in range(4):
+                try:
+                    if self._stop_requested():
+                        raise SiteSweepError("STOP_REQUESTED")
+                    already = bool(step.run(self._tab()))
+                    break
+                except Exception as error:
+                    if (attempt == 3 or self._stop_requested()
+                            or not retryable_site_failure(_reason_code(error) or "SOURCE_UNAVAILABLE")):
+                        raise
+                    self._wait(SITE_RETRY_DELAYS[attempt])
         except Exception as exc:  # noqa: BLE001 - one site's failure is not the next one's
             # Leave the exact failed page for the operator. The next site gets
             # a fresh tab in the SAME context, never another browser/profile.
