@@ -64,7 +64,9 @@ class GridLocator:
         return None
 
     def click(self, **_):
-        if self.kind == 'tab':
+        if self.kind == 'editor':
+            self.page.editor_active = True
+        elif self.kind == 'tab':
             self.page.title = self.name
             self.page.url = self.page.url.split('#')[0] + f'#gid={TITLES[self.name]}'
         elif self.name not in ('文件',):
@@ -81,8 +83,15 @@ class GridLocator:
             self.page.edit = value
 
     def press(self, key):
+        if key in ('Control+A', 'Backspace'):
+            assert self.kind == 'editor' and self.page.editor_active
+            if key == 'Backspace':
+                self.page.edit = ''
+            return
         assert key == 'Enter'
         if self.kind == 'editor':
+            if not self.page.native_edit:
+                return  # DOM fill alone is ignored by the real Sheets model.
             cell = self.page.selection
             col, row = ord(cell[0])-65, int(cell[1:])-1
             rows = self.page.rows[self.page.title]
@@ -92,9 +101,14 @@ class GridLocator:
                 rows[row].append('')
             text = self.page.edit
             rows[row][col] = text.removeprefix("'")
+            self.page.editor_active = self.page.native_edit = False
 
     def input_value(self):
         return self.page.selection
+
+    def evaluate(self, script):
+        assert self.kind == 'box' and 'document.activeElement' in script
+        return False
 
 
 class GridPage(Page):
@@ -103,6 +117,20 @@ class GridPage(Page):
         self.rows, self.tmp, self.title = rows, tmp, '2026'
         self.typed, self.downloads = [], []
         self.save_fails = False
+        self.editor_active = self.native_edit = False
+        self.keyboard = SimpleNamespace(press=self.keypress, type=self.type_text)
+
+    def keypress(self, key):
+        if key == "'":
+            self.editor_active = True
+        else:
+            assert key == 'Enter'
+            GridLocator(self, 'editor').press(key)
+
+    def type_text(self, text, **kwargs):
+        self.editor_active = True
+        self.typed.append(text)
+        self.edit, self.native_edit = text, True
 
     def locator(self, selector):
         kind = {'#t-name-box': 'box', '.docs-sheet-tab': 'tabs',
@@ -455,7 +483,7 @@ def test_wrapped_navigation_network_failure_is_transient(web, monkeypatch, code)
     assert len(calls) == 5
 
 
-@pytest.mark.parametrize('failure', ['unknown', 'cert', 'auth', 'schema', 'wrapper_without_cause'])
+@pytest.mark.parametrize('failure', ['unknown', 'cert', 'auth', 'schema', 'wrapper_without_cause', 'missing_runtime'])
 def test_unknown_and_security_failures_do_not_become_temporary(web, monkeypatch, failure):
     from playwright.sync_api import Error as PageError
 
@@ -473,6 +501,7 @@ def test_unknown_and_security_failures_do_not_become_temporary(web, monkeypatch,
         'auth': V12Fault(FaultScope.GLOBAL_STOP, 'GOOGLE_AUTHENTICATION_REQUIRED'),
         'schema': V12Fault(FaultScope.GLOBAL_STOP, 'SHEETS_SCHEMA_UNAVAILABLE'),
         'wrapper_without_cause': UpdateAttemptUnconfirmed('UPDATE_RESULT_UNCONFIRMED'),
+        'missing_runtime': FileNotFoundError('synthetic unrelated missing runtime'),
     }
     calls = []
     original = Locator.wait_for
@@ -487,7 +516,7 @@ def test_unknown_and_security_failures_do_not_become_temporary(web, monkeypatch,
     assert not isinstance(caught.value, GoogleSheetsReadUnavailable) and len(calls) == 1
 
 
-@pytest.mark.parametrize('failure_mode', ['menu_timeout', 'read_gid_drift', 'read_page_closed'])
+@pytest.mark.parametrize('failure_mode', ['menu_timeout', 'read_gid_drift', 'read_page_closed', 'artifact_lost'])
 def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next_cycle(
         web, tmp_path, monkeypatch, failure_mode):
     import json
@@ -530,6 +559,12 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
             page.closed = True
         return original_download(page, actions)
     monkeypatch.setattr(service, '_download', read)
+    original_path = Download.path
+    def artifact_path(download):
+        if len(calls) <= 5 and failure_mode == 'artifact_lost':
+            download.file.unlink()
+        return original_path(download)
+    monkeypatch.setattr(Download, 'path', artifact_path)
     backend = launcher.ProductionBackend(root=tmp_path, config_path=rc, production_config_path=production)
     def next_poll(seconds):
         waits.append(seconds)
@@ -851,3 +886,82 @@ def test_real_web_guard_four_failures_then_fifth_recovers_or_auth_stops(web, mon
     assert all(p.closed for p in attempts[:4])
     assert attempts[-1].closed is not auth_on_fifth
     assert not browser.contexts[0].pages[0].closed
+
+
+@pytest.mark.parametrize('title,position', [('2026', 2), ('SHAHAB', 3)])
+def test_purchase_status_writer_commits_grid_without_formula_dom_fill(web, monkeypatch, title, position):
+    from src.sheets.google_writer import GoogleSheetsPurchaseStatusWriter
+    from src.sheets.worksheet_schema import worksheet_schema
+    service, _, rows, _ = web
+    schema = worksheet_schema(title)
+    column = ord(schema.status_column) - 65
+    rows[title][position - 1][column] = '未发'
+    fill = GridLocator.fill
+    def no_formula_fill(locator, value):
+        assert locator.kind != 'editor', 'DOM-only edits never commit Sheets data'
+        return fill(locator, value)
+    monkeypatch.setattr(GridLocator, 'fill', no_formula_fill)
+    GoogleSheetsPurchaseStatusWriter(service).write_purchase_status(WorksheetIdentity('test', title), position)
+    assert rows[title][position - 1][column] == '发给采购'
+
+
+def test_grid_write_requires_focus_to_leave_name_box(web, monkeypatch):
+    service, browser, rows, _ = web
+    monkeypatch.setattr(GridLocator, 'evaluate', lambda *a: True)
+    old = [list(row) for row in rows['2026']]
+    with pytest.raises(GoogleSheetsWriteError):
+        GoogleSheetsBrandWriter(service).write_brand(WorksheetIdentity('test', '2026'), 2, 'NEW')
+    assert rows['2026'] == old and not browser.contexts[0].pages[-1].typed
+
+
+def test_lost_owned_export_retries_fresh_read_without_hiding_other_missing_files(web, monkeypatch, caplog):
+    service, browser, _, _ = web
+    path = Download.path
+    calls = []
+    def lose_once(download):
+        calls.append(download)
+        if len(calls) == 1:
+            download.file.unlink()
+        return path(download)
+    monkeypatch.setattr(Download, 'path', lose_once)
+    with service.poll_scope():
+        assert GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', 'SHAHAB'))
+    assert len(calls) == 2 and calls[0].page is not calls[1].page
+    assert all(p.closed for p in browser.contexts[0].pages[1:])
+    assert all(not d.file.exists() for d in calls)
+    assert any(getattr(r, 'runtime_reason', None) == 'GOOGLE_WEB_READ_ARTIFACT_LOST' for r in caplog.records)
+
+
+def test_already_deleted_download_cleanup_does_not_fail_a_valid_read(web, monkeypatch):
+    service, _, _, _ = web
+    def gone(download):
+        download.file.unlink()
+        raise FileNotFoundError('synthetic already removed export')
+    monkeypatch.setattr(Download, 'delete', gone)
+    assert GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', '2026'))
+
+
+def test_lost_export_after_grid_commit_stays_uncertain_and_never_repeats_write(web, monkeypatch):
+    service, browser, rows, _ = web
+    path = Download.path
+    def lose_readback(download):
+        if download.page.typed:
+            download.file.unlink()
+        return path(download)
+    monkeypatch.setattr(Download, 'path', lose_readback)
+    with pytest.raises(GoogleSheetsWriteError):
+        GoogleSheetsBrandWriter(service).write_brand(WorksheetIdentity('test', '2026'), 2, 'NEW')
+    page = browser.contexts[0].pages[-1]
+    assert rows['2026'][1][5] == 'NEW' and page.typed == ["'NEW"] and not page.closed
+
+
+def test_write_failure_logs_fixed_stage_and_reason_without_values(web, monkeypatch, caplog):
+    from src.gui.main import _sanitized_line
+    service, _, _, _ = web
+    monkeypatch.setattr(GridLocator, 'evaluate', lambda *a: True)
+    with pytest.raises(GoogleSheetsWriteError):
+        GoogleSheetsBrandWriter(service).write_brand(WorksheetIdentity('test', '2026'), 2, 'PRIVATE-TEST-VALUE')
+    lines = [_sanitized_line(r) for r in caplog.records if r.name == 'inso.diagnostics']
+    assert any('google-write-select-cell' in line for line in lines)
+    assert any('GOOGLE_SELECTION_UNCONFIRMED' in line for line in lines)
+    assert all('PRIVATE-TEST-VALUE' not in line for line in lines)

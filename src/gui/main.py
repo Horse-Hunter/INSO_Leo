@@ -139,6 +139,9 @@ def main(*, guard_factory=None, backend_factory=None) -> int:
         parser.add_argument(
             "--mock", action="store_true", help="run GUI demo backend instead of production"
         )
+        parser.add_argument(
+            "--start-inquiry", action="store_true", help="start the existing inquiry workflow after GUI initialization"
+        )
         args = parser.parse_args()
         guard = (guard_factory or SingleInstanceGuard)()
         if not guard.acquire():
@@ -149,7 +152,10 @@ def main(*, guard_factory=None, backend_factory=None) -> int:
             if args.mock
             else (backend_factory or ProductionBackend)()
         )
-        InsoDashboardApp(backend).run()
+        app = InsoDashboardApp(backend)
+        if args.start_inquiry:
+            backend.start()
+        app.run()
         return 0
     except Exception as exc:  # noqa: BLE001 - windowed startup safety boundary
         logging.getLogger("inso.startup").error(

@@ -220,21 +220,33 @@ class GoogleSheetsWebService:
                     if isinstance(value, bool) or not isinstance(value, (str, int, float)):
                         raise TypeError("GOOGLE_VALUE_UNCONFIRMED")
                     actions._guard()
+                    stage = "google-write-select-cell"
                     cell = f"{_column(first + offset)}{start}"
                     box = page.locator("#t-name-box")
                     box.fill(cell)
                     box.press("Enter")
                     if box.input_value() != cell:
                         raise ValueError("GOOGLE_SELECTION_UNCONFIRMED")
-                    editor = page.locator('#t-formula-bar-input [contenteditable="true"]')
-                    # RAW strings stay literal, including leading zeros, = and newlines.
+                    # Name-box Enter hands focus back to the selected grid cell.
+                    # Sheets' formula-bar DOM fill does not commit its data model.
+                    if box.evaluate("element => element === document.activeElement"):
+                        raise ValueError("GOOGLE_SELECTION_UNCONFIRMED")
+                    stage = "google-write-edit"
                     dirty = True
-                    editor.fill("'" + value if isinstance(value, str) else str(value))
-                    editor.press("Enter")
+                    if isinstance(value, str):
+                        # Sequential native input gives Sheets its key/input
+                        # sequence; a bulk DOM/insertText replacement is ignored.
+                        # Literal prefix preserves RAW text, not formula evaluation.
+                        page.keyboard.type("'" + value, delay=75)
+                    else:
+                        page.keyboard.type(str(value))
+                    page.keyboard.press("Enter")
                 # Observed live UI badge; do not close a page with unsynced edits.
+                stage = "google-write-save"
                 page.wait_for_function(
                     '() => document.querySelector("#docs-save-indicator-badge")?.getAttribute("aria-label") === "文档状态：已保存到云端硬盘。"',
                     timeout=30000)
+                stage = "google-write-readback"
                 confirmed = _source_values(self._download(page, actions), title, first, start, last, end)
                 if confirmed != values:
                     raise ValueError("GOOGLE_WRITE_READBACK_MISMATCH")
@@ -242,10 +254,18 @@ class GoogleSheetsWebService:
                 return {"updatedCells": len(values[0])}
             except Exception as exc:
                 actions.retire_failed_page()
+                if write:
+                    log_step(stage, cause=exc)
+                    reason = str(exc) if str(exc) in {
+                        "GOOGLE_SELECTION_UNCONFIRMED", "GOOGLE_WRITE_READBACK_MISMATCH",
+                        "GOOGLE_VALUE_UNCONFIRMED", "GOOGLE_WEB_READ_ARTIFACT_LOST",
+                    } else "GOOGLE_WEB_WRITE_UNCLASSIFIED"
+                    logging.getLogger("inso.diagnostics").warning("Google write classification", extra={
+                        "runtime_reason": reason, "runtime_cause": type(exc).__name__})
                 if dirty:
                     actions._protected = True
                     raise QuotationInputUnavailable("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED") from None
-                # Same one-retry/next-15-minute policy as existing transient reads.
+                # Same bounded retry/next-15-minute policy as existing transient reads.
                 # Never turn auth, unknown errors or write ambiguity into a retry.
                 if not write:
                     temporary = _temporary_web_read_failure(exc)
@@ -256,6 +276,8 @@ class GoogleSheetsWebService:
                         "GOOGLE_OPERATION_SURFACE_UNAVAILABLE", "GOOGLE_OPERATION_SURFACE_UNCONFIRMED",
                     }:
                         reason = str(exc)  # Safe exact guard code; never page text/URLs.
+                    elif isinstance(exc, TimeoutError) and str(exc) == "GOOGLE_WEB_READ_ARTIFACT_LOST":
+                        reason = "GOOGLE_WEB_READ_ARTIFACT_LOST"
                     logging.getLogger("inso.diagnostics").warning("Google read classification", extra={
                         "runtime_reason": reason, "runtime_cause": type(exc).__name__})
                     if temporary:
@@ -324,16 +346,25 @@ class GoogleSheetsWebService:
             failure = download.failure()
             if failure:
                 raise TimeoutError("GOOGLE_WEB_READ_UNAVAILABLE")
-            path = Path(download.path())
-            if path.stat().st_size > 32 * 1024 * 1024:
-                raise ValueError("GOOGLE_WEB_READ_TOO_LARGE")
-            rows = list(csv.reader(io.StringIO(path.read_text(encoding="utf-8-sig")), delimiter="\t"))
+            try:
+                path = Path(download.path())
+                if path.stat().st_size > 32 * 1024 * 1024:
+                    raise ValueError("GOOGLE_WEB_READ_TOO_LARGE")
+                content = path.read_text(encoding="utf-8-sig")
+            except FileNotFoundError:
+                # Only this owned export artifact is recoverable. A missing
+                # configuration/credential or other unknown file still stops.
+                raise TimeoutError("GOOGLE_WEB_READ_ARTIFACT_LOST") from None
+            rows = list(csv.reader(io.StringIO(content), delimiter="\t"))
             if len(rows) > 100000:
                 raise ValueError("GOOGLE_WEB_READ_TOO_LARGE")
             actions._guard()
             return rows
         finally:
-            download.delete()  # Customer data stays temporary, never evidence/logs/Git.
+            try:
+                download.delete()  # Customer data stays temporary, never evidence/logs/Git.
+            except FileNotFoundError:
+                pass  # Already removed; never mask a completed read/its real failure.
 
 
 def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, browser_handle=None):

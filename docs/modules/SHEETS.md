@@ -124,3 +124,13 @@ status, brand, baseline-commit and write readback checks retain live reads.
 Recoverable source reads allow five attempts total, with production stop-aware
 2/4/6/8-second backoff; unknown/auth/security/schema errors never get that retry.
 Evidence: tasks/2026-10-18-google-read-efficiency.md (REVIEW_REQUIRED; not deployed).
+
+2026-10-19 write correction: canonical web transport commits selected cells with
+native sequential grid keyboard input, rather than DOM-only formula-bar fill.
+Target/focus proof precedes typing; literal prefix, cloud-save confirmation and
+TSV readback remain mandatory. Two Owner-approved source status repairs have real
+readback evidence; full raw14 editor/overwrite live acceptance remains UNKNOWN.
+Loss of the owned TSV path during path/stat/read becomes a transient read;
+already-missing download cleanup is idempotent. Other FileNotFoundError sources
+remain unknown/security stops, and loss AFTER a write remains uncertain with no
+automatic write retry. Evidence: tasks/2026-10-19-purchase-status-web-repair.md.
