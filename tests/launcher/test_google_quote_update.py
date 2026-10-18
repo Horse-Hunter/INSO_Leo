@@ -97,6 +97,9 @@ class Page:
             self.script_running = False
             self.settled = True
     def evaluate(self, script, arg=None):
+        if "document.querySelectorAll('[role=\"dialog\"]')" in script:
+            return bool(self.popup or getattr(self, 'refresh_pending', False)
+                        or (self.started and self.script_running))
         if "window.__insoRefreshPending = true" in script:
             self.refresh_pending = True
         elif "window.__insoRefreshPending = false" in script:

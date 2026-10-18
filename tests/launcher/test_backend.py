@@ -154,6 +154,9 @@ class _SheetsService:
     def spreadsheets(self):
         return self.resource
 
+    def poll_scope(self):
+        return nullcontext()
+
 
 def _write_runtime_configs(tmp_path, *, pending_count=0):
     client_secret = tmp_path / "oauth-client.json"

@@ -243,3 +243,170 @@ def test_authentication_page_is_not_retried_or_closed(web):
         service.values().get(spreadsheetId='test', range="'2026'!A1:G").execute()
     assert len(browser.contexts[0].pages) == 2
     assert not browser.contexts[0].pages[-1].closed and not original.closed
+
+
+def test_poll_reuses_one_page_across_both_sources_and_raw14_then_closes(web):
+    service, browser, _, original = web
+    with service.poll_scope():
+        for title in ('2026', 'SHAHAB', '2026'):
+            service.get(spreadsheetId='test', range=f"'{title}'!A1:G").execute()
+        service.update(spreadsheetId='test', range="'报价输入'!A1:N1",
+                       valueInputOption='RAW', body={'values': [['TEST'] * 14]}).execute()
+        assert len(browser.contexts[0].pages) == 2
+        assert not browser.contexts[0].pages[-1].closed
+    assert browser.contexts[0].pages[-1].closed and not original.closed
+    with service.poll_scope():
+        service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
+    assert len(browser.contexts[0].pages) == 3 and browser.contexts[0].pages[-1].closed
+
+
+@pytest.mark.parametrize('problem', ['wrong_document', 'auth', 'pending', 'dialog', 'ownership'])
+def test_unsafe_old_sheet_is_quarantined_next_stage_uses_fresh_page(web, problem):
+    service, browser, _, original = web
+    with service.poll_scope():
+        service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
+        old = browser.contexts[0].pages[-1]
+        if problem == 'wrong_document':
+            old.url = 'https://docs.google.com/spreadsheets/d/other/edit#gid=0'
+        elif problem == 'auth':
+            old.login_markers.add('登录')
+        elif problem == 'pending':
+            old.refresh_pending = True
+        elif problem == 'dialog':
+            old.popup = 'Unexpected dialog'
+        else:
+            old.owner_name = ''
+        service.get(spreadsheetId='test', range="'SHAHAB'!A1:G").execute()
+        new = browser.contexts[0].pages[-1]
+        assert new is not old and new.title == 'SHAHAB'
+        assert not old.closed and not new.closed
+    assert new.closed and not old.closed and not original.closed
+
+
+def test_dirty_write_page_is_never_reused_or_closed_by_next_stage(web):
+    service, browser, _, original = web
+    with service.poll_scope():
+        create = browser.contexts[0].new_page
+        def dirty():
+            page = create()
+            page.save_fails = True
+            return page
+        browser.contexts[0].new_page = dirty
+        with pytest.raises(QuotationInputUnavailable):
+            service.update(spreadsheetId='test', range="'2026'!F2", valueInputOption='RAW',
+                           body={'values': [['NEW']]}).execute()
+        old = browser.contexts[0].pages[-1]
+        browser.contexts[0].new_page = create
+        service.get(spreadsheetId='test', range="'SHAHAB'!A1:G").execute()
+        new = browser.contexts[0].pages[-1]
+    assert new.closed and not old.closed and not original.closed
+
+
+def test_poll_cleanup_on_error_does_not_leave_normal_page_open(web):
+    service, browser, _, original = web
+    with pytest.raises(RuntimeError, match='synthetic stage failure'), service.poll_scope():
+        service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
+        raise RuntimeError('synthetic stage failure')
+    assert browser.contexts[0].pages[-1].closed and not original.closed
+
+
+def test_updater_and_web_transport_share_one_page_despite_interleaved_source_reads(web):
+    from src.launcher.google_quote_update import GoogleQuotationUpdateActions
+    service, browser, _, original = web
+    location = QuotationInputLocation(WorksheetIdentity('test', '报价输入'), 1, 1, '29')
+    with service.poll_scope():
+        actions = GoogleQuotationUpdateActions(browser_handle=BrowserHandle(owned=False, browser=browser),
+                                               location=location)
+        actions.open_quote_input()
+        for title in ('2026', 'SHAHAB'):
+            service.get(spreadsheetId='test', range=f"'{title}'!A1:G").execute()
+        service.update(spreadsheetId='test', range="'报价输入'!A1:N1", valueInputOption='RAW',
+                       body={'values': [['TEST'] * 14]}).execute()
+        actions.click_update_quote()
+        assert '成功填入' in actions.read_update_result()
+        actions.dismiss_result()
+        # Source status checks after script completion may select the source tab.
+        service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
+        actions.close()
+        assert len(browser.contexts[0].pages) == 2
+    assert browser.contexts[0].pages[-1].closed and not original.closed
+
+
+def test_new_stage_auth_failure_still_stops_once_and_preserves_both_pages(web):
+    service, browser, _, original = web
+    with service.poll_scope():
+        service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
+        old = browser.contexts[0].pages[-1]
+        old.popup = 'Previous stage error'
+        create = browser.contexts[0].new_page
+        def auth():
+            page = create()
+            page.login_markers.add('登录')
+            return page
+        browser.contexts[0].new_page = auth
+        with pytest.raises(V12Fault, match='GOOGLE_AUTHENTICATION_REQUIRED'):
+            service.get(spreadsheetId='test', range="'SHAHAB'!A1:G").execute()
+        new = browser.contexts[0].pages[-1]
+        assert len(browser.contexts[0].pages) == 3
+    assert not old.closed and not new.closed and not original.closed
+
+
+def test_poll_session_is_lazy_reused_and_failed_acquisition_can_retry(web):
+    from contextlib import contextmanager
+    service, _, _, _ = web
+    original_session = service._session
+    entered, exited = [], []
+    @contextmanager
+    def session():
+        entered.append(True)
+        if len(entered) == 1:
+            raise TimeoutError('synthetic pre-acquisition failure')
+        with original_session() as handle:
+            try:
+                yield handle
+            finally:
+                exited.append(True)
+    service._session = session
+    with service.poll_scope():
+        assert not entered
+        with pytest.raises(TimeoutError):
+            service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
+        for title in ('2026', 'SHAHAB'):
+            service.get(spreadsheetId='test', range=f"'{title}'!A1:G").execute()
+        assert len(entered) == 2 and not exited
+    assert len(exited) == 1
+
+
+def test_other_thread_cannot_borrow_or_close_poll_page(web):
+    from threading import Thread
+    service, browser, _, _ = web
+    with service.poll_scope():
+        service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
+        poll_page = browser.contexts[0].pages[-1]
+        results = []
+        worker = Thread(target=lambda: results.append(service.get(
+            spreadsheetId='test', range="'SHAHAB'!A1:G").execute()))
+        worker.start()
+        worker.join(timeout=2)
+        assert not worker.is_alive() and results
+        assert len(browser.contexts[0].pages) == 3
+        assert browser.contexts[0].pages[-1].closed and not poll_page.closed
+    assert poll_page.closed
+
+
+def test_pending_refresh_page_kept_while_other_source_reads_continue(web):
+    from src.launcher.google_quote_update import GoogleQuotationUpdateActions
+    service, browser, _, _ = web
+    location = QuotationInputLocation(WorksheetIdentity('test', '报价输入'), 1, 1, '29')
+    with service.poll_scope():
+        actions = GoogleQuotationUpdateActions(browser_handle=BrowserHandle(owned=False, browser=browser),
+                                               location=location)
+        actions.prepare_price_refresh()
+        actions.open_quote_input()
+        old = actions._page
+        actions.click_update_quote()
+        actions.close()  # Uncertain result, no repeat click or destructive navigation.
+        service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
+        new = browser.contexts[0].pages[-1]
+        assert new is not old and old.refresh_pending and old.clicks == ['更新报价']
+    assert new.closed and not old.closed

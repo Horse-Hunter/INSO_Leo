@@ -4,6 +4,8 @@ Named button or Owner-verified sole visible drawing. Configured geometry/gid is 
 this module never discovers credentials, launches a browser, or calls Script URLs.
 """
 import re
+from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar
 from types import SimpleNamespace
 from urllib.parse import urlsplit
 
@@ -65,6 +67,33 @@ _REFRESH_INPUT_IDLE = """() => {
 }"""
 
 
+_POLL_GOOGLE_PAGES = ContextVar("poll_google_pages", default=None)
+_UNSAFE_POLL_PAGE = """() => window.__insoRefreshPending === true ||
+    [...document.querySelectorAll('[role="dialog"]')].some(e => e.getClientRects().length) ||
+    document.body.innerText.includes('正在运行脚本') ||
+    (() => { const label = document.querySelector('#docs-save-indicator-badge')?.getAttribute('aria-label');
+        return !!label && label !== '文档状态：已保存到云端硬盘。'; })()"""
+
+
+@contextmanager
+def google_operation_scope():
+    """Retain only this thread's owned surfaces until this poll exits."""
+    pages = {}
+    token = _POLL_GOOGLE_PAGES.set(pages)
+    try:
+        yield
+    finally:
+        _POLL_GOOGLE_PAGES.reset(token)
+        with ExitStack() as closing:
+            for entry in pages.values():
+                if not entry["protected"]:
+                    cleanup = entry["actions"]
+                    cleanup._page = entry["page"]
+                    cleanup._poll_entry = None
+                    cleanup._location = SimpleNamespace(url=entry["page"].url)
+                    closing.callback(cleanup.close)
+
+
 class GoogleQuotationUpdateActions:
     def __init__(self, *, browser_handle, location: QuotationInputLocation,
                  timeout_ms: int = 10000, readiness_timeout_ms: int = 30000,
@@ -77,6 +106,7 @@ class GoogleQuotationUpdateActions:
         self._page, self._protected = None, False
         self._script_pending = False
         self._price_refresh = False
+        self._poll_entry = None
 
     def prepare_price_refresh(self):
         self._price_refresh = True
@@ -152,6 +182,34 @@ class GoogleQuotationUpdateActions:
         browser = self._handle.browser
         if browser is None or not browser.is_connected() or len(browser.contexts) != 1:
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")
+        pool = _POLL_GOOGLE_PAGES.get()
+        target = urlsplit(self._location.url)
+        key = (target.scheme, target.hostname, target.path)
+        entry = pool.get(key) if pool is not None else None
+        if entry is not None and not entry["protected"]:
+            self._page, self._poll_entry = entry["page"], entry
+            # Prove the current document/authentication BEFORE navigating away.
+            expected = self._location
+            self._location = SimpleNamespace(url=self._page.url)
+            actual = urlsplit(self._page.url)
+            try:
+                self._guard()
+                if (actual.scheme, actual.hostname, actual.path) != key or page_owner(self._page) != "google-operation":
+                    raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SPREADSHEET_UNAVAILABLE")
+                if self._page.evaluate(_UNSAFE_POLL_PAGE):
+                    raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
+            except Exception:  # noqa: BLE001 - unknown old pages get isolated, never repaired in place
+                # Quarantine the old surface. A new stage gets one ordinary new
+                # page, whose existing guards/retries decide whether it can run.
+                entry["protected"] = True
+                self._page, self._poll_entry, self._protected = None, None, False
+            finally:
+                self._location = expected
+            if self._page is not None:
+                if self._page.url != expected.url:
+                    self._attempt(lambda: self._page.goto(expected.url, wait_until="domcontentloaded", timeout=self._timeout))
+                self._guard()
+                return self._page
         try:
             self._page = new_background_page(browser, browser.contexts[0], timeout_ms=self._timeout,
                                              owner="google-operation")
@@ -161,6 +219,9 @@ class GoogleQuotationUpdateActions:
         self._guard()
         from src.research.cdp_pages import mark_owned_page
         mark_owned_page(self._page, "google-operation")
+        if pool is not None:
+            self._poll_entry = {"page": self._page, "actions": self, "protected": False}
+            pool[key] = self._poll_entry
         return self._page
 
     def _ready_control(self):
@@ -264,6 +325,30 @@ class GoogleQuotationUpdateActions:
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from None
 
     def close(self):
+        if self._poll_entry is not None:
+            entry, self._poll_entry = self._poll_entry, None
+            entry["protected"] |= self._protected or self._script_pending
+            if not entry["protected"] and self._page is not None and not self._page.is_closed():
+                expected = self._location
+                actual = urlsplit(self._page.url)
+                target = urlsplit(expected.url)
+                try:
+                    # Other nested calls may legitimately have selected another gid.
+                    # Authentication/document ownership and settlement must still hold.
+                    self._location = SimpleNamespace(url=self._page.url)
+                    self._guard()
+                    entry["protected"] |= (
+                        (actual.scheme, actual.hostname, actual.path) !=
+                        (target.scheme, target.hostname, target.path)
+                        or page_owner(self._page) != "google-operation"
+                        or bool(self._page.evaluate(_UNSAFE_POLL_PAGE)))
+                except Exception:  # noqa: BLE001 - unknown surfaces are quarantined, never reused
+                    entry["protected"] = True
+                finally:
+                    self._location = expected
+            entry["actions"] = self
+            self._page = None
+            return
         if self._price_refresh and self._script_pending:
             # The browser-visible marker, not this disposable controller, owns
             # recovery. Preserve the tab and allow a later attempt to re-check it.

@@ -135,7 +135,7 @@ from .v13_integration import (
     quotation_gui,
     quotation_location,
 )
-from .v13_quotation import V13QuotationOperations
+from .v13_quotation import quotation_operation_scope, quotation_operations
 
 log = logging.getLogger(__name__)
 
@@ -860,33 +860,34 @@ class ProductionBackend(GuiBackend):
                                 return
                             self._poll_idle.clear()
                         try:
-                            self._last_poll = utc_now()
-                            self._cycle_id = "cycle_" + uuid.uuid4().hex
-                            self._begin_poll_projection()
-                            self._refresh_dashboard_counts(reader, worksheets,
-                                episodes=follow_up_store, now=self._last_poll)
-                            if self._combined is not None:
-                                self._combined.run(reader, worksheets, now=self._last_poll)
-                            else:
-                                self._v12_composition.coordinator.begin_poll_cycle()
-                                for worksheet in worksheets:
-                                    if self._immediate_stop_requested():
-                                        return
-                                    self._v12_composition.coordinator.poll_and_process(reader,worksheet,now=self._last_poll)
-                            if self._immediate_stop_requested():
-                                return
-                            self._idle_login_tick(now=utc_now())
-                            if self._immediate_stop_requested():
-                                return
-                            self._purchase_completion.retry_saved_statuses(at=utc_now())
-                            self._v12_composition.coordinator.run_notifications(
-                                now=utc_now()
-                            )
-                            with self._lock:
-                                if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}:
-                                    self._next_poll_at = utc_now() + runtime.poll_interval
-                            browser_state = "已连接" if self._research_ready else "待命"
-                            self._set_health(("正常", browser_state, "正常", "正常"), "正常")
+                            with web_service.poll_scope(), quotation_operation_scope():
+                                self._last_poll = utc_now()
+                                self._cycle_id = "cycle_" + uuid.uuid4().hex
+                                self._begin_poll_projection()
+                                self._refresh_dashboard_counts(reader, worksheets,
+                                    episodes=follow_up_store, now=self._last_poll)
+                                if self._combined is not None:
+                                    self._combined.run(reader, worksheets, now=self._last_poll)
+                                else:
+                                    self._v12_composition.coordinator.begin_poll_cycle()
+                                    for worksheet in worksheets:
+                                        if self._immediate_stop_requested():
+                                            return
+                                        self._v12_composition.coordinator.poll_and_process(reader,worksheet,now=self._last_poll)
+                                if self._immediate_stop_requested():
+                                    return
+                                self._idle_login_tick(now=utc_now())
+                                if self._immediate_stop_requested():
+                                    return
+                                self._purchase_completion.retry_saved_statuses(at=utc_now())
+                                self._v12_composition.coordinator.run_notifications(
+                                    now=utc_now()
+                                )
+                                with self._lock:
+                                    if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}:
+                                        self._next_poll_at = utc_now() + runtime.poll_interval
+                                browser_state = "已连接" if self._research_ready else "待命"
+                                self._set_health(("正常", browser_state, "正常", "正常"), "正常")
                         except (sqlite3.Error, V12DatabaseError):
                             self._state = RunState.GLOBAL_STOP
                             raise
@@ -997,11 +998,16 @@ class ProductionBackend(GuiBackend):
                     login = CoreLoginBridge().login(INSO_SITE_ID)
                 except Exception:  # noqa: BLE001 - only the shared login bridge
                     raise V12Fault(FaultScope.GLOBAL_STOP,"INSO_AUTHENTICATION_REQUIRED") from None
-                self.current = V13QuotationOperations(browser_handle=handle,login=login)
+                self.current = quotation_operations(browser_handle=handle,login=login)
                 return self.current.open(inquiry_id)
             def preserve(self):
                 if self.current:
                     self.current.preserve()
+            def reset(self):
+                if self.current:
+                    self.current.reset()
+                    self.current = None
+                backend._active_inso_inquiry = None
             def close(self):
                 if self.current:
                     self.current.close()

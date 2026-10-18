@@ -1,6 +1,7 @@
 """Exercise the production poll thread with synthetic config/Sheets and fake mail."""
 
 import json
+from contextlib import contextmanager
 from threading import Event
 from types import SimpleNamespace
 
@@ -36,10 +37,19 @@ def test_canonical_poll_combines_empty_purchase_quotation_and_interruptible_900s
     production.write_text(json.dumps(cfg), encoding="utf-8")
     observed = Event()
     events = []
+    page_scope = []
+    class PollSheets(_SheetsService):
+        @contextmanager
+        def poll_scope(self):
+            page_scope.append('enter')
+            try:
+                yield
+            finally:
+                page_scope.append('exit')
     monkeypatch.setattr(
         launcher,
         "build_google_web_service",
-        lambda _, **_kwargs: _SheetsService(rows, Event()),
+        lambda _, **_kwargs: PollSheets(rows, Event()),
     )
     monkeypatch.setattr(
         launcher,
@@ -58,6 +68,8 @@ def test_canonical_poll_combines_empty_purchase_quotation_and_interruptible_900s
     original = V12WorkflowCoordinator.poll_and_process
 
     def purchase(self, *a, **k):
+        from src.launcher.v13_quotation import _POLL_OPERATIONS
+        assert page_scope == ['enter'] and _POLL_OPERATIONS.get() is not None
         events.append("V12")
         if fault:
             raise V12Fault(
@@ -72,6 +84,8 @@ def test_canonical_poll_combines_empty_purchase_quotation_and_interruptible_900s
     run = V13IntegratedCycle.run
 
     def quotation(self, *a, **k):
+        from src.launcher.v13_quotation import _POLL_OPERATIONS
+        assert page_scope == ['enter'] and _POLL_OPERATIONS.get() is not None
         events.append("V13")
         output = run(self, *a, **k)
         observed.set()
@@ -129,6 +143,7 @@ def test_canonical_poll_combines_empty_purchase_quotation_and_interruptible_900s
             backend.request_stop_after_cycle()
         backend._thread.join(timeout=5)
         assert not backend._thread.is_alive()
+        assert page_scope == ['enter', 'exit']
     finally:
         backend.shutdown()
 

@@ -121,3 +121,124 @@ def test_failed_owned_tab_close_blocks_the_next_order():
     with pytest.raises(V12Fault):
         operations.open("original-2")
     assert not page.closed
+
+
+@pytest.fixture
+def retained_browser():
+    """Exercise real login, native menu proof and pinned leases, without CDP."""
+    context = FakeContext()
+    class OwnedLoginPage(_LoginPage):
+        def evaluate(self, script, arg=None):
+            if 'window.name = name' in script:
+                self.owner_name = arg
+            elif 'window.name' in script:
+                return getattr(self, 'owner_name', '')
+            else:
+                return super().evaluate(script)
+    def new_page():
+        page = OwnedLoginPage(context)
+        context.pages.append(page)
+        return page
+    context.new_page = new_page
+    browser = FakeBrowser([context])
+    return BrowserHandle(owned=False, browser=browser, playwright=FakePlaywright(browser)), context
+
+
+def test_poll_two_worksheets_reuse_page_with_real_menu_reproof_then_next_poll_fresh(retained_browser):
+    from src.launcher.v13_quotation import (
+        quotation_operation_scope,
+        quotation_operations,
+    )
+    handle, context = retained_browser
+    original = tuple(context.pages)
+    with quotation_operation_scope():
+        first = quotation_operations(browser_handle=handle, login=_Login())
+        page = first.open('2026-order').operation_page().page
+        first.close()
+        second = quotation_operations(browser_handle=handle, login=_Login())
+        assert second is first
+        assert second.open('SHAHAB-order').operation_page().page is page
+        second.close()
+        assert page.menu_clicks == 2 and not page.closed
+    assert page.closed and all(not p.closed for p in original)
+    with quotation_operation_scope():
+        third = quotation_operations(browser_handle=handle, login=_Login())
+        next_page = third.open('next-poll').operation_page().page
+        third.close()
+        assert next_page is not page
+    assert next_page.closed and handle.browser.connected
+
+
+def test_lost_inso_menu_is_quarantined_and_next_order_gets_fresh_login(retained_browser):
+    from src.launcher.v13_quotation import (
+        quotation_operation_scope,
+        quotation_operations,
+    )
+    handle, _context = retained_browser
+    with quotation_operation_scope():
+        operation = quotation_operations(browser_handle=handle, login=_Login())
+        old = operation.open('first').operation_page().page
+        operation.close()
+        old.frames = [old.main_frame]  # Previous stage left an unexpected menu.
+        before = list(old.gotos)
+        new = operation.open('second').operation_page().page
+        operation.close()
+        assert new is not old and new.menu_clicks == 1
+        assert old.gotos == before and not old.closed
+    assert new.closed and not old.closed
+
+
+def test_protected_quotation_page_not_reused_next_stage_then_existing_auth_stop(retained_browser):
+    from src.launcher.v13_quotation import (
+        quotation_operation_scope,
+        quotation_operations,
+    )
+    handle, context = retained_browser
+    with quotation_operation_scope():
+        operation = quotation_operations(browser_handle=handle, login=_Login())
+        old = operation.open('first').operation_page().page
+        operation.preserve()
+        next_operation = quotation_operations(browser_handle=handle, login=_Login())
+        assert next_operation is not operation
+        create = context.new_page
+        def challenge():
+            page = create()
+            page.body_text = 'CAPTCHA'
+            return page
+        context.new_page = challenge
+        with pytest.raises(V12Fault, match='INSO_AUTHENTICATION_REQUIRED'):
+            next_operation.open('second')
+        human = context.pages[-1]
+        assert human is not old and human.clicks == 0
+    assert not human.closed and not old.closed
+
+
+def test_quotation_scope_closes_normal_page_on_later_stage_failure(retained_browser):
+    from src.launcher.v13_quotation import (
+        quotation_operation_scope,
+        quotation_operations,
+    )
+    handle, _ = retained_browser
+    with pytest.raises(RuntimeError), quotation_operation_scope():
+        operation = quotation_operations(browser_handle=handle, login=_Login())
+        page = operation.open('first').operation_page().page
+        operation.close()
+        raise RuntimeError('synthetic later failure')
+    assert page.closed and handle.browser.connected
+
+
+def test_failed_query_reset_physically_closes_before_retry_inside_poll(retained_browser):
+    from src.launcher.v13_quotation import (
+        quotation_operation_scope,
+        quotation_operations,
+    )
+    handle, _ = retained_browser
+    with quotation_operation_scope():
+        operation = quotation_operations(browser_handle=handle, login=_Login())
+        first = operation.open('first-attempt').operation_page().page
+        operation.reset()
+        assert first.closed  # run_inso_query waits only AFTER this callback.
+        next_page = operation.open('retry').operation_page().page
+        assert next_page is not first
+        operation.close()
+    assert next_page.closed

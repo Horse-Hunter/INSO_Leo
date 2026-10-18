@@ -268,7 +268,7 @@ class V13QuotationCycle:
             try:
                 quote, _ = run_inso_query(
                     operation, succeeded=lambda result: result[1],
-                    reset=self._operations.close, wait=self._wait,
+                    reset=getattr(self._operations, "reset", self._operations.close), wait=self._wait,
                     stop_fault=lambda: V13Stopped("STOP_REQUESTED"),
                 )
             except V13SourceRowError as exc:

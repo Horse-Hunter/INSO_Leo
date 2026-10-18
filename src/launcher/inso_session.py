@@ -806,6 +806,7 @@ def attach_inso_research_session(
     fresh_page: bool = False,
     operation_page: Any | None = None,
     owns_operation_page: bool = False,
+    preserve_operation_page_on_failure: bool = False,
 ) -> InsoResearchSession:
     """Attach to exactly one existing authenticated shell in the sole context."""
 
@@ -892,7 +893,8 @@ def attach_inso_research_session(
         )
         return InsoResearchSession(lease, playwright, browser_handle, ownership)
     except Exception:
-        cleanup_page = opened_page or (operation_page if owns_operation_page else None)
+        cleanup_page = opened_page or (
+            operation_page if owns_operation_page and not preserve_operation_page_on_failure else None)
         try:
             if cleanup_page is not None and not cleanup_page.is_closed():
                 cleanup_page.close()

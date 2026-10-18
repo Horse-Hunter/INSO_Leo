@@ -9,7 +9,8 @@ import csv
 import io
 import re
 import threading
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -21,7 +22,7 @@ from src.sheets.worksheet_schema import worksheet_schema
 from src.workflow.v12_faults import FaultScope, V12Fault
 
 from .browser_bootstrap import BrowserHandle
-from .google_quote_update import GoogleQuotationUpdateActions
+from .google_quote_update import GoogleQuotationUpdateActions, google_operation_scope
 
 _GOOGLE_GRID_LOCK = threading.RLock()
 _TITLES = ("2026", "SHAHAB", "报价输入")
@@ -90,6 +91,29 @@ class GoogleSheetsWebService:
     """One thread-safe transport injected into existing readers and writers."""
     def __init__(self, session, *, actions_factory=GoogleQuotationUpdateActions):
         self._session, self._actions_factory = session, actions_factory
+        self._poll_handle = ContextVar("google_web_poll_handle", default=None)
+
+    @contextmanager
+    def poll_scope(self):
+        # One client lifetime, same thread as native UI calls. No page crosses polls.
+        # Acquire lazily INSIDE the existing reader/writer error/retry boundary.
+        with ExitStack() as lifetime, google_operation_scope():
+            token = self._poll_handle.set({"handle": None, "lifetime": lifetime})
+            try:
+                yield
+            finally:
+                self._poll_handle.reset(token)
+
+    @contextmanager
+    def _operation_session(self):
+        state = self._poll_handle.get()
+        if state is not None:
+            if state["handle"] is None:
+                state["handle"] = state["lifetime"].enter_context(self._session())
+            yield state["handle"]
+        else:
+            with self._session() as handle:
+                yield handle
 
     def spreadsheets(self):
         return self
@@ -112,7 +136,7 @@ class GoogleSheetsWebService:
         if write and (geometry is None or options.get("valueInputOption") != "RAW"):
             raise ValueError("GOOGLE_WRITE_UNCONFIRMED")
         base = f"https://docs.google.com/spreadsheets/d/{spreadsheet}/edit#gid=0"
-        with _GOOGLE_GRID_LOCK, self._session() as handle:
+        with _GOOGLE_GRID_LOCK, self._operation_session() as handle:
             actions = self._actions_factory(browser_handle=handle, location=_Location(base))
             dirty = False
             try:
