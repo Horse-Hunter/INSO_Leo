@@ -141,3 +141,48 @@ stash, rebase, force push, new branch or deployment. CEO review evidence: this
 packet, tests/launcher/test_google_web.py, tests/workflow/test_v13_price_refresh.py,
 and the scoped Git commit. Next: independent CEO Review; controlled live write
 acceptance remains required before any packaging/deployment claim.
+
+
+## CEO independent review — 2026-10-18
+
+**CHANGES_REQUESTED — one refresh idempotency blocker; do not live-write or package.**
+Reviewed actual GitHub code at `23671c7` and the focused test files.
+Three-state read scope, original inquiry-ID binding, supplier-net RMB baseline,
+historical bootstrap, later-source status preservation and existing CDP browser
+read transport match the approved design at the reviewed code level. Executor
+reports 2159 offline passing / 1 skipped and real read-only reconnaissance on
+both source tabs; CEO did not independently run tests or live writes.
+
+**Blocking, reproducible in control flow:** in
+`src/workflow/v13_quote_update.py` `V13QuotationUpdater.update_one`,
+after `click_update_quote()`, an `UNCONFIRMED` popup takes `continue`
+and `UpdateAttemptUnconfirmed` takes an outer retry. For refresh rows
+(`采购已报价` / `已报价给客户`), source status intentionally stays unchanged;
+therefore the next attempt can **click the script again after a previous
+possibly-successful click**, potentially updating/appending duplicate quotes.
+The pre-existing first-quotation status-change shortcut cannot protect refresh.
+`tests/workflow/test_v13_price_refresh.py::test_skip_or_unconfirmed_popup_never_advances_baseline`
+checks no baseline advance but does **not** assert one maximum click.
+
+**Narrow correction:** Once a refresh script click may have occurred, any
+ambiguous click/popup/settlement result must stop further submissions for that
+inquiry and surface a durable `ROW_FAILED`/existing hold for manual read-only
+reconciliation. Never advance baseline and never infer success from unchanged
+quoted status. Keep required auth/ongoing-script tab protection where outcome
+is uncertain; do not close a possibly executing page solely to retry.
+Allow retry of clearly pre-click read/input/validation failures only. Add
+regression tests for unknown popup, click timeout after dispatch, popup timeout
+after dispatch and successful refresh, asserting max one click, no baseline
+advance on uncertainty, hold across next poll/restart and no other-row replay.
+Do not alter reviewed first-quotation behavior or broaden the web transport.
+
+**Acceptance still pending:** Google native RAW14 and targeted single-cell
+writes, actual script overwrite, preserved status and session/tab hygiene have
+not been live-verified. Controlled real writes require a separately approved,
+isolated Owner-attended acceptance plan after code re-review; no production
+writes, no packaging/overwrite and no synthetic business replay in this fix.
+
+**Disposition:** Scoped rework only. Existing V1.4 installation, CDP/profile,
+local ledger, rollback and dirty work remain protected. Update this evidence,
+run network-isolated offline checks, push normal non-force to the current branch
+and return `REVIEW_REQUIRED` for CEO re-review.
