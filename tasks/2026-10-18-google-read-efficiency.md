@@ -98,3 +98,8 @@ Task-owned test runner/copies/logs are retired after verification in this same
 task. Keep this packet, module contract and targeted tests as minimal evidence.
 Publication preserves local HEAD/index and all unrelated dirty work through an
 isolated index based on the synchronized remote branch. No reset/force push.
+
+Owner later authorized release and explicit inquiry start on 2026-10-19. This
+discovery/five-attempt change is included with the follow-up native-write and
+lost-export corrections in source fe6f9767ec6bf091d4cd249232e8222e945b3a46.
+Installed/start/cleanup receipt: 2026-10-19-purchase-status-web-repair.md.

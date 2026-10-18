@@ -123,7 +123,7 @@ clears discovery between inquiry and quotation; scope exit discards it. Identity
 status, brand, baseline-commit and write readback checks retain live reads.
 Recoverable source reads allow five attempts total, with production stop-aware
 2/4/6/8-second backoff; unknown/auth/security/schema errors never get that retry.
-Evidence: tasks/2026-10-18-google-read-efficiency.md (REVIEW_REQUIRED; not deployed).
+Evidence: tasks/2026-10-18-google-read-efficiency.md (REVIEW_REQUIRED; included in the Owner-authorized 2026-10-19 local release).
 
 2026-10-19 write correction: canonical web transport commits selected cells with
 native sequential grid keyboard input, rather than DOM-only formula-bar fill.

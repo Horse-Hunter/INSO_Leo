@@ -106,3 +106,39 @@ Task-owned test/probe files will be retired; keep minimum protected rollback.
 Both approved source repairs and canonical local pending-state settlements are
 now confirmed. Original purchase/workflow item rows remain byte-for-byte equal
 at SQL row comparison; first target non-status source columns were unchanged.
+
+### Installed release / inquiry-start receipt
+Owner explicitly approved overwrite and direct inquiry start and confirmed old
+program exit. Code commit **fe6f9767ec6bf091d4cd249232e8222e945b3a46**, normal
+push to codex/v1-4-order-mail-inspection. Local HEAD/index/unrelated dirty bytes
+preserved. All113 canonical src/scripts/packaging build inputs match that commit.
+Reuse build_windows_release.ps1 -Version 1.4 -BuildOnly. Frozen self-check,
+RELEASE_SCAN_OK, installed self-check and real idle GUI check PASS. The default
+idle check starts neither business nor order-mail worker.
+
+Deployment replaced only EXE and base_library.zip; all2875 assets verified.
+All970 protected files and all4 existing browser page IDs unchanged AT COPY.
+Old installed self-check passed; two changed assets backed up with verified
+hashes. Runtime/config/Vault/OAuth/profile/Chrome were not overwritten/closed.
+Installed EXE SHA256:
+**c97be3a9933ade5657aa4ad43cf9d408829f28464dc7d421f2782c02b8384aa1**.
+Normal visible launch with --start-inquiry at 00:39 on 2026-10-19, GUI responding,
+PID151144. This invokes only the existing ProductionBackend.start workflow.
+Fresh actual cycle records from 00:42:58 through 00:43:38 confirm multiple
+quotation queries completed, no new read-stop observed in that initial window.
+Later business pages/state may change as AUTHORIZED normal inquiry executes;
+copy-time unchanged evidence is not a claim of unchanged state after starting.
+Full long-running/next-day acceptance remains UNKNOWN, not a guarantee of network
+availability. Auth/security/unknown faults still stop safely.
+
+Ignored minimum release evidence/rollback:
+.tmp/v14-status-recovery-release-20261019/ (build inputs/log, asset/protection/tab
+manifests, startup receipt and two old assets). Private consistent pre-settlement
+DB rollback remains only .tmp/purchase-status-20261019/rollback/, not Git.
+Task-owned full test copies retired:249091918 bytes; exact marked non-reparse
+frozen stage retired:267811716 bytes. Canonical build removed PyInstaller work.
+Focused copies and diagnostic/recovery/publish helpers retired in this task;
+keep only the minimum rollback/evidence. Prior rollback sets untouched.
+
+Status remains REVIEW_REQUIRED for CEO independent Review; local release/start
+was explicitly Owner-authorized, not a self-issued Review PASS.
