@@ -410,3 +410,197 @@ def test_pending_refresh_page_kept_while_other_source_reads_continue(web):
         new = browser.contexts[0].pages[-1]
         assert new is not old and old.refresh_pending and old.clicks == ['更新报价']
     assert new.closed and not old.closed
+
+
+def test_wrapped_menu_timeout_retries_once_then_recovers_in_reader(web, monkeypatch):
+    from playwright.sync_api import TimeoutError as PageTimeout
+
+    from tests.launcher.test_google_quote_update import Locator
+    service, browser, _, _ = web
+    calls = []
+    original = Locator.wait_for
+    def wait(locator, **kwargs):
+        if locator.name == '报价工具':
+            calls.append(True)
+            if len(calls) == 1:
+                raise PageTimeout('synthetic menu loading timeout')
+        return original(locator, **kwargs)
+    monkeypatch.setattr(Locator, 'wait_for', wait)
+    with service.poll_scope():
+        rows = GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', '2026'))
+    assert rows and len(calls) == 2
+    assert len(browser.contexts[0].pages) == 3  # Failed phase closed; retry gets a new tab.
+    assert all(page.closed for page in browser.contexts[0].pages[1:])
+
+
+@pytest.mark.parametrize('code', ['ERR_TIMED_OUT', 'ERR_CONNECTION_RESET', 'ERR_NETWORK_CHANGED',
+                                 'ERR_PROXY_CONNECTION_FAILED', 'ERR_NAME_NOT_RESOLVED'])
+def test_wrapped_navigation_network_failure_is_transient(web, monkeypatch, code):
+    from playwright.sync_api import Error as PageError
+
+    from src.sheets.google_reader import GoogleSheetsReadUnavailable
+    service, browser, _, _ = web
+    create = browser.contexts[0].new_page
+    calls = []
+    def new_page():
+        page = create()
+        def goto(url, **kwargs):
+            calls.append(True)
+            raise PageError(f'Page.goto: net::{code} at private-url-not-for-logs')
+        page.goto = goto
+        return page
+    browser.contexts[0].new_page = new_page
+    with service.poll_scope(), pytest.raises(GoogleSheetsReadUnavailable):
+        GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', '2026'))
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize('failure', ['unknown', 'cert', 'auth', 'schema', 'wrapper_without_cause'])
+def test_unknown_and_security_failures_do_not_become_temporary(web, monkeypatch, failure):
+    from playwright.sync_api import Error as PageError
+
+    from src.sheets.google_reader import (
+        GoogleSheetsReadError,
+        GoogleSheetsReadUnavailable,
+    )
+    from src.workflow.v12_faults import FaultScope
+    from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
+    from tests.launcher.test_google_quote_update import Locator
+    service, _, _, _ = web
+    errors = {
+        'unknown': RuntimeError('private unexpected DOM'),
+        'cert': PageError('net::ERR_CERT_AUTHORITY_INVALID'),
+        'auth': V12Fault(FaultScope.GLOBAL_STOP, 'GOOGLE_AUTHENTICATION_REQUIRED'),
+        'schema': V12Fault(FaultScope.GLOBAL_STOP, 'SHEETS_SCHEMA_UNAVAILABLE'),
+        'wrapper_without_cause': UpdateAttemptUnconfirmed('UPDATE_RESULT_UNCONFIRMED'),
+    }
+    calls = []
+    original = Locator.wait_for
+    def wait(locator, **kwargs):
+        if locator.name == '报价工具':
+            calls.append(True)
+            raise errors[failure]
+        return original(locator, **kwargs)
+    monkeypatch.setattr(Locator, 'wait_for', wait)
+    with service.poll_scope(), pytest.raises(GoogleSheetsReadError) as caught:
+        GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', '2026'))
+    assert not isinstance(caught.value, GoogleSheetsReadUnavailable) and len(calls) == 1
+
+
+def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next_cycle(web, tmp_path, monkeypatch):
+    import json
+    from types import SimpleNamespace
+
+    from playwright.sync_api import TimeoutError as PageTimeout
+
+    from src.launcher import backend as launcher
+    from tests.launcher.test_backend import _RecordingTransport, _write_runtime_configs
+    from tests.launcher.test_google_quote_update import Locator
+    service, browser, rows, original_page = web
+    rows['2026'] = [list(row) for row in HEADERS['2026']]
+    rows['SHAHAB'] = [list(row) for row in HEADERS['SHAHAB']]
+    production, rc, _ = _write_runtime_configs(tmp_path)
+    cfg = json.loads(production.read_text(encoding='utf-8'))
+    cfg.update(worksheet_titles=['2026', 'SHAHAB'], v13_enabled=True,
+               quotation_input={'gid': '29', 'input_row': 1, 'first_column': 1})
+    production.write_text(json.dumps(cfg), encoding='utf-8')
+    monkeypatch.setattr(launcher, 'build_google_web_service', lambda *a, **kw: service)
+    monkeypatch.setattr(launcher, 'assess_readiness', lambda *a, **kw: SimpleNamespace(ready=True, missing_site_ids=()))
+    monkeypatch.setattr(launcher, 'build_research_service', lambda *a, **kw: SimpleNamespace(execute=lambda _: None))
+    monkeypatch.setattr(launcher, 'QQSMTPTransport', _RecordingTransport)
+    monkeypatch.setattr('src.launcher.v12_composition.QQSMTPTransport', _RecordingTransport)
+    _RecordingTransport.sent.clear()
+    calls, waits = [], []
+    original_wait = Locator.wait_for
+    def page_wait(locator, **kwargs):
+        if locator.name == '报价工具':
+            calls.append(True)
+            if len(calls) <= 2:
+                raise PageTimeout('synthetic page load/menu timeout')
+        return original_wait(locator, **kwargs)
+    monkeypatch.setattr(Locator, 'wait_for', page_wait)
+    backend = launcher.ProductionBackend(root=tmp_path, config_path=rc, production_config_path=production)
+    def next_poll(seconds):
+        waits.append(seconds)
+        assert not backend._stop.is_set() and backend.get_status().next_poll_at is not None
+        if len(waits) == 1:
+            assert len(calls) == 2
+            backend._v12_composition.coordinator.run_notifications(now=launcher.utc_now())
+            return False
+        backend._stop.set()
+        return True
+    monkeypatch.setattr(backend, '_wait_between_polls', next_poll)
+    try:
+        backend.start()
+        backend._thread.join(timeout=10)
+        assert not backend._thread.is_alive() and waits == [900, 900]
+        assert len(calls) > 2 and backend.get_health().overall == '正常'
+        assert len(_RecordingTransport.sent) == 1
+        assert _RecordingTransport.sent[0][1].address == 'linan229@qq.com'
+        assert '15分钟后重试' in _RecordingTransport.sent[0][2]
+        assert backend._store.all_items() == ()
+        assert not original_page.closed and all(p.closed for p in browser.contexts[0].pages[1:])
+    finally:
+        backend.shutdown()
+
+
+def test_timeout_does_not_hide_authentication_discovered_by_real_guard(web, monkeypatch):
+    from playwright.sync_api import TimeoutError as PageTimeout
+
+    from src.sheets.google_reader import (
+        GoogleSheetsReadError,
+        GoogleSheetsReadUnavailable,
+    )
+    from tests.launcher.test_google_quote_update import Locator
+    service, browser, _, _ = web
+    original = Locator.wait_for
+    calls = []
+    def wait(locator, **kwargs):
+        if locator.name == '报价工具':
+            calls.append(True)
+            locator.page.login_markers.add('登录')
+            raise PageTimeout('synthetic expired login after loading')
+        return original(locator, **kwargs)
+    monkeypatch.setattr(Locator, 'wait_for', wait)
+    with service.poll_scope(), pytest.raises(GoogleSheetsReadError) as caught:
+        GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', '2026'))
+    assert not isinstance(caught.value, GoogleSheetsReadUnavailable)
+    assert len(calls) == 1 and not browser.contexts[0].pages[-1].closed
+
+
+def test_write_timeout_is_not_translated_to_retryable_read(web, monkeypatch):
+    from playwright.sync_api import TimeoutError as PageTimeout
+
+    from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
+    from tests.launcher.test_google_quote_update import Locator
+    service, _, _, _ = web
+    original = Locator.wait_for
+    def wait(locator, **kwargs):
+        if locator.name == '报价工具':
+            raise PageTimeout('synthetic write-stage setup timeout')
+        return original(locator, **kwargs)
+    monkeypatch.setattr(Locator, 'wait_for', wait)
+    with service.poll_scope(), pytest.raises(UpdateAttemptUnconfirmed):
+        service.update(spreadsheetId='test', range="'2026'!F2", valueInputOption='RAW',
+                       body={'values': [['NEW']]}).execute()
+
+
+def test_new_read_diagnostics_remain_sanitized(web, monkeypatch, caplog):
+    from playwright.sync_api import Error as PageError
+
+    from src.gui.main import _sanitized_line
+    from src.sheets.google_reader import GoogleSheetsReadUnavailable
+    from tests.launcher.test_google_quote_update import Locator
+    service, _, _, _ = web
+    original = Locator.wait_for
+    def wait(locator, **kwargs):
+        if locator.name == '报价工具':
+            raise PageError('net::ERR_CONNECTION_RESET private-customer private-url token=synthetic-secret')
+        return original(locator, **kwargs)
+    monkeypatch.setattr(Locator, 'wait_for', wait)
+    with service.poll_scope(), pytest.raises(GoogleSheetsReadUnavailable):
+        GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', '2026'))
+    lines = [_sanitized_line(record) for record in caplog.records if record.name == 'inso.diagnostics']
+    assert any('google-sheet-ready' in line for line in lines)
+    assert any('GOOGLE_WEB_READ_UNAVAILABLE' in line for line in lines)
+    assert all('private-' not in line and 'synthetic-secret' not in line for line in lines)

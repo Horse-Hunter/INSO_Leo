@@ -324,6 +324,18 @@ class GoogleQuotationUpdateActions:
             self._guard()
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from None
 
+    def retire_failed_page(self):
+        """Never pass a failed phase's page to another phase/retry."""
+        if self._poll_entry is None:
+            return
+        self._poll_entry["protected"] = True
+        self._poll_entry = None
+        try:
+            # Ordinary read failures can be closed; unresolved work stays visible.
+            self._protected |= bool(self._page.evaluate(_UNSAFE_POLL_PAGE))
+        except Exception:  # noqa: BLE001 - uncertain old surface is retained
+            self._protected = True
+
     def close(self):
         if self._poll_entry is not None:
             entry, self._poll_entry = self._poll_entry, None

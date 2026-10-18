@@ -70,6 +70,14 @@ cover that final reset boundary in the follow-up Google-read fix. An initial ove
 synthetic/local tests and sandbox Tcl; those preliminary failures were corrected
 in the test runner/environment, never by weakening production safety code.
 No live CDP, credentials, runtime writes, business actions, SMTP, package or
-EXE overwrite. Live UI/performance acceptance remains UNKNOWN. Task-owned test
-copies/runner will be retired in this same work cycle after the additionally
+EXE overwrite. Live UI/performance acceptance remains UNKNOWN. Task-owned test copies/runner retired in this same work cycle with the
 Owner-requested Google-stop diagnosis/regression. All unrelated dirty work kept.
+
+Final combined regression after physical failed-query reset and Google recovery:
+**2205 passed, 1 skipped, 74.47s**. Targeted failed-page retirement/recovery:
+117 PASS. Ruff PASS. Normal source/script operations retain one page; failed
+phases retire their page before a fresh next attempt. Ordinary failed read pages
+close, while verification/unsaved/pending or unknown page state is preserved.
+Code implementation first published as 399eab9943685cb005c7100667271c066174912b;
+final follow-up evidence accompanies the Google recovery commit. Both scopes
+remain REVIEW_REQUIRED, with no package/deployment or actual business replay.

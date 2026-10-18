@@ -7,6 +7,7 @@ No OAuth, HTTP export endpoint, clipboard, private Sheets model, or new login.
 """
 import csv
 import io
+import logging
 import re
 import threading
 from contextlib import ExitStack, contextmanager
@@ -20,12 +21,45 @@ from src.research.cdp_pages import shared_playwright_factory
 from src.sheets.quotation_input import QuotationInputUnavailable
 from src.sheets.worksheet_schema import worksheet_schema
 from src.workflow.v12_faults import FaultScope, V12Fault
+from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
 
 from .browser_bootstrap import BrowserHandle
+from .diagnostics import log_step
 from .google_quote_update import GoogleQuotationUpdateActions, google_operation_scope
 
 _GOOGLE_GRID_LOCK = threading.RLock()
 _TITLES = ("2026", "SHAHAB", "报价输入")
+
+
+def _temporary_web_read_failure(exc):
+    """Unwrap only known read wrappers; unknown/auth/write faults stay closed."""
+    visited, temporary = set(), False
+    while exc is not None and id(exc) not in visited:
+        visited.add(id(exc))
+        if isinstance(exc, V12Fault):
+            return False
+        if type(exc).__module__.startswith("playwright"):
+            if type(exc).__name__ == "TimeoutError":
+                temporary = True
+            else:
+                codes = re.findall(r"net::(ERR_[A-Z_]+)", str(exc))
+                if not codes or any(code not in {
+                    "ERR_TIMED_OUT", "ERR_CONNECTION_TIMED_OUT", "ERR_CONNECTION_RESET",
+                    "ERR_CONNECTION_CLOSED", "ERR_CONNECTION_REFUSED", "ERR_EMPTY_RESPONSE",
+                    "ERR_NAME_NOT_RESOLVED", "ERR_NETWORK_CHANGED", "ERR_INTERNET_DISCONNECTED",
+                    "ERR_PROXY_CONNECTION_FAILED", "ERR_TUNNEL_CONNECTION_FAILED",
+                } for code in codes):
+                    return False
+                temporary = True
+        elif isinstance(exc, (TimeoutError, ConnectionError)):
+            temporary = True
+        elif not (isinstance(exc, UpdateAttemptUnconfirmed) and str(exc) in {
+            "UPDATE_RESULT_UNCONFIRMED", "GOOGLE_OPERATION_SURFACE_UNAVAILABLE",
+            "GOOGLE_OPERATION_SURFACE_UNCONFIRMED",
+        }):
+            return False
+        exc = exc.__cause__ or exc.__context__
+    return temporary and exc is None
 
 
 @dataclass(frozen=True)
@@ -139,23 +173,28 @@ class GoogleSheetsWebService:
         with _GOOGLE_GRID_LOCK, self._operation_session() as handle:
             actions = self._actions_factory(browser_handle=handle, location=_Location(base))
             dirty = False
+            stage = "google-open-sheet"
             try:
                 if write and geometry[0] == "报价输入":
                     actions.ensure_refresh_input_idle()
                 page = actions.open_sheet()
+                stage = "google-sheet-ready"
                 page.locator("#t-name-box").wait_for(state="visible", timeout=30000)
                 # Reuse the verified onOpen readiness signal. Selecting SHAHAB
                 # before initialization settles can be reset to the initial tab.
                 actions.wait_for_script_menu()
                 if geometry is None:
+                    stage = "google-select-sheet"
                     sheets = []
                     for title in _TITLES:
                         gid = self._select(page, actions, title)
                         sheets.append({"properties": {"title": title, "sheetId": gid}})
                     return {"sheets": sheets}
                 title, first, start, last, end = geometry
+                stage = "google-select-sheet"
                 self._select(page, actions, title)
                 if not write:
+                    stage = "google-download-read"
                     rows = self._download(page, actions)
                     self._headers(rows, title)
                     return {"values": _source_values(rows, title, first, start, last, end)}
@@ -197,14 +236,29 @@ class GoogleSheetsWebService:
                 dirty = False
                 return {"updatedCells": len(values[0])}
             except Exception as exc:
+                actions.retire_failed_page()
                 if dirty:
                     actions._protected = True
                     raise QuotationInputUnavailable("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED") from None
                 # Same one-retry/next-15-minute policy as existing transient reads.
                 # Never turn auth, unknown errors or write ambiguity into a retry.
-                if not write and type(exc).__module__.startswith("playwright") and type(exc).__name__ == "TimeoutError":
-                    actions._guard()
-                    raise TimeoutError("GOOGLE_WEB_READ_UNAVAILABLE") from None
+                if not write:
+                    temporary = _temporary_web_read_failure(exc)
+                    log_step(stage, cause=exc)
+                    reason = ("GOOGLE_WEB_READ_UNAVAILABLE" if temporary else
+                              getattr(exc, "reason", "GOOGLE_WEB_READ_UNCLASSIFIED"))
+                    logging.getLogger("inso.diagnostics").warning("Google read classification", extra={
+                        "runtime_reason": reason, "runtime_cause": type(exc).__name__})
+                    if temporary:
+                        try:
+                            actions._guard()
+                        except Exception as guard:
+                            # A failed navigation can still leave a blank/closed page.
+                            if not isinstance(guard, UpdateAttemptUnconfirmed) or str(guard) not in {
+                                "GOOGLE_OPERATION_SURFACE_UNAVAILABLE", "GOOGLE_OPERATION_SURFACE_UNCONFIRMED",
+                            }:
+                                raise
+                        raise TimeoutError("GOOGLE_WEB_READ_UNAVAILABLE") from None
                 raise
             finally:
                 actions.close()  # Own tab only; reuse existing auth/script protection.
