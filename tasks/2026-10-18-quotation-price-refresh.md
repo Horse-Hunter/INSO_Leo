@@ -294,3 +294,38 @@ write and quotation script confirmation on a safely disposable/non-business
 test target, with readback, non-duplicate result and tab/session checks.
 No unapproved business data edits, broad replay, batch automation or
 deployment before the live-write acceptance and runtime preflight.
+
+## Owner-authorized package/overwrite — 2026-10-18
+Owner now explicitly requests packaging and overwrite. This new authorization
+supersedes historical no-package/no-deploy restrictions for the completed code at
+26b6b3a95d7934015af37ebe0c1c6e2bf1311886; it does not extend the scoped CEO code PASS to live-write
+acceptance. Reuse canonical V1.4 BuildOnly/spec/scanner and existing changed-asset
+backup/deployment procedure. Preserve runtime/config/DB/receipts/Vault/OAuth,
+CDP/profile/tabs, rollback and all dirty work. Verify build inputs, frozen/staged
+scan and installed hashes/self-check, then launch only idle. No inquiry, sales
+entry, actual Sheets write, quotation script or SMTP testing is authorized here.
+Retire exact owned stage/work copies in this task; retain verified rollback and
+minimal evidence in this original packet. Real-write acceptance remains UNKNOWN.
+
+### Deployment completion evidence
+Canonical BuildOnly/scanner and frozen self-check PASS; 123 build input files
+match code commit 26b6b3a95d7934015af37ebe0c1c6e2bf1311886. Latest remote
+6a0901682119d1c7ae556732bb75aa7fb9d0cd15 adds only CEO code PASS evidence.
+Installed at the existing dist/INSO_V1.4 path; 2875 frozen asset hashes verified,
+only 2 assets changed. All 970 protected files unchanged at copy verification;
+post-start non-log protected files still unchanged. Existing page IDs unchanged.
+Old installed EXE self-check PASS; changed old assets backed up and hashes
+verified for overlay rollback. Previous EXE SHA256:
+a4703edae2f1708ac88be5bee539e66594e8dbd267e13985e2b6a4a3e7508e07.
+New installed EXE SHA256:
+a791d0f142b8e6260fb7f2ecd7f65aaf71bef8cb05c8cca8a779db7f9dd2d82a.
+Installed self-check and idle GUI self-check PASS, GUI responding with visible
+INSO_V1.4 window. Both business workers not started, state stopped. No real
+order/Sheets writes/quote scripts/SMTP tests performed; live-write acceptance
+remains UNKNOWN. Prior scoped code disposition remains REVIEWED_DONE; release
+performed under Owner's subsequent explicit package/overwrite authorization.
+Ignored minimal build/deployment evidence and verified two-file rollback retained
+at .tmp/v14-release-20261018/. Exact owned canonical stage removed after marker,
+absolute-path and reparse checks (267801901 bytes retired); PyInstaller work
+already removed by build script.
+No source code changed for packaging; all unrelated dirty work preserved.
