@@ -53,9 +53,14 @@ def _temporary_web_read_failure(exc):
                 temporary = True
         elif isinstance(exc, (TimeoutError, ConnectionError)):
             temporary = True
+        elif isinstance(exc, UpdateAttemptUnconfirmed) and str(exc) in {
+            "GOOGLE_OPERATION_SURFACE_UNAVAILABLE", "GOOGLE_OPERATION_SURFACE_UNCONFIRMED",
+        }:
+            # A read lost its owned page/worksheet position. Reject its data and
+            # re-enter on a fresh page; do not loosen any auth/document/gid guard.
+            temporary = True
         elif not (isinstance(exc, UpdateAttemptUnconfirmed) and str(exc) in {
-            "UPDATE_RESULT_UNCONFIRMED", "GOOGLE_OPERATION_SURFACE_UNAVAILABLE",
-            "GOOGLE_OPERATION_SURFACE_UNCONFIRMED",
+            "UPDATE_RESULT_UNCONFIRMED",
         }):
             return False
         exc = exc.__cause__ or exc.__context__
@@ -247,6 +252,10 @@ class GoogleSheetsWebService:
                     log_step(stage, cause=exc)
                     reason = ("GOOGLE_WEB_READ_UNAVAILABLE" if temporary else
                               getattr(exc, "reason", "GOOGLE_WEB_READ_UNCLASSIFIED"))
+                    if isinstance(exc, UpdateAttemptUnconfirmed) and str(exc) in {
+                        "GOOGLE_OPERATION_SURFACE_UNAVAILABLE", "GOOGLE_OPERATION_SURFACE_UNCONFIRMED",
+                    }:
+                        reason = str(exc)  # Safe exact guard code; never page text/URLs.
                     logging.getLogger("inso.diagnostics").warning("Google read classification", extra={
                         "runtime_reason": reason, "runtime_cause": type(exc).__name__})
                     if temporary:

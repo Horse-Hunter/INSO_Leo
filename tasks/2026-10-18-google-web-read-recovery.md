@@ -178,3 +178,59 @@ worker without closing protected tabs and investigate before retry.
 
 No real order, live data, package, process or browser action was performed
 by the reviewer.
+
+## Reopened: Owner reports repeat stop after installed manual run
+status: REVIEW_REQUIRED (same bounded read-recovery task)
+Latest sanitized installed log2026-10-18 17:05:32: google-download-read,
+GOOGLE_WEB_READ_UNCLASSIFIED, UpdateAttemptUnconfirmed, then shared stop.
+In this phase that typed exception originates at the existing action page guard
+before/after native TSV read, not directly from menu timeout. Prior fix does not
+classify a wrapper lacking confirmed timeout evidence as transient. Diagnose the
+specific guard boundary before changing retry policy. Authorized for this Owner
+incident: read-only local logs/config and passive canonical CDP metadata/current
+owned Google page inspection if needed, using existing session only. No browser
+launch/close, navigation/login, business clicks, writes, downloads, credential or
+DB access for diagnosis. Keep real data out of evidence. Patch only a positively
+identified recoverable read/entry fault; never bypass wrong-document/auth guards.
+
+Passive metadata after failure contains only the original blank page; the failed
+Google page is already gone. A proposed live UI probe was rejected by automatic
+approval for lack of explicit live navigation/menu authorization; it was NOT run.
+No indirect workaround. Continue safely with existing logs/code and offline
+reproduction. Exact closed-page versus changed-fragment trigger is UNKNOWN.
+Within _download, the only UpdateAttemptUnconfirmed source is _guard before/after
+reading, with typed SURFACE_UNAVAILABLE/SURFACE_UNCONFIRMED. These describe a
+lost read surface, not an accepted result. Rejecting that data and retrying a
+fresh page is safe without weakening strict auth/document/gid/schema guards.
+Unknown UPDATE_RESULT_UNCONFIRMED without temporary evidence remains a stop;
+write/click/settlement errors are unchanged. Persist the exact safe surface code
+in sanitized diagnostics for future differentiation, never raw exception text.
+
+### Repeat-stop correction / final offline evidence
+Treat only the two explicit lost-read-surface codes as retryable during reads,
+even without an underlying timeout: discard results and physically retire the
+failed page before the existing reader's one fresh-page retry. This does NOT
+accept changed gid/range/closed-page data: original auth/document/gid/schema
+validation remains strict. After two failures, original229 notification and
+next900-second poll resume. Unknown UPDATE_RESULT_UNCONFIRMED without temporary
+evidence and all write/click/settlement failures retain their previous policy.
+Safe diagnostics now record the exact whitelisted surface code, not only a
+generic unclassified label. No authentication or wrong-document bypass added.
+
+144 focused PASS. Full isolated suite: **2220 passed,1 skipped,74.66s**; Ruff PASS.
+Real native-action guard -> transport -> reader tests cover both2026/SHAHAB,
+closed page, gid drift before/after download, range fragment change, discarded
+failed data, deleted temporary downloads and fresh next attempt. Production
+poller with simulated pages/mail covers two closed/gid failures, one229 notice,
+no stop flag, virtual900-second next cycle recovery across both worksheets.
+Wrong document, auth, unknown errors and write guard failures still stop without
+read retry. Exact-code diagnostics checked through runtime sanitizer. No live
+page probe/download/edit or business replay performed. Exact historical
+closed-versus-fragment trigger remains UNKNOWN; the offending read-guard branch
+and failure-to-defer behavior are reproduced and corrected.
+
+Owner has confirmed exiting the GUI in response to the announced corrective
+package/overwrite and idle-reopen step. Continue the existing authorized V1.4
+release procedure; no automatic business start. This supersedes the previous
+code-pin-only deployment scope for this narrow correction. Keep runtime/data/
+credentials/Chrome/profile and rollback. CEO independent Review still required.

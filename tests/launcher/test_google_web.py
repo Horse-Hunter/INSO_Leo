@@ -487,7 +487,9 @@ def test_unknown_and_security_failures_do_not_become_temporary(web, monkeypatch,
     assert not isinstance(caught.value, GoogleSheetsReadUnavailable) and len(calls) == 1
 
 
-def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next_cycle(web, tmp_path, monkeypatch):
+@pytest.mark.parametrize('failure_mode', ['menu_timeout', 'read_gid_drift', 'read_page_closed'])
+def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next_cycle(
+        web, tmp_path, monkeypatch, failure_mode):
     import json
     from types import SimpleNamespace
 
@@ -515,10 +517,18 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
     def page_wait(locator, **kwargs):
         if locator.name == '报价工具':
             calls.append(True)
-            if len(calls) <= 2:
+            if len(calls) <= 2 and failure_mode == 'menu_timeout':
                 raise PageTimeout('synthetic page load/menu timeout')
         return original_wait(locator, **kwargs)
     monkeypatch.setattr(Locator, 'wait_for', page_wait)
+    original_download = service._download
+    def read(page, actions):
+        if len(calls) <= 2 and failure_mode == 'read_gid_drift':
+            page.url = page.url.split('#')[0] + '#gid=999'
+        elif len(calls) <= 2 and failure_mode == 'read_page_closed':
+            page.closed = True
+        return original_download(page, actions)
+    monkeypatch.setattr(service, '_download', read)
     backend = launcher.ProductionBackend(root=tmp_path, config_path=rc, production_config_path=production)
     def next_poll(seconds):
         waits.append(seconds)
@@ -604,3 +614,93 @@ def test_new_read_diagnostics_remain_sanitized(web, monkeypatch, caplog):
     assert any('google-sheet-ready' in line for line in lines)
     assert any('GOOGLE_WEB_READ_UNAVAILABLE' in line for line in lines)
     assert all('private-' not in line and 'synthetic-secret' not in line for line in lines)
+
+
+@pytest.mark.parametrize('title', ['2026', 'SHAHAB'])
+@pytest.mark.parametrize('failure', ['closed', 'gid_before', 'gid_after', 'range_after'])
+def test_read_surface_loss_rejects_result_and_reenters_fresh_sheet(web, monkeypatch, title, failure):
+    service, _browser, _, original_page = web
+    attempts = []
+    download = service._download
+    download_path = Download.path
+    def read(page, actions):
+        attempts.append(page)
+        if len(attempts) == 1:
+            if failure == 'closed':
+                page.closed = True
+            elif failure == 'gid_before':
+                page.url = page.url.split('#')[0] + '#gid=999'
+        return download(page, actions)
+    def path(attachment):
+        if len(attempts) == 1:
+            if failure == 'gid_after':
+                attachment.page.url = attachment.page.url.split('#')[0] + '#gid=999'
+            elif failure == 'range_after':
+                attachment.page.url += '&range=A1'
+        return download_path(attachment)
+    monkeypatch.setattr(service, '_download', read)
+    monkeypatch.setattr(Download, 'path', path)
+    with service.poll_scope():
+        result = GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', title))
+    assert len(attempts) == 2 and attempts[0] is not attempts[1]
+    assert attempts[1].title == title
+    assert result and not original_page.closed
+    assert all(p.closed for p in attempts)
+    assert all(not d.file.exists() for p in attempts for d in p.downloads)
+
+
+@pytest.mark.parametrize('failure', ['auth', 'document', 'unknown'])
+def test_download_guard_does_not_retry_wrong_document_auth_or_unknown(web, monkeypatch, failure):
+    from src.sheets.google_reader import (
+        GoogleSheetsReadError,
+        GoogleSheetsReadUnavailable,
+    )
+    from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
+    service, _, _, _ = web
+    calls = []
+    download = service._download
+    def read(page, actions):
+        calls.append(True)
+        if failure == 'auth':
+            page.login_markers.add('登录')
+        elif failure == 'document':
+            page.url = 'https://docs.google.com/spreadsheets/d/other/edit#gid=0'
+        else:
+            raise UpdateAttemptUnconfirmed('UPDATE_RESULT_UNCONFIRMED')
+        return download(page, actions)
+    monkeypatch.setattr(service, '_download', read)
+    with service.poll_scope(), pytest.raises(GoogleSheetsReadError) as caught:
+        GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', '2026'))
+    assert not isinstance(caught.value, GoogleSheetsReadUnavailable) and len(calls) == 1
+
+
+def test_write_guard_surface_loss_stays_unconfirmed_without_retry(web, monkeypatch):
+    from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
+    service, browser, _, _ = web
+    calls = []
+    download = service._download
+    def read(page, actions):
+        calls.append(True)
+        page.url = page.url.split('#')[0] + '#gid=999'
+        return download(page, actions)
+    monkeypatch.setattr(service, '_download', read)
+    with service.poll_scope(), pytest.raises(UpdateAttemptUnconfirmed):
+        service.update(spreadsheetId='test', range="'2026'!F2", valueInputOption='RAW',
+                       body={'values': [['NEW']]}).execute()
+    assert len(calls) == 1 and not browser.contexts[0].pages[-1].typed
+
+
+def test_read_guard_code_is_logged_without_exception_or_page_content(web, monkeypatch, caplog):
+    from src.gui.main import _sanitized_line
+    from src.sheets.google_reader import GoogleSheetsReadUnavailable
+    service, _, _, _ = web
+    download = service._download
+    def read(page, actions):
+        page.url += '&range=A1'
+        return download(page, actions)
+    monkeypatch.setattr(service, '_download', read)
+    with service.poll_scope(), pytest.raises(GoogleSheetsReadUnavailable):
+        GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', '2026'))
+    lines = [_sanitized_line(r) for r in caplog.records if r.name == 'inso.diagnostics']
+    assert any('GOOGLE_OPERATION_SURFACE_UNCONFIRMED' in line for line in lines)
+    assert all('range=' not in line and 'gid=' not in line for line in lines)
