@@ -234,3 +234,32 @@ package/overwrite and idle-reopen step. Continue the existing authorized V1.4
 release procedure; no automatic business start. This supersedes the previous
 code-pin-only deployment scope for this narrow correction. Keep runtime/data/
 credentials/Chrome/profile and rollback. CEO independent Review still required.
+
+### Corrective installed release receipt
+Source1f808caaddae0c6a6e363d3eea9e10e8782639de (13-line transport-only delta,
+plus targeted tests/evidence), normal child of the preserved prior CEO review.
+Owner confirmed formal GUI exit for this replacement. Canonical BuildOnly,
+staged scanner and installed self-check/idle GUI check PASS; all113 build inputs
+match source, all2875 installed assets match stage, only2 assets replaced.
+Installed EXE SHA256:
+2b691bf25f918958c670e10cf6b54001e4106a26502266e11e7cff2245407925.
+Verified both rollback assets against previous03cd1e7 deployed manifest; prior
+EXE self-check PASS. Rollback/minimal evidence retained locally ignored under
+.tmp/v14-read-surface-release-20261018/. Existing rollback sets preserved.
+
+All970 protected files and browser page IDs unchanged at copy verification.
+Installed idle check: both business workers NOT started. GUI then reopened,
+responsive. Later post-GUI observation finds page IDs changed; actor/cause
+UNKNOWN, so do NOT claim tabs remained unchanged after GUI was made available.
+No non-log protected file changed at that observation. Release tooling did not
+navigate/launch/close browsers, invoke business/scripts or send SMTP. No live
+Google UI probe ran (automatic approval rejection retained above); physical
+cause closed-page versus fragment-change and real incident replay remain UNKNOWN.
+This release has startup/offline evidence, not independent live acceptance.
+
+Task-owned offline test copies/runner cleaned (86123163 bytes); exact marked,
+non-reparse frozen stage cleaned (267809231 bytes), PyInstaller work cleaned
+by canonical script, temporary deploy helper removed. Runtime/config/DB/Vault/
+profile/Chrome and all unrelated dirty work preserved. Full2220 PASS/1 skipped,
+Ruff PASS. Correction and this receipt remain REVIEW_REQUIRED for CEO; earlier
+CODE_REVIEW_PASS applies only to the preceding code, not this new correction.
