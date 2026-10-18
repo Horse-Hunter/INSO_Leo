@@ -253,3 +253,44 @@ re-review next. Prior live-write acceptance remains UNKNOWN and unauthorized.
 Cleanup: all five整改-owned test directories and the temporary offline guard
 removed after absolute-path/reparse checks, using their original permissions;
 no ACL changes, force-unlock, browser/profile/runtime or prior-temp deletion.
+
+
+## CEO independent re-review — 2026-10-18
+
+**PASS — scoped price-refresh uncertainty code review; LIVE WRITE / RELEASE NOT ACCEPTED.**
+Independently checked GitHub diff `ce60daf..26b6b3a` and actual updater,
+launcher, Google operation-page, outbox, price-store, and related focused tests.
+No additional business-code changes requested.
+
+- The Owner's amended rule supersedes the preceding review's mandatory Hold:
+  once a refresh click might have been dispatched, an unknown result or
+  click/result/settlement uncertainty returns a non-success
+  `BASELINE_RECORDED + UPDATE_RESULT_UNCONFIRMED`, enqueues a deduplicated
+  Owner-229 price-transition notice before persisting the new RMB comparison
+  minimum, and does not enter another update-click retry or durable quotation
+  Hold. A definite pre-click failure does not advance the minimum.
+- Focused tests with SQLite storage/notification queue and cycle integration
+  demonstrate 10→8 uncertain, 8/9 skip, 6 update (or uncertain), no duplicate
+  click for the uncertain attempt, no blocking Hold, one 229 recipient, and
+  another inquiry processed in the same cycle.
+- Browser-visible pending marker and owned-tab/script-idle recovery guard
+  defer shared quotation-input reuse while an earlier refresh may still be
+  running; scoped synthetic tests cover late popup, running script, click
+  delivery timeout and pre-click retry. This is **code-level evidence**, not
+  assurance that Google's production DOM/script always matches the synthetic
+  surface. Genuine CDP/auth outages can still trigger the established shared
+  stop; the Owner's nonblocking guarantee applies to one ambiguous quote
+  result, not an unavailable shared infrastructure.
+- Executor reports 2172 offline PASS / 1 skipped, Ruff/diff PASS. CEO did
+  not independently execute the offline suite, send SMTP, or contact
+  production CDP, Google Sheets or INSO. No CI statuses were reported for
+  this commit.
+
+**Disposition:** `REVIEWED_DONE` for this scoped code correction only;
+do **not** equate with deployed or live-accepted status. Preserve installed
+V1.4, profile, database, credentials, rollback and dirty work. Next is
+an Owner-authorized, controlled **single-target** live Google web-cell/RAW14
+write and quotation script confirmation on a safely disposable/non-business
+test target, with readback, non-duplicate result and tab/session checks.
+No unapproved business data edits, broad replay, batch automation or
+deployment before the live-write acceptance and runtime preflight.
