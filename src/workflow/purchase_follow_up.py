@@ -56,7 +56,7 @@ class PurchaseFollowUp:
         now = self.clock()
         enqueued = 0
         for candidate in candidates:
-            if not isinstance(candidate, V13Candidate):
+            if not isinstance(candidate, V13Candidate) or candidate.source_status != "发给采购":
                 continue  # Never guess which local timestamp an ambiguous row belongs to.
             episode = self.episodes.latest(candidate.inquiry_id)
             if episode is None:

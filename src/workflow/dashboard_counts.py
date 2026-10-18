@@ -1,7 +1,8 @@
 """Read-only, per-poll source counts; no processing totals or notification effects."""
 from dataclasses import dataclass
 
-from src.sheets import query_pending_records, query_quotation_candidates
+from src.sheets import query_pending_records
+from src.sheets.pending import query_records_by_status
 
 from .purchase_follow_up import purchase_episode_overdue
 from .v13_quotation import V13Candidate, _read_source_rows, read_v13_candidates
@@ -29,10 +30,10 @@ def read_dashboard_counts(reader, worksheets, *, store, episodes, now):
 
         snapshot = SnapshotReader(rows)
         new_orders += len(query_pending_records(snapshot, worksheet))
-        awaiting += len(query_quotation_candidates(snapshot, worksheet))
+        awaiting += len(query_records_by_status(snapshot, worksheet, status="发给采购"))
         if store is not None and episodes is not None:
             for candidate in read_v13_candidates(snapshot, worksheet, store):
-                if isinstance(candidate, V13Candidate) and purchase_episode_overdue(
+                if isinstance(candidate, V13Candidate) and candidate.source_status == "发给采购" and purchase_episode_overdue(
                     episodes.latest(candidate.inquiry_id), now,
                 ):
                     overdue += 1

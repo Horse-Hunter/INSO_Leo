@@ -129,3 +129,27 @@ before final observation/notification; login sweep follows the same classificati
 INSO reuses its existing three query retries. Known security challenges, rejected
 credentials, missing credentials and unverified session identity keep immediate
 human-handling safeguards. Genuine no-result/no-price is not a technical retry.
+
+## Owner quotation refresh / Google web transport (2026-10-18)
+
+The existing poll watches 发给采购 / 采购已报价 / 已报价给客户 for the same
+inclusive72-hour INSO supplier-net-price selection. Compare local RMB procurement
+baselines keyed by the original inquiry ID, never customer sale prices. Existing
+quoted rows first bootstrap a missing baseline without updating; subsequently
+only cheaper positive prices or zero-to-positive refresh. Verified inserted
+updates advance the stored positive minimum; skip/failure does not. Initial
+sent rows still require 采购已报价; refreshes preserve the later source status.
+Unbound historical quoted rows are skipped, never given invented inquiry IDs.
+Pending/overdue purchase counts and reminders remain sent-status only.
+
+Owner replaces API/OAuth in production composition with the canonical CDP Google
+web UI for all source reads, targeted writes, quote input and intent updates.
+Existing domain adapters and quote-script UI are reused. Read-only reconnaissance
+verified2026 header row1 and SHAHAB header row2 with their existing column rules.
+The missing native range transport reads via File/Download TSV (immediate temp
+deletion), writes through the observed name box/formula editor, waits for cloud
+sync and exact readback, then closes only owned Google tabs. Auth/unsynced-write
+uncertainty preserves the operation page and stops; sales review tabs stay intact.
+No new Google login, OAuth refresh, browser profile or scheduler is introduced.
+Live read acceptance passed; real writes/overwrite acceptance remains UNKNOWN
+pending independent Review. No deployment is part of this implementation task.

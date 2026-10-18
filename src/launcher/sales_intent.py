@@ -1,15 +1,13 @@
-"""V1.4 one-shot Sheets assembly; no browser, inquiry worker or consent flow."""
-from pathlib import Path
-
-from src.core.app_paths import resolve_app_path
+"""V1.4 one-shot Sheets assembly over the already-attached sales CDP session."""
 from src.sheets import WorksheetIdentity
-from src.sheets.google_oauth import build_read_write_google_sheets_service
 from src.sheets.google_reader import GoogleSheetsRowReader
 from src.sheets.google_writer import GoogleSheetsIntentStatusWriter
 from src.sheets.intent_status import IntentLine, IntentResult, update_intent_statuses
 
+from .google_web import build_google_web_service
 
-def mark_sales_intent(order, *, production, root):
+
+def mark_sales_intent(order, *, production, root, browser_handle=None):
     lines = tuple(dict.fromkeys(IntentLine(line.part_number, line.quantity) for line in order.lines))
     try:
         titles = production['worksheet_titles']
@@ -17,11 +15,10 @@ def mark_sales_intent(order, *, production, root):
                 or any(not isinstance(title, str) or not title for title in titles)):
             raise ValueError("WORKSHEETS_UNCONFIRMED")
         worksheets = tuple(WorksheetIdentity(production['spreadsheet_id'], title) for title in titles)
-        client = resolve_app_path(Path(production['client_secret_file']), root=Path(root))
-        service = build_read_write_google_sheets_service(client, allow_interactive=False)
+        service = build_google_web_service(browser_handle=browser_handle)
         return update_intent_statuses(GoogleSheetsRowReader(service),
             GoogleSheetsIntentStatusWriter(service), worksheets, lines)
-    except Exception:  # noqa: BLE001 - missing/invalid grant must not open another browser
+    except Exception:  # noqa: BLE001 - web/session failure goes to Owner's existing manual-repair popup
         return tuple(IntentResult(line, False, 'SHEETS_UNAVAILABLE') for line in lines)
 
 

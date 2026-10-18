@@ -231,7 +231,7 @@ def test_actual_poll_finally_preserves_keepalive_targets_and_next_cycle(tmp_path
     config = json.loads(production.read_text(encoding="utf-8"))
     config.update(v13_enabled=True, quotation_input={"gid": "0", "input_row": 1, "first_column": 1})
     production.write_text(json.dumps(config), encoding="utf-8")
-    monkeypatch.setattr(launcher, "build_read_only_google_sheets_service", lambda _: _SheetsService(rows, Event()))
+    monkeypatch.setattr(launcher, "build_google_web_service", lambda _, **_kwargs: _SheetsService(rows, Event()))
     monkeypatch.setattr(launcher, "assess_readiness", lambda *a, **k: SimpleNamespace(ready=True, missing_site_ids=()))
     monkeypatch.setattr(launcher, "build_research_service", lambda *a, **k: SimpleNamespace(execute=lambda _: None))
     monkeypatch.setattr("src.launcher.v12_composition.QQSMTPTransport", _RecordingTransport)

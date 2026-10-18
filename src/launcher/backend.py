@@ -55,10 +55,6 @@ from src.research.runtime import (
 )
 from src.research.source_contracts import ResearchSource, SourceOutcome
 from src.sheets import WorksheetIdentity
-from src.sheets.google_oauth import (
-    build_read_only_google_sheets_service,
-    build_read_write_google_sheets_service,
-)
 from src.sheets.google_reader import GoogleSheetsRowReader
 from src.sheets.google_writer import GoogleSheetsPurchaseStatusWriter
 from src.workflow import (
@@ -93,6 +89,7 @@ from src.workflow.v12_store import (
 )
 from src.workflow.v13_follow_up_store import V13PurchaseFollowUpStore
 from src.workflow.v13_integration import CombinedCycle, V13HoldStore, V13IntegratedCycle
+from src.workflow.v13_price_store import ProcurementPriceStore
 from src.workflow.v13_quotation import V13QuotationCycle, V13Stopped
 
 from .browser_bootstrap import (
@@ -103,6 +100,7 @@ from .browser_bootstrap import (
 )
 from .diagnostics import log_step
 from .google_quote_update import build_v13_quotation_updater
+from .google_web import build_google_web_service
 from .inso_session import (
     InsoAuthenticationError,
     InsoResearchSession,
@@ -632,10 +630,9 @@ class ProductionBackend(GuiBackend):
             if (
                 not cfg.get("spreadsheet_id")
                 or not cfg.get("worksheet_titles")
-                or not cfg.get("client_secret_file")
             ):
                 raise ProductionConfigurationError(
-                    "production.json requires spreadsheet_id, worksheet_titles and client_secret_file"
+                    "production.json requires spreadsheet_id and worksheet_titles"
                 )
             rc = load_runtime_config(self.config_path)
             if not rc.excel_output_path.is_absolute():
@@ -649,11 +646,9 @@ class ProductionBackend(GuiBackend):
             )
             if credential_readiness.missing_site_ids:
                 raise RuntimeError("Research credential readiness requires manual handling")
-            client = Path(cfg["client_secret_file"])
-            client = resolve_app_path(client, root=self.root)
-            reader = GoogleSheetsRowReader(
-                build_read_only_google_sheets_service(client)
-            )
+            web_service = build_google_web_service(
+                rc.cdp.cdp_url, provider=lambda: self._google_playwright_provider(rc, cfg))
+            reader = GoogleSheetsRowReader(web_service)
             worksheets = tuple(
                 WorksheetIdentity(cfg["spreadsheet_id"], title)
                 for title in cfg["worksheet_titles"]
@@ -682,14 +677,11 @@ class ProductionBackend(GuiBackend):
                 follow_up_store = V13PurchaseFollowUpStore(db)
                 follow_up_store.migrate()
             status_writer = None
-            write_service = None
+            write_service = web_service
 
             self._manual_reader = reader
 
             def get_write_service():
-                nonlocal write_service
-                if write_service is None:
-                    write_service = build_read_write_google_sheets_service(client, allow_interactive=False)
                 return write_service
 
             def get_status_writer():
@@ -799,6 +791,8 @@ class ProductionBackend(GuiBackend):
                 holds = V13HoldStore(db)
                 holds.migrate()
                 self._v13_ledger_ready = True
+                price_store = ProcurementPriceStore(db)
+                price_store.migrate()
                 location = quotation_location(cfg)  # Missing/unknown config stops before business.
 
                 quotation_fx = EcbDailyUsdRmbProvider()
@@ -819,6 +813,7 @@ class ProductionBackend(GuiBackend):
                         return build_v13_quotation_updater(
                             service=service, source_reader=active_reader,
                             store=active_store, browser_handle=handle, location=location,
+                            price_store=price_store, currency_rate=cycle.currency_rate,
                             wait=self._stop.wait, stop_requested=self._immediate_stop_requested,
                             notify_model_difference=lambda result, model: notify_quotation_model_difference(
                                 self._v12_store, result, model, at=utc_now()))
@@ -1016,7 +1011,7 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             inquiry = result.inquiry_id or key
             self._poll_inquiries.add(inquiry)
-            if result.outcome.value in {"NO_RECENT_QUOTE", "ROW_FAILED", "UPDATED_INSERTED", "UPDATED_ALREADY_EXISTS"}:
+            if result.outcome.value in {"NO_RECENT_QUOTE", "ROW_FAILED", "UPDATED_INSERTED", "UPDATED_ALREADY_EXISTS", "BASELINE_RECORDED", "PRICE_UNCHANGED"}:
                 self._poll_quotation_completed.add(inquiry)
         if dto is not None:
             with self._lock:
@@ -1127,12 +1122,12 @@ class ProductionBackend(GuiBackend):
                 self._v12_composition.coordinator.rerun_unsubmitted(inquiry, record, scoped_reader, now=utc_now())
                 message = "采购流程本次处理结束，请查看订单状态。"
             else:
-                if status != "发给采购":
-                    raise ValueError("报价重跑要求当前Google状态为发给采购，未修改状态。")
+                if status not in {"发给采购", "采购已报价", "已报价给客户"}:
+                    raise ValueError("报价重跑要求当前Google状态为发给采购、采购已报价或已报价给客户，未修改状态。")
                 runner, holds = self._manual_quote
                 manual_holds = ManualRetryHolds(holds, inquiry, identity)
                 for key, _, observed, reason, _ in manual_holds.matched_old:
-                    if reason == "SOURCE_STATUS_NOT_UPDATED":
+                    if reason == "SOURCE_STATUS_NOT_UPDATED" and status == "发给采购":
                         snapshot = json.loads(observed)["identifying_snapshot"]
                         if all(snapshot[name] == getattr(record, name) for name in ("model", "brand", "quantity")):
                             raise ValueError("此前报价脚本已成功，主表状态待核对；不会重复更新报价。")
@@ -1606,6 +1601,13 @@ class ProductionBackend(GuiBackend):
             )
             self._research_ready = True
         self._set_health(("正常", "已连接", "正常", "正常"), "正常")
+
+    def _google_playwright_provider(self, rc, cfg):
+        # Reuse canonical attach/resume when Sheets now needs Chrome before Research.
+        handle = self._v13_browser(rc, cfg)
+        if handle is None or handle._owner_thread != threading.get_ident():
+            return None
+        return self._research_playwright_provider()
 
     def _research_playwright_provider(self):
         """Return the launcher's live ``(playwright, browser)`` CDP attachment.

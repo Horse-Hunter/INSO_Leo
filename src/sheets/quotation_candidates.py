@@ -3,7 +3,7 @@ from collections.abc import Iterable
 from dataclasses import replace
 
 from .brand_write import SheetRecordConflict, relocate_record
-from .pending import SheetRecordIdentity, WorksheetRow
+from .pending import QUOTATION_STATUSES, SheetRecordIdentity, WorksheetRow
 from .worksheet_schema import worksheet_schema
 
 
@@ -23,7 +23,7 @@ def relocate_quotation_source(
     expected-brand validation. Never generate or rewrite business identity.
     """
     return relocate_quotation_status(
-        identity, rows, expected_brand=expected_brand, accepted_statuses=("发给采购",),
+        identity, rows, expected_brand=expected_brand, accepted_statuses=QUOTATION_STATUSES,
     )
 
 
@@ -32,7 +32,7 @@ def relocate_quotation_status(
     accepted_statuses: tuple[str, ...],
 ) -> WorksheetRow:
     """Same reviewed locator, with an explicit read-only status-transition scope."""
-    if not accepted_statuses or any(status not in {"发给采购", "采购已报价"} for status in accepted_statuses):
+    if not accepted_statuses or any(status not in QUOTATION_STATUSES for status in accepted_statuses):
         raise ValueError("unsupported quotation status read scope")
     schema = worksheet_schema(identity.worksheet.worksheet)
     eligible = tuple(row for row in rows

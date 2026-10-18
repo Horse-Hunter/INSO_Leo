@@ -8,6 +8,7 @@ from hashlib import sha256
 
 from src.sheets import query_quotation_candidates
 from src.sheets.brand_write import SheetRecordConflict
+from src.sheets.pending import QUOTATION_STATUSES
 from src.sheets.quotation_candidates import relocate_quotation_status
 from src.sheets.worksheet_schema import worksheet_schema
 
@@ -226,7 +227,7 @@ class V13IntegratedCycle:
                     identity,
                     rows,
                     expected_brand=identity.identifying_snapshot.brand,
-                    accepted_statuses=("发给采购", "采购已报价"),
+                    accepted_statuses=QUOTATION_STATUSES,
                 )
             except SheetRecordConflict:
                 log.warning("V1.3 held source cannot be safely located")
@@ -238,16 +239,18 @@ class V13IntegratedCycle:
                     continue
                 located = anchors[0]
                 status = located.cells.get(worksheet_schema(worksheet.worksheet).status_column)
-                if status != "采购已报价":
+                if status != "采购已报价" or result.source_status != "发给采购":
                     blocked_locations.add(identity.row_position)
                     self.observe(result, key)
                     continue
             if (
                 located.cells.get(worksheet_schema(worksheet.worksheet).status_column)
-                == "采购已报价"
+                == "采购已报价" and result.source_status == "发给采购"
             ):
                 self.holds.close(key)
-                blocked_ids.discard(result.inquiry_id)
+                # Do not re-query a just-settled initial hold in this same pass.
+                # The next ordinary poll may bootstrap its refresh baseline.
+                blocked_locations.add(located.row_position)
                 self.observe(
                     replace(
                         result,

@@ -167,7 +167,7 @@ def test_row_failed_without_durable_new_hold_does_not_release_old_barrier(tmp_pa
     assert holds.active() == before
 
 
-@pytest.mark.parametrize("status", ["未发", "采购已报价", "成交"])
+@pytest.mark.parametrize("status", ["未发", "意向订单", "成交"])
 def test_quote_source_status_gate_preserves_old_barrier(tmp_path, monkeypatch, status):
     backend, _, source, inquiry, _, holds, _ = setup_hold(tmp_path, monkeypatch)
     before = holds.active()

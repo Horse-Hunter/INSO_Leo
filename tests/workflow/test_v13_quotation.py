@@ -109,9 +109,9 @@ def failure():
     return InsoDuplicateHistoryError(DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED)
 
 
-def test_only_exact_sent_status_v12_pending_entry_unchanged():
+def test_three_exact_quotation_statuses_v12_pending_entry_unchanged():
     sheets = Sheets([source(2), source(3, "未发"), source(4, "采购已报价"), source(5, " 发给采购")])
-    assert [r.row_position for r in query_quotation_candidates(sheets, WS)] == [2]
+    assert [r.row_position for r in query_quotation_candidates(sheets, WS)] == [2, 4]
     assert [r.row_position for r in query_pending_records(sheets, WS)] == [3]
 
 

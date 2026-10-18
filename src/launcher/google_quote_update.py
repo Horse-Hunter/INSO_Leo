@@ -83,6 +83,11 @@ class GoogleQuotationUpdateActions:
             raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
 
     def open_quote_input(self):
+        self.open_sheet()
+        self._ready_control()  # Prove readiness/uniqueness before any input write.
+
+    def open_sheet(self):
+        """Shared Google navigation/auth/ownership boundary, without running a script."""
         if self._script_pending:
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED")
         if self._protected:
@@ -93,14 +98,21 @@ class GoogleQuotationUpdateActions:
         if browser is None or not browser.is_connected() or len(browser.contexts) != 1:
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")
         try:
-            self._page = new_background_page(browser, browser.contexts[0], timeout_ms=self._timeout)
+            self._page = new_background_page(browser, browser.contexts[0], timeout_ms=self._timeout,
+                                             owner="google-operation")
         except Exception:  # noqa: BLE001 - shared context cannot create the owned operation
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE") from None
         self._attempt(lambda: self._page.goto(self._location.url, wait_until="domcontentloaded", timeout=self._timeout))
         self._guard()
-        self._ready_control()  # Prove readiness/uniqueness before any input write.
+        from src.research.cdp_pages import mark_owned_page
+        mark_owned_page(self._page, "google-operation")
+        return self._page
 
     def _ready_control(self):
+        self.wait_for_script_menu()
+        return self._update_control()
+
+    def wait_for_script_menu(self):
         # Real Sheets exposes the drawing shell before onOpen/menu initialization.
         # Wait for observed script readiness, not a fixed sleep or a shell-only click.
         menu = self._page.get_by_text("报价工具", exact=True)
@@ -108,7 +120,6 @@ class GoogleQuotationUpdateActions:
         if menu.count() != 1:
             raise UpdateAttemptUnconfirmed("UPDATE_CONTROL_UNCONFIRMED")
         self._guard()
-        return self._update_control()
 
     def _result_dialog(self):
         # Live dialog has an observed title in its body; accessible name can be absent.
@@ -212,8 +223,9 @@ class GoogleQuotationUpdateActions:
 
 def build_v13_quotation_updater(*, service, source_reader, store, browser_handle,
                                 location: QuotationInputLocation, wait, stop_requested=lambda: False,
-                                notify_model_difference=lambda _r, _m: None):
-    """Service supplied by existing cached write-grant/OAuth builder, never replaced.
+                                notify_model_difference=lambda _r, _m: None,
+                                price_store=None, currency_rate=None):
+    """Domain input contract supplied by the canonical Google web transport.
 
     RFQ-006 owns production scheduling/wiring. This factory performs no I/O.
     """
@@ -223,4 +235,5 @@ def build_v13_quotation_updater(*, service, source_reader, store, browser_handle
         actions=GoogleQuotationUpdateActions(browser_handle=browser_handle, location=location),
         wait=wait, stop_requested=stop_requested,
         notify_model_difference=notify_model_difference,
+        price_store=price_store, currency_rate=currency_rate,
     )

@@ -91,8 +91,13 @@ class Page:
                 raise TimeoutError("never settled")
             self.script_running = False
             self.settled = True
-    def evaluate(self, script):
-        assert self.started and self.settled
+    def evaluate(self, script, arg=None):
+        if "window.name = name" in script:
+            self.owner_name = arg
+        elif "window.name" in script:
+            return getattr(self, "owner_name", "")
+        else:
+            assert self.started and self.settled
     def goto(self, url, **kwargs):
         self.url = url
     def get_by_role(self, role, *, name=None, exact=None):

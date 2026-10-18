@@ -4,9 +4,11 @@ from dataclasses import replace
 from time import monotonic
 from typing import Protocol
 
+from src.inso.quotation_read import QuotationPriceUnavailable, procurement_price_rmb
 from src.quotation.update_result import UpdatePopupOutcome, parse_update_popup
 from src.sheets import WorksheetRowReader
 from src.sheets.brand_write import SheetRecordConflict
+from src.sheets.pending import QUOTATION_STATUSES
 from src.sheets.quotation_candidates import (
     QuotationSourceAmbiguous,
     relocate_quotation_status,
@@ -81,7 +83,7 @@ class WorkflowQuotationSource:
             brand = (original.resolved_brand if original.brand_update_status == "UPDATED"
                      else original.record_identity.identifying_snapshot.brand)
             return relocate_quotation_status(original.record_identity, rows,
-                expected_brand=brand, accepted_statuses=("发给采购", "采购已报价"))
+                expected_brand=brand, accepted_statuses=QUOTATION_STATUSES)
         try:
             target = locate(item)
         except SheetRecordConflict:
@@ -129,7 +131,8 @@ class V13QuotationUpdater:
                  stop_requested: Callable[[], bool] = lambda: False,
                  status_reads: int = 31, status_interval: float = 1.0,
                  clock: Callable[[], float] = monotonic,
-                 notify_model_difference: Callable[[V13QuotationResult, str], None] = lambda _r, _m: None):
+                 notify_model_difference: Callable[[V13QuotationResult, str], None] = lambda _r, _m: None,
+                 price_store=None, currency_rate=None):
         if not 1 <= status_reads <= 31 or not 0 < status_interval <= 5:
             raise ValueError("status polling must be short and bounded")
         self._source, self._input, self._actions = source, quotation_input, actions
@@ -137,6 +140,7 @@ class V13QuotationUpdater:
         self._status_reads, self._status_interval = status_reads, status_interval
         self._clock = clock
         self._notify_model_difference = notify_model_difference
+        self._prices, self._currency_rate = price_store, currency_rate
 
     def run(self, results: Iterable[V13QuotationResult]) -> tuple[V13QuotationResult, ...]:
         output = []
@@ -154,12 +158,27 @@ class V13QuotationUpdater:
         if self._input.worksheet.spreadsheet != result.record_identity.worksheet.spreadsheet:
             raise V12Fault(FaultScope.GLOBAL_STOP, "QUOTE_INPUT_LOCATION_INVALID")
         payload = None
+        refresh = result.source_status in {"采购已报价", "已报价给客户"}
+        price = None
         try:
+            if self._prices is not None:
+                price = procurement_price_rmb(result.quotation, currency_rate=self._currency_rate)
+                baseline = self._prices.get(result.inquiry_id)
+                self._require_mode(result, refresh)
+                if refresh and baseline is None:
+                    self._prices.record(result.inquiry_id, price)
+                    return replace(result, outcome=QuotationOutcome.BASELINE_RECORDED)
+                if refresh and not (price > 0 and (baseline == 0 or price < baseline)):
+                    return replace(result, outcome=QuotationOutcome.PRICE_UNCHANGED)
+            elif refresh:
+                raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE")
             for _attempt in range(4):
                 self._check_stop()
                 status, source_model = self._current_state(result)
-                if status == "采购已报价":
+                if not refresh and status == "采购已报价":
                     return self._success(result, UpdatePopupOutcome.ALREADY_EXISTS)
+                if refresh and status != result.source_status:
+                    raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
                 if payload is None:
                     payload = quotation_input_payload(result, source_model)
                     if result.quotation.payload[1] != source_model:
@@ -173,7 +192,7 @@ class V13QuotationUpdater:
                     write_reason = RowErrorReason.QUOTE_INPUT_WRITE_FAILED
                     for _write_attempt in range(4):
                         self._check_stop()
-                        if self._current_status(result, expected_model=payload[1]) == "采购已报价":
+                        if self._require_mode(result, refresh, expected_model=payload[1]) == "采购已报价" and not refresh:
                             return self._success(result, UpdatePopupOutcome.ALREADY_EXISTS)
                         self._input.validate_schema()
                         try:
@@ -183,7 +202,7 @@ class V13QuotationUpdater:
                                 continue
                             # Source is still this order; final exact input read occurs
                             # immediately before the only submit action (no write in between).
-                            if self._current_status(result, expected_model=payload[1]) == "采购已报价":
+                            if self._require_mode(result, refresh, expected_model=payload[1]) == "采购已报价" and not refresh:
                                 return self._success(result, UpdatePopupOutcome.ALREADY_EXISTS)
                             if self._input.read_payload() != payload:
                                 continue
@@ -204,20 +223,41 @@ class V13QuotationUpdater:
                         self._actions.dismiss_result()
                     except UpdateAttemptUnconfirmed:
                         pass
-                    return self._verify_status(result, popup)
+                    if refresh:
+                        if popup is not UpdatePopupOutcome.INSERTED:
+                            return self._failed(result, RowErrorReason.UPDATE_RESULT_UNCONFIRMED)
+                        self._require_mode(result, refresh, expected_model=payload[1])
+                        final = self._success(result, popup)
+                    else:
+                        final = self._verify_status(result, popup)
+                    if self._prices is not None and final.outcome is QuotationOutcome.UPDATED_INSERTED:
+                        self._prices.record(result.inquiry_id, price)
+                    return final
                 except UpdateAttemptUnconfirmed:
                     continue
                 finally:
                     self._actions.close()
             return self._failed(result, RowErrorReason.UPDATE_RESULT_UNCONFIRMED)
+        except QuotationPriceUnavailable as exc:
+            if exc.code.startswith("QUOTE_FX"):
+                raise V12Fault(FaultScope.GLOBAL_STOP, "V13_FX_UNAVAILABLE") from None
+            return self._failed(result, RowErrorReason.QUOTE_PRICE_UNCOMPARABLE)
         except V13SourceRowError as exc:
             return self._failed(result, exc.reason)
         except QuotationInputUnavailable as exc:
             raise V12Fault(FaultScope.GLOBAL_STOP, exc.reason) from None
 
+    def _require_mode(self, result, refresh, *, expected_model=None):
+        status, model = self._current_state(result)
+        if ((refresh and status != result.source_status)
+                or (not refresh and status not in {"发给采购", "采购已报价"})
+                or (expected_model is not None and model != expected_model)):
+            raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
+        return status
+
     def _current_state(self, result):
         status, model = self._source.read_state(result)
-        if status not in {"发给采购", "采购已报价"}:
+        if status not in QUOTATION_STATUSES:
             raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
         return status, model
 

@@ -55,7 +55,7 @@ def _column(number):
 
 
 def _shared_error(error):
-    return (isinstance(error, GoogleSheetsAuthorizationError)
+    return (isinstance(error, (GoogleSheetsAuthorizationError, QuotationInputUnavailable))
             or type(error).__name__ in {"RefreshError", "DefaultCredentialsError"}
             or getattr(getattr(error, "resp", None), "status", None) in {400, 401, 403, 404, 429, 500, 502, 503, 504})
 

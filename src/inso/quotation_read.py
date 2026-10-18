@@ -69,8 +69,6 @@ def select_recent_lowest(
     cutoff = end - timedelta(hours=72)
     eligible, zero_rows = [], []
     rates = {"RMB": Decimal(1)}
-    currencies = {"RMB": "RMB", "CNY": "RMB", "人民币": "RMB", "CNY人民币": "RMB",
-                  "USD": "USD", "美元": "USD", "HKD": "HKD", "港币": "HKD", "HKD港币": "HKD"}
     for row in records:
         if (not lookup_mpn_matches(queried_mpn, row.payload[1])
                 or not cutoff <= row.quote_record_time.astimezone(SHANGHAI) <= end):
@@ -84,22 +82,38 @@ def select_recent_lowest(
         if price == 0:
             zero_rows.append(row)
             continue
-        currency = currencies.get(row.payload[4].strip().upper())
-        if currency is None:
-            raise QuotationPriceUnavailable("QUOTE_CURRENCY_UNSUPPORTED")
-        if currency not in rates:
-            if currency_rate is None:
-                raise QuotationPriceUnavailable("QUOTE_FX_REQUIRED")
-            rate = currency_rate(currency)
-            if not isinstance(rate, Decimal) or not rate.is_finite() or rate <= 0:
-                raise QuotationPriceUnavailable("QUOTE_FX_INVALID")
-            rates[currency] = rate
-        eligible.append((price * rates[currency], row))
+        eligible.append((procurement_price_rmb(row, currency_rate=currency_rate, rates=rates), row))
     if not eligible:
         return max(zero_rows, key=lambda row: row.quote_record_time, default=None)
     lowest = min(price for price, _ in eligible)
     return max((row for price, row in eligible if price == lowest),
                key=lambda row: row.quote_record_time)
+
+
+def procurement_price_rmb(row: V13QuotationRow, *, currency_rate=None, rates=None) -> Decimal:
+    """Canonical net-price normalization, shared by selection and local baselines."""
+    try:
+        price = Decimal(row.payload[7].strip().replace(",", ""))
+    except InvalidOperation:
+        raise QuotationPriceUnavailable("QUOTE_PRICE_INVALID") from None
+    if not price.is_finite() or price < 0:
+        raise QuotationPriceUnavailable("QUOTE_PRICE_INVALID")
+    if price == 0:
+        return Decimal(0)
+    currencies = {"RMB": "RMB", "CNY": "RMB", "人民币": "RMB", "CNY人民币": "RMB",
+                  "USD": "USD", "美元": "USD", "HKD": "HKD", "港币": "HKD", "HKD港币": "HKD"}
+    rates = {"RMB": Decimal(1)} if rates is None else rates
+    currency = currencies.get(row.payload[4].strip().upper())
+    if currency is None:
+        raise QuotationPriceUnavailable("QUOTE_CURRENCY_UNSUPPORTED")
+    if currency not in rates:
+        if currency_rate is None:
+            raise QuotationPriceUnavailable("QUOTE_FX_REQUIRED")
+        rate = currency_rate(currency)
+        if not isinstance(rate, Decimal) or not rate.is_finite() or rate <= 0:
+            raise QuotationPriceUnavailable("QUOTE_FX_INVALID")
+        rates[currency] = rate
+    return price * rates[currency]
 
 
 class InsoQuotationAuthenticationError(SecurityViolation):

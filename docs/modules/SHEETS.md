@@ -99,3 +99,18 @@ Fresh re-read validates the row snapshot before one status-cell RAW update and
 readback; schema-specific status is A for 2026 and B for SHAHAB. No match, duplicate,
 source change, permission failure or uncertain write yields a per-model manual
 repair result without a repeated write, whole-row overwrite or status regression.
+
+## Owner CDP web transport replacement (2026-10-18)
+
+Production composition now supplies launcher.google_web.GoogleSheetsWebService
+to the EXISTING GoogleSheetsRowReader/BrandWriter/PurchaseStatusWriter/
+IntentStatusWriter/GoogleQuotationInput contracts. Its service-shaped calls are
+in-process compatibility methods; all external reads/writes use native Google
+web UI, not the Sheets API or OAuth. No duplicated schema/identity/business writer.
+Source TSV reads preserve positions, numeric quantity semantics and text IDs;
+raw14 input remains literal strings. Header proof uses the observed2026 row1 /
+SHAHAB row2 contracts. Source writes remain single-cell, quotation input one raw14
+row, with existing domain readback plus cloud-sync proof at transport. Downloads
+are ephemeral/deleted, pages owned/protected, no clipboard or new login/profile.
+Actual read acceptance passed; real editor/overwrite writes are UNKNOWN, not
+claimed deployed or live-verified. See tasks/2026-10-18-quotation-price-refresh.md.

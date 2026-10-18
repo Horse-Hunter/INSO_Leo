@@ -765,7 +765,7 @@ def test_backend_closes_only_owned_browser_after_runtime_thread_exits(tmp_path, 
     browser_acquired = threading.Event()
     closed = []
     browser = BrowserHandle(owned=owned, close_fn=lambda: closed.append(threading.current_thread().name))
-    monkeypatch.setattr(backend_module, "build_read_only_google_sheets_service", lambda _path: _SheetsService(rows, poll_called))
+    monkeypatch.setattr(backend_module, "build_google_web_service", lambda _path, **_kwargs: _SheetsService(rows, poll_called))
     monkeypatch.setattr(backend_module, "assess_readiness", lambda *_a, **_k: type("Ready", (), {"ready": True, "missing_site_ids": ()})())
     monkeypatch.setattr(backend_module, "attach_inso_research_session", lambda _endpoint, handle, **_kw: _FakeInsoSession(handle))
     monkeypatch.setattr(research_runtime, "assess_readiness", lambda *_a, **_k: type("Ready", (), {"ready": True})())

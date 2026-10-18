@@ -38,8 +38,8 @@ def test_canonical_poll_combines_empty_purchase_quotation_and_interruptible_900s
     events = []
     monkeypatch.setattr(
         launcher,
-        "build_read_only_google_sheets_service",
-        lambda _: _SheetsService(rows, Event()),
+        "build_google_web_service",
+        lambda _, **_kwargs: _SheetsService(rows, Event()),
     )
     monkeypatch.setattr(
         launcher,

@@ -25,7 +25,7 @@ def current_record(reader, worksheet, row_position):
     row = rows[0]
     schema = worksheet_schema(worksheet.worksheet)
     status = row.cells.get(schema.status_column)
-    if status not in {"未发", "发给采购", "采购已报价", "成交"}:
+    if status not in {"未发", "发给采购", "采购已报价", "已报价给客户", "意向订单", "成交"}:
         raise ValueError("原行状态无法确认，未执行操作。")
     normalized = replace(row, cells={**row.cells, schema.status_column: "未发"})
     parser = type("CurrentRow", (), {"read_rows": lambda self, ws: (normalized,)})()
@@ -121,6 +121,7 @@ class ManualRetryHolds:
             # Never deactivate a newly updated bound key that equals the old key.
             to_close = self.matched_old_keys - current
         elif result.outcome in {QuotationOutcome.NO_RECENT_QUOTE,
+                QuotationOutcome.BASELINE_RECORDED, QuotationOutcome.PRICE_UNCHANGED,
                 QuotationOutcome.UPDATED_INSERTED, QuotationOutcome.UPDATED_ALREADY_EXISTS}:
             to_close = self.matched_old_keys
         else:

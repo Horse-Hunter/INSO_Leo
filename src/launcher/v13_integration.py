@@ -33,6 +33,16 @@ def quotation_location(cfg):
 
 
 def quotation_gui(result, key):
+    if result.source_status in {"采购已报价", "已报价给客户"}:
+        detail = {
+            QuotationOutcome.BASELINE_RECORDED: "首次已记录采购价",
+            QuotationOutcome.PRICE_UNCHANGED: "采购价未降低",
+            QuotationOutcome.NO_RECENT_QUOTE: "近三天暂无新采购报价",
+            QuotationOutcome.UPDATED_INSERTED: "采购报价已更新",
+        }.get(result.outcome)
+        if detail is not None:
+            return V12OrderStateDTO(key, V12BusinessLabel.QUOTATION_COMPLETED, None,
+                                   waiting_label=f"{result.source_status}（{detail}）")
     label = {
         QuotationOutcome.NO_RECENT_QUOTE: V12BusinessLabel.QUOTATION_WAITING,
         QuotationOutcome.ROW_FAILED: V12BusinessLabel.QUOTATION_FAILED,

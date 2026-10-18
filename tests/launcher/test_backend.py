@@ -218,8 +218,8 @@ def test_production_composition_builds_real_seams_without_network(
     readiness_calls = []
     monkeypatch.setattr(
         launcher,
-        "build_read_only_google_sheets_service",
-        lambda _path: _SheetsService(rows, sheets_called),
+        "build_google_web_service",
+        lambda _path, **_kwargs: _SheetsService(rows, sheets_called),
     )
     monkeypatch.setattr(
         launcher,
@@ -299,8 +299,8 @@ def test_empty_poll_defers_browser_bootstrap_until_an_inquiry_is_due(
     browser_calls = []
     monkeypatch.setattr(
         launcher,
-        "build_read_only_google_sheets_service",
-        lambda _path: _SheetsService(rows, sheets_called),
+        "build_google_web_service",
+        lambda _path, **_kwargs: _SheetsService(rows, sheets_called),
     )
     monkeypatch.setattr(
         launcher,
@@ -344,8 +344,8 @@ def test_browser_bootstrap_failure_enters_manual_review_without_research_retry(
     research_calls = []
     monkeypatch.setattr(
         launcher,
-        "build_read_only_google_sheets_service",
-        lambda _path: _SheetsService(rows, sheets_called),
+        "build_google_web_service",
+        lambda _path, **_kwargs: _SheetsService(rows, sheets_called),
     )
     monkeypatch.setattr(
         launcher,
@@ -397,8 +397,8 @@ def test_readiness_failure_closes_owned_browser_without_research_retry(
     research_calls = []
     monkeypatch.setattr(
         launcher,
-        "build_read_only_google_sheets_service",
-        lambda _path: _SheetsService(rows, sheets_called),
+        "build_google_web_service",
+        lambda _path, **_kwargs: _SheetsService(rows, sheets_called),
     )
 
     def readiness(_url, *, cdp_probe):
@@ -455,8 +455,8 @@ def test_stop_after_cycle_drains_every_due_item_from_current_poll(
     research_builder_kwargs = []
     monkeypatch.setattr(
         launcher,
-        "build_read_only_google_sheets_service",
-        lambda _path: _SheetsService(rows, sheets_called),
+        "build_google_web_service",
+        lambda _path, **_kwargs: _SheetsService(rows, sheets_called),
     )
     monkeypatch.setattr(
         launcher,
@@ -557,8 +557,8 @@ def test_startup_releases_a_research_claim_left_by_an_interrupted_run(
 
     monkeypatch.setattr(
         launcher,
-        "build_read_only_google_sheets_service",
-        lambda _path: _SheetsService([], Event()),
+        "build_google_web_service",
+        lambda _path, **_kwargs: _SheetsService([], Event()),
     )
     monkeypatch.setattr(
         launcher,
@@ -1408,8 +1408,8 @@ def test_real_poll_seam_stops_batch_on_login_and_resumes_queued_inquiry(tmp_path
     _RecordingTransport.sent = []
     monkeypatch.setattr(launcher, "QQSMTPTransport", _RecordingTransport)
     monkeypatch.setattr("src.launcher.v12_composition.QQSMTPTransport", _RecordingTransport)
-    monkeypatch.setattr(launcher, "build_read_only_google_sheets_service",
-                        lambda _path: _SheetsService(rows, Event()))
+    monkeypatch.setattr(launcher, "build_google_web_service",
+                        lambda _path, **_kwargs: _SheetsService(rows, Event()))
     monkeypatch.setattr(launcher, "assess_readiness",
                         lambda *_args, **_kwargs: SimpleNamespace(ready=True, missing_site_ids=()))
 
@@ -1697,7 +1697,7 @@ def test_real_poll_google_outage_uses_existing_fifteen_minute_wait_then_recovers
     production.write_text(json.dumps(settings), encoding="utf-8")
     _RecordingTransport.sent = []
     monkeypatch.setattr("src.launcher.v12_composition.QQSMTPTransport", _RecordingTransport)
-    monkeypatch.setattr(launcher, "build_read_only_google_sheets_service", lambda path: _SheetsService(rows, Event()))
+    monkeypatch.setattr(launcher, "build_google_web_service", lambda path, **_kwargs: _SheetsService(rows, Event()))
     monkeypatch.setattr(launcher, "assess_readiness", lambda *args, **kwargs: SimpleNamespace(ready=True, missing_site_ids=()))
     backend = ProductionBackend(config_path=config, production_config_path=production,
         cdp_probe=lambda url: True, browser_acquirer=lambda *args, **kwargs: BrowserHandle(owned=False))

@@ -184,7 +184,8 @@ def run_sales_header_check(*, config_path, production_path, root, notify=None):
         except Exception:  # noqa: BLE001 - no SQLite/path details in email
             raise OrderError("RECEIPT", pi_no=order.pi_no) from None
         from .sales_intent import intent_report, mark_sales_intent
-        sheets_report = intent_report(mark_sales_intent(order, production=production, root=root))
+        sheets_report = intent_report(mark_sales_intent(order, production=production, root=root, browser_handle=handle))
+        page.bring_to_front()
         return "WAITING_OWNER", (f"本次订单：合同{count}行已完成解析和 ICNET 封装查询（已脱敏）。\n"
             "头部及全部明细字段读回一致，PDF 已上传1张，等待 Owner 复核。\n"
             "V1.4 worker 已结束，不影响询价；销售订单页面保留。\n"

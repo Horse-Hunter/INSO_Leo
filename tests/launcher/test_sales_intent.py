@@ -6,10 +6,10 @@ from src.sheets.intent_status import IntentLine, IntentResult
 
 def test_no_interactive_google_consent_and_both_configured_sheets(monkeypatch, tmp_path):
     service = object()
-    def build(client, *, allow_interactive):
-        assert client == tmp_path/'client.json' and allow_interactive is False
+    def build(*, browser_handle):
+        assert browser_handle is None
         return service
-    monkeypatch.setattr(sales_intent, 'build_read_write_google_sheets_service', build)
+    monkeypatch.setattr(sales_intent, 'build_google_web_service', build)
     monkeypatch.setattr(sales_intent, 'GoogleSheetsRowReader', lambda value: value)
     monkeypatch.setattr(sales_intent, 'GoogleSheetsIntentStatusWriter', lambda value: value)
     def update(reader, writer, worksheets, lines):
@@ -26,7 +26,7 @@ def test_no_interactive_google_consent_and_both_configured_sheets(monkeypatch, t
 def test_auth_failure_reports_all_models_without_provider_content(monkeypatch, tmp_path):
     def fail(*args, **kwargs):
         raise RuntimeError('PRIVATE_TOKEN_URL')
-    monkeypatch.setattr(sales_intent, 'build_read_write_google_sheets_service', fail)
+    monkeypatch.setattr(sales_intent, 'build_google_web_service', fail)
     order = SimpleNamespace(lines=[SimpleNamespace(part_number='TEST-A', quantity=2),
         SimpleNamespace(part_number='TEST-B', quantity=3)])
     results = sales_intent.mark_sales_intent(order, production={'client_secret_file': 'client.json',

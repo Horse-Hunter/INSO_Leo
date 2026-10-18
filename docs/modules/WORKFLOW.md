@@ -176,3 +176,21 @@ Source snapshots/IDs and existing submission/dedup guards stay intact; no replay
 or migration. New SHAHAB sheet records display SHAHAB instead of invented A.
 Important/duplicate/exception email copy uses 询价; model-difference email subject
 is 【INSO】采购报价差异. Historical outbox payloads remain immutable.
+
+## Owner procurement-price refresh (2026-10-18)
+
+Reuse the V13 cycle/updater/holds and existing15-minute scheduler. Candidates now
+include 发给采购 / 采购已报价 / 已报价给客户. Carry the observed source status
+through candidate/result/hold serialization; old serialized holds default to
+initial sent mode. Do not settle refresh failures by seeing unchanged quoted
+status. Preserve the original inquiry ID and reviewed exact relocation.
+ProcurementPriceStore is one additive workflow table (inquiry FK, Decimal RMB
+price), backed up through existing verified migration support, without changing
+V12 user_version or copying quotation/customer payloads. Missing historical
+baseline => record only; lower positive or zero-to-positive => existing updater.
+Only verified insert advances the positive minimum. Customer-sale prices are
+never read as a baseline. INSO exports a shared pure procurement_price_rmb helper
+from the existing selector; conversion/72h/payload rules are unchanged.
+Initial status advancement remains required; later source status must stay exact
+and a skip popup cannot prove overwrite. Counts/follow-up remain sent-only.
+See tasks/2026-10-18-quotation-price-refresh.md for evidence and live UNKNOWNs.

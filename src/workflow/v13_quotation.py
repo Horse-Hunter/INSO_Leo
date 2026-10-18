@@ -32,6 +32,8 @@ from .v12_faults import FaultScope, V12Fault
 
 
 class QuotationOutcome(StrEnum):
+    BASELINE_RECORDED = "BASELINE_RECORDED"
+    PRICE_UNCHANGED = "PRICE_UNCHANGED"
     UPDATED_INSERTED = "UPDATED_INSERTED"
     UPDATED_ALREADY_EXISTS = "UPDATED_ALREADY_EXISTS"
     QUOTE_FOUND = "QUOTE_FOUND"
@@ -79,6 +81,7 @@ class V13Candidate:
     record_identity: SheetRecordIdentity
     queried_mpn: str
     source_row_position: int | None = None
+    source_status: str = "发给采购"
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +94,7 @@ class V13QuotationResult:
     row_error_reason: RowErrorReason | None = None
     source_worksheet: WorksheetIdentity | None = None
     source_row_position: int | None = None
+    source_status: str = "发给采购"
 
 
 def _read_source_rows(reader, worksheet):
@@ -155,14 +159,19 @@ def read_v13_candidates(
             reason = RowErrorReason.SOURCE_IDENTITY_AMBIGUOUS
         elif item is None:
             reason = RowErrorReason.SOURCE_IDENTITY_UNRESOLVED
+        # Refreshes require an EXISTING unique internal ID for their baseline.
+        # Historical/unbound quoted rows must not create IDs or a mailbox flood.
+        # Initial sent-to-procurement rows retain their reviewed failure handling.
+        if record.status != "发给采购" and item is None:
+            continue
         if reason is not None:
             result.append(V13QuotationResult(
                 item.inquiry_id if item else None, item.record_identity if item else None,
                 record.model if isinstance(record.model, str) else None,
-                QuotationOutcome.ROW_FAILED, None, reason, worksheet, record.row_position,
+                QuotationOutcome.ROW_FAILED, None, reason, worksheet, record.row_position, str(record.status),
             ))
         else:
-            result.append(V13Candidate(item.inquiry_id, item.record_identity, record.model, record.row_position))
+            result.append(V13Candidate(item.inquiry_id, item.record_identity, record.model, record.row_position, str(record.status)))
     return tuple(result)
 
 
@@ -176,7 +185,7 @@ class V13QuotationCycle:
         self._quotes = quote_reader or InsoQuotationReader()
         self._fx = fx_provider
 
-    def _currency_rate(self, currency):
+    def currency_rate(self, currency):
         if self._fx is None:
             raise V12Fault(FaultScope.GLOBAL_STOP, "V13_FX_UNAVAILABLE")
         from src.research.ecb_fx import EcbFxError
@@ -230,6 +239,9 @@ class V13QuotationCycle:
                     raise V13SourceRowError(RowErrorReason.SOURCE_IDENTITY_AMBIGUOUS) from None
                 except SheetRecordConflict:
                     raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED) from None
+                from src.sheets.worksheet_schema import worksheet_schema
+                if row.cells.get(worksheet_schema(worksheet.worksheet).status_column) != candidate.source_status:
+                    raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
                 bindings, ambiguous = _source_bindings(_ledger_items(self._store), worksheet, fresh_rows)
                 bound = bindings.get(row.row_position, [])
                 if row.row_position in ambiguous or len(bound) != 1:
@@ -242,7 +254,7 @@ class V13QuotationCycle:
                     # Query-time clock sampled after this attempt completes, not batch start.
                     try:
                         return select_recent_lowest(rows, queried_mpn=candidate.queried_mpn,
-                                                    now=self._clock(), currency_rate=self._currency_rate), True
+                                                    now=self._clock(), currency_rate=self.currency_rate), True
                     except QuotationPriceUnavailable as exc:
                         if exc.code.startswith("QUOTE_FX"):
                             raise V12Fault(FaultScope.GLOBAL_STOP, "V13_FX_UNAVAILABLE") from None
@@ -263,7 +275,7 @@ class V13QuotationCycle:
                 self._operations.close()
                 results.append(on_result(V13QuotationResult(
                     candidate.inquiry_id, candidate.record_identity, candidate.queried_mpn,
-                    QuotationOutcome.ROW_FAILED, None, exc.reason, worksheet, candidate.source_row_position,
+                    QuotationOutcome.ROW_FAILED, None, exc.reason, worksheet, candidate.source_row_position, candidate.source_status,
                 )))
                 continue
             except V12Fault:
@@ -280,6 +292,7 @@ class V13QuotationCycle:
                 candidate.inquiry_id, candidate.record_identity, candidate.queried_mpn,
                 QuotationOutcome.QUOTE_FOUND if quote is not None else QuotationOutcome.NO_RECENT_QUOTE,
                 quote, source_worksheet=worksheet, source_row_position=candidate.source_row_position,
+                source_status=candidate.source_status,
             )))
         return tuple(results)
 

@@ -110,15 +110,15 @@ def query_pending_records(
 
 
 def query_records_by_status(
-    reader: WorksheetRowReader, worksheet: WorksheetIdentity, *, status: str,
+    reader: WorksheetRowReader, worksheet: WorksheetIdentity, *, status: str | tuple[str, ...],
 ) -> tuple[PendingSheetRecord, ...]:
     """One-shot exact status read using the canonical schema and row parser."""
-    wanted_status = status
+    wanted_statuses = (status,) if isinstance(status, str) else status
     schema = worksheet_schema(worksheet.worksheet)
     pending: list[PendingSheetRecord] = []
     for row in reader.read_rows(worksheet):
         status = row.cells.get(schema.status_column)
-        if status != wanted_status:
+        if status not in wanted_statuses:
             continue
 
         snapshot = _source_snapshot(row, schema)
@@ -186,4 +186,7 @@ def query_quotation_candidates(
     reader: WorksheetRowReader, worksheet: WorksheetIdentity,
 ) -> tuple[PendingSheetRecord, ...]:
     """V1.3 read-only source; never polls or changes a cell."""
-    return query_records_by_status(reader, worksheet, status="发给采购")
+    return query_records_by_status(reader, worksheet, status=QUOTATION_STATUSES)
+
+
+QUOTATION_STATUSES = ("发给采购", "采购已报价", "已报价给客户")

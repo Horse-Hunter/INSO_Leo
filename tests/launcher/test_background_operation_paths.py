@@ -14,11 +14,13 @@ def forbidden():
 
 def background_spy(monkeypatch, module, browser, context):
     calls = []
-    def create(actual_browser, actual_context, *, timeout_ms):
+    def create(actual_browser, actual_context, *, timeout_ms, owner=None):
         assert actual_browser is browser and actual_context is context
         assert timeout_ms > 0
         calls.append("background")
         page = Page(context)
+        if owner is not None:
+            page.owner_name = "INSO_OWNER_TAB:" + owner
         context.pages.append(page)
         return page
     monkeypatch.setattr(module, "new_background_page", create)
