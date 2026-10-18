@@ -123,3 +123,58 @@ normal-poll reuse, production script behavior and historical incident root cause
 remain UNKNOWN pending Owner testing/CEO Review. REVIEW_REQUIRED; no CEO PASS
 is asserted merely because Owner authorized deployment. This original task and
 ../tasks/2026-10-18-poll-page-reuse.md are the review evidence; no duplicate report.
+
+
+## CEO independent review — 2026-10-18 (deployed)
+
+**CODE REVIEW PASS for scope 399eab9 + ea278cc; LIVE POLL / BUSINESS ACCEPTANCE UNKNOWN.**
+Independent GitHub review of `6a09016..2a93aba` covered page-pool lifetimes,
+INSO lease reset and reproof, Google wrapped-error classification, poll deferral,
+read diagnostics, synthetic regression tests, and the executor's deployment receipt.
+
+- Google grid transport retains a thread-local, poll-bounded session and
+  guarded owned page. It still verifies active worksheet/gid/schema and authentic
+  document identity for every read/write; ordinary bad-read pages are retired
+  before the next attempt and protected/unsaved/script/human pages are not blindly
+  re-used. Normal pages close at poll scope exit. The separate INSO quotation
+  pool re-establishes login/native menu on page reuse, physically resets the
+  failed query page before the existing 120-second retry, and does not close
+  protected sales/manual-auth pages on normal cleanup.
+- Temporary **read** errors are recognized only from specified wrapped
+  Playwright timeout/network/connection causes; auth, schema, unknown wrappers
+  and write uncertainty remain fail-closed. GoogleSheetsRowReader retains
+  its initial+one retry; exhaustion uses the established durable 229 notice,
+  no permanent stop flag, and the ordinary next 900-second poll.
+- Reviewed synthetic tests cover 2026+SHAHAB reuse, next-poll new page,
+  failure isolation, script/input protection, foreign thread ownership,
+  wrapped timeout/network retry, unsafe/auth negative cases, actual simulated
+  poller deferral/notification and next cycle. Executor reports full
+  **2205 PASS / 1 skipped**, Ruff PASS, frozen scanner/self-check/idle GUI PASS.
+  CEO did **not** independently execute the local test suite, inspect the
+  installed binary, or attach to real Chrome/Sheets/INSO.
+- Executor's Owner-authorized release receipt records install at the original
+  V1.4 path, installed EXE SHA256
+  `03cd1e738060a1eeffbe52b98e90d6008a18e2bc7e7d32bbd995fc98adad2cc2`,
+  retained changed-asset rollback and original protected assets, and a
+  responsive idle GUI. These are **Executor attestations**, not direct
+  CEO runtime attestation.
+- Logs at 14:59:58 and 15:18:04 only establish earlier
+  `SHEETS_READ_UNAVAILABLE` events. Their underlying website cause remains
+  **UNKNOWN**; do not claim OAuth, browser outage or any actual recurrence is
+  proven. Real page reuse performance, both-tab traversal and Google writes
+  remain **NOT YET ACCEPTED**.
+
+**Disposition:** `CODE_REVIEW_PASS` on these two scoped fixes. Deployed
+pending Owner-run business observation. No more coding is requested solely
+for Review and **no automatic replay** is authorized. Before clicking 开始询价,
+Owner should be aware that existing 2026/SHAHAB rows and all three quotation
+statuses may be processed (including existing older items), not only a newly
+arrived order. Check intended business scope and current Chrome/login state;
+retain rollback and baseline. On manual start, record sanitized cycle/status
+logs, source-title traversal, whether transient errors recover next poll, and
+actual changed cells/script outcomes; no duplicate manual clicks or replays on
+an uncertain write. If unexpected writes/auth/sessions occur, stop the business
+worker without closing protected tabs and investigate before retry.
+
+No real order, live data, package, process or browser action was performed
+by the reviewer.
