@@ -33,6 +33,10 @@ def quotation_location(cfg):
 
 
 def quotation_gui(result, key):
+    if (result.outcome is QuotationOutcome.BASELINE_RECORDED
+            and result.row_error_reason is not None):
+        return V12OrderStateDTO(key, V12BusinessLabel.QUOTATION_STATUS_PENDING, None,
+            waiting_label="Google写入结果不确定，已提醒229；后续降价继续检查")
     if result.source_status in {"采购已报价", "已报价给客户"}:
         detail = {
             QuotationOutcome.BASELINE_RECORDED: "首次已记录采购价",
@@ -56,13 +60,31 @@ def quotation_gui(result, key):
     return V12OrderStateDTO(key, label, None, waiting_label=waiting) if label else None
 
 
-def notify_quotation(store, result, key, episode, *, at):
+def notify_refresh_uncertain(store, result, old_price, new_price, *, at):
+    """Reuse the durable quotation mailbox and price-transition deduplication."""
+    episode = f"price-{format(old_price.normalize(), 'f')}-to-{format(new_price.normalize(), 'f')}"
+    notify_quotation(store, result, result.inquiry_id, episode, at=at,
+                     old_price=old_price, new_price=new_price)
+
+
+def notify_quotation(store, result, key, episode, *, at, old_price=None, new_price=None):
     reason = result.row_error_reason.value
     command_id = f"v13:{key}:{episode}:{reason}"
     owner = (NotificationRecipient("owner", "linan229@qq.com"),)
     if store.notification_already_created(
         command_id, result.inquiry_id, NotificationKind.PURCHASE_EXCEPTION, owner
     ):
+        return
+    if old_price is not None and new_price is not None:
+        body = (f"询价：{result.queried_mpn}\n"
+            f"位置：{result.source_worksheet.worksheet}，第{result.source_row_position}行\n"
+            f"原采购价：{format(old_price, 'f')}元（人民币未税）\n"
+            f"新采购价：{format(new_price, 'f')}元（人民币未税）\n"
+            "情况：已尝试点击更新报价，Google写入结果不确定，请人工核对。\n"
+            f"后续按{format(new_price, 'f')}元比较；本次不重复点击，相同或更高价跳过，再降价时继续更新。")
+        store.enqueue_notification(NotificationCommand(command_id, result.inquiry_id,
+            NotificationKind.PURCHASE_EXCEPTION, owner,
+            f"【INSO】降价更新待核对：{result.queried_mpn}", body, None, at))
         return
     action = {
         "SOURCE_STATUS_NOT_UPDATED": "核对源表状态，确认后改为“采购已报价”；无需重复更新报价。",

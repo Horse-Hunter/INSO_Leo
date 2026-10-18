@@ -78,6 +78,11 @@ class Page:
         self.armed = self.confirmed = self.started = self.settled = False
         self.script_never_starts = False
     def wait_for_function(self, script, **kwargs):
+        if "__insoRefreshQuietSince" in script:
+            assert 'isRunning' in script and '[role="dialog"]' in script
+            if self.script_running or self.popup:
+                raise TimeoutError("synthetic script is still using shared input")
+            return
         state = "settled" if ".settled" in script else "started"
         self.script_waits.append({"state": state, **kwargs})
         assert self.armed and self.confirmed
@@ -92,7 +97,13 @@ class Page:
             self.script_running = False
             self.settled = True
     def evaluate(self, script, arg=None):
-        if "window.name = name" in script:
+        if "window.__insoRefreshPending = true" in script:
+            self.refresh_pending = True
+        elif "window.__insoRefreshPending = false" in script:
+            self.refresh_pending = False
+        elif "window.__insoRefreshPending === true" in script:
+            return getattr(self, "refresh_pending", False)
+        elif "window.name = name" in script:
             self.owner_name = arg
         elif "window.name" in script:
             return getattr(self, "owner_name", "")
@@ -402,3 +413,66 @@ def test_production_factory_keeps_model_difference_callback():
     updater = build_v13_quotation_updater(service=object(), source_reader=object(), store=object(),
         browser_handle=handle, location=location(), wait=lambda _: False, notify_model_difference=notify)
     assert updater._notify_model_difference is notify
+
+
+@pytest.mark.parametrize('late_dialog', [False, True])
+def test_uncertain_refresh_preserves_running_input_then_later_releases_without_update_click(late_dialog):
+    from src.sheets.quotation_input import QuotationInputBusy
+    actions,browser=adapter()
+    owner=browser.contexts[0].pages[0]
+    actions.prepare_price_refresh()
+    actions.open_quote_input()
+    pending=browser.contexts[0].pages[-1]
+    actions.click_update_quote()
+    pending.popup=None  # No usable result has arrived yet.
+    actions.close()
+    assert not pending.closed and pending.refresh_pending
+    newer=GoogleQuotationUpdateActions(browser_handle=SimpleNamespace(owned=False,browser=browser),location=location())
+    with pytest.raises(QuotationInputBusy):
+        newer.open_quote_input()
+    assert len(browser.contexts[0].pages)==2  # No second writer while script is running.
+    assert pending.clicks==['更新报价'] and not owner.closed
+    pending.script_running=False
+    if late_dialog:
+        pending.popup='更新完成\n成功填入：1行'
+    newer.open_quote_input()
+    assert pending.closed and not owner.closed and browser.connected
+    assert pending.clicks==(['更新报价','确定'] if late_dialog else ['更新报价'])
+    newer.close()
+
+
+def test_refresh_native_click_timeout_is_classified_after_dispatch_only():
+    from src.workflow.v13_quote_update import UpdateClickUnconfirmed
+    actions,browser=adapter()
+    actions.prepare_price_refresh()
+    actions.open_quote_input()
+    page=browser.contexts[0].pages[-1]
+    get=page.get_by_role
+    def locate(role,*,name=None,exact=None):
+        locator=get(role,name=name,exact=exact)
+        if role=='button' and name=='更新报价':
+            clicked=locator.click
+            def timeout(**kwargs):
+                clicked(**kwargs)
+                raise TimeoutError('native delivery unknown')
+            locator.click=timeout
+        return locator
+    page.get_by_role=locate
+    with pytest.raises(UpdateClickUnconfirmed):
+        actions.click_update_quote()
+    assert page.clicks==['更新报价'] and page.refresh_pending
+    actions.close()
+    assert not page.closed
+
+
+def test_preclick_refresh_failure_does_not_mark_dispatch_or_retain_input():
+    actions,browser=adapter()
+    actions.prepare_price_refresh()
+    actions.open_quote_input()
+    page=browser.contexts[0].pages[-1]
+    page.menu_failure=True
+    with pytest.raises(UpdateAttemptUnconfirmed):
+        actions.click_update_quote()
+    assert not getattr(page,'refresh_pending',False) and not page.clicks
+    actions.close()
+    assert page.closed

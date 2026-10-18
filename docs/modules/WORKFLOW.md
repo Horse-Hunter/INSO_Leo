@@ -188,7 +188,12 @@ ProcurementPriceStore is one additive workflow table (inquiry FK, Decimal RMB
 price), backed up through existing verified migration support, without changing
 V12 user_version or copying quotation/customer payloads. Missing historical
 baseline => record only; lower positive or zero-to-positive => existing updater.
-Only verified insert advances the positive minimum. Customer-sale prices are
+Owner CEO整改: possible refresh-click delivery plus uncertain result advances
+the existing comparison minimum and enqueues a deduplicated229-only notice with
+old/new RMB net prices. Return BASELINE_RECORDED + UPDATE_RESULT_UNCONFIRMED, not
+ROW_FAILED/Google success; no blocking Hold or same-run re-click. Pre-click
+failures retain baseline. Shared input busy returns QUOTE_FOUND for later poll,
+not a durable barrier. Initial sent-mode behavior remains unchanged. Customer-sale prices are
 never read as a baseline. INSO exports a shared pure procurement_price_rmb helper
 from the existing selector; conversion/72h/payload rules are unchanged.
 Initial status advancement remains required; later source status must stay exact

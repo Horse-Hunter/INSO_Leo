@@ -49,7 +49,7 @@ class ProcurementPriceStore:
             raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
 
     def record(self, inquiry_id, price):
-        """Bootstrap or verified success only; positive minimum never regresses."""
+        """Comparison baseline: bootstrap, verified success or attempted uncertain refresh."""
         if not isinstance(price, Decimal) or not price.is_finite() or price < 0:
             raise ValueError("invalid procurement baseline")
         try:

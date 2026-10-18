@@ -129,6 +129,7 @@ from .v12_gui import read_startup_interruptions, read_v12_order_state
 from .v13_integration import (
     notify_quotation,
     notify_quotation_model_difference,
+    notify_refresh_uncertain,
     notify_runtime_fault,
     notify_website_issue,
     quotation_gui,
@@ -814,6 +815,8 @@ class ProductionBackend(GuiBackend):
                             service=service, source_reader=active_reader,
                             store=active_store, browser_handle=handle, location=location,
                             price_store=price_store, currency_rate=cycle.currency_rate,
+                            notify_refresh_uncertain=lambda result, old, new: notify_refresh_uncertain(
+                                self._v12_store, result, old, new, at=utc_now()),
                             wait=self._stop.wait, stop_requested=self._immediate_stop_requested,
                             notify_model_difference=lambda result, model: notify_quotation_model_difference(
                                 self._v12_store, result, model, at=utc_now()))

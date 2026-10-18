@@ -137,7 +137,13 @@ inclusive72-hour INSO supplier-net-price selection. Compare local RMB procuremen
 baselines keyed by the original inquiry ID, never customer sale prices. Existing
 quoted rows first bootstrap a missing baseline without updating; subsequently
 only cheaper positive prices or zero-to-positive refresh. Verified inserted
-updates advance the stored positive minimum; skip/failure does not. Initial
+updates advance the stored positive minimum. Owner CEO整改 (same date): after a
+refresh update click may have executed, uncertain result also advances ONLY the
+comparison baseline and enqueues229 manual-check mail with old/new RMB net prices;
+no same-run re-click, Google-success outcome or blocking Hold. Pre-click failure
+never advances it; same/higher then skips, further reduction can update normally.
+Existing owned script/input guard re-checks later instead of permanently stopping.
+Initial
 sent rows still require 采购已报价; refreshes preserve the later source status.
 Unbound historical quoted rows are skipped, never given invented inquiry IDs.
 Pending/overdue purchase counts and reminders remain sent-status only.

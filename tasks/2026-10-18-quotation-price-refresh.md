@@ -3,6 +3,20 @@ status: REVIEW_REQUIRED
 owner: Codex
 created: 2026-10-18
 
+## CEO整改 / latest Owner rule (2026-10-18)
+This supersedes the earlier verified-success-only baseline/refresh-Hold policy
+ONLY after a refresh update button may have been dispatched. Do not re-click in
+the same run; enqueue229-only uncertainty notice (identity, old/new RMB net price,
+manual verification), advance existing comparison baseline, and return a
+baseline-only outcome, never Google success or a blocking Hold. Same/higher price
+then skips; a further reduction starts an ordinary new update. Pre-click failures
+do not advance baseline. Reuse existing PriceStore/outbox/dedup/outcomes; no new
+table, approval, scheduler or business state machine. Existing script-settlement
+guards must temporarily protect shared input and re-check on later attempts,
+not cause a permanent stop for this uncertainty. Real writes/CDP/runtime access,
+packaging and deployment are not authorized in this整改. Offline-only tests and
+original evidence update, normal V1.4 push, then REVIEW_REQUIRED.
+
 ## Owner requirements
 Old quotation incident recovered; no further follow-up/replay. Poll statuses
 发给采购 / 采购已报价 / 已报价给客户 in the existing scheduler. Look for INSO
@@ -142,7 +156,6 @@ packet, tests/launcher/test_google_web.py, tests/workflow/test_v13_price_refresh
 and the scoped Git commit. Next: independent CEO Review; controlled live write
 acceptance remains required before any packaging/deployment claim.
 
-
 ## CEO independent review — 2026-10-18
 
 **CHANGES_REQUESTED — one refresh idempotency blocker; do not live-write or package.**
@@ -186,3 +199,57 @@ writes, no packaging/overwrite and no synthetic business replay in this fix.
 local ledger, rollback and dirty work remain protected. Update this evidence,
 run network-isolated offline checks, push normal non-force to the current branch
 and return `REVIEW_REQUIRED` for CEO re-review.
+
+
+Owner latest clarification above supersedes ONLY this historical review's
+requested blocking Hold / no-baseline-advance policy; its one-click idempotency
+blocker, script safety, no-live-write and no-packaging boundaries remain in force.
+
+## CEO整改 implementation evidence (offline only)
+Reuse audit: kept ProcurementPriceStore.record/get, BASELINE_RECORDED/QUOTE_FOUND,
+UPDATE_RESULT_UNCONFIRMED, existing notify_quotation outbox/recipient/command dedup,
+and the existing script MutationObserver/dismiss/owned-tab cleanup. No new table,
+business state enum, scheduler, login, approval flow, side database or live access.
+
+Native refresh click now distinguishes failure BEFORE dispatch from a possibly
+delivered click. After possible dispatch, unknown popup/read/settlement returns
+BASELINE_RECORDED with the uncertainty reason after229 notice enqueue and normal
+baseline record. It cannot enter the old four-click retry or ROW_FAILED Hold.
+Google success is not fabricated; GUI explicitly says uncertain/notified/continue
+checking later reductions. Mail identifies inquiry/model/source location and
+old/new RMB supplier net prices; dedup uses existing inquiry/price-transition key.
+Enqueue precedes comparison update so a successful baseline advance cannot lose
+its notice. Shared ledger/outbox infrastructure errors retain existing safeguards.
+
+An unfinished refresh retains its EXISTING owned Google tab and a single browser
+marker. Reuse existing script observer/dialog confirmation to settle it on a later
+attempt; while running/dialog pending, return temporary QuotationInputBusy, leave
+prices unchanged and defer without Hold/global stop. If no result dialog remains,
+require observable script-idle/dialog-free UI quiescence before releasing the owned
+surface. Re-check both quote-open and native raw14-write boundaries. Script busy
+is not ignored, but its old uncertainty cannot permanently freeze later polls.
+Normal source reads/writes/INSO work remain independent. Genuine auth/CDP failures
+retain existing security guards. No production browser was contacted for整改.
+
+### 整改 verification / publication
+Final full network-isolated offline regression: **2172 passed, 1 skipped, 79.57s**.
+Focused quote/refresh/holds/manual-retry checks:161 passed before the additional
+pre-click-retry rearming test, which is included in the final full run. Ruff and
+git diff --check PASS. Real SQLite price/outbox/hold/cycle tests cover10→8 unknown
+(one click, baseline8,229 notice, no Hold/success)→8 and9 skip→6 update; the6-unknown
+variant advances6/notifies again. Dedup is tested with equivalent Decimal forms,
+only229 recipients, and actual outbox command counts. A following inquiry succeeds
+in the same run. Fake native DOM controls cover dispatched click timeout, late
+result dismissal, running-script input exclusion and later idle recovery; initial
+quotation guards/regression remain passing. No real SMTP, CDP, Google writes,
+production ledger changes, package or deployment were performed.
+
+The original CEO review from ce60daf45791a0eb98edda7a1a523a946de143ed is preserved
+verbatim above. Only its requested Hold/no-baseline policy is superseded by the
+latest explicit Owner decision. Publish this scoped整改 as a normal child of
+that remote commit, using the established isolated index and preserving the old
+local HEAD/index/all unrelated dirty work. REVIEW_REQUIRED; CEO independent
+re-review next. Prior live-write acceptance remains UNKNOWN and unauthorized.
+Cleanup: all five整改-owned test directories and the temporary offline guard
+removed after absolute-path/reparse checks, using their original permissions;
+no ACL changes, force-unlock, browser/profile/runtime or prior-temp deletion.

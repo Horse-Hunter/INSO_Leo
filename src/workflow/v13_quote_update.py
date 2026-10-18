@@ -15,6 +15,7 @@ from src.sheets.quotation_candidates import (
 )
 from src.sheets.quotation_input import (
     QuotationInputAttemptFailed,
+    QuotationInputBusy,
     QuotationInputUnavailable,
 )
 from src.sheets.worksheet_schema import worksheet_schema
@@ -34,7 +35,12 @@ class UpdateAttemptUnconfirmed(RuntimeError):
     """Recoverable owned Google surface/button/dialog failure; safe to repeat."""
 
 
+class UpdateClickUnconfirmed(UpdateAttemptUnconfirmed):
+    """Native update click was dispatched; delivery/result cannot be confirmed."""
+
+
 class QuotationUpdateActions(Protocol):
+    def prepare_price_refresh(self) -> None: ...
     def open_quote_input(self) -> None: ...
     def click_update_quote(self) -> None: ...
     def read_update_result(self) -> str | None: ...
@@ -132,7 +138,8 @@ class V13QuotationUpdater:
                  status_reads: int = 31, status_interval: float = 1.0,
                  clock: Callable[[], float] = monotonic,
                  notify_model_difference: Callable[[V13QuotationResult, str], None] = lambda _r, _m: None,
-                 price_store=None, currency_rate=None):
+                 price_store=None, currency_rate=None,
+                 notify_refresh_uncertain=lambda _r, _old, _new: None):
         if not 1 <= status_reads <= 31 or not 0 < status_interval <= 5:
             raise ValueError("status polling must be short and bounded")
         self._source, self._input, self._actions = source, quotation_input, actions
@@ -141,6 +148,7 @@ class V13QuotationUpdater:
         self._clock = clock
         self._notify_model_difference = notify_model_difference
         self._prices, self._currency_rate = price_store, currency_rate
+        self._notify_refresh_uncertain = notify_refresh_uncertain
 
     def run(self, results: Iterable[V13QuotationResult]) -> tuple[V13QuotationResult, ...]:
         output = []
@@ -187,6 +195,8 @@ class V13QuotationUpdater:
                     raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
                 # Binding/header faults must stop before opening a possibly wrong gid.
                 self._input.validate_schema()
+                if refresh:
+                    self._actions.prepare_price_refresh()
                 try:
                     self._actions.open_quote_input()
                     write_reason = RowErrorReason.QUOTE_INPUT_WRITE_FAILED
@@ -207,25 +217,42 @@ class V13QuotationUpdater:
                             if self._input.read_payload() != payload:
                                 continue
                             break
+                        except QuotationInputBusy:
+                            return result  # Quote remains eligible next poll, no Hold or baseline write.
                         except QuotationInputAttemptFailed as exc:
                             write_reason = (RowErrorReason.QUOTE_INPUT_READBACK_MISMATCH
                                             if str(exc) == "QUOTE_INPUT_READBACK_MISMATCH"
                                             else RowErrorReason.QUOTE_INPUT_WRITE_FAILED)
                     else:
                         return self._failed(result, write_reason)
-                    self._actions.click_update_quote()
-                    popup = parse_update_popup(self._actions.read_update_result())
+                    try:
+                        self._actions.click_update_quote()
+                    except UpdateClickUnconfirmed:
+                        if refresh:
+                            return self._uncertain_refresh(result, baseline, price)
+                        raise
+                    try:
+                        popup = parse_update_popup(self._actions.read_update_result())
+                    except Exception:
+                        if refresh:
+                            return self._uncertain_refresh(result, baseline, price)
+                        raise
                     if popup is UpdatePopupOutcome.UNCONFIRMED:
+                        if refresh:
+                            return self._uncertain_refresh(result, baseline, price)
                         continue
                     # A successful popup is final submission proof; dismiss failure
                     # never re-enters update retries. Only source status is polled.
                     try:
                         self._actions.dismiss_result()
-                    except UpdateAttemptUnconfirmed:
-                        pass
+                    except Exception as exc:
+                        if refresh:
+                            return self._uncertain_refresh(result, baseline, price)
+                        if not isinstance(exc, UpdateAttemptUnconfirmed):
+                            raise
                     if refresh:
                         if popup is not UpdatePopupOutcome.INSERTED:
-                            return self._failed(result, RowErrorReason.UPDATE_RESULT_UNCONFIRMED)
+                            return self._uncertain_refresh(result, baseline, price)
                         self._require_mode(result, refresh, expected_model=payload[1])
                         final = self._success(result, popup)
                     else:
@@ -233,6 +260,8 @@ class V13QuotationUpdater:
                     if self._prices is not None and final.outcome is QuotationOutcome.UPDATED_INSERTED:
                         self._prices.record(result.inquiry_id, price)
                     return final
+                except QuotationInputBusy:
+                    return result
                 except UpdateAttemptUnconfirmed:
                     continue
                 finally:
@@ -246,6 +275,15 @@ class V13QuotationUpdater:
             return self._failed(result, exc.reason)
         except QuotationInputUnavailable as exc:
             raise V12Fault(FaultScope.GLOBAL_STOP, exc.reason) from None
+
+    def _uncertain_refresh(self, result, old, new):
+        # Enqueue first, so advancing the comparison baseline cannot lose the notice.
+        # The existing outbox deduplicates the inquiry + old/new price transition.
+        uncertain = replace(result, outcome=QuotationOutcome.BASELINE_RECORDED,
+                            row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED)
+        self._notify_refresh_uncertain(uncertain, old, new)
+        self._prices.record(result.inquiry_id, new)
+        return uncertain
 
     def _require_mode(self, result, refresh, *, expected_model=None):
         status, model = self._current_state(result)

@@ -4,14 +4,20 @@ Named button or Owner-verified sole visible drawing. Configured geometry/gid is 
 this module never discovers credentials, launches a browser, or calls Script URLs.
 """
 import re
+from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 from src.inso.quotation_read import QUOTATION_COLUMNS
-from src.research.cdp_pages import new_background_page
-from src.sheets.quotation_input import GoogleQuotationInput, QuotationInputLocation
+from src.research.cdp_pages import new_background_page, page_owner
+from src.sheets.quotation_input import (
+    GoogleQuotationInput,
+    QuotationInputBusy,
+    QuotationInputLocation,
+)
 from src.workflow.v12_faults import FaultScope, V12Fault
 from src.workflow.v13_quote_update import (
     UpdateAttemptUnconfirmed,
+    UpdateClickUnconfirmed,
     V13QuotationUpdater,
     WorkflowQuotationSource,
 )
@@ -38,6 +44,7 @@ _SCRIPT_SETTLEMENT_LATCH = """button => {
         if (running) { latch.started = true; latch.settled = false; }
         else if (latch.started) latch.settled = true;
     };
+    latch.isRunning = visibleRunning;
     latch.observer = new MutationObserver(sample);
     latch.observer.observe(document.body, {
         subtree: true, childList: true, characterData: true, attributes: true
@@ -45,6 +52,16 @@ _SCRIPT_SETTLEMENT_LATCH = """button => {
     button.addEventListener('click', () => { latch.confirmed = true; sample(); },
         {capture: true, once: true});
     window.__insoQuoteSettlement = latch;
+}"""
+
+_REFRESH_INPUT_IDLE = """() => {
+    const visible = e => e.getClientRects().length &&
+        getComputedStyle(e).visibility !== 'hidden' && getComputedStyle(e).display !== 'none';
+    const busy = [...document.querySelectorAll('[role="dialog"]')].some(visible) ||
+        window.__insoQuoteSettlement?.isRunning();
+    if (busy) { window.__insoRefreshQuietSince = null; return false; }
+    window.__insoRefreshQuietSince ??= performance.now();
+    return performance.now() - window.__insoRefreshQuietSince >= 1000;
 }"""
 
 
@@ -59,6 +76,43 @@ class GoogleQuotationUpdateActions:
         self._result_timeout = result_timeout_ms
         self._page, self._protected = None, False
         self._script_pending = False
+        self._price_refresh = False
+
+    def prepare_price_refresh(self):
+        self._price_refresh = True
+
+    def ensure_refresh_input_idle(self):
+        """Recheck only our unfinished refresh pages; no durable barrier/global stop."""
+        browser = self._handle.browser
+        if browser is None or not browser.is_connected():
+            raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")
+        expected = urlsplit(self._location.url)
+        for context in browser.contexts:
+            for page in tuple(context.pages):
+                if page.is_closed() or page_owner(page) != "google-operation":
+                    continue
+                actual = urlsplit(page.url)
+                if (actual.hostname, actual.path) != (expected.hostname, expected.path):
+                    continue
+                if not page.evaluate("() => window.__insoRefreshPending === true"):
+                    continue
+                recovery = GoogleQuotationUpdateActions(browser_handle=self._handle,
+                    location=SimpleNamespace(url=page.url), result_timeout_ms=self._result_timeout)
+                recovery._page, recovery._script_pending = page, True
+                recovery._price_refresh = True
+                recovery._guard()  # Authentication/CDP failures retain their existing boundaries.
+                try:
+                    if recovery._result_dialog().count() == 1:
+                        recovery.dismiss_result()  # Confirm result dialog only, never re-click update.
+                    else:
+                        page.wait_for_function(_REFRESH_INPUT_IDLE, timeout=self._result_timeout)
+                        recovery._guard()
+                        page.evaluate("() => { window.__insoRefreshPending = false; }")
+                        recovery._script_pending = False
+                except Exception:  # noqa: BLE001 - occupied/uncertain input defers only this attempt
+                    recovery._guard()
+                    raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from None
+                recovery.close()
 
     def _guard(self):
         browser = self._handle.browser
@@ -83,6 +137,7 @@ class GoogleQuotationUpdateActions:
             raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
 
     def open_quote_input(self):
+        self.ensure_refresh_input_idle()
         self.open_sheet()
         self._ready_control()  # Prove readiness/uniqueness before any input write.
 
@@ -151,7 +206,17 @@ class GoogleQuotationUpdateActions:
         # Stale result dialogs cannot be mistaken for this attempt's result.
         if self._result_dialog().count():
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_STALE")
-        self._attempt(lambda: button.click(timeout=self._timeout))
+        if self._price_refresh:
+            # Arm before native dispatch; a click timeout may mean it DID execute.
+            button.evaluate(_SCRIPT_SETTLEMENT_LATCH, timeout=self._timeout)
+            self._page.evaluate("() => { window.__insoRefreshPending = true; }")
+            self._script_pending = True
+            try:
+                button.click(timeout=self._timeout)
+            except Exception:  # noqa: BLE001 - do not retry a possibly delivered refresh click
+                raise UpdateClickUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from None
+        else:
+            self._attempt(lambda: button.click(timeout=self._timeout))
 
     def read_update_result(self):
         self._guard()
@@ -185,6 +250,8 @@ class GoogleQuotationUpdateActions:
             self._page.evaluate("() => window.__insoQuoteSettlement.observer.disconnect()")
         except Exception:  # noqa: BLE001 - any settlement uncertainty preserves the operation page
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED") from None
+        if self._price_refresh:
+            self._page.evaluate("() => { window.__insoRefreshPending = false; }")
         self._script_pending = False
 
     def _attempt(self, operation):
@@ -197,6 +264,11 @@ class GoogleQuotationUpdateActions:
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from None
 
     def close(self):
+        if self._price_refresh and self._script_pending:
+            # The browser-visible marker, not this disposable controller, owns
+            # recovery. Preserve the tab and allow a later attempt to re-check it.
+            self._page, self._script_pending, self._price_refresh = None, False, False
+            return
         if self._protected or self._script_pending or self._page is None:
             return
         try:
@@ -219,12 +291,14 @@ class GoogleQuotationUpdateActions:
         except Exception:  # noqa: BLE001 - inability to end the owned surface is shared safety failure
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_OPERATION_NOT_CLOSED") from None
         self._page = None
+        self._price_refresh = False
 
 
 def build_v13_quotation_updater(*, service, source_reader, store, browser_handle,
                                 location: QuotationInputLocation, wait, stop_requested=lambda: False,
                                 notify_model_difference=lambda _r, _m: None,
-                                price_store=None, currency_rate=None):
+                                price_store=None, currency_rate=None,
+                                notify_refresh_uncertain=lambda _r, _old, _new: None):
     """Domain input contract supplied by the canonical Google web transport.
 
     RFQ-006 owns production scheduling/wiring. This factory performs no I/O.
@@ -236,4 +310,5 @@ def build_v13_quotation_updater(*, service, source_reader, store, browser_handle
         wait=wait, stop_requested=stop_requested,
         notify_model_difference=notify_model_difference,
         price_store=price_store, currency_rate=currency_rate,
+        notify_refresh_uncertain=notify_refresh_uncertain,
     )

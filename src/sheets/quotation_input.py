@@ -17,6 +17,10 @@ class QuotationInputAttemptFailed(RuntimeError):
     """Targeted attempt failed; sanitized and retryable within this row."""
 
 
+class QuotationInputBusy(QuotationInputAttemptFailed):
+    """A prior owned script still uses shared input; defer, never quarantine."""
+
+
 @dataclass(frozen=True, slots=True)
 class QuotationInputLocation:
     worksheet: WorksheetIdentity
@@ -121,7 +125,9 @@ class GoogleQuotationInput:
                 spreadsheetId=self.worksheet.spreadsheet, range=self.location.input_range,
                 valueInputOption="RAW", body={"majorDimension": "ROWS", "values": [list(payload)]},
             ).execute()
-        except Exception as exc:  # noqa: BLE001 - classify only targeted API operation
+        except Exception as exc:
+            if isinstance(exc, QuotationInputBusy):
+                raise
             if _shared_error(exc):
                 raise QuotationInputUnavailable() from None
             raise QuotationInputAttemptFailed("QUOTE_INPUT_WRITE_FAILED") from None

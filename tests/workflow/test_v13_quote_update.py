@@ -80,6 +80,9 @@ class Input:
 
 
 class Actions:
+    def prepare_price_refresh(self):
+        pass
+
     def __init__(self, source_reader):
         self.source = source_reader
         self.popups = [POPUP]
