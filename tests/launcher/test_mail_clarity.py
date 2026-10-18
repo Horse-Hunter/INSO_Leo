@@ -98,5 +98,5 @@ def test_google_retry_alert_promises_next_normal_poll_not_manual_restart():
     assert len(mailbox.commands) == 1
     assert command.inquiry_id is None
     assert [r.address for r in command.recipients] == ["linan229@qq.com"]
-    assert "重试一次" in command.text_body and "15分钟后自动再试" in command.text_body
+    assert "连续5次" in command.text_body and "15分钟后自动再试" in command.text_body
     assert "无需手动重启" in command.text_body and "程序已停止" not in command.text_body

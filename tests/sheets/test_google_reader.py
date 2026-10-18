@@ -188,7 +188,7 @@ def test_transient_read_exhaustion_is_distinct_from_invalid_response():
     service = FakeSheetsService(failure=TimeoutError("synthetic timeout"))
     with pytest.raises(GoogleSheetsReadUnavailable):
         GoogleSheetsRowReader(service).read_rows(worksheet())
-    assert len(service.values_resource.get_calls) == 2
+    assert len(service.values_resource.get_calls) == 5
     broken = FakeSheetsService(response={"values": None})
     with pytest.raises(GoogleSheetsReadError) as error:
         GoogleSheetsRowReader(broken).read_rows(worksheet())
@@ -203,4 +203,72 @@ def test_permission_denied_is_not_transient_or_retried():
     service = FakeSheetsService(failure=Denied("synthetic permission denied"))
     with pytest.raises(GoogleSheetsReadError):
         GoogleSheetsRowReader(service).read_rows(worksheet())
+    assert len(service.values_resource.get_calls) == 1
+
+
+def test_fifth_read_can_recover_and_backoff_is_bounded():
+    calls, waits = [], []
+    service = FakeSheetsService()
+    def execute():
+        calls.append(True)
+        if len(calls) < 5:
+            raise TimeoutError("synthetic")
+        return {"values": [["未发"]]}
+    service.values_resource._request.execute = execute
+    reader = GoogleSheetsRowReader(service, retry_wait=lambda seconds: waits.append(seconds))
+    assert reader.read_rows(worksheet())[0].cells['A'] == '未发'
+    assert len(calls) == 5 and waits == [2, 4, 6, 8]
+
+
+def test_discovery_is_bounded_immutable_and_fresh_checks_never_use_it():
+    import pytest
+    response = {"values": [["未发", "", "A", "", "TEST", "brand", 2]]}
+    service = FakeSheetsService(response)
+    reader = GoogleSheetsRowReader(service)
+    with reader.discovery_scope():
+        first = reader.read_discovery_rows(worksheet())
+        assert reader.read_discovery_rows(worksheet()) is first
+        with pytest.raises(TypeError):
+            first[0].cells['A'] = 'wrong'
+        response['values'][0][0] = '发给采购'
+        assert reader.read_discovery_rows(worksheet())[0].cells['A'] == '未发'
+        assert reader.read_rows(worksheet())[0].cells['A'] == '发给采购'
+        assert reader.read_discovery_rows(worksheet())[0].cells['A'] == '发给采购'
+        reader.clear_discovery_snapshot()
+        reader.read_discovery_rows(worksheet())
+        assert len(service.values_resource.get_calls) == 3
+    reader.read_discovery_rows(worksheet())
+    with reader.discovery_scope():
+        reader.read_discovery_rows(worksheet())
+    assert len(service.values_resource.get_calls) == 5
+
+
+def test_discovery_does_not_cross_threads_or_survive_a_failed_live_check():
+    from concurrent.futures import ThreadPoolExecutor
+
+    import pytest
+    service = FakeSheetsService({"values": [["未发"]]})
+    reader = GoogleSheetsRowReader(service)
+    with reader.discovery_scope():
+        reader.read_discovery_rows(worksheet())
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(reader.read_discovery_rows, worksheet()).result()
+        assert len(service.values_resource.get_calls) == 2
+        service.values_resource._request._failure = RuntimeError('synthetic unknown')
+        with pytest.raises(GoogleSheetsReadError):
+            reader.read_rows(worksheet())
+        with pytest.raises(GoogleSheetsReadError):
+            reader.read_discovery_rows(worksheet())
+        service.values_resource._request._failure = None
+        reader.read_discovery_rows(worksheet())
+        assert len(service.values_resource.get_calls) == 5
+
+
+def test_stop_during_backoff_does_not_continue_reading():
+    import pytest
+
+    from src.sheets.google_reader import GoogleSheetsReadUnavailable
+    service = FakeSheetsService(failure=TimeoutError('synthetic'))
+    with pytest.raises(GoogleSheetsReadUnavailable):
+        GoogleSheetsRowReader(service, retry_wait=lambda _: True).read_rows(worksheet())
     assert len(service.values_resource.get_calls) == 1

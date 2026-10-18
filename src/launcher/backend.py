@@ -649,7 +649,7 @@ class ProductionBackend(GuiBackend):
                 raise RuntimeError("Research credential readiness requires manual handling")
             web_service = build_google_web_service(
                 rc.cdp.cdp_url, provider=lambda: self._google_playwright_provider(rc, cfg))
-            reader = GoogleSheetsRowReader(web_service)
+            reader = GoogleSheetsRowReader(web_service, retry_wait=self._stop.wait)
             worksheets = tuple(
                 WorksheetIdentity(cfg["spreadsheet_id"], title)
                 for title in cfg["worksheet_titles"]
@@ -860,7 +860,7 @@ class ProductionBackend(GuiBackend):
                                 return
                             self._poll_idle.clear()
                         try:
-                            with web_service.poll_scope(), quotation_operation_scope():
+                            with web_service.poll_scope(), quotation_operation_scope(), reader.discovery_scope():
                                 self._last_poll = utc_now()
                                 self._cycle_id = "cycle_" + uuid.uuid4().hex
                                 self._begin_poll_projection()

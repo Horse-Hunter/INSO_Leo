@@ -234,7 +234,7 @@ class V12WorkflowCoordinator:
         """Read pending rows through the existing Sheets schema and process fakes."""
 
         self._current_reader = reader
-        records = query_pending_records(reader, worksheet)
+        records = query_pending_records(reader, worksheet, discovery=True)
         self.pending_rows_seen += len(records)
         for item in self._workflow_store.all_items():
             if item.record_identity.worksheet != worksheet:

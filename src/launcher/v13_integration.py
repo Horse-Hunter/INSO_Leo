@@ -157,7 +157,7 @@ def notify_runtime_fault(store, key, reason, *, at):
             "情况：" + {
                 "GOOGLE_SHEETS_UNAVAILABLE": "Google表格读取或授权不可用，询价和采购报价流程已停止。",
                 "SHEETS_READ_UNAVAILABLE": "Google表格读取失败，询价和采购报价流程已停止；尚不能确定是网络还是授权问题。",
-                "GOOGLE_READ_RETRY_EXHAUSTED": "Google表格读取失败，重试一次仍未成功。",
+                "GOOGLE_READ_RETRY_EXHAUSTED": "Google表格连续5次读取未成功，本轮已跳过。",
                 "SHEETS_SCHEMA_UNAVAILABLE": "源表列结构未能确认，询价和采购报价流程已停止。",
                 "SHEETS_WRITE_UNAVAILABLE": "Google表格写入未能确认，程序已停止。",
                 "SHEETS_AUTH_UNAVAILABLE": "Google表格授权不可用。",

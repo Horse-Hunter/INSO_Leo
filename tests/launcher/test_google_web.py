@@ -452,7 +452,7 @@ def test_wrapped_navigation_network_failure_is_transient(web, monkeypatch, code)
     browser.contexts[0].new_page = new_page
     with service.poll_scope(), pytest.raises(GoogleSheetsReadUnavailable):
         GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', '2026'))
-    assert len(calls) == 2
+    assert len(calls) == 5
 
 
 @pytest.mark.parametrize('failure', ['unknown', 'cert', 'auth', 'schema', 'wrapper_without_cause'])
@@ -507,6 +507,7 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
                quotation_input={'gid': '29', 'input_row': 1, 'first_column': 1})
     production.write_text(json.dumps(cfg), encoding='utf-8')
     monkeypatch.setattr(launcher, 'build_google_web_service', lambda *a, **kw: service)
+    monkeypatch.setattr(launcher, 'GoogleSheetsRowReader', lambda svc, **kw: GoogleSheetsRowReader(svc))
     monkeypatch.setattr(launcher, 'assess_readiness', lambda *a, **kw: SimpleNamespace(ready=True, missing_site_ids=()))
     monkeypatch.setattr(launcher, 'build_research_service', lambda *a, **kw: SimpleNamespace(execute=lambda _: None))
     monkeypatch.setattr(launcher, 'QQSMTPTransport', _RecordingTransport)
@@ -517,15 +518,15 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
     def page_wait(locator, **kwargs):
         if locator.name == '报价工具':
             calls.append(True)
-            if len(calls) <= 2 and failure_mode == 'menu_timeout':
+            if len(calls) <= 5 and failure_mode == 'menu_timeout':
                 raise PageTimeout('synthetic page load/menu timeout')
         return original_wait(locator, **kwargs)
     monkeypatch.setattr(Locator, 'wait_for', page_wait)
     original_download = service._download
     def read(page, actions):
-        if len(calls) <= 2 and failure_mode == 'read_gid_drift':
+        if len(calls) <= 5 and failure_mode == 'read_gid_drift':
             page.url = page.url.split('#')[0] + '#gid=999'
-        elif len(calls) <= 2 and failure_mode == 'read_page_closed':
+        elif len(calls) <= 5 and failure_mode == 'read_page_closed':
             page.closed = True
         return original_download(page, actions)
     monkeypatch.setattr(service, '_download', read)
@@ -534,7 +535,7 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
         waits.append(seconds)
         assert not backend._stop.is_set() and backend.get_status().next_poll_at is not None
         if len(waits) == 1:
-            assert len(calls) == 2
+            assert len(calls) == 5
             backend._v12_composition.coordinator.run_notifications(now=launcher.utc_now())
             return False
         backend._stop.set()
@@ -544,7 +545,7 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
         backend.start()
         backend._thread.join(timeout=10)
         assert not backend._thread.is_alive() and waits == [900, 900]
-        assert len(calls) > 2 and backend.get_health().overall == '正常'
+        assert len(calls) == 9 and backend.get_health().overall == '正常'
         assert len(_RecordingTransport.sent) == 1
         assert _RecordingTransport.sent[0][1].address == 'linan229@qq.com'
         assert '15分钟后重试' in _RecordingTransport.sent[0][2]
@@ -704,3 +705,149 @@ def test_read_guard_code_is_logged_without_exception_or_page_content(web, monkey
     lines = [_sanitized_line(r) for r in caplog.records if r.name == 'inso.diagnostics']
     assert any('GOOGLE_OPERATION_SURFACE_UNCONFIRMED' in line for line in lines)
     assert all('range=' not in line and 'gid=' not in line for line in lines)
+
+
+def test_repeated_source_reads_select_target_without_default_sheet_reload(web, monkeypatch):
+    service, browser, _, _ = web
+    navigations = []
+    original = GridPage.goto
+    def goto(page, url, **kwargs):
+        navigations.append(url)
+        return original(page, url, **kwargs)
+    monkeypatch.setattr(GridPage, 'goto', goto)
+    with service.poll_scope():
+        for title in ('SHAHAB', 'SHAHAB', '2026', 'SHAHAB'):
+            service.get(spreadsheetId='test', range=f"'{title}'!A1:G").execute()
+            assert browser.contexts[0].pages[-1].title == title
+    assert len(navigations) == 1
+
+
+def test_many_query_only_candidates_share_one_export_per_sheet_stage(web):
+    from src.sheets import (
+        IdentifyingSnapshot,
+        SheetRecordIdentity,
+        query_pending_records,
+    )
+    from src.workflow.dashboard_counts import read_dashboard_counts
+    from src.workflow.v13_integration import CombinedCycle
+    from src.workflow.v13_quotation import V13QuotationCycle
+    from tests.inso.test_v13_quotation_read import NOW
+    from tests.workflow.test_v13_quotation import Operations, Quotes, Store
+    service, browser, rows, _ = web
+    reader = GoogleSheetsRowReader(service)
+    worksheets = tuple(WorksheetIdentity('test', title) for title in ('2026', 'SHAHAB'))
+    items = []
+    for ws in worksheets:
+        rows[ws.worksheet] = [list(row) for row in HEADERS[ws.worksheet]]
+        for index in range(12):
+            model = f'TEST-{ws.worksheet}-{index}'
+            cells = (['发给采购', '', 'B', '', model, 'BRAND', '2'] if ws.worksheet == '2026'
+                     else ['', '发给采购', '1', model, 'BRAND', '2', 'PCS'])
+            rows[ws.worksheet].append(cells)
+            importance = 'B' if ws.worksheet == '2026' else None
+            identity = SheetRecordIdentity(ws, len(rows[ws.worksheet]),
+                                          IdentifyingSnapshot('未发', importance, model, 'BRAND', 2))
+            items.append(SimpleNamespace(inquiry_id=model, record_identity=identity,
+                                         resolved_brand=None, brand_update_status=None))
+    store = Store(items)
+    results = []
+    inquiry = SimpleNamespace(begin_poll_cycle=lambda: None,
+        poll_and_process=lambda r, ws, **kw: query_pending_records(r, ws, discovery=True))
+    def quotation(ws):
+        cycle = V13QuotationCycle(reader=reader, store=store, operations=Operations(),
+            clock=lambda: NOW, wait=lambda _: False, quote_reader=Quotes([()] * 12))
+        results.extend(cycle.run(ws))
+    combined = CombinedCycle(inquiry, quotation, on_pause=lambda _: pytest.fail('unexpected pause'))
+    with service.poll_scope(), reader.discovery_scope():
+        counts = read_dashboard_counts(reader, worksheets, store=None, episodes=None, now=NOW)
+        assert counts.awaiting_quotation == 24
+        combined.run(reader, worksheets, now=NOW)
+    assert len(results) == 24 and all(r.outcome.value == 'NO_RECENT_QUOTE' for r in results)
+    assert sum(len(p.downloads) for p in browser.contexts[0].pages[1:]) == 4
+
+
+@pytest.mark.parametrize('title,position,model,qty,column', [
+    ('2026', 2, '000123', 1200, 6), ('SHAHAB', 3, 'TEST-XYZ', 2, 5),
+])
+def test_live_source_check_rejects_owner_edit_despite_cached_discovery(web, title, position, model, qty, column):
+    from src.sheets import IdentifyingSnapshot, SheetRecordIdentity
+    from src.workflow.v13_quotation import (
+        QuotationOutcome,
+        V13QuotationResult,
+        V13SourceRowError,
+    )
+    from src.workflow.v13_quote_update import WorkflowQuotationSource
+    from tests.workflow.test_v13_quotation import Store
+    service, _, rows, _ = web
+    reader = GoogleSheetsRowReader(service)
+    ws = WorksheetIdentity('test', title)
+    identity = SheetRecordIdentity(ws, position, IdentifyingSnapshot('未发', 'B' if title == '2026' else None,
+                                                                   model, 'OLD', qty))
+    item = SimpleNamespace(inquiry_id='test', record_identity=identity,
+                           resolved_brand=None, brand_update_status=None)
+    result = V13QuotationResult('test', identity, model, QuotationOutcome.QUOTE_FOUND, None)
+    source = WorkflowQuotationSource(reader=reader, store=Store([item]))
+    with service.poll_scope(), reader.discovery_scope():
+        reader.read_discovery_rows(ws)
+        rows[title][position - 1][column] = '999'
+        with pytest.raises(V13SourceRowError, match='SOURCE_CHANGED'):
+            source.read_state(result)
+
+
+def test_quotation_discovery_sees_inquiry_changes_in_both_sheets(web):
+    from src.sheets import query_pending_records, query_quotation_candidates
+    from src.workflow.dashboard_counts import read_dashboard_counts
+    from src.workflow.v13_integration import CombinedCycle
+    from tests.inso.test_v13_quotation_read import NOW
+    service, _, rows, _ = web
+    reader = GoogleSheetsRowReader(service)
+    worksheets = tuple(WorksheetIdentity('test', title) for title in ('2026', 'SHAHAB'))
+    rows['2026'][1][0] = rows['SHAHAB'][2][1] = '未发'
+    def inquiry(r, ws, **_):
+        assert len(query_pending_records(r, ws, discovery=True)) == 1
+        if ws.worksheet == '2026':
+            rows['2026'][1][0] = '发给采购'
+        else:
+            rows['SHAHAB'][2][1] = '发给采购'
+    quotations = []
+    combined = CombinedCycle(SimpleNamespace(begin_poll_cycle=lambda: None, poll_and_process=inquiry),
+        lambda ws: quotations.extend(query_quotation_candidates(reader, ws, discovery=True)),
+        on_pause=lambda _: pytest.fail('unexpected pause'))
+    with service.poll_scope(), reader.discovery_scope():
+        assert read_dashboard_counts(reader, worksheets, store=None, episodes=None, now=NOW).new_orders == 2
+        combined.run(reader, worksheets, now=NOW)
+    assert len(quotations) == 2 and all(r.status == '发给采购' for r in quotations)
+
+
+@pytest.mark.parametrize('auth_on_fifth', [False, True])
+def test_real_web_guard_four_failures_then_fifth_recovers_or_auth_stops(web, monkeypatch, auth_on_fifth):
+    from playwright.sync_api import TimeoutError as PageTimeout
+
+    from src.sheets.google_reader import (
+        GoogleSheetsReadError,
+        GoogleSheetsReadUnavailable,
+    )
+    from tests.launcher.test_google_quote_update import Locator
+    service, browser, _, _ = web
+    attempts = []
+    original = Locator.wait_for
+    def wait(locator, **kwargs):
+        if locator.name == '报价工具':
+            attempts.append(locator.page)
+            if len(attempts) < 5:
+                raise PageTimeout('synthetic intermittent load')
+            if auth_on_fifth:
+                locator.page.login_markers.add('登录')
+        return original(locator, **kwargs)
+    monkeypatch.setattr(Locator, 'wait_for', wait)
+    with service.poll_scope():
+        if auth_on_fifth:
+            with pytest.raises(GoogleSheetsReadError) as caught:
+                GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', 'SHAHAB'))
+            assert not isinstance(caught.value, GoogleSheetsReadUnavailable)
+        else:
+            assert GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', 'SHAHAB'))
+    assert len(attempts) == len({id(p) for p in attempts}) == 5
+    assert all(p.closed for p in attempts[:4])
+    assert attempts[-1].closed is not auth_on_fifth
+    assert not browser.contexts[0].pages[0].closed

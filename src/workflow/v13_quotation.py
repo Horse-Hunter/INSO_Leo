@@ -97,9 +97,10 @@ class V13QuotationResult:
     source_status: str = "发给采购"
 
 
-def _read_source_rows(reader, worksheet):
+def _read_source_rows(reader, worksheet, *, discovery=False):
     try:
-        return tuple(reader.read_rows(worksheet))
+        read = getattr(reader, "read_discovery_rows", reader.read_rows) if discovery else reader.read_rows
+        return tuple(read(worksheet))
     except V12Fault:
         raise
     except Exception as exc:
@@ -135,9 +136,10 @@ def _source_bindings(items, worksheet, source_rows):
 
 def read_v13_candidates(
     reader: WorksheetRowReader, worksheet: WorksheetIdentity, store: ExistingInquiryStore,
+    *, discovery=False,
 ) -> tuple[V13Candidate | V13QuotationResult, ...]:
     """Ordered candidate-or-row-error; later bad rows cannot abort the batch."""
-    source_rows = _read_source_rows(reader, worksheet)
+    source_rows = _read_source_rows(reader, worksheet, discovery=discovery)
 
     class SnapshotReader:
         def read_rows(self, requested):
@@ -204,7 +206,7 @@ class V13QuotationCycle:
             raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE") from None
 
     def _run(self, worksheet, *, skip, on_result):
-        candidates = read_v13_candidates(self._reader, worksheet, self._store)
+        candidates = read_v13_candidates(self._reader, worksheet, self._store, discovery=True)
         results = []
         for candidate in candidates:
             if self._stop():
@@ -230,7 +232,9 @@ class V13QuotationCycle:
                     raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
                 if item.record_identity != candidate.record_identity:
                     raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
-                fresh_rows = _read_source_rows(self._reader, worksheet)
+                # Query-only work may reuse discovery; the updater independently
+                # re-reads identity/status before any baseline or business write.
+                fresh_rows = _read_source_rows(self._reader, worksheet, discovery=True)
                 try:
                     row = relocate_quotation_source(
                         item.record_identity, fresh_rows, expected_brand=_expected_brand(item),

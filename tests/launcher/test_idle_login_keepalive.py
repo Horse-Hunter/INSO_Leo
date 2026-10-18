@@ -161,7 +161,7 @@ def test_pending_observation_aggregates_all_worksheets_and_resets(tmp_path, monk
     from tests.workflow.test_rfq003_resilience import rows
     from tests.workflow.test_v12_flow import SHEET
     flow, *_ = _make_flow(tmp_path)
-    monkeypatch.setattr(v12_flow, "query_pending_records", lambda *a: rows())
+    monkeypatch.setattr(v12_flow, "query_pending_records", lambda *a, **kw: rows())
     flow._workflow_store.all_items = lambda: ()
     flow.process_pending = lambda records, **kw: ()
     flow.begin_poll_cycle()

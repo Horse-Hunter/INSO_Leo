@@ -172,12 +172,14 @@ class V13QuotationUpdater:
             if self._prices is not None:
                 price = procurement_price_rmb(result.quotation, currency_rate=self._currency_rate)
                 baseline = self._prices.get(result.inquiry_id)
+                if refresh and baseline is not None and not (price > 0 and (baseline == 0 or price < baseline)):
+                    # No write/baseline change is possible; no live source scan
+                    # needed solely to skip an unchanged procurement price.
+                    return replace(result, outcome=QuotationOutcome.PRICE_UNCHANGED)
                 self._require_mode(result, refresh)
                 if refresh and baseline is None:
                     self._prices.record(result.inquiry_id, price)
                     return replace(result, outcome=QuotationOutcome.BASELINE_RECORDED)
-                if refresh and not (price > 0 and (baseline == 0 or price < baseline)):
-                    return replace(result, outcome=QuotationOutcome.PRICE_UNCHANGED)
             elif refresh:
                 raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE")
             for _attempt in range(4):

@@ -182,7 +182,7 @@ class GoogleSheetsWebService:
             try:
                 if write and geometry[0] == "报价输入":
                     actions.ensure_refresh_input_idle()
-                page = actions.open_sheet()
+                page = actions.open_sheet(select_worksheet=True)
                 stage = "google-sheet-ready"
                 page.locator("#t-name-box").wait_for(state="visible", timeout=30000)
                 # Reuse the verified onOpen readiness signal. Selecting SHAHAB

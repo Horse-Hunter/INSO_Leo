@@ -171,7 +171,7 @@ class GoogleQuotationUpdateActions:
         self.open_sheet()
         self._ready_control()  # Prove readiness/uniqueness before any input write.
 
-    def open_sheet(self):
+    def open_sheet(self, *, select_worksheet=False):
         """Shared Google navigation/auth/ownership boundary, without running a script."""
         if self._script_pending:
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED")
@@ -206,7 +206,11 @@ class GoogleQuotationUpdateActions:
             finally:
                 self._location = expected
             if self._page is not None:
-                if self._page.url != expected.url:
+                if select_worksheet:
+                    # Native range transport selects/proves its worksheet next;
+                    # do not reload default gid=0 on every range operation.
+                    self._location = SimpleNamespace(url=self._page.url)
+                elif self._page.url != expected.url:
                     self._attempt(lambda: self._page.goto(expected.url, wait_until="domcontentloaded", timeout=self._timeout))
                 self._guard()
                 return self._page

@@ -19,7 +19,7 @@ def read_dashboard_counts(reader, worksheets, *, store, episodes, now):
     """Count all source rows; infer timeout only through canonical unique binding."""
     new_orders = awaiting = overdue = 0
     for worksheet in dict.fromkeys(worksheets):
-        rows = _read_source_rows(reader, worksheet)
+        rows = _read_source_rows(reader, worksheet, discovery=True)
 
         class SnapshotReader:
             def __init__(self, source_rows):

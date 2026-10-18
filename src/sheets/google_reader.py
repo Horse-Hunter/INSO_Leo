@@ -2,6 +2,9 @@
 
 import socket
 from collections.abc import Mapping, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
+from types import MappingProxyType
 from typing import Any, Protocol
 
 from .pending import WorksheetIdentity, WorksheetRow
@@ -12,7 +15,7 @@ class GoogleSheetsReadError(RuntimeError):
 
 
 class GoogleSheetsReadUnavailable(GoogleSheetsReadError):
-    """A transient read failed its single retry; next normal poll may resume."""
+    """A transient read exhausted its bounded attempts; next poll may resume."""
 
 
 def _temporary_read_failure(exc: Exception) -> bool:
@@ -48,11 +51,36 @@ class GoogleSheetsRowReader:
         service: GoogleSheetsService,
         *,
         first_row: int = 1,
+        retry_wait=None,
     ) -> None:
         if first_row < 1:
             raise ValueError("first_row must be a positive Google Sheet row number")
         self._service = service
         self._first_row = first_row
+        self._retry_wait = retry_wait or (lambda _seconds: False)
+        self._discovery = ContextVar("google_source_discovery", default=None)
+
+    @contextmanager
+    def discovery_scope(self):
+        """Only discovery opts in; ordinary read_rows ALWAYS re-reads the source."""
+        token = self._discovery.set({})
+        try:
+            yield
+        finally:
+            self._discovery.reset(token)
+
+    def clear_discovery_snapshot(self):
+        """Quotation must see inquiry writes; never carry a snapshot across stages."""
+        if self._discovery.get() is not None:
+            self._discovery.set({})
+
+    def read_discovery_rows(self, worksheet):
+        cache = self._discovery.get()
+        if cache is None:
+            return self.read_rows(worksheet)
+        if worksheet not in cache:
+            self.read_rows(worksheet)
+        return cache[worksheet]
 
     def read_rows(
         self,
@@ -60,7 +88,7 @@ class GoogleSheetsRowReader:
     ) -> tuple[WorksheetRow, ...]:
         read_range = _a1_range(worksheet.worksheet, self._first_row)
         try:
-            for attempt in range(2):
+            for attempt in range(5):
                 try:
                     response = (
                         self._service.spreadsheets().values().get(
@@ -73,16 +101,31 @@ class GoogleSheetsRowReader:
                 except Exception as exc:
                     if not _temporary_read_failure(exc):
                         raise
-                    if attempt == 1:
+                    if attempt == 4 or self._retry_wait(2 * (attempt + 1)):
                         raise GoogleSheetsReadUnavailable("Google read retry exhausted") from exc
             values = response.get("values", [])
-            return _to_worksheet_rows(values, first_row=self._first_row)
+            rows = _to_worksheet_rows(values, first_row=self._first_row)
+            cache = self._discovery.get()
+            if cache is not None:
+                # A mandatory live check also refreshes later discovery, but a
+                # discovery snapshot never substitutes for that live check.
+                cache[worksheet] = tuple(
+                    WorksheetRow(row.row_position, MappingProxyType(dict(row.cells))) for row in rows
+                )
+            return rows
         except GoogleSheetsReadError:
+            self._invalidate_discovery(worksheet)
             raise
         except Exception as exc:
+            self._invalidate_discovery(worksheet)
             raise GoogleSheetsReadError(
                 f"Unable to read worksheet {worksheet.worksheet!r}"
             ) from exc
+
+    def _invalidate_discovery(self, worksheet):
+        cache = self._discovery.get()
+        if cache is not None:
+            cache.pop(worksheet, None)
 
 
 def _a1_range(worksheet_title: str, first_row: int) -> str:

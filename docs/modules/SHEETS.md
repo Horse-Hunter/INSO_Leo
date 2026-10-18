@@ -114,3 +114,13 @@ row, with existing domain readback plus cloud-sync proof at transport. Downloads
 are ephemeral/deleted, pages owned/protected, no clipboard or new login/profile.
 Actual read acceptance passed; real editor/overwrite writes are UNKNOWN, not
 claimed deployed or live-verified. See tasks/2026-10-18-quotation-price-refresh.md.
+
+Owner read-efficiency correction (2026-10-18): GoogleSheetsRowReader exposes
+optional poll-local/thread-local discovery_scope/read_discovery_rows; discovery
+queries explicitly opt in. Ordinary read_rows always fetches live data and also
+refreshes discovery after success, invalidating it on failure. CombinedCycle
+clears discovery between inquiry and quotation; scope exit discards it. Identity,
+status, brand, baseline-commit and write readback checks retain live reads.
+Recoverable source reads allow five attempts total, with production stop-aware
+2/4/6/8-second backoff; unknown/auth/security/schema errors never get that retry.
+Evidence: tasks/2026-10-18-google-read-efficiency.md (REVIEW_REQUIRED; not deployed).

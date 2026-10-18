@@ -59,6 +59,21 @@ def test_refresh_only_lower_or_zero_to_positive_preserves_status(status, baselin
         assert prices.value == Decimal(price)
 
 
+def test_unchanged_price_does_not_scan_source_or_change_baseline():
+    updater, result, io, actions, prices, source = refresh('已报价给客户', '10', '10')
+    assert updater.update_one(result).outcome is QuotationOutcome.PRICE_UNCHANGED
+    assert not source.calls and not io.writes and not prices.writes and actions.clicks == 0
+
+
+@pytest.mark.parametrize('baseline', [None, '10'])
+def test_baseline_or_lower_price_still_requires_fresh_source(baseline):
+    from src.workflow.v13_quotation import V13SourceRowError
+    updater, result, io, actions, prices, source = refresh('已报价给客户', baseline, '8')
+    source.error = V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
+    assert updater.update_one(result).outcome is QuotationOutcome.ROW_FAILED
+    assert source.calls and not io.writes and not prices.writes and actions.clicks == 0
+
+
 @pytest.mark.parametrize('popup', [EXISTS, '未知结果'])
 def test_skip_or_unconfirmed_refresh_records_comparison_only(popup):
     updater, result, _, actions, prices, _ = refresh('已报价给客户', '10', '8')

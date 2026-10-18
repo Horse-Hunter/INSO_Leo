@@ -264,7 +264,7 @@ class V13IntegratedCycle:
                 self.observe(result, key)
 
         try:
-            observed_records = query_quotation_candidates(self.reader, worksheet)
+            observed_records = query_quotation_candidates(self.reader, worksheet, discovery=True)
         except Exception as exc:
             raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE") from exc
 
@@ -374,6 +374,9 @@ class CombinedCycle:
                     cause = cause.__cause__
                 self.v12_paused = True
                 self.on_pause(V12Fault(FaultScope.V12_PAUSE, "V12_INTERNAL_FAILURE"))
+        # Writes in inquiry must be visible to quotation discovery. Fresh source
+        # checks inside writers/recovery never use this optional snapshot.
+        getattr(reader, "clear_discovery_snapshot", lambda: None)()
         for worksheet in worksheets:
             if self.stop():
                 return
