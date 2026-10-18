@@ -81,3 +81,8 @@ close, while verification/unsaved/pending or unknown page state is preserved.
 Code implementation first published as 399eab9943685cb005c7100667271c066174912b;
 final follow-up evidence accompanies the Google recovery commit. Both scopes
 remain REVIEW_REQUIRED, with no package/deployment or actual business replay.
+
+Owner subsequently authorized package/overwrite for manual testing. Final installed
+release, rollback, unchanged data/tabs and idle-start evidence is in
+2026-10-18-google-web-read-recovery.md, Installed release / CEO review receipt.
+REVIEW_REQUIRED remains; normal real-poll reuse is not yet live-accepted.

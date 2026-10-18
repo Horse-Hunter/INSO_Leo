@@ -80,3 +80,46 @@ can interrupt a historical poll before SHAHAB. Historical logs cannot prove both
 sheets completed in the stopped rounds. Synthetic next-poll test covers both.
 Installed EXE SHA256 remains
 a791d0f142b8e6260fb7f2ecd7f65aaf71bef8cb05c8cca8a779db7f9dd2d82a.
+
+## Owner-authorized package/overwrite and CEO handoff
+Owner now explicitly requests package/overwrite for manual testing, followed by
+this report for CEO Review. This supersedes historical no-package/no-deploy
+instructions for code399eab9 + ea278cca6618114fb1c1394608b8b7cf7bc4d3d5 only.
+It does not assert CEO PASS or live business acceptance. Reuse canonical
+BuildOnly/spec/scanner and changed-asset backup/deployment; preserve runtime,
+DB/config/credentials/CDP/profile/tabs and all unrelated dirty work. Verify source
+inputs, staged scan/self-check, installed hashes/idle GUI, then open idle only.
+No automatic inquiry/order/Sheets/script/SMTP action. Retire owned stage/work and
+transient helper, retain verified rollback/minimal evidence. REVIEW_REQUIRED.
+
+### Installed release / CEO review receipt
+Owner-authorized overwrite completed at existing
+D:/Program_Leo/INSO_Leo/dist/INSO_V1.4/INSO_V1.4.exe.
+Build source: ea278cca6618114fb1c1394608b8b7cf7bc4d3d5, including page reuse
+399eab9943685cb005c7100667271c066174912b. All113 executable build-source/icon
+inputs match that commit; no unpublished source code included. Canonical
+BuildOnly, staged frozen self-check and RELEASE_SCAN_OK passed. All2875 staged
+asset hashes match installed assets; only EXE/base_library.zip changed. Verified
+old self-check and both changed rollback assets against the prior deployed
+manifest; ignored usable rollback retained at
+.tmp/v14-page-reuse-release-20261018/rollback/. Prior rollback sets preserved.
+New installed EXE SHA256:
+03cd1e738060a1eeffbe52b98e90d6008a18e2bc7e7d32bbd995fc98adad2cc2.
+
+Installed self-check and idle GUI check PASS; visible INSO_V1.4 window responding.
+Both inquiry and order-mail workers not started; Owner manually starts testing.
+All970 protected files unchanged at copy verification; post-start non-log files
+unchanged (no existing log file changed either). Existing browser page IDs
+unchanged; no CDP WebSocket attach, browser launch/close, credential change,
+real order/Sheets/script or SMTP action during release. Existing2026/SHAHAB
+configuration unchanged. This is release/idle evidence, not live acceptance.
+
+Exact marked non-reparse canonical stage removed:267809128 bytes retired;
+PyInstaller work removed by the canonical script. Temporary deployment helper
+removed. Retain only small ignored build/hash/startup evidence and verified
+changed-asset rollback. All unrelated dirty work/local HEAD/index preserved.
+Offline full suite2205 PASS/1 skipped remains the source-code validation; live
+normal-poll reuse, production script behavior and historical incident root cause
+remain UNKNOWN pending Owner testing/CEO Review. REVIEW_REQUIRED; no CEO PASS
+is asserted merely because Owner authorized deployment. This original task and
+../tasks/2026-10-18-poll-page-reuse.md are the review evidence; no duplicate report.
