@@ -1,6 +1,6 @@
 # Google poll: one tab per worksheet, at most three
 
-status: in_progress
+status: REVIEW_REQUIRED
 owner: Codex
 created: 2026-10-19
 
@@ -60,3 +60,36 @@ some cross-module tests; PYTHONTZPATH points to the existing release environment
 tzdata/zoneinfo (no configuration change). Initial old-one-page expectations were
 updated to Owner's three-page contract. Ruff PASS; scoped source/test diff reviewed.
 Live three-slot verification, release and cleanup receipt follow below.
+
+## Live verification / installed release receipt
+Owner-exited program was verified absent. Closed 22 residual tabs as explicitly
+requested, keeping the existing blank page and the same protected browser.
+Using the real existing actions and native worksheet selection (no row download,
+cell editing or Script click), opened 2026/SHAHAB/报价输入 once each and visited
+each twice. Actual peak: three Google pages; all three reused; poll-scope exit
+closed all three; exactly one about:blank remained. This directly verifies the
+corrected lifecycle on the live Google page, not business processing acceptance.
+
+Source commit e49181908a1222c0fd7e9d7186d2e2ed8820ddf5, pushed normally to the
+original V1.4 remote branch while preserving local HEAD/index/unrelated files.
+All 122 canonical build inputs match that commit. Existing release script,
+environment and spec reused with -Version 1.4 -BuildOnly. Frozen self-check and
+RELEASE_SCAN_OK PASS. Old installed self-check, new installed self-check and
+idle GUI self-check PASS. All 2875 installed assets verified; only EXE and
+base_library.zip changed, with both prior assets hash-verified in rollback.
+Copy-time protected file/link manifest (10 entries; runtime links not traversed)
+unchanged. No configuration/credentials/DB/profile overwrite or Chrome stop.
+
+Installed EXE SHA256:
+119ca69058c6f16f48e064f97165acdba20de1f0562732ac2edcfc3d4d644915.
+Visible normal launch at 2026-10-19 14:42:14 Asia/Shanghai: PID161128,
+title INSO_V1.4, window present and responding. Launched idle, with no inquiry
+or order run. Exactly one blank browser page verified immediately before launch.
+Full business-poll/quotation write acceptance remains UNKNOWN; no live writes,
+source replay, inquiry or email was initiated by this verification.
+
+Ignored evidence/minimum rollback: .tmp/google-three-tabs-release-20261019/.
+Task-owned test directories retired (12126021 bytes), live helper removed,
+exact marked non-reparse stage retired (267813388 bytes); canonical script
+removed PyInstaller work. Retained only small manifests/logs/receipts and two
+old changed assets. All older rollback/runtime/CDP and unknown dirty work kept.
