@@ -93,3 +93,46 @@ Task-owned test directories retired (12126021 bytes), live helper removed,
 exact marked non-reparse stage retired (267813388 bytes); canonical script
 removed PyInstaller work. Retained only small manifests/logs/receipts and two
 old changed assets. All older rollback/runtime/CDP and unknown dirty work kept.
+
+
+## CEO independent review — 2026-10-19
+
+**CODE REVIEW PASS; DEPLOYED/IDLE ATTESTED BY EXECUTOR; BUSINESS-POLL ACCEPTANCE STILL UNKNOWN.**
+Independently checked branch changes `c5879f4..1a31d41`,
+core source commit `e491819`, the full current Google operation-page
+pool, web range integration, the new predicate test and changed Google tests.
+
+- Existing Google scope now retains separate slots keyed by document +
+  worksheet: 2026, SHAHAB and 报价输入. Reused actions still validate
+  existing document/ownership/gid and unsafe-state markers before borrow.
+- The exact leak root cause (hidden Google role=dialog with nonzero rectangle)
+  is addressed: the unsafe predicate now requires non-hidden, displayed
+  dialog, while pending refresh, visible script running and unsaved state
+  remain protected. The poll-final sweep re-verifies slot state and closes
+  only unprotected owned operation pages.
+- A protected same-worksheet slot is not silently replaced; existing
+  owned pages for the same document are counted and a fourth is refused,
+  limiting repeat tab accumulation. Real auth/dirty/script pages may remain
+  intentionally and block that scope; this is a protected exception, not
+  a normal-poll leak.
+- Offline tests include a directly executed JS visibility predicate,
+  distinct three-tab reuse, terminal cleanup, owned-tab cap, and protected
+  dialog behavior. Executor reports focused **383 PASS**; full 2205+
+  regression on this exact source commit was not reported. CEO did not run
+  local tests or inspect live Chrome. Executor's live read-only three-slot
+  verification and installed-binary receipt are credible evidence but are
+  **not independent CEO observation**.
+- Executor states Owner-authorized EXE overwrite was completed; installed
+  SHA256 `119ca69058c6f16f48e064f97165acdba20de1f0562732ac2edcfc3d4d644915`,
+  verified two-asset rollback, protected runtime/profile/DB/config preserved,
+  idle GUI responsive, remaining browser tab blank. CEO cannot independently
+  verify current running process from remote source review.
+
+**Disposition:** Scoped code `REVIEWED_DONE`. No further code change requested
+solely for this bug. Real inquiry/quotation/script/write behavior and whether
+future polls leave exactly one blank page are **PENDING LIVE BUSINESS OBSERVATION**.
+Owner may allow the next naturally due business run with normal vigilance:
+do not manually replay uncertain orders; if tabs grow, auth prompts appear,
+or writes look ambiguous, stop business processing without destroying
+protected browser/profile and capture sanitized evidence. No further
+packaging/action was performed by CEO.
