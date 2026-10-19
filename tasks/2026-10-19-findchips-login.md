@@ -59,3 +59,44 @@ this repair's three files as a child of the remote V1.4 tip, using a disposable
 Git index; preserve the local branch/checkpoint and all unrelated working files.
 The remote and local pre-repair Findchips/shared-login source and tests are
 identical. No force push, merge of unrelated local commits or worktree reset.
+
+
+## CEO independent review — 2026-10-19
+
+**CODE REVIEW PASS (scoped Findchips change); LIVE SIGN-IN NOT VERIFIED.**
+Independently inspected GitHub commit `b375d8a05d73ede0498e37a32897056bfe417c5b`,
+the real `src/research/findchips.py` login flow,
+`src/research/site_login.py` response/challenge helpers, the focused
+synthetic `tests/research/test_findchips.py` changes and the two
+unchanged site-sweep/shared-login entry points. Commit changes only the
+Findchips file, focused tests and this task note.
+
+- Existing Findchips form fields are filled, then all currently visible,
+  enabled native `input[type="checkbox"]` inputs are checked if needed
+  and read back, followed by precisely `wait(5.0)` before the first
+  sign-in click. Already-checked inputs are not toggled. This does not
+  establish behavior for nonnative/styled checkbox widgets on the live site.
+- An unchanged login form with no observed request/page/button response
+  after the initial short settle window permits one further click.
+  A confirmed refusal or site verification does not trigger a repeat;
+  only two clicks are possible inside this function. Note that a generic
+  document/XHR/fetch request is only a proxy for response activity,
+  not evidence of successful authentication; whether incidental background
+  requests suppress an otherwise desired repeat remains **LIVE UNKNOWN**.
+- The existing credentials provider, manual-verification detection,
+  redirect verdict and bounded shared sign-in sweep stay intact. The
+  implementation adds a site-local event listener but no new login framework,
+  background scheduler, process or cross-site changes.
+- Executor reports 109 focused PASS, Ruff and diff checks PASS. CEO
+  inspected tests but did not run the local suite or perform a live
+  Findchips/CDP login. No full offline regression or real sign-in evidence
+  was provided.
+
+**Disposition:** approve scoped code review; no additional code change
+requested merely for Review. The installed V1.4 is still unchanged by
+this commit. Before deploying or claiming the login fixed, Owner should
+observe one controlled real Findchips sign-in to confirm the site's actual
+checkbox structure, full five-second order and no duplicate submission,
+without automating a human-verification challenge or affecting other sites.
+Keep prior production rollback, CDP profile/session and other dirty work
+untouched; packaging/deployment remains a separate Owner decision.
