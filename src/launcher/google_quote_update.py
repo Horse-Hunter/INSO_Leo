@@ -69,7 +69,8 @@ _REFRESH_INPUT_IDLE = """() => {
 
 _POLL_GOOGLE_PAGES = ContextVar("poll_google_pages", default=None)
 _UNSAFE_POLL_PAGE = """() => window.__insoRefreshPending === true ||
-    [...document.querySelectorAll('[role="dialog"]')].some(e => e.getClientRects().length) ||
+    [...document.querySelectorAll('[role="dialog"]')].some(e => e.getClientRects().length &&
+        getComputedStyle(e).visibility !== 'hidden' && getComputedStyle(e).display !== 'none') ||
     document.body.innerText.includes('正在运行脚本') ||
     (() => { const label = document.querySelector('#docs-save-indicator-badge')?.getAttribute('aria-label');
         return !!label && label !== '文档状态：已保存到云端硬盘。'; })()"""
@@ -88,6 +89,11 @@ def google_operation_scope():
             for entry in pages.values():
                 if not entry["protected"]:
                     cleanup = entry["actions"]
+                    cleanup._page = entry["page"]
+                    cleanup._poll_entry = entry
+                    cleanup.close()  # Recheck changes since this slot was last borrowed.
+                    if entry["protected"]:
+                        continue
                     cleanup._page = entry["page"]
                     cleanup._poll_entry = None
                     cleanup._location = SimpleNamespace(url=entry["page"].url)
@@ -171,7 +177,7 @@ class GoogleQuotationUpdateActions:
         self.open_sheet()
         self._ready_control()  # Prove readiness/uniqueness before any input write.
 
-    def open_sheet(self, *, select_worksheet=False):
+    def open_sheet(self, *, select_worksheet=False, worksheet="报价输入"):
         """Shared Google navigation/auth/ownership boundary, without running a script."""
         if self._script_pending:
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED")
@@ -184,8 +190,16 @@ class GoogleQuotationUpdateActions:
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")
         pool = _POLL_GOOGLE_PAGES.get()
         target = urlsplit(self._location.url)
-        key = (target.scheme, target.hostname, target.path)
+        document_key = (target.scheme, target.hostname, target.path)
+        if worksheet not in {"2026", "SHAHAB", "报价输入"}:
+            raise ValueError("GOOGLE_SHEET_UNCONFIRMED")
+        key = (*document_key, worksheet)
         entry = pool.get(key) if pool is not None else None
+        if entry is not None and entry["page"].is_closed():
+            del pool[key]
+            entry = None
+        if entry is not None and entry["protected"]:
+            raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
         if entry is not None and not entry["protected"]:
             self._page, self._poll_entry = entry["page"], entry
             # Prove the current document/authentication BEFORE navigating away.
@@ -194,15 +208,15 @@ class GoogleQuotationUpdateActions:
             actual = urlsplit(self._page.url)
             try:
                 self._guard()
-                if (actual.scheme, actual.hostname, actual.path) != key or page_owner(self._page) != "google-operation":
+                if (actual.scheme, actual.hostname, actual.path) != document_key or page_owner(self._page) != "google-operation":
                     raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SPREADSHEET_UNAVAILABLE")
                 if self._page.evaluate(_UNSAFE_POLL_PAGE):
                     raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
-            except Exception:  # noqa: BLE001 - unknown old pages get isolated, never repaired in place
-                # Quarantine the old surface. A new stage gets one ordinary new
-                # page, whose existing guards/retries decide whether it can run.
+            except Exception:
+                # Preserve genuine unfinished work without repeatedly adding tabs.
                 entry["protected"] = True
                 self._page, self._poll_entry, self._protected = None, None, False
+                raise
             finally:
                 self._location = expected
             if self._page is not None:
@@ -214,6 +228,13 @@ class GoogleQuotationUpdateActions:
                     self._attempt(lambda: self._page.goto(expected.url, wait_until="domcontentloaded", timeout=self._timeout))
                 self._guard()
                 return self._page
+        owned_pages = sum(
+            not page.is_closed() and page_owner(page) == "google-operation"
+            and (urlsplit(page.url).scheme, urlsplit(page.url).hostname, urlsplit(page.url).path) == document_key
+            for page in browser.contexts[0].pages
+        )
+        if owned_pages >= 3:
+            raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
         try:
             self._page = new_background_page(browser, browser.contexts[0], timeout_ms=self._timeout,
                                              owner="google-operation")

@@ -273,19 +273,24 @@ def test_authentication_page_is_not_retried_or_closed(web):
     assert not browser.contexts[0].pages[-1].closed and not original.closed
 
 
-def test_poll_reuses_one_page_across_both_sources_and_raw14_then_closes(web):
+def test_poll_reuses_three_worksheet_pages_then_closes_all(web):
     service, browser, _, original = web
     with service.poll_scope():
         for title in ('2026', 'SHAHAB', '2026'):
             service.get(spreadsheetId='test', range=f"'{title}'!A1:G").execute()
         service.update(spreadsheetId='test', range="'报价输入'!A1:N1",
                        valueInputOption='RAW', body={'values': [['TEST'] * 14]}).execute()
-        assert len(browser.contexts[0].pages) == 2
-        assert not browser.contexts[0].pages[-1].closed
-    assert browser.contexts[0].pages[-1].closed and not original.closed
+        pages = browser.contexts[0].pages[1:]
+        assert len(pages) == 3
+        assert [page.title for page in pages] == ['2026', 'SHAHAB', '报价输入']
+        assert all(not page.closed for page in pages)
+        for title in ('SHAHAB', '2026', '报价输入', 'SHAHAB'):
+            service.get(spreadsheetId='test', range=f"'{title}'!A1:G").execute()
+        assert browser.contexts[0].pages[1:] == pages
+    assert all(page.closed for page in pages) and not original.closed
     with service.poll_scope():
         service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
-    assert len(browser.contexts[0].pages) == 3 and browser.contexts[0].pages[-1].closed
+    assert len(browser.contexts[0].pages) == 5 and browser.contexts[0].pages[-1].closed
 
 
 @pytest.mark.parametrize('problem', ['wrong_document', 'auth', 'pending', 'dialog', 'ownership'])
@@ -338,7 +343,7 @@ def test_poll_cleanup_on_error_does_not_leave_normal_page_open(web):
     assert browser.contexts[0].pages[-1].closed and not original.closed
 
 
-def test_updater_and_web_transport_share_one_page_despite_interleaved_source_reads(web):
+def test_updater_and_web_transport_share_input_slot_with_separate_source_pages(web):
     from src.launcher.google_quote_update import GoogleQuotationUpdateActions
     service, browser, _, original = web
     location = QuotationInputLocation(WorksheetIdentity('test', '报价输入'), 1, 1, '29')
@@ -346,18 +351,20 @@ def test_updater_and_web_transport_share_one_page_despite_interleaved_source_rea
         actions = GoogleQuotationUpdateActions(browser_handle=BrowserHandle(owned=False, browser=browser),
                                                location=location)
         actions.open_quote_input()
+        input_page = actions._page
         for title in ('2026', 'SHAHAB'):
             service.get(spreadsheetId='test', range=f"'{title}'!A1:G").execute()
         service.update(spreadsheetId='test', range="'报价输入'!A1:N1", valueInputOption='RAW',
                        body={'values': [['TEST'] * 14]}).execute()
+        assert actions._page is input_page and input_page.title == '报价输入'
         actions.click_update_quote()
         assert '成功填入' in actions.read_update_result()
         actions.dismiss_result()
         # Source status checks after script completion may select the source tab.
         service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
         actions.close()
-        assert len(browser.contexts[0].pages) == 2
-    assert browser.contexts[0].pages[-1].closed and not original.closed
+        assert len(browser.contexts[0].pages) == 4
+    assert all(page.closed for page in browser.contexts[0].pages[1:]) and not original.closed
 
 
 def test_new_stage_auth_failure_still_stops_once_and_preserves_both_pages(web):
@@ -753,8 +760,9 @@ def test_repeated_source_reads_select_target_without_default_sheet_reload(web, m
     with service.poll_scope():
         for title in ('SHAHAB', 'SHAHAB', '2026', 'SHAHAB'):
             service.get(spreadsheetId='test', range=f"'{title}'!A1:G").execute()
-            assert browser.contexts[0].pages[-1].title == title
-    assert len(navigations) == 1
+            assert sum(not page.closed and page.title == title
+                       for page in browser.contexts[0].pages[1:]) == 1
+    assert len(navigations) == 2
 
 
 def test_many_query_only_candidates_share_one_export_per_sheet_stage(web):
