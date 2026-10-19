@@ -100,3 +100,36 @@ checkbox structure, full five-second order and no duplicate submission,
 without automating a human-verification challenge or affecting other sites.
 Keep prior production rollback, CDP profile/session and other dirty work
 untouched; packaging/deployment remains a separate Owner decision.
+
+## Owner-authorized deployment (2026-10-19)
+Owner now explicitly requests packaging, overwriting the installed V1.4 and
+running it, and confirms the program has exited. This supersedes the initial
+no-package/deployment boundary for this repair only. Reuse the canonical release
+script/environment and install path, protect existing runtime/config/credentials
+and Chrome/CDP, retain verified changed-asset rollback, and launch normally.
+Do not initiate inquiry/order actions as a verification step. REVIEW_REQUIRED
+remains. Pre-build check: all 122 src/scripts/packaging inputs exactly match
+published b375d8a05d73ede0498e37a32897056bfe417c5b (normalizing CRLF only).
+
+Deployment completed: reused build_windows_release.ps1 -Version 1.4 -BuildOnly;
+frozen self-check, RELEASE_SCAN_OK, old/new installed self-check and installed
+idle GUI self-check PASS. Initial sandbox Tcl initialization failed before build;
+the unchanged canonical script succeeded in the normal desktop environment.
+Verified all 2875 installed assets; only INSO_V1.4.exe and
+_internal/base_library.zip changed. Both original assets have hash-verified
+rollback. Copy-time protected file/link manifest (10 entries, no traversal of
+runtime reparse links) and the one existing browser page ID stayed unchanged.
+No runtime/config/credential/profile replacement or Chrome stop occurred.
+
+Installed D:/Program_Leo/INSO_Leo/dist/INSO_V1.4/INSO_V1.4.exe SHA256:
+06a3582bebcc7a4e529bd2d08bcc4de1e625b299b7d89302d1194b08ea9c53b3.
+Normal visible launch at 2026-10-19 11:24:27 (Asia/Shanghai): PID 151676,
+title INSO_V1.4, main window present and responding. Default idle launch;
+no --start-inquiry, inquiry/order action, real login test or mail was initiated.
+Live Findchips acceptance remains UNKNOWN; status remains REVIEW_REQUIRED.
+
+Ignored evidence/rollback: .tmp/findchips-release-20261019/. Exact marked,
+non-reparse staging retired after successful deployment (267812798 bytes);
+canonical script removed its PyInstaller work. Temporary deployment helper was
+removed. Only small logs/manifests/startup receipt and the two rollback assets
+remain; prior release rollback and all unrelated dirty work are preserved.
