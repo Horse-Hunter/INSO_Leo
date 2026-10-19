@@ -312,34 +312,116 @@ def test_findchips_only_own_signin_refusal_is_interpreted(url, pending):
     assert _findchips_login_pending(SimpleNamespace(url=url)) is pending
 
 
-@pytest.mark.parametrize("verdict, expected_clicks", [
-    ("success", 1), ("silent_then_success", 2),
-    ("silent", 2), ("MANUAL_VERIFICATION_REQUIRED", 1),
-    ("CREDENTIAL_REJECTED", 1),
+@pytest.mark.parametrize("verdict, expected_clicks, error_code", [
+    ("success", 1, None), ("silent_then_success", 2, None),
+    ("silent", 2, "LOGIN_NOT_CONFIRMED"),
+    ("request_pending", 1, "LOGIN_NOT_CONFIRMED"),
+    ("page_changed", 1, "LOGIN_NOT_CONFIRMED"),
+    ("button_busy", 1, "LOGIN_NOT_CONFIRMED"),
+    ("delayed_success", 1, None),
+    ("Bad captcha", 1, "MANUAL_VERIFICATION_REQUIRED"),
+    ("Invalid login", 1, "LOGIN_REJECTED"),
 ])
-def test_findchips_submit_retry_is_bounded_and_stops_on_confirmed_verdict(monkeypatch, verdict, expected_clicks):
+def test_findchips_checks_options_waits_and_only_reclicks_if_silent(
+    monkeypatch, verdict, expected_clicks, error_code,
+):
     from types import SimpleNamespace
+    from urllib.parse import quote
 
     from src.research import findchips as module
     from src.research.site_login import SiteLoginError
-    page = SimpleNamespace(url=module.FINDCHIPS_LOGIN_URL)
-    page.goto = lambda *args, **kwargs: pytest.fail("must reuse the already opened login form")
-    calls = []
-    monkeypatch.setattr(module, "_wait_findchips_submit_ready", lambda *args, **kwargs: calls.append("ready"))
-    monkeypatch.setattr(module, "submit_login_form", lambda *args, **kwargs: calls.append("click"))
-    def outcome(*args, **kwargs):
-        clicks = calls.count("click")
-        if verdict == "success" or (verdict == "silent_then_success" and clicks == 2):
+
+    events, listeners = [], {}
+    now = [0.0]
+    page = SimpleNamespace(url=module.FINDCHIPS_LOGIN_URL, html="login form")
+    page.goto = lambda *a, **k: pytest.fail("reuse the opened login form")
+    page.wait_for_load_state = lambda *a, **k: None
+    page.evaluate = lambda _: True
+    page.content = lambda: page.html
+    page.on = lambda name, callback: listeners.__setitem__(name, callback)
+    page.remove_listener = lambda name, callback: listeners.pop(name)
+
+    class Control:
+        def __init__(self, name, *, checked=False, visible=True, enabled=True):
+            self.name, self.checked = name, checked
+            self.visible, self.enabled = visible, enabled
+
+        def is_visible(self):
+            return self.visible
+
+        def is_enabled(self):
+            return self.enabled
+
+        def is_checked(self):
+            return self.checked
+
+        def fill(self, value, *, timeout):
+            events.append((self.name, value))
+
+        def check(self, *, timeout):
+            assert not self.checked, "already checked must never be clicked"
+            self.checked = True
+            events.append((self.name, now[0]))
+
+        def click(self, *, timeout):
+            events.append(("submit", now[0]))
+            clicks = sum(name == "submit" for name, _ in events)
+            if verdict == "success" or (verdict == "silent_then_success" and clicks == 2):
+                page.url = "https://www.findchips.com/account"
+            elif verdict in {"request_pending", "delayed_success"}:
+                listeners["request"](SimpleNamespace(resource_type="xhr"))
+            elif verdict == "page_changed":
+                page.html = "login form with site response"
+            elif verdict == "button_busy":
+                self.enabled = False
+            elif verdict in {"Bad captcha", "Invalid login"}:
+                page.url += "?login_error=" + quote(verdict)
+
+    options = [Control("option-1"), Control("option-2"),
+               Control("already-checked", checked=True),
+               Control("hidden", visible=False), Control("disabled", enabled=False)]
+    controls = {
+        module.FINDCHIPS_LOGIN_FORM.username: [Control("username")],
+        module.FINDCHIPS_LOGIN_FORM.password: [Control("password")],
+        module.FINDCHIPS_LOGIN_FORM.submit: [Control("submit")],
+        'input[type="checkbox"]': options,
+    }
+
+    def locator(selector):
+        matches = controls.get(selector, [])
+        return SimpleNamespace(count=lambda: len(matches), nth=lambda i: matches[i])
+
+    page.locator = locator
+    monkeypatch.setattr(module, "challenge_present", lambda *a: False)
+    monkeypatch.setattr("src.research.site_login.challenge_present", lambda *a: False)
+    monkeypatch.setattr("src.research.site_login.rejection_present", lambda *a: False)
+
+    def wait(seconds):
+        events.append(("wait", seconds))
+        now[0] += seconds
+        if verdict == "delayed_success" and now[0] >= 7.5:
             page.url = "https://www.findchips.com/account"
-            return
-        raise SiteLoginError("LOGIN_NOT_CONFIRMED" if verdict.startswith("silent") else verdict)
-    monkeypatch.setattr(module, "await_login_outcome", outcome)
-    if verdict in {"success", "silent_then_success"}:
-        module.ensure_findchips_signed_in(page, login=object(), timeout_ms=1000)
+
+    def run():
+        module.ensure_findchips_signed_in(
+            page, login=module.FindchipsLogin("synthetic-user", "synthetic-password"),
+            timeout_ms=4_000, wait=wait, clock=lambda: now[0],
+        )
+
+    if error_code is None:
+        run()
     else:
-        with pytest.raises(SiteLoginError):
-            module.ensure_findchips_signed_in(page, login=object(), timeout_ms=1000)
-    assert calls == ["ready", "click"] * expected_clicks
+        with pytest.raises(SiteLoginError, match=error_code):
+            run()
+    assert events[:5] == [
+        ("username", "synthetic-user"), ("password", "synthetic-password"),
+        ("option-1", 0.0), ("option-2", 0.0), ("wait", 5.0),
+    ]
+    assert all(option.checked for option in options[:3])
+    assert not options[3].checked and not options[4].checked
+    submits = [value for name, value in events if name == "submit"]
+    assert submits == ([5.0, 7.0] if expected_clicks == 2 else [5.0])
+    assert listeners == {}
 
 
 def test_findchips_existing_session_does_not_submit_again(monkeypatch):
@@ -347,7 +429,7 @@ def test_findchips_existing_session_does_not_submit_again(monkeypatch):
 
     from src.research import findchips as module
     page = SimpleNamespace(url="https://www.findchips.com/dashboard", goto=lambda *a, **k: None)
-    monkeypatch.setattr(module, "submit_login_form", lambda *a, **k: pytest.fail("already signed in"))
+    monkeypatch.setattr(module, "unique_visible_control", lambda *a: pytest.fail("already signed in"))
     module.ensure_findchips_signed_in(page, login=object(), timeout_ms=1000)
 
 

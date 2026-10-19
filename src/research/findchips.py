@@ -25,7 +25,6 @@ from .site_login import (
     SiteLoginError,
     await_login_outcome,
     challenge_present,
-    submit_login_form,
     unique_visible_control,
 )
 from .source_contracts import (
@@ -381,25 +380,67 @@ def ensure_findchips_signed_in(
     # An existing session redirects /signin to /account or /dashboard.
     if _is_findchips_response_url(page.url) and not findchips_login_page_open(page):
         return
-    for attempt in range(2):
-        _wait_findchips_submit_ready(page, timeout_ms=timeout_ms, wait=wait, clock=clock)
-        submit_login_form(
-            page, form=FINDCHIPS_LOGIN_FORM, login=login, timeout_ms=timeout_ms,
-        )
-        try:
-            await_login_outcome(
-                page, form=FINDCHIPS_LOGIN_FORM,
-                is_login_page=_findchips_login_pending,
-                timeout_ms=timeout_ms, wait=wait, clock=clock,
-            )
+    _wait_findchips_submit_ready(page, timeout_ms=timeout_ms, wait=wait, clock=clock)
+    username = unique_visible_control(page, FINDCHIPS_LOGIN_FORM.username)
+    password = unique_visible_control(page, FINDCHIPS_LOGIN_FORM.password)
+    button = unique_visible_control(page, FINDCHIPS_LOGIN_FORM.submit)
+    if username is None or password is None or button is None:
+        raise SiteLoginError("LOGIN_FORM_UNAVAILABLE")
+    try:
+        username.fill(login.username, timeout=timeout_ms)
+        password.fill(login.password, timeout=timeout_ms)
+    except Exception as error:
+        raise SiteLoginError("LOGIN_FORM_UNAVAILABLE") from error
+    checkboxes = page.locator('input[type="checkbox"]')
+    for index in range(checkboxes.count()):
+        checkbox = checkboxes.nth(index)
+        if checkbox.is_visible() and checkbox.is_enabled():
+            if not checkbox.is_checked():
+                checkbox.check(timeout=timeout_ms)
+            if not checkbox.is_checked():
+                raise SiteLoginError("LOGIN_OPTION_UNCONFIRMED")
+    wait(5.0)
+    initial_url, initial_html = page.url, page.content()
+    responded = False
+
+    def on_request(request: object) -> None:
+        nonlocal responded
+        if request.resource_type in {"document", "xhr", "fetch"}:
+            responded = True
+
+    page.on("request", on_request)
+    try:
+        for attempt in range(2):
+            if challenge_present(page, FINDCHIPS_LOGIN_FORM):
+                raise SiteLoginError("MANUAL_VERIFICATION_REQUIRED")
+            try:
+                button.click(timeout=timeout_ms)
+            except Exception as error:
+                raise SiteLoginError("LOGIN_SUBMIT_FAILED") from error
+            try:
+                await_login_outcome(
+                    page, form=FINDCHIPS_LOGIN_FORM,
+                    is_login_page=_findchips_login_pending,
+                    timeout_ms=min(timeout_ms, 2_000) if not attempt else timeout_ms,
+                    wait=wait, clock=clock,
+                )
+            except SiteLoginError as error:
+                if error.reason_code != "LOGIN_NOT_CONFIRMED" or attempt:
+                    raise
+                # An in-flight request or changed page/button is already a response.
+                if not (responded or page.url != initial_url
+                        or page.content() != initial_html or not button.is_enabled()):
+                    continue
+                await_login_outcome(
+                    page, form=FINDCHIPS_LOGIN_FORM,
+                    is_login_page=_findchips_login_pending,
+                    timeout_ms=timeout_ms, wait=wait, clock=clock,
+                )
             if not _is_findchips_response_url(page.url):
                 raise SiteLoginError("UNEXPECTED_RESPONSE_HOST")
             return
-        except SiteLoginError as error:
-            # Retry only an ordinary submit with no confirmed site verdict.
-            # CAPTCHA/password refusals are not fixed by repeated clicks.
-            if error.reason_code != "LOGIN_NOT_CONFIRMED" or attempt:
-                raise
+    finally:
+        page.remove_listener("request", on_request)
 
 
 def _wait_findchips_submit_ready(
