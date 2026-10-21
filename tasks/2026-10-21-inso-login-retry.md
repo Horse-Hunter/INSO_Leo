@@ -74,3 +74,11 @@ login exception text or credentials are added to logs.
 Final log-only delta: 64 focused session/retry tests PASS in0.69s, Ruff PASS.
 Final task-owned test directories removed after checks; no release artifacts
 created. Commit/push only inso_session.py, its existing/new tests and this packet.
+
+## Owner-authorized installed release
+The prior not-installed delivery limit is superseded: Owner explicitly requested
+packaging/overwrite/run after combined verification. Installed with Google busy
+read recovery on2026-10-21;1471 combined tests PASS/1 skipped, scanner and staged/
+installed/idle GUI checks PASS, normal idle startup responding. Canonical
+receipt/rollback/limits: tasks/2026-10-21-recovery-authorized-release.md.
+REVIEW_REQUIRED remains; no actual business run or long-running acceptance claim.

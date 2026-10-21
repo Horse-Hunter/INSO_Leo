@@ -75,3 +75,11 @@ unrelated dirty bytes preserved. Remote was fetched before publication and the
 five existing source/test files were verified unchanged from the pre-repair
 remote baseline, preserving concurrent Review/docs changes. Commit only these
 five files plus this packet to the original remote V1.4 branch.
+
+## Owner-authorized installed release
+The prior source-only delivery limit is superseded: Owner explicitly requested
+packaging/overwrite/run after combined verification. Installed with the INSO
+login retry on2026-10-21;1471 combined tests PASS/1 skipped, scanner and staged/
+installed/idle GUI checks PASS, normal idle startup responding. Canonical
+receipt/rollback/limits: tasks/2026-10-21-recovery-authorized-release.md.
+REVIEW_REQUIRED remains; no actual business run or long-running acceptance claim.
