@@ -6,7 +6,6 @@ import pytest
 from playwright._impl._driver import compute_driver_executable
 
 from src.launcher.google_quote_update import _UNSAFE_POLL_PAGE
-from src.sheets.quotation_input import QuotationInputBusy
 from tests.launcher.test_google_web import (
     web as web,  # noqa: PLC0414 - pytest fixture re-export
 )
@@ -50,7 +49,7 @@ def test_protected_slot_does_not_spawn_replacement_tabs(web):
         old = browser.contexts[0].pages[-1]
         old.popup = 'Real visible dialog'
         for _ in range(3):
-            with pytest.raises(QuotationInputBusy):
+            with pytest.raises(TimeoutError, match='GOOGLE_WEB_READ_UNAVAILABLE'):
                 service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
         assert len(browser.contexts[0].pages) == 2
     assert not old.closed and not original.closed
@@ -63,6 +62,72 @@ def test_no_fourth_program_google_tab_even_with_prior_orphans(web):
         old = context.new_page()
         old.owner_name = 'INSO_OWNER_TAB:google-operation'
         old.url = 'https://docs.google.com/spreadsheets/d/test/edit#gid=0'
-    with service.poll_scope(), pytest.raises(QuotationInputBusy):
+    with service.poll_scope(), pytest.raises(TimeoutError, match='GOOGLE_WEB_READ_UNAVAILABLE'):
         service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
     assert len(context.pages) == 4 and not original.closed
+
+
+@pytest.mark.parametrize('expires_auth', [False, True])
+def test_timeout_busy_read_retires_only_after_settlement_and_keeps_auth_check(
+    web, monkeypatch, expires_auth,
+):
+    from playwright.sync_api import TimeoutError as PageTimeout
+
+    from src.sheets import WorksheetIdentity
+    from src.sheets.google_reader import GoogleSheetsReadError, GoogleSheetsRowReader
+
+    service, browser, _, _ = web
+    download = service._download
+    failed, waits = [], []
+
+    def read(page, actions):
+        if not failed:
+            failed.append(page)
+            page.popup = 'Temporary read dialog'
+            raise PageTimeout('Synthetic read timeout')
+        return download(page, actions)
+
+    def wait(seconds):
+        waits.append(seconds)
+        if len(waits) == 2:
+            if expires_auth:
+                failed[0].login_markers.add('登录')
+            else:
+                failed[0].popup = ''
+        return False
+
+    monkeypatch.setattr(service, '_download', read)
+    reader = GoogleSheetsRowReader(service, retry_wait=wait)
+    with service.poll_scope():
+        if expires_auth:
+            with pytest.raises(GoogleSheetsReadError):
+                reader.read_rows(WorksheetIdentity('test', '2026'))
+            assert not failed[0].closed and len(browser.contexts[0].pages) == 2
+        else:
+            assert reader.read_rows(WorksheetIdentity('test', '2026'))
+            assert failed[0].closed and len(browser.contexts[0].pages) == 3
+    assert waits == [2, 4]
+
+
+def test_uncertain_write_is_neither_read_tagged_nor_closed_as_recovered_read(web):
+    from src.sheets.quotation_input import QuotationInputUnavailable
+
+    service, browser, _, _ = web
+    context = browser.contexts[0]
+    create = context.new_page
+
+    def dirty_page():
+        page = create()
+        page.save_fails = True
+        return page
+
+    context.new_page = dirty_page
+    with service.poll_scope():
+        with pytest.raises(QuotationInputUnavailable):
+            service.update(spreadsheetId='test', range="'2026'!F2",
+                           valueInputOption='RAW', body={'values': [['NEW']]}).execute()
+        old = context.pages[-1]
+        assert not getattr(old, 'read_failed', False)
+        with pytest.raises(TimeoutError):
+            service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
+        assert not old.closed and len(context.pages) == 2

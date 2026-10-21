@@ -523,7 +523,8 @@ def test_unknown_and_security_failures_do_not_become_temporary(web, monkeypatch,
     assert not isinstance(caught.value, GoogleSheetsReadUnavailable) and len(calls) == 1
 
 
-@pytest.mark.parametrize('failure_mode', ['menu_timeout', 'read_gid_drift', 'read_page_closed', 'artifact_lost'])
+@pytest.mark.parametrize('failure_mode', ['menu_timeout', 'read_gid_drift', 'read_page_closed',
+                                        'artifact_lost', 'timeout_then_busy'])
 def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next_cycle(
         web, tmp_path, monkeypatch, failure_mode):
     import json
@@ -549,7 +550,7 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
     monkeypatch.setattr(launcher, 'QQSMTPTransport', _RecordingTransport)
     monkeypatch.setattr('src.launcher.v12_composition.QQSMTPTransport', _RecordingTransport)
     _RecordingTransport.sent.clear()
-    calls, waits = [], []
+    calls, waits, busy_pages = [], [], []
     original_wait = Locator.wait_for
     def page_wait(locator, **kwargs):
         if locator.name == '报价工具':
@@ -560,6 +561,10 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
     monkeypatch.setattr(Locator, 'wait_for', page_wait)
     original_download = service._download
     def read(page, actions):
+        if failure_mode == 'timeout_then_busy' and not waits:
+            busy_pages.append(page)
+            page.popup = 'Synthetic temporary read-only dialog'
+            raise PageTimeout('synthetic download timeout followed by busy slot')
         if len(calls) <= 5 and failure_mode == 'read_gid_drift':
             page.url = page.url.split('#')[0] + '#gid=999'
         elif len(calls) <= 5 and failure_mode == 'read_page_closed':
@@ -577,7 +582,11 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
         waits.append(seconds)
         assert not backend._stop.is_set() and backend.get_status().next_poll_at is not None
         if len(waits) == 1:
-            assert len(calls) == 5
+            if failure_mode == 'timeout_then_busy':
+                assert len(calls) == 1 and len(busy_pages) == 1
+                busy_pages[0].popup = ''  # Site is idle by the next poll.
+            else:
+                assert len(calls) == 5
             backend._v12_composition.coordinator.run_notifications(now=launcher.utc_now())
             return False
         backend._stop.set()
@@ -587,12 +596,14 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
         backend.start()
         backend._thread.join(timeout=10)
         assert not backend._thread.is_alive() and waits == [900, 900]
-        assert len(calls) == 9 and backend.get_health().overall == '正常'
+        assert len(calls) == (5 if failure_mode == 'timeout_then_busy' else 9)
+        assert backend.get_health().overall == '正常'
         assert len(_RecordingTransport.sent) == 1
         assert _RecordingTransport.sent[0][1].address == 'linan229@qq.com'
         assert '15分钟后重试' in _RecordingTransport.sent[0][2]
         assert backend._store.all_items() == ()
-        assert not original_page.closed and all(p.closed for p in browser.contexts[0].pages[1:])
+        assert not original_page.closed
+        assert all(p.closed for p in browser.contexts[0].pages[1:])
     finally:
         backend.shutdown()
 

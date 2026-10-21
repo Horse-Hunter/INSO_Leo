@@ -18,7 +18,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from src.research.cdp_pages import shared_playwright_factory
-from src.sheets.quotation_input import QuotationInputUnavailable
+from src.sheets.quotation_input import QuotationInputBusy, QuotationInputUnavailable
 from src.sheets.worksheet_schema import worksheet_schema
 from src.workflow.v12_faults import FaultScope, V12Fault
 from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
@@ -53,6 +53,8 @@ def _temporary_web_read_failure(exc):
                 temporary = True
         elif isinstance(exc, (TimeoutError, ConnectionError)):
             temporary = True
+        elif isinstance(exc, QuotationInputBusy) and str(exc) == "GOOGLE_QUOTATION_INPUT_BUSY":
+            temporary = True  # Only the read caller uses this classifier.
         elif isinstance(exc, UpdateAttemptUnconfirmed) and str(exc) in {
             "GOOGLE_OPERATION_SURFACE_UNAVAILABLE", "GOOGLE_OPERATION_SURFACE_UNCONFIRMED",
         }:
@@ -254,7 +256,7 @@ class GoogleSheetsWebService:
                 dirty = False
                 return {"updatedCells": len(values[0])}
             except Exception as exc:
-                actions.retire_failed_page()
+                actions.retire_failed_page(read_only=not write)
                 if write:
                     log_step(stage, cause=exc)
                     reason = str(exc) if str(exc) in {
@@ -279,6 +281,8 @@ class GoogleSheetsWebService:
                         reason = str(exc)  # Safe exact guard code; never page text/URLs.
                     elif isinstance(exc, TimeoutError) and str(exc) == "GOOGLE_WEB_READ_ARTIFACT_LOST":
                         reason = "GOOGLE_WEB_READ_ARTIFACT_LOST"
+                    elif isinstance(exc, QuotationInputBusy):
+                        reason = "GOOGLE_WEB_READ_BUSY"
                     logging.getLogger("inso.diagnostics").warning("Google read classification", extra={
                         "runtime_reason": reason, "runtime_cause": type(exc).__name__})
                     if temporary:

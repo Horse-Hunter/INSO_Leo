@@ -97,6 +97,11 @@ class Page:
             self.script_running = False
             self.settled = True
     def evaluate(self, script, arg=None):
+        if "window.__insoGoogleReadFailed = true" in script:
+            self.read_failed = True
+            return
+        if "window.__insoGoogleReadFailed === true" in script:
+            return getattr(self, 'read_failed', False)
         if "document.querySelectorAll('[role=\"dialog\"]')" in script:
             return bool(self.popup or getattr(self, 'refresh_pending', False)
                         or (self.started and self.script_running))

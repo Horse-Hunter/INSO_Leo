@@ -188,6 +188,23 @@ class GoogleQuotationUpdateActions:
         browser = self._handle.browser
         if browser is None or not browser.is_connected() or len(browser.contexts) != 1:
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")
+        # Retire only explicitly failed READ surfaces that are now settled. The
+        # marker survives a poll/client ending; uncertain writes never get it.
+        expected_document = urlsplit(self._location.url)
+        for old in tuple(browser.contexts[0].pages):
+            actual = urlsplit(old.url)
+            if (old.is_closed() or page_owner(old) != "google-operation"
+                    or (actual.scheme, actual.hostname, actual.path) !=
+                    (expected_document.scheme, expected_document.hostname, expected_document.path)):
+                continue
+            if not old.evaluate("() => window.__insoGoogleReadFailed === true"):
+                continue
+            recovery = GoogleQuotationUpdateActions(browser_handle=self._handle,
+                location=SimpleNamespace(url=old.url))
+            recovery._page = old
+            recovery._guard()
+            if not old.evaluate(_UNSAFE_POLL_PAGE):
+                recovery.close()
         pool = _POLL_GOOGLE_PAGES.get()
         target = urlsplit(self._location.url)
         document_key = (target.scheme, target.hostname, target.path)
@@ -199,6 +216,10 @@ class GoogleQuotationUpdateActions:
             del pool[key]
             entry = None
         if entry is not None and entry["protected"]:
+            # A busy READ must not conceal authentication/document failure.
+            previous = entry["actions"]
+            previous._page = entry["page"]
+            previous._guard()
             raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
         if entry is not None and not entry["protected"]:
             self._page, self._poll_entry = entry["page"], entry
@@ -349,11 +370,17 @@ class GoogleQuotationUpdateActions:
             self._guard()
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from None
 
-    def retire_failed_page(self):
+    def retire_failed_page(self, *, read_only=False):
         """Never pass a failed phase's page to another phase/retry."""
+        if read_only and self._page is not None and not self._page.is_closed():
+            try:
+                self._page.evaluate("() => { window.__insoGoogleReadFailed = true; }")
+            except Exception:  # noqa: BLE001 - inability to tag never makes a page safe
+                self._protected = True
         if self._poll_entry is None:
             return
         self._poll_entry["protected"] = True
+        self._poll_entry["actions"] = self
         self._poll_entry = None
         try:
             # Ordinary read failures can be closed; unresolved work stays visible.
