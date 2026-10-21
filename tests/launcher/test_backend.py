@@ -289,8 +289,8 @@ def test_production_composition_builds_real_seams_without_network(
         captured["observer"].execute(ResearchInput("inq-challenge", "MPN", None, 1, None))
     assert "inq-challenge" in backend._inquiries
     assert "inq-challenge" in backend._manual_inquiries
-    assert backend.get_status().state is RunState.MODULE_PAUSED
-    assert not backend._drain_due_on_stop.is_set()
+    assert backend.get_status().state is RunState.STOPPED  # Owner already stopped this composed fixture.
+    assert backend._drain_due_on_stop.is_set()  # Recovery cannot cancel the explicit Owner stop.
     backend.shutdown()
 
 
@@ -375,7 +375,9 @@ def test_browser_bootstrap_failure_enters_manual_review_without_research_retry(
     )
     backend.start()
     assert sheets_called.wait(5)
-    assert _wait_until(lambda: backend.get_status().state is RunState.GLOBAL_STOP)
+    assert _wait_until(lambda: backend.get_status().next_poll_at is not None)
+    assert backend.get_status().state is RunState.RUNNING and not backend._stop.is_set()
+    backend.request_stop_after_cycle()
     backend._thread.join(timeout=5)
 
     item = backend._store.all_items()[0]
@@ -431,7 +433,9 @@ def test_readiness_failure_closes_owned_browser_without_research_retry(
     )
     backend.start()
     assert sheets_called.wait(5)
-    assert _wait_until(lambda: backend.get_status().state is RunState.GLOBAL_STOP)
+    assert _wait_until(lambda: backend.get_status().next_poll_at is not None)
+    assert backend.get_status().state is RunState.RUNNING and not backend._stop.is_set()
+    backend.request_stop_after_cycle()
     backend._thread.join(timeout=5)
 
     item = backend._store.all_items()[0]
@@ -743,7 +747,7 @@ def test_runtime_component_error_stops_poll_and_worker_fail_closed():
     assert backend._stop.is_set()
     assert backend.get_status().state is RunState.MODULE_PAUSED
     assert backend.get_health().overall == "需要人工处理"
-    assert any("RuntimeError" in entry.message for entry in backend.get_logs())
+    assert any("业务已暂停" in entry.message for entry in backend.get_logs())
     backend.shutdown()
 
 
@@ -1427,31 +1431,32 @@ def test_real_poll_seam_stops_batch_on_login_and_resumes_queued_inquiry(tmp_path
     backend = ProductionBackend(config_path=config, production_config_path=production,
                                 cdp_probe=lambda _url: True,
                                 browser_acquirer=lambda *_args, **_kwargs: BrowserHandle(owned=False))
+    waits = []
+    monkeypatch.setattr(backend, '_wait_between_rows', lambda _: False)
+    def wait(seconds):
+        nonlocal repaired
+        waits.append(seconds)
+        assert not backend._stop.is_set() and backend.get_status().next_poll_at is not None
+        if len(waits) == 1:
+            assert len(calls) == 1
+            repaired = True
+            return False
+        backend._stop.set()
+        return True
+    monkeypatch.setattr(backend, '_wait_between_polls', wait)
     backend.start()
-    backend._thread.join(5)
-    assert not backend._thread.is_alive()
-    assert len(calls) == 1, "login failure must not continue with the next inquiry"
-    assert len(_RecordingTransport.sent) == 1
-    assert all(item.status.value == "QUEUED" for item in backend._store.all_items())
-    interrupted_id = calls[0]
-    assert backend._v12_store.business_state(interrupted_id) is BusinessState.RESEARCH_RETRY_WAIT
-    repaired = True
-    rows.append(["未发", None, "A", None, "NEW-NORMAL-ROW", "Brand", 1])
-    backend.start()
-    assert _wait_until(lambda: len(calls) == 2)
-    backend.request_stop_after_cycle()
-    backend._thread.join(5)
-    assert calls.count(interrupted_id) == 1, "the interrupted inquiry must not be resumed"
-    assert calls[1] == backend._store.all_items()[1].inquiry_id, "resume the next untouched source row, not only newly added rows"
-    untouched = backend._store.all_items()[2]
-    assert untouched.status.value == "QUEUED"
-    assert backend._v12_store.business_state(untouched.inquiry_id) is BusinessState.DUPLICATE_CHECK_PENDING
-    assert len([m for m in _RecordingTransport.sent if "异常" in m[2]]) == 1
+    backend._thread.join(10)
+    assert not backend._thread.is_alive() and waits == [900, 900]
+    assert len(calls) == 4 and calls[0] == calls[1]
+    assert len(set(calls)) == 3
+    assert all(item.status.value != "RESEARCHING" for item in backend._store.all_items())
+    waiting = [mail for mail in _RecordingTransport.sent if '等待恢复' in mail[2]]
+    assert len(waiting) == 1 and '已停止' not in waiting[0][2]
     backend.shutdown()
 
 
 @pytest.mark.parametrize("settled,mail_settled", [(False, True), (True, False), (True, True)])
-def test_row_completion_stops_next_row_until_submit_status_and_mail_settle(tmp_path, settled, mail_settled):
+def test_row_completion_holds_only_unconfirmed_order_and_preserves_review_page(tmp_path, settled, mail_settled):
     backend = ProductionBackend(root=tmp_path)
     backend._state = RunState.RUNNING
     backend._purchase_completion = SimpleNamespace(process=lambda *_a, **_k: settled)
@@ -1459,10 +1464,13 @@ def test_row_completion_stops_next_row_until_submit_status_and_mail_settle(tmp_p
     calls = []
     backend._v12_composition = SimpleNamespace(coordinator=SimpleNamespace(
         run_notifications=lambda **_k: calls.append("notifications")))
-    backend._inso_session = SimpleNamespace(close_owned_operation_tab=lambda: calls.append("close"))
+    page = SimpleNamespace()
+    backend._inso_session = SimpleNamespace(close_owned_operation_tab=lambda: calls.append("close"),
+        operation_access=lambda: SimpleNamespace(operation_page=lambda: SimpleNamespace(page=page)))
+    backend._protect_keepalive_pages = lambda pages: calls.append("protect")
     backend._complete_inquiry(SimpleNamespace(inquiry_id="synthetic-inquiry"))
-    assert calls == (["notifications", "close"] if settled else ["notifications"])
-    assert backend._immediate_stop_requested() == (not settled)
+    assert calls == (["notifications", "close"] if settled else ["notifications", "protect"])
+    assert not backend._immediate_stop_requested()
     assert backend._active_inso_inquiry is None and backend._inso_session is None
 
 
@@ -1473,7 +1481,7 @@ def test_sweep_never_closes_even_a_browser_it_started():
     assert handle.disconnected and not handle.closed
 
 
-def test_preparation_authentication_failure_stops_and_alerts_only_owner(tmp_path, monkeypatch):
+def test_preparation_authentication_failure_without_active_poll_pauses_and_alerts_only_owner(tmp_path, monkeypatch):
     from src.launcher.inso_session import InsoAuthenticationError
     _RecordingTransport.sent = []
     monkeypatch.setattr(launcher, "QQSMTPTransport", _RecordingTransport)
@@ -1486,7 +1494,7 @@ def test_preparation_authentication_failure_stops_and_alerts_only_owner(tmp_path
         failure.__cause__ = auth
     backend._runtime_error(failure)
     assert backend._stop.is_set()
-    assert backend.get_status().state is RunState.GLOBAL_STOP
+    assert backend.get_status().state is RunState.MODULE_PAUSED
     assert len(_RecordingTransport.sent) == 1
     assert _RecordingTransport.sent[0][1].address == "linan229@qq.com"
     backend.shutdown()
@@ -1676,12 +1684,12 @@ def test_shared_sheets_fault_does_not_blame_last_historical_order(caplog):
     failure = V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE")
     failure.__cause__ = TimeoutError("SECRET_PROVIDER_BODY customer address")
     backend._runtime_error(failure)
-    assert backend.get_status().state is RunState.GLOBAL_STOP
+    assert backend.get_status().state is RunState.MODULE_PAUSED
     command = next(iter(mailbox.commands.values()))
     assert command.inquiry_id is None and "historical-order" not in command.text_body
     assert "Google表格读取失败" in command.text_body and len(delivered) == 1
     health = backend.get_health()
-    assert [i.status for i in health.items].count("需要人工处理") == 1
+    assert [i.status for i in health.items].count("需要处理") == 1
     records = [r for r in caplog.records if getattr(r, "runtime_reason", None) == "SHEETS_READ_UNAVAILABLE"]
     assert records and records[-1].runtime_cause == "TimeoutError"
     assert "SECRET_PROVIDER_BODY" not in caplog.text

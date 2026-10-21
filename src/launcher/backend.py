@@ -165,6 +165,11 @@ def _login_alert_body(stop_reason: str) -> str:
     """The alert's plain text: what stopped, and what to do about it."""
 
     # Keep only closed status hints; never copy raw source remarks.
+    if "台账" in stop_reason or stop_reason == "WORKFLOW_LEDGER_UNAVAILABLE":
+        return "情况：本机订单台账不可用，相关业务已暂停。\n处理：请检查本机台账和运行提示；不要重发采购单。"
+    if stop_reason in {"V12_INTERNAL_FAILURE", "V13_INTERNAL_FAILURE", "QUOTE_INPUT_CONFIGURATION_REQUIRED",
+                       "SHEETS_SCHEMA_UNAVAILABLE"}:
+        return "情况：本机配置、表格结构或处理结果尚未确认，相关业务已暂停。\n处理：请核对程序提示；不能据此判断网站登录失效。"
     if any(token in stop_reason for token in ("全局", "基础设施", "台账", "GLOBAL_STOP")):
         return ("情况：询价因运行异常停止。\n"
             "处理：检查网络、授权和程序订单详情，确认后点击“开始询价”；不要直接重发采购单。")
@@ -183,9 +188,9 @@ class _Observer:
     """Track actual Research attempts and surface interactive challenges."""
 
     #: Every wording a source uses when what failed is the *session*, not the
-    #: result. Owner rule (2026-10-01): a login problem stops the run and mails
-    #: the Owner, because a run that carries on without one of its sites quietly
-    #: produces a price pool that is missing a source. These are exactly the
+    #: result. Login failures propagate to the canonical recovery boundary;
+    #: short outages retain polling and never become a missing-price result.
+    #: These are exactly the
     #: phrases ``research.aggregation._failure_reason`` renders, plus the English
     #: challenge words, and nothing else -- a parse failure must not stop a run.
     _HUMAN_ACTION_MARKERS = (
@@ -225,7 +230,8 @@ class _Observer:
             # consume this inquiry. Existing queue release makes it resumable.
             if "ic.net" in remarks or "inso" in remarks or "英索" in remarks:
                 raise V12Fault(FaultScope.GLOBAL_STOP if "inso" in remarks or "英索" in remarks
-                    else FaultScope.V12_PAUSE, "Research requires session repair")
+                    else FaultScope.V12_PAUSE, "INSO_AUTHENTICATION_REQUIRED"
+                    if "inso" in remarks or "英索" in remarks else "IC_NET_UNAVAILABLE")
         return result
 
 
@@ -299,7 +305,7 @@ class _LivePurchaseDraftWriter:
             status.reason_code,
         )
         if self._login_problem is not None:
-            self._login_problem(command.inquiry_id, "INSO：登录不可用")
+            self._login_problem(command.inquiry_id, "INSO：" + (status.reason_code or "登录不可用"))
         return PurchaseDraftResult(
             command_id=command.command_id,
             outcome=PurchaseOutcome.VALIDATION_FAILED,
@@ -414,15 +420,18 @@ class _PreparedDuplicateChecker:
     """Prepare the verified INSO session before the V1.2 duplicate lookup.
 
     Reuse the lower-history reader. Query failures get at most three fresh-tab
-    retries after interruptible waits; authentication failures stop immediately.
+    retries after interruptible waits; authentication failures preserve their
+    page and propagate to the shared website-recovery policy.
     """
 
-    def __init__(self, checker, prepare=None, *, begin_inquiry=None, reset=None, wait=None) -> None:
+    def __init__(self, checker, prepare=None, *, begin_inquiry=None, reset=None, wait=None,
+                 on_success=lambda: None) -> None:
         self._checker = checker
         self._prepare = prepare
         self._begin_inquiry = begin_inquiry
         self._reset = reset
         self._wait = wait
+        self._on_success = on_success
 
     def check(self, inquiry_id, mpn, quantity, *, at):
         if self._begin_inquiry is not None:
@@ -439,7 +448,7 @@ class _PreparedDuplicateChecker:
         def operation():
             try:
                 return self._checker.check(inquiry_id, mpn, quantity, at=at)
-            except (sqlite3.Error, V12DatabaseError):
+            except (sqlite3.Error, V12DatabaseError, V12Fault, InsoAuthenticationError):
                 raise
             except Exception:
                 if self._wait is None:
@@ -449,11 +458,46 @@ class _PreparedDuplicateChecker:
         if self._wait is None:
             prepare()
             return operation()
-        return run_inso_query(
+        result = run_inso_query(
             operation, prepare=prepare,
             succeeded=lambda result: result is not None and result.outcome.value == "CONFIRMED",
             reset=self._reset or (lambda: None), wait=self._wait,
         )
+        self._on_success()
+        return result
+
+
+def _website_failure(exc):
+    """Identify a failed dependency without treating local data errors as outages."""
+    chain, seen = [], set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        chain.append(exc)
+        exc = exc.__cause__ or exc.__context__
+    if any(isinstance(e, (sqlite3.Error, V12DatabaseError, ProductionConfigurationError)) for e in chain):
+        return None
+    reasons = {getattr(e, "reason", "") for e in chain}
+    if reasons & {"SHEETS_SCHEMA_UNAVAILABLE", "QUOTE_INPUT_LOCATION_INVALID",
+                  "QUOTE_INPUT_LOCATION_BINDING_MISMATCH", "QUOTE_INPUT_METADATA_INVALID",
+                  "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED", "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"}:
+        return None
+    if ("INSO_AUTHENTICATION_REQUIRED" in reasons or "INSO_QUERY_RETRIES_EXHAUSTED" in reasons
+            or any(isinstance(e, InsoAuthenticationError) for e in chain)):
+        return "INSO"
+    if (reasons & {"SHEETS_READ_UNAVAILABLE", "SHEETS_AUTH_UNAVAILABLE", "GOOGLE_SHEETS_UNAVAILABLE",
+                   "GOOGLE_AUTHENTICATION_REQUIRED", "GOOGLE_SPREADSHEET_UNAVAILABLE",
+                   "GOOGLE_SHEET_UNCONFIRMED", "QUOTE_INPUT_METADATA_UNAVAILABLE"}
+            or any(type(e).__name__ in {"GoogleSheetsReadError", "GoogleSheetsReadUnavailable"} for e in chain)):
+        return "Google Sheets"
+    if "IC_NET_UNAVAILABLE" in reasons:
+        return "IC.net"
+    if "V13_FX_UNAVAILABLE" in reasons:
+        return "汇率网站"
+    if (reasons & {"CDP_SESSION_UNAVAILABLE", "CDP_RECONNECT_EXHAUSTED",
+                   "GOOGLE_OPERATION_NOT_CLOSED", "INSO_OPERATION_NOT_CLOSED"}
+            or any(isinstance(e, BrowserBootstrapError) for e in chain)):
+        return "Browser/CDP"
+    return None
 
 
 class ProductionBackend(GuiBackend):
@@ -499,9 +543,12 @@ class ProductionBackend(GuiBackend):
         self._thread = None
         self._closed = False
         self._run_id = None
+        self._cycle_id = None
         self._state = RunState.STOPPED
         self._started = self._stopped = self._last_poll = None
         self._next_poll_at = None
+        self._site_outages = {}
+        self._site_manual_wait = set()
         self._keepalive_protected_targets = set()
         self._idle_empty_polls = 0
         self._idle_login_since = utc_now()
@@ -557,7 +604,7 @@ class ProductionBackend(GuiBackend):
                     "待验证", None, None, OrderStatus.ERROR, (), "", "", None, None)
                     for iid, (_dto, model, brand, quantity) in self._startup_interruptions.items() if iid not in known)
             except (sqlite3.Error, ValueError):
-                self._state = RunState.GLOBAL_STOP
+                self._state = RunState.MODULE_PAUSED
                 self._append_log("ERROR", "订单台账不可读，已停止共享业务；未恢复任何订单。")
 
     @staticmethod
@@ -599,6 +646,8 @@ class ProductionBackend(GuiBackend):
             self._results = ()
             self._last_poll = None
             self._next_poll_at = None
+            self._site_outages.clear()
+            self._site_manual_wait.clear()
             self._stop.clear()
             self._drain_due_on_stop.clear()
             self._research_ready = False
@@ -648,7 +697,8 @@ class ProductionBackend(GuiBackend):
             if credential_readiness.missing_site_ids:
                 raise RuntimeError("Research credential readiness requires manual handling")
             web_service = build_google_web_service(
-                rc.cdp.cdp_url, provider=lambda: self._google_playwright_provider(rc, cfg))
+                rc.cdp.cdp_url, provider=lambda: self._google_playwright_provider(rc, cfg),
+                on_read_success=lambda: self._site_recovered("Google Sheets"))
             reader = GoogleSheetsRowReader(web_service, retry_wait=self._stop.wait)
             worksheets = tuple(
                 WorksheetIdentity(cfg["spreadsheet_id"], title)
@@ -732,6 +782,7 @@ class ProductionBackend(GuiBackend):
                         begin_inquiry=self._begin_inso_inquiry,
                         reset=self._close_inso_order_tab,
                         wait=self._stop.wait,
+                        on_success=lambda: self._site_recovered("INSO"),
                     ),
                     research_facts=ResearchExcelFactsProvider(ResearchExcelOutput(self._excel)),
                     purchase_writer=_LivePurchaseDraftWriter(
@@ -804,7 +855,9 @@ class ProductionBackend(GuiBackend):
                     active_holds = hold_store or holds
                     cycle = V13QuotationCycle(reader=active_reader, store=active_store,
                         operations=self._v13_operations(rc, cfg), clock=utc_now,
-                        wait=self._stop.wait, stop_requested=self._stop.is_set, fx_provider=quotation_fx)
+                        wait=self._stop.wait, stop_requested=self._stop.is_set, fx_provider=quotation_fx,
+                        on_fx_success=lambda: self._site_recovered("汇率网站"),
+                        on_query_success=lambda: self._site_recovered("INSO"))
                     def updater():
                         handle = self._v13_browser(rc, cfg)
                         try:
@@ -864,6 +917,7 @@ class ProductionBackend(GuiBackend):
                                 self._last_poll = utc_now()
                                 self._cycle_id = "cycle_" + uuid.uuid4().hex
                                 self._begin_poll_projection()
+                                self._check_site_recovery(rc, cfg)
                                 self._refresh_dashboard_counts(reader, worksheets,
                                     episodes=follow_up_store, now=self._last_poll)
                                 if self._combined is not None:
@@ -887,18 +941,26 @@ class ProductionBackend(GuiBackend):
                                     if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}:
                                         self._next_poll_at = utc_now() + runtime.poll_interval
                                 browser_state = "已连接" if self._research_ready else "待命"
-                                self._set_health(("正常", browser_state, "正常", "正常"), "正常")
+                                if not self._site_outages:
+                                    self._set_health(("正常", browser_state, "正常", "正常"), "正常")
                         except (sqlite3.Error, V12DatabaseError):
-                            self._state = RunState.GLOBAL_STOP
                             raise
                         except Exception as exc:
-                            if not self._defer_google_read_poll(exc, runtime.poll_interval):
-                                if isinstance(exc, V12Fault) and exc.scope is FaultScope.GLOBAL_STOP:
-                                    self._state = RunState.GLOBAL_STOP
+                            if not self._defer_website_poll(exc, runtime.poll_interval):
                                 raise
                         finally:
-                            self._close_inso_order_tab()
-                            self._poll_idle.set()
+                            original_failure = sys.exc_info()[1]
+                            try:
+                                self._close_inso_order_tab()
+                            except Exception as cleanup:
+                                log_step("inso-operation-cleanup", cause=cleanup)
+                                if original_failure is None:
+                                    failure = V12Fault(FaultScope.GLOBAL_STOP, "INSO_OPERATION_NOT_CLOSED")
+                                    failure.__cause__ = cleanup
+                                    if not self._defer_website_poll(failure, runtime.poll_interval):
+                                        raise
+                            finally:
+                                self._poll_idle.set()
                         if self._wait_between_polls(runtime.poll_interval.total_seconds()):
                             return
                 except V13Stopped:
@@ -912,18 +974,18 @@ class ProductionBackend(GuiBackend):
 
             def worker_loop():
                 try:
-                    while True:
-                        if self._stop.is_set():
-                            return
-                        BrowserHandle.drain_deferred_stops()
-                        self._refresh()
-                        if self._v12_composition is not None:
-                            self._v12_composition.coordinator.run_notifications(now=utc_now())
-                        self._release_idle_browser()
+                    while not self._stop.is_set():
+                        try:
+                            BrowserHandle.drain_deferred_stops()
+                            self._refresh()
+                            if self._v12_composition is not None:
+                                self._v12_composition.coordinator.run_notifications(now=utc_now())
+                            self._release_idle_browser()
+                        except Exception as exc:
+                            if not self._defer_website_poll(exc, runtime.poll_interval):
+                                raise
                         self._stop.wait(runtime.worker_idle_interval.total_seconds())
-                except ResearchPreparationError as exc:
-                    self._preparation_error(exc)
-                except Exception as exc:  # noqa: BLE001 - fail closed at runtime boundary
+                except Exception as exc:  # noqa: BLE001 - local failure or proven prolonged outage
                     self._runtime_error(exc)
                 finally:
                     BrowserHandle.drain_deferred_stops()
@@ -959,6 +1021,10 @@ class ProductionBackend(GuiBackend):
                 self._notify()
 
     def _pause_v12(self, fault):
+        if _website_failure(fault) is not None and not self._defer_website_poll(
+                fault, timedelta(minutes=15), notify=False):
+            self._runtime_error(fault)
+            return
         with self._lock:
             self._state = RunState.QUOTATION_RUNNING
         inquiry = self._active_inso_inquiry or (self._inquiries[-1] if self._inquiries else None)
@@ -974,6 +1040,7 @@ class ProductionBackend(GuiBackend):
         for attempt in range(4):
             handle = self._browser_handle
             if handle is not None and handle.browser is not None and handle.browser.is_connected():
+                self._site_recovered("Browser/CDP")
                 return handle
             try:
                 if handle is not None:
@@ -981,6 +1048,7 @@ class ProductionBackend(GuiBackend):
                 self._browser_handle = self._browser_acquirer(rc.cdp.cdp_url,self.root,cfg,
                     probe=self.cdp_probe or probe_loopback_endpoint)
                 if self._browser_handle.browser.is_connected():
+                    self._site_recovered("Browser/CDP")
                     return self._browser_handle
             except Exception:  # noqa: BLE001 - only shared CDP acquisition
                 log.warning("V1.3 shared CDP recovery attempt failed")
@@ -1153,13 +1221,15 @@ class ProductionBackend(GuiBackend):
             success = True
             self._refresh_history(force=True)
         except V12Fault as exc:
-            if exc.scope is FaultScope.GLOBAL_STOP:
-                self._state = RunState.GLOBAL_STOP
+            if self._defer_website_poll(exc, timedelta(minutes=15)):
+                message = "网站暂不可用，程序等待恢复；本次手动操作未确认，不会自动重做。"
+            elif exc.scope is FaultScope.GLOBAL_STOP:
                 raise
-            if self._combined is not None:
-                self._combined.v12_paused = True
-            self._pause_v12(exc)
-            message = "采购流程需要人工处理，报价轮询保持原有独立策略。"
+            else:
+                if self._combined is not None:
+                    self._combined.v12_paused = True
+                self._pause_v12(exc)
+                message = "采购流程需要人工处理，报价轮询保持原有独立策略。"
         except (KeyError, ValueError) as exc:
             message = str(exc) if isinstance(exc, ValueError) else "找不到订单的源表定位，未执行操作。"
         except Exception:  # noqa: BLE001 - targeted edit/read failure is shown without raw provider text
@@ -1174,6 +1244,7 @@ class ProductionBackend(GuiBackend):
     def _refresh_dashboard_counts(self, reader, worksheets, *, episodes, now):
         counts = read_dashboard_counts(reader, worksheets, store=self._store,
                                        episodes=episodes, now=now)
+        self._site_recovered("Google Sheets")
         with self._lock:
             self._dashboard_counts = counts
         self._notify()
@@ -1207,7 +1278,7 @@ class ProductionBackend(GuiBackend):
             self._manual_review(inquiry_id, "IC.net：需要人工验证" if login else "IC.net：查询不可用", notify=False)
             raise V12Fault(FaultScope.V12_PAUSE, "IC_NET_UNAVAILABLE")
         if result.source is ResearchSource.INSO and login:
-            self._manual_review(inquiry_id, "INSO：登录不可用", notify=False)
+            self._manual_review(inquiry_id, "INSO：" + code, notify=False)
             raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED")
 
     def _run_inso_query(self, inquiry_id, operation, prepare):
@@ -1237,6 +1308,8 @@ class ProductionBackend(GuiBackend):
             if result is None:
                 return False
             code = next((str(f.value) for f in result.evidence.fields if f.key == "failure_code"), "SOURCE_UNAVAILABLE")
+            if result.outcome is not SourceOutcome.SOURCE_UNAVAILABLE or "FX" in code:
+                self._site_recovered("INSO")
             if result.outcome is SourceOutcome.SOURCE_UNAVAILABLE and code in _INSO_AUTH_STOP_CODES:
                 self._observe_source_failure(inquiry_id, result)
             return result.outcome is not SourceOutcome.SOURCE_UNAVAILABLE or "FX" in code
@@ -1259,6 +1332,9 @@ class ProductionBackend(GuiBackend):
                 raise V12Fault(FaultScope.V12_PAUSE, "STOP_REQUESTED")
             result = self._run_source_query_once(inquiry_id, site, operation, reconnect)
             source = result.source_result if site is ResearchSource.IC_NET else result
+            if source.outcome is not SourceOutcome.SOURCE_UNAVAILABLE:
+                self._site_recovered("INSO" if site is ResearchSource.INSO else
+                                     "IC.net" if site is ResearchSource.IC_NET else site.value)
             code = next((str(f.value) for f in source.evidence.fields if f.key == "failure_code"), "")
             if (source.outcome is not SourceOutcome.SOURCE_UNAVAILABLE or site is ResearchSource.INSO
                     or not retryable_site_failure(code) or attempt == 3):
@@ -1317,16 +1393,30 @@ class ProductionBackend(GuiBackend):
 
     def _park_browser(self, browser):
         protected = self._live_keepalive_pages(browser)
-        if protected:
+        if protected or self._site_manual_wait:
             context, = browser.contexts
             if not any(not p.is_closed() and p.url == "about:blank" for p in context.pages):
                 new_background_page(browser, context, timeout_ms=10000)
             return
         park_shared_cdp(browser)
 
-    def _close_inso_order_tab(self):
+    def _close_inso_order_tab(self, *, preserve=False):
         session = self._inso_session
-        if session is not None and self._state not in {RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}:
+        if preserve and session is not None:
+            try:
+                try:
+                    pages = (session.operation_access().operation_page().page,)
+                except Exception:  # noqa: BLE001 - an expired lease must not discard any review page
+                    pages = tuple(self._browser_handle.browser.contexts[0].pages)
+                self._protect_keepalive_pages(pages)
+            except Exception as exc:  # noqa: BLE001 - preserve every page if review identity cannot be pinned
+                self._state = RunState.MODULE_PAUSED
+                self._stop.set()
+                self._set_health(("已暂停", "需要核对", "未核验", "已暂停"), "订单页面待核对")
+                log_step("purchase-review-page-unconfirmed", cause=exc)
+                self._append_log("ERROR", "待核对订单的页面保护尚未确认，业务已暂停；原浏览器及页面保留，禁止重发。")
+        preserve |= "INSO" in self._site_manual_wait
+        if not preserve and session is not None and self._state not in {RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}:
             close = getattr(session, "close_owned_operation_tab", None)
             protected = False
             if self._keepalive_protected_targets:
@@ -1342,11 +1432,12 @@ class ProductionBackend(GuiBackend):
         self._research_ready = False
         self._active_inso_inquiry = None
         browser = getattr(self._browser_handle, "browser", None)
-        if browser is not None and self._state not in {RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}:
+        if not preserve and browser is not None and self._state not in {RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}:
             self._park_browser(browser)
 
     def _complete_inquiry(self, result):
         """Settle each row before starting the next; never defer to batch drain."""
+        preserve = False
         try:
             log.warning("combined cycle result", extra={"cycle_id":getattr(self,"_cycle_id",None),
                 "business_module":"V1.2","inquiry_id":result.inquiry_id,"stage":"purchase",
@@ -1355,16 +1446,12 @@ class ProductionBackend(GuiBackend):
             settled = self._purchase_completion.process(result, at=utc_now())
             self._v12_composition.coordinator.run_notifications(now=utc_now())
             if settled is False:
-                with self._lock:
-                    self._state = RunState.MODULE_PAUSED
-                    self._next_poll_at = None
-                    self._drain_due_on_stop.clear()
-                    self._stop.set()
-                self._append_log("ERROR", "当前订单提交、状态写回或通知尚未确认，已停止后续订单；不会重发采购。")
+                preserve = True
+                self._append_log("ERROR", "当前订单结果待核对，已保留页面并阻止该单重发；其他安全订单继续处理。")
             self._refresh()
             self._notify()
         finally:
-            self._close_inso_order_tab()
+            self._close_inso_order_tab(preserve=preserve)
 
     def _ensure_research_ready(self, research_config, production_config) -> None:
         """Start or reuse CDP only for a due inquiry, then verify readiness."""
@@ -1486,8 +1573,8 @@ class ProductionBackend(GuiBackend):
             self._inso_session = None
             self._inso_guard = None
             self._research_ready = False
-        if self._keepalive_protected_targets and handle is not None:
-            handle.disconnect()  # Target IDs survive detach; never close protected Chrome/pages.
+        if (self._keepalive_protected_targets or self._site_manual_wait) and handle is not None:
+            handle.disconnect()  # Target IDs/human wait survive detach; never close protected pages.
             return
         if handle is not None and self._state in {
             RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP,
@@ -1515,7 +1602,7 @@ class ProductionBackend(GuiBackend):
             except Exception as exc:  # noqa: BLE001 - cleanup boundary
                 log.warning("Idle browser shutdown failed (%s)", type(exc).__name__)
         with self._lock:
-            running = self._state is RunState.RUNNING
+            running = self._state is RunState.RUNNING and not self._site_outages
         if running:
             self._set_health(("正常", "待命", "正常", "正常"), "正常")
 
@@ -1654,6 +1741,74 @@ class ProductionBackend(GuiBackend):
             return None
         return SaveReconciliationTarget(item.mpn, brand, item.quantity)
 
+    def _site_recovered(self, site):
+        with self._lock:
+            self._site_outages.pop(site, None)
+            self._site_manual_wait.discard(site)
+
+    def _check_site_recovery(self, rc=None, cfg=None):
+        with self._lock:
+            waiting = set(self._site_outages)
+            manual_inso = "INSO" in self._site_manual_wait
+        if "Browser/CDP" in waiting and self._inso_session is not None:
+            self._close_inso_order_tab()
+        if manual_inso:
+            from .inso_session import authenticated_inso_shell_available
+            if self._browser_handle is None and rc is not None:
+                self._v13_browser(rc, cfg)
+            browser = getattr(self._browser_handle, "browser", None)
+            if not authenticated_inso_shell_available(browser):
+                raise InsoAuthenticationError("MANUAL_VERIFICATION_REQUIRED")
+            with self._lock:
+                self._site_manual_wait.discard("INSO")
+        if self._combined is not None and waiting & {"INSO", "IC.net"}:
+            self._combined.v12_paused = False
+            if self._state is RunState.QUOTATION_RUNNING:
+                self._state = RunState.RUNNING
+
+    def _defer_website_poll(self, exc, interval, *, notify=True):
+        site = _website_failure(exc)
+        if site is None:
+            return False
+        with self._lock:
+            if self._stop.is_set():
+                return True  # Explicit Owner stop always wins over automatic recovery.
+            since = self._site_outages.setdefault(site, monotonic())
+            if site != "Browser/CDP" and monotonic() - since >= 3 * 60 * 60:
+                return False
+            cause, visited = exc, set()
+            while cause is not None and id(cause) not in visited:
+                visited.add(id(cause))
+                if getattr(cause, "reason_code", "") in {
+                    "MANUAL_VERIFICATION_REQUIRED", "CREDENTIAL_REJECTED", "AUTHENTICATION_REQUIRED",
+                    "SESSION_IDENTITY_UNVERIFIED",
+                } and site == "INSO":
+                    self._site_manual_wait.add(site)
+                cause = cause.__cause__ or cause.__context__
+            if self._state is not RunState.STOPPING_AFTER_CYCLE:
+                self._state = RunState.RUNNING
+            self._next_poll_at = utc_now() + interval
+            detail = ("等待人工完成登录或验证，程序会自动检查恢复；不会自动重复提交。"
+                      if site in self._site_manual_wait else
+                      "必要操作暂未成功，等待下一轮恢复；不会自动重复提交。")
+            self._health = HealthReport(tuple(
+                HealthItem(name, "等待恢复" if name == site or name == "Research" else "待命", detail)
+                for name in self._components()), f"等待{site}恢复")
+        # Keep the existing read-exhaustion message/dedup contract.
+        if notify and site == "Google Sheets" and self._defer_google_read_poll(exc, interval):
+            return True
+        reason = {"INSO": "INSO_WAITING_RECOVERY", "Google Sheets": "GOOGLE_WAITING_RECOVERY",
+                  "IC.net": "IC_NET_WAITING_RECOVERY", "Browser/CDP": "BROWSER_WAITING_RECOVERY",
+                  "汇率网站": "FX_WAITING_RECOVERY"}[site]
+        log.warning("Website recovery deferred", extra={
+            "runtime_reason": reason, "runtime_cause": type(exc).__name__})
+        if notify and self._v13_ledger_ready:
+            notify_runtime_fault(self._v12_store, f"{self._run_id or 'run'}:{site}:{since}", reason, at=utc_now())
+        elif notify:
+            self._alert_owner_of_login(stop_reason=f"{site}等待恢复；程序未停止")
+        self._notify()
+        return True
+
     def _defer_google_read_poll(self, exc, interval):
         from src.sheets.google_reader import GoogleSheetsReadUnavailable
 
@@ -1674,23 +1829,27 @@ class ProductionBackend(GuiBackend):
             "runtime_reason": "GOOGLE_READ_RETRY_EXHAUSTED",
             "runtime_cause": type(cause.__cause__).__name__,
         })
-        notify_runtime_fault(self._v12_store, self._cycle_id or self._run_id or "run",
-            "GOOGLE_READ_RETRY_EXHAUSTED", at=utc_now())
+        if self._v13_ledger_ready:
+            notify_runtime_fault(self._v12_store, self._cycle_id or self._run_id or "run",
+                "GOOGLE_READ_RETRY_EXHAUSTED", at=utc_now())
+        else:
+            self._alert_owner_of_login(stop_reason="Google表格等待恢复；程序未停止")
         self._notify()
         return True
 
     def _runtime_error(self, exc):
         log.warning("Production runtime worker failed (%s)", type(exc).__name__)
         with self._lock:
-            self._state = RunState.MODULE_PAUSED
+            site = _website_failure(exc)
+            prolonged = (site is not None and site != "Browser/CDP"
+                         and site in self._site_outages
+                         and monotonic() - self._site_outages[site] >= 3 * 60 * 60)
+            self._state = RunState.GLOBAL_STOP if prolonged else RunState.MODULE_PAUSED
             cause = exc
             while cause is not None:
                 if isinstance(cause, V12Fault):
-                    self._state = (RunState.GLOBAL_STOP if cause.scope is FaultScope.GLOBAL_STOP
-                                   else RunState.MODULE_PAUSED)
                     break
                 if isinstance(cause, (sqlite3.Error, V12DatabaseError, InsoAuthenticationError, ProductionConfigurationError)) or type(cause).__name__.startswith("GoogleSheets"):
-                    self._state = RunState.GLOBAL_STOP
                     break
                 cause = cause.__cause__
             self._next_poll_at = None
@@ -1722,8 +1881,17 @@ class ProductionBackend(GuiBackend):
         message = (
             "需要配置：请补齐本地生产数据源与授权文件"
             if isinstance(exc, ProductionConfigurationError)
-            else f"需要人工处理：{type(exc).__name__}；检查本地运行状态"
+            else "相关业务已暂停，请检查运行提示；程序不会自动重复提交。"
         )
+        if site is not None:
+            affected = site if site in self._components() else "Research"
+            self._health = HealthReport(tuple(
+                HealthItem(name, "连续三小时未恢复" if prolonged and name == affected else
+                           "需要处理" if name == affected else "已暂停",
+                           f"{site}必要业务操作未确认；未确认其他组件独立故障。")
+                for name in self._components()), "连续三小时未恢复" if prolonged else "相关业务已暂停")
+        if prolonged:
+            message = f"{site}必要业务操作已连续三小时未恢复，已停止共享业务；未自动重复提交。"
         self._append_log("ERROR", message)
         self._notify()
         # A shared fault is not a failure of the last historical order.
@@ -1745,6 +1913,9 @@ class ProductionBackend(GuiBackend):
                 break
             cause = cause.__cause__
         shared_fault = self._state is RunState.GLOBAL_STOP
+        if prolonged:
+            reason = {"INSO": "INSO_OUTAGE_THREE_HOURS", "Google Sheets": "GOOGLE_OUTAGE_THREE_HOURS",
+                      "IC.net": "IC_NET_OUTAGE_THREE_HOURS", "汇率网站": "FX_OUTAGE_THREE_HOURS"}[site]
         safe_reason = reason if isinstance(reason, str) and re.fullmatch(r"[A-Z_]{1,64}", reason) else "V12_INTERNAL_FAILURE"
         root_cause, visited = exc, set()
         while root_cause.__cause__ is not None and id(root_cause) not in visited:
@@ -1764,9 +1935,9 @@ class ProductionBackend(GuiBackend):
                 notify_runtime_fault(self._v12_store,self._run_id or "run",reason,at=utc_now())
                 self._v12_composition.coordinator.run_notifications(now=utc_now())
             except (sqlite3.Error,V12DatabaseError):
-                self._alert_owner_of_login(stop_reason=self._state.value)
+                self._alert_owner_of_login(stop_reason=reason)
         elif self._purchase_completion is None or fault_inquiry is None:
-            self._alert_owner_of_login(stop_reason=self._state.value)
+            self._alert_owner_of_login(stop_reason=reason)
 
     def _record_fault_alert(self, inquiry_id, phase, reason):
         if self._purchase_completion is None or inquiry_id is None:
@@ -1776,7 +1947,7 @@ class ProductionBackend(GuiBackend):
             if self._v12_composition is not None:
                 self._v12_composition.coordinator.run_notifications(now=utc_now())
         except (sqlite3.Error, V12DatabaseError):
-            self._state = RunState.GLOBAL_STOP
+            self._state = RunState.MODULE_PAUSED
             self._stop.set()
             self._append_log("ERROR", "订单台账不可用，无法记录故障通知；全部共享业务已停止。")
             self._alert_owner_of_login(stop_reason="订单台账不可用；全部共享业务已停止")
@@ -1795,41 +1966,27 @@ class ProductionBackend(GuiBackend):
             else:
                 self._alert_owner_of_login(stop_reason=remarks, inquiry_id=inquiry_id)
             return
+        site = "INSO" if "inso" in lower or "英索" in lower else "IC.net"
+        reason = "INSO_AUTHENTICATION_REQUIRED" if site == "INSO" else "IC_NET_UNAVAILABLE"
+        fault = V12Fault(FaultScope.GLOBAL_STOP, reason)
+        if site == "INSO" and any(token in lower for token in (
+                "需要人工验证", "验证码", "manual_verification", "credential_rejected",
+                "session_identity_unverified", "没有可用的登录凭据", "captcha", "otp",
+                "security_event", "credential", "verification", "interactive", "verified_session", "login_rejected")):
+            self._site_manual_wait.add(site)
         with self._lock:
             self._manual_inquiries.add(inquiry_id)
-            self._state = (RunState.GLOBAL_STOP if "inso" in lower or "英索" in lower else RunState.MODULE_PAUSED)
-            self._next_poll_at = None
-            self._drain_due_on_stop.clear()
-            if not (self._v13_enabled and self._state is RunState.MODULE_PAUSED):
-                with self._poll_gate:
-                    self._stop.set()
-            self._health = HealthReport(
-                tuple(
-                    HealthItem(
-                        name,
-                        "需要人工处理" if name == "Research" else "已停止",
-                        "采集遇到需要人工介入的登录或安全验证",
-                    )
-                    for name in self._components()
-                ),
-                "需要人工处理",
-            )
-        self._append_log(
-            "WARNING",
-            "采集需要人工处理；请在 Chrome 完成登录后再次点击「开始询价」",
-        )
-        self._refresh()
-        self._notify()
-        if not notify:
+        if not self._defer_website_poll(fault, timedelta(minutes=15), notify=False):
+            self._runtime_error(fault)
             return
-        # The run is already stopped above, so the Owner's screen says what
-        # happened before the mail round trip is attempted. The mail is what
-        # tells them while they are away from the machine.
-        if self._purchase_completion is not None:
-            self._record_fault_alert(inquiry_id, "SESSION", "INSO_AUTHENTICATION_REQUIRED"
-                if "inso" in lower or "英索" in lower else "IC_NET_UNAVAILABLE")
-        else:
-            self._alert_owner_of_login(stop_reason=remarks, inquiry_id=inquiry_id)
+        message = (f"{site}暂不可用，程序等待恢复；需要验证时请在原Chrome完成，未停止轮询。"
+                   if not self._stop.is_set() else f"{site}验证待处理；本次运行已按用户要求停止。")
+        self._append_log("WARNING", message)
+        if notify:
+            if self._purchase_completion is not None:
+                self._record_fault_alert(inquiry_id, "SESSION", reason)
+            else:
+                self._alert_owner_of_login(stop_reason=f"{site}等待恢复；程序未停止", inquiry_id=inquiry_id)
 
     def _alert_owner_of_login(self, *, stop_reason: str, inquiry_id: str | None = None) -> None:
         """Mail the one address that repairs sessions, at most once per run.
@@ -1850,7 +2007,10 @@ class ProductionBackend(GuiBackend):
             transport = QQSMTPTransport(
                 config=QQSMTPConfig(sender_address=_LOGIN_ALERT_SENDER)
             )
-            body = _login_alert_body(stop_reason)
+            waiting = bool(self._site_outages) and self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}
+            body = ("网站必要业务操作暂未成功，程序仍在运行，15分钟后检查恢复。\n"
+                    "如需人工验证，请在原Chrome完成；不会自动重复提交采购。"
+                    if waiting else _login_alert_body(stop_reason))
             if inquiry_id is not None and self._store is not None:
                 item = self._store.get_by_inquiry_id(inquiry_id)
                 body += (f"\n型号：{item.mpn}\n"
@@ -1858,7 +2018,7 @@ class ProductionBackend(GuiBackend):
                          "请核对本单处理状态，勿直接重发采购单。")
             result = transport.send_operator_alert(
                 recipient=NotificationRecipient("owner", _LOGIN_ALERT_RECIPIENT),
-                subject="【INSO】询价已停止",
+                subject="【INSO】网站等待恢复" if waiting else "【INSO】询价已停止",
                 text_body=body,
             )
         except Exception as exc:  # noqa: BLE001 - fail closed at runtime boundary

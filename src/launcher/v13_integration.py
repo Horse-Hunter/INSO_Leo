@@ -133,6 +133,10 @@ def notify_runtime_fault(store, key, reason, *, at):
         command_id, None, NotificationKind.PURCHASE_EXCEPTION, owner
     ):
         return
+    sites = {"INSO": "INSO", "GOOGLE": "Google表格", "IC_NET": "IC.net",
+             "BROWSER": "Chrome连接", "FX": "汇率网站"}
+    waiting = next((label for code, label in sites.items() if reason == code + "_WAITING_RECOVERY"), None)
+    prolonged = next((label for code, label in sites.items() if reason == code + "_OUTAGE_THREE_HOURS"), None)
     treatment = {
         "GOOGLE_SHEETS_UNAVAILABLE": "检查VPN网络及Google表格授权，恢复后点击“重新开始询价”。",
         "SHEETS_READ_UNAVAILABLE": "检查VPN及Google表格是否能正常读取，恢复后点击“重新开始询价”。",
@@ -145,16 +149,23 @@ def notify_runtime_fault(store, key, reason, *, at):
         "INSO_AUTHENTICATION_REQUIRED": "在程序使用的Chrome中完成INSO登录或人工验证后继续。",
         "QUOTE_INPUT_CONFIGURATION_REQUIRED": "核对报价输入配置，修正后继续。",
     }.get(reason, "查看程序订单详情及本机运行状态，确认后继续。")
+    if waiting:
+        treatment = "程序继续运行，15分钟后检查恢复；出现验证码时请在原Chrome完成。不会自动重复采购提交。"
+    elif prolonged:
+        treatment = "必要业务操作已连续三小时未恢复，现已停止共享业务；恢复后再启动，先核对未确认订单。"
     store.enqueue_notification(
         NotificationCommand(
             command_id,
             None,
             NotificationKind.PURCHASE_EXCEPTION,
             owner,
-            ("【INSO】Google表格暂不可用，15分钟后重试"
+            (f"【INSO】{waiting}暂不可用，等待恢复" if waiting else
+             f"【INSO】{prolonged}连续三小时未恢复" if prolonged else
+             "【INSO】Google表格暂不可用，15分钟后重试"
              if reason == "GOOGLE_READ_RETRY_EXHAUSTED" else "【INSO】运行已停止：Google表格读取失败"
              if reason == "SHEETS_READ_UNAVAILABLE" else "【INSO】询价运行异常"),
-            "情况：" + {
+            "情况：" + (f"{waiting}必要业务操作暂未成功，程序仍在运行。" if waiting else
+                       f"{prolonged}必要业务操作已连续三小时未恢复。" if prolonged else {
                 "GOOGLE_SHEETS_UNAVAILABLE": "Google表格读取或授权不可用，询价和采购报价流程已停止。",
                 "SHEETS_READ_UNAVAILABLE": "Google表格读取失败，询价和采购报价流程已停止；尚不能确定是网络还是授权问题。",
                 "GOOGLE_READ_RETRY_EXHAUSTED": "Google表格连续5次读取未成功，本轮已跳过。",
@@ -165,7 +176,7 @@ def notify_runtime_fault(store, key, reason, *, at):
                 "CDP_RECONNECT_EXHAUSTED": "Chrome连接恢复失败。",
                 "INSO_AUTHENTICATION_REQUIRED": "INSO需要登录或人工验证。",
                 "QUOTE_INPUT_CONFIGURATION_REQUIRED": "报价输入配置缺失或不明确。",
-            }.get(reason, "运行故障，程序已停止；具体原因需查看本机安全日志。") + f"\n处理：{treatment}\n不要直接重发采购单。",
+            }.get(reason, "运行故障，相关业务已暂停；具体原因需查看本机安全日志。")) + f"\n处理：{treatment}\n不要直接重发采购单。",
             None,
             at,
         )

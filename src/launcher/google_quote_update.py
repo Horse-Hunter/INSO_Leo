@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 from src.inso.quotation_read import QUOTATION_COLUMNS
-from src.research.cdp_pages import new_background_page, page_owner
+from src.research.cdp_pages import mark_owned_page, new_background_page, page_owner
 from src.sheets.quotation_input import (
     GoogleQuotationInput,
     QuotationInputBusy,
@@ -62,7 +62,8 @@ _REFRESH_INPUT_IDLE = """() => {
     const visible = e => e.getClientRects().length &&
         getComputedStyle(e).visibility !== 'hidden' && getComputedStyle(e).display !== 'none';
     const busy = [...document.querySelectorAll('[role="dialog"]')].some(visible) ||
-        window.__insoQuoteSettlement?.isRunning();
+        window.__insoQuoteSettlement?.isRunning() ||
+        (window.__insoQuoteSettlement?.initial && !window.__insoQuoteSettlement.settled);
     if (busy) { window.__insoRefreshQuietSince = null; return false; }
     window.__insoRefreshQuietSince ??= performance.now();
     return performance.now() - window.__insoRefreshQuietSince >= 1000;
@@ -133,6 +134,8 @@ class GoogleQuotationUpdateActions:
                 if (actual.hostname, actual.path) != (expected.hostname, expected.path):
                     continue
                 if not page.evaluate("() => window.__insoRefreshPending === true"):
+                    if page.evaluate(_UNSAFE_POLL_PAGE):
+                        raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
                     continue
                 recovery = GoogleQuotationUpdateActions(browser_handle=self._handle,
                     location=SimpleNamespace(url=page.url), result_timeout_ms=self._result_timeout)
@@ -200,11 +203,13 @@ class GoogleQuotationUpdateActions:
         expected_document = urlsplit(self._location.url)
         for old in tuple(browser.contexts[0].pages):
             actual = urlsplit(old.url)
-            if (old.is_closed() or page_owner(old) != "google-operation"
-                    or (actual.scheme, actual.hostname, actual.path) !=
-                    (expected_document.scheme, expected_document.hostname, expected_document.path)):
+            if old.is_closed() or page_owner(old) != "google-operation":
                 continue
             if not old.evaluate("() => window.__insoGoogleReadFailed === true"):
+                continue
+            if (actual.scheme, actual.hostname, actual.path) != (
+                    expected_document.scheme, expected_document.hostname, expected_document.path
+            ) and actual.hostname != "accounts.google.com":
                 continue
             recovery = GoogleQuotationUpdateActions(browser_handle=self._handle,
                 location=SimpleNamespace(url=old.url))
@@ -273,7 +278,6 @@ class GoogleQuotationUpdateActions:
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE") from None
         self._attempt(lambda: self._page.goto(self._location.url, wait_until="domcontentloaded", timeout=self._timeout))
         self._guard()
-        from src.research.cdp_pages import mark_owned_page
         mark_owned_page(self._page, "google-operation")
         if pool is not None:
             self._poll_entry = {"page": self._page, "actions": self, "protected": False}
@@ -333,7 +337,13 @@ class GoogleQuotationUpdateActions:
             except Exception:  # noqa: BLE001 - do not retry a possibly delivered refresh click
                 raise UpdateClickUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from None
         else:
-            self._attempt(lambda: button.click(timeout=self._timeout))
+            self._attempt(lambda: button.evaluate(_SCRIPT_SETTLEMENT_LATCH, timeout=self._timeout))
+            self._attempt(lambda: self._page.evaluate("() => { window.__insoQuoteSettlement.initial = true; window.__insoRefreshPending = true; }"))
+            self._script_pending = True
+            try:
+                button.click(timeout=self._timeout)
+            except Exception:  # noqa: BLE001 - native click may already have executed
+                raise UpdateClickUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from None
 
     def read_update_result(self):
         self._guard()
@@ -367,8 +377,7 @@ class GoogleQuotationUpdateActions:
             self._page.evaluate("() => window.__insoQuoteSettlement.observer.disconnect()")
         except Exception:  # noqa: BLE001 - any settlement uncertainty preserves the operation page
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED") from None
-        if self._price_refresh:
-            self._page.evaluate("() => { window.__insoRefreshPending = false; }")
+        self._page.evaluate("() => { window.__insoRefreshPending = false; }")
         self._script_pending = False
 
     def _attempt(self, operation):
@@ -388,6 +397,7 @@ class GoogleQuotationUpdateActions:
         """Never pass a failed phase's page to another phase/retry."""
         if read_only and self._page is not None and not self._page.is_closed():
             try:
+                mark_owned_page(self._page, "google-operation")
                 self._page.evaluate("() => { window.__insoGoogleReadFailed = true; }")
             except Exception:  # noqa: BLE001 - inability to tag never makes a page safe
                 self._protected = True

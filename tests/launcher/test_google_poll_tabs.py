@@ -131,3 +131,21 @@ def test_uncertain_write_is_neither_read_tagged_nor_closed_as_recovered_read(web
         with pytest.raises(TimeoutError):
             service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
         assert not old.closed and len(context.pages) == 2
+
+
+
+@pytest.mark.parametrize('initial,settled,expected', [(True, False, False), (True, True, True), (False, False, True)])
+def test_real_idle_predicate_never_clears_an_unconfirmed_initial_update(initial, settled, expected):
+    from src.launcher.google_quote_update import _REFRESH_INPUT_IDLE
+    node, _ = compute_driver_executable()
+    state = json.dumps({'initial': initial, 'settled': settled})
+    script = f"""
+        const state = {state};
+        global.window = {{__insoQuoteSettlement: {{...state, isRunning: () => false}}, __insoRefreshQuietSince: 0}};
+        global.document = {{querySelectorAll: () => []}};
+        global.performance = {{now: () => 2000}};
+        const predicate = ({_REFRESH_INPUT_IDLE});
+        process.stdout.write(JSON.stringify(!!predicate()));
+    """
+    result = subprocess.run([str(node), '-e', script], check=True, capture_output=True, text=True, timeout=10)
+    assert json.loads(result.stdout) is expected

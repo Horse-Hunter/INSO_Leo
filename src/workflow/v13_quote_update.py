@@ -1,4 +1,5 @@
 """RFQ-005 serial idempotent Google update over frozen RFQ-004 quote results."""
+import sqlite3
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from time import monotonic
@@ -21,6 +22,7 @@ from src.sheets.quotation_input import (
 from src.sheets.worksheet_schema import worksheet_schema
 
 from .v12_faults import FaultScope, V12Fault
+from .v12_store import V12DatabaseError
 from .v13_quotation import (
     ExistingInquiryStore,
     QuotationOutcome,
@@ -32,7 +34,7 @@ from .v13_quotation import (
 
 
 class UpdateAttemptUnconfirmed(RuntimeError):
-    """Recoverable owned Google surface/button/dialog failure; safe to repeat."""
+    """Unconfirmed UI step; only pre-dispatch operations may be repeated."""
 
 
 class UpdateClickUnconfirmed(UpdateAttemptUnconfirmed):
@@ -235,14 +237,16 @@ class V13QuotationUpdater:
                         raise
                     try:
                         popup = parse_update_popup(self._actions.read_update_result())
-                    except Exception:
+                    except (sqlite3.Error, V12DatabaseError):
+                        raise
+                    except Exception:  # noqa: BLE001 - dispatched update is never clicked again
                         if refresh:
                             return self._uncertain_refresh(result, baseline, price)
-                        raise
+                        return self._unconfirmed_initial(result)
                     if popup is UpdatePopupOutcome.UNCONFIRMED:
                         if refresh:
                             return self._uncertain_refresh(result, baseline, price)
-                        continue
+                        return self._unconfirmed_initial(result)
                     # A successful popup is final submission proof; dismiss failure
                     # never re-enters update retries. Only source status is polled.
                     try:
@@ -264,6 +268,12 @@ class V13QuotationUpdater:
                     return final
                 except QuotationInputBusy:
                     return result
+                except UpdateClickUnconfirmed:
+                    return self._unconfirmed_initial(result)
+                except V12Fault as exc:
+                    if exc.reason == "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED":
+                        return self._failed(result, RowErrorReason.UPDATE_RESULT_UNCONFIRMED)
+                    raise
                 except UpdateAttemptUnconfirmed:
                     continue
                 finally:
@@ -276,7 +286,26 @@ class V13QuotationUpdater:
         except V13SourceRowError as exc:
             return self._failed(result, exc.reason)
         except QuotationInputUnavailable as exc:
+            if exc.reason == "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED":
+                return self._failed(result, RowErrorReason.QUOTE_INPUT_WRITE_FAILED)
             raise V12Fault(FaultScope.GLOBAL_STOP, exc.reason) from None
+
+    def _unconfirmed_initial(self, result):
+        """Only fresh source status may settle a possibly delivered click."""
+        try:
+            final = self._verify_status(result, UpdatePopupOutcome.ALREADY_EXISTS,
+                                        expected_model=result.record_identity.identifying_snapshot.model)
+        except (sqlite3.Error, V12DatabaseError, V13Stopped):
+            raise
+        except V12Fault as exc:
+            if exc.reason == "WORKFLOW_LEDGER_UNAVAILABLE":
+                raise
+            return self._failed(result, RowErrorReason.UPDATE_RESULT_UNCONFIRMED)
+        except V13SourceRowError as exc:
+            return self._failed(result, exc.reason)
+        if final.row_error_reason is RowErrorReason.SOURCE_STATUS_NOT_UPDATED:
+            return self._failed(result, RowErrorReason.UPDATE_RESULT_UNCONFIRMED)
+        return final
 
     def _uncertain_refresh(self, result, old, new):
         # Enqueue first, so advancing the comparison baseline cannot lose the notice.
@@ -303,17 +332,17 @@ class V13QuotationUpdater:
 
     def _current_status(self, result, *, expected_model=None):
         status, model = self._current_state(result)
-        if status != "采购已报价" and expected_model is not None and model != expected_model:
+        if expected_model is not None and model != expected_model:
             raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
         return status
 
-    def _verify_status(self, result, popup):
+    def _verify_status(self, result, popup, *, expected_model=None):
         # Both inserted and already-priced Script results are accepted execution.
         # Status must settle independently within a bounded 30-second window.
         deadline = self._clock() + 30.0
         for read_number in range(self._status_reads):
             self._check_stop()
-            if self._current_status(result) == "采购已报价":
+            if self._current_status(result, expected_model=expected_model) == "采购已报价":
                 return self._success(result, popup)
             remaining = deadline - self._clock()
             if remaining <= 0 or read_number + 1 == self._status_reads:

@@ -83,7 +83,8 @@ def test_site_challenge_scope_is_explicit(tmp_path, monkeypatch, site, scope):
         with pytest.raises(V12Fault) as error:
             observer.execute(item)
         assert error.value.scope is scope
-        assert backend.get_status().state is (RunState.GLOBAL_STOP if scope is FaultScope.GLOBAL_STOP else RunState.MODULE_PAUSED)
+        assert backend.get_status().state is RunState.RUNNING
+        assert not backend._stop.is_set() and backend._next_poll_at is not None
     backend.shutdown()
 
 
@@ -182,9 +183,9 @@ def test_pending_rows_are_yellow_with_explicit_text(tmp_path, state):
     assert _order_row_style(SimpleNamespace(status=SimpleNamespace(value=""), processed_at=None), NOW, dto) == "warning"
 
 
-@pytest.mark.parametrize("error,expected", [(V12DatabaseError("ledger"), RunState.GLOBAL_STOP),
+@pytest.mark.parametrize("error,expected", [(V12DatabaseError("ledger"), RunState.MODULE_PAUSED),
     (RuntimeError("code"), RunState.MODULE_PAUSED)])
-def test_ledger_fault_is_global_but_unknown_v12_code_is_module_only(tmp_path, monkeypatch, error, expected):
+def test_local_ledger_and_unknown_faults_pause_safely_without_claiming_site_outage(tmp_path, monkeypatch, error, expected):
     backend = ProductionBackend(root=tmp_path)
     monkeypatch.setattr(backend, "_alert_owner_of_login", lambda **_k: None)
     backend._runtime_error(error)

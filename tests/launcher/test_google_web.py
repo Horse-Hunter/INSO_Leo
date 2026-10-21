@@ -1184,3 +1184,42 @@ def test_navigation_guard_diagnostics_distinguish_causes_without_urls(web, monke
     lines = [_sanitized_line(r) for r in caplog.records if r.name == 'inso.diagnostics']
     assert any('google-document-path-mismatch' in line for line in lines)
     assert all('private-id' not in line and 'https://' not in line for line in lines)
+
+
+
+def test_repeated_auth_polls_reuse_preserved_page_instead_of_opening_more(web, monkeypatch):
+    service, browser, _, _ = web
+    goto = GridPage.goto
+    def auth(page, url, **kwargs):
+        result = goto(page, url, **kwargs)
+        page.url = 'https://accounts.google.com/'
+        return result
+    monkeypatch.setattr(GridPage, 'goto', auth)
+    for _ in range(4):
+        with service.poll_scope(), pytest.raises(V12Fault, match='GOOGLE_AUTHENTICATION_REQUIRED'):
+            service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
+    assert len(browser.contexts[0].pages) == 2
+    retained = browser.contexts[0].pages[-1]
+    assert not retained.closed and retained.read_failed
+    retained.url = 'https://docs.google.com/spreadsheets/d/test/edit#gid=0'
+    monkeypatch.setattr(GridPage, 'goto', goto)
+    with service.poll_scope():
+        assert service.get(spreadsheetId='test', range="'2026'!A1:G").execute()['values']
+    assert retained.closed
+
+
+def test_only_successful_reads_signal_site_recovery_not_failed_reads_or_writes(web, monkeypatch):
+    from playwright.sync_api import TimeoutError as PageTimeout
+    service, _, _, _ = web
+    recovered = []
+    service._on_read_success = lambda: recovered.append(True)
+    service.update(spreadsheetId='test', range="'2026'!F2", valueInputOption='RAW', body={'values': [['NEW']]}).execute()
+    assert not recovered
+    download = service._download
+    monkeypatch.setattr(service, '_download', lambda *a: (_ for _ in ()).throw(PageTimeout('synthetic failed read')))
+    with pytest.raises(TimeoutError):
+        service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
+    assert not recovered
+    monkeypatch.setattr(service, '_download', download)
+    assert service.get(spreadsheetId='test', range="'2026'!A1:G").execute()['values']
+    assert recovered == [True]

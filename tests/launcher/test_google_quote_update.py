@@ -85,7 +85,8 @@ class Page:
     def wait_for_function(self, script, **kwargs):
         if "__insoRefreshQuietSince" in script:
             assert 'isRunning' in script and '[role="dialog"]' in script
-            if self.script_running or self.popup:
+            if (self.script_running or self.popup
+                    or (getattr(self, 'initial_update_pending', False) and not self.settled)):
                 raise TimeoutError("synthetic script is still using shared input")
             return
         state = "settled" if ".settled" in script else "started"
@@ -112,6 +113,7 @@ class Page:
                         or (self.started and self.script_running))
         if "window.__insoRefreshPending = true" in script:
             self.refresh_pending = True
+            self.initial_update_pending = "window.__insoQuoteSettlement.initial = true" in script
         elif "window.__insoRefreshPending = false" in script:
             self.refresh_pending = False
         elif "window.__insoRefreshPending === true" in script:
@@ -368,7 +370,8 @@ def test_script_settlement_timeout_preserves_surface_and_prevents_next_row():
     assert fault.value.reason == "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"
     actions.close()
     assert not page.closed and browser.connected
-    with pytest.raises(V12Fault, match="GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"):
+    from src.sheets.quotation_input import QuotationInputBusy
+    with pytest.raises(QuotationInputBusy):
         actions.open_quote_input()
     assert page.clicks == ["确定"]
 
@@ -489,3 +492,31 @@ def test_preclick_refresh_failure_does_not_mark_dispatch_or_retain_input():
     assert not getattr(page,'refresh_pending',False) and not page.clicks
     actions.close()
     assert page.closed
+
+
+
+def test_initial_update_click_timeout_is_preserved_and_never_reclicked(monkeypatch):
+    from playwright.sync_api import TimeoutError as PageTimeout
+
+    from src.sheets.quotation_input import QuotationInputBusy
+    from src.workflow.v13_quote_update import UpdateClickUnconfirmed
+    actions, browser = adapter()
+    actions.open_quote_input()
+    page = actions._page
+    click = Locator.click
+    def timeout(locator, **kwargs):
+        if locator.name == '更新报价':
+            page.clicks.append(locator.name)
+            raise PageTimeout('synthetic delivered click with missing acknowledgement')
+        return click(locator, **kwargs)
+    monkeypatch.setattr(Locator, 'click', timeout)
+    with pytest.raises(UpdateClickUnconfirmed):
+        actions.click_update_quote()
+    assert page.refresh_pending and actions._script_pending
+    page.popup = None
+    page.script_running = False  # Quiet DOM alone cannot settle an unconfirmed initial dispatch.
+    actions.close()
+    other = GoogleQuotationUpdateActions(browser_handle=SimpleNamespace(owned=False, browser=browser), location=location())
+    with pytest.raises(QuotationInputBusy):
+        other.open_quote_input()
+    assert not page.closed and page.clicks == ['更新报价']

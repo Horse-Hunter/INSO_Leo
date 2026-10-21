@@ -185,14 +185,14 @@ def test_four_input_failures_are_row_failed_without_click(failure_kind, reason):
 
 @pytest.mark.parametrize("first_popup", [None, "unknown", UpdateAttemptUnconfirmed("hang"),
     "报价更新完成 成功填入：0行 已有报价：0行"])
-def test_unconfirmed_update_retry_reestablishes_surface_and_entire_payload(first_popup):
+def test_unconfirmed_update_only_polls_source_without_rewriting_or_reclicking(first_popup):
     updater, src, io, actions, waits = service()
     src.after = ["发给采购"]*3 + ["采购已报价"]
     actions.popups = [first_popup, EXISTS]
     result = updater.update_one(found())
     assert result.outcome is QuotationOutcome.UPDATED_ALREADY_EXISTS
-    assert actions.opened == actions.closed == actions.clicks == 2
-    assert len(io.writes) == 2 and io.reads == 4 and waits == []
+    assert actions.opened == actions.closed == actions.clicks == 1
+    assert len(io.writes) == 1 and io.reads == 2 and waits == [1.0] * 3
 
 
 def test_popup_missing_but_prior_script_status_closed_prevents_second_click():
@@ -203,14 +203,14 @@ def test_popup_missing_but_prior_script_status_closed_prevents_second_click():
     assert actions.clicks == actions.opened == actions.closed == 1 and len(io.writes) == 1 and waits == []
 
 
-def test_four_update_attempts_exhaust_row_failure_and_rewrite_each_time():
+def test_unconfirmed_update_exhausts_read_only_checks_without_any_second_write():
     updater, src, io, actions, waits = service()
     src.after = ["发给采购"]
     actions.popups = [None]
     result = updater.update_one(found())
     assert result.row_error_reason is RowErrorReason.UPDATE_RESULT_UNCONFIRMED
-    assert actions.opened == actions.closed == actions.clicks == 4
-    assert len(io.writes) == 4 and io.reads == 8 and waits == []
+    assert actions.opened == actions.closed == actions.clicks == 1
+    assert len(io.writes) == 1 and io.reads == 2 and waits == [1.0] * 30
 
 
 def test_confirmed_popup_only_polls_source_and_never_resubmits():
@@ -509,8 +509,18 @@ def test_script_settlement_fault_prevents_second_row_open_write_and_click():
     updater, _src, inp, actions, waits = service()
     actions.popups = ["更新完成 成功填入：0行 已有价跳过：1行"]
     actions.dismiss_error = V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED")
-    with pytest.raises(V12Fault, match="GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"):
-        updater.run((found(), found(3)))
+    _src.after = ["发给采购"]
+    from src.sheets.quotation_input import QuotationInputBusy
+    open_input = actions.open_quote_input
+    def open_unless_pending():
+        if actions.opened:
+            raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
+        open_input()
+    actions.open_quote_input = open_unless_pending
+    first, deferred = updater.run((found(), found(3)))
+    assert first.outcome is QuotationOutcome.ROW_FAILED
+    assert first.row_error_reason is RowErrorReason.UPDATE_RESULT_UNCONFIRMED
+    assert deferred.outcome is QuotationOutcome.QUOTE_FOUND
     assert actions.opened == actions.clicks == 1
     assert len(inp.writes) == 1 and not waits
 

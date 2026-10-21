@@ -130,8 +130,9 @@ def _source_values(rows, title, first, start, last, end):
 
 class GoogleSheetsWebService:
     """One thread-safe transport injected into existing readers and writers."""
-    def __init__(self, session, *, actions_factory=GoogleQuotationUpdateActions):
+    def __init__(self, session, *, actions_factory=GoogleQuotationUpdateActions, on_read_success=lambda: None):
         self._session, self._actions_factory = session, actions_factory
+        self._on_read_success = on_read_success
         self._poll_handle = ContextVar("google_web_poll_handle", default=None)
 
     @contextmanager
@@ -171,7 +172,11 @@ class GoogleSheetsWebService:
 
     def get(self, **kwargs):
         # Existing metadata binding uses the same web sheet-title/gid proof.
-        return _Request(lambda: self._execute(kwargs, write=False))
+        def read():
+            result = self._execute(kwargs, write=False)
+            self._on_read_success()
+            return result
+        return _Request(read)
 
     def update(self, **kwargs):
         return _Request(lambda: self._execute(kwargs, write=True))
@@ -389,7 +394,8 @@ class GoogleSheetsWebService:
                 pass  # Already removed; never mask a completed read/its real failure.
 
 
-def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, browser_handle=None):
+def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, browser_handle=None,
+                             on_read_success=lambda: None):
     """Reuse the existing shared Playwright provider; attach only, never launch/login."""
     if cdp_url.rstrip("/") != "http://127.0.0.1:9222":
         raise ValueError("CANONICAL_CDP_REQUIRED")
@@ -409,4 +415,4 @@ def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, 
                 raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")
             yield BrowserHandle(owned=False, browser=browser)
 
-    return GoogleSheetsWebService(session)
+    return GoogleSheetsWebService(session, on_read_success=on_read_success)

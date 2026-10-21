@@ -120,8 +120,9 @@ def test_canonical_poll_combines_empty_purchase_quotation_and_interruptible_900s
         backend.start()
         if fault is FaultScope.GLOBAL_STOP:
             assert _wait_until(
-                lambda: backend.get_status().state is RunState.GLOBAL_STOP
+                lambda: backend.get_status().next_poll_at is not None
             )
+            assert backend.get_status().state is RunState.RUNNING and not backend._stop.is_set()
             assert events == ["V12"]
         else:
             assert observed.wait(5)
@@ -140,7 +141,7 @@ def test_canonical_poll_combines_empty_purchase_quotation_and_interruptible_900s
             assert (
                 backend._thread is first
             )  # No overlapping scheduler, including purchase pause.
-            backend.request_stop_after_cycle()
+        backend.request_stop_after_cycle()
         backend._thread.join(timeout=5)
         assert not backend._thread.is_alive()
         assert page_scope == ['enter', 'exit']

@@ -257,6 +257,21 @@ def _verified_shell_frame(page: Any, context: Any) -> Any | None:
         return None
 
 
+def authenticated_inso_shell_available(browser: Any) -> bool:
+    """Observe human recovery without navigation, credentials or login clicks."""
+    try:
+        if browser is None or not browser.is_connected() or len(browser.contexts) != 1:
+            return False
+        context = browser.contexts[0]
+        pages = tuple(context.pages)
+        if any(_is_inso_origin_page(page) and (_is_login_page(page) or _human_verification_required(page))
+               for page in pages if not page.is_closed()):
+            return False
+        return any(_verified_shell_frame(page, context) is not None for page in pages)
+    except Exception:  # noqa: BLE001 - observation failure never authorizes a write
+        return False
+
+
 def ensure_inso_authenticated(
     browser: Any,
     login: Any | None,

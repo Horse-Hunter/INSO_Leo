@@ -159,3 +159,27 @@ uncertainty preserves the operation page and stops; sales review tabs stay intac
 No new Google login, OAuth refresh, browser profile or scheduler is introduced.
 Live read acceptance passed; real writes/overwrite acceptance remains UNKNOWN
 pending independent Review. No deployment is part of this implementation task.
+
+
+## Owner website outage recovery correction (2026-10-22)
+
+A website failure must not globally stop shared business before its necessary
+business operations have continuously failed for three hours in the active run.
+Owner explicitly confirms: a working login page alone is not INSO query recovery;
+a proven necessary business read resets that site's outage clock. Sites have
+independent clocks; intermittent failures do not accumulate. Existing bounded
+read/login/query retries and interruptible15-minute polling remain canonical.
+Only a fresh observed failure at/after3h permits global stop; stale timers or a
+working unrelated site cannot justify it. Owner stop always wins. Browser/CDP
+connection loss is a recoverable dependency, not proof a website is down for3h.
+CAPTCHA/SMS/rejected credentials preserve the original page and wait for human
+completion; recovery checks never bypass security or replay writes. A successful
+read is required before clearing a site outage; login-only DOM observation only
+permits the next safe attempt. Uncertain purchase/update dispatch remains held
+per order, with no automatic re-click; safe independent orders/quotes continue.
+Schema/config/database/invariant failures are local business pauses requiring
+repair, never proof of a website outage or a blanket claim of global failure.
+Their affected business may need to stop safely; the UI must state that honestly.
+Older immediate website GLOBAL_STOP policies above are superseded. Executor owns
+implementation/tests/release evidence in tasks/2026-10-22-site-outage-three-hours.md;
+independent Review remains required. No production writes are run as verification.

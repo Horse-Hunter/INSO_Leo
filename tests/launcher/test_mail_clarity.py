@@ -100,3 +100,25 @@ def test_google_retry_alert_promises_next_normal_poll_not_manual_restart():
     assert [r.address for r in command.recipients] == ["linan229@qq.com"]
     assert "连续5次" in command.text_body and "15分钟后自动再试" in command.text_body
     assert "无需手动重启" in command.text_body and "程序已停止" not in command.text_body
+
+
+
+@pytest.mark.parametrize('site', ['INSO', 'GOOGLE', 'IC_NET', 'BROWSER', 'FX'])
+def test_website_waiting_notice_does_not_claim_the_program_stopped(site):
+    mailbox = Mailbox()
+    for _ in range(2):
+        notify_runtime_fault(mailbox, 'synthetic-outage', site + '_WAITING_RECOVERY', at=NOW)
+    command = next(iter(mailbox.commands.values()))
+    assert len(mailbox.commands) == 1
+    assert '等待恢复' in command.subject and '程序仍在运行' in command.text_body
+    assert '已停止' not in command.subject + command.text_body
+    assert '15分钟' in command.text_body and '不会自动重复' in command.text_body
+    assert [r.address for r in command.recipients] == ['linan229@qq.com']
+
+
+
+@pytest.mark.parametrize('reason', ['WORKFLOW_LEDGER_UNAVAILABLE', 'V12_INTERNAL_FAILURE', 'SHEETS_SCHEMA_UNAVAILABLE'])
+def test_local_failure_notice_does_not_guess_a_website_login_problem(reason):
+    body = _login_alert_body(reason)
+    assert '已暂停' in body
+    assert '需要重新登录' not in body and '检查VPN' not in body

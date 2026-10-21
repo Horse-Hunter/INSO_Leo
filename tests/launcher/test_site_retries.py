@@ -136,7 +136,7 @@ def inso_failure(code):
     'CREDENTIALS_UNAVAILABLE', 'CREDENTIAL_NOT_CONFIGURED', 'CREDENTIAL_REJECTED', 'LOGIN_REJECTED',
     'MANUAL_VERIFICATION_REQUIRED', 'INTERACTIVE_CHALLENGE_REQUIRED', 'VERIFIED_SESSION_LEASE_REQUIRED',
     'SESSION_IDENTITY_UNVERIFIED', 'SESSION_STALE', 'SECURITY_EVENT', 'CAPTCHA_REQUIRED', 'OTP_REQUIRED'])
-def test_inso_authorization_still_stops_before_reset_or_retry(code, monkeypatch):
+def test_inso_authorization_preserves_page_and_schedules_recovery_without_global_stop(code, monkeypatch):
     backend = ProductionBackend()
     backend._v12_store = outbox = InsoTestOutbox()
     calls = []
@@ -150,7 +150,8 @@ def test_inso_authorization_still_stops_before_reset_or_retry(code, monkeypatch)
         backend._run_inso_query('synthetic', operation, lambda: pytest.fail('unsafe prepare retry'))
     assert calls == [1]
     assert failure.value.scope is FaultScope.GLOBAL_STOP
-    assert backend._state is RunState.GLOBAL_STOP and backend._stop.is_set()
+    assert backend._state is RunState.RUNNING and not backend._stop.is_set()
+    assert backend._next_poll_at is not None and 'INSO' in backend._site_outages
     assert 'synthetic' in backend._manual_inquiries
     assert len(outbox.commands) == 1
     command = next(iter(outbox.commands.values()))

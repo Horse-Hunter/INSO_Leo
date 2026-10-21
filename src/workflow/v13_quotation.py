@@ -181,11 +181,13 @@ class V13QuotationCycle:
     def __init__(self, *, reader: WorksheetRowReader, store: ExistingInquiryStore,
                  operations: QuotationOperations, clock: Callable[[], datetime],
                  wait: Callable[[int], bool], stop_requested: Callable[[], bool] = lambda: False,
-                 quote_reader: InsoQuotationReader | None = None, fx_provider=None):
+                 quote_reader: InsoQuotationReader | None = None, fx_provider=None, on_fx_success=lambda: None, on_query_success=lambda: None):
         self._reader, self._store, self._operations = reader, store, operations
         self._clock, self._wait, self._stop = clock, wait, stop_requested
         self._quotes = quote_reader or InsoQuotationReader()
         self._fx = fx_provider
+        self._on_fx_success = on_fx_success
+        self._on_query_success = on_query_success
 
     def currency_rate(self, currency):
         if self._fx is None:
@@ -193,7 +195,9 @@ class V13QuotationCycle:
         from src.research.ecb_fx import EcbFxError
         try:
             quote = self._fx.get_quote()
-            return quote.rate if currency == "USD" else self._fx.get_hkd_rmb_rate()
+            rate = quote.rate if currency == "USD" else self._fx.get_hkd_rmb_rate()
+            self._on_fx_success()
+            return rate
         except (EcbFxError, OSError):
             raise V12Fault(FaultScope.GLOBAL_STOP, "V13_FX_UNAVAILABLE") from None
 
@@ -255,10 +259,12 @@ class V13QuotationCycle:
                 access = self._operations.open(candidate.inquiry_id)
                 try:
                     rows = self._quotes.read(access, candidate.queried_mpn)
+                    self._on_query_success()  # INSO read succeeded even if another site's FX fails.
                     # Query-time clock sampled after this attempt completes, not batch start.
                     try:
-                        return select_recent_lowest(rows, queried_mpn=candidate.queried_mpn,
-                                                    now=self._clock(), currency_rate=self.currency_rate), True
+                        quote = select_recent_lowest(rows, queried_mpn=candidate.queried_mpn,
+                                                     now=self._clock(), currency_rate=self.currency_rate)
+                        return quote, True
                     except QuotationPriceUnavailable as exc:
                         if exc.code.startswith("QUOTE_FX"):
                             raise V12Fault(FaultScope.GLOBAL_STOP, "V13_FX_UNAVAILABLE") from None
