@@ -298,7 +298,7 @@ def test_ordinary_fresh_authentication_failure_still_closes_only_owned_tab(monke
     monkeypatch.setattr(InsoSessionGuard, "_log_in", fail_login)
     browser = FakeBrowser([context])
     with pytest.raises(InsoAuthenticationError) as error:
-        ensure_inso_authenticated(browser, _Login(), fresh_page=True)
+        ensure_inso_authenticated(browser, _Login(), fresh_page=True, wait=lambda _: None)
     assert error.value.reason_code == failure
     assert page.closed and all(not p.closed for p in old_pages)
     assert browser.connected and browser.contexts == [context]
@@ -606,7 +606,7 @@ def test_ordinary_login_recovery_fails_closed(
         )
 
     assert error.value.reason_code == expected
-    assert page.clicks <= 1
+    assert page.clicks <= (5 if expected == "AUTHENTICATED_SHELL_UNAVAILABLE" else 1)
 
 
 def test_ordinary_login_recovery_rejects_a_wrong_origin() -> None:
@@ -1033,7 +1033,7 @@ def test_a_session_that_never_comes_back_is_reported_dead() -> None:
 
     assert status.outcome is InsoSessionOutcome.DEAD
     assert status.reason_code == "AUTHENTICATED_SHELL_UNAVAILABLE"
-    assert page.clicks == 1
+    assert page.clicks == 5
     assert reattached == []
 
 

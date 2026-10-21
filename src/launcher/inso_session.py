@@ -30,6 +30,7 @@ back unchanged.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -49,6 +50,7 @@ from src.inso.session import (
     SecurityViolation,
 )
 from src.research.cdp_pages import new_background_page, page_owner
+from src.research.site_login import REJECTED_PASSWORD_TEXT, visible_text_contains
 
 _INSO_ORIGIN = "https://yingsuo.alperp.cn"
 _INSO_HOSTNAME = "yingsuo.alperp.cn"
@@ -91,6 +93,29 @@ _NAVIGATION_TIMEOUT_MS = 20_000
 _LOGIN_WAIT_SECONDS = 20.0
 _LIST_RENDER_SECONDS = 20.0
 _RENDER_POLL_SECONDS = 0.25
+_LOGIN_RETRY_DELAYS = (2, 4, 6, 8)
+
+
+def _login_failure_code(error: Exception) -> str:
+    """Separate proven transport failures from refusal/unknown authentication."""
+    if isinstance(error, InsoAuthenticationError):
+        if error.reason_code != "AUTHENTICATION_REQUIRED" or error.__cause__ is None:
+            return error.reason_code
+        return _login_failure_code(error.__cause__)
+    if isinstance(error, (TimeoutError, ConnectionError)):
+        return "BROWSER_TIMEOUT"
+    if type(error).__module__.startswith("playwright"):
+        if type(error).__name__ == "TimeoutError":
+            return "BROWSER_TIMEOUT"
+        codes = re.findall(r"net::(ERR_[A-Z_]+)", str(error))
+        if codes and all(code in {
+            "ERR_TIMED_OUT", "ERR_CONNECTION_TIMED_OUT", "ERR_CONNECTION_RESET",
+            "ERR_CONNECTION_CLOSED", "ERR_CONNECTION_REFUSED", "ERR_EMPTY_RESPONSE",
+            "ERR_NAME_NOT_RESOLVED", "ERR_NETWORK_CHANGED", "ERR_INTERNET_DISCONNECTED",
+            "ERR_PROXY_CONNECTION_FAILED", "ERR_TUNNEL_CONNECTION_FAILED",
+        } for code in codes):
+            return "LOGIN_PAGE_UNAVAILABLE"
+    return "AUTHENTICATION_REQUIRED"
 
 _MANUAL_VERIFICATION_MARKERS = (
     "captcha",
@@ -494,21 +519,52 @@ class InsoSessionGuard:
     ) -> InsoSessionStatus:
         """Reopen the ERP and ensure the login behind it is proven live."""
 
+        retry_page = None
+        self.authenticated_page = None
+        for attempt in range(5):
+            status = self._ensure_authenticated_once(retry_page=retry_page)
+            if (status.outcome is not InsoSessionOutcome.DEAD or status.reason_code not in {
+                    "BROWSER_TIMEOUT", "LOGIN_PAGE_UNAVAILABLE", "AUTHENTICATED_SHELL_UNAVAILABLE",
+            } or attempt == 4):
+                if attempt == 4 and status.outcome is InsoSessionOutcome.DEAD:
+                    _log.warning("INSO login recovery exhausted", extra={
+                        "runtime_reason": "INSO_LOGIN_RETRY_EXHAUSTED",
+                        "runtime_cause": status.reason_code,
+                    })
+                return status
+            retry_page = self.authenticated_page
+            if retry_page is not None and retry_page.is_closed():
+                retry_page = None
+            self._wait(_LOGIN_RETRY_DELAYS[attempt])
+        raise AssertionError("bounded INSO login recovery exhausted")
+
+    def _ensure_authenticated_once(self, *, retry_page=None) -> InsoSessionStatus:
+
         if not _valid_login(self._login):
             return InsoSessionStatus(
                 InsoSessionOutcome.DEAD, "AUTHENTICATION_REQUIRED"
             )
         try:
-            if self._page is not None:
+            if retry_page is not None:
+                page, opened_here = retry_page, retry_page is self.opened_page
+                if _human_verification_required(page):
+                    return InsoSessionStatus(InsoSessionOutcome.DEAD, "MANUAL_VERIFICATION_REQUIRED")
+                if _is_login_page(page) and visible_text_contains(page, REJECTED_PASSWORD_TEXT):
+                    return InsoSessionStatus(InsoSessionOutcome.DEAD, "CREDENTIAL_REJECTED")
+                # A timed-out navigation may already show the login URL while
+                # its form is incomplete. Reopen, rather than trust that URL.
+                page.goto(self._login_url, wait_until="domcontentloaded",
+                          timeout=_LOGIN_FORM_TIMEOUT_MS)
+            elif self._page is not None:
                 page, opened_here = self._page(), False
             elif self._fresh_page:
                 page, opened_here = _new_background_login_page(self._context()), True
             else:
                 page, opened_here = _existing_or_new_login_page(self._context())
-        except Exception:  # noqa: BLE001 - an unusable page becomes a status, not an exception
-            _log.warning("no INSO page could be opened to prove", exc_info=True)
+        except Exception as exc:  # noqa: BLE001 - an unusable page becomes a sanitized status
+            _log.warning("INSO login page unavailable (%s)", _login_failure_code(exc))
             return InsoSessionStatus(
-                InsoSessionOutcome.DEAD, "AUTHENTICATION_REQUIRED"
+                InsoSessionOutcome.DEAD, _login_failure_code(exc)
             )
         self.opened_page = page if opened_here else None
         self.authenticated_page = page
@@ -519,12 +575,12 @@ class InsoSessionGuard:
         except Exception as exc:  # noqa: BLE001 - any submit failure becomes an explicit status
             return InsoSessionStatus(
                 InsoSessionOutcome.DEAD,
-                getattr(exc, "reason_code", None) or "AUTHENTICATION_REQUIRED",
+                _login_failure_code(exc),
             )
         try:
             proven = self._prove(page)
-        except Exception:  # noqa: BLE001 - native-menu failure must remain closed
-            proven = False
+        except Exception as exc:  # noqa: BLE001 - unknown proof failures are not retried
+            return InsoSessionStatus(InsoSessionOutcome.DEAD, _login_failure_code(exc))
         if not proven:
             return InsoSessionStatus(
                 InsoSessionOutcome.DEAD, "AUTHENTICATED_SHELL_UNAVAILABLE"
@@ -572,14 +628,16 @@ class InsoSessionGuard:
                     wait_until="domcontentloaded",
                     timeout=_LOGIN_FORM_TIMEOUT_MS,
                 )
-            except Exception:  # noqa: BLE001 - a form we cannot fill means authentication is required
-                raise InsoAuthenticationError("AUTHENTICATION_REQUIRED") from None
+            except Exception as exc:  # noqa: BLE001 - classify transport without exposing page text
+                raise InsoAuthenticationError(_login_failure_code(exc)) from None
         if _human_verification_required(page):
             raise InsoAuthenticationError("MANUAL_VERIFICATION_REQUIRED")
         if not _is_login_page(page):
             # The ERP refused to show a form, which means it still considers
             # this session authenticated. Nothing to submit.
             return False
+        if visible_text_contains(page, REJECTED_PASSWORD_TEXT):
+            raise InsoAuthenticationError("CREDENTIAL_REJECTED")
         _submit_ordinary_login(page, self._login)
         self._wait_until_login_settles(page)
         return True
@@ -593,6 +651,8 @@ class InsoSessionGuard:
                 # The ERP revealed a code field after the submit, so this login
                 # is human-only. Stop rather than guess.
                 raise InsoAuthenticationError("MANUAL_VERIFICATION_REQUIRED")
+            if visible_text_contains(page, REJECTED_PASSWORD_TEXT):
+                raise InsoAuthenticationError("CREDENTIAL_REJECTED")
             if self._clock() >= deadline:
                 # Still on the form. The proof that follows decides what that
                 # means; it must not be reported as a restored session.
@@ -641,7 +701,7 @@ def _existing_or_new_login_page(context: Any) -> tuple[Any, bool]:
 def _submit_ordinary_login(page: Any, login: Any | None) -> None:
     """Fill the two confirmed fields and press the page's own login control.
 
-    At most one ordinary login attempt. The controls are resolved before either
+    One ordinary submit per call; the guard bounds recovery attempts. Controls are resolved before either
     field is written, and each write is read back before the submit, so a
     rejected field can never be followed by a click.
     """
@@ -652,24 +712,24 @@ def _submit_ordinary_login(page: Any, login: Any | None) -> None:
         username = _single_visible_enabled(page, "input#personname:visible")
         password = _single_visible_enabled(page, "input#password:visible")
         button = _login_button(page)
-    except Exception:  # noqa: BLE001 - a form we cannot resolve means authentication is required
-        raise InsoAuthenticationError("AUTHENTICATION_REQUIRED") from None
+    except Exception as exc:  # noqa: BLE001 - only known transport errors permit retry
+        raise InsoAuthenticationError(_login_failure_code(exc)) from None
     try:
         username.fill(login.username)
         if not _nonempty_readback(username):
             raise ValueError("username read-back is empty")
-    except Exception:  # noqa: BLE001 - an unverified read-back must not be submitted
-        raise InsoAuthenticationError("AUTHENTICATION_REQUIRED") from None
+    except Exception as exc:  # noqa: BLE001 - an unverified read-back must not be submitted
+        raise InsoAuthenticationError(_login_failure_code(exc)) from None
     try:
         password.fill(login.password)
         if not _nonempty_readback(password):
             raise ValueError("password read-back is empty")
-    except Exception:  # noqa: BLE001 - an unverified read-back must not be submitted
-        raise InsoAuthenticationError("AUTHENTICATION_REQUIRED") from None
+    except Exception as exc:  # noqa: BLE001 - an unverified read-back must not be submitted
+        raise InsoAuthenticationError(_login_failure_code(exc)) from None
     try:
         button.click()
-    except Exception:  # noqa: BLE001 - a click we cannot perform means authentication is required
-        raise InsoAuthenticationError("AUTHENTICATION_REQUIRED") from None
+    except Exception as exc:  # noqa: BLE001 - classify login control transport only, never business submit
+        raise InsoAuthenticationError(_login_failure_code(exc)) from None
 
 
 def _login_button(page: Any) -> Any:
