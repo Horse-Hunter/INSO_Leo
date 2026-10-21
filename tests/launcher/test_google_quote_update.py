@@ -26,6 +26,11 @@ class Locator:
         if self.role == "dialog":
             return int(bool(self.page.popup) and (not hasattr(self, "pattern") or bool(self.pattern.search(self.page.popup))))
         return 1
+    def nth(self, index):
+        assert index == 0
+        return self
+    def is_visible(self):
+        return bool(self.count()) and self.name not in getattr(self.page, 'hidden_markers', set())
     def filter(self, *, has_text):
         self.pattern = has_text
         return self

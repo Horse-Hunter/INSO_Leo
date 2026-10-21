@@ -62,7 +62,7 @@ def _temporary_web_read_failure(exc):
             # re-enter on a fresh page; do not loosen any auth/document/gid guard.
             temporary = True
         elif not (isinstance(exc, UpdateAttemptUnconfirmed) and str(exc) in {
-            "UPDATE_RESULT_UNCONFIRMED",
+            "UPDATE_RESULT_UNCONFIRMED", "GOOGLE_NAVIGATION_FAILED",
         }):
             return False
         exc = exc.__cause__ or exc.__context__
@@ -148,13 +148,20 @@ class GoogleSheetsWebService:
     @contextmanager
     def _operation_session(self):
         state = self._poll_handle.get()
-        if state is not None:
-            if state["handle"] is None:
-                state["handle"] = state["lifetime"].enter_context(self._session())
-            yield state["handle"]
-        else:
-            with self._session() as handle:
-                yield handle
+        with ExitStack() as lifetime:
+            try:
+                if state is not None:
+                    if state["handle"] is None:
+                        state["handle"] = state["lifetime"].enter_context(self._session())
+                    handle = state["handle"]
+                else:
+                    handle = lifetime.enter_context(self._session())
+            except Exception as exc:
+                # Only attachment failed; no UI operation/write has begun.
+                if _temporary_web_read_failure(exc):
+                    raise TimeoutError("GOOGLE_WEB_SESSION_UNAVAILABLE") from exc
+                raise
+            yield handle
 
     def spreadsheets(self):
         return self
@@ -290,9 +297,17 @@ class GoogleSheetsWebService:
                             actions._guard()
                         except Exception as guard:
                             # A failed navigation can still leave a blank/closed page.
-                            if not isinstance(guard, UpdateAttemptUnconfirmed) or str(guard) not in {
+                            navigation_failure = (
+                                stage == "google-open-sheet"
+                                and isinstance(exc, UpdateAttemptUnconfirmed)
+                                and str(exc) == "GOOGLE_NAVIGATION_FAILED"
+                                and isinstance(guard, V12Fault)
+                                and guard.reason == "GOOGLE_SPREADSHEET_UNAVAILABLE"
+                                and actions._page is not None
+                                and actions._page.url == "chrome-error://chromewebdata/")
+                            if not navigation_failure and (not isinstance(guard, UpdateAttemptUnconfirmed) or str(guard) not in {
                                 "GOOGLE_OPERATION_SURFACE_UNAVAILABLE", "GOOGLE_OPERATION_SURFACE_UNCONFIRMED",
-                            }:
+                            }):
                                 raise
                         raise TimeoutError("GOOGLE_WEB_READ_UNAVAILABLE") from None
                 raise
@@ -318,6 +333,8 @@ class GoogleSheetsWebService:
             title: document.querySelector('.docs-sheet-active-tab .docs-sheet-tab-name')?.textContent,
             fragment: location.hash})''')
         tab = page.locator(".docs-sheet-tab").filter(has=page.get_by_text(title, exact=True))
+        if tab.count() == 0:
+            tab.wait_for(state="visible", timeout=10000)
         if tab.count() != 1:
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SHEET_UNCONFIRMED")
         tab.click(timeout=10000)

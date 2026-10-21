@@ -524,7 +524,7 @@ def test_unknown_and_security_failures_do_not_become_temporary(web, monkeypatch,
 
 
 @pytest.mark.parametrize('failure_mode', ['menu_timeout', 'read_gid_drift', 'read_page_closed',
-                                        'artifact_lost', 'timeout_then_busy'])
+                                        'artifact_lost', 'timeout_then_busy', 'navigation_error_page', 'session_attach', 'metadata_timeout'])
 def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next_cycle(
         web, tmp_path, monkeypatch, failure_mode):
     import json
@@ -551,6 +551,42 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
     monkeypatch.setattr('src.launcher.v12_composition.QQSMTPTransport', _RecordingTransport)
     _RecordingTransport.sent.clear()
     calls, waits, busy_pages = [], [], []
+    original_goto = GridPage.goto
+    navigation_calls = []
+    def goto(page, url, **kwargs):
+        navigation_calls.append(page)
+        if failure_mode == 'navigation_error_page' and len(navigation_calls) <= 5:
+            from playwright.sync_api import Error as PageError
+            calls.append(True)
+            page.url = 'chrome-error://chromewebdata/'
+            raise PageError('net::ERR_CONNECTION_RESET synthetic navigation failure')
+        return original_goto(page, url, **kwargs)
+    monkeypatch.setattr(GridPage, 'goto', goto)
+    from contextlib import contextmanager
+
+    from src.inso.quotation_read import QUOTATION_COLUMNS
+    session = service._session
+    @contextmanager
+    def attach():
+        if failure_mode == 'session_attach' and len(calls) < 5:
+            calls.append(True)
+            raise PageTimeout('synthetic CDP attach timeout')
+        with session() as handle:
+            yield handle
+    monkeypatch.setattr(service, '_session', attach)
+    dashboard = launcher.read_dashboard_counts
+    def counts(*args, **kwargs):
+        if failure_mode == 'metadata_timeout':
+            target = QuotationInputLocation(WorksheetIdentity('test', '报价输入'), 1, 1, '29')
+            GoogleQuotationInput(service, target, expected_columns=QUOTATION_COLUMNS).validate_schema()
+        return dashboard(*args, **kwargs)
+    monkeypatch.setattr(launcher, 'read_dashboard_counts', counts)
+    select = service._select
+    def select_sheet(*args):
+        if failure_mode == 'metadata_timeout' and len(calls) <= 5:
+            raise PageTimeout('synthetic metadata timeout')
+        return select(*args)
+    monkeypatch.setattr(service, '_select', select_sheet)
     original_wait = Locator.wait_for
     def page_wait(locator, **kwargs):
         if locator.name == '报价工具':
@@ -596,7 +632,8 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
         backend.start()
         backend._thread.join(timeout=10)
         assert not backend._thread.is_alive() and waits == [900, 900]
-        assert len(calls) == (5 if failure_mode == 'timeout_then_busy' else 9)
+        assert len(calls) == (5 if failure_mode == 'timeout_then_busy' else
+                              10 if failure_mode == 'metadata_timeout' else 9)
         assert backend.get_health().overall == '正常'
         assert len(_RecordingTransport.sent) == 1
         assert _RecordingTransport.sent[0][1].address == 'linan229@qq.com'
@@ -984,3 +1021,166 @@ def test_write_failure_logs_fixed_stage_and_reason_without_values(web, monkeypat
     assert any('google-write-select-cell' in line for line in lines)
     assert any('GOOGLE_SELECTION_UNCONFIRMED' in line for line in lines)
     assert all('PRIVATE-TEST-VALUE' not in line for line in lines)
+
+
+@pytest.mark.parametrize('failure', ['network', 'timeout', 'certificate', 'unknown', 'wrong_document', 'auth'])
+def test_navigation_error_page_preserves_transport_classification(web, monkeypatch, failure):
+    from playwright.sync_api import Error as PageError
+    from playwright.sync_api import TimeoutError as PageTimeout
+
+    from src.sheets.google_reader import (
+        GoogleSheetsReadError,
+        GoogleSheetsReadUnavailable,
+    )
+    service, browser, _, _ = web
+    original = GridPage.goto
+    attempts = []
+    def goto(page, url, **kwargs):
+        attempts.append(page)
+        if len(attempts) == 1:
+            page.url = 'chrome-error://chromewebdata/'
+            if failure == 'wrong_document':
+                page.url = 'https://docs.google.com/spreadsheets/d/other/edit#gid=0'
+            elif failure == 'auth':
+                page.url = 'https://accounts.google.com/'
+            if failure == 'timeout':
+                raise PageTimeout('synthetic navigation timeout')
+            codes = {'certificate': 'ERR_CERT_AUTHORITY_INVALID', 'unknown': 'ERR_FAILED'}
+            raise PageError('net::' + codes.get(failure, 'ERR_CONNECTION_RESET'))
+        return original(page, url, **kwargs)
+    monkeypatch.setattr(GridPage, 'goto', goto)
+    with service.poll_scope():
+        if failure in {'network', 'timeout'}:
+            assert GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', '2026'))
+            assert len(attempts) == 2 and attempts[0].closed
+        else:
+            with pytest.raises(GoogleSheetsReadError) as caught:
+                GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', '2026'))
+            assert not isinstance(caught.value, GoogleSheetsReadUnavailable)
+            assert len(attempts) == 1
+    assert not browser.contexts[0].pages[0].closed
+
+
+@pytest.mark.parametrize('title', ['2026', 'SHAHAB'])
+def test_late_worksheet_tab_is_awaited_before_document_failure(web, monkeypatch, title):
+    service, _, _, _ = web
+    pending, awaited = {title}, []
+    count, wait = GridLocator.count, GridLocator.wait_for
+    def delayed_count(locator):
+        if locator.kind == 'tab' and locator.name in pending:
+            return 0
+        return count(locator)
+    def delayed_wait(locator, **kwargs):
+        if locator.kind == 'tab' and locator.name in pending:
+            assert kwargs == {'state': 'visible', 'timeout': 10000}
+            awaited.append(locator.name)
+            pending.remove(locator.name)
+        return wait(locator, **kwargs)
+    monkeypatch.setattr(GridLocator, 'count', delayed_count)
+    monkeypatch.setattr(GridLocator, 'wait_for', delayed_wait)
+    with service.poll_scope():
+        assert GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', title))
+    assert awaited == [title]
+
+
+def test_hidden_login_text_does_not_stop_verified_document_read(web, monkeypatch):
+    service, _, _, _ = web
+    goto = GridPage.goto
+    def hidden_login(page, url, **kwargs):
+        result = goto(page, url, **kwargs)
+        page.login_markers.add('登录')
+        page.hidden_markers = {'登录'}
+        return result
+    monkeypatch.setattr(GridPage, 'goto', hidden_login)
+    with service.poll_scope():
+        assert GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', '2026'))
+
+
+def test_metadata_exhaustion_reaches_updater_without_opening_or_writing_input(web, monkeypatch):
+    from playwright.sync_api import TimeoutError as PageTimeout
+
+    from src.inso.quotation_read import QUOTATION_COLUMNS
+    from src.sheets.google_reader import GoogleSheetsReadUnavailable
+    from src.workflow.v13_quote_update import V13QuotationUpdater
+    from tests.workflow.test_v13_quote_update import Actions, Source, found
+    service, browser, _, _ = web
+    original = service._select
+    selected, waits = [], []
+    def select(page, actions, title):
+        selected.append(title)
+        raise PageTimeout('synthetic metadata selection timeout')
+    monkeypatch.setattr(service, '_select', select)
+    location = QuotationInputLocation(WorksheetIdentity('fake-sheet', '报价输入'), 1, 1, '29')
+    adapter = GoogleQuotationInput(service, location, expected_columns=QUOTATION_COLUMNS,
+                                  retry_wait=lambda seconds: waits.append(seconds) or False)
+    source = Source()
+    actions = Actions(source)
+    updater = V13QuotationUpdater(source=source, quotation_input=adapter, actions=actions, wait=lambda _: False)
+    with service.poll_scope(), pytest.raises(GoogleSheetsReadUnavailable):
+        updater.update_one(found())
+    assert len(selected) == 5 and waits == [2, 4, 6, 8]
+    assert actions.opened == actions.clicks == 0
+    assert all(not p.typed for p in browser.contexts[0].pages[1:])
+    monkeypatch.setattr(service, '_select', original)
+    with service.poll_scope():
+        adapter.validate_schema()
+    assert all(p.closed for p in browser.contexts[0].pages[1:])
+
+
+@pytest.mark.parametrize('failure', ['certificate', 'unknown'])
+def test_metadata_permanent_failure_is_not_retried(web, monkeypatch, failure):
+    from playwright.sync_api import Error as PageError
+
+    from src.inso.quotation_read import QUOTATION_COLUMNS
+    service, _, _, _ = web
+    attempts = []
+    def select(*args):
+        attempts.append(True)
+        raise PageError('net::' + ('ERR_CERT_AUTHORITY_INVALID' if failure == 'certificate' else 'ERR_FAILED'))
+    monkeypatch.setattr(service, '_select', select)
+    location = QuotationInputLocation(WorksheetIdentity('test', '报价输入'), 1, 1, '29')
+    adapter = GoogleQuotationInput(service, location, expected_columns=QUOTATION_COLUMNS)
+    with service.poll_scope(), pytest.raises(QuotationInputUnavailable):
+        adapter.validate_schema()
+    assert len(attempts) == 1
+
+
+@pytest.mark.parametrize('write', [False, True])
+def test_navigation_network_error_does_not_replay_writes(web, monkeypatch, write):
+    from playwright.sync_api import Error as PageError
+
+    from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
+    service, browser, _, _ = web
+    attempts = []
+    def goto(page, url, **kwargs):
+        attempts.append(page)
+        page.url = 'chrome-error://chromewebdata/'
+        raise PageError('net::ERR_CONNECTION_RESET synthetic private-url')
+    monkeypatch.setattr(GridPage, 'goto', goto)
+    with service.poll_scope():
+        if write:
+            with pytest.raises(UpdateAttemptUnconfirmed, match='GOOGLE_NAVIGATION_FAILED'):
+                service.update(spreadsheetId='test', range="'2026'!F2", valueInputOption='RAW',
+                               body={'values': [['NEW']]}).execute()
+        else:
+            with pytest.raises(TimeoutError, match='GOOGLE_WEB_READ_UNAVAILABLE'):
+                service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
+    assert len(attempts) == 1 and not attempts[0].typed
+    assert attempts[0].closed and not browser.contexts[0].pages[0].closed
+
+
+def test_navigation_guard_diagnostics_distinguish_causes_without_urls(web, monkeypatch, caplog):
+    from src.gui.main import _sanitized_line
+    from src.launcher.google_quote_update import GoogleQuotationUpdateActions
+    service, _, _, _ = web
+    original = GoogleQuotationUpdateActions._guard
+    def wrong_document(actions):
+        if actions._page and actions._page.url.startswith('https://docs.google.com/'):
+            actions._page.url = 'https://docs.google.com/spreadsheets/d/private-id/edit#gid=0'
+        return original(actions)
+    monkeypatch.setattr(GoogleQuotationUpdateActions, '_guard', wrong_document)
+    with service.poll_scope(), pytest.raises(V12Fault):
+        service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
+    lines = [_sanitized_line(r) for r in caplog.records if r.name == 'inso.diagnostics']
+    assert any('google-document-path-mismatch' in line for line in lines)
+    assert all('private-id' not in line and 'https://' not in line for line in lines)

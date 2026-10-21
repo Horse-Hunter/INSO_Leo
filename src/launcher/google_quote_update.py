@@ -24,6 +24,8 @@ from src.workflow.v13_quote_update import (
     WorkflowQuotationSource,
 )
 
+from .diagnostics import log_step
+
 _SCRIPT_SETTLEMENT_LATCH = """button => {
     const previous = window.__insoQuoteSettlement;
     if (previous) previous.observer.disconnect();
@@ -158,9 +160,10 @@ class GoogleQuotationUpdateActions:
             raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNAVAILABLE")
         parsed = urlsplit(self._page.url)
         # Text/role contract only; no automated Google login/verification bypass.
-        login = parsed.hostname == "accounts.google.com" or any(
-            self._page.get_by_text(text, exact=True).count() > 0
-            for text in ("登录", "Sign in", "Verify it's you", "验证您的身份", "请求访问权限"))
+        login = parsed.hostname == "accounts.google.com"
+        for text in ("登录", "Sign in", "Verify it's you", "验证您的身份", "请求访问权限"):
+            markers = self._page.get_by_text(text, exact=True)
+            login |= any(markers.nth(i).is_visible() for i in range(markers.count()))
         if login:
             self._protected = True
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_AUTHENTICATION_REQUIRED")
@@ -168,6 +171,10 @@ class GoogleQuotationUpdateActions:
             raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
         expected = urlsplit(self._location.url)
         if parsed.scheme != "https" or parsed.hostname != expected.hostname or parsed.path != expected.path:
+            step = ("google-navigation-error-page" if self._page.url == "chrome-error://chromewebdata/"
+                    else "google-document-host-mismatch" if parsed.scheme != "https" or parsed.hostname != expected.hostname
+                    else "google-document-path-mismatch")
+            log_step(step)
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SPREADSHEET_UNAVAILABLE")
         if parsed.fragment != expected.fragment:
             raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
@@ -230,6 +237,9 @@ class GoogleQuotationUpdateActions:
             try:
                 self._guard()
                 if (actual.scheme, actual.hostname, actual.path) != document_key or page_owner(self._page) != "google-operation":
+                    log_step("google-pooled-document-mismatch" if
+                             (actual.scheme, actual.hostname, actual.path) != document_key
+                             else "google-tab-ownership-lost")
                     raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SPREADSHEET_UNAVAILABLE")
                 if self._page.evaluate(_UNSAFE_POLL_PAGE):
                     raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
@@ -366,7 +376,11 @@ class GoogleQuotationUpdateActions:
             return operation()
         except V12Fault:
             raise
-        except Exception:  # noqa: BLE001 - diagnose shared/auth failure before safe UI retry
+        except Exception as exc:
+            if self._page is not None and self._page.url == "chrome-error://chromewebdata/":
+                # The URL cannot identify the transport failure (including TLS).
+                # Only the read caller may classify the original exception.
+                raise UpdateAttemptUnconfirmed("GOOGLE_NAVIGATION_FAILED") from exc
             self._guard()
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from None
 
@@ -454,7 +468,7 @@ def build_v13_quotation_updater(*, service, source_reader, store, browser_handle
     """
     return V13QuotationUpdater(
         source=WorkflowQuotationSource(reader=source_reader, store=store),
-        quotation_input=GoogleQuotationInput(service, location, expected_columns=QUOTATION_COLUMNS),
+        quotation_input=GoogleQuotationInput(service, location, expected_columns=QUOTATION_COLUMNS, retry_wait=wait),
         actions=GoogleQuotationUpdateActions(browser_handle=browser_handle, location=location),
         wait=wait, stop_requested=stop_requested,
         notify_model_difference=notify_model_difference,

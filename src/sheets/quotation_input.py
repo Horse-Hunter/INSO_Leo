@@ -3,6 +3,7 @@ import re
 from dataclasses import dataclass
 
 from .google_oauth import GoogleSheetsAuthorizationError
+from .google_reader import GoogleSheetsReadUnavailable, execute_google_read
 from .pending import WorksheetIdentity
 
 
@@ -79,13 +80,14 @@ def _row_values(response):
 
 class GoogleQuotationInput:
     """Only this configured input row can be written; no source-status setter."""
-    def __init__(self, service, location: QuotationInputLocation, *, expected_columns: tuple[str, ...]):
+    def __init__(self, service, location: QuotationInputLocation, *, expected_columns: tuple[str, ...], retry_wait=None):
         if (not isinstance(location, QuotationInputLocation) or not isinstance(expected_columns, tuple)
                 or len(expected_columns) != 14 or any(not isinstance(column, str) for column in expected_columns)
                 or len(set(expected_columns)) != 14):
             raise QuotationInputUnavailable("QUOTE_INPUT_SCHEMA_CONTRACT_INVALID")
         self.location, self.worksheet = location, location.worksheet
         self._service, self._columns = service, expected_columns
+        self._retry_wait = retry_wait or (lambda _seconds: False)
 
     def validate_schema(self):
         """Validate the headerless raw14 contract and live metadata binding."""
@@ -94,10 +96,12 @@ class GoogleQuotationInput:
     def validate_location_binding(self):
         """Prove the API title and configured UI gid identify the same sheet."""
         try:
-            response = self._service.spreadsheets().get(
+            response = execute_google_read(lambda: self._service.spreadsheets().get(
                 spreadsheetId=self.worksheet.spreadsheet,
                 fields="sheets.properties(sheetId,title)", includeGridData=False,
-            ).execute()
+            ).execute(), retry_wait=self._retry_wait)
+        except GoogleSheetsReadUnavailable:
+            raise  # Pure read exhaustion keeps the ordinary next-poll recovery path.
         except Exception:  # noqa: BLE001 - metadata is always a shared boundary
             raise QuotationInputUnavailable("QUOTE_INPUT_METADATA_UNAVAILABLE") from None
         if not isinstance(response, dict) or not isinstance(response.get("sheets"), list):

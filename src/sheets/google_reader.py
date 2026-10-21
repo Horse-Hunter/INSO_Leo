@@ -27,6 +27,18 @@ def _temporary_read_failure(exc: Exception) -> bool:
     }
 
 
+def execute_google_read(operation, *, retry_wait):
+    """One bounded retry contract for source rows and read-only sheet metadata."""
+    for attempt in range(5):
+        try:
+            return operation()
+        except Exception as exc:
+            if not _temporary_read_failure(exc):
+                raise
+            if attempt == 4 or retry_wait(2 * (attempt + 1)):
+                raise GoogleSheetsReadUnavailable("Google read retry exhausted") from exc
+
+
 class GoogleSheetsRequest(Protocol):
     def execute(self) -> Mapping[str, Any]: ...
 
@@ -88,21 +100,12 @@ class GoogleSheetsRowReader:
     ) -> tuple[WorksheetRow, ...]:
         read_range = _a1_range(worksheet.worksheet, self._first_row)
         try:
-            for attempt in range(5):
-                try:
-                    response = (
-                        self._service.spreadsheets().values().get(
-                            spreadsheetId=worksheet.spreadsheet,
-                            range=read_range, majorDimension="ROWS",
-                            valueRenderOption="UNFORMATTED_VALUE",
-                        ).execute()
-                    )
-                    break
-                except Exception as exc:
-                    if not _temporary_read_failure(exc):
-                        raise
-                    if attempt == 4 or self._retry_wait(2 * (attempt + 1)):
-                        raise GoogleSheetsReadUnavailable("Google read retry exhausted") from exc
+            response = execute_google_read(
+                lambda: self._service.spreadsheets().values().get(
+                    spreadsheetId=worksheet.spreadsheet,
+                    range=read_range, majorDimension="ROWS",
+                    valueRenderOption="UNFORMATTED_VALUE",
+                ).execute(), retry_wait=self._retry_wait)
             values = response.get("values", [])
             rows = _to_worksheet_rows(values, first_row=self._first_row)
             cache = self._discovery.get()
