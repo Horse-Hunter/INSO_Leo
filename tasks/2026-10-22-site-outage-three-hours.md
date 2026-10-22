@@ -144,3 +144,63 @@ startup, browser and cleanup receipts are local only, without production output
 in Git. No further source changes after the1580 PASS/1 skipped regression.
 Status remains REVIEW_REQUIRED. Owner may start ordinary business when ready;
 external site availability and actual long-running acceptance remain UNKNOWN.
+
+
+## CEO independent review — 2026-10-22
+
+**CODE REVIEW PASS — scoped three-hour site-recovery implementation.
+INSTALLED IDLE: EXECUTOR-ATTESTED ONLY. LIVE BUSINESS ACCEPTANCE PENDING.**
+
+Independently inspected source commit `81a757d18fd71bd72d47f5dc174318c9a3c0cd42`,
+the published release-note child `69214f16edaee178669b4b8c45e889c7e0db1d88`,
+the backend site-outage routing, Google read/metadata/navigation,
+INSO auth/query handlers, purchase/quotation uncertainty handling,
+and focused cross-module tests. No new business-code changes are requested
+on the present review evidence.
+
+- Per-site first-failure clock uses `monotonic()`, with a new failure
+  required to reach `>=10800` seconds before the website GLOBAL_STOP
+  state is set. A proven site-specific read/query success calls
+  `_site_recovered`; another site's success does not clear it. Browser/CDP
+  is a separate recoverable dependency, not a website counted toward the
+  three-hour website limit. An explicitly restarted run resets the in-memory
+  clocks. Thus this is an **active-run observed failure window**, not a
+  persistent wall-clock guarantee across process restarts or unattended
+  periods with no new failed attempt.
+- Existing 15-minute polling, bounded Google/INSO retries, and 229 alerts
+  are reused. A sign-in page or stale INSO DOM alone is not a successful
+  required query. Authentication, human challenges and source identity still
+  cannot be bypassed. A schema/config/database/invariant problem may safely
+  pause shared business **before** three hours; it is not labeled a website
+  outage.
+- Uncertain Google quote/update and purchase dispatch continue to use
+  distinct no-replay/hold mechanisms. The initial dispatched quote click
+  now has a pre-dispatch browser marker; quiet DOM alone cannot release a
+  pending script, and status readback can settle without another click.
+  The Owner's separately approved refresh comparison-baseline rule is
+  preserved. Other safe inquiry rows may proceed, with protected pages not
+  disposed by the normal cleanup path.
+- Executor reports 1580 offline PASS / one skipped, Ruff PASS, frozen
+  scanner and installed self-check PASS; tests include real backend +
+  synthetic-time 12 x 900s waiting / 13th failed observation, site
+  independence, success reset, local-fault/unknown-write exclusion,
+  preserved human page, and non-reclick. CEO reviewed source/test
+  evidence but **did not independently execute** the suite, use the local
+  PC, or access production CDP, orders, ERP, Google Sheets or SMTP.
+- Executor release receipt reports installed V1.4 EXE SHA256
+  `5ff5e5cab799dcf8fcbd9335182d03ddef3192a7a767b49af30c9eb6603254d2`,
+  rollback of the two changed program assets, runtime/profile/DB/config
+  unchanged, and GUI responsive while idle. These are source-reported
+  attestations, **not direct CEO runtime verification**.
+- **Operational blocker:** the existing browser CDP port 9222 was
+  unreachable in the Executor's preflight. Actual tabs/login sessions
+  cannot be verified; an idle GUI is not proof of business readiness.
+  Restore/verify the approved existing Chrome connection and manual
+  authentication **before** an Owner-authorized Start, without launching,
+  killing or rewriting its protected profile via this review. Do not
+  replay uncertain orders. Actual multi-hour production recovery and
+  Google/INSO business-chain outcomes remain UNKNOWN.
+
+**Disposition: CODE_REVIEW_PASS / RELEASE_REPORTED_COMPLETE /
+LIVE_ACCEPTANCE_HOLD (CDP unavailable).** No further automatic deployment or
+business test authorized by this review.
