@@ -253,14 +253,15 @@ def test_other_research_sources_continue_after_timeout_and_challenge(tmp_path, m
         if name is ResearchSource.LCSC:
             return _result(name, SourceOutcome.SOURCE_UNAVAILABLE, failure_code="MANUAL_VERIFICATION_REQUIRED")
         return _result(name, SourceOutcome.SUCCESS, "2")
-    sources = [SimpleNamespace(search=lambda *_a, name=name: search(name)) for name in PRICE_SOURCES]
+    other_sources = [name for name in PRICE_SOURCES if name is not ResearchSource.IC_NET]
+    sources = [SimpleNamespace(search=lambda *_a, name=name: search(name)) for name in other_sources]
     service = ResearchService(icnet=SimpleNamespace(search=lambda *_a: IcNetResult(
         _result(ResearchSource.IC_NET, SourceOutcome.NO_STRICT_MPN_MATCH))),
         findchips=sources[0], hqew=sources[1], lcsc=sources[2], bom_ai=sources[3], inso=sources[4],
         output=SimpleNamespace(upsert=lambda *_a, **_k: None), source_observer=backend._observe_source_failure)
     result = service.execute(ResearchInput("synthetic", "ABC", "Brand", 2, "A"))
     assert result.status is ResearchStatus.PARTIAL_SUCCESS
-    assert calls == list(PRICE_SOURCES) and len(mails) == 2
+    assert calls == other_sources and len(mails) == 2
     assert backend.get_status().state is RunState.RUNNING
     backend.shutdown()
 

@@ -9,8 +9,6 @@ from typing import Protocol
 
 from .aggregation import (
     PriceAggregation,
-    _failure_code,
-    _failure_reason,
     aggregate_price_results,
 )
 from .contracts import ResearchInput, ResearchReasonCode, ResearchResult, ResearchStatus
@@ -76,7 +74,7 @@ class ResearchService:
                  if self._source_query is not None else icnet_search())
         if self._source_observer is not None:
             self._source_observer(research_input.inquiry_id, icnet.source_result)
-        price_results_list = []
+        price_results_list = [icnet.source_result]
         for name, source in zip((ResearchSource.FINDCHIPS, ResearchSource.HQEW,
                 ResearchSource.LCSC, ResearchSource.BOM_AI, ResearchSource.INSO), self._price_sources, strict=True):
             def search(source=source, name=name):
@@ -104,22 +102,18 @@ class ResearchService:
             aggregation.reason_code,
             aggregation.remarks,
         )
-        if icnet.source_result.outcome is SourceOutcome.SOURCE_UNAVAILABLE:
-            icnet_remark = (
-                f"IC.net：{_failure_reason(_failure_code(icnet.source_result))}"
-            )
-            remarks = "；".join(part for part in (remarks, icnet_remark) if part)
         source_values = {
             result.source: format_source_result(result) for result in price_results
         }
         if set(source_values) != {
+            ResearchSource.IC_NET,
             ResearchSource.FINDCHIPS,
             ResearchSource.HQEW,
             ResearchSource.LCSC,
             ResearchSource.BOM_AI,
             ResearchSource.INSO,
         }:
-            raise ValueError("Research service requires all five price sources")
+            raise ValueError("Research service requires all six price sources")
         try:
             self._output.upsert(
                 research_input.inquiry_id,

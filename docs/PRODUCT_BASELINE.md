@@ -183,3 +183,22 @@ Their affected business may need to stop safely; the UI must state that honestly
 Older immediate website GLOBAL_STOP policies above are superseded. Executor owns
 implementation/tests/release evidence in tasks/2026-10-22-site-outage-three-hours.md;
 independent Review remains required. No production writes are run as verification.
+
+## Owner Research six-price-source correction (2026-10-22)
+
+Supersedes previous five-source and individual shorter history windows: IC.net
+joins Findchips/HQEW/LCSC/Bom.Ai/INSO as a sixth price source using its existing
+query page's current RMB reference price. Missing/invalid/zero reference produces
+no candidate, not a technical failure; existing IC.net brand/certified-stock rules
+stay unchanged. Only positive valid RMB-normalized candidates compete; same ECB
+FX and minimum times original customer quantity. Findchips/LCSC stock fallback
+and all other Research status/matching/quantity rules stay unchanged.
+Findchips/HQEW/Bom.Ai/INSO independently select the minimum within the first valid
+1,2,3,4,5,6 calendar-month window using calendar_month_cutoff. Actual quote dates
+take precedence; only evidenced current undated quotes use capture-time current
+pricing. Product/stock update dates are not historical quotation dates. LCSC and
+IC.net current prices have no month filter. No invented unavailable history.
+Research Excel adds IC.net through its existing atomic schema migration without
+dropping old rows/identity/status. See docs/modules/RESEARCH.md for date contracts
+and UNKNOWN live coverage. Task:tasks/2026-10-22-research-six-price-sources.md,
+offline only, REVIEW_REQUIRED; no packaging/deployment/production-data access.

@@ -4,11 +4,11 @@
 
 复用 ResearchService 和现有全部 adapters；聚合/价格算法不变。
 生产组合注入 typed source observer / query recovery，不新增第二套调研。
-IC.net 不可用暂停 V1.2；INSO 认证立即全局停止，历史查询失败按 fresh-tab
-初次加三次重试恢复；其他来源超时/登录/验证只记该来源失败，继续其余来源。
+本节故障策略以 PRODUCT_BASELINE.md 中 2026-10-22 网站持续三小时故障规则为准；
+旧版 IC.net/INSO 故障立即全局停止的表述已被该规则取代。本次价格调整不修改故障恢复流程。
 人工登录/验证提醒仍走既有通知账本至 Owner 229。无报价仍保持真实无报价，
 Workflow V1.2 将本行调研失败安全终结而非自动重跑；重要/重复通知规则不变。
-共享 CDP 有限恢复失败必须向上抛 GLOBAL_STOP，不能被可选来源降格吞掉。
+共享 CDP/认证等技术异常仍向原恢复流程报告，不能伪装成正常零价。
 
 ## Public Contract
 
@@ -20,18 +20,45 @@ Workflow V1.2 将本行调研失败安全终结而非自动重跑；重要/重�
 
 ## 来源
 
-IC.net 只用于 Brand 与货量，不是价格源。价格源为 Findchips、HQEW、LCSC、Bom.Ai、INSO。
+正式六价格源：IC.net、Findchips、HQEW、LCSC、Bom.Ai、INSO。
 
 - IC.net：严格 MPN；库存只统计严格匹配且带 SSCP/ICCP 标识的行。无合格库存或总量 `<= 3 × quantity` → `货少`；否则 `货多`。技术失败 → `待验证`，不得当作零。
+- IC.net 参考价只从同次型号查询页的 `body > div.navigation > div.cankaoPrice > a > span`
+  提取人民币单价，复用已有 HTML tree/可见性及型号校验，不重复查询。空/零/非数字/不可解析
+  为正常无有效价（Excel 显示0），不生成候选价；品牌、库存及货量逻辑不变。
+  加载/登录/验证/结果页解析故障仍为 SOURCE_UNAVAILABLE（Excel 显示暂不可用，备注保留原因）。
 - Findchips：读取可见价格档位；分别保留有库存/无库存最低价。
 - Findchips 明确空结果页：已核证 `p.alert.alert-info.no-results` 的完整文本
   `No results were found for <当前型号>.` 是正常无结果，即便没有报价表格。
   必须与当前型号一致；空白页、普通文本、脚本中的提示、登录页或错误页不能据此判空。
   表格记录与空结果标记并存按冲突报错。继续复用原有 source outcome/聚合规则。
-- HQEW：只读目标型号历史市场报价，最近 1 个自然月最低价。
+- HQEW：只读目标型号市场报价，按下述1至6月窗口取价。
 - LCSC：取已展示最低 unit price，分别保留有库存/无库存最低价。
-- Bom.Ai：只读目标型号报价区域，最近 1 个自然月最低价。
-- INSO：只读历史询价“供方未税价”；先 1 个自然月，无有效价再扩大到 2、3 个自然月。
+- Bom.Ai：只读目标型号报价区域，按下述1至6月窗口取价。
+- INSO：只读历史询价“供方未税价”，按下述1至6月窗口取价。
+
+### 历史窗口及日期依据（Owner 2026-10-22）
+
+Findchips/HQEW/Bom.Ai/INSO 各自先查最近1个自然月，无有效报价再逐月扩大至2、3、4、5、6月。
+只选第一个存在有效报价窗口中的最低价，不混入更旧窗口的低价。边界使用原
+`calendar_month_cutoff`，包含截止时刻，排除未来及六个月前报价；不新增历史查询。
+Findchips 在该站第一个有效窗口内继续分别保存有库存/无库存价，整体正常价格池优先，
+原无库存兜底不变。月数 `PriceCandidate.age_months` 支持1至6；2至6月在价格备注显示
+两个月/三个月/四个月/五个月/六个月，后缀型号和无库存备注保留。首月沿用原显示格式。
+
+以下是现有采集器/离线样本可识别的日期依据，不代表已实盘确认所有站点都提供完整历史：
+
+| 来源 | 可用报价时间/当前价依据 | 未提供日期时 |
+| --- | --- | --- |
+| Findchips | 报价行 `data-quotedate` / `data-quote-date` | 当前已展示的价格档位按本次现价归首月；通用 `data-date` 不作为历史报价时间 |
+| HQEW | `input.list-data` 的 `quotationDate` / `quoteDate`，含原有相对日期解析 | 当前 `quotationPrice` 按现价归首月，不借用商品/库存更新字段 |
+| Bom.Ai | 报价块 `quoteDate` | 仅明确文字“实时报价/当前报价/现价”且有采集时间才归首月；无日期且不能证明当前价则不虚构时间 |
+| INSO | 原有 `Stock_VenQuote` 行的 `CreateTime`（沿用现有历史报价记录时间）、`InPrice`、`CurrencyID` | 未提供可解析历史记录时间的行不参与；不拿库存更新时间补齐 |
+| LCSC | 当前网页显示的商品/合作库存价格档位 | 不作日期过滤；`更新时间`、`updateTime`、`updatedAt` 不作报价日期，日期缺失不舍弃价格 |
+| IC.net | 指定位置当前参考价 | 不作日期过滤，无日期也不虚构历史报价 |
+
+本次仅离线验证，当前实站字段覆盖、六个月历史完整性及实盘取价验收仍为 UNKNOWN。
+网站只展示现价就只取现价，已有首屏覆盖范围及访问方式不扩大。
 
 Findchips/HQEW/LCSC/Bom.Ai 的型号比较按现有 canonical normalization；禁止模糊猜测变体。INSO Research 复用 launcher 提供的 authenticated `InsoOperationAccess`，不得自行枚举/接管任意浏览器页面。
 
@@ -40,6 +67,7 @@ Findchips/HQEW/LCSC/Bom.Ai 的型号比较按现有 canonical normalization；�
 USD/RMB、HKD/RMB 使用同日 ECB reference；缺失、重复、日期不一致、非正数或非有限值均 fail closed。
 
 正常价格池：
+- IC.net 有效当前参考价
 - Findchips 有库存最低价
 - HQEW 最低价
 - LCSC 有库存最低价
@@ -133,9 +161,13 @@ profile 为 `D:\Program_Leo\INSO_CDP\chrome-profile`（见 `CDP_SESSION_POLICY.m
 正式输出：`调研价格.xlsx`。
 
 可见列：
-`型号 | 品牌 | 数量 | 重要等级 | 货量标识 | 预估订单总价 | 市场最低参考价 | INSO | Findchips | 华强 | 立创 | 正能量 | 备注 | 处理时间`
+`型号 | 品牌 | 数量 | 重要等级 | 货量标识 | 预估订单总价 | 市场最低参考价 | INSO | Findchips | 华强 | 立创 | 正能量 | IC.net | 备注 | 处理时间`
 
 隐藏 `_inquiry_id` 用于幂等，隐藏 `_research_status` 保存结果状态。Excel load/schema/save 失败 → `RETRYABLE_FAILURE`。技术失败详情只进备注，不伪装成业务“无结果”。
+
+五价格源旧表及原有更早 schema 均可按列名兼容读取；首次写入沿用原原子迁移，
+保留历史各字段、来源价、隐藏状态/身份及单元格样式/批注，新增 IC.net 列。
+旧记录 IC.net 留空，不回填虚构价格；新采集无参考价显示0且不进入最低价池。
 
 ## 边界
 

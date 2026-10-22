@@ -76,10 +76,10 @@ def test_inso_three_month_window() -> None:
     assert format_source_result(result) == "21（三个月）"
 
 
-def test_zero_or_older_than_three_months_is_no_result() -> None:
+def test_zero_or_older_than_six_months_is_no_result() -> None:
     records = (
         _rec("0", "USD", datetime(2026, 9, 1, tzinfo=UTC)),
-        _rec("1", "USD", datetime(2026, 6, 29, tzinfo=UTC)),
+        _rec("1", "USD", datetime(2026, 3, 29, tzinfo=UTC)),
     )
     result = InsoHistoryAdapter(Client(records), Fx(), clock=lambda: NOW).search(
         "ABC", 1

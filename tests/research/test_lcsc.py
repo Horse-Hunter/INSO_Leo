@@ -76,8 +76,7 @@ def test_cooperation_inventory_card_price_and_date() -> None:
     )
     assert product is not None
     assert product.stock_quantity == 208
-    assert product.observed_at is not None
-    assert product.observed_at.date().isoformat() == "2026-09-23"
+    assert product.observed_at is None  # Inventory update time is not a quote date.
     assert select_lcsc_tier(product.tiers, 10_000).unit_price == Decimal("622.516219")
 
 
@@ -119,7 +118,7 @@ def test_overlong_suffix_and_unsupported_currency_have_no_candidate() -> None:
     assert unsupported.outcome is SourceOutcome.NO_VALID_PRICE
 
 
-def test_present_date_is_filtered_by_natural_month() -> None:
+def test_current_price_is_not_filtered_by_date() -> None:
     result = LcscAdapter(
         Client(
             _html(
@@ -131,7 +130,8 @@ def test_present_date_is_filtered_by_natural_month() -> None:
         Fx(),
         clock=lambda: NOW,
     ).search("ABC-1", 1)
-    assert result.outcome is SourceOutcome.NO_VALID_PRICE
+    assert result.outcome is SourceOutcome.SUCCESS
+    assert result.price_candidate is not None
 
 
 def _next(payload: dict[str, object]) -> str:

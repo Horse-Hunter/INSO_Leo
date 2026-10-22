@@ -33,7 +33,6 @@ from .source_contracts import (
     SourceEvidence,
     SourceOutcome,
     SourceResult,
-    calendar_month_cutoff,
     price_source_mpn_match,
 )
 
@@ -298,19 +297,13 @@ class LcscBrowserClient:
 
 
 def parse_lcsc_cooperation_card(text: str, target_mpn: str) -> LcscProduct | None:
-    """Read a displayed cooperation-inventory card, including date and tiers."""
+    """Read current cooperation-inventory tiers; update dates are not quote dates."""
 
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     if not lines or price_source_mpn_match(target_mpn, lines[0]) is None:
         return None
     try:
         stock_index = lines.index("库存")
-        observed_at = None
-        if "更新时间" in lines:
-            date_index = lines.index("更新时间")
-            observed_at = datetime.strptime(
-                lines[date_index + 1], "%Y年%m月%d日"
-            ).replace(tzinfo=_CHINA_TZ).astimezone(UTC)
         stock = int(lines[stock_index + 1].replace(",", ""))
         tiers = tuple(
             LcscPriceTier(int(lines[index][:-1]), Decimal(lines[index + 1].lstrip("¥￥")), "CNY")
@@ -322,7 +315,7 @@ def parse_lcsc_cooperation_card(text: str, target_mpn: str) -> LcscProduct | Non
         raise LcscParseError("COOPERATION_CARD_UNPARSEABLE") from exc
     if not tiers:
         raise LcscParseError("COOPERATION_PRICE_MISSING")
-    return LcscProduct(lines[0], False, stock, tiers, observed_at)
+    return LcscProduct(lines[0], False, stock, tiers)
 
 
 class CdpLcscClient:
@@ -610,17 +603,11 @@ def _parse_lcsc_product_page(html: str) -> tuple[LcscProduct, str | None]:
         raise LcscParseError("PRICE_TIERS_UNPARSEABLE") from exc
     if stock is not None and (isinstance(stock, bool) or not isinstance(stock, int)):
         raise LcscParseError("STOCK_UNPARSEABLE")
-    observed_at = _parse_optional_date(
-        record.get("quoteDate")
-        or record.get("updateTime")
-        or record.get("updatedAt")
-    )
     return LcscProduct(
         mpn,
         is_preorder,
         stock,
         tuple(tiers),
-        observed_at,
     ), product_id
 
 
@@ -767,19 +754,6 @@ class LcscAdapter:
                 page,
                 product,
                 SourceOutcome.NO_STRICT_MPN_MATCH,
-                None,
-                None,
-                None,
-            )
-        now = self._clock()
-        if product.observed_at is not None and not (
-            calendar_month_cutoff(now) <= product.observed_at <= now
-        ):
-            return self._result(
-                target_mpn,
-                page,
-                product,
-                SourceOutcome.NO_VALID_PRICE,
                 None,
                 None,
                 None,

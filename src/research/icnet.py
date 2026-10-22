@@ -9,6 +9,7 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
 from ipaddress import ip_address
 from time import monotonic, sleep
@@ -28,6 +29,7 @@ from .site_login import (
 )
 from .source_contracts import (
     EvidenceField,
+    PriceCandidate,
     ResearchSource,
     SourceEvidence,
     SourceOutcome,
@@ -758,8 +760,36 @@ def ensure_icnet_signed_in(
         raise SiteLoginError("LOGIN_NOT_CONFIRMED")
 
 
+def parse_icnet_reference_price(html: str) -> Decimal:
+    """Read only body > div.navigation > div.cankaoPrice > a > span."""
+    parser = _TreeParser()
+    parser.feed(html)
+    hidden = _hidden_classes(html)
+    nodes = [node for node in parser.root.descendants() if node.tag == "body"]
+    for tag, class_name in (("div", "navigation"), ("div", "cankaoPrice"), ("a", None), ("span", None)):
+        nodes = [child for node in nodes for child in node.children
+                 if child.tag == tag and (class_name is None or _has_class(child, class_name))
+                 and not _is_hidden(child, parser.root, hidden)]
+    if len(nodes) != 1:
+        return Decimal(0)
+    text = _visible_text(nodes[0], parser.root, hidden).strip()
+    # One displayed RMB unit price; reject ranges, extra numbers and other currencies.
+    match = re.fullmatch(
+        r"(?:参考价[：:]?\s*)?(?:[¥￥]|RMB\s*|CNY\s*)?\s*"
+        r"(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|\.\d+)"
+        r"\s*(?:元(?:/颗|/个|/片)?|/颗|/个|/片)?", text, re.IGNORECASE,
+    )
+    if match is None:
+        return Decimal(0)
+    try:
+        value = Decimal(match.group(1).replace(",", ""))
+    except InvalidOperation:
+        return Decimal(0)
+    return value if value.is_finite() and value > 0 else Decimal(0)
+
+
 class IcNetAdapter:
-    """Build Research-owned IC.net evidence without price candidates."""
+    """Build IC.net brand, stock and current reference price from one capture."""
 
     def __init__(
         self,
@@ -888,7 +918,13 @@ class IcNetAdapter:
 
         threshold = customer_quantity * 3
         stock_label = classify_stock(stock_total, customer_quantity)
+        price = parse_icnet_reference_price(page.html)
+        candidate = (PriceCandidate(
+            ResearchSource.IC_NET, strict_rows[0].mpn, price, "RMB", price,
+            page.captured_at, page.url,
+        ) if price > 0 else None)
         fields = (
+            EvidenceField("reference_price_rmb", price),
             EvidenceField("first_page_rows_inspected", len(rows)),
             EvidenceField("strict_mpn_rows", len(strict_rows)),
             EvidenceField("brand_frequency_rows_used", brand_rows_used),
@@ -928,6 +964,7 @@ class IcNetAdapter:
                 source=ResearchSource.IC_NET,
                 outcome=SourceOutcome.SUCCESS,
                 evidence=evidence,
+                price_candidate=candidate,
             ),
             resolved_brand=resolved_brand,
             stock_label=stock_label,

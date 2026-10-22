@@ -132,7 +132,7 @@ def _parse_price(value: str) -> tuple[Decimal, str]:
 
 
 def parse_bom_ai_price_records(
-    html: str, target_mpn: str
+    html: str, target_mpn: str, *, captured_at: datetime | None = None,
 ) -> tuple[BomAiPriceRecord, ...]:
     """Parse only quote blocks belonging to matching lower-page MPN sections."""
 
@@ -161,13 +161,16 @@ def parse_bom_ai_price_records(
             for data in _DATA.findall(block):
                 raw_price = _child_text(data, "quotePrice")
                 raw_date = _child_text(data, "quoteDate")
-                if not raw_price or not raw_date or "*" in raw_price:
+                if not raw_price or "*" in raw_price:
                     continue
                 price, currency = _parse_price(raw_price)
                 try:
-                    observed = datetime.strptime(
-                        raw_date, "%Y/%m/%d %H:%M:%S"
-                    ).replace(tzinfo=_CHINA_TZ)
+                    if raw_date:
+                        observed = datetime.strptime(raw_date, "%Y/%m/%d %H:%M:%S").replace(tzinfo=_CHINA_TZ)
+                    elif captured_at is not None and re.search(r"实时报价|当前报价|现价", _TAG.sub("", data)):
+                        observed = captured_at
+                    else:
+                        continue
                 except ValueError as exc:
                     raise BomAiClientError("PRICE_RECORD_UNPARSEABLE") from exc
                 records.append(
@@ -196,16 +199,18 @@ def parse_bom_ai_price_records(
                 continue
             if (
                 not raw_price
-                or not raw_date
                 or "{{" in raw_price
-                or "{{" in raw_date
+                or (raw_date and "{{" in raw_date)
             ):
                 continue
             price, currency = _parse_price(raw_price)
             try:
-                observed = datetime.strptime(
-                    raw_date, "%Y/%m/%d %H:%M:%S"
-                ).replace(tzinfo=_CHINA_TZ)
+                if raw_date:
+                    observed = datetime.strptime(raw_date, "%Y/%m/%d %H:%M:%S").replace(tzinfo=_CHINA_TZ)
+                elif captured_at is not None and re.search(r"实时报价|当前报价|现价", _TAG.sub("", block)):
+                    observed = captured_at
+                else:
+                    continue
             except ValueError as exc:
                 raise BomAiClientError("PRICE_RECORD_UNPARSEABLE") from exc
             records.append(
@@ -238,7 +243,7 @@ class BomAiCredentialedClient:
         if urlsplit(page.url).scheme != "https" or not _is_bom_ai_host(page.url):
             raise BomAiClientError("UNEXPECTED_RESPONSE_HOST", page.url)
         return BomAiCapture(
-            parse_bom_ai_price_records(page.html, mpn),
+            parse_bom_ai_price_records(page.html, mpn, captured_at=page.captured_at),
             page.url,
             page.captured_at,
         )
@@ -516,7 +521,7 @@ class BomAiAdapter:
         now = self._clock()
         try:
             capture = self._client.fetch_price_records(target_mpn)
-            cutoff = self._month_cutoff(now)
+            first_cutoff = self._month_cutoff(now)
         except BomAiClientError as exc:
             return self._failure(target_mpn, now, exc.code, exc.source_url)
         except (RuntimeError, TypeError, ValueError):
@@ -529,11 +534,12 @@ class BomAiAdapter:
             for record in capture.records
             if price_source_mpn_match(target_mpn, record.mpn) is not None
         ]
-        valid = [
-            record
-            for record in matched
-            if cutoff <= record.observed_at <= now
-        ]
+        valid = []
+        for months in range(1, 7):
+            cutoff = first_cutoff if months == 1 else calendar_month_cutoff(now, months)
+            valid = [record for record in matched if cutoff <= record.observed_at <= now]
+            if valid:
+                break
         if not matched:
             return self._result(target_mpn, capture, SourceOutcome.NO_STRICT_MPN_MATCH)
         if not valid:
@@ -575,9 +581,10 @@ class BomAiAdapter:
             capture.captured_at,
             capture.url,
             selected.mpn if match is MpnMatchKind.SUFFIX else None,
+            age_months=months,
         )
         return self._result(
-            target_mpn, capture, SourceOutcome.SUCCESS, candidate
+            target_mpn, capture, SourceOutcome.SUCCESS, candidate, selected.observed_at,
         )
 
     @staticmethod
@@ -586,6 +593,7 @@ class BomAiAdapter:
         capture: BomAiCapture,
         outcome: SourceOutcome,
         candidate: PriceCandidate | None = None,
+        selected_observed_at: datetime | None = None,
     ) -> SourceResult:
         evidence = SourceEvidence(
             ResearchSource.BOM_AI,
@@ -598,16 +606,7 @@ class BomAiAdapter:
                 EvidenceField("records_inspected", len(capture.records)),
                 EvidenceField(
                     "selected_observed_at",
-                    next(
-                        (
-                            record.observed_at
-                            for record in capture.records
-                            if candidate is not None
-                            and record.mpn == candidate.matched_mpn
-                            and record.raw_price == candidate.raw_price
-                        ),
-                        None,
-                    ),
+                    selected_observed_at,
                 ),
                 EvidenceField(
                     "selected_rmb_price",

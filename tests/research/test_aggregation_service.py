@@ -248,7 +248,7 @@ def test_no_price_and_no_technical_failure_is_terminal_exception() -> None:
     assert aggregation.status is ResearchStatus.EXCEPTION
     assert aggregation.reason_code is ResearchReasonCode.NO_MATCHING_PRODUCT
     assert aggregation.market_reference is None
-    assert aggregation.remarks == "五个价格来源均无报价，可能是客户填写的型号有误"
+    assert aggregation.remarks == "六个价格来源均无报价，可能是客户填写的型号有误"
 
 
 def test_no_quote_exception_is_persisted_in_research_history(tmp_path: Path) -> None:
@@ -322,11 +322,11 @@ def test_icnet_challenge_is_visible_in_excel_remarks(tmp_path: Path) -> None:
     service = _service(path, _complete())
     service._icnet = ChallengedIcNet()
     result = service.execute(ResearchInput("inq_challenge", "ABC", None, 10, "A"))
-    assert result.status is ResearchStatus.EXCEPTION
-    assert result.remarks == (
-        "五个价格来源均无报价，可能是客户填写的型号有误；IC.net：需要人工验证"
-    )
-    assert load_workbook(path).active["M2"].value == result.remarks
+    assert result.status is ResearchStatus.RETRYABLE_FAILURE
+    assert result.remarks == "IC.net：需要人工验证"
+    worksheet = load_workbook(path).active
+    headers = {cell.value: cell.column for cell in worksheet[1]}
+    assert worksheet.cell(2, headers["备注"]).value == result.remarks
 
 
 def test_service_writes_canonical_idempotent_full_snapshot(tmp_path: Path) -> None:
@@ -437,7 +437,7 @@ def test_excel_failure_is_retryable_and_keeps_acquisition_evidence() -> None:
     )
 
     assert execution.result.status is ResearchStatus.RETRYABLE_FAILURE
-    assert execution.price_sources == values
+    assert execution.price_sources == (service._icnet.search("ABC", None, 10).source_result, *values[1:])
     assert execution.aggregation.lowest is not None
 
 

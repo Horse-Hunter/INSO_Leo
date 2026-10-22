@@ -483,12 +483,13 @@ class HqewAdapter:
             candidate = None
             matched_mpn = None
         else:
-            cutoff = calendar_month_cutoff(now)
-            valid = [
-                offer
-                for offer in matched
-                if offer.observed_at is None or cutoff <= offer.observed_at <= now
-            ]
+            valid = []
+            for months in range(1, 7):
+                cutoff = calendar_month_cutoff(now, months)
+                valid = [offer for offer in matched
+                         if offer.observed_at is None or cutoff <= offer.observed_at <= now]
+                if valid:
+                    break
             if not valid:
                 outcome = SourceOutcome.NO_VALID_PRICE
                 candidate = None
@@ -514,6 +515,7 @@ class HqewAdapter:
                         if match_kind is MpnMatchKind.SUFFIX
                         else None
                     ),
+                    age_months=months,
                 )
         evidence = SourceEvidence(
             ResearchSource.HQEW,

@@ -23,6 +23,7 @@ class ResearchSource(str, Enum):
 
 
 PRICE_SOURCES: tuple[ResearchSource, ...] = (
+    ResearchSource.IC_NET,
     ResearchSource.FINDCHIPS,
     ResearchSource.HQEW,
     ResearchSource.LCSC,
@@ -107,8 +108,8 @@ class PriceCandidate:
                 raise TypeError(f"{name} must be Decimal")
             if not value.is_finite() or value <= 0:
                 raise ValueError(f"{name} must be finite and positive")
-        if self.age_months not in {1, 2, 3}:
-            raise ValueError("age_months must be 1, 2, or 3")
+        if self.age_months not in {1, 2, 3, 4, 5, 6}:
+            raise ValueError("age_months must be between 1 and 6")
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,9 +172,9 @@ def format_source_result(result: SourceResult) -> str:
         candidate = result.price_candidate
         text = money_text(candidate.normalized_rmb_price)
         notes: list[str] = []
-        if candidate.source is ResearchSource.INSO and candidate.age_months > 1:
-            notes.append("两个月" if candidate.age_months == 2 else "三个月")
-        elif candidate.display_mpn:
+        if candidate.age_months > 1:
+            notes.append(("一个月", "两个月", "三个月", "四个月", "五个月", "六个月")[candidate.age_months - 1])
+        if candidate.display_mpn:
             notes.append(candidate.display_mpn)
         if notes:
             text += f"（{'，'.join(notes)}）"
@@ -181,9 +182,17 @@ def format_source_result(result: SourceResult) -> str:
     if result.out_of_stock_candidate is not None:
         candidate = result.out_of_stock_candidate
         notes = ["无库存"]
+        if candidate.age_months > 1:
+            notes.append(("一个月", "两个月", "三个月", "四个月", "五个月", "六个月")[candidate.age_months - 1])
         if candidate.display_mpn:
             notes.append(candidate.display_mpn)
         lines.append(
             f"{money_text(candidate.normalized_rmb_price)}（{'，'.join(notes)}）"
         )
-    return "\n".join(lines) if lines else "无结果"
+    if lines:
+        return "\n".join(lines)
+    if result.source is ResearchSource.IC_NET and result.outcome is not SourceOutcome.SOURCE_UNAVAILABLE:
+        return "0"
+    if result.source is ResearchSource.IC_NET:
+        return "暂不可用"
+    return "无结果"

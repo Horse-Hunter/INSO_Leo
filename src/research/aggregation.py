@@ -1,4 +1,4 @@
-"""Pure five-source price-pool and status aggregation."""
+"""Pure six-source price-pool and status aggregation."""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ class PriceAggregation:
 
 
 _SOURCE_LABELS = {
+    ResearchSource.IC_NET: "IC.net",
     ResearchSource.FINDCHIPS: "Findchips",
     ResearchSource.HQEW: "华强",
     ResearchSource.LCSC: "立创",
@@ -222,5 +223,5 @@ def aggregate_price_results(
         None,
         ResearchStatus.EXCEPTION,
         ResearchReasonCode.NO_MATCHING_PRODUCT,
-        "五个价格来源均无报价，可能是客户填写的型号有误",
+        "六个价格来源均无报价，可能是客户填写的型号有误",
     )

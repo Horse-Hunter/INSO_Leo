@@ -645,7 +645,6 @@ class _FindchipsParser(HTMLParser):
                     observed_at=_parse_optional_date(
                         values.get("data-quotedate")
                         or values.get("data-quote-date")
-                        or values.get("data-date")
                     ),
                 )
             )
@@ -802,20 +801,20 @@ class FindchipsAdapter:
             )
 
         now = self._clock()
-        cutoff = calendar_month_cutoff(now)
         mpn_matched_offers = [
             offer
             for offer in offers
             if price_source_mpn_match(target_mpn, offer.mpn) is not None
         ]
-        matched_offers = [
-            offer
-            for offer in mpn_matched_offers
-            if (
-                offer.observed_at is None
-                or cutoff <= offer.observed_at <= now
-            )
-        ]
+        matched_offers = []
+        for months in range(1, 7):
+            cutoff = calendar_month_cutoff(now, months)
+            matched_offers = [offer for offer in mpn_matched_offers
+                if (offer.observed_at is None or cutoff <= offer.observed_at <= now)
+                and offer.stock_positive is not None
+                and any(tier.currency in {"USD", "HKD"} for tier in offer.tiers)]
+            if matched_offers:
+                break
         if not mpn_matched_offers:
             evidence = SourceEvidence(
                 source=ResearchSource.FINDCHIPS,
@@ -943,6 +942,7 @@ class FindchipsAdapter:
                 display_mpn=(
                     offer.mpn if match is MpnMatchKind.SUFFIX else None
                 ),
+                age_months=months,
             )
 
         stocked_candidate = candidate(stocked_selection)

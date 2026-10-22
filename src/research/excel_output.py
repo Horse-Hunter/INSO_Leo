@@ -30,6 +30,7 @@ FINDCHIPS_HEADER = "Findchips"
 HQEW_HEADER = "华强"
 LCSC_HEADER = "立创"
 BOM_AI_HEADER = "正能量"
+ICNET_HEADER = "IC.net"
 REMARKS_HEADER = "备注"
 PROCESSED_AT_HEADER = "处理时间"
 INQUIRY_ID_HEADER = "_inquiry_id"
@@ -47,12 +48,15 @@ VISIBLE_HEADERS = (
     HQEW_HEADER,
     LCSC_HEADER,
     BOM_AI_HEADER,
+    ICNET_HEADER,
     REMARKS_HEADER,
     PROCESSED_AT_HEADER,
 )
 CANONICAL_HEADERS = (*VISIBLE_HEADERS, RESEARCH_STATUS_HEADER, INQUIRY_ID_HEADER)
+_FIVE_SOURCE_HEADERS = tuple(header for header in CANONICAL_HEADERS if header != ICNET_HEADER)
 DEFAULT_SHEET_TITLE = "Research"
 SOURCE_HEADERS: Mapping[ResearchSource, str] = {
+    ResearchSource.IC_NET: ICNET_HEADER,
     ResearchSource.INSO: INSO_HEADER,
     ResearchSource.FINDCHIPS: FINDCHIPS_HEADER,
     ResearchSource.HQEW: HQEW_HEADER,
@@ -213,6 +217,7 @@ class ResearchExcelOutput:
                 raise ExcelConsistencyError("duplicate Excel header")
             recognized = {
                 frozenset(CANONICAL_HEADERS),
+                frozenset(_FIVE_SOURCE_HEADERS),
                 frozenset(_OLD_CANONICAL_HEADERS),
                 frozenset(_PREVIOUS_HEADERS),
                 frozenset(_LEGACY_HEADERS),
@@ -234,7 +239,8 @@ class ResearchExcelOutput:
                     )
                 inquiry_ids.add(inquiry_id)
                 sources = tuple(
-                    (header, str(_cell(values, columns.get(header)) or "无结果"))
+                    (header, str(_cell(values, columns.get(header)))
+                     if _cell(values, columns.get(header)) is not None else "无结果")
                     for header in SOURCE_HEADERS.values()
                 )
                 records.append(ResearchHistoryRecord(
@@ -313,12 +319,14 @@ class ResearchExcelOutput:
                 raise ExcelConsistencyError("duplicate Excel header")
             known_sets = {
                 frozenset(CANONICAL_HEADERS),
+                frozenset(_FIVE_SOURCE_HEADERS),
                 frozenset(_OLD_CANONICAL_HEADERS),
                 frozenset(_PREVIOUS_HEADERS),
                 frozenset(_LEGACY_HEADERS),
             }
             if frozenset(headers) not in known_sets or len(headers) not in {
                 len(CANONICAL_HEADERS),
+                len(_FIVE_SOURCE_HEADERS),
                 len(_OLD_CANONICAL_HEADERS),
                 len(_PREVIOUS_HEADERS),
                 len(_LEGACY_HEADERS),

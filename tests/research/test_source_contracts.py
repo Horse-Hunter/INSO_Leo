@@ -72,13 +72,14 @@ def test_source_catalog_and_price_sources_are_exact() -> None:
         "inso",
     }
     assert PRICE_SOURCES == (
+        ResearchSource.IC_NET,
         ResearchSource.FINDCHIPS,
         ResearchSource.HQEW,
         ResearchSource.LCSC,
         ResearchSource.BOM_AI,
         ResearchSource.INSO,
     )
-    assert ResearchSource.IC_NET not in PRICE_SOURCES
+    assert len(PRICE_SOURCES) == 6
 
 
 def test_source_outcome_catalog_is_exact() -> None:
@@ -180,9 +181,8 @@ def test_price_candidate_rejects_binary_float(field: str) -> None:
         PriceCandidate(**values)  # type: ignore[arg-type]
 
 
-def test_ic_net_cannot_produce_price_candidate() -> None:
-    with pytest.raises(ValueError, match="price sources"):
-        _candidate(ResearchSource.IC_NET)
+def test_ic_net_is_a_positive_price_source() -> None:
+    assert _candidate(ResearchSource.IC_NET).source is ResearchSource.IC_NET
 
 
 @pytest.mark.parametrize(

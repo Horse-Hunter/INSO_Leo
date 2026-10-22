@@ -53,7 +53,7 @@ def test_suffix_match_expiry_and_overlong_suffix() -> None:
         clock=lambda: NOW,
     ).search("ABC", 1)
     expired = BomAiAdapter(
-        Client((BomAiPriceRecord("ABC", Decimal(1), NOW - timedelta(days=40)),)),
+        Client((BomAiPriceRecord("ABC", Decimal(1), NOW - timedelta(days=190)),)),
         clock=lambda: NOW,
     ).search("ABC", 1)
     mismatch = BomAiAdapter(

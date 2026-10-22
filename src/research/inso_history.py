@@ -398,7 +398,7 @@ class InsoHistoryAdapter:
         )
         selected: InsoHistoryRecord | None = None
         selected_months = 1
-        for months in (1, 2, 3):
+        for months in range(1, 7):
             cutoff = calendar_month_cutoff(now, months)
             pool = [record for record in positive if record.observed_at >= cutoff]
             if pool:
