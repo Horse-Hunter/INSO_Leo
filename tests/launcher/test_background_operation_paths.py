@@ -63,8 +63,10 @@ def test_login_guard_creates_its_owned_tab_in_background(monkeypatch, fresh):
     monkeypatch.setattr(inso_session, "new_background_page", create)
     monkeypatch.setattr(context, "new_page", forbidden)
     login = SimpleNamespace(username="synthetic", password="synthetic")
-    guard = inso_session.InsoSessionGuard(login=login, context=lambda: context, fresh_page=fresh)
+    guard = inso_session.InsoSessionGuard(
+        login=login, context=lambda: context, fresh_page=fresh, wait=lambda _seconds: None,
+    )
     result = guard.ensure_authenticated()
-    assert calls == ["background"]
+    assert calls == ["background"] * 5  # Existing bounded timeout recovery stays in background.
     assert result.outcome is inso_session.InsoSessionOutcome.DEAD
     assert guard.opened_page is None

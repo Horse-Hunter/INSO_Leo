@@ -1147,6 +1147,10 @@ class ProductionBackend(GuiBackend):
     def _wait_between_polls(self, seconds):
         deadline = monotonic() + seconds
         while not self._stop.is_set():
+            # Give the shared browser back during idle time, on its owner thread.
+            # A worker may queue teardown after this wait has already started.
+            self._release_idle_browser()
+            BrowserHandle.drain_deferred_stops()
             with self._manual_condition:
                 if self._stop.is_set():
                     self._manual_request = None
