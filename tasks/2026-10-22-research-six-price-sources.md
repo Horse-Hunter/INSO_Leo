@@ -109,3 +109,42 @@ recorded locally; no generated evidence/workbook/customer output goes into Git.
 Retired all five owned synthetic test roots (154236162 bytes), without following
 reparse points. Retain only compact ignored logs/manifests under
 .tmp/research-six-evidence-20261022; no staging/package was created.
+
+
+## CEO independent review — six price sources (2026-10-22)
+
+**CHANGES_REQUESTED — one scoped price-display precision defect; deployment NOT approved.**
+Independently reviewed commit `9e48db95b516fce010138006d548210ec34689c4`
+against the Owner's six-source rule and actual adapter/aggregation/Excel code
+and tests. Verified the single-capture IC.net selector parsing and conditional
+positive candidate; zero/missing text vs technical faults; the six-source
+ResearchService result and one observer call; independent first-valid windows
+1–6 for Findchips/HQEW/Bom.Ai/INSO; LCSC no-date filtering; FX, stock fallback,
+quantity multiplication; Excel header-name migration and retention of old rows,
+identities, styles and other sheets. Executor reports 1643 tests PASS / one skipped
+and Ruff/diff checks PASS; CEO did not run local suite or access live websites,
+CDP, Excel, customers or the installed V1.4.
+
+**P2 defect — display rounds a nonzero minimum to literal `0`.**
+`src/research/source_contracts.py::money_text` always rounds to two decimal
+places. A valid new IC.net price `Decimal("0.001")` is allowed by
+`parse_icnet_reference_price` and `PriceCandidate`, competes as a positive
+price in `aggregate_price_results`, but both the IC.net Excel cell via
+`format_source_result` and market reference via `_market_reference` display
+`0`. The Owner expressly distinguishes invalid zero (excluded) from valid
+positive values (included). Existing generic formatter had the same precision
+limitation, but adding IC.net to the minimum pool makes it part of this feature
+acceptance. This is a deterministic source-level finding, not a claim of a
+current real-world site price. Request **minimal display-only correction**
+that preserves two-decimal display when sufficient but never renders a strictly
+positive usable candidate as zero; do not round the candidate or total used
+for calculations, and do not alter an actual zero source display. Add a
+targeted IC.net positive-sub-cent -> six-source market reference/Excel test,
+plus a true-zero excluded test. Preserve existing business rules. No extra
+framework/packaging/production/browser operations.
+
+**Disposition:** Keep `REVIEW_REQUIRED` until the tiny display precision
+follow-up is pushed and re-reviewed. All other reviewed scoped behavior is
+accepted at code level, not live site accepted. Real IC.net markup/date field
+coverage and historical completeness remain UNKNOWN. No deployment or
+production action was performed by CEO.
