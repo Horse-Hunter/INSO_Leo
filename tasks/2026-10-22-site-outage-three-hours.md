@@ -90,11 +90,8 @@ script, SMTP or order/Sheets write is used as verification. Historical03:20 exac
 URL/ownership/navigation cause remains UNKNOWN, but its documented fault route
 is now included in the shared recovery policy rather than immediate global stop.
 
-Source complete and ready for the existing authorized build/replacement. Old
-installed PID209012 still has Oct21 EXE; no replacement or business resume yet.
-Keep REVIEW_REQUIRED. Package/start/cleanup evidence will be appended after the
-canonical build and a verified safe old-program exit; preserve runtime/profile,
-credentials, all unrelated dirty work and real local Git HEAD/index throughout.
+The source-only deployment limit above is SUPERSEDED by the completed release
+receipt below. Keep REVIEW_REQUIRED; independent review remains outstanding.
 
 Final review additionally verifies the real JavaScript idle predicate: a quiet DOM
 cannot release an initial dispatched update whose settlement is still unconfirmed.
@@ -108,3 +105,42 @@ initial update from later consuming another order's payload.
 Current frozen build input manifest contains122 tracked src/scripts/packaging
 assets; final regression source bytes will be matched to the committed source
 and rechecked after packaging. No normal source changes after this test receipt.
+
+## Authorized release / startup receipt (2026-10-22)
+Implementation commit:81a757d18fd71bd72d47f5dc174318c9a3c0cd42 (21 files,
+932 insertions/177 deletions, including tests/docs). All122 frozen build input
+hashes match the tested source before replacement. Canonical existing command
+`scripts/build_windows_release.ps1 -Version 1.4 -BuildOnly` completed; frozen
+self-check and RELEASE_SCAN_OK passed. No parallel package pipeline was added.
+
+The previous process had exited before replacement; no force termination was
+used. Replaced only `INSO_V1.4.exe` and `_internal/base_library.zip` at the existing
+`D:\Program_Leo\INSO_Leo\dist\INSO_V1.4` installation. Verified all2875 program
+assets against staging; all10 protected non-program files had identical hashes
+immediately after copying. Config/credentials/runtime/database/CDP profile were
+not replaced. Only the two previous program assets were backed up locally;
+the Oct21 rollback is retained separately. Installed EXE SHA256:
+`5ff5e5cab799dcf8fcbd9335182d03ddef3192a7a767b49af30c9eb6603254d2`.
+
+Installed dependency check and actual idle GUI check both exited0. Launched the
+normal visible installed EXE; PID230216, title INSO_V1.4, nonzero window handle,
+Responding=True, and a later independent process check still passed. No Start
+action, business polling, order processing, production site login/query, SMTP
+or Sheets write was performed. This is genuine packaged idle-start evidence,
+not live business-chain or actual three-hour outage acceptance.
+
+Read-only CDP metadata checks, including outside the sandbox, found port9222
+unreachable at this time. Current tabs are UNKNOWN; do not claim only a blank
+page remains. No Chrome process/profile/port/config was started, stopped or
+modified to obtain an apparent passing result. Browser availability remains
+an operational prerequisite for later business start, not a package failure.
+
+Retired23 owned disposable directories (748442695 bytes), including the canonical
+marked stage and this task's synthetic test directories after verification;
+no reparse points were followed. Retained only compact release/test/hash receipts
+and necessary rollback at ignored `.tmp/site-outage-release-20261022/`, plus
+existing protected prior rollback/runtime/unknown dirty work. Source, deployment,
+startup, browser and cleanup receipts are local only, without production output
+in Git. No further source changes after the1580 PASS/1 skipped regression.
+Status remains REVIEW_REQUIRED. Owner may start ordinary business when ready;
+external site availability and actual long-running acceptance remain UNKNOWN.
