@@ -182,3 +182,49 @@ Compact evidence: ignored `.tmp/runtime-systemexit-review-20261023/`; retire onl
 this task's synthetic test tree after checks. No package/install/replacement or
 production process/browser/order/data access. Past disappearance remains UNKNOWN.
 Next: CEO independent review of the minimal correction, REVIEW_REQUIRED.
+
+
+## CEO independent re-review — SystemExit classification (2026-10-23)
+
+**CODE_REVIEW_PASS / RELEASE_NOT_AUTHORIZED / LIVE_ACCEPTANCE_PENDING.**
+
+Independently reviewed the exact follow-up commit
+`6089686d791c92cfaccf0b2e614a11f1f0dde122` against CEO's
+prior requested fix in `4b40e30652d331616045f423d1ace9134dc58263`.
+GitHub compare verifies exactly three touched files:
+`src/core/runtime_diagnostics.py`, `tests/core/test_runtime_diagnostics.py`
+and this original task packet. Production change is confined to
+`run_monitored`'s `except SystemExit` branch: the exit-code
+conversion is unchanged; previously unconditional inference of
+`diagnostics.request_exit("command_exit")` for zero code is removed;
+sanitized `main_exception` type and code locations are now recorded.
+No observer, GUI close, business workflow, CDP or release input was modified.
+
+Checked `watch_runtime` actual classification contract against the
+new behavior: zero exit code alone cannot establish a normal exit.
+With no separately recorded intent, `SystemExit(0)` and
+`SystemExit(None)` keep exit code zero and become `unexpected`;
+explicit owner/duplicate/command intent with zero code still yields
+`normal`; nonzero exits remain `unexpected`. The observer still
+waits on the inherited handle of the same process. Exception receipts
+exclude values, messages, local variables, and arbitrary paths.
+New parametrized synthetic Windows subprocess test cases assert the
+observer's actual exit JSON, exit codes/hex, preserved explicit intent,
+exception type/location, and non-disclosure, including these paths.
+The existing targeted suite and shutdown/tray tests are retained.
+
+Executor reports 268 relevant offline tests passed, Ruff and scoped
+diff PASS; reviewer verified the source and test logic but did NOT
+independently run this Windows suite or validate the installed EXE.
+The two earlier broad-suite legacy CDP/GLOBAL_STOP failures were
+reported as baseline-existing in the previous task execution;
+this tiny follow-up did not rerun the full business suite. No claim of
+resolving the previous unexplained disappearance: it remains UNKNOWN.
+
+**Disposition:** The one requested P1 classification correction is
+fully addressed in code. CEO **CODE REVIEW PASS** for this scoped
+source-only change. It may enter a **separately owner-authorized**
+release preflight; packaging, installation, process shutdown, browser
+CDP interaction, customer/business data actions and live acceptance
+were NOT performed or approved by this review. Maintain existing
+safety/rollback controls for any subsequent release.
