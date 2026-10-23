@@ -78,3 +78,67 @@ Live website/date coverage/production acceptance remain UNKNOWN. Synthetic test
 roots are retired in this task; compact ignored logs/manifests only are retained
 at .tmp/research-inso-preference-20261023. Keep REVIEW_REQUIRED, not self-approved.
 Retired all four owned test roots (77266009 bytes); no reparse point followed.
+
+
+## CEO independent review — 2026-10-23
+
+**CODE REVIEW PASS; NO PRODUCTION ACCEPTANCE OR DEPLOYMENT AUTHORIZED.**
+
+Independent GitHub review of the exact implementation commit
+`075cf91eff0e4fe514f06531ba881971ccff367e`, on top of prior
+six-source review `5594feb78d1f955412c15519779856b0254994a9`.
+Compared the branch diff: only
+`src/research/aggregation.py` and `src/research/source_contracts.py`
+are modified production code; five accompanying files are tests, task
+evidence and canonical Research/product documentation. Reviewed the full
+aggregation/formatting code, targeted tests, and relevant downstream
+Research Excel → `ResearchExcelFactsProvider` → V1.2 workflow consumers.
+No new code defect requiring repair was identified within this scope.
+
+- The actual positive six-source normal minimum remains the unchanged
+  `PriceAggregation.lowest` and the sorted source candidate pool is
+  preserved. For a valid INSO candidate, its first-valid month index
+  1–6 selects exact `Decimal` multipliers 1.12, 1.10, 1.08, 1.06, 1.04,
+  1.02; the unrounded `<=` threshold includes the exact boundary.
+  If INSO exceeds the applicable threshold or is unavailable, the
+  actual minimum is selected. If INSO is itself the minimum, it remains
+  preferred. No weighted average or changed site filter is introduced.
+- The **existing** Excel-facing `market_reference` stores just the
+  selected final unit-price string; `estimated_total` is the selected
+  **unrounded** `Decimal` unit price multiplied by original quantity.
+  The old optional second-lowest multiline display is deliberately
+  disabled per the Owner's single-reference output instruction;
+  actual lowest/second-lowest source candidates remain available in
+  the in-memory result, and no new workbook columns are introduced.
+  Original source cells/stock fallback/partial failure states remain
+  unchanged. The selected persisted reference and total feed existing
+  V1.2 downstream Research facts, not just GUI.
+- `money_text` retains ordinary 2-place presentation, except that
+  strictly positive values that would round to zero preserve their
+  positive plain-decimal digits. Thus 0.001, 0.00001 and 1E-30 are not
+  rendered as a literal zero. Actual source zero still cannot become
+  a `PriceCandidate`. The price-selection comparison and multiplication
+  do not use formatted strings.
+- **Pre-existing precision boundary, not a finding requiring this
+  scoped task to change procurement:** `ResearchExcelOutput.upsert`
+  serializes the estimated total using `money_text`, and
+  `ResearchExcelFactsProvider.get` later parses that persisted string
+  for V1.2 threshold/routing decisions. Normal totals with >2 decimal
+  places are therefore rounded to cents at persistence; the exact
+  in-memory `PriceAggregation.estimated_total` is unrounded. This
+  behavior predates the new selection and is left unchanged, in
+  accordance with the Owner's no-procurement-change instruction.
+- Executor reports 1684 offline PASS / 1 skipped, Ruff and diff checks
+  PASS, including all six monthly below/equal/above threshold cases,
+  true zero, micro-price precision, synthetic Excel and existing
+  suite. This reviewer inspected code and tests but did **not**
+  independently execute them, access real INSO/IC.net/other sites,
+  inspect local Excel, or interact with CDP/installed EXE/production
+  orders/SMTP. Live sourcing and business-chain acceptance remain
+  **UNKNOWN**.
+
+**Disposition: CODE_REVIEW_PASS / READY_FOR_OWNER-CONTROLLED_RELEASE
+AFTER NORMAL SAFETY PREFLIGHT / LIVE_ACCEPTANCE_PENDING.**
+Keep rollback and the existing shared CDP/profile protection rules.
+No software deployment, order processing, or production browser operation
+was undertaken by this independent review.
