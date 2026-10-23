@@ -40,6 +40,11 @@ _SOURCE_LABELS = {
     ResearchSource.INSO: "INSO",
 }
 
+# INSO's first-valid history window (months 1–6), applied to the actual minimum.
+_INSO_PRICE_LIMITS = tuple(Decimal(value) for value in (
+    "1.12", "1.10", "1.08", "1.06", "1.04", "1.02",
+))
+
 
 def _failure_code(result: SourceResult) -> str:
     return next(
@@ -99,21 +104,18 @@ def _failure_reason(code: str) -> str:
 
 def _market_reference(
     candidates: tuple[PriceCandidate, ...],
-) -> tuple[PriceCandidate, PriceCandidate | None, bool, str]:
+) -> tuple[PriceCandidate, PriceCandidate | None, bool, str, Decimal]:
     lowest = candidates[0]
     second = candidates[1] if len(candidates) > 1 else None
-    show_second = bool(
-        second
-        and lowest.normalized_rmb_price
-        <= second.normalized_rmb_price * Decimal("0.80")
-    )
-    rendered = money_text(lowest.normalized_rmb_price)
-    if show_second and second is not None:
-        rendered += (
-            f"\n{money_text(second.normalized_rmb_price)}-"
-            f"{_SOURCE_LABELS[second.source]}"
-        )
-    return lowest, second, show_second, rendered
+    inso = next((candidate for candidate in candidates if candidate.source is ResearchSource.INSO), None)
+    selected = lowest
+    if inso is not None and inso.normalized_rmb_price <= (
+        lowest.normalized_rmb_price * _INSO_PRICE_LIMITS[inso.age_months - 1]
+    ):
+        selected = inso
+    price = selected.normalized_rmb_price
+    # This existing output field now contains only the final selected unit price.
+    return lowest, second, False, money_text(price), price
 
 
 def aggregate_price_results(
@@ -168,7 +170,7 @@ def aggregate_price_results(
     )
 
     if normal:
-        lowest, second, show_second, market = _market_reference(normal)
+        lowest, second, show_second, market, reference_price = _market_reference(normal)
         status = (
             ResearchStatus.PARTIAL_SUCCESS
             if unavailable
@@ -179,7 +181,7 @@ def aggregate_price_results(
             lowest,
             second,
             show_second,
-            lowest.normalized_rmb_price * Decimal(quantity),
+            reference_price * Decimal(quantity),
             market,
             status,
             ResearchReasonCode.SOURCE_UNAVAILABLE if unavailable else None,
@@ -200,13 +202,13 @@ def aggregate_price_results(
         )
 
     if fallback:
-        lowest, second, show_second, market = _market_reference(fallback)
+        lowest, second, show_second, market, reference_price = _market_reference(fallback)
         return PriceAggregation(
             fallback,
             lowest,
             second,
             show_second,
-            lowest.normalized_rmb_price * Decimal(quantity),
+            reference_price * Decimal(quantity),
             market,
             ResearchStatus.PARTIAL_SUCCESS,
             None,

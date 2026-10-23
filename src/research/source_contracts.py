@@ -156,8 +156,10 @@ class SourceResult:
 
 
 def money_text(value: Decimal) -> str:
-    """Render a price to two decimal places without changing calculation values."""
+    """Keep the normal two-place display without erasing positive sub-cent values."""
     capped = value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if value > 0 and capped == 0:
+        capped = value
     text = format(capped, "f")
     if "." in text:
         text = text.rstrip("0").rstrip(".")

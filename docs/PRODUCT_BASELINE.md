@@ -202,3 +202,19 @@ Research Excel adds IC.net through its existing atomic schema migration without
 dropping old rows/identity/status. See docs/modules/RESEARCH.md for date contracts
 and UNKNOWN live coverage. Task:tasks/2026-10-22-research-six-price-sources.md,
 offline only, REVIEW_REQUIRED; no packaging/deployment/production-data access.
+
+## Owner INSO reference preference and nonzero display (2026-10-23)
+
+Within the unchanged valid six-source normal pool compute the true minimum RMB
+price, then prefer INSO if its first-valid1–6 month candidate is at most that
+minimum times1.12/1.10/1.08/1.06/1.04/1.02 respectively (inclusive, Decimal).
+Otherwise use the actual minimum; no average or raw-price/filter change. Existing
+market-reference column stores only the final selected unit price, replacing its
+old second-price multiline display; estimated total is that exact selected price
+times original quantity. Six source columns, stock/fallback/status and old Excel
+schema compatibility remain unchanged; no extra decision/explanation columns.
+Keep two-decimal display unless it would erase a positive usable value to0, in
+which case preserve its nonzero Decimal digits. True zero still has no candidate.
+CEO review5594feb78d1f955412c15519779856b0254994a9 is the prior display-defect
+source; implementation/evidence:tasks/2026-10-23-research-inso-preference.md.
+Offline source change only, REVIEW_REQUIRED; no packaging/deployment/live business.

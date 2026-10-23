@@ -79,7 +79,7 @@ def _complete(
     return tuple(values[source] for source in PRICE_SOURCES)
 
 
-def test_normal_pool_20_percent_and_partial_failure() -> None:
+def test_normal_pool_single_reference_and_partial_failure() -> None:
     results = _complete(
         {
             ResearchSource.FINDCHIPS: _result(
@@ -102,7 +102,9 @@ def test_normal_pool_20_percent_and_partial_failure() -> None:
     aggregation = aggregate_price_results(results, 10)
 
     assert aggregation.status is ResearchStatus.PARTIAL_SUCCESS
-    assert aggregation.market_reference == "8\n11-华强"
+    assert aggregation.market_reference == "8"
+    assert aggregation.second_lowest.normalized_rmb_price == Decimal(11)
+    assert aggregation.show_second_lowest is False
     assert aggregation.estimated_total == Decimal(80)
     assert aggregation.used_out_of_stock_fallback is False
     assert aggregation.remarks == "正能量：结果解析失败"
@@ -217,7 +219,7 @@ def test_authenticated_session_failure_is_reported_as_login_unavailable() -> Non
     assert aggregation.remarks == "立创：登录不可用"
 
 
-def test_out_of_stock_fallback_is_partial_and_uses_20_percent_rule() -> None:
+def test_out_of_stock_fallback_is_partial_with_single_reference() -> None:
     results = _complete(
         {
             ResearchSource.FINDCHIPS: _result(
@@ -237,7 +239,9 @@ def test_out_of_stock_fallback_is_partial_and_uses_20_percent_rule() -> None:
 
     assert aggregation.status is ResearchStatus.PARTIAL_SUCCESS
     assert aggregation.used_out_of_stock_fallback is True
-    assert aggregation.market_reference == "8\n11-立创"
+    assert aggregation.market_reference == "8"
+    assert aggregation.second_lowest.normalized_rmb_price == Decimal(11)
+    assert aggregation.show_second_lowest is False
     assert aggregation.estimated_total == Decimal(24)
     assert aggregation.remarks == "仅找到无库存报价"
 
