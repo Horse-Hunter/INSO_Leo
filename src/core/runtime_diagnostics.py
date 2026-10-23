@@ -315,8 +315,7 @@ def run_monitored(load_main, root):
         code = load_main()(diagnostics=diagnostics)
     except SystemExit as exc:
         code = 0 if exc.code is None else exc.code if isinstance(exc.code, int) else 1
-        if code == 0:
-            diagnostics.request_exit("command_exit")
+        diagnostics.exception("main_exception", type(exc), exc.__traceback__)
     except BaseException as exc:  # noqa: BLE001 - last-resort entry receipt, no replay
         diagnostics.exception("main_exception", type(exc), exc.__traceback__)
     finally:

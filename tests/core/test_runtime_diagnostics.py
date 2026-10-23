@@ -223,3 +223,52 @@ def test_explicit_system_exit_keeps_exit_code(tmp_path, monkeypatch, exit_code):
         raise SystemExit(exit_code)
 
     assert run_monitored(lambda: main, tmp_path) == (exit_code or 0)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows process handle observer")
+@pytest.mark.parametrize("intent, error, expected, classification", [
+    (None, "SystemExit(0)", 0, "unexpected"),
+    (None, "SystemExit(None)", 0, "unexpected"),
+    ("owner_exit", "SystemExit(0)", 0, "normal"),
+    ("duplicate_instance", "SystemExit(0)", 0, "normal"),
+    ("command_exit", "SystemExit(0)", 0, "normal"),
+    (None, "SystemExit(7)", 7, "unexpected"),
+    ("owner_exit", "SystemExit(7)", 7, "unexpected"),
+    (None, "SystemExit('CUSTOMER_PASSWORD_DO_NOT_RECORD')", 1, "unexpected"),
+    (None, "RuntimeError('CUSTOMER_PASSWORD_DO_NOT_RECORD')", 1, "unexpected"),
+])
+def test_monitored_main_actual_exit_classification(tmp_path, intent, error, expected, classification):
+    code = (
+        "import sys\nfrom src.core import run_monitored\n"
+        "def main(*, diagnostics):\n"
+        "    assert diagnostics.healthy\n"
+        f"    intent = {intent!r}\n"
+        "    if intent is not None: diagnostics.request_exit(intent)\n"
+        "    private_local = 'CUSTOMER_PASSWORD_DO_NOT_RECORD'\n"
+        f"    raise {error}\n"
+        "raise SystemExit(run_monitored(lambda: main, sys.argv[1]))\n"
+    )
+    result = subprocess.run([sys.executable, "-c", code, str(tmp_path)], cwd=ROOT,
+                            capture_output=True, timeout=15, check=False)
+    assert result.returncode == expected, result.stderr.decode(errors="replace")
+    directory = tmp_path / "runtime/logs"
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        receipts = list(directory.glob("*.exit.json"))
+        if receipts:
+            break
+        time.sleep(0.03)
+    assert receipts, "Observer did not record the monitored main exit"
+    receipt = json.loads(receipts[0].read_text())
+    assert receipt["exit_code"] == expected
+    assert receipt["exit_code_hex"] == f"0x{expected:08X}"
+    assert receipt["classification"] == classification
+    state = json.loads(next(directory.glob("*.state.json")).read_text())
+    assert state["exit_reason"] == intent
+    rows = [json.loads(line) for line in next(directory.glob("*.events.jsonl")).read_text().splitlines()]
+    errors = [row for row in rows if row["event"] == "main_exception"]
+    assert len(errors) == 1
+    assert errors[0]["error_type"] == error.split("(", 1)[0]
+    assert errors[0]["frames"][-1]["function"] == "main"
+    assert errors[0]["frames"][-1]["line"] > 0
+    assert SECRET not in "".join(path.read_text() for path in directory.iterdir() if path.is_file())

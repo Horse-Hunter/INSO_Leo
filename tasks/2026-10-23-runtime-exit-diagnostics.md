@@ -145,3 +145,40 @@ insufficient proof of previous cause.
 small SystemExit classification fix is committed and independently
 reviewed. No packaging, installation or business activity authorized
 by this review.
+
+
+## CEO minimal correction — execution (2026-10-23)
+
+Owner authorizes only removal of inferred command-exit intent for SystemExit,
+redacted type/code-position evidence, synthetic-process tests and necessary offline
+regression. Preserve separately established owner/duplicate/command intent, raw
+exit codes, inherited-handle observer and GUI close flow. No packaging, install,
+running-app replacement, production orders/browser/data operations.
+Execution: complete; final review status remains REVIEW_REQUIRED.
+
+Changed only run_monitored's SystemExit branch: preserve its existing code
+conversion, remove inferred command_exit, and record sanitized main_exception
+type/code positions through the existing exception recorder. Previously explicit
+exit intent remains untouched. Windows observer/handle/code/GUI flow unchanged.
+Only source module, corresponding Core test and this original Task Packet changed;
+CEO review4b40e30652d331616045f423d1ace9134dc58263 preserved verbatim above.
+
+Verification:268 passed in33.41s, offline on Windows:
+`python -m pytest tests/core tests/gui tests/launcher/test_release_infrastructure.py -q -p no:cacheprovider`.
+Scoped Ruff passed; selected diff reviewed/checked. Nine new synthetic-process
+cases execute run_monitored through actual inherited-handle observation: no-intent
+SystemExit(0)/SystemExit(None) =>code0/unexpected; explicitly requested owner,
+duplicate and command SystemExit(0) =>code0/normal; SystemExit(7), including an
+owner request, =>code7/unexpected; string-code SystemExit and RuntimeError =>
+code1/unexpected. Event type, code position and retained explicit intent asserted;
+synthetic private exception arguments and locals absent from every receipt.
+Existing forced/native-pattern exits, GUI close/tray, duplicate guard, threads/Tk,
+failure degradation and startup regressions pass. No live business/real-app tests;
+no broader business suite rerun for this three-line branch correction.
+
+Prior123-input manifest differs only in src/core/runtime_diagnostics.py. Publish
+exactly3 files on the original branch, preserving local HEAD/index/unrelated work.
+Compact evidence: ignored `.tmp/runtime-systemexit-review-20261023/`; retire only
+this task's synthetic test tree after checks. No package/install/replacement or
+production process/browser/order/data access. Past disappearance remains UNKNOWN.
+Next: CEO independent review of the minimal correction, REVIEW_REQUIRED.
