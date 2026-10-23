@@ -18,6 +18,7 @@ from .credential_provider import (
     default_provider,
     get_login,
 )
+from .runtime_diagnostics import RuntimeDiagnostics, run_monitored, watch_runtime
 
 __all__ = [
     "CredentialError",
@@ -27,6 +28,9 @@ __all__ = [
     "CredentialSiteNotFoundError",
     "CredentialVaultError",
     "Login",
+    "RuntimeDiagnostics",
     "default_provider",
     "get_login",
+    "run_monitored",
+    "watch_runtime",
 ]

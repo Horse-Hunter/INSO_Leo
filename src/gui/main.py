@@ -128,7 +128,7 @@ def _show_error(message: str, title: str = "INSO_V1.3") -> None:
             message_box(None, message, title, 0x10)
 
 
-def main(*, guard_factory=None, backend_factory=None) -> int:
+def main(*, guard_factory=None, backend_factory=None, diagnostics=None) -> int:
     log_path = None
     guard = None
     backend = None
@@ -145,6 +145,8 @@ def main(*, guard_factory=None, backend_factory=None) -> int:
         args = parser.parse_args()
         guard = (guard_factory or SingleInstanceGuard)()
         if not guard.acquire():
+            if diagnostics is not None:
+                diagnostics.request_exit("duplicate_instance")
             _show_error("INSO_V1.3 已在运行。")
             return 0
         backend = (
@@ -152,12 +154,19 @@ def main(*, guard_factory=None, backend_factory=None) -> int:
             if args.mock
             else (backend_factory or ProductionBackend)()
         )
-        app = InsoDashboardApp(backend)
+        app = (InsoDashboardApp(backend) if diagnostics is None
+               else InsoDashboardApp(backend, diagnostics=diagnostics))
+        if diagnostics is not None:
+            diagnostics.gui_ready()
+            if not diagnostics.healthy:
+                _show_error("部分退出取证未能启用，请检查程序目录写入权限及 runtime/logs 中的诊断记录。")
         if args.start_inquiry:
             backend.start()
         app.run()
         return 0
     except Exception as exc:  # noqa: BLE001 - windowed startup safety boundary
+        if diagnostics is not None:
+            diagnostics.exception("app_exception", type(exc), exc.__traceback__)
         logging.getLogger("inso.startup").error(
             "Application startup failed (%s)", type(exc).__name__
         )
@@ -173,6 +182,8 @@ def main(*, guard_factory=None, backend_factory=None) -> int:
             try:
                 backend.shutdown()
             except Exception as exc:  # noqa: BLE001 - cleanup boundary
+                if diagnostics is not None:
+                    diagnostics.exception("shutdown_exception", type(exc), exc.__traceback__)
                 logging.getLogger("inso.startup").error(
                     "Backend shutdown failed (%s)", type(exc).__name__
                 )
@@ -181,4 +192,6 @@ def main(*, guard_factory=None, backend_factory=None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    from src.core import run_monitored
+
+    sys.exit(run_monitored(lambda: main, app_root()))

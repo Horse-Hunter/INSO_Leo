@@ -183,6 +183,12 @@ def _cdp_self_check() -> int:
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--watch-runtime"]:
+        from src.core import watch_runtime
+
+        if len(sys.argv) != 5 or not sys.argv[2].isdigit():
+            raise SystemExit(2)
+        raise SystemExit(watch_runtime(int(sys.argv[2]), sys.argv[3], sys.argv[4]))
     if sys.argv[1:] == ["--cdp-self-check"]:
         raise SystemExit(_cdp_self_check())
     if sys.argv[1:] == ["--idle-self-check"]:
@@ -191,6 +197,9 @@ if __name__ == "__main__":
         raise SystemExit(_self_check())
     if sys.argv[1:] == ["--diagnose-vault"]:
         raise SystemExit(_diagnose_vault())
-    from src.gui.main import main
+    from importlib import import_module
 
-    raise SystemExit(main())
+    from src.core import run_monitored
+    from src.core.app_paths import app_root
+
+    raise SystemExit(run_monitored(lambda: import_module("src.gui.main").main, app_root()))

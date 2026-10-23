@@ -92,3 +92,52 @@ except CredentialError as exc:
 
 ## Shared lookup MPN policy (Owner 2026-10-08)
 `src.core.mpn` publicly provides normalize_lookup_mpn, lookup_mpn_prefix and lookup_mpn_matches for Research and INSO procurement-history reads/Workflow duplicate decisions. Pure, no I/O/dependencies; NFKC/upper case, remove whitespace/underscore/dash punctuation/minus and invisible whitespace; directional cleaned-target-minus-two prefix with at most ten tail characters. Empty inputs reject, one/two-character targets exact. Forbidden for Sheets identity or purchase submission verification.
+
+## Process exit evidence (2026-10-23, source only, REVIEW_REQUIRED)
+
+Core publicly exports `RuntimeDiagnostics`, `run_monitored`, `watch_runtime`.
+The existing frozen entry wraps GUI loading/main with `run_monitored`; source
+`python -m src.gui.main` wraps main after module imports. Diagnostic self-check
+commands retain their old behavior. No automatic restart, browser operation or
+business replay. GUI records actual graceful-exit requests; hiding to tray is
+not an exit. Duplicate invocations use distinct receipts and retain the existing
+single-instance guard.
+
+Each launch owns UUID-named files under the existing `runtime/logs` directory:
+
+| Suffix (`runtime-<uuid>.*`) | Evidence |
+| --- | --- |
+| `state.json` | UTC start, PID, phase, GUI ready, requested-exit reason, main completion |
+| `events.jsonl` | Lifecycle and main/thread/Tk/shutdown exception types and code positions |
+| `fatal.log` | faulthandler native fatal stack only; no memory dump |
+| `observer.json` | Hidden observer ready handshake, target and observer PID |
+| `exit.json` | Independently observed actual DWORD exit code/hex and classification |
+
+The Windows observer waits on the inherited handle of the exact process, not a
+later reused PID. It runs the same entry in `--watch-runtime` mode (source uses a
+Core-only Python command), has no business backend and never kills/restarts the
+parent. Only exit code zero plus completed-main plus an explicit owner/duplicate/
+command exit receipt counts as normal. Missing close intent, even with code zero,
+is unexpected. Normal classification does not assert that earlier callbacks were
+error-free; those events remain recorded separately. If final state is damaged,
+the observer still writes the actual exit code and classifies it unexpected.
+
+Safe Python exception records exclude messages, values, local variables, source
+lines and thread names; code paths are restricted to repository-relative source/
+test paths, with external paths replaced. Native fault output is stack-only;
+it can contain library installation paths. Events rotate at128KiB with one backup.
+At startup retain the latest20 completed/dead owned runs including the current
+run; never prune still-live unobserved runs or unrelated application logs. Damaged
+old receipts are ignored. Missing receipt for a dead run is reported as
+`previous_exit_unobserved`, not a fabricated cause. Recorded unexpected exits are
+reported as `previous_abnormal_exit`. Monitoring startup/write failure makes
+`healthy` false; GUI warns when initialization is incomplete. No dependency added.
+
+Limits: power loss, simultaneous termination of parent and observer, storage
+failure or failure before Python/diagnostics starts may leave UNKNOWN. Native
+faults during interpreter teardown after handlers close retain only the observer
+exit code where available. A forced exit code cannot identify who terminated a
+process. This cannot reconstruct the previously unrecorded disappearance. Source
+verification uses synthetic processes and Tk callbacks; no real-app crash or
+live business probe, no packaging/deployment in this task. See
+`tasks/2026-10-23-runtime-exit-diagnostics.md`.

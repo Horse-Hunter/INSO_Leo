@@ -218,3 +218,16 @@ which case preserve its nonzero Decimal digits. True zero still has no candidate
 CEO review5594feb78d1f955412c15519779856b0254994a9 is the prior display-defect
 source; implementation/evidence:tasks/2026-10-23-research-inso-preference.md.
 Offline source change only, REVIEW_REQUIRED; no packaging/deployment/live business.
+
+## Runtime disappearance evidence (2026-10-23)
+
+Core/GUI/frozen-entry source now records per-launch lifetime, sanitized Python
+main/thread/Tk/shutdown errors, stack-only native faults and independently observed
+Windows exit codes under runtime/logs. An unexplained zero-code exit is unexpected;
+normal exit requires explicit exit intent and main completion. Next launch reports
+dead runs lacking exit observation. This adds no restart or business replay.
+Previous installed-app disappearance remains UNKNOWN: absent Windows reports do
+not prove clean exit. Source-only offline verification, REVIEW_REQUIRED, not yet
+installed; power loss/observer also killed/pre-Python failures can remain UNKNOWN.
+Contract and limits: docs/modules/CORE.md;
+task: tasks/2026-10-23-runtime-exit-diagnostics.md.

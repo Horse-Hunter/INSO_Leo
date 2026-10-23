@@ -203,11 +203,12 @@ def _event_display_text(event: Any) -> str:
 class InsoDashboardApp:
     """Single-page INSO_V1.4 operator dashboard."""
 
-    def __init__(self, backend: GuiBackend) -> None:
+    def __init__(self, backend: GuiBackend, *, diagnostics=None) -> None:
         global ctk
         import customtkinter as ctk
 
         self._backend = backend
+        self._runtime_diagnostics = diagnostics
         self._status: RunSession = backend.get_status()
         self._selected_order: Order | None = None
         self._displayed_orders: dict[str, Order] = {}
@@ -227,6 +228,8 @@ class InsoDashboardApp:
         self._tray = None
 
         self._root = ctk.CTk()
+        if diagnostics is not None:
+            self._root.report_callback_exception = diagnostics.tk_exception
         self._root.title("INSO_V1.4")
         self._root.geometry("1200x800")
         self._root.configure(fg_color=_BG)
@@ -1025,6 +1028,9 @@ class InsoDashboardApp:
         if self._closing:
             return
         self._assert_main_thread()
+        diagnostics = getattr(self, "_runtime_diagnostics", None)
+        if diagnostics is not None:
+            diagnostics.request_exit()
         self._closing = True
         self._cancel_after(self._after_id)
         self._after_id = None
@@ -1076,6 +1082,9 @@ class InsoDashboardApp:
             # Diagnostics confirm all backend threads have already exited.
             self._backend.shutdown()
         except Exception as exc:  # noqa: BLE001 - always destroy after safe shutdown attempt
+            diagnostics = getattr(self, "_runtime_diagnostics", None)
+            if diagnostics is not None:
+                diagnostics.exception("shutdown_exception", type(exc), exc.__traceback__)
             logger.error("Backend shutdown error: %s", exc)
         finally:
             tray = getattr(self, "_tray", None)
