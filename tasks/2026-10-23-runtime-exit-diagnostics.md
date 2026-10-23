@@ -85,3 +85,63 @@ Past disappearance remains UNKNOWN. Source-only pending independent CEO review,
 no build/overwrite/launch, no real business validation. Earlier conditional
 deployment is still unfulfilled; these diagnostics only protect a future installed
 version. Next action: CEO review this source change (REVIEW_REQUIRED).
+
+
+## CEO independent review — exit diagnostics (2026-10-23)
+
+**CHANGES_REQUESTED — P1 classification correctness; DO NOT PACKAGE/DEPLOY.**
+Independently inspected commit
+`de9adac283af87df9ffe5bd078411d0316e1f53f`, including the new
+Core observer/lifecycle module, frozen/source entry integration, Tk
+close/callback handling, synthetic tests and existing launcher
+interfaces. Source files are limited to Core diagnostics, GUI and
+Windows entry; no backend, browser, purchase, Research, Sheets or
+business replay changes. The observer's inherited Windows process
+handle, recorded raw exit DWORD/hex, missing-exit UNKNOWN policy,
+thread/Tk exception redaction, and user-close-vs-tray distinction
+are directionally correct. Owner's previous disappearance cannot be
+retroactively diagnosed.
+
+**P1 defect — unexpected clean `SystemExit(0)` is forged into an explicit
+command exit.**
+In `src/core/runtime_diagnostics.py::run_monitored`, the broad
+`except SystemExit as exc` clause calls
+`diagnostics.request_exit("command_exit")` whenever the exit code is
+zero. This manufactures a supposedly intentional command-exit receipt
+without a user action or recognized explicit command. If an imported
+library, Tk callback or the application's own internal code unexpectedly
+raises `SystemExit(0)`, the wrapper also calls `finish(0)`;
+`watch_runtime` then sees `exit_code==0`, `completed==True`,
+`exit_reason=="command_exit"`, classifies the disappearance
+`normal`, and suppresses the very unexpected-zero-code evidence the
+Owner requested. This contradicts the stated normal-exit
+classification contract.
+
+**Required minimal repair:** Do not infer `command_exit` solely from
+`SystemExit(0)`. Record a zero-code SystemExit with no already
+verified explicit owner/duplicate/recognized-command intent as
+**unexpected**; preserve actual exit code and sanitized exception type
+and stack position. Only a genuine separately established command-exit
+intent may be labeled `command_exit` (or simply omit that category if
+not used). Keep prior explicit owner-exit and duplicate-instance
+behavior and process-handle watcher unchanged. Add a **real Windows
+synthetic-process observer test** executing a main function that raises
+`SystemExit(0)` without an exit request, asserting exit code zero and
+`classification=="unexpected"`; include a positive normal
+owner/duplicate-exit countertest. No new framework or broader scope,
+and no real production process or browser tests.
+
+Executor reported targeted 164 PASS; broad suite 2117 PASS, 1 skipped,
+2 pre-existing failures reproduced against prior remote
+`55e7af3b915b0937248c2c5e0c6c3d321b6bb239`, relating to
+manual CDP recovery / legacy GLOBAL_STOP expectation. The prior
+baseline reproduction is an **executor attestation**, not independently
+rerun by CEO. CEO reviewed sources and code tests only; no testing of
+actual installed EXE, native Windows faults, protected Chrome, live
+business, customer data or deployment. Windows WER absence remains
+insufficient proof of previous cause.
+
+**Disposition:** `REVIEW_REQUIRED / CHANGES_REQUESTED` until the
+small SystemExit classification fix is committed and independently
+reviewed. No packaging, installation or business activity authorized
+by this review.
