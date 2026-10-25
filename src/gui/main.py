@@ -14,7 +14,7 @@ import tkinter.messagebox
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from src.core.app_paths import app_root
+from src.core.app_paths import app_root, application_name
 from src.launcher import ProductionBackend
 from src.launcher.single_instance import SingleInstanceGuard
 
@@ -112,7 +112,8 @@ def _configure_startup_log(root: Path) -> Path:
     return path
 
 
-def _show_error(message: str, title: str = "INSO_V1.3") -> None:
+def _show_error(message: str, title: str | None = None) -> None:
+    title = title or application_name()
     try:
         tkinter.messagebox.showerror(title, message)
     except (tkinter.TclError, RuntimeError):
@@ -147,7 +148,7 @@ def main(*, guard_factory=None, backend_factory=None, diagnostics=None) -> int:
         if not guard.acquire():
             if diagnostics is not None:
                 diagnostics.request_exit("duplicate_instance")
-            _show_error("INSO_V1.3 已在运行。")
+            _show_error(application_name() + " 已在运行。")
             return 0
         backend = (
             MockBackend(cycle_seconds=12.0)
@@ -170,7 +171,7 @@ def main(*, guard_factory=None, backend_factory=None, diagnostics=None) -> int:
         logging.getLogger("inso.startup").error(
             "Application startup failed (%s)", type(exc).__name__
         )
-        message = "INSO_V1.3 启动失败。"
+        message = application_name() + " 启动失败。"
         if log_path is not None:
             message += f"\n请查看本地日志：{log_path}"
         else:

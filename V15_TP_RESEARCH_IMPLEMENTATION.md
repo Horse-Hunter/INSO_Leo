@@ -1,9 +1,40 @@
-# V1.5 TP independent research — offline delivery
+# V1.5 TP independent research
 
 status: REVIEW_REQUIRED
 baseline: d67ebfe150340ea90760f5a2e44dcd7b92f8dac4
 branch: codex/v1-5-tp-research
-authority: Owner 2026-10-25 feature request; offline development only
+authority: Owner 2026-10-25 feature request and subsequent integration/local-release authorization
+
+## Current Owner integration and query correction
+
+The existing normal inquiry/quotation cycle and TP phase remain on one poll
+thread with one fifteen-minute wait and the existing manual-operation gate.
+Frozen V1.5 enables TP by default; explicit tp_enabled=false disables it. Older
+products/source do not opt in implicitly. GUI/tray product identity and existing
+packaging/self-check paths support V1.5 with the same V1.4 PDF/timezone checks.
+Existing release interpreter can be passed to the same build script, avoiding
+duplicating its venv/dependencies. Existing shared runtime, Vault, CDP and named
+mutex are retained; V1.4 executable/runtime remain the rollback.
+
+Owner clarified full source MPN is the search text for ALL six sites. Removed
+query truncation from IC.net, HQEW, Findchips, BOM and LCSC; INSO already did this.
+The generalized core full-query seam retains its INSO alias. Returned-model fuzzy
+matching, source-row identity, normal1–6 and TP1–12 calendars remain unchanged.
+Canonical-client read-only reproduction confirmed inherited prefix-query loss
+and successful full-query IC reference/HQ two-price results. No live values,
+customer data, raw captures or model-specific fix is committed.
+
+Future TP mail adds existing ops/Shawn alongside Owner229. TP completion now
+aggregates every recipient through the existing outbox API: SENT cannot conceal
+another UNKNOWN or pending attempt. Recipient-only retries never replay SENT.
+Owner requests carrying forward two trial SENT task receipts, preserving immutable
+message payloads/recipient lists and manual rerun ability; no automatic trial replay.
+
+The two historical broad-suite failures were stale stop expectations after the
+reviewed site-recovery policy. Their test now exercises real recovery with a fake
+mail effect, verifies pending manual result and durable ordinary quotation holds,
+and retains GLOBAL_STOP assertions for unrelated failures. Production recovery
+code is unchanged. Earlier verification statements below are historical snapshots.
 
 ## CEO correction delivery (review c64d9d8076f38d2fe8702f68ab95f612afbcb0f8)
 

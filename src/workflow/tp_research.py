@@ -11,7 +11,7 @@ from src.research.source_contracts import money_text
 from src.sheets.tp_brief import TpLocalError, TpOrder, bind_tp_order, source_worksheet
 
 from .v12_contracts import NotificationCommand, NotificationKind, NotificationRecipient
-from .v12_store import create_verified_backup
+from .v12_store import V12Store, create_verified_backup
 
 
 class _TpDataError(TpLocalError):
@@ -83,10 +83,17 @@ class TpStore:
 
     def delivery(self, key):
         row = self.get(key)
-        with self.connect() as db:
-            result = db.execute("SELECT outcome FROM workflow_v12_notification_recipients WHERE command_id=?",
-                                (row["command_id"],)).fetchone()
-        return result[0] if result else None
+        outcomes = {r.outcome.value for r in V12Store(self.path).recipient_results(row["command_id"])}
+        if not outcomes:
+            return None
+        # One successful recipient must never hide another's unknown/in-flight
+        # attempt. Reuse the outbox's recipient-scoped retries, never replay SENT.
+        for pending in ("UNKNOWN", "SENDING", "PENDING", "RETRYABLE_FAILURE"):
+            if pending in outcomes:
+                return pending
+        if outcomes <= {"SENT", "PERMANENT_FAILURE"}:
+            return "PERMANENT_FAILURE" if "PERMANENT_FAILURE" in outcomes else "SENT"
+        return "UNKNOWN"
 
     def manual_allowed(self, key):
         row = self.get(key)
@@ -228,7 +235,8 @@ def tp_mail(order, result, command_id, now):
             + "".join(rows) + '</table>')
     html += '</div>'
     return NotificationCommand(command_id, None, NotificationKind.TP_RESEARCH,
-        (NotificationRecipient("owner", "linan229@qq.com"),),
+        (NotificationRecipient("owner", "linan229@qq.com"),
+         NotificationRecipient("ops", "shawn@inso-hk.com")),
         "【INSO】TP 专项调研", "\n\n".join(paragraphs), html, now)
 
 

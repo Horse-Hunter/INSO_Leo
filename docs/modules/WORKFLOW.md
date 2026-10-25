@@ -15,14 +15,20 @@ existing worker owns send retries. Unknown/SENDING-after-crash remains quarantin
 Crash after enqueue adopts the immutable command key; before enqueue only read-only
 research can recover. SQLite BEGIN IMMEDIATE claims arbitrate automatic/manual work.
 
-`TP_RESEARCH` commands have inquiry_id=None and a TP/generation command_id; recipient
-is only linan229@qq.com. No duplicate sender/outbox/daemon. A false-by-default
-`production.json.tp_enabled` opt-in assembles TP in the original poller, after its
+`TP_RESEARCH` commands have inquiry_id=None and a TP/generation command_id. Owner
+now authorizes future messages to linan229@qq.com and shawn@inso-hk.com. Delivery
+uses existing recipient_results; any UNKNOWN/SENDING/pending/retryable recipient
+blocks manual generation, and completion requires all recipients to settle.
+Historical SENT commands keep their original recipients/content. No duplicate
+sender/outbox/daemon. `production.json.tp_enabled` opt-in assembles TP in the original poller, after its
 ordinary native page scope, using the same 15-minute wait. GUI third action
 重跑 TP 价格 uses the existing idle-command condition and same poll thread.
 TP-only historical rows are exposed by the existing GUI Order DTO; its legacy
 inquiry_id display field holds a tp_ UI key, not a persisted V1.4 inquiry.
-No production config has been edited or opt-in activated in this phase.
+The Owner-authorized V1.5 frozen product enables the same TP phase by default;
+an explicit false opt-out still wins. Earlier products/source default disabled.
+The shared V1.4 production config does not need modification. The same named
+mutex prevents simultaneous V1.4/V1.5 process ownership of runtime.
 
 Owner 2026-10-25 TP mail correction: tp_mail supplies escaped HTML plus the
 existing plain-text alternative. Opening explicitly compares valid RMB minimum

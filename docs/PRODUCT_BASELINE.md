@@ -1,5 +1,15 @@
 # 产品基线
 
+## Owner clarification — complete search model (2026-10-25)
+
+All Research sites search the original full source MPN. Removing the final two
+normalized characters is exclusively returned-model fuzzy matching, never query
+truncation. This supersedes the October8 query-prefix wording for non-INSO sites
+as well. Normal Research 1–6-month and TP1–12-month policies remain independent.
+Owner also authorizes V1.5 integration/package/local launch and future TP mail
+to existing Owner229 and ops/Shawn recipients. Carry forward the two verified
+trial task SENT states to avoid automatic replay; explicit manual rerun remains.
+
 ## V1.5 TP implementation authority (Owner 2026-10-25)
 
 Owner approves offline TP design/development following discovery review d67ebfe.

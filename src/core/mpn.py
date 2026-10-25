@@ -1,7 +1,7 @@
 """Pure shared Owner-defined matching for Research and procurement history.
 
 This policy must not be used for source-row identity or purchase submission
-validation. Query prefixes retrieve candidates; comparisons keep the full target.
+validation. Searches retain the full model; only comparisons use a prefix.
 """
 import unicodedata
 
@@ -36,6 +36,10 @@ def lookup_mpn_matches(target: object, observed: object) -> bool:
     return result.startswith(prefix) and len(result) - len(prefix) <= 10
 
 
-def inso_lookup_query(target: object) -> str:
+def lookup_mpn_query(target: object) -> str:
     """Send the original complete source model; normalization is comparison only."""
     return target if isinstance(target, str) and lookup_mpn_prefix(target) else ""
+
+
+# Preserve the existing INSO public entry point with the same implementation.
+inso_lookup_query = lookup_mpn_query

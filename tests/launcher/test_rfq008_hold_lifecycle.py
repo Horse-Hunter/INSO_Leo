@@ -96,9 +96,20 @@ def test_unsettled_manual_attempt_preserves_durable_old_hold_and_automatic_barri
             raise failure
         return ()  # No terminal selected-row evidence is not settlement.
     backend._manual_quote = runner, holds
-    with pytest.raises(V12Fault) as exc:
+    if isinstance(failure, V12Fault) and failure.reason == "CDP_SESSION_UNAVAILABLE":
+        # The reviewed site-recovery policy supersedes the original stop
+        # expectation. Keep the real recovery path and fake only its mail side
+        # effect; an unsettled manual attempt must retain its durable barrier.
+        alerts = []
+        monkeypatch.setattr(backend, "_alert_owner_of_login", lambda **kw: alerts.append(kw))
         backend._execute_order_action(("r", inquiry, "quotation", None, None))
-    assert exc.value.scope is FaultScope.GLOBAL_STOP
+        assert not backend.get_manual_order_result().success
+        assert "Browser/CDP" in backend._site_outages
+        assert backend._next_poll_at is not None and len(alerts) == 1
+    else:
+        with pytest.raises(V12Fault) as exc:
+            backend._execute_order_action(("r", inquiry, "quotation", None, None))
+        assert exc.value.scope is FaultScope.GLOBAL_STOP
     assert holds.active() == before and holds.active()[0][0] == old_key
     automatic_quotes = Quotes([()])
     assert make_cycle(SingleRowReader(source, SHEET, 3), store, holds, automatic_quotes).run(SHEET) == ()

@@ -14,7 +14,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
-from src.core.mpn import lookup_mpn_prefix, normalize_lookup_mpn
+from src.core.mpn import lookup_mpn_prefix, lookup_mpn_query, normalize_lookup_mpn
 
 from .cdp_pages import new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
@@ -218,8 +218,8 @@ class LcscBrowserClient:
         self._playwright_factory = playwright_factory
 
     def fetch_product_page(self, mpn: str) -> LcscPage:
-        query = mpn.strip()
-        search_url = "https://so.szlcsc.com/global.html?" + urlencode({"k": lookup_mpn_prefix(query)})
+        query = lookup_mpn_query(mpn)
+        search_url = "https://so.szlcsc.com/global.html?" + urlencode({"k": query})
         factory = self._playwright_factory
         timeout_error: type[Exception] = TimeoutError
         if factory is None:
@@ -337,7 +337,7 @@ class CdpLcscClient:
         self._playwright_factory = playwright_factory
 
     def fetch_product_page(self, mpn: str) -> LcscPage:
-        search_url = "https://so.szlcsc.com/global.html?" + urlencode({"k": lookup_mpn_prefix(mpn)})
+        search_url = "https://so.szlcsc.com/global.html?" + urlencode({"k": lookup_mpn_query(mpn)})
         factory = self._playwright_factory
         if factory is None:
             try:

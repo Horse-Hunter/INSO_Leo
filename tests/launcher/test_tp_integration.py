@@ -63,16 +63,23 @@ def test_manual_tp_uses_same_idle_command_path_and_no_purchase_or_quotation(tmp_
     assert backend.get_manual_order_result().success
     assert len(cycle.research.calls) == 2
     # First explicit generation used a fake with no next SENT outcome -> UNKNOWN.
-    assert len(transport.calls) == 2 and not cycle.store.manual_allowed(key)
+    assert len(transport.calls) == 4 and not cycle.store.manual_allowed(key)
     assert any(row.inquiry_id == key for row in backend.get_result_history())
 
 
-@pytest.mark.parametrize("enabled", [False, True])
-def test_existing_poll_and_fifteen_minute_wait_opt_in_tp_no_extra_thread(tmp_path, monkeypatch, enabled):
+@pytest.mark.parametrize("enabled,frozen,expected", [
+    (False, False, False), (True, False, True),
+    (None, True, True), (False, True, False),
+])
+def test_existing_poll_and_fifteen_minute_wait_opt_in_tp_no_extra_thread(tmp_path, monkeypatch, enabled, frozen, expected):
     from src.launcher import tp_composition
     production, config, rows = _write_runtime_configs(tmp_path)
     cfg = json.loads(production.read_text())
-    cfg["tp_enabled"] = enabled
+    if enabled is not None:
+        cfg["tp_enabled"] = enabled
+    if frozen:
+        monkeypatch.setattr(launcher.sys, "frozen", True, raising=False)
+        monkeypatch.setattr(launcher.sys, "executable", str(tmp_path / "INSO_V1.5.exe"))
     production.write_text(json.dumps(cfg))
     calls, scope = [], []
     service = __import__('tests.launcher.test_backend', fromlist=['_SheetsService'])._SheetsService(rows, Event())
@@ -103,7 +110,7 @@ def test_existing_poll_and_fifteen_minute_wait_opt_in_tp_no_extra_thread(tmp_pat
         return True
     monkeypatch.setattr(backend, "_wait_between_polls", wait)
     backend._run()
-    assert calls == (["built", "tp"] if enabled else [])
+    assert calls == (["built", "tp"] if expected else [])
     assert waits == [900]
 
 

@@ -6,6 +6,48 @@ authority: Owner request 2026-10-25; discovery review d67ebfe150340ea90760f5a2e4
 
 ## Scope and safety
 
+### Current Owner extension: integration, release, source omission repair
+
+Owner now authorizes integration with the existing V1.4 inquiry workflow,
+complete synthetic workflow/regression checks, adding the existing ops recipient
+shawn@inso-hk.com to future TP messages, and packaging/local launch of V1.5.
+Earlier offline/no-build restrictions below are historical and superseded only
+within this scope. Preserve the existing canonical browser/profile/runtime and
+V1.4 rollback. Tests must not purchase, change Sheets, or send real messages.
+Launch initially idle; no historical purchase replay or blind resend of trial
+messages. Existing SENT/UNKNOWN payloads remain immutable. Reuse the current
+opt-in serial poll integration, build script/spec and single-instance guard.
+
+Owner identified two omitted sources in a real TP result. Read-only reproduction
+confirmed both existing parsers read the full-model user pages. The canonical
+two-character-trimmed search returned IC.net stock SUCCESS with no reference
+candidate and HQEW zero offers. Both client query implementations are unchanged
+from reviewed V1.4 baseline 124e39ca. This is inherited retrieval loss, not proof
+of missing website prices. Fix and test the shared retrieval gap before release;
+do not hardcode model/price or change ordinary 1–6-month ranking.
+
+Owner clarification (current, supersedes earlier query-prefix rule): all source
+searches send the COMPLETE source MPN. Tail removal is only returned-model fuzzy
+matching. Applies to ordinary inquiry and TP, not merely a fallback. Reuse
+core.mpn's existing full-query implementation (generalized name, INSO alias
+preserved); all six clients share this separation. Existing identity checks,
+matching boundaries, calendar windows, stock and price selection remain intact.
+Adding Shawn also requires aggregating ALL recipient delivery states: a SENT
+recipient cannot conceal another UNKNOWN/pending recipient and permit a rerun.
+
+Integration verification: final entire suite **2666 PASS,11 SKIP,0 FAIL /103.67s**,
+with existing tzdata/Tcl/Tk and PDF from the shared release environment. Ruff and
+diff whitespace PASS. Earlier diagnostic failures (old truncated-query expectations,
+two reviewed-recovery stop expectations and stale product-label expectation) were
+resolved with explicit replacement assertions, not skipped. Recovery tests now
+fake their notification boundary; no SMTP escape attempt in final suite.
+Additional focused93/80 checks passed while validating the same interfaces.
+Read-only canonical IC/HQ clients now return valid full-query prices, HQ two
+dated prices; no raw data in evidence. Disposable synthetic receipt migration
+verified exact copy, idempotence, ordinary-state digests unchanged, automatic
+skip and manual rerun allowed. Owner explicitly selects carrying two trial SENT
+states forward. Build/deployment outcome follows below after actual verification.
+
 Offline source implementation and synthetic verification only. No real Sheets/CDP,
 mail, production DB, procurement, build or deployment. Existing V1.5 worktree;
 no copying dirty V1.4 work or merging later unreviewed commits. Owner confirms

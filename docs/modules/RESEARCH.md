@@ -1,5 +1,17 @@
 # Research 模块
 
+## Owner full-query correction (2026-10-25)
+
+All six source searches send the original complete source model (URL encoding
+only). Shared core.mpn.lookup_mpn_query generalizes the existing full INSO query;
+inso_lookup_query remains an alias. Two-character removal/normalization applies
+ONLY to comparison of returned models. IC.net/HQEW/Findchips/BOM/LCSC no longer
+truncate retrieval; normal 1–6 and TP 1–12 windows, stock, price legality and
+identity rules remain unchanged. This supersedes earlier prefix-query wording.
+Reproduced inherited loss using both canonical clients: prefix search omitted
+IC reference and HQ offers, full query returned valid results. No live values
+or source HTML are stored in repository evidence.
+
 ## TP currency correction (2026-10-25, REVIEW_REQUIRED)
 
 BomAiPriceRecord.currency_confirmed records row-scoped currency evidence. The

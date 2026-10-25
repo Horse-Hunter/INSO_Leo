@@ -443,7 +443,7 @@ def _cdp_client(
     ],
 )
 def test_cdp_client_accepts_loopback_endpoints(cdp_url: str) -> None:
-    target_url = "https://www.ic.net.cn/search/ABC1.html"
+    target_url = "https://www.ic.net.cn/search/ABC-123.html"
     page = FakeCdpPage(target_url, FIXTURE.read_text(encoding="utf-8"))
     client, chromium = _cdp_client(
         [page],
@@ -469,7 +469,7 @@ def test_cdp_client_rejects_remote_endpoint() -> None:
 
 
 def test_cdp_client_attach_only_reads_exact_existing_page() -> None:
-    target_url = "https://www.ic.net.cn/search/ABC1.html"
+    target_url = "https://www.ic.net.cn/search/ABC-123.html"
     page = FakeCdpPage(target_url, FIXTURE.read_text(encoding="utf-8"))
     client, chromium = _cdp_client([page], navigate=False)
 
@@ -496,10 +496,10 @@ def test_cdp_client_opens_its_own_page_and_closes_it() -> None:
         ),
     )
 
-    captured = client.fetch_first_page("  ABC-123  ")
+    captured = client.fetch_first_page("ABC-123")
 
     context = chromium.browser.contexts[0]
-    target_url = "https://www.ic.net.cn/search/ABC1.html"
+    target_url = "https://www.ic.net.cn/search/ABC-123.html"
     assert captured.url == target_url
     assert stale.goto_calls == [], "an earlier tab must not be reused"
     assert len(context.pages) == 2
@@ -586,7 +586,7 @@ def test_cdp_client_recovers_one_expired_session_with_existing_provider() -> Non
     captured = client.fetch_first_page("ABC-123")
 
     page = chromium.browser.contexts[0].pages[-1]
-    assert captured.url == "https://www.ic.net.cn/search/ABC1.html"
+    assert captured.url == "https://www.ic.net.cn/search/ABC-123.html"
     assert ("#username", "test-user") in page.fills
     assert ("#password", "test-password") in page.fills
     assert page.clicks == ["#btn_login"]
@@ -615,7 +615,7 @@ def test_cdp_client_classifies_http_forbidden_before_parser() -> None:
     with pytest.raises(IcNetPageUnavailable, match="HTTP_STATUS_403") as caught:
         client.fetch_first_page("ABC-123")
 
-    assert caught.value.source_url == "https://www.ic.net.cn/search/ABC1.html"
+    assert caught.value.source_url == "https://www.ic.net.cn/search/ABC-123.html"
 
 
 def test_cdp_client_spaces_queries_to_the_same_site(
@@ -658,7 +658,7 @@ def test_cdp_client_navigation_does_not_reuse_unrelated_page() -> None:
 
     captured = client.fetch_first_page("ABC-123")
 
-    target_url = "https://www.ic.net.cn/search/ABC1.html"
+    target_url = "https://www.ic.net.cn/search/ABC-123.html"
     context = chromium.browser.contexts[0]
     assert captured.url == target_url
     assert unrelated.goto_calls == []
@@ -682,7 +682,7 @@ def test_cdp_client_attach_only_requires_target_page_to_be_open() -> None:
 
 
 def test_cdp_client_fails_closed_when_attached_page_has_no_body() -> None:
-    target_url = "https://www.ic.net.cn/search/ABC1.html"
+    target_url = "https://www.ic.net.cn/search/ABC-123.html"
     page = FakeCdpPage(
         target_url,
         "<html></html>",

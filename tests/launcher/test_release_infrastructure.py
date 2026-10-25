@@ -655,7 +655,7 @@ def test_windowed_startup_duplicate_does_not_construct_backend(tmp_path, monkeyp
     monkeypatch.setattr(sys, "argv", ["INSO_V1.2.exe"])
     assert main_module.main(guard_factory=lambda: guard, backend_factory=lambda: constructed.append(True)) == 0
     assert constructed == []
-    assert messages == ["INSO_V1.3 已在运行。"]
+    assert messages == ["INSO_V1.4 已在运行。"]
     assert guard.released
 
 
@@ -985,17 +985,19 @@ def test_login_sweep_explains_live_chrome_session_initialization_timeout(tmp_pat
     assert backend._thread is None
 
 
-def test_v14_frozen_self_check_requires_pdf_and_timezone(monkeypatch):
+@pytest.mark.parametrize("version", ["1.4", "1.5"])
+def test_v14_frozen_self_check_requires_pdf_and_timezone(monkeypatch, version):
     from scripts import windows_release_entry as entry
-    monkeypatch.setattr(entry.sys,'executable','INSO_V1.4.exe')
+    monkeypatch.setattr(entry.sys,'executable',f'INSO_V{version}.exe')
     assert entry._self_check()==0
 
 
-def test_v14_frozen_self_check_rejects_missing_pdf(monkeypatch):
+@pytest.mark.parametrize("version", ["1.4", "1.5"])
+def test_v14_frozen_self_check_rejects_missing_pdf(monkeypatch, version):
     import builtins
 
     from scripts import windows_release_entry as entry
-    monkeypatch.setattr(entry.sys,'executable','INSO_V1.4.exe')
+    monkeypatch.setattr(entry.sys,'executable',f'INSO_V{version}.exe')
     original=builtins.__import__
     def imports(name,*args,**kwargs):
         if name=='pypdf':raise ImportError('missing PDF dependency')

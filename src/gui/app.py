@@ -13,6 +13,8 @@ from decimal import Decimal
 from tkinter import Menu, messagebox, simpledialog, ttk
 from typing import Any
 
+from src.core.app_paths import application_name
+
 from .contracts import (
     GuiBackend,
     LogEntry,
@@ -230,7 +232,7 @@ class InsoDashboardApp:
         self._root = ctk.CTk()
         if diagnostics is not None:
             self._root.report_callback_exception = diagnostics.tk_exception
-        self._root.title("INSO_V1.4")
+        self._root.title(application_name())
         self._root.geometry("1200x800")
         self._root.configure(fg_color=_BG)
         self._root.protocol("WM_DELETE_WINDOW", self._on_window_close)
@@ -276,7 +278,7 @@ class InsoDashboardApp:
 
         title = ctk.CTkLabel(
             frame,
-            text="INSO_V1.4",
+            text=application_name(),
             font=_FONT_TITLE,
             text_color=_TEXT,
         )

@@ -898,7 +898,8 @@ class ProductionBackend(GuiBackend):
                     stop_requested=self._stop.is_set)
             self._manual_write_service = get_write_service
             self._tp = None
-            if cfg.get("tp_enabled") is True:
+            if cfg.get("tp_enabled", getattr(sys, "frozen", False)
+                       and Path(sys.executable).stem == "INSO_V1.5") is True:
                 from .tp_composition import build_tp_cycle
                 def prepare_tp(key):
                     self._begin_inso_inquiry(key)

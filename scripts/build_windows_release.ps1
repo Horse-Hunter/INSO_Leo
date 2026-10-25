@@ -1,8 +1,8 @@
-param([switch]$BuildOnly, [ValidateSet("1.1", "1.2", "1.3", "1.4")][string]$Version = "1.1")
+param([switch]$BuildOnly, [ValidateSet("1.1", "1.2", "1.3", "1.4", "1.5")][string]$Version = "1.1", [string]$PythonExecutable = "")
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repo
-$python = Join-Path $repo ".venv-release/Scripts/python.exe"
+$python = if ($PythonExecutable) { (Resolve-Path -LiteralPath $PythonExecutable).Path } else { Join-Path $repo ".venv-release/Scripts/python.exe" }
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
     throw "Release Python environment is missing. Create it and install requirements-windows-release.lock first."
 }

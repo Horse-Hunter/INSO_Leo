@@ -6,7 +6,7 @@ import os
 
 repo_root = Path(SPECPATH).parent
 release_version = os.environ.get("INSO_BUILD_VERSION", "1.1")
-if release_version not in {"1.1", "1.2", "1.3", "1.4"}:
+if release_version not in {"1.1", "1.2", "1.3", "1.4", "1.5"}:
     raise ValueError("unsupported release version")
 release_name = "INSO_V" + release_version
 
@@ -27,7 +27,7 @@ release_packages = (
     "openpyxl",
     "playwright",
 )
-if release_version == "1.4":
+if release_version in {"1.4", "1.5"}:
     release_packages += ("pypdf", "tzdata")
 for package in release_packages:
     package_datas, package_binaries, package_hiddenimports = collect_all(package)

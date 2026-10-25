@@ -14,7 +14,7 @@ from time import monotonic, sleep
 from typing import Protocol
 from urllib.parse import quote, urlsplit
 
-from src.core.mpn import lookup_mpn_prefix
+from src.core.mpn import lookup_mpn_query
 
 from .cdp_pages import new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
@@ -372,10 +372,10 @@ class BomAiBrowserConfig:
                 raise ValueError(f"Bom.Ai {name} must not be blank when present")
 
     def result_url(self, mpn: str) -> str:
-        """Build the target model page URL from the trimmed MPN."""
+        """Build the target page from the complete source model."""
 
         return self.result_url_template.replace(
-            "{mpn}", quote(lookup_mpn_prefix(mpn), safe="")
+            "{mpn}", quote(lookup_mpn_query(mpn), safe="")
         )
 
 

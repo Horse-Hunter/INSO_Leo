@@ -12,7 +12,7 @@ from time import monotonic, sleep
 from typing import Protocol
 from urllib.parse import parse_qs, quote, urlsplit
 
-from src.core.mpn import lookup_mpn_prefix
+from src.core.mpn import lookup_mpn_query
 
 from .cdp_pages import new_background_page
 from .site_login import (
@@ -108,7 +108,7 @@ class HqewPageClient(Protocol):
 
 
 def build_hqew_result_url(mpn: str) -> str:
-    return f"{HQEW_RESULT_URL}{quote(lookup_mpn_prefix(mpn), safe='')}.html?y4=1"
+    return f"{HQEW_RESULT_URL}{quote(lookup_mpn_query(mpn), safe='')}.html?y4=1"
 
 
 def _is_hqew_url(url: str) -> bool:
@@ -130,7 +130,7 @@ def _is_loopback_hostname(hostname: str) -> bool:
 
 def _is_expected_result_url(url: str, mpn: str) -> bool:
     parsed = urlsplit(url)
-    encoded_mpn = quote(lookup_mpn_prefix(mpn), safe="")
+    encoded_mpn = quote(lookup_mpn_query(mpn), safe="")
     expected_path = f"/yunquote/{encoded_mpn}.html"
     if not _is_hqew_url(url):
         return False
@@ -199,7 +199,7 @@ class CdpHqewClient:
         self._playwright_factory = playwright_factory
 
     def fetch_first_page(self, mpn: str) -> HqewPage:
-        mpn = mpn.strip()
+        mpn = lookup_mpn_query(mpn)
         factory = self._playwright_factory
         timeout_error: type[Exception] = TimeoutError
         if factory is None:

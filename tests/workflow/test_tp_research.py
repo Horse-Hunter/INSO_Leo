@@ -1,4 +1,5 @@
 import sqlite3
+from collections import deque
 from contextlib import nullcontext
 from dataclasses import replace
 from datetime import timedelta
@@ -44,7 +45,7 @@ def build(tmp_path, outcomes=(DeliveryOutcome.SENT,)):
     V13HoldStore(path).migrate()
     store, outbox = TpStore(path), V12Store(path)
     store.migrate()
-    transport = FakeNotificationTransport({"owner": outcomes})
+    transport = FakeNotificationTransport({"owner": outcomes, "ops": outcomes})
     worker = V12NotificationWorker(outbox, transport)
     lines = [brief()]
     reader = SimpleNamespace(rows=[source()], read_rows=lambda _: tuple(reader.rows))
@@ -59,12 +60,12 @@ def test_historical_no_inquiry_15_minute_polls_tp_edits_and_manual_generation(tm
     for i in range(4):
         cycle.run("synthetic", now=NOW+timedelta(minutes=15*i))
     key = task_key("synthetic", "2026", 10)
-    assert len(cycle.research.calls) == len(transport.calls) == 1
+    assert len(cycle.research.calls) == 1 and len(transport.calls) == 2
     lines[0] = brief(price="3 USD")
     cycle.run("synthetic", now=NOW+timedelta(hours=2))
     assert len(cycle.research.calls) == 1
     cycle.run("synthetic", now=NOW+timedelta(hours=3), manual_key=key)
-    assert len(cycle.research.calls) == len(transport.calls) == 2
+    assert len(cycle.research.calls) == 2 and len(transport.calls) == 4
     assert cycle.research.calls[-1][1].target_price == Decimal(3)
     assert cycle.store.get(key)["generation"] == 1
     with sqlite3.connect(path) as db:
@@ -82,7 +83,7 @@ def test_delivery_failure_unknown_no_automatic_research_or_blind_manual_resend(t
     assert cycle.store.manual_allowed(key) is (outcome is DeliveryOutcome.PERMANENT_FAILURE)
     cycle.run("synthetic", now=NOW+timedelta(minutes=15))
     assert len(cycle.research.calls) == 1
-    assert len(transport.calls) == (2 if outcome is DeliveryOutcome.RETRYABLE_FAILURE else 1)
+    assert len(transport.calls) == (4 if outcome is DeliveryOutcome.RETRYABLE_FAILURE else 2)
 
 
 def test_claim_excludes_auto_and_manual_even_with_two_store_connections(tmp_path):
@@ -93,6 +94,27 @@ def test_claim_excludes_auto_and_manual_even_with_two_store_connections(tmp_path
     second = TpStore(path)
     assert second.claim(key, order, NOW) is None
     assert second.claim(key, order, NOW, manual=True) is None
+
+
+@pytest.mark.parametrize("owner,ops,expected,allowed", [
+    ("SENT", "UNKNOWN", "UNKNOWN", False),
+    ("UNKNOWN", "SENT", "UNKNOWN", False),
+    ("SENT", "RETRYABLE_FAILURE", "RETRYABLE_FAILURE", False),
+    ("SENT", "PERMANENT_FAILURE", "PERMANENT_FAILURE", True),
+    ("SENT", "SENT", "SENT", True),
+])
+def test_all_recipients_control_completion_and_manual_retry(tmp_path, owner, ops, expected, allowed):
+    cycle, _, _, transport, _ = build(tmp_path)
+    transport._outcomes["owner"] = deque([DeliveryOutcome(owner)])
+    transport._outcomes["ops"] = deque([DeliveryOutcome(ops)])
+    cycle.run("synthetic", now=NOW)
+    key = cycle.store.rows()[0]["task_id"]
+    assert cycle.store.delivery(key) == expected
+    assert cycle.store.manual_allowed(key) is allowed
+    first_calls = tuple(transport.calls)
+    cycle.run("synthetic", now=NOW + timedelta(minutes=15))
+    assert len(cycle.research.calls) == 1
+    assert all(call[1] == "ops" for call in transport.calls[len(first_calls):])
 
 
 def test_crash_after_outbox_commit_adopts_same_command(tmp_path):
@@ -108,7 +130,7 @@ def test_crash_after_outbox_commit_adopts_same_command(tmp_path):
     assert cycle.store.get(key)["state"] == "MAIL_QUEUED"
     cycle.outbox.enqueue_notification = enqueue
     cycle.run("synthetic", now=NOW+timedelta(minutes=15))
-    assert len(cycle.research.calls) == len(transport.calls) == 1
+    assert len(cycle.research.calls) == 1 and len(transport.calls) == 2
 
 
 def test_crash_before_outbox_research_recoverable_and_sending_crash_unknown(tmp_path):
@@ -161,7 +183,7 @@ def test_mail_no_fake_zero_second_date_and_urgent_when_no_valid_prices(tmp_path)
     assert "各来源报价" not in command.text_body
     assert "不足两档" not in command.text_body
     assert "预计订单总价" not in command.text_body
-    assert len(command.recipients) == 1 and command.recipients[0].address == "linan229@qq.com"
+    assert {r.address for r in command.recipients} == {"linan229@qq.com", "shawn@inso-hk.com"}
 
 
 def test_tp_equal_target_not_urgent_and_current_quote_has_no_fabricated_date(tmp_path):
@@ -209,11 +231,11 @@ def test_four_orders_batch_sources_and_completed_poll_reads_no_sources(tmp_path,
     cycle.run("synthetic", now=NOW)
     # One snapshot per sheet + four fresh target-only final checks (was20).
     assert counts == Counter(sheets) + Counter({s: 1 for s in sheets}) + Counter(brief=5)
-    assert len(transport.calls) == 4
+    assert len(transport.calls) == 8
     counts.clear()
     cycle.run("synthetic", now=NOW + timedelta(minutes=15))
     assert counts == {"brief": 1}
-    assert len(transport.calls) == 4
+    assert len(transport.calls) == 8
     counts.clear()
     cycle.run("synthetic", now=NOW + timedelta(minutes=30),
               manual_key=task_key("synthetic", "2026", 10))
@@ -267,7 +289,7 @@ def test_local_failure_persisted_safe_retry_and_manual_failure(tmp_path, monkeyp
             cycle.run("synthetic", now=NOW, manual_key=key)
     monkeypatch.setattr(target, attr, original)
     cycle.run("synthetic", now=NOW + timedelta(minutes=15))
-    assert len(transport.calls) == 1
+    assert len(transport.calls) == 2
     with sqlite3.connect(path) as db:
         assert db.execute("SELECT count(*) FROM workflow_tp_failures").fetchone()[0] == 0
 
