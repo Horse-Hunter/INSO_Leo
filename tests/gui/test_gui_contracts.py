@@ -248,7 +248,7 @@ def test_countdown_uses_backend_deadline_and_stopped_states_are_zero():
     assert _countdown_text(running, now) == "14:59"
     assert _countdown_text(reset_after_poll, now) == "15:00"
     assert _countdown_text(reset_after_poll, now + timedelta(seconds=1)) == "14:59"
-    assert _countdown_text(first_poll, now) == "即将轮询"
+    assert _countdown_text(first_poll, now) == "本轮进行中"
     assert _countdown_text(stopping, now) == "00:00"
     assert _countdown_text(stopped, now) == "00:00"
 

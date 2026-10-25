@@ -447,3 +447,12 @@ def test_transport_module_ships_no_sleep_or_scheduler() -> None:
 
     assert not re.search(r"\bsleep\b", source)
     assert "time.monotonic" not in source
+
+
+def test_suite_mail_guard_survives_individual_fixture_teardown(monkeypatch):
+    import smtplib
+
+    from tests import conftest as guards
+    monkeypatch.undo()
+    assert smtplib.SMTP_SSL is guards._refuse
+    assert smtplib.SMTP is guards._refuse

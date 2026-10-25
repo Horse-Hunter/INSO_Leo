@@ -31,5 +31,6 @@ def tp_display_orders(cycle):
         orders.append(Order(row["task_id"], order.mpn, order.brand, order.quantity,
             "待验证", None, None, status, remark=(
                 f"TP 专项｜{order.sheet} 第{order.row}行｜{order.target_raw}｜"
-                f"{delivery or row['state']}")))
+                f"{delivery or row['state']}"), source_sheet=order.sheet, source_row=order.row,
+                module_id="tp", delivery_status=delivery, business_status=row['state']))
     return tuple(orders)

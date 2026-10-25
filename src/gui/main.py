@@ -14,7 +14,7 @@ import tkinter.messagebox
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from src.core.app_paths import app_root, application_name
+from src.core.app_paths import app_root
 from src.launcher import ProductionBackend
 from src.launcher.single_instance import SingleInstanceGuard
 
@@ -113,7 +113,7 @@ def _configure_startup_log(root: Path) -> Path:
 
 
 def _show_error(message: str, title: str | None = None) -> None:
-    title = title or application_name()
+    title = title or "INSO LEO"
     try:
         tkinter.messagebox.showerror(title, message)
     except (tkinter.TclError, RuntimeError):
@@ -148,12 +148,12 @@ def main(*, guard_factory=None, backend_factory=None, diagnostics=None) -> int:
         if not guard.acquire():
             if diagnostics is not None:
                 diagnostics.request_exit("duplicate_instance")
-            _show_error(application_name() + " 已在运行。")
+            _show_error("INSO LEO 已在运行。")
             return 0
         backend = (
             MockBackend(cycle_seconds=12.0)
             if args.mock
-            else (backend_factory or ProductionBackend)()
+            else backend_factory() if backend_factory else ProductionBackend(defer_local_view=True)
         )
         app = (InsoDashboardApp(backend) if diagnostics is None
                else InsoDashboardApp(backend, diagnostics=diagnostics))
@@ -162,7 +162,10 @@ def main(*, guard_factory=None, backend_factory=None, diagnostics=None) -> int:
             if not diagnostics.healthy:
                 _show_error("部分退出取证未能启用，请检查程序目录写入权限及 runtime/logs 中的诊断记录。")
         if args.start_inquiry:
-            backend.start()
+            if getattr(backend, "local_view_loading", lambda: False)():
+                app._start_on_ready = True
+            else:
+                backend.start()
         app.run()
         return 0
     except Exception as exc:  # noqa: BLE001 - windowed startup safety boundary
@@ -171,7 +174,7 @@ def main(*, guard_factory=None, backend_factory=None, diagnostics=None) -> int:
         logging.getLogger("inso.startup").error(
             "Application startup failed (%s)", type(exc).__name__
         )
-        message = application_name() + " 启动失败。"
+        message = "INSO LEO 启动失败。"
         if log_path is not None:
             message += f"\n请查看本地日志：{log_path}"
         else:

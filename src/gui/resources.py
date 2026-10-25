@@ -7,7 +7,6 @@ lifetimes so the GUI can shut down without leaking processes.
 from __future__ import annotations
 
 import logging
-import queue
 import sys
 import threading
 from collections import deque
@@ -31,18 +30,29 @@ class MainThreadEventQueue:
     """Thread-safe handoff from backend callbacks to the Tk event loop."""
 
     def __init__(self) -> None:
-        self._queue: queue.SimpleQueue[BackendEvent] = queue.SimpleQueue()
+        self._queue: deque[BackendEvent] = deque(maxlen=256)
+        self._latest: dict[str, BackendEvent] = {}
+        self._lock = threading.Lock()
 
     def publish(self, event: BackendEvent) -> None:
-        self._queue.put(event)
+        with self._lock:
+            if event.kind in {"status", "login_all", "tray"}:
+                if (
+                    event.kind == "tray"
+                    and "tray" in self._latest
+                    and self._latest["tray"].payload == "exit"
+                ):
+                    return
+                self._latest[event.kind] = event
+            else:
+                self._queue.append(event)
 
     def drain(self) -> tuple[BackendEvent, ...]:
-        events: list[BackendEvent] = []
-        while True:
-            try:
-                events.append(self._queue.get_nowait())
-            except queue.Empty:
-                return tuple(events)
+        with self._lock:
+            events = tuple(self._latest.values()) + tuple(self._queue)
+            self._latest.clear()
+            self._queue.clear()
+            return events
 
 
 class RingBufferLog(logging.Handler):

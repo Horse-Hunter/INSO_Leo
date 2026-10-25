@@ -105,7 +105,7 @@ def _self_check() -> int:
 
 def _idle_self_check() -> int:
     """Construct and render the real idle dashboard; never press Start or acquire CDP."""
-    from src.core.app_paths import app_root, application_name
+    from src.core.app_paths import app_root
     from src.gui.app import InsoDashboardApp
     from src.gui.contracts import RunState
     from src.launcher.backend import ProductionBackend
@@ -134,7 +134,7 @@ def _idle_self_check() -> int:
         )
         return (
             0
-            if report["title"] == application_name()
+            if report["title"] == "INSO LEO — Procurement Automation Control Center"
             and backend.get_status().state is RunState.STOPPED
             and not report["business_thread_started"]
             and not report["order_thread_started"]

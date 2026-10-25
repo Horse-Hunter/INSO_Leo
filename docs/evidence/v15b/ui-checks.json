@@ -1,0 +1,502 @@
+{
+  "layout": [
+    {
+      "scale": 1,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u603b\u89c8"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u4efb\u52a1\u4e2d\u5fc3"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u8c03\u7814\u7ed3\u679c"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u5f02\u5e38\u4e0e\u901a\u77e5"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u8fd0\u884c\u8bb0\u5f55"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u8bbe\u7f6e"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u603b\u89c8"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u4efb\u52a1\u4e2d\u5fc3"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u8c03\u7814\u7ed3\u679c"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u5f02\u5e38\u4e0e\u901a\u77e5"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u8fd0\u884c\u8bb0\u5f55"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u8bbe\u7f6e"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u603b\u89c8"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u4efb\u52a1\u4e2d\u5fc3"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u8c03\u7814\u7ed3\u679c"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u5f02\u5e38\u4e0e\u901a\u77e5"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u8fd0\u884c\u8bb0\u5f55"
+    },
+    {
+      "scale": 1,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u8bbe\u7f6e"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u603b\u89c8"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u4efb\u52a1\u4e2d\u5fc3"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u8c03\u7814\u7ed3\u679c"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u5f02\u5e38\u4e0e\u901a\u77e5"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u8fd0\u884c\u8bb0\u5f55"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u8bbe\u7f6e"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u603b\u89c8"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u4efb\u52a1\u4e2d\u5fc3"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u8c03\u7814\u7ed3\u679c"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u5f02\u5e38\u4e0e\u901a\u77e5"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u8fd0\u884c\u8bb0\u5f55"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u8bbe\u7f6e"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u603b\u89c8"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u4efb\u52a1\u4e2d\u5fc3"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u8c03\u7814\u7ed3\u679c"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u5f02\u5e38\u4e0e\u901a\u77e5"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u8fd0\u884c\u8bb0\u5f55"
+    },
+    {
+      "scale": 1.25,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u8bbe\u7f6e"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u603b\u89c8"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u4efb\u52a1\u4e2d\u5fc3"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u8c03\u7814\u7ed3\u679c"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u5f02\u5e38\u4e0e\u901a\u77e5"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u8fd0\u884c\u8bb0\u5f55"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        1280,
+        720
+      ],
+      "page": "\u8bbe\u7f6e"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u603b\u89c8"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u4efb\u52a1\u4e2d\u5fc3"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u8c03\u7814\u7ed3\u679c"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u5f02\u5e38\u4e0e\u901a\u77e5"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u8fd0\u884c\u8bb0\u5f55"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        1920,
+        1080
+      ],
+      "page": "\u8bbe\u7f6e"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u603b\u89c8"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u4efb\u52a1\u4e2d\u5fc3"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u8c03\u7814\u7ed3\u679c"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u5f02\u5e38\u4e0e\u901a\u77e5"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u8fd0\u884c\u8bb0\u5f55"
+    },
+    {
+      "scale": 1.5,
+      "client_pixels": [
+        2560,
+        1440
+      ],
+      "page": "\u8bbe\u7f6e"
+    }
+  ],
+  "cycles": 90,
+  "resources": [
+    {
+      "cycle": 0,
+      "after_callbacks": 5,
+      "rss": 64114688,
+      "private": 45617152,
+      "threads": 11,
+      "python_threads": 2,
+      "handles": 320,
+      "gdi": 57,
+      "user": 282
+    },
+    {
+      "cycle": 30,
+      "after_callbacks": 5,
+      "rss": 64765952,
+      "private": 45891584,
+      "threads": 11,
+      "python_threads": 2,
+      "handles": 320,
+      "gdi": 57,
+      "user": 279
+    },
+    {
+      "cycle": 60,
+      "after_callbacks": 5,
+      "rss": 64815104,
+      "private": 45891584,
+      "threads": 11,
+      "python_threads": 2,
+      "handles": 320,
+      "gdi": 57,
+      "user": 279
+    },
+    {
+      "cycle": 90,
+      "after_callbacks": 5,
+      "rss": 64868352,
+      "private": 45891584,
+      "threads": 11,
+      "python_threads": 2,
+      "handles": 320,
+      "gdi": 57,
+      "user": 279
+    }
+  ],
+  "table_workloads": [
+    {
+      "orders": 100,
+      "visible_rows": 100,
+      "search_filter_scroll_detail_ms": 262.39829999394715
+    },
+    {
+      "orders": 500,
+      "visible_rows": 200,
+      "search_filter_scroll_detail_ms": 334.3921000196133
+    },
+    {
+      "orders": 1000,
+      "visible_rows": 200,
+      "search_filter_scroll_detail_ms": 359.5136000076309
+    }
+  ],
+  "callbacks_failed": [],
+  "os_dpi": "NOT_VERIFIED; widget scaling only"
+}

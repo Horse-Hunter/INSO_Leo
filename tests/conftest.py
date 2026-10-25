@@ -45,6 +45,15 @@ def _refuse(*_args: Any, **_kwargs: Any) -> Any:
     )
 
 
+def pytest_configure(config):
+    # A failed test can leave a worker alive past fixture teardown. Keep the
+    # process-wide floor closed even between tests and after pytest returns;
+    # explicit synthetic SMTP factories may still be installed per test.
+    _OUTBOUND_ATTEMPTS.clear()
+    smtplib.SMTP_SSL = _refuse
+    smtplib.SMTP = _refuse
+
+
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """Shout about every outbound-mail attempt once the run is over."""
 

@@ -1,0 +1,4646 @@
+{
+  "synthetic_only": true,
+  "baseline_git_sha": "97212f40eb87cad5d0069f0c1f21c4cef71c481b",
+  "method": "Separate synthetic processes; idle 600s, foreground1800s+tray120s. Same session, concurrent diagnostics. Own-process resources only. Exclude first60s startup/first30s of phase for steady means.",
+  "cases": {
+    "v15b-baseline-idle": {
+      "metadata": {
+        "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+        "logical_cpus": 16,
+        "synthetic_only": true,
+        "source_sha256": {
+          "src\\gui\\app.py": "468911d06ff33d7b262f21f3a8f75f13a775dc5daf6185363eba32feefbef7e2",
+          "src\\gui\\contracts.py": "ac0873b9c450a895104065a7081b52ec187c3e8bae4831b0797c05d16598bb42",
+          "src\\gui\\main.py": "3dd7a33a42f2ecd8a2623172cdbf0e43e5375f3a94f592064c5e6e2e9098f1a0",
+          "src\\gui\\mock_backend.py": "478f014205734654a579d4e742b70afbb3ca27177d49c23dab2531613e0cb34c",
+          "src\\gui\\resources.py": "7436ef711444c53e4590517ae984ec9a68a23c7a595457263bd136ee635d1c3b",
+          "src\\gui\\smoke.py": "3ce521a67466b02bcd53d11dd78ab1b146701d784df2e10b574dbf5d0d64a750",
+          "src\\gui\\state.py": "fdae79f5cc05ab2f2e2e4ee1115603ecf7047ae6cfc825e55bd84dd0fc49c076",
+          "src\\gui\\tray.py": "78fcfe4a65e7ca7d1a9921d47743f51fcc7bac4e96361ac4d187e0527ce13cc9",
+          "src\\gui\\__init__.py": "7bf2e3fd25ebb61fd076ccf93eecb10f7cc7314d4393a9eac8ea6e1e6d2dd0bf",
+          "src\\launcher\\backend.py": "fde4e511ad11518a79edc11419c602de9e2dfec1301a0c494f5cb93fb2b4e796",
+          "src\\launcher\\browser_bootstrap.py": "b0f4533d93839ca077bcf63d0241ec42ac73f1c71799de2ac7dc32de69fc59de",
+          "src\\launcher\\diagnostics.py": "6b272c231b2f17d322ad7da19dd7537f01bea2aa9ddeceb252540a7941e4bc6a",
+          "src\\launcher\\google_quote_update.py": "0cde6fdf3c8020f6c03ad60fb6671149ae3397f8470fe3da05c0d1225b9922fc",
+          "src\\launcher\\google_web.py": "5c647b62992046692d932d0bdb54133a168975124680506008614ca04eeb8978",
+          "src\\launcher\\inso_session.py": "3c4ed019c3c8606b97b7c9c5c491436a2bd2fd093b3c76b743b25ce6c813865c",
+          "src\\launcher\\manual_order.py": "a0608f5c3f992e2ab706709641cfb4b45d8b1ca6b470573b6dfcd20b32670843",
+          "src\\launcher\\purchase_completion.py": "bb3bbb3a1af0abb60a48abb47c7fa8ba1d721224c872f796931f873251e63945",
+          "src\\launcher\\sales_header.py": "4c0505796f459234fb48e459011860cee01a9c89d7932e629dbb2dd30b09f4b3",
+          "src\\launcher\\sales_intent.py": "9d6ccc24566de411fe6e2940834f1c69495f63b141c7c2416aebd9f4154532ec",
+          "src\\launcher\\single_instance.py": "967e7d38343283dbd7aa49d26f3b3098f74066d492278c04e7b7dfb819f96c79",
+          "src\\launcher\\site_login_sweep.py": "feac405efcd8d36345196af23458948ff5265f09a03ebb58229175e1758abb1b",
+          "src\\launcher\\tp_composition.py": "21e85320885916c69b054487d0e3fe8b47b6cb30bf91363f56ece00288365f83",
+          "src\\launcher\\v12_composition.py": "c939a5f598fb04fb1d38831e982592d1fcc1b7d76a5b92cd1d9743fb8a7a3d14",
+          "src\\launcher\\v12_gui.py": "1b7194638351f67e02e5f0f1f5e69b29abcb77a8af805c931185321f99e3726f",
+          "src\\launcher\\v12_phase_a_readonly.py": "29b9eb82fc4239ae020d21760b1efb6fab3aa42282a31ad2a79de131bdbe4683",
+          "src\\launcher\\v13_integration.py": "d563abade6a757ca42eb4fb5c049ae3903fea9471780f0d894e5ec44964bcbd0",
+          "src\\launcher\\v13_quotation.py": "65f9b29d07762518071d518c21cb5242733ee30ce31c9a330e8e6bc66b2d546f",
+          "src\\launcher\\__init__.py": "b95e4ca45217e96156ccdd15d3e80178dbca65f263579ad235bbffe82e15e547"
+        }
+      },
+      "source_hashes_match": true,
+      "rendered_gui_source_hashes_match": true,
+      "unmeasured_source_changes": {},
+      "unmeasured_change_scope": null,
+      "completion": {
+        "completed": true,
+        "durations": [
+          600,
+          0,
+          0
+        ],
+        "samples": 21,
+        "elapsed": 600.2189999999828
+      },
+      "phases": {
+        "idle": {
+          "samples": 18,
+          "sample_span_seconds": [
+            1.0160000000032596,
+            572.375
+          ],
+          "cpu_host_mean_percent": 0.12755166073238827,
+          "cpu_one_core_mean_percent": 2.0408265717182124,
+          "rss": {
+            "min": 77971456,
+            "max": 92512256,
+            "first": 77971456,
+            "last": 92512256
+          },
+          "private": {
+            "min": 55824384,
+            "max": 57749504,
+            "first": 55988224,
+            "last": 57679872
+          },
+          "threads": {
+            "min": 6,
+            "max": 11,
+            "first": 11,
+            "last": 6
+          },
+          "python_threads": {
+            "min": 1,
+            "max": 1,
+            "first": 1,
+            "last": 1
+          },
+          "handles": {
+            "min": 543,
+            "max": 551,
+            "first": 551,
+            "last": 543
+          },
+          "gdi": {
+            "min": 133,
+            "max": 133,
+            "first": 133,
+            "last": 133
+          },
+          "user": {
+            "min": 189,
+            "max": 189,
+            "first": 189,
+            "last": 189
+          }
+        }
+      },
+      "resource_samples": [
+        {
+          "seconds": 1.0160000000032596,
+          "phase": "idle",
+          "cpu_one_core_percent": 43.061023621909094,
+          "cpu_host_percent": 2.6913139763693184,
+          "rss": 77807616,
+          "private": 56127488,
+          "threads": 15,
+          "python_threads": 1,
+          "handles": 557,
+          "gdi": 133,
+          "user": 190
+        },
+        {
+          "seconds": 31.078000000008615,
+          "phase": "idle",
+          "cpu_one_core_percent": 2.3908921562100725,
+          "cpu_host_percent": 0.14943075976312953,
+          "rss": 77955072,
+          "private": 56094720,
+          "threads": 14,
+          "python_threads": 1,
+          "handles": 554,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 61.14100000000326,
+          "phase": "idle",
+          "cpu_one_core_percent": 2.2868642517384243,
+          "cpu_host_percent": 0.14292901573365152,
+          "rss": 77971456,
+          "private": 55988224,
+          "threads": 11,
+          "python_threads": 1,
+          "handles": 551,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 91.20300000000861,
+          "phase": "idle",
+          "cpu_one_core_percent": 2.1310125740133254,
+          "cpu_host_percent": 0.13318828587583284,
+          "rss": 78036992,
+          "private": 55988224,
+          "threads": 11,
+          "python_threads": 1,
+          "handles": 551,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 121.28099999998813,
+          "phase": "idle",
+          "cpu_one_core_percent": 1.97403417780572,
+          "cpu_host_percent": 0.1233771361128575,
+          "rss": 78045184,
+          "private": 55988224,
+          "threads": 11,
+          "python_threads": 1,
+          "handles": 551,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 151.34399999998277,
+          "phase": "idle",
+          "cpu_one_core_percent": 2.0789675015803857,
+          "cpu_host_percent": 0.1299354688487741,
+          "rss": 78016512,
+          "private": 55894016,
+          "threads": 8,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 181.42199999999139,
+          "phase": "idle",
+          "cpu_one_core_percent": 1.97403417780381,
+          "cpu_host_percent": 0.12337713611273812,
+          "rss": 77983744,
+          "private": 55824384,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 211.48399999999674,
+          "phase": "idle",
+          "cpu_one_core_percent": 1.8711329918165784,
+          "cpu_host_percent": 0.11694581198853615,
+          "rss": 78123008,
+          "private": 56631296,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 241.56299999999464,
+          "phase": "idle",
+          "cpu_one_core_percent": 2.129808171814371,
+          "cpu_host_percent": 0.13311301073839818,
+          "rss": 78188544,
+          "private": 56631296,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 271.64100000000326,
+          "phase": "idle",
+          "cpu_one_core_percent": 1.8181893742929829,
+          "cpu_host_percent": 0.11363683589331143,
+          "rss": 78196736,
+          "private": 56631296,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 301.7030000000086,
+          "phase": "idle",
+          "cpu_one_core_percent": 2.442868072649422,
+          "cpu_host_percent": 0.15267925454058887,
+          "rss": 78249984,
+          "private": 56700928,
+          "threads": 8,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 331.76600000000326,
+          "phase": "idle",
+          "cpu_one_core_percent": 1.7671223763433277,
+          "cpu_host_percent": 0.11044514852145798,
+          "rss": 78254080,
+          "private": 57749504,
+          "threads": 8,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 361.84399999998277,
+          "phase": "idle",
+          "cpu_one_core_percent": 2.0779307134797054,
+          "cpu_host_percent": 0.12987066959248159,
+          "rss": 78254080,
+          "private": 57749504,
+          "threads": 8,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 391.9219999999914,
+          "phase": "idle",
+          "cpu_one_core_percent": 1.8701376421299252,
+          "cpu_host_percent": 0.11688360263312032,
+          "rss": 78254080,
+          "private": 57749504,
+          "threads": 8,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 422.0,
+          "phase": "idle",
+          "cpu_one_core_percent": 2.285723784825464,
+          "cpu_host_percent": 0.1428577365515915,
+          "rss": 78290944,
+          "private": 57679872,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 452.0780000000086,
+          "phase": "idle",
+          "cpu_one_core_percent": 2.0779307134776945,
+          "cpu_host_percent": 0.1298706695923559,
+          "rss": 78299136,
+          "private": 57679872,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 482.1559999999881,
+          "phase": "idle",
+          "cpu_one_core_percent": 1.8701376421317348,
+          "cpu_host_percent": 0.11688360263323343,
+          "rss": 78307328,
+          "private": 57679872,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 512.2189999999828,
+          "phase": "idle",
+          "cpu_one_core_percent": 2.0789675015803857,
+          "cpu_host_percent": 0.1299354688487741,
+          "rss": 78307328,
+          "private": 57679872,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 542.2969999999914,
+          "phase": "idle",
+          "cpu_one_core_percent": 1.8181893742929829,
+          "cpu_host_percent": 0.11363683589331143,
+          "rss": 92499968,
+          "private": 57679872,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 572.375,
+          "phase": "idle",
+          "cpu_one_core_percent": 2.1818272491515796,
+          "cpu_host_percent": 0.13636420307197372,
+          "rss": 92512256,
+          "private": 57679872,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 600.1410000000033,
+          "phase": "tray",
+          "cpu_one_core_percent": 2.644871425484095,
+          "cpu_host_percent": 0.16530446409275593,
+          "rss": 94867456,
+          "private": 59260928,
+          "threads": 9,
+          "python_threads": 2,
+          "handles": 553,
+          "gdi": 133,
+          "user": 192
+        }
+      ],
+      "operation_timings": [
+        {
+          "operation": "table",
+          "rows": 100,
+          "ms": 0.6889999785926193
+        },
+        {
+          "operation": "table",
+          "rows": 500,
+          "ms": 43.377499998314306
+        },
+        {
+          "operation": "table",
+          "rows": 1000,
+          "ms": 54.83609999646433
+        }
+      ],
+      "tick": {
+        "count": 586,
+        "median_ms": 10.05129999248311,
+        "p95_ms": 11.903600010555238,
+        "max_ms": 22.027799976058304
+      },
+      "operations": {
+        "table": {
+          "count": 3,
+          "median_ms": 43.377499998314306,
+          "p95_ms": 43.377499998314306,
+          "max_ms": 54.83609999646433
+        },
+        "search": null,
+        "detail": null,
+        "page": null
+      }
+    },
+    "v15b-baseline-foreground": {
+      "metadata": {
+        "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+        "logical_cpus": 16,
+        "synthetic_only": true,
+        "source_sha256": {
+          "src\\gui\\app.py": "468911d06ff33d7b262f21f3a8f75f13a775dc5daf6185363eba32feefbef7e2",
+          "src\\gui\\contracts.py": "ac0873b9c450a895104065a7081b52ec187c3e8bae4831b0797c05d16598bb42",
+          "src\\gui\\main.py": "3dd7a33a42f2ecd8a2623172cdbf0e43e5375f3a94f592064c5e6e2e9098f1a0",
+          "src\\gui\\mock_backend.py": "478f014205734654a579d4e742b70afbb3ca27177d49c23dab2531613e0cb34c",
+          "src\\gui\\resources.py": "7436ef711444c53e4590517ae984ec9a68a23c7a595457263bd136ee635d1c3b",
+          "src\\gui\\smoke.py": "3ce521a67466b02bcd53d11dd78ab1b146701d784df2e10b574dbf5d0d64a750",
+          "src\\gui\\state.py": "fdae79f5cc05ab2f2e2e4ee1115603ecf7047ae6cfc825e55bd84dd0fc49c076",
+          "src\\gui\\tray.py": "78fcfe4a65e7ca7d1a9921d47743f51fcc7bac4e96361ac4d187e0527ce13cc9",
+          "src\\gui\\__init__.py": "7bf2e3fd25ebb61fd076ccf93eecb10f7cc7314d4393a9eac8ea6e1e6d2dd0bf",
+          "src\\launcher\\backend.py": "fde4e511ad11518a79edc11419c602de9e2dfec1301a0c494f5cb93fb2b4e796",
+          "src\\launcher\\browser_bootstrap.py": "b0f4533d93839ca077bcf63d0241ec42ac73f1c71799de2ac7dc32de69fc59de",
+          "src\\launcher\\diagnostics.py": "6b272c231b2f17d322ad7da19dd7537f01bea2aa9ddeceb252540a7941e4bc6a",
+          "src\\launcher\\google_quote_update.py": "0cde6fdf3c8020f6c03ad60fb6671149ae3397f8470fe3da05c0d1225b9922fc",
+          "src\\launcher\\google_web.py": "5c647b62992046692d932d0bdb54133a168975124680506008614ca04eeb8978",
+          "src\\launcher\\inso_session.py": "3c4ed019c3c8606b97b7c9c5c491436a2bd2fd093b3c76b743b25ce6c813865c",
+          "src\\launcher\\manual_order.py": "a0608f5c3f992e2ab706709641cfb4b45d8b1ca6b470573b6dfcd20b32670843",
+          "src\\launcher\\purchase_completion.py": "bb3bbb3a1af0abb60a48abb47c7fa8ba1d721224c872f796931f873251e63945",
+          "src\\launcher\\sales_header.py": "4c0505796f459234fb48e459011860cee01a9c89d7932e629dbb2dd30b09f4b3",
+          "src\\launcher\\sales_intent.py": "9d6ccc24566de411fe6e2940834f1c69495f63b141c7c2416aebd9f4154532ec",
+          "src\\launcher\\single_instance.py": "967e7d38343283dbd7aa49d26f3b3098f74066d492278c04e7b7dfb819f96c79",
+          "src\\launcher\\site_login_sweep.py": "feac405efcd8d36345196af23458948ff5265f09a03ebb58229175e1758abb1b",
+          "src\\launcher\\tp_composition.py": "21e85320885916c69b054487d0e3fe8b47b6cb30bf91363f56ece00288365f83",
+          "src\\launcher\\v12_composition.py": "c939a5f598fb04fb1d38831e982592d1fcc1b7d76a5b92cd1d9743fb8a7a3d14",
+          "src\\launcher\\v12_gui.py": "1b7194638351f67e02e5f0f1f5e69b29abcb77a8af805c931185321f99e3726f",
+          "src\\launcher\\v12_phase_a_readonly.py": "29b9eb82fc4239ae020d21760b1efb6fab3aa42282a31ad2a79de131bdbe4683",
+          "src\\launcher\\v13_integration.py": "d563abade6a757ca42eb4fb5c049ae3903fea9471780f0d894e5ec44964bcbd0",
+          "src\\launcher\\v13_quotation.py": "65f9b29d07762518071d518c21cb5242733ee30ce31c9a330e8e6bc66b2d546f",
+          "src\\launcher\\__init__.py": "b95e4ca45217e96156ccdd15d3e80178dbca65f263579ad235bbffe82e15e547"
+        }
+      },
+      "source_hashes_match": true,
+      "rendered_gui_source_hashes_match": true,
+      "unmeasured_source_changes": {},
+      "unmeasured_change_scope": null,
+      "completion": {
+        "completed": true,
+        "durations": [
+          0,
+          1800,
+          120
+        ],
+        "samples": 65,
+        "elapsed": 1920.203999999998
+      },
+      "phases": {
+        "foreground": {
+          "samples": 58,
+          "sample_span_seconds": [
+            1.0320000000065193,
+            1775.078999999998
+          ],
+          "cpu_host_mean_percent": 0.1571243379824852,
+          "cpu_one_core_mean_percent": 2.5139894077197633,
+          "rss": {
+            "min": 79323136,
+            "max": 94597120,
+            "first": 79323136,
+            "last": 94597120
+          },
+          "private": {
+            "min": 58593280,
+            "max": 59707392,
+            "first": 58761216,
+            "last": 59641856
+          },
+          "threads": {
+            "min": 6,
+            "max": 11,
+            "first": 11,
+            "last": 6
+          },
+          "python_threads": {
+            "min": 1,
+            "max": 1,
+            "first": 1,
+            "last": 1
+          },
+          "handles": {
+            "min": 543,
+            "max": 551,
+            "first": 551,
+            "last": 543
+          },
+          "gdi": {
+            "min": 133,
+            "max": 133,
+            "first": 133,
+            "last": 133
+          },
+          "user": {
+            "min": 189,
+            "max": 189,
+            "first": 189,
+            "last": 189
+          }
+        },
+        "tray": {
+          "samples": 4,
+          "sample_span_seconds": [
+            1805.1410000000033,
+            1920.1410000000033
+          ],
+          "cpu_host_mean_percent": 0.09298770904620107,
+          "cpu_one_core_mean_percent": 1.4878033447392172,
+          "rss": {
+            "min": 94691328,
+            "max": 95739904,
+            "first": 95535104,
+            "last": 94691328
+          },
+          "private": {
+            "min": 58343424,
+            "max": 60264448,
+            "first": 60264448,
+            "last": 58343424
+          },
+          "threads": {
+            "min": 7,
+            "max": 8,
+            "first": 8,
+            "last": 7
+          },
+          "python_threads": {
+            "min": 2,
+            "max": 2,
+            "first": 2,
+            "last": 2
+          },
+          "handles": {
+            "min": 560,
+            "max": 560,
+            "first": 560,
+            "last": 560
+          },
+          "gdi": {
+            "min": 133,
+            "max": 133,
+            "first": 133,
+            "last": 133
+          },
+          "user": {
+            "min": 192,
+            "max": 192,
+            "first": 192,
+            "last": 192
+          }
+        }
+      },
+      "resource_samples": [
+        {
+          "seconds": 1.0320000000065193,
+          "phase": "foreground",
+          "cpu_one_core_percent": 63.59011627866806,
+          "cpu_host_percent": 3.974382267416754,
+          "rss": 78229504,
+          "private": 58552320,
+          "threads": 16,
+          "python_threads": 1,
+          "handles": 474,
+          "gdi": 133,
+          "user": 190
+        },
+        {
+          "seconds": 31.094000000011874,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.6507717384068195,
+          "cpu_host_percent": 0.16567323365042622,
+          "rss": 79298560,
+          "private": 58863616,
+          "threads": 14,
+          "python_threads": 1,
+          "handles": 554,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 61.15700000000652,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.598709376975482,
+          "cpu_host_percent": 0.16241933606096762,
+          "rss": 79323136,
+          "private": 58761216,
+          "threads": 11,
+          "python_threads": 1,
+          "handles": 551,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 91.21900000001187,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.338916239770723,
+          "cpu_host_percent": 0.1461822649856702,
+          "rss": 79323136,
+          "private": 58761216,
+          "threads": 11,
+          "python_threads": 1,
+          "handles": 551,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 121.29699999999139,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.4935168561756464,
+          "cpu_host_percent": 0.1558448035109779,
+          "rss": 79392768,
+          "private": 58761216,
+          "threads": 11,
+          "python_threads": 1,
+          "handles": 551,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 151.35999999998603,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.9625286897520495,
+          "cpu_host_percent": 0.1851580431095031,
+          "rss": 79360000,
+          "private": 58662912,
+          "threads": 8,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 181.43799999999464,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.3896203204993487,
+          "cpu_host_percent": 0.1493512700312093,
+          "rss": 79327232,
+          "private": 58593280,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 211.5,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.3908921562100725,
+          "cpu_host_percent": 0.14943075976312953,
+          "rss": 79331328,
+          "private": 58593280,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 241.5789999999979,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.389540875694172,
+          "cpu_host_percent": 0.14934630473088575,
+          "rss": 79405056,
+          "private": 58593280,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 271.6570000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.4935168561732337,
+          "cpu_host_percent": 0.1558448035108271,
+          "rss": 79409152,
+          "private": 58593280,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 301.7190000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.7547235712855183,
+          "cpu_host_percent": 0.1721702232053449,
+          "rss": 79458304,
+          "private": 58658816,
+          "threads": 8,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 331.7820000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.546735189435972,
+          "cpu_host_percent": 0.15917094933974826,
+          "rss": 79466496,
+          "private": 59707392,
+          "threads": 8,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 361.85999999998603,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.545465124012639,
+          "cpu_host_percent": 0.15909157025078993,
+          "rss": 79470592,
+          "private": 59707392,
+          "threads": 8,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 391.93799999999464,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.5974133918471183,
+          "cpu_host_percent": 0.1623383369904449,
+          "rss": 79478784,
+          "private": 59707392,
+          "threads": 8,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 422.01600000000326,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.4935168561732337,
+          "cpu_host_percent": 0.1558448035108271,
+          "rss": 79458304,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 452.0940000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.545465124010176,
+          "cpu_host_percent": 0.159091570250636,
+          "rss": 79470592,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 482.1719999999914,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.545465124012639,
+          "cpu_host_percent": 0.15909157025078993,
+          "rss": 79568896,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 512.234999999986,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.2868642517384243,
+          "cpu_host_percent": 0.14292901573365152,
+          "rss": 79683584,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 542.3129999999946,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.441568588336291,
+          "cpu_host_percent": 0.1525980367710182,
+          "rss": 93937664,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 572.3910000000033,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.7532581953579456,
+          "cpu_host_percent": 0.1720786372098716,
+          "rss": 93945856,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 602.4539999999979,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.4427868143569533,
+          "cpu_host_percent": 0.15267417589730958,
+          "rss": 94015488,
+          "private": 59707392,
+          "threads": 8,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 632.5160000000033,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.3908921562100725,
+          "cpu_host_percent": 0.14943075976312953,
+          "rss": 94023680,
+          "private": 59707392,
+          "threads": 8,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 662.5940000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.3376720526624064,
+          "cpu_host_percent": 0.1461045032914004,
+          "rss": 94035968,
+          "private": 59707392,
+          "threads": 8,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 692.6570000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.6506835645149915,
+          "cpu_host_percent": 0.16566772278218697,
+          "rss": 94007296,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 722.7190000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.442868072649422,
+          "cpu_host_percent": 0.15267925454058887,
+          "rss": 94011392,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 752.7820000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.2868642517384243,
+          "cpu_host_percent": 0.14292901573365152,
+          "rss": 94027776,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 782.859999999986,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.7532581953606097,
+          "cpu_host_percent": 0.1720786372100381,
+          "rss": 94044160,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 812.9379999999946,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.441568588336291,
+          "cpu_host_percent": 0.1525980367710182,
+          "rss": 94064640,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 842.984999999986,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.548091323593768,
+          "cpu_host_percent": 0.1592557077246105,
+          "rss": 94076928,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 873.0469999999914,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.4948439890887713,
+          "cpu_host_percent": 0.1559277493180482,
+          "rss": 94076928,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 903.109999999986,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.2868642517384243,
+          "cpu_host_percent": 0.14292901573365152,
+          "rss": 94076928,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 933.1879999999946,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.441568588336291,
+          "cpu_host_percent": 0.1525980367710182,
+          "rss": 94089216,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 963.25,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.5468199055281207,
+          "cpu_host_percent": 0.15917624409550754,
+          "rss": 94093312,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 993.3289999999979,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.545380498022053,
+          "cpu_host_percent": 0.15908628112637832,
+          "rss": 94105600,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1023.3910000000033,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.702747654846169,
+          "cpu_host_percent": 0.16892172842788555,
+          "rss": 94121984,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1053.4690000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.545465124010176,
+          "cpu_host_percent": 0.159091570250636,
+          "rss": 94126080,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1083.5320000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.6506835645149915,
+          "cpu_host_percent": 0.16566772278218697,
+          "rss": 94126080,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1113.5940000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.7547235712855183,
+          "cpu_host_percent": 0.1721702232053449,
+          "rss": 94126080,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1143.6570000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.598709376975482,
+          "cpu_host_percent": 0.16241933606096762,
+          "rss": 94150656,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1173.7190000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.338916239770723,
+          "cpu_host_percent": 0.1461822649856702,
+          "rss": 94158848,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1203.7820000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.598709376975482,
+          "cpu_host_percent": 0.16241933606096762,
+          "rss": 94253056,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1233.8440000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.338916239770723,
+          "cpu_host_percent": 0.1461822649856702,
+          "rss": 94253056,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1263.9070000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.598709376975482,
+          "cpu_host_percent": 0.16241933606096762,
+          "rss": 94253056,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1293.9690000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.2869403233313736,
+          "cpu_host_percent": 0.14293377020821085,
+          "rss": 94257152,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1324.0320000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.1309416891198953,
+          "cpu_host_percent": 0.13318385556999346,
+          "rss": 94257152,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1354.0940000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.338916239770723,
+          "cpu_host_percent": 0.1461822649856702,
+          "rss": 94257152,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1384.1570000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.3908126268174437,
+          "cpu_host_percent": 0.14942578917609023,
+          "rss": 94326784,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1414.234999999986,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.4935168561756464,
+          "cpu_host_percent": 0.1558448035109779,
+          "rss": 94326784,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1444.2969999999914,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.2869403233313736,
+          "cpu_host_percent": 0.14293377020821085,
+          "rss": 94326784,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1474.359999999986,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.546735189435972,
+          "cpu_host_percent": 0.15917094933974826,
+          "rss": 94326784,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1504.4379999999946,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.6493616596840606,
+          "cpu_host_percent": 0.16558510373025379,
+          "rss": 94326784,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1534.5,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.6507717384068195,
+          "cpu_host_percent": 0.16567323365042622,
+          "rss": 94420992,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1564.5629999999946,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.3908126268174437,
+          "cpu_host_percent": 0.14942578917609023,
+          "rss": 94420992,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1594.6410000000033,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.441568588336291,
+          "cpu_host_percent": 0.1525980367710182,
+          "rss": 94523392,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1624.7190000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.9091029988687724,
+          "cpu_host_percent": 0.18181893742929828,
+          "rss": 94523392,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1654.7969999999914,
+          "phase": "foreground",
+          "cpu_one_core_percent": 3.1688443380565507,
+          "cpu_host_percent": 0.19805277112853442,
+          "rss": 94523392,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1684.859999999986,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.4947610018964625,
+          "cpu_host_percent": 0.1559225626185289,
+          "rss": 94527488,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1714.9219999999914,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.3908921562100725,
+          "cpu_host_percent": 0.14943075976312953,
+          "rss": 94593024,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1745.0,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.5974133918471183,
+          "cpu_host_percent": 0.1623383369904449,
+          "rss": 94597120,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1775.078999999998,
+          "phase": "foreground",
+          "cpu_one_core_percent": 2.337594334918212,
+          "cpu_host_percent": 0.14609964593238825,
+          "rss": 94597120,
+          "private": 59641856,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 543,
+          "gdi": 133,
+          "user": 189
+        },
+        {
+          "seconds": 1805.1410000000033,
+          "phase": "tray",
+          "cpu_one_core_percent": 2.59879582196747,
+          "cpu_host_percent": 0.16242473887296688,
+          "rss": 95535104,
+          "private": 60264448,
+          "threads": 8,
+          "python_threads": 2,
+          "handles": 560,
+          "gdi": 133,
+          "user": 192
+        },
+        {
+          "seconds": 1835.203999999998,
+          "phase": "tray",
+          "cpu_one_core_percent": 1.6631740012643086,
+          "cpu_host_percent": 0.10394837507901929,
+          "rss": 95535104,
+          "private": 60264448,
+          "threads": 8,
+          "python_threads": 2,
+          "handles": 560,
+          "gdi": 133,
+          "user": 192
+        },
+        {
+          "seconds": 1865.2660000000033,
+          "phase": "tray",
+          "cpu_one_core_percent": 1.299397910983735,
+          "cpu_host_percent": 0.08121236943648344,
+          "rss": 95731712,
+          "private": 60235776,
+          "threads": 7,
+          "python_threads": 2,
+          "handles": 560,
+          "gdi": 133,
+          "user": 192
+        },
+        {
+          "seconds": 1895.328999999998,
+          "phase": "tray",
+          "cpu_one_core_percent": 1.3513288760272506,
+          "cpu_host_percent": 0.08445805475170316,
+          "rss": 95739904,
+          "private": 60235776,
+          "threads": 7,
+          "python_threads": 2,
+          "handles": 560,
+          "gdi": 133,
+          "user": 192
+        },
+        {
+          "seconds": 1920.1410000000033,
+          "phase": "tray",
+          "cpu_one_core_percent": 1.6373125906815746,
+          "cpu_host_percent": 0.10233203691759842,
+          "rss": 94691328,
+          "private": 58343424,
+          "threads": 7,
+          "python_threads": 2,
+          "handles": 560,
+          "gdi": 133,
+          "user": 192
+        }
+      ],
+      "operation_timings": [
+        {
+          "operation": "table",
+          "rows": 100,
+          "ms": 13.515400001779199
+        },
+        {
+          "operation": "table",
+          "rows": 500,
+          "ms": 7.909400010248646
+        },
+        {
+          "operation": "table",
+          "rows": 1000,
+          "ms": 21.035400015534833
+        }
+      ],
+      "tick": {
+        "count": 1875,
+        "median_ms": 14.285999990534037,
+        "p95_ms": 18.73349997913465,
+        "max_ms": 37.386099982541054
+      },
+      "operations": {
+        "table": {
+          "count": 3,
+          "median_ms": 13.515400001779199,
+          "p95_ms": 13.515400001779199,
+          "max_ms": 21.035400015534833
+        },
+        "search": null,
+        "detail": null,
+        "page": null
+      }
+    },
+    "v15b-accepted-idle": {
+      "metadata": {
+        "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+        "logical_cpus": 16,
+        "synthetic_only": true,
+        "source_sha256": {
+          "src\\gui\\app.py": "84192ce8e5562397786d5202e24bfec74e964df4ef2b07972bd87f84e866d96f",
+          "src\\gui\\contracts.py": "e9592774ed5561ce9fc46545cd7d98912e12725309098d3f366b45827cc6b35b",
+          "src\\gui\\main.py": "9d554e5fc13a44e863e0073d061ea3e40247040836113086f3e6d6f9fb5a33f8",
+          "src\\gui\\mock_backend.py": "733cb3e6bb623210724f1d612b10902e72d3944ef301f2791bb628c04868cf31",
+          "src\\gui\\resources.py": "637828534f73ecb8efc05b14244c0db42ff93bf5c568edea55d512d45007f613",
+          "src\\gui\\smoke.py": "5c7867ec5dbfbc3496ebdb9f6a3938bfb41dbee7fd9387554d87866dfe7fb1ab",
+          "src\\gui\\state.py": "9a71252431b98bc80f9abdfad8ca8049f9bab9961166ad33ff0f6260d5b65046",
+          "src\\gui\\tray.py": "45f3ecb43e909d7dd224699ed5108f9fe68b1308cac3a40472f401032f1b1e9d",
+          "src\\gui\\workbench.py": "a6fb808b70f8d8eadace1ab4cb2ae65a838773cafc4a7ba07e13105fdac03663",
+          "src\\gui\\__init__.py": "4dfe2a9758a104a189a7b3bb619eee710727491018b0e6d29292fffd29c6f603",
+          "src\\launcher\\backend.py": "69be5b4509be7e1cdbab6ea2e303e458da2672b7b3269c6f2f63db3c52b808bb",
+          "src\\launcher\\browser_bootstrap.py": "2f24d12179247661b8f31dde693e1a765101456b48c243b84aba5e4c41fc0c61",
+          "src\\launcher\\diagnostics.py": "f4df38f8780e5aa31fc06a445c6eda523d91fdfe418150854c450dba983e12d5",
+          "src\\launcher\\google_quote_update.py": "c3f5a968125a107bd5e8dd63f7cddfebb1cd24d092c30b8fef7685b8bccf7bb5",
+          "src\\launcher\\google_web.py": "5a9c8251f411a97367c9f107d5f3b44cb25721f26abea91868e6cc6cd95de8f3",
+          "src\\launcher\\inso_session.py": "a8d268f7028315389d8d6d0680ded77c1a10c7a709920bfa5c682837d1ba9c30",
+          "src\\launcher\\manual_order.py": "33e52d0efd279b9ff36c6f9f9fcff41dec60ea02a6d3237aba25ef7fdb669451",
+          "src\\launcher\\purchase_completion.py": "92075c5d68ce3bf69806bcc74a2c14ba6ca1ac2a14228b9d6c53f7b32339f8d3",
+          "src\\launcher\\sales_header.py": "68c604ef78d8ff4d896430313f7b82cd4af91eb0da8d2d869f56fc1377817923",
+          "src\\launcher\\sales_intent.py": "0cd60e0a39bf00d258a5ffb640e0255d3094666c37b8a6d718dd6e3d5d5c0c5c",
+          "src\\launcher\\single_instance.py": "0cab4945afa5ce4791c39632919d07f7d3bf03e9823b2d098fb3455dc367bb38",
+          "src\\launcher\\site_login_sweep.py": "816628d813b2314bd8355de1c22b0d59d4f4065650739933f876c2cfcdb2a96b",
+          "src\\launcher\\tp_composition.py": "4ef07dcd91af684ea4fdb7efef206c7360ed71cdcaf30810029a9ee47c2d231c",
+          "src\\launcher\\v12_composition.py": "4e67002f4ab4ed12aef42c03bba082bb15f686e8fad42f104e6b4832a1c4ffd4",
+          "src\\launcher\\v12_gui.py": "b50abf846a27d96bc50521eeee26cc822c9ef6cb7be3793a6a87f87c5294408c",
+          "src\\launcher\\v12_phase_a_readonly.py": "04c6b5d670001a59d58213036fb0c37c77c7c072289e2204ec19b765444b98bc",
+          "src\\launcher\\v13_integration.py": "076aaba3a94540d37460d1e3f481e3c0f30395f277a40d6690c8c0b6a0f173d1",
+          "src\\launcher\\v13_quotation.py": "a2bb3f9fb26b7768ada4835d71ed14829c8cf8a2870f01a2c41f46deda8a2752",
+          "src\\launcher\\workbench_snapshot.py": "e9584c4f43ebb4ad65615060e93a14810cb5d70a8821bc7294589ffecdf651e7",
+          "src\\launcher\\__init__.py": "78a725a25af637e950557d68298e20374d5fbda5f9808ec0e8088f7eb7c0be81"
+        }
+      },
+      "source_hashes_match": false,
+      "rendered_gui_source_hashes_match": false,
+      "unmeasured_source_changes": {
+        "src\\gui\\app.py": "6a5f19a89eb18f287f89b4e34bc6378c6e9f6180079cd4cfe8f9d4ebdbaeacb6",
+        "src\\gui\\main.py": "b7089d43d5d555798fece53d7b6e806307fd01240369e50b4b028f8594f9696e",
+        "src\\gui\\workbench.py": "d8ed8e3e378f212db771e6658d239ea334afb42fa80d64e9d7d329c2426886e3",
+        "src\\launcher\\backend.py": "63eeacc24250d735fb53ae8e68cafa8625bf38efb20e47153c3a26129bffd6ba"
+      },
+      "unmeasured_change_scope": "Late display-only fixes: typed sorting, two restored existing-value detail labels, UNKNOWN projection and startup branding and queued explicit startup after history loading. Final regression/smoke verified; 90-cycle UI verified before the queued-start-only delta; long profile predates these small deltas. No business/scheduler/resource architecture change.",
+      "completion": {
+        "completed": true,
+        "durations": [
+          600,
+          0,
+          0
+        ],
+        "samples": 22,
+        "elapsed": 605.984999999986
+      },
+      "phases": {
+        "idle": {
+          "samples": 18,
+          "sample_span_seconds": [
+            1.0160000000032596,
+            572.625
+          ],
+          "cpu_host_mean_percent": 0.020557445514940653,
+          "cpu_one_core_mean_percent": 0.32891912823905045,
+          "rss": {
+            "min": 44941312,
+            "max": 45109248,
+            "first": 44986368,
+            "last": 45101056
+          },
+          "private": {
+            "min": 28241920,
+            "max": 28340224,
+            "first": 28340224,
+            "last": 28241920
+          },
+          "threads": {
+            "min": 3,
+            "max": 6,
+            "first": 6,
+            "last": 3
+          },
+          "python_threads": {
+            "min": 1,
+            "max": 1,
+            "first": 1,
+            "last": 1
+          },
+          "handles": {
+            "min": 277,
+            "max": 285,
+            "first": 285,
+            "last": 277
+          },
+          "gdi": {
+            "min": 56,
+            "max": 56,
+            "first": 56,
+            "last": 56
+          },
+          "user": {
+            "min": 224,
+            "max": 224,
+            "first": 224,
+            "last": 224
+          }
+        }
+      },
+      "resource_samples": [
+        {
+          "seconds": 1.0160000000032596,
+          "phase": "idle",
+          "cpu_one_core_percent": 47.67470472425649,
+          "cpu_host_percent": 2.979669045266031,
+          "rss": 44892160,
+          "private": 28491776,
+          "threads": 9,
+          "python_threads": 1,
+          "handles": 287,
+          "gdi": 56,
+          "user": 225
+        },
+        {
+          "seconds": 31.094000000011874,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.7272757497171931,
+          "cpu_host_percent": 0.04545473435732457,
+          "rss": 44978176,
+          "private": 28446720,
+          "threads": 9,
+          "python_threads": 1,
+          "handles": 287,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 61.171999999991385,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.20779307134797054,
+          "cpu_host_percent": 0.012987066959248159,
+          "rss": 44986368,
+          "private": 28340224,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 285,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 91.23499999998603,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.41579350031607715,
+          "cpu_host_percent": 0.02598709376975482,
+          "rss": 44986368,
+          "private": 28340224,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 285,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 121.3289999999979,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.3115238918055526,
+          "cpu_host_percent": 0.01947024323784704,
+          "rss": 44986368,
+          "private": 28340224,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 285,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 151.40700000000652,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.20779307134776948,
+          "cpu_host_percent": 0.012987066959235592,
+          "rss": 44941312,
+          "private": 28241920,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 181.5,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.31153424384415085,
+          "cpu_host_percent": 0.019470890240259428,
+          "rss": 45006848,
+          "private": 28241920,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 211.56299999999464,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.2598709376975482,
+          "cpu_host_percent": 0.016241933606096763,
+          "rss": 45006848,
+          "private": 28241920,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 241.64100000000326,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.36363787485859655,
+          "cpu_host_percent": 0.022727367178662285,
+          "rss": 45006848,
+          "private": 28241920,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 271.7190000000119,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.3116896070216542,
+          "cpu_host_percent": 0.01948060043885339,
+          "rss": 45006848,
+          "private": 28241920,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 301.7969999999914,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.25974133918496317,
+          "cpu_host_percent": 0.016233833699060198,
+          "rss": 45043712,
+          "private": 28278784,
+          "threads": 4,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 331.875,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.3116896070216542,
+          "cpu_host_percent": 0.01948060043885339,
+          "rss": 45043712,
+          "private": 28278784,
+          "threads": 4,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 361.9690000000119,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.3115238918055526,
+          "cpu_host_percent": 0.01947024323784704,
+          "rss": 45043712,
+          "private": 28278784,
+          "threads": 4,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 392.06299999999464,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.3634445404401629,
+          "cpu_host_percent": 0.02271528377751018,
+          "rss": 45109248,
+          "private": 28278784,
+          "threads": 4,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 422.1570000000065,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.3634445404398114,
+          "cpu_host_percent": 0.022715283777488212,
+          "rss": 45088768,
+          "private": 28241920,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 452.25,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.4673013657662263,
+          "cpu_host_percent": 0.029206335360389142,
+          "rss": 45088768,
+          "private": 28241920,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 482.3440000000119,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.41536518907407016,
+          "cpu_host_percent": 0.025960324317129385,
+          "rss": 45088768,
+          "private": 28241920,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 512.4219999999914,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.3116896070219558,
+          "cpu_host_percent": 0.019480600438872238,
+          "rss": 45092864,
+          "private": 28241920,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 542.5320000000065,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.36325141149101636,
+          "cpu_host_percent": 0.022703213218188523,
+          "rss": 45101056,
+          "private": 28241920,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 572.625,
+          "phase": "idle",
+          "cpu_one_core_percent": 0.36345661781817595,
+          "cpu_host_percent": 0.022716038613635997,
+          "rss": 45101056,
+          "private": 28241920,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 224
+        },
+        {
+          "seconds": 605.7820000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 16.06938203094053,
+          "cpu_host_percent": 1.0043363769337832,
+          "rss": 45940736,
+          "private": 28614656,
+          "threads": 4,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 57,
+          "user": 268
+        },
+        {
+          "seconds": 605.9219999999914,
+          "phase": "tray",
+          "cpu_one_core_percent": 66.96428572152455,
+          "cpu_host_percent": 4.185267857595284,
+          "rss": 47443968,
+          "private": 29700096,
+          "threads": 8,
+          "python_threads": 2,
+          "handles": 301,
+          "gdi": 57,
+          "user": 272
+        }
+      ],
+      "operation_timings": [
+        {
+          "operation": "table",
+          "rows": 100,
+          "ms": 43.82310001528822
+        },
+        {
+          "operation": "table",
+          "rows": 500,
+          "ms": 41.023199999472126
+        },
+        {
+          "operation": "table",
+          "rows": 1000,
+          "ms": 40.507700003217906
+        },
+        {
+          "operation": "detail",
+          "ms": 170.85810002754442
+        },
+        {
+          "operation": "detail",
+          "ms": 5.513399984920397
+        },
+        {
+          "operation": "detail",
+          "ms": 7.168799987994134
+        },
+        {
+          "operation": "detail",
+          "ms": 5.547399981878698
+        },
+        {
+          "operation": "detail",
+          "ms": 5.4564999882131815
+        },
+        {
+          "operation": "detail",
+          "ms": 5.922599986661226
+        },
+        {
+          "operation": "detail",
+          "ms": 5.331000022124499
+        },
+        {
+          "operation": "detail",
+          "ms": 5.8188000111840665
+        },
+        {
+          "operation": "detail",
+          "ms": 5.466600006911904
+        },
+        {
+          "operation": "detail",
+          "ms": 5.469099996844307
+        },
+        {
+          "operation": "detail",
+          "ms": 5.985800002235919
+        },
+        {
+          "operation": "detail",
+          "ms": 5.510699993465096
+        },
+        {
+          "operation": "detail",
+          "ms": 5.346699996152893
+        },
+        {
+          "operation": "detail",
+          "ms": 6.463300000177696
+        },
+        {
+          "operation": "detail",
+          "ms": 6.284100003540516
+        },
+        {
+          "operation": "detail",
+          "ms": 6.515400018543005
+        },
+        {
+          "operation": "detail",
+          "ms": 8.20820001536049
+        },
+        {
+          "operation": "detail",
+          "ms": 6.739300006302074
+        },
+        {
+          "operation": "detail",
+          "ms": 6.0628999781329185
+        },
+        {
+          "operation": "detail",
+          "ms": 6.402400002116337
+        },
+        {
+          "operation": "search",
+          "ms": 36.52739999233745
+        },
+        {
+          "operation": "search",
+          "ms": 45.251999981701374
+        },
+        {
+          "operation": "search",
+          "ms": 12.655200000153854
+        },
+        {
+          "operation": "search",
+          "ms": 45.6838000100106
+        },
+        {
+          "operation": "page",
+          "ms": 21.270500001264736
+        },
+        {
+          "operation": "page",
+          "ms": 54.19269998674281
+        },
+        {
+          "operation": "page",
+          "ms": 59.707999986130744
+        },
+        {
+          "operation": "page",
+          "ms": 41.99149998021312
+        },
+        {
+          "operation": "page",
+          "ms": 17.867799993837252
+        },
+        {
+          "operation": "page",
+          "ms": 49.61260000709444
+        },
+        {
+          "operation": "page",
+          "ms": 34.00040001724847
+        },
+        {
+          "operation": "page",
+          "ms": 52.40320001030341
+        },
+        {
+          "operation": "page",
+          "ms": 45.64560001017526
+        },
+        {
+          "operation": "page",
+          "ms": 9.643299999879673
+        },
+        {
+          "operation": "page",
+          "ms": 9.787199989659712
+        },
+        {
+          "operation": "page",
+          "ms": 16.013699991162866
+        },
+        {
+          "operation": "page",
+          "ms": 21.926999994320795
+        },
+        {
+          "operation": "page",
+          "ms": 51.02459999034181
+        },
+        {
+          "operation": "page",
+          "ms": 45.658100018044934
+        },
+        {
+          "operation": "page",
+          "ms": 9.61259999894537
+        },
+        {
+          "operation": "page",
+          "ms": 9.77849998162128
+        },
+        {
+          "operation": "page",
+          "ms": 17.99860000028275
+        },
+        {
+          "operation": "page",
+          "ms": 29.056600003968924
+        },
+        {
+          "operation": "page",
+          "ms": 58.21699998341501
+        },
+        {
+          "operation": "page",
+          "ms": 50.353099999483675
+        },
+        {
+          "operation": "page",
+          "ms": 10.189499997068197
+        },
+        {
+          "operation": "page",
+          "ms": 9.122700022999197
+        },
+        {
+          "operation": "page",
+          "ms": 16.780000005383044
+        },
+        {
+          "operation": "page",
+          "ms": 22.626800026046112
+        },
+        {
+          "operation": "page",
+          "ms": 49.98229999910109
+        },
+        {
+          "operation": "page",
+          "ms": 53.723599994555116
+        },
+        {
+          "operation": "page",
+          "ms": 14.918999979272485
+        },
+        {
+          "operation": "page",
+          "ms": 13.548899994930252
+        },
+        {
+          "operation": "page",
+          "ms": 19.302000000607222
+        },
+        {
+          "operation": "page",
+          "ms": 23.119299992686138
+        },
+        {
+          "operation": "page",
+          "ms": 55.45899999560788
+        },
+        {
+          "operation": "page",
+          "ms": 49.855200020829216
+        },
+        {
+          "operation": "page",
+          "ms": 9.8541000043042
+        },
+        {
+          "operation": "page",
+          "ms": 10.692200012272224
+        },
+        {
+          "operation": "page",
+          "ms": 17.12299999780953
+        },
+        {
+          "operation": "page",
+          "ms": 23.365500004729256
+        },
+        {
+          "operation": "page",
+          "ms": 50.145799992606044
+        },
+        {
+          "operation": "page",
+          "ms": 44.99909997684881
+        },
+        {
+          "operation": "page",
+          "ms": 8.931899996241555
+        },
+        {
+          "operation": "page",
+          "ms": 9.440999972866848
+        },
+        {
+          "operation": "page",
+          "ms": 15.531899989582598
+        },
+        {
+          "operation": "page",
+          "ms": 21.134299982804805
+        },
+        {
+          "operation": "page",
+          "ms": 63.0955999949947
+        },
+        {
+          "operation": "page",
+          "ms": 45.14719999860972
+        },
+        {
+          "operation": "page",
+          "ms": 9.306899999501184
+        },
+        {
+          "operation": "page",
+          "ms": 9.28659999044612
+        },
+        {
+          "operation": "page",
+          "ms": 16.443899978185073
+        },
+        {
+          "operation": "page",
+          "ms": 20.123900001635775
+        },
+        {
+          "operation": "page",
+          "ms": 58.35760000627488
+        },
+        {
+          "operation": "page",
+          "ms": 49.385599995730445
+        },
+        {
+          "operation": "page",
+          "ms": 10.47780000953935
+        },
+        {
+          "operation": "page",
+          "ms": 9.228800015989691
+        },
+        {
+          "operation": "page",
+          "ms": 16.591700026765466
+        },
+        {
+          "operation": "page",
+          "ms": 26.389499980723485
+        },
+        {
+          "operation": "page",
+          "ms": 55.85909998626448
+        },
+        {
+          "operation": "page",
+          "ms": 50.86299998220056
+        },
+        {
+          "operation": "page",
+          "ms": 10.764800012111664
+        },
+        {
+          "operation": "page",
+          "ms": 10.257600020850077
+        },
+        {
+          "operation": "page",
+          "ms": 19.90959999966435
+        },
+        {
+          "operation": "page",
+          "ms": 28.372999979183078
+        },
+        {
+          "operation": "page",
+          "ms": 51.376899995375425
+        },
+        {
+          "operation": "page",
+          "ms": 47.259400016628206
+        },
+        {
+          "operation": "page",
+          "ms": 9.067700011655688
+        },
+        {
+          "operation": "page",
+          "ms": 11.318400007439777
+        },
+        {
+          "operation": "page",
+          "ms": 23.233899992192164
+        },
+        {
+          "operation": "page",
+          "ms": 26.317399984691292
+        },
+        {
+          "operation": "page",
+          "ms": 50.27390000759624
+        },
+        {
+          "operation": "page",
+          "ms": 45.48060000524856
+        },
+        {
+          "operation": "page",
+          "ms": 9.658399998443201
+        },
+        {
+          "operation": "page",
+          "ms": 9.739599976455793
+        },
+        {
+          "operation": "page",
+          "ms": 16.307499987306073
+        },
+        {
+          "operation": "page",
+          "ms": 22.00650001759641
+        },
+        {
+          "operation": "page",
+          "ms": 53.56150001171045
+        },
+        {
+          "operation": "page",
+          "ms": 49.68670001835562
+        },
+        {
+          "operation": "page",
+          "ms": 8.98600000073202
+        },
+        {
+          "operation": "page",
+          "ms": 9.644200006732717
+        },
+        {
+          "operation": "page",
+          "ms": 17.377399984980002
+        },
+        {
+          "operation": "page",
+          "ms": 24.777099984930828
+        },
+        {
+          "operation": "page",
+          "ms": 64.66790000558831
+        },
+        {
+          "operation": "page",
+          "ms": 46.91619999357499
+        },
+        {
+          "operation": "page",
+          "ms": 10.346300026867539
+        },
+        {
+          "operation": "page",
+          "ms": 8.835999993607402
+        },
+        {
+          "operation": "page",
+          "ms": 16.07699997839518
+        },
+        {
+          "operation": "page",
+          "ms": 24.266099993837997
+        },
+        {
+          "operation": "page",
+          "ms": 51.47499998565763
+        },
+        {
+          "operation": "page",
+          "ms": 52.75440000696108
+        },
+        {
+          "operation": "page",
+          "ms": 11.193799989996478
+        },
+        {
+          "operation": "page",
+          "ms": 10.332100006053224
+        },
+        {
+          "operation": "page",
+          "ms": 18.77210001111962
+        },
+        {
+          "operation": "page",
+          "ms": 28.897800017148256
+        },
+        {
+          "operation": "page",
+          "ms": 56.953599996631965
+        },
+        {
+          "operation": "page",
+          "ms": 47.66019998351112
+        },
+        {
+          "operation": "page",
+          "ms": 9.177200001431629
+        },
+        {
+          "operation": "page",
+          "ms": 9.063899982720613
+        },
+        {
+          "operation": "page",
+          "ms": 15.596299985190853
+        },
+        {
+          "operation": "page",
+          "ms": 21.492900006705895
+        },
+        {
+          "operation": "page",
+          "ms": 52.316100016469136
+        },
+        {
+          "operation": "page",
+          "ms": 47.79330000746995
+        },
+        {
+          "operation": "page",
+          "ms": 11.22620000387542
+        },
+        {
+          "operation": "page",
+          "ms": 10.834100015927106
+        },
+        {
+          "operation": "page",
+          "ms": 21.830300014698878
+        },
+        {
+          "operation": "page",
+          "ms": 35.79990001162514
+        },
+        {
+          "operation": "page",
+          "ms": 60.807300003943965
+        },
+        {
+          "operation": "page",
+          "ms": 51.548499992350116
+        },
+        {
+          "operation": "page",
+          "ms": 9.035800001583993
+        },
+        {
+          "operation": "page",
+          "ms": 9.084899997105822
+        },
+        {
+          "operation": "page",
+          "ms": 16.590299987001345
+        },
+        {
+          "operation": "page",
+          "ms": 24.14289998705499
+        },
+        {
+          "operation": "page",
+          "ms": 48.91260000295006
+        },
+        {
+          "operation": "page",
+          "ms": 45.29459998593666
+        },
+        {
+          "operation": "page",
+          "ms": 9.498100000200793
+        },
+        {
+          "operation": "page",
+          "ms": 8.853600011207163
+        },
+        {
+          "operation": "page",
+          "ms": 15.716699999757111
+        },
+        {
+          "operation": "page",
+          "ms": 23.988200002349913
+        },
+        {
+          "operation": "page",
+          "ms": 54.071799997473136
+        },
+        {
+          "operation": "page",
+          "ms": 56.42209999496117
+        },
+        {
+          "operation": "page",
+          "ms": 11.075400019763038
+        },
+        {
+          "operation": "page",
+          "ms": 10.730400012107566
+        },
+        {
+          "operation": "page",
+          "ms": 22.249600006034598
+        },
+        {
+          "operation": "page",
+          "ms": 28.954700013855472
+        },
+        {
+          "operation": "page",
+          "ms": 55.05170000833459
+        },
+        {
+          "operation": "page",
+          "ms": 43.59230000409298
+        },
+        {
+          "operation": "page",
+          "ms": 9.330600005341694
+        },
+        {
+          "operation": "page",
+          "ms": 9.815500001423061
+        },
+        {
+          "operation": "page",
+          "ms": 15.738499991130084
+        },
+        {
+          "operation": "page",
+          "ms": 22.387700009858236
+        },
+        {
+          "operation": "page",
+          "ms": 48.41849999502301
+        },
+        {
+          "operation": "page",
+          "ms": 44.85979999299161
+        },
+        {
+          "operation": "page",
+          "ms": 9.078999981284142
+        },
+        {
+          "operation": "page",
+          "ms": 9.437700005946681
+        },
+        {
+          "operation": "page",
+          "ms": 17.458599992096424
+        },
+        {
+          "operation": "page",
+          "ms": 26.56200001365505
+        },
+        {
+          "operation": "page",
+          "ms": 55.836600018665195
+        },
+        {
+          "operation": "page",
+          "ms": 51.056700001936406
+        },
+        {
+          "operation": "page",
+          "ms": 10.179800010519102
+        },
+        {
+          "operation": "page",
+          "ms": 11.683000018820167
+        },
+        {
+          "operation": "page",
+          "ms": 24.845900014042854
+        },
+        {
+          "operation": "page",
+          "ms": 23.136300005717203
+        },
+        {
+          "operation": "page",
+          "ms": 68.3366000012029
+        },
+        {
+          "operation": "page",
+          "ms": 48.724799999035895
+        },
+        {
+          "operation": "page",
+          "ms": 9.906899998895824
+        },
+        {
+          "operation": "page",
+          "ms": 10.013599996455014
+        },
+        {
+          "operation": "page",
+          "ms": 17.68020002054982
+        },
+        {
+          "operation": "page",
+          "ms": 28.315499977907166
+        },
+        {
+          "operation": "page",
+          "ms": 57.478200003970414
+        },
+        {
+          "operation": "page",
+          "ms": 52.98510001739487
+        },
+        {
+          "operation": "page",
+          "ms": 10.62300000921823
+        },
+        {
+          "operation": "page",
+          "ms": 10.055299993837252
+        },
+        {
+          "operation": "page",
+          "ms": 20.042699994519353
+        },
+        {
+          "operation": "page",
+          "ms": 30.933899979572743
+        },
+        {
+          "operation": "page",
+          "ms": 66.9802000047639
+        },
+        {
+          "operation": "page",
+          "ms": 45.27509998297319
+        },
+        {
+          "operation": "page",
+          "ms": 9.983199997805059
+        },
+        {
+          "operation": "page",
+          "ms": 9.330600005341694
+        },
+        {
+          "operation": "page",
+          "ms": 17.54080000682734
+        },
+        {
+          "operation": "page",
+          "ms": 24.678799993125722
+        },
+        {
+          "operation": "page",
+          "ms": 51.35069999960251
+        },
+        {
+          "operation": "page",
+          "ms": 51.59710001316853
+        },
+        {
+          "operation": "page",
+          "ms": 10.31049998709932
+        },
+        {
+          "operation": "page",
+          "ms": 10.742799990111962
+        },
+        {
+          "operation": "page",
+          "ms": 19.565399998100474
+        },
+        {
+          "operation": "page",
+          "ms": 27.78449998004362
+        },
+        {
+          "operation": "page",
+          "ms": 58.64450000808574
+        },
+        {
+          "operation": "page",
+          "ms": 51.15529999602586
+        },
+        {
+          "operation": "page",
+          "ms": 10.834400018211454
+        },
+        {
+          "operation": "page",
+          "ms": 10.151800001040101
+        },
+        {
+          "operation": "page",
+          "ms": 20.731600001454353
+        },
+        {
+          "operation": "page",
+          "ms": 24.852900009136647
+        },
+        {
+          "operation": "page",
+          "ms": 51.79359999601729
+        },
+        {
+          "operation": "page",
+          "ms": 48.36379998596385
+        },
+        {
+          "operation": "page",
+          "ms": 10.015999985625967
+        },
+        {
+          "operation": "page",
+          "ms": 10.903299989877269
+        },
+        {
+          "operation": "page",
+          "ms": 19.8048000165727
+        },
+        {
+          "operation": "page",
+          "ms": 37.01980001642369
+        },
+        {
+          "operation": "page",
+          "ms": 61.72470000456087
+        },
+        {
+          "operation": "page",
+          "ms": 51.50349999894388
+        },
+        {
+          "operation": "page",
+          "ms": 10.349999996833503
+        },
+        {
+          "operation": "page",
+          "ms": 9.30460001109168
+        },
+        {
+          "operation": "page",
+          "ms": 17.175699991639704
+        }
+      ],
+      "tick": {
+        "count": 595,
+        "median_ms": 0.1866999955382198,
+        "p95_ms": 0.26780000189319253,
+        "max_ms": 0.9146000084001571
+      },
+      "operations": {
+        "table": {
+          "count": 3,
+          "median_ms": 41.023199999472126,
+          "p95_ms": 41.023199999472126,
+          "max_ms": 43.82310001528822
+        },
+        "search": {
+          "count": 4,
+          "median_ms": 40.88969998701941,
+          "p95_ms": 45.251999981701374,
+          "max_ms": 45.6838000100106
+        },
+        "detail": {
+          "count": 20,
+          "median_ms": 5.954199994448572,
+          "p95_ms": 8.20820001536049,
+          "max_ms": 170.85810002754442
+        },
+        "page": {
+          "count": 180,
+          "median_ms": 21.966750005958602,
+          "p95_ms": 58.21699998341501,
+          "max_ms": 68.3366000012029
+        }
+      }
+    },
+    "v15b-accepted-foreground": {
+      "metadata": {
+        "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+        "logical_cpus": 16,
+        "synthetic_only": true,
+        "source_sha256": {
+          "src\\gui\\app.py": "84192ce8e5562397786d5202e24bfec74e964df4ef2b07972bd87f84e866d96f",
+          "src\\gui\\contracts.py": "e9592774ed5561ce9fc46545cd7d98912e12725309098d3f366b45827cc6b35b",
+          "src\\gui\\main.py": "9d554e5fc13a44e863e0073d061ea3e40247040836113086f3e6d6f9fb5a33f8",
+          "src\\gui\\mock_backend.py": "733cb3e6bb623210724f1d612b10902e72d3944ef301f2791bb628c04868cf31",
+          "src\\gui\\resources.py": "637828534f73ecb8efc05b14244c0db42ff93bf5c568edea55d512d45007f613",
+          "src\\gui\\smoke.py": "5c7867ec5dbfbc3496ebdb9f6a3938bfb41dbee7fd9387554d87866dfe7fb1ab",
+          "src\\gui\\state.py": "9a71252431b98bc80f9abdfad8ca8049f9bab9961166ad33ff0f6260d5b65046",
+          "src\\gui\\tray.py": "45f3ecb43e909d7dd224699ed5108f9fe68b1308cac3a40472f401032f1b1e9d",
+          "src\\gui\\workbench.py": "a6fb808b70f8d8eadace1ab4cb2ae65a838773cafc4a7ba07e13105fdac03663",
+          "src\\gui\\__init__.py": "4dfe2a9758a104a189a7b3bb619eee710727491018b0e6d29292fffd29c6f603",
+          "src\\launcher\\backend.py": "69be5b4509be7e1cdbab6ea2e303e458da2672b7b3269c6f2f63db3c52b808bb",
+          "src\\launcher\\browser_bootstrap.py": "2f24d12179247661b8f31dde693e1a765101456b48c243b84aba5e4c41fc0c61",
+          "src\\launcher\\diagnostics.py": "f4df38f8780e5aa31fc06a445c6eda523d91fdfe418150854c450dba983e12d5",
+          "src\\launcher\\google_quote_update.py": "c3f5a968125a107bd5e8dd63f7cddfebb1cd24d092c30b8fef7685b8bccf7bb5",
+          "src\\launcher\\google_web.py": "5a9c8251f411a97367c9f107d5f3b44cb25721f26abea91868e6cc6cd95de8f3",
+          "src\\launcher\\inso_session.py": "a8d268f7028315389d8d6d0680ded77c1a10c7a709920bfa5c682837d1ba9c30",
+          "src\\launcher\\manual_order.py": "33e52d0efd279b9ff36c6f9f9fcff41dec60ea02a6d3237aba25ef7fdb669451",
+          "src\\launcher\\purchase_completion.py": "92075c5d68ce3bf69806bcc74a2c14ba6ca1ac2a14228b9d6c53f7b32339f8d3",
+          "src\\launcher\\sales_header.py": "68c604ef78d8ff4d896430313f7b82cd4af91eb0da8d2d869f56fc1377817923",
+          "src\\launcher\\sales_intent.py": "0cd60e0a39bf00d258a5ffb640e0255d3094666c37b8a6d718dd6e3d5d5c0c5c",
+          "src\\launcher\\single_instance.py": "0cab4945afa5ce4791c39632919d07f7d3bf03e9823b2d098fb3455dc367bb38",
+          "src\\launcher\\site_login_sweep.py": "816628d813b2314bd8355de1c22b0d59d4f4065650739933f876c2cfcdb2a96b",
+          "src\\launcher\\tp_composition.py": "4ef07dcd91af684ea4fdb7efef206c7360ed71cdcaf30810029a9ee47c2d231c",
+          "src\\launcher\\v12_composition.py": "4e67002f4ab4ed12aef42c03bba082bb15f686e8fad42f104e6b4832a1c4ffd4",
+          "src\\launcher\\v12_gui.py": "b50abf846a27d96bc50521eeee26cc822c9ef6cb7be3793a6a87f87c5294408c",
+          "src\\launcher\\v12_phase_a_readonly.py": "04c6b5d670001a59d58213036fb0c37c77c7c072289e2204ec19b765444b98bc",
+          "src\\launcher\\v13_integration.py": "076aaba3a94540d37460d1e3f481e3c0f30395f277a40d6690c8c0b6a0f173d1",
+          "src\\launcher\\v13_quotation.py": "a2bb3f9fb26b7768ada4835d71ed14829c8cf8a2870f01a2c41f46deda8a2752",
+          "src\\launcher\\workbench_snapshot.py": "e9584c4f43ebb4ad65615060e93a14810cb5d70a8821bc7294589ffecdf651e7",
+          "src\\launcher\\__init__.py": "78a725a25af637e950557d68298e20374d5fbda5f9808ec0e8088f7eb7c0be81"
+        }
+      },
+      "source_hashes_match": false,
+      "rendered_gui_source_hashes_match": false,
+      "unmeasured_source_changes": {
+        "src\\gui\\app.py": "6a5f19a89eb18f287f89b4e34bc6378c6e9f6180079cd4cfe8f9d4ebdbaeacb6",
+        "src\\gui\\main.py": "b7089d43d5d555798fece53d7b6e806307fd01240369e50b4b028f8594f9696e",
+        "src\\gui\\workbench.py": "d8ed8e3e378f212db771e6658d239ea334afb42fa80d64e9d7d329c2426886e3",
+        "src\\launcher\\backend.py": "63eeacc24250d735fb53ae8e68cafa8625bf38efb20e47153c3a26129bffd6ba"
+      },
+      "unmeasured_change_scope": "Late display-only fixes: typed sorting, two restored existing-value detail labels, UNKNOWN projection and startup branding and queued explicit startup after history loading. Final regression/smoke verified; 90-cycle UI verified before the queued-start-only delta; long profile predates these small deltas. No business/scheduler/resource architecture change.",
+      "completion": {
+        "completed": true,
+        "durations": [
+          0,
+          1800,
+          120
+        ],
+        "samples": 65,
+        "elapsed": 1921.203999999998
+      },
+      "phases": {
+        "foreground": {
+          "samples": 58,
+          "sample_span_seconds": [
+            1.0789999999979045,
+            1774.9070000000065
+          ],
+          "cpu_host_mean_percent": 0.016016678946999225,
+          "cpu_one_core_mean_percent": 0.2562668631519876,
+          "rss": {
+            "min": 45809664,
+            "max": 67817472,
+            "first": 45809664,
+            "last": 67817472
+          },
+          "private": {
+            "min": 28659712,
+            "max": 29065216,
+            "first": 28749824,
+            "last": 29065216
+          },
+          "threads": {
+            "min": 3,
+            "max": 6,
+            "first": 6,
+            "last": 3
+          },
+          "python_threads": {
+            "min": 1,
+            "max": 1,
+            "first": 1,
+            "last": 1
+          },
+          "handles": {
+            "min": 277,
+            "max": 285,
+            "first": 285,
+            "last": 277
+          },
+          "gdi": {
+            "min": 56,
+            "max": 56,
+            "first": 56,
+            "last": 56
+          },
+          "user": {
+            "min": 265,
+            "max": 265,
+            "first": 265,
+            "last": 265
+          }
+        },
+        "tray": {
+          "samples": 4,
+          "sample_span_seconds": [
+            1804.984999999986,
+            1921.125
+          ],
+          "cpu_host_mean_percent": 0.01756804947579069,
+          "cpu_one_core_mean_percent": 0.28108879161265105,
+          "rss": {
+            "min": 69201920,
+            "max": 69234688,
+            "first": 69234688,
+            "last": 69222400
+          },
+          "private": {
+            "min": 30904320,
+            "max": 30994432,
+            "first": 30994432,
+            "last": 30904320
+          },
+          "threads": {
+            "min": 4,
+            "max": 7,
+            "first": 7,
+            "last": 4
+          },
+          "python_threads": {
+            "min": 2,
+            "max": 2,
+            "first": 2,
+            "last": 2
+          },
+          "handles": {
+            "min": 301,
+            "max": 301,
+            "first": 301,
+            "last": 301
+          },
+          "gdi": {
+            "min": 56,
+            "max": 56,
+            "first": 56,
+            "last": 56
+          },
+          "user": {
+            "min": 268,
+            "max": 268,
+            "first": 268,
+            "last": 268
+          }
+        }
+      },
+      "resource_samples": [
+        {
+          "seconds": 1.0789999999979045,
+          "phase": "foreground",
+          "cpu_one_core_percent": 78.19740500478578,
+          "cpu_host_percent": 4.887337812799111,
+          "rss": 45518848,
+          "private": 28856320,
+          "threads": 9,
+          "python_threads": 1,
+          "handles": 287,
+          "gdi": 56,
+          "user": 165
+        },
+        {
+          "seconds": 31.14100000000326,
+          "phase": "foreground",
+          "cpu_one_core_percent": 1.9750848246952772,
+          "cpu_host_percent": 0.12344280154345483,
+          "rss": 45801472,
+          "private": 28856320,
+          "threads": 9,
+          "python_threads": 1,
+          "handles": 287,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 61.203999999997905,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.1559225626185289,
+          "cpu_host_percent": 0.009745160163658057,
+          "rss": 45809664,
+          "private": 28749824,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 285,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 91.25,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3640251614191319,
+          "cpu_host_percent": 0.022751572588695743,
+          "rss": 45809664,
+          "private": 28749824,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 285,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 121.31299999999464,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.2598709376975482,
+          "cpu_host_percent": 0.016241933606096763,
+          "rss": 45809664,
+          "private": 28749824,
+          "threads": 6,
+          "python_threads": 1,
+          "handles": 285,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 151.375,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.2079036657573976,
+          "cpu_host_percent": 0.01299397910983735,
+          "rss": 45842432,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 181.43799999999464,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.2598709376975482,
+          "cpu_host_percent": 0.016241933606096763,
+          "rss": 45842432,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 211.48499999998603,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.15600559124043478,
+          "cpu_host_percent": 0.009750349452527174,
+          "rss": 45842432,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 241.54699999999139,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.259879582196747,
+          "cpu_host_percent": 0.016242473887296688,
+          "rss": 45842432,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 271.60999999998603,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3118451252370578,
+          "cpu_host_percent": 0.019490320327316114,
+          "rss": 45907968,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 301.6719999999914,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.1559277493180482,
+          "cpu_host_percent": 0.009745484332378013,
+          "rss": 45940736,
+          "private": 28692480,
+          "threads": 4,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 331.7190000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.2600093187338061,
+          "cpu_host_percent": 0.016250582420862882,
+          "rss": 55275520,
+          "private": 28692480,
+          "threads": 4,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 361.7820000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.1559225626185289,
+          "cpu_host_percent": 0.009745160163658057,
+          "rss": 62078976,
+          "private": 28692480,
+          "threads": 4,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 391.85999999998603,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.25974133918496317,
+          "cpu_host_percent": 0.016233833699060198,
+          "rss": 62078976,
+          "private": 28692480,
+          "threads": 4,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 421.9219999999914,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.1559277493180482,
+          "cpu_host_percent": 0.009745484332378013,
+          "rss": 62062592,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 451.98499999998603,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.2598709376975482,
+          "cpu_host_percent": 0.016241933606096763,
+          "rss": 62062592,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 482.0469999999914,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3638314150754458,
+          "cpu_host_percent": 0.022739463442215363,
+          "rss": 62091264,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 512.109999999986,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.46776768785558676,
+          "cpu_host_percent": 0.029235480490974172,
+          "rss": 62091264,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 542.1879999999946,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3116896070216542,
+          "cpu_host_percent": 0.01948060043885339,
+          "rss": 62099456,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 572.2660000000033,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.41558614269553895,
+          "cpu_host_percent": 0.025974133918471184,
+          "rss": 62099456,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 602.3289999999979,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.20789675015803857,
+          "cpu_host_percent": 0.01299354688487741,
+          "rss": 62140416,
+          "private": 28692480,
+          "threads": 4,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 632.3910000000033,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.2079036657573976,
+          "cpu_host_percent": 0.01299397910983735,
+          "rss": 62144512,
+          "private": 28692480,
+          "threads": 4,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 662.4539999999979,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3118451252370578,
+          "cpu_host_percent": 0.019490320327316114,
+          "rss": 62156800,
+          "private": 28692480,
+          "threads": 4,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 692.5160000000033,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.1559277493180482,
+          "cpu_host_percent": 0.009745484332378013,
+          "rss": 62156800,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 722.5940000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3116896070216542,
+          "cpu_host_percent": 0.01948060043885339,
+          "rss": 62164992,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 752.6570000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3638193127765675,
+          "cpu_host_percent": 0.022738707048535468,
+          "rss": 62169088,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 782.7190000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.259879582196747,
+          "cpu_host_percent": 0.016242473887296688,
+          "rss": 62177280,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 812.7820000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.20789675015803857,
+          "cpu_host_percent": 0.01299354688487741,
+          "rss": 62181376,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 842.859999999986,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.20779307134797054,
+          "cpu_host_percent": 0.012987066959248159,
+          "rss": 67309568,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 872.9379999999946,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.20779307134776948,
+          "cpu_host_percent": 0.012987066959235592,
+          "rss": 67334144,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 903.0,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.2079036657573976,
+          "cpu_host_percent": 0.01299397910983735,
+          "rss": 67342336,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 933.0629999999946,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3118451252370578,
+          "cpu_host_percent": 0.019490320327316114,
+          "rss": 67346432,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 963.125,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3118554986360964,
+          "cpu_host_percent": 0.019490968664756025,
+          "rss": 67375104,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 993.1879999999946,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.20789675015803857,
+          "cpu_host_percent": 0.01299354688487741,
+          "rss": 67387392,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1023.25,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.259879582196747,
+          "cpu_host_percent": 0.016242473887296688,
+          "rss": 67391488,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1053.3129999999946,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.20789675015803857,
+          "cpu_host_percent": 0.01299354688487741,
+          "rss": 67407872,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1083.3910000000033,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.2597413391847118,
+          "cpu_host_percent": 0.01623383369904449,
+          "rss": 67411968,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1113.4690000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3116896070216542,
+          "cpu_host_percent": 0.01948060043885339,
+          "rss": 67416064,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1143.5320000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.20789675015803857,
+          "cpu_host_percent": 0.01299354688487741,
+          "rss": 67420160,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1173.609999999986,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3116896070219558,
+          "cpu_host_percent": 0.019480600438872238,
+          "rss": 67424256,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1203.6719999999914,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.259879582196747,
+          "cpu_host_percent": 0.016242473887296688,
+          "rss": 67444736,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1233.75,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.20779307134776948,
+          "cpu_host_percent": 0.012987066959235592,
+          "rss": 67457024,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1263.828999999998,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3116792446557616,
+          "cpu_host_percent": 0.0194799527909851,
+          "rss": 67457024,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1293.8910000000033,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3118554986360964,
+          "cpu_host_percent": 0.019490968664756025,
+          "rss": 67457024,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1323.953999999998,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.2598709376975482,
+          "cpu_host_percent": 0.016241933606096763,
+          "rss": 67461120,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1354.0320000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.20779307134776948,
+          "cpu_host_percent": 0.012987066959235592,
+          "rss": 67465216,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1384.0940000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.2079036657573976,
+          "cpu_host_percent": 0.01299397910983735,
+          "rss": 67481600,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1414.1570000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3638193127765675,
+          "cpu_host_percent": 0.022738707048535468,
+          "rss": 67489792,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1444.203999999998,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.20800745498724638,
+          "cpu_host_percent": 0.013000465936702899,
+          "rss": 67489792,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1474.2820000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.20779307134776948,
+          "cpu_host_percent": 0.012987066959235592,
+          "rss": 67489792,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1504.3440000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.1559277493180482,
+          "cpu_host_percent": 0.009745484332378013,
+          "rss": 67493888,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1534.3910000000033,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.26000931873405797,
+          "cpu_host_percent": 0.016250582420878623,
+          "rss": 67493888,
+          "private": 28659712,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1564.453999999998,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.2598709376975482,
+          "cpu_host_percent": 0.016241933606096763,
+          "rss": 67633152,
+          "private": 28794880,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1594.5160000000033,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.259879582196747,
+          "cpu_host_percent": 0.016242473887296688,
+          "rss": 67641344,
+          "private": 28794880,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1624.578999999998,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.2598709376975482,
+          "cpu_host_percent": 0.016241933606096763,
+          "rss": 67641344,
+          "private": 28794880,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1654.6410000000033,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.2079036657573976,
+          "cpu_host_percent": 0.01299397910983735,
+          "rss": 67641344,
+          "private": 28794880,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1684.7190000000119,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.36363787485859655,
+          "cpu_host_percent": 0.022727367178662285,
+          "rss": 67645440,
+          "private": 28794880,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1714.7660000000033,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.20800745498724638,
+          "cpu_host_percent": 0.013000465936702899,
+          "rss": 67760128,
+          "private": 29065216,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1744.828999999998,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.3118451252370578,
+          "cpu_host_percent": 0.019490320327316114,
+          "rss": 67796992,
+          "private": 29065216,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1774.9070000000065,
+          "phase": "foreground",
+          "cpu_one_core_percent": 0.20779307134776948,
+          "cpu_host_percent": 0.012987066959235592,
+          "rss": 67817472,
+          "private": 29065216,
+          "threads": 3,
+          "python_threads": 1,
+          "handles": 277,
+          "gdi": 56,
+          "user": 265
+        },
+        {
+          "seconds": 1804.984999999986,
+          "phase": "tray",
+          "cpu_one_core_percent": 0.36363787485894844,
+          "cpu_host_percent": 0.022727367178684277,
+          "rss": 69218304,
+          "private": 30994432,
+          "threads": 7,
+          "python_threads": 2,
+          "handles": 301,
+          "gdi": 56,
+          "user": 268
+        },
+        {
+          "seconds": 1835.0629999999946,
+          "phase": "tray",
+          "cpu_one_core_percent": 0.36363787485859655,
+          "cpu_host_percent": 0.022727367178662285,
+          "rss": 69234688,
+          "private": 30994432,
+          "threads": 7,
+          "python_threads": 2,
+          "handles": 301,
+          "gdi": 56,
+          "user": 268
+        },
+        {
+          "seconds": 1865.125,
+          "phase": "tray",
+          "cpu_one_core_percent": 0.2079036657573976,
+          "cpu_host_percent": 0.01299397910983735,
+          "rss": 69201920,
+          "private": 30904320,
+          "threads": 4,
+          "python_threads": 2,
+          "handles": 301,
+          "gdi": 56,
+          "user": 268
+        },
+        {
+          "seconds": 1895.1879999999946,
+          "phase": "tray",
+          "cpu_one_core_percent": 0.3118451252370578,
+          "cpu_host_percent": 0.019490320327316114,
+          "rss": 69210112,
+          "private": 30904320,
+          "threads": 4,
+          "python_threads": 2,
+          "handles": 301,
+          "gdi": 56,
+          "user": 268
+        },
+        {
+          "seconds": 1921.125,
+          "phase": "tray",
+          "cpu_one_core_percent": 0.24096850059755212,
+          "cpu_host_percent": 0.015060531287347008,
+          "rss": 69222400,
+          "private": 30904320,
+          "threads": 4,
+          "python_threads": 2,
+          "handles": 301,
+          "gdi": 56,
+          "user": 268
+        }
+      ],
+      "operation_timings": [
+        {
+          "operation": "table",
+          "rows": 100,
+          "ms": 105.02909999922849
+        },
+        {
+          "operation": "table",
+          "rows": 500,
+          "ms": 5.903400015085936
+        },
+        {
+          "operation": "table",
+          "rows": 1000,
+          "ms": 3.0636000155936927
+        },
+        {
+          "operation": "detail",
+          "ms": 88.66549999220297
+        },
+        {
+          "operation": "detail",
+          "ms": 0.02850001328624785
+        },
+        {
+          "operation": "detail",
+          "ms": 0.008300004992634058
+        },
+        {
+          "operation": "detail",
+          "ms": 0.005599984433501959
+        },
+        {
+          "operation": "detail",
+          "ms": 0.0052000104915350676
+        },
+        {
+          "operation": "detail",
+          "ms": 0.004599976819008589
+        },
+        {
+          "operation": "detail",
+          "ms": 0.0046000059228390455
+        },
+        {
+          "operation": "detail",
+          "ms": 0.0045000051613897085
+        },
+        {
+          "operation": "detail",
+          "ms": 0.0046000059228390455
+        },
+        {
+          "operation": "detail",
+          "ms": 0.004399975296109915
+        },
+        {
+          "operation": "detail",
+          "ms": 0.0043000036384910345
+        },
+        {
+          "operation": "detail",
+          "ms": 0.0044000043999403715
+        },
+        {
+          "operation": "detail",
+          "ms": 0.0043000036384910345
+        },
+        {
+          "operation": "detail",
+          "ms": 0.0042000028770416975
+        },
+        {
+          "operation": "detail",
+          "ms": 0.004299974534660578
+        },
+        {
+          "operation": "detail",
+          "ms": 0.0042000028770416975
+        },
+        {
+          "operation": "detail",
+          "ms": 0.0043000036384910345
+        },
+        {
+          "operation": "detail",
+          "ms": 0.0042000028770416975
+        },
+        {
+          "operation": "detail",
+          "ms": 0.0041000021155923605
+        },
+        {
+          "operation": "detail",
+          "ms": 0.0041000021155923605
+        },
+        {
+          "operation": "search",
+          "ms": 1.180000021122396
+        },
+        {
+          "operation": "search",
+          "ms": 5.248300003586337
+        },
+        {
+          "operation": "search",
+          "ms": 0.8772999863140285
+        },
+        {
+          "operation": "search",
+          "ms": 4.859800013946369
+        },
+        {
+          "operation": "page",
+          "ms": 4.969500005245209
+        },
+        {
+          "operation": "page",
+          "ms": 6.0953000211156905
+        },
+        {
+          "operation": "page",
+          "ms": 14.67100001173094
+        },
+        {
+          "operation": "page",
+          "ms": 19.43859999300912
+        },
+        {
+          "operation": "page",
+          "ms": 8.097799989627674
+        },
+        {
+          "operation": "page",
+          "ms": 21.279100008541718
+        },
+        {
+          "operation": "page",
+          "ms": 5.143699992913753
+        },
+        {
+          "operation": "page",
+          "ms": 4.6762000129092485
+        },
+        {
+          "operation": "page",
+          "ms": 7.562000013422221
+        },
+        {
+          "operation": "page",
+          "ms": 7.410699996398762
+        },
+        {
+          "operation": "page",
+          "ms": 6.286599993472919
+        },
+        {
+          "operation": "page",
+          "ms": 3.414599981624633
+        },
+        {
+          "operation": "page",
+          "ms": 5.113399995025247
+        },
+        {
+          "operation": "page",
+          "ms": 6.4144000061787665
+        },
+        {
+          "operation": "page",
+          "ms": 10.619200009386986
+        },
+        {
+          "operation": "page",
+          "ms": 8.627700008219108
+        },
+        {
+          "operation": "page",
+          "ms": 14.694300014525652
+        },
+        {
+          "operation": "page",
+          "ms": 7.660000002942979
+        },
+        {
+          "operation": "page",
+          "ms": 8.125599997583777
+        },
+        {
+          "operation": "page",
+          "ms": 8.432300004642457
+        },
+        {
+          "operation": "page",
+          "ms": 6.981399987125769
+        },
+        {
+          "operation": "page",
+          "ms": 6.8872999981977046
+        },
+        {
+          "operation": "page",
+          "ms": 4.885400005150586
+        },
+        {
+          "operation": "page",
+          "ms": 6.443299993406981
+        },
+        {
+          "operation": "page",
+          "ms": 5.819200014229864
+        },
+        {
+          "operation": "page",
+          "ms": 7.181599998148158
+        },
+        {
+          "operation": "page",
+          "ms": 7.779099978506565
+        },
+        {
+          "operation": "page",
+          "ms": 5.296999996062368
+        },
+        {
+          "operation": "page",
+          "ms": 6.028300005709752
+        },
+        {
+          "operation": "page",
+          "ms": 6.225899996934459
+        },
+        {
+          "operation": "page",
+          "ms": 5.504900007508695
+        },
+        {
+          "operation": "page",
+          "ms": 8.72069998877123
+        },
+        {
+          "operation": "page",
+          "ms": 5.512800009455532
+        },
+        {
+          "operation": "page",
+          "ms": 5.66709999111481
+        },
+        {
+          "operation": "page",
+          "ms": 6.142900005215779
+        },
+        {
+          "operation": "page",
+          "ms": 9.639500000048429
+        },
+        {
+          "operation": "page",
+          "ms": 6.0461999964900315
+        },
+        {
+          "operation": "page",
+          "ms": 6.210699997609481
+        },
+        {
+          "operation": "page",
+          "ms": 5.4983000154607
+        },
+        {
+          "operation": "page",
+          "ms": 5.441399989649653
+        },
+        {
+          "operation": "page",
+          "ms": 5.975699983537197
+        },
+        {
+          "operation": "page",
+          "ms": 5.2863000018987805
+        },
+        {
+          "operation": "page",
+          "ms": 4.6876999840606
+        },
+        {
+          "operation": "page",
+          "ms": 6.846400006907061
+        },
+        {
+          "operation": "page",
+          "ms": 8.010699995793402
+        },
+        {
+          "operation": "page",
+          "ms": 6.264099996769801
+        },
+        {
+          "operation": "page",
+          "ms": 4.1683999879751354
+        },
+        {
+          "operation": "page",
+          "ms": 7.12210001074709
+        },
+        {
+          "operation": "page",
+          "ms": 6.988300010561943
+        },
+        {
+          "operation": "page",
+          "ms": 7.479599997168407
+        },
+        {
+          "operation": "page",
+          "ms": 4.87599999178201
+        },
+        {
+          "operation": "page",
+          "ms": 5.571999994572252
+        },
+        {
+          "operation": "page",
+          "ms": 5.770699994172901
+        },
+        {
+          "operation": "page",
+          "ms": 5.77970000449568
+        },
+        {
+          "operation": "page",
+          "ms": 5.389199999626726
+        },
+        {
+          "operation": "page",
+          "ms": 6.024600006639957
+        },
+        {
+          "operation": "page",
+          "ms": 7.083000004058704
+        },
+        {
+          "operation": "page",
+          "ms": 2.928499976405874
+        },
+        {
+          "operation": "page",
+          "ms": 2.9113000200595707
+        },
+        {
+          "operation": "page",
+          "ms": 2.8343000158201903
+        },
+        {
+          "operation": "page",
+          "ms": 3.455700003542006
+        },
+        {
+          "operation": "page",
+          "ms": 4.143500002101064
+        },
+        {
+          "operation": "page",
+          "ms": 3.640699986135587
+        },
+        {
+          "operation": "page",
+          "ms": 2.8464000206440687
+        },
+        {
+          "operation": "page",
+          "ms": 2.821300004143268
+        },
+        {
+          "operation": "page",
+          "ms": 4.06109998584725
+        },
+        {
+          "operation": "page",
+          "ms": 3.5780000034719706
+        },
+        {
+          "operation": "page",
+          "ms": 3.717899991897866
+        },
+        {
+          "operation": "page",
+          "ms": 3.2666000188328326
+        },
+        {
+          "operation": "page",
+          "ms": 2.8814000252168626
+        },
+        {
+          "operation": "page",
+          "ms": 3.4602000087033957
+        },
+        {
+          "operation": "page",
+          "ms": 2.9104000132065266
+        },
+        {
+          "operation": "page",
+          "ms": 2.9331000114325434
+        },
+        {
+          "operation": "page",
+          "ms": 3.6881999985780567
+        },
+        {
+          "operation": "page",
+          "ms": 3.9263999788090587
+        },
+        {
+          "operation": "page",
+          "ms": 2.861399989342317
+        },
+        {
+          "operation": "page",
+          "ms": 2.840100001776591
+        },
+        {
+          "operation": "page",
+          "ms": 2.959500008728355
+        },
+        {
+          "operation": "page",
+          "ms": 2.6147000025957823
+        },
+        {
+          "operation": "page",
+          "ms": 4.036400001496077
+        },
+        {
+          "operation": "page",
+          "ms": 5.18420001026243
+        },
+        {
+          "operation": "page",
+          "ms": 2.814500010572374
+        },
+        {
+          "operation": "page",
+          "ms": 2.874900004826486
+        },
+        {
+          "operation": "page",
+          "ms": 2.605499990750104
+        },
+        {
+          "operation": "page",
+          "ms": 3.266799991251901
+        },
+        {
+          "operation": "page",
+          "ms": 4.058599995914847
+        },
+        {
+          "operation": "page",
+          "ms": 3.3281999931205064
+        },
+        {
+          "operation": "page",
+          "ms": 2.9952999902889132
+        },
+        {
+          "operation": "page",
+          "ms": 3.9154000114649534
+        },
+        {
+          "operation": "page",
+          "ms": 2.8380000148899853
+        },
+        {
+          "operation": "page",
+          "ms": 2.8822999738622457
+        },
+        {
+          "operation": "page",
+          "ms": 4.02550000580959
+        },
+        {
+          "operation": "page",
+          "ms": 3.414700011489913
+        },
+        {
+          "operation": "page",
+          "ms": 3.724200010765344
+        },
+        {
+          "operation": "page",
+          "ms": 5.433099984657019
+        },
+        {
+          "operation": "page",
+          "ms": 2.862900000764057
+        },
+        {
+          "operation": "page",
+          "ms": 3.643400006694719
+        },
+        {
+          "operation": "page",
+          "ms": 3.9818999939598143
+        },
+        {
+          "operation": "page",
+          "ms": 3.5392999998293817
+        },
+        {
+          "operation": "page",
+          "ms": 3.2296999997925013
+        },
+        {
+          "operation": "page",
+          "ms": 3.108100005192682
+        },
+        {
+          "operation": "page",
+          "ms": 2.7706999971996993
+        },
+        {
+          "operation": "page",
+          "ms": 3.0223999929148704
+        },
+        {
+          "operation": "page",
+          "ms": 4.122000013012439
+        },
+        {
+          "operation": "page",
+          "ms": 3.848299995297566
+        },
+        {
+          "operation": "page",
+          "ms": 2.740500000072643
+        },
+        {
+          "operation": "page",
+          "ms": 3.17949999589473
+        },
+        {
+          "operation": "page",
+          "ms": 2.821300004143268
+        },
+        {
+          "operation": "page",
+          "ms": 2.8455999854486436
+        },
+        {
+          "operation": "page",
+          "ms": 4.368599998997524
+        },
+        {
+          "operation": "page",
+          "ms": 3.862799989292398
+        },
+        {
+          "operation": "page",
+          "ms": 2.8975000022910535
+        },
+        {
+          "operation": "page",
+          "ms": 2.677399985259399
+        },
+        {
+          "operation": "page",
+          "ms": 2.660700003616512
+        },
+        {
+          "operation": "page",
+          "ms": 2.812499995343387
+        },
+        {
+          "operation": "page",
+          "ms": 3.6124000034760684
+        },
+        {
+          "operation": "page",
+          "ms": 4.227899975376204
+        },
+        {
+          "operation": "page",
+          "ms": 4.007500014267862
+        },
+        {
+          "operation": "page",
+          "ms": 3.0735000036656857
+        },
+        {
+          "operation": "page",
+          "ms": 3.113999991910532
+        },
+        {
+          "operation": "page",
+          "ms": 3.495799988741055
+        },
+        {
+          "operation": "page",
+          "ms": 3.871299995807931
+        },
+        {
+          "operation": "page",
+          "ms": 3.9551999943796545
+        },
+        {
+          "operation": "page",
+          "ms": 2.9958999948576093
+        },
+        {
+          "operation": "page",
+          "ms": 2.7828000020235777
+        },
+        {
+          "operation": "page",
+          "ms": 3.1270999752450734
+        },
+        {
+          "operation": "page",
+          "ms": 3.1574000022374094
+        },
+        {
+          "operation": "page",
+          "ms": 4.946000000927597
+        },
+        {
+          "operation": "page",
+          "ms": 3.5358999739401042
+        },
+        {
+          "operation": "page",
+          "ms": 3.3941000001505017
+        },
+        {
+          "operation": "page",
+          "ms": 2.793999999994412
+        },
+        {
+          "operation": "page",
+          "ms": 2.846299990778789
+        },
+        {
+          "operation": "page",
+          "ms": 2.888999995775521
+        },
+        {
+          "operation": "page",
+          "ms": 3.490200004307553
+        },
+        {
+          "operation": "page",
+          "ms": 3.805499989539385
+        },
+        {
+          "operation": "page",
+          "ms": 2.7979000005871058
+        },
+        {
+          "operation": "page",
+          "ms": 3.2643999729771167
+        },
+        {
+          "operation": "page",
+          "ms": 3.5470000002533197
+        },
+        {
+          "operation": "page",
+          "ms": 3.0750999867450446
+        },
+        {
+          "operation": "page",
+          "ms": 4.3095000146422535
+        },
+        {
+          "operation": "page",
+          "ms": 3.8503999821841717
+        },
+        {
+          "operation": "page",
+          "ms": 3.3159999875351787
+        },
+        {
+          "operation": "page",
+          "ms": 2.9223000165075064
+        },
+        {
+          "operation": "page",
+          "ms": 4.0253000042866915
+        },
+        {
+          "operation": "page",
+          "ms": 3.1399999861605465
+        },
+        {
+          "operation": "page",
+          "ms": 3.8218999980017543
+        },
+        {
+          "operation": "page",
+          "ms": 5.500500003108755
+        },
+        {
+          "operation": "page",
+          "ms": 3.5099000087939203
+        },
+        {
+          "operation": "page",
+          "ms": 2.6673999964259565
+        },
+        {
+          "operation": "page",
+          "ms": 2.8516000020317733
+        },
+        {
+          "operation": "page",
+          "ms": 2.552199992351234
+        },
+        {
+          "operation": "page",
+          "ms": 3.833499999018386
+        },
+        {
+          "operation": "page",
+          "ms": 4.08329998026602
+        },
+        {
+          "operation": "page",
+          "ms": 2.9731999966315925
+        },
+        {
+          "operation": "page",
+          "ms": 2.8882999904453754
+        },
+        {
+          "operation": "page",
+          "ms": 2.841000008629635
+        },
+        {
+          "operation": "page",
+          "ms": 2.788799989502877
+        },
+        {
+          "operation": "page",
+          "ms": 4.557999985991046
+        },
+        {
+          "operation": "page",
+          "ms": 3.8594999932684004
+        },
+        {
+          "operation": "page",
+          "ms": 2.755199995590374
+        },
+        {
+          "operation": "page",
+          "ms": 2.753000007942319
+        },
+        {
+          "operation": "page",
+          "ms": 3.4681999823078513
+        },
+        {
+          "operation": "page",
+          "ms": 2.9952999902889132
+        },
+        {
+          "operation": "page",
+          "ms": 3.9143000030890107
+        },
+        {
+          "operation": "page",
+          "ms": 3.6121000011917204
+        },
+        {
+          "operation": "page",
+          "ms": 2.979599987156689
+        },
+        {
+          "operation": "page",
+          "ms": 4.817699984414503
+        },
+        {
+          "operation": "page",
+          "ms": 3.1488999957218766
+        },
+        {
+          "operation": "page",
+          "ms": 3.022299992153421
+        },
+        {
+          "operation": "page",
+          "ms": 4.505699995206669
+        },
+        {
+          "operation": "page",
+          "ms": 4.117600008612499
+        },
+        {
+          "operation": "page",
+          "ms": 3.209299989975989
+        },
+        {
+          "operation": "page",
+          "ms": 2.982299978611991
+        },
+        {
+          "operation": "page",
+          "ms": 2.8642000106628984
+        },
+        {
+          "operation": "page",
+          "ms": 2.813400002196431
+        },
+        {
+          "operation": "page",
+          "ms": 4.184299992630258
+        },
+        {
+          "operation": "page",
+          "ms": 4.618899984052405
+        },
+        {
+          "operation": "page",
+          "ms": 2.7857999957632273
+        },
+        {
+          "operation": "page",
+          "ms": 3.232300019590184
+        },
+        {
+          "operation": "page",
+          "ms": 3.3616000146139413
+        }
+      ],
+      "tick": {
+        "count": 1826,
+        "median_ms": 0.20324999059084803,
+        "p95_ms": 0.294400000711903,
+        "max_ms": 2.501100010704249
+      },
+      "operations": {
+        "table": {
+          "count": 3,
+          "median_ms": 5.903400015085936,
+          "p95_ms": 5.903400015085936,
+          "max_ms": 105.02909999922849
+        },
+        "search": {
+          "count": 4,
+          "median_ms": 3.0199000175343826,
+          "p95_ms": 4.859800013946369,
+          "max_ms": 5.248300003586337
+        },
+        "detail": {
+          "count": 20,
+          "median_ms": 0.004399989848025143,
+          "p95_ms": 0.02850001328624785,
+          "max_ms": 88.66549999220297
+        },
+        "page": {
+          "count": 180,
+          "median_ms": 3.8136999937705696,
+          "p95_ms": 8.125599997583777,
+          "max_ms": 21.279100008541718
+        }
+      }
+    }
+  },
+  "long_profile_workbench_to_final_patch": "diff --git a/src/gui/workbench.py b/src/gui/workbench.py\nindex 1b22ad9..6c422e9 100644\n--- a/src/gui/workbench.py\n+++ b/src/gui/workbench.py\n@@ -166,6 +166,36 @@ def select_orders(\n     return tuple(o for o in orders if keep(o))\n \n \n+def sort_orders(orders, key, *, reverse=False):\n+    \"\"\"Keep missing values last and compare numbers/dates in their own types.\"\"\"\n+    if key in {\"price\", \"quantity\", \"processed\"}:\n+        field = {\n+            \"price\": \"min_reference_price\",\n+            \"quantity\": \"quantity\",\n+            \"processed\": \"processed_at\",\n+        }[key]\n+        present = [o for o in orders if getattr(o, field) is not None]\n+        missing = [o for o in orders if getattr(o, field) is None]\n+\n+        def value(order):\n+            current = getattr(order, field)\n+            return current.timestamp() if key == \"processed\" else current\n+\n+        return tuple(sorted(present, key=value, reverse=reverse) + missing)\n+\n+    def value(order):\n+        return str(\n+            {\n+                \"status\": order_status(order),\n+                \"source\": order.source_sheet or \"\",\n+                \"module\": NAMES.get(order.module_id, \"\"),\n+            }.get(key, getattr(order, key, \"\"))\n+            or \"\"\n+        ).casefold()\n+\n+    return tuple(sorted(orders, key=value, reverse=reverse))\n+\n+\n class WorkbenchView:\n     pages = (\"\u603b\u89c8\", \"\u4efb\u52a1\u4e2d\u5fc3\", \"\u8c03\u7814\u7ed3\u679c\", \"\u5f02\u5e38\u4e0e\u901a\u77e5\", \"\u8fd0\u884c\u8bb0\u5f55\", \"\u8bbe\u7f6e\")\n \n@@ -630,22 +660,7 @@ class WorkbenchView:\n         )\n         key = getattr(self, \"sort_key\", None)\n         if key:\n-            selected = tuple(\n-                sorted(\n-                    selected,\n-                    key=lambda o: (\n-                        {\n-                            \"status\": order_status(o),\n-                            \"source\": o.source_sheet or \"\",\n-                            \"module\": NAMES.get(o.module_id, \"\"),\n-                            \"processed\": stamp(o.processed_at),\n-                            \"price\": o.min_reference_price or 0,\n-                        }.get(key, getattr(o, key, \"\"))\n-                        or \"\"\n-                    ),\n-                    reverse=self.sort_desc,\n-                )\n-            )\n+            selected = sort_orders(selected, key, reverse=self.sort_desc)\n         pages = max(1, (len(selected) + self.page_size - 1) // self.page_size)\n         self.page_index = min(self.page_index, pages - 1)\n         visible = selected[\n@@ -732,6 +747,17 @@ class WorkbenchView:\n \n         line(order.model)\n         line(f\"\u54c1\u724c\uff1a{order.brand or '\u6682\u65e0\u8bb0\u5f55'}\\n\u6570\u91cf\uff1a{order.quantity}\", MUTED)\n+        line(\n+            f\"\u5e93\u5b58\u5224\u65ad\uff1a{order.stock_label or '\u5f85\u9a8c\u8bc1'}\\n\u91cd\u8981\u7a0b\u5ea6\uff1a{order.importance or '\u6682\u65e0\u8bb0\u5f55'}\",\n+            MUTED,\n+        )\n+        line(\n+            \"\u5df2\u6709\u53c2\u8003\u4ef7\uff1a\"\n+            + self.app._format_money(order.min_reference_price)\n+            + \"\\n\u9884\u8ba1\u603b\u4ef7\uff1a\"\n+            + self.app._format_money(order.total_price),\n+            MUTED,\n+        )\n         line(\n             f\"\u6765\u6e90\uff1a{order.source_sheet or '\u672a\u8f7d\u5165'} / {order.source_row or '\u884c\u53f7\u672a\u8f7d\u5165'}\",\n             MUTED,\n",
+  "final_source_smoke": {
+    "source_hashes_match": true,
+    "metadata": {
+      "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+      "logical_cpus": 16,
+      "synthetic_only": true,
+      "source_sha256": {
+        "src\\gui\\app.py": "6a5f19a89eb18f287f89b4e34bc6378c6e9f6180079cd4cfe8f9d4ebdbaeacb6",
+        "src\\gui\\contracts.py": "e9592774ed5561ce9fc46545cd7d98912e12725309098d3f366b45827cc6b35b",
+        "src\\gui\\main.py": "b7089d43d5d555798fece53d7b6e806307fd01240369e50b4b028f8594f9696e",
+        "src\\gui\\mock_backend.py": "733cb3e6bb623210724f1d612b10902e72d3944ef301f2791bb628c04868cf31",
+        "src\\gui\\resources.py": "637828534f73ecb8efc05b14244c0db42ff93bf5c568edea55d512d45007f613",
+        "src\\gui\\smoke.py": "5c7867ec5dbfbc3496ebdb9f6a3938bfb41dbee7fd9387554d87866dfe7fb1ab",
+        "src\\gui\\state.py": "9a71252431b98bc80f9abdfad8ca8049f9bab9961166ad33ff0f6260d5b65046",
+        "src\\gui\\tray.py": "45f3ecb43e909d7dd224699ed5108f9fe68b1308cac3a40472f401032f1b1e9d",
+        "src\\gui\\workbench.py": "d8ed8e3e378f212db771e6658d239ea334afb42fa80d64e9d7d329c2426886e3",
+        "src\\gui\\__init__.py": "4dfe2a9758a104a189a7b3bb619eee710727491018b0e6d29292fffd29c6f603",
+        "src\\launcher\\backend.py": "63eeacc24250d735fb53ae8e68cafa8625bf38efb20e47153c3a26129bffd6ba",
+        "src\\launcher\\browser_bootstrap.py": "2f24d12179247661b8f31dde693e1a765101456b48c243b84aba5e4c41fc0c61",
+        "src\\launcher\\diagnostics.py": "f4df38f8780e5aa31fc06a445c6eda523d91fdfe418150854c450dba983e12d5",
+        "src\\launcher\\google_quote_update.py": "c3f5a968125a107bd5e8dd63f7cddfebb1cd24d092c30b8fef7685b8bccf7bb5",
+        "src\\launcher\\google_web.py": "5a9c8251f411a97367c9f107d5f3b44cb25721f26abea91868e6cc6cd95de8f3",
+        "src\\launcher\\inso_session.py": "a8d268f7028315389d8d6d0680ded77c1a10c7a709920bfa5c682837d1ba9c30",
+        "src\\launcher\\manual_order.py": "33e52d0efd279b9ff36c6f9f9fcff41dec60ea02a6d3237aba25ef7fdb669451",
+        "src\\launcher\\purchase_completion.py": "92075c5d68ce3bf69806bcc74a2c14ba6ca1ac2a14228b9d6c53f7b32339f8d3",
+        "src\\launcher\\sales_header.py": "68c604ef78d8ff4d896430313f7b82cd4af91eb0da8d2d869f56fc1377817923",
+        "src\\launcher\\sales_intent.py": "0cd60e0a39bf00d258a5ffb640e0255d3094666c37b8a6d718dd6e3d5d5c0c5c",
+        "src\\launcher\\single_instance.py": "0cab4945afa5ce4791c39632919d07f7d3bf03e9823b2d098fb3455dc367bb38",
+        "src\\launcher\\site_login_sweep.py": "816628d813b2314bd8355de1c22b0d59d4f4065650739933f876c2cfcdb2a96b",
+        "src\\launcher\\tp_composition.py": "4ef07dcd91af684ea4fdb7efef206c7360ed71cdcaf30810029a9ee47c2d231c",
+        "src\\launcher\\v12_composition.py": "4e67002f4ab4ed12aef42c03bba082bb15f686e8fad42f104e6b4832a1c4ffd4",
+        "src\\launcher\\v12_gui.py": "b50abf846a27d96bc50521eeee26cc822c9ef6cb7be3793a6a87f87c5294408c",
+        "src\\launcher\\v12_phase_a_readonly.py": "04c6b5d670001a59d58213036fb0c37c77c7c072289e2204ec19b765444b98bc",
+        "src\\launcher\\v13_integration.py": "076aaba3a94540d37460d1e3f481e3c0f30395f277a40d6690c8c0b6a0f173d1",
+        "src\\launcher\\v13_quotation.py": "a2bb3f9fb26b7768ada4835d71ed14829c8cf8a2870f01a2c41f46deda8a2752",
+        "src\\launcher\\workbench_snapshot.py": "e9584c4f43ebb4ad65615060e93a14810cb5d70a8821bc7294589ffecdf651e7",
+        "src\\launcher\\__init__.py": "78a725a25af637e950557d68298e20374d5fbda5f9808ec0e8088f7eb7c0be81"
+      }
+    },
+    "completion": {
+      "completed": true,
+      "durations": [
+        1,
+        2,
+        2
+      ],
+      "samples": 2,
+      "elapsed": 9.734000000025844
+    },
+    "note": "1s idle/2s foreground/2s tray; functional smoke only, NOT long-term stability evidence"
+  }
+}

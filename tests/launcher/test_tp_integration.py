@@ -69,7 +69,7 @@ def test_manual_tp_uses_same_idle_command_path_and_no_purchase_or_quotation(tmp_
 
 @pytest.mark.parametrize("enabled,frozen,expected", [
     (False, False, False), (True, False, True),
-    (None, True, True), (False, True, False),
+    (None, True, False), (False, True, False),
 ])
 def test_existing_poll_and_fifteen_minute_wait_opt_in_tp_no_extra_thread(tmp_path, monkeypatch, enabled, frozen, expected):
     from src.launcher import tp_composition
@@ -103,6 +103,8 @@ def test_existing_poll_and_fifteen_minute_wait_opt_in_tp_no_extra_thread(tmp_pat
     monkeypatch.setattr(tp_composition, "build_tp_cycle", build_tp)
     backend = launcher.ProductionBackend(root=tmp_path, config_path=config,
                                          production_config_path=production)
+    # Composition/scheduling only; no Owner notification or credential lookup.
+    monkeypatch.setattr(backend, "_alert_owner_of_login", lambda **_kwargs: None)
     waits = []
     def wait(seconds):
         waits.append(seconds)

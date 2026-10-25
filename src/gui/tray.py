@@ -5,8 +5,6 @@ import threading
 from ctypes import wintypes
 from uuid import uuid4
 
-from src.core.app_paths import application_name
-
 
 class WindowsTray:
     def __init__(self, emit):
@@ -96,7 +94,7 @@ class WindowsTray:
             if not popup:
                 return
             try:
-                user.AppendMenuW(popup, 0, 1, '打开 ' + application_name())
+                user.AppendMenuW(popup, 0, 1, '打开 INSO LEO')
                 user.AppendMenuW(popup, 0, 2, '退出')
                 point = wintypes.POINT()
                 user.GetCursorPos(ctypes.byref(point))
@@ -144,7 +142,7 @@ class WindowsTray:
             registered = bool(user.RegisterClassW(ctypes.byref(window_class)))
             if not registered:
                 return
-            hwnd = user.CreateWindowExW(0, name, application_name() + ' tray', 0, 0, 0, 0, 0,
+            hwnd = user.CreateWindowExW(0, name, 'INSO LEO tray', 0, 0, 0, 0, 0,
                                         None, None, instance, None)
             if not hwnd:
                 return
@@ -154,7 +152,7 @@ class WindowsTray:
                 return
             icon.size, icon.window, icon.identifier = ctypes.sizeof(icon), hwnd, 1
             icon.flags, icon.callback = 1 | 2 | 4, 0x8001
-            icon.icon, icon.tip = user.LoadIconW(None, ctypes.c_void_p(32512)), application_name()
+            icon.icon, icon.tip = user.LoadIconW(None, ctypes.c_void_p(32512)), 'INSO LEO'
             added = bool(shell.Shell_NotifyIconW(0, ctypes.byref(icon)))
             self.available = added
             self.ready.set()

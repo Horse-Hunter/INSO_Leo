@@ -10,14 +10,13 @@ import logging
 import threading
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from tkinter import Menu, messagebox, simpledialog, ttk
+from tkinter import Menu, messagebox, simpledialog
 from typing import Any
-
-from src.core.app_paths import application_name
 
 from .contracts import (
     GuiBackend,
     LogEntry,
+    ModuleSnapshot,
     Order,
     RunSession,
     RunState,
@@ -25,6 +24,7 @@ from .contracts import (
     V12AlertCode,
     V12BusinessLabel,
     V12OrderStateDTO,
+    WorkbenchSnapshot,
 )
 from .resources import BackendEvent, MainThreadEventQueue
 
@@ -116,9 +116,9 @@ def _countdown_text(status: RunSession, now: datetime | None = None) -> str:
         seconds = max(0, int((status.row_cooldown_until - now).total_seconds() + 0.999))
         return f"冷却 {seconds // 60:02d}:{seconds % 60:02d}"
     if status.in_progress:
-        return "订单处理中"
+        return "本轮进行中"
     if status.next_poll_at is None:
-        return "即将轮询"
+        return "本轮进行中"
     now = now or datetime.now(timezone.utc)
     seconds = max(0, int((status.next_poll_at - now).total_seconds() + 0.999))
     return f"{seconds // 60:02d}:{seconds % 60:02d}"
@@ -203,7 +203,7 @@ def _event_display_text(event: Any) -> str:
 
 
 class InsoDashboardApp:
-    """Single-page INSO_V1.4 operator dashboard."""
+    """Local workbench using the existing guarded backend actions."""
 
     def __init__(self, backend: GuiBackend, *, diagnostics=None) -> None:
         global ctk
@@ -211,7 +211,8 @@ class InsoDashboardApp:
 
         self._backend = backend
         self._runtime_diagnostics = diagnostics
-        self._status: RunSession = backend.get_status()
+        initial = backend.get_workbench_snapshot()
+        self._status: RunSession = initial.session if initial else backend.get_status()
         self._selected_order: Order | None = None
         self._displayed_orders: dict[str, Order] = {}
         self._displayed_order_styles: dict[str, str] = {}
@@ -222,6 +223,7 @@ class InsoDashboardApp:
         self._after_id: str | None = None
         self._close_after_id: str | None = None
         self._closing = False
+        self._start_on_ready = False
         self._close_finalized = False
         self._login_all_running = False
         self._shown_login_report: SiteLoginReport | None = None
@@ -232,8 +234,12 @@ class InsoDashboardApp:
         self._root = ctk.CTk()
         if diagnostics is not None:
             self._root.report_callback_exception = diagnostics.tk_exception
-        self._root.title(application_name())
-        self._root.geometry("1200x800")
+        self._root.title("INSO LEO — Procurement Automation Control Center")
+        self._root.geometry("1400x850")
+        self._root.minsize(800, 440)
+        self._hidden = False
+        self._snapshot = None
+        self._sync_signature = None
         self._root.configure(fg_color=_BG)
         self._root.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
@@ -245,338 +251,13 @@ class InsoDashboardApp:
         self._schedule_tick()
 
     def _build_ui(self) -> None:
-        # Main container with padding
-        self._root.grid_rowconfigure(1, weight=1)
-        self._root.grid_columnconfigure(0, weight=1)
+        from .workbench import WorkbenchView
+        self._view = WorkbenchView(self)
 
-        self._header = self._build_header()
-        self._header.grid(row=0, column=0, sticky="ew", padx=24, pady=(24, 12))
 
-        content = ctk.CTkFrame(self._root, fg_color="transparent")
-        content.grid(row=1, column=0, sticky="nsew", padx=24, pady=12)
-        content.grid_columnconfigure(0, weight=2)
-        content.grid_columnconfigure(1, weight=1)
-        content.grid_rowconfigure(1, weight=1)
 
-        self._build_action_card(content).grid(
-            row=0, column=0, sticky="new", padx=(0, 12), pady=(0, 12)
-        )
-        self._build_run_info(content).grid(
-            row=0, column=1, sticky="new", padx=(12, 0), pady=(0, 12)
-        )
-        self._build_results(content).grid(
-            row=1, column=0, columnspan=2, sticky="nsew", pady=(12, 0)
-        )
 
-        self._build_health_bar().grid(
-            row=2, column=0, sticky="ew", padx=24, pady=(12, 24)
-        )
 
-    def _build_header(self) -> ctk.CTkFrame:
-        frame = ctk.CTkFrame(self._root, fg_color="transparent")
-        frame.grid_columnconfigure(0, weight=1)
-
-        title = ctk.CTkLabel(
-            frame,
-            text=application_name(),
-            font=_FONT_TITLE,
-            text_color=_TEXT,
-        )
-        title.grid(row=0, column=0, sticky="w")
-
-        self._status_badge = ctk.CTkLabel(
-            frame,
-            text="已停止",
-            font=("Microsoft YaHei UI", 14, "bold"),
-            text_color=_TEXT,
-            fg_color=_GRAY,
-            corner_radius=16,
-            width=160,
-        )
-        self._status_badge.grid(row=0, column=1, sticky="e")
-
-        return frame
-
-    def _build_action_card(self, parent: ctk.CTkFrame) -> ctk.CTkFrame:
-        card = ctk.CTkFrame(parent, fg_color=_CARD_BG, corner_radius=16)
-        card.grid_columnconfigure(0, weight=1)
-
-        label = ctk.CTkLabel(
-            card,
-            text="核心操作",
-            font=_FONT_LABEL,
-            text_color=_TEXT_SECONDARY,
-        )
-        label.grid(row=0, column=0, sticky="w", padx=24, pady=(20, 8))
-
-        self._action_button = ctk.CTkButton(
-            card,
-            text="开始询价",
-            font=("Microsoft YaHei UI", 14, "bold"),
-            fg_color=_GREEN,
-            hover_color="#059669",
-            text_color="white",
-            height=52,
-            corner_radius=12,
-            command=self._on_action,
-        )
-        self._action_button.grid(row=1, column=0, sticky="ew", padx=24, pady=(8, 12))
-
-        # Owner rule (2026-10-01): signing every site in is its own action, run
-        # *before* a round of inquiry, and reported either way. A run started
-        # with dead sessions is what produced "采集需要人工处理" mid-cycle.
-        actions = ctk.CTkFrame(card, fg_color="transparent")
-        actions.grid(row=2, column=0, sticky="ew", padx=24, pady=(0, 20))
-        actions.grid_columnconfigure((0, 1), weight=1, uniform="mail-actions")
-        self._login_all_button = ctk.CTkButton(
-            actions,
-            text="一键登录所有网站",
-            font=("Microsoft YaHei UI", 13, "bold"),
-            fg_color=_BLUE,
-            hover_color="#2563EB",
-            text_color="white",
-            height=44,
-            corner_radius=12,
-            command=self._on_login_all,
-        )
-        self._login_all_button.grid(row=0, column=0, sticky="ew", padx=(0, 6))
-        self._order_mail_button = ctk.CTkButton(
-            actions, text="自动订单录单", font=("Microsoft YaHei UI", 13, "bold"),
-            fg_color=_BLUE, hover_color="#2563EB", text_color="white",
-            height=44, corner_radius=12, command=self._on_order_mail,
-        )
-        self._order_mail_button.grid(row=0, column=1, sticky="ew", padx=(6, 0))
-
-        return card
-
-    def _build_run_info(self, parent: ctk.CTkFrame) -> ctk.CTkFrame:
-        card = ctk.CTkFrame(parent, fg_color=_CARD_BG, corner_radius=16)
-        card.grid_columnconfigure((0, 1, 2), weight=1)
-
-        title = ctk.CTkLabel(
-            card,
-            text="运行信息",
-            font=_FONT_LABEL,
-            text_color=_TEXT_SECONDARY,
-        )
-        title.grid(row=0, column=0, columnspan=3, sticky="w", padx=20, pady=(16, 8))
-
-        self._run_info_labels: dict[str, ctk.CTkLabel] = {}
-        info_items = [
-            ("新订单", "--"),
-            ("采购未报价", "--"),
-            ("采购超时未报价", "--"),
-            ("下轮询价倒计时", "00:00"),
-        ]
-        positions = [(1, 0), (1, 1), (1, 2), (2, 0)]
-        for (label_text, value), (row, col) in zip(info_items, positions, strict=True):
-            cell = ctk.CTkFrame(card, fg_color="transparent")
-            cell.grid(row=row, column=col, sticky="nsew", padx=8, pady=8)
-            lbl = ctk.CTkLabel(
-                cell,
-                text=label_text,
-                font=_FONT_SMALL,
-                text_color=_TEXT_SECONDARY,
-            )
-            lbl.pack(anchor="w")
-            val = ctk.CTkLabel(
-                cell,
-                text=value,
-                font=_FONT_NUMBER,
-                text_color=_TEXT,
-            )
-            val.pack(anchor="w")
-            self._run_info_labels[label_text] = val
-
-        return card
-
-    def _build_results(self, parent: ctk.CTkFrame) -> ctk.CTkFrame:
-        frame = ctk.CTkFrame(parent, fg_color="transparent")
-        frame.grid_rowconfigure(1, weight=1)
-        frame.grid_columnconfigure(0, weight=2)
-        frame.grid_columnconfigure(1, weight=1)
-
-        header = ctk.CTkLabel(
-            frame,
-            text="询价结果",
-            font=_FONT_LABEL,
-            text_color=_TEXT_SECONDARY,
-        )
-        header.grid(row=0, column=0, sticky="w", pady=(0, 8))
-        ctk.CTkLabel(
-            frame,
-            text="蓝色：24小时内｜白色：历史",
-            font=_FONT_SMALL,
-            text_color=_TEXT_SECONDARY,
-        ).grid(row=0, column=0, sticky="w", padx=(82, 0), pady=(0, 8))
-
-        toolbar = ctk.CTkFrame(frame, fg_color="transparent")
-        toolbar.grid(row=0, column=1, sticky="e", pady=(0, 8))
-        ctk.CTkButton(
-            toolbar,
-            text="打开 Excel",
-            font=_FONT_SMALL,
-            width=100,
-            height=32,
-            fg_color=_CARD_BG,
-            hover_color=_CARD_BG_HOVER,
-            text_color=_TEXT,
-            command=self._backend.open_excel,
-        ).pack(side="left", padx=(0, 8))
-        ctk.CTkButton(
-            toolbar,
-            text="打开结果目录",
-            font=_FONT_SMALL,
-            width=110,
-            height=32,
-            fg_color=_CARD_BG,
-            hover_color=_CARD_BG_HOVER,
-            text_color=_TEXT,
-            command=self._backend.open_results_dir,
-        ).pack(side="left")
-
-        table_card = ctk.CTkFrame(frame, fg_color=_CARD_BG, corner_radius=16)
-        table_card.grid(row=1, column=0, sticky="nsew", padx=(0, 12))
-        table_card.grid_rowconfigure(0, weight=1)
-        table_card.grid_columnconfigure(0, weight=1)
-
-        columns = (
-            "model",
-            "brand",
-            "quantity",
-            "importance",
-            "stock",
-            "min_price",
-            "total",
-            "status",
-        )
-        self._tree = ttk.Treeview(
-            table_card,
-            columns=columns,
-            show="headings",
-            selectmode="browse",
-        )
-        self._tree.heading("model", text="型号")
-        self._tree.heading("brand", text="品牌")
-        self._tree.heading("quantity", text="数量")
-        self._tree.heading("importance", text="重要程度")
-        self._tree.heading("stock", text="货量")
-        self._tree.heading("min_price", text="市场最低参考价")
-        self._tree.heading("total", text="总价")
-        self._tree.heading("status", text="状态")
-        self._tree.column("model", width=160, anchor="w")
-        self._tree.column("brand", width=80, anchor="w")
-        self._tree.column("quantity", width=60, anchor="e")
-        self._tree.column("importance", width=80, anchor="center")
-        self._tree.column("stock", width=80, anchor="e")
-        self._tree.column("min_price", width=100, anchor="e")
-        self._tree.column("total", width=100, anchor="e")
-        self._tree.column("status", width=100, anchor="center")
-        self._tree.grid(row=0, column=0, sticky="nsew", padx=12, pady=12)
-
-        scrollbar = ttk.Scrollbar(
-            table_card, orient="vertical", command=self._tree.yview
-        )
-        scrollbar.grid(row=0, column=1, sticky="ns", pady=12)
-        self._tree.configure(yscrollcommand=scrollbar.set)
-
-        style = ttk.Style(self._tree)
-        style.theme_use("default")
-        style.configure(
-            "Treeview",
-            background=_CARD_BG,
-            foreground=_TEXT,
-            fieldbackground=_CARD_BG,
-            rowheight=28,
-            borderwidth=0,
-        )
-        style.configure(
-            "Treeview.Heading",
-            background=_CARD_BG,
-            foreground=_TEXT_SECONDARY,
-            borderwidth=0,
-            font=_FONT_SMALL,
-        )
-        style.map("Treeview", background=[("selected", "#334155")], foreground=[("selected", "#FFFFFF")])
-        self._tree.tag_configure("completed", background="#A7F3D0", foreground="#065F46")
-        self._tree.tag_configure("recent", background=_RECENT_BLUE, foreground="#111827")
-        self._tree.tag_configure("legacy", background=_HISTORY_WHITE, foreground="#111827")
-        self._tree.tag_configure("warning", background=_WARNING_BG, foreground="#111827")
-        self._tree.tag_configure("error", background=_ERROR_BG, foreground=_ERROR_TEXT)
-        style.configure(
-            "Vertical.TScrollbar",
-            background=_CARD_BG,
-            troughcolor=_BG,
-            bordercolor=_BG,
-            arrowcolor=_TEXT_SECONDARY,
-        )
-
-        self._tree.bind("<<TreeviewSelect>>", self._on_row_select)
-        self._tree.bind("<Button-3>", self._on_order_context)
-        self._tree.bind("<Double-1>", self._on_order_edit)
-
-        detail_card = ctk.CTkFrame(frame, fg_color=_CARD_BG, corner_radius=16)
-        detail_card.grid(row=1, column=1, sticky="nsew", padx=(12, 0))
-        detail_card.grid_rowconfigure(1, weight=1)
-        detail_card.grid_columnconfigure(0, weight=1)
-
-        detail_title = ctk.CTkLabel(
-            detail_card,
-            text="订单详情",
-            font=_FONT_LABEL,
-            text_color=_TEXT_SECONDARY,
-        )
-        detail_title.grid(row=0, column=0, sticky="w", padx=16, pady=(16, 8))
-
-        self._detail_container = ctk.CTkScrollableFrame(detail_card, fg_color="transparent")
-        self._detail_container.grid(
-            row=1, column=0, sticky="nsew", padx=16, pady=(0, 16)
-        )
-        self._detail_empty = ctk.CTkLabel(
-            self._detail_container,
-            text="点击左侧订单查看详情",
-            font=_FONT_SMALL,
-            text_color=_TEXT_SECONDARY,
-        )
-        self._detail_empty.pack(expand=True)
-
-        return frame
-
-    def _build_health_bar(self) -> ctk.CTkFrame:
-        bar = ctk.CTkFrame(self._root, fg_color=_CARD_BG, corner_radius=16)
-        bar.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
-
-        label = ctk.CTkLabel(
-            bar,
-            text="健康状态",
-            font=_FONT_LABEL,
-            text_color=_TEXT_SECONDARY,
-        )
-        label.grid(row=0, column=0, sticky="w", padx=16, pady=12)
-
-        self._health_labels: dict[str, ctk.CTkLabel] = {}
-        for idx, name in enumerate(
-            ["Google Sheets", "Browser/CDP", "Credential", "Research"], start=1
-        ):
-            cell = ctk.CTkFrame(bar, fg_color="transparent")
-            cell.grid(row=0, column=idx, sticky="nsew", padx=8, pady=8)
-            name_lbl = ctk.CTkLabel(
-                cell,
-                text=name,
-                font=_FONT_SMALL,
-                text_color=_TEXT_SECONDARY,
-            )
-            name_lbl.pack(anchor="w")
-            status_lbl = ctk.CTkLabel(
-                cell,
-                text="正常",
-                font=("Microsoft YaHei UI", 12, "bold"),
-                text_color=_GREEN,
-            )
-            status_lbl.pack(anchor="w")
-            self._health_labels[name] = status_lbl
-
-        return bar
 
     def _wire_backend(self) -> None:
         def on_status(status: RunSession) -> None:
@@ -599,6 +280,9 @@ class InsoDashboardApp:
         """Drain backend events and refresh changing dashboard state on Tk thread."""
         if self._closing:
             return
+        if hasattr(self, "_view"):
+            self._tick_workbench()
+            return
         self._assert_main_thread()
         for event in self._events.drain():
             if event.kind == "status":
@@ -615,6 +299,45 @@ class InsoDashboardApp:
         self._sync_login_all()
         self._sync_order_mail()
         self._after_id = self._root.after(1000, self._schedule_tick)
+
+    def _tick_workbench(self):
+        self._assert_main_thread()
+        for event in self._events.drain():
+            if event.kind == "login_all":
+                self._show_login_all_report(event.payload)
+            elif event.kind == "tray":
+                self._on_tray_command(event.payload)
+                if self._closing:
+                    return
+        getter = getattr(self._backend, "get_workbench_snapshot", None)
+        snapshot = getter() if callable(getter) else None
+        if snapshot is None:
+            # Legacy/mock capability fallback. Production always supplies the
+            # cached seam and never takes this per-tick history path.
+            status = self._backend.get_status()
+            orders = self._backend.get_result_history()[:1000]
+            prior = self._snapshot
+            revision = (prior.revision + int(prior.orders != orders or prior.session != status)) if prior else 0
+            snapshot = WorkbenchSnapshot(revision, status, self._backend.get_health(), orders,
+                modules=(ModuleSnapshot("inquiry", "询价采购", "空闲"),
+                         ModuleSnapshot("quotation", "报价跟进"),
+                         ModuleSnapshot("tp", "目标价调研")), logs=self._backend.get_logs()[-300:])
+        self._snapshot, self._status = snapshot, snapshot.session
+        if getattr(self, "_start_on_ready", False) and not snapshot.local_loading:
+            self._start_on_ready = False
+            self._backend.start()
+        if not self._hidden:
+            self._update_status(snapshot.session)
+            self._view.render(snapshot)
+        signature = (self._backend.login_all_running(), id(self._backend.get_login_all_report()),
+            self._backend.order_mail_running(), self._backend.get_order_mail_report(),
+            self._backend.get_order_mail_stage(), self._status.state)
+        if signature != self._sync_signature:
+            self._sync_signature = signature
+            self._sync_login_all()
+            self._sync_order_mail()
+        self._sync_manual_result()
+        self._after_id = self._root.after(3000 if self._hidden else 1000, self._schedule_tick)
 
     def _assert_main_thread(self) -> None:
         if threading.get_ident() != self._main_thread_id:
@@ -736,6 +459,15 @@ class InsoDashboardApp:
     def _update_status(self, status: RunSession) -> None:
         self._assert_main_thread()
         self._status = status
+        if hasattr(self, "_view"):
+            running = status.state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}
+            stopping = status.state is RunState.STOPPING_AFTER_CYCLE
+            self._view.configure(self._action_button,
+                text="载入本地记录…" if self._snapshot and self._snapshot.local_loading else
+                     "正在安全结束…" if stopping else "安全停止" if running else "开始运行",
+                state="disabled" if stopping or (self._snapshot and self._snapshot.local_loading) else "normal",
+                fg_color="#806a43" if running else "#557fae")
+            return
 
         # Header badge
         self._status_badge.configure(
@@ -813,8 +545,8 @@ class InsoDashboardApp:
     def _on_order_edit(self, event):
         inquiry = self._tree.identify_row(event.y)
         column = self._tree.identify_column(event.x)
-        fields = {"#1": ("型号", "model"), "#2": ("品牌", "brand"),
-                  "#3": ("数量", "quantity"), "#4": ("重要程度", "importance")}
+        fields = getattr(self, "_column_fields", {"#1": ("型号", "model"), "#2": ("品牌", "brand"),
+                  "#3": ("数量", "quantity"), "#4": ("重要程度", "importance")})
         if inquiry not in self._displayed_orders or column not in fields:
             return
         if not self._backend.can_order_action(inquiry, "edit"):
@@ -822,6 +554,12 @@ class InsoDashboardApp:
             return
         label, field = fields[column]
         order = self._displayed_orders[inquiry]
+        self._edit_order_field(order, label, field, inquiry=inquiry)
+
+    def _edit_order_field(self, order, label, field, *, inquiry=None):
+        inquiry = inquiry or order.inquiry_id
+        if not self._backend.can_order_action(inquiry, "edit"):
+            return
         initial = getattr(order, field)
         value = simpledialog.askstring(f"编辑{label}",
             f"仅同步源表原行的{label}单元格，其他项不变。",
@@ -840,6 +578,11 @@ class InsoDashboardApp:
 
     def _refresh_results(self, now: datetime | None = None) -> None:
         self._assert_main_thread()
+        if hasattr(self, "_view"):
+            if self._snapshot is not None:
+                self._view.set_orders(self._snapshot.orders,
+                    {s.inquiry_id:s for s in self._snapshot.order_states})
+            return
         orders = {
             order.inquiry_id: order for order in self._backend.get_result_history()
         }
@@ -905,6 +648,9 @@ class InsoDashboardApp:
         self._render_detail(order)
 
     def _render_detail(self, order: Order) -> None:
+        if hasattr(self, "_view"):
+            self._view.render_detail(order)
+            return
         for widget in self._detail_container.winfo_children():
             widget.destroy()
 
@@ -1017,6 +763,7 @@ class InsoDashboardApp:
                 self._on_close()
             return
         self._root.withdraw()
+        self._hidden = True
 
     def _on_tray_command(self, command) -> None:
         self._assert_main_thread()
@@ -1025,6 +772,9 @@ class InsoDashboardApp:
         elif command == "show" and not self._closing:
             self._root.deiconify()
             self._root.lift()
+            self._hidden = False
+            if hasattr(self, "_view") and self._snapshot is not None:
+                self._view.render(self._snapshot, force=True)
 
     def _on_close(self) -> None:
         """Request a graceful backend stop and keep Tk responsive while it drains."""
@@ -1060,6 +810,8 @@ class InsoDashboardApp:
         self._close_after_id = self._root.after(100, self._check_close_complete)
 
     def _backend_stopped(self) -> bool:
+        if getattr(self._backend, "local_view_loading", lambda: False)():
+            return False
         if getattr(self._backend, "order_mail_running", lambda: False)():
             return False
         if self._backend.login_all_running():
@@ -1074,6 +826,8 @@ class InsoDashboardApp:
         if self._close_finalized:
             return
         self._close_finalized = True
+        if hasattr(self, "_view"):
+            self._view.close()
         self._cancel_after(self._close_after_id)
         self._close_after_id = None
         self._cancel_after(self._after_id)

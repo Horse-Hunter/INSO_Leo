@@ -29,6 +29,7 @@ def test_real_tk_equal_split_and_sanitized_result():
     backend.get_order_mail_stage = lambda: "WAITING_OWNER"
     app = InsoDashboardApp(backend)
     try:
+        app._view.show_page("设置")
         deadline = time.monotonic() + 3
         while app._order_mail_button.winfo_width() <= 1 and time.monotonic() < deadline:
             app._root.update()

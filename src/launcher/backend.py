@@ -34,6 +34,9 @@ from src.gui.contracts import (
     SiteLoginReport,
     SiteLoginResult,
     SourceDetail,
+    V12BusinessLabel,
+    V12ReasonCode,
+    WorkbenchSnapshot,
 )
 from src.gui.state import utc_now
 from src.inso.duplicate_history import InsoDuplicateHistoryReader
@@ -253,11 +256,12 @@ class _LivePurchaseDraftWriter:
     """
 
     def __init__(self, access, *, session_guard_factory=None, login_problem=None,
-                 store: V12Store | None = None) -> None:
+                 store: V12Store | None = None, observe=None) -> None:
         self._access = access
         self._session_guard_factory = session_guard_factory
         self._login_problem = login_problem
         self._store = store
+        self._observe = observe
 
     def _guard(self):
         if self._session_guard_factory is None:
@@ -271,6 +275,8 @@ class _LivePurchaseDraftWriter:
             return None
 
     def prepare(self, command):
+        if self._observe is not None:
+            self._observe("inquiry", "采购草稿与提交安全核验", site="INSO", order_ref=command.inquiry_id)
         guard = self._guard()
         if guard is not None:
             # Owner rule (2026-10-01): every INSO entry opens the ERP again and
@@ -507,6 +513,7 @@ class ProductionBackend(GuiBackend):
         self, config_path=None, production_config_path=None, *, cdp_probe=None,
         root=None, browser_acquirer=acquire_cdp_browser,
         v12_adapters: V12ProductionAdapters | None = None,
+        defer_local_view: bool = False,
         inquiry_ids: frozenset[str] | None = None,
     ):
         self.root = Path(root) if root is not None else app_root()
@@ -578,16 +585,6 @@ class ProductionBackend(GuiBackend):
         self._order_mail_report = None
         self._order_mail_stage = None
         self._order_notifications = None
-        try:
-            configured_excel = load_runtime_config(self.config_path).excel_output_path
-            self._excel = (
-                configured_excel
-                if configured_excel.is_absolute()
-                else resolve_app_path(configured_excel, root=self.root)
-            )
-        except ResearchRuntimeConfigError as exc:
-            log.debug("Research output path unavailable (%s)", type(exc).__name__)
-        self._refresh_history(force=True)
         self._logs = []
         self._status_callbacks = []
         self._log_callbacks = []
@@ -595,18 +592,58 @@ class ProductionBackend(GuiBackend):
             tuple(HealthItem(n, "未知", "尚未检查") for n in self._components()),
             "需要人工处理",
         )
-        if self.production_path.is_file():
+        from .workbench_snapshot import RuntimeObservation
+        self._observation = RuntimeObservation()
+        self._view_gate = threading.Lock()
+        self._snapshot_lock = threading.Lock()
+        self._view_last_refresh = 0.0
+        self._view_state_cache = {}
+        self._view_dirty = set()
+        self._view_snapshot = WorkbenchSnapshot(0, self.get_status(), self._health)
+        self._view_loading = defer_local_view
+        self._local_view_thread = None
+        if defer_local_view:
+            # One-shot local I/O only; no browser/business work or permanent UI worker.
+            self._local_view_thread = threading.Thread(target=self._load_local_view,
+                name="local-history-loader")
+            self._local_view_thread.start()
+        else:
+            self._load_local_view()
+
+    def _load_local_view(self):
+        try:
             try:
-                startup_cfg = json.loads(self.production_path.read_text(encoding="utf-8"))
-                path = resolve_app_path(Path(startup_cfg.get("sqlite_path", "runtime/production/workflow.sqlite3")), root=self.root)
-                self._startup_interruptions = read_startup_interruptions(path)
-                known = {o.inquiry_id for o in self._history}
-                self._history += tuple(Order(iid, model or "", brand, _integer(quantity, 0),
-                    "待验证", None, None, OrderStatus.ERROR, (), "", "", None, None)
-                    for iid, (_dto, model, brand, quantity) in self._startup_interruptions.items() if iid not in known)
-            except (sqlite3.Error, ValueError):
-                self._state = RunState.MODULE_PAUSED
-                self._append_log("ERROR", "订单台账不可读，已停止共享业务；未恢复任何订单。")
+                configured_excel = load_runtime_config(self.config_path).excel_output_path
+                self._excel = (
+                    configured_excel
+                    if configured_excel.is_absolute()
+                    else resolve_app_path(configured_excel, root=self.root)
+                )
+            except ResearchRuntimeConfigError as exc:
+                log.debug("Research output path unavailable (%s)", type(exc).__name__)
+            self._refresh_history(force=True)
+            if self.production_path.is_file():
+                try:
+                    startup_cfg = json.loads(self.production_path.read_text(encoding="utf-8"))
+                    path = resolve_app_path(Path(startup_cfg.get("sqlite_path", "runtime/production/workflow.sqlite3")), root=self.root)
+                    self._startup_interruptions = read_startup_interruptions(path)
+                    known = {o.inquiry_id for o in self._history}
+                    self._history += tuple(Order(iid, model or "", brand, _integer(quantity, 0),
+                        "待验证", None, None, OrderStatus.ERROR, (), "", "", None, None)
+                        for iid, (_dto, model, brand, quantity) in self._startup_interruptions.items() if iid not in known)
+                except (sqlite3.Error, ValueError):
+                    self._state = RunState.MODULE_PAUSED
+                    self._append_log("ERROR", "订单台账不可读，已停止共享业务；未恢复任何订单。")
+            self._observation.enable(quotation=locals().get("startup_cfg", {}).get("v13_enabled") is True,
+                                     tp=locals().get("startup_cfg", {}).get("tp_enabled") is True)
+        except Exception:  # noqa: BLE001 - local display bootstrap, never raw data in diagnostics
+            self._append_log("WARNING", "本地历史暂不可用，尚未执行业务操作。")
+        finally:
+            self._view_loading = False
+            self._cache_workbench(force=True)
+
+    def local_view_loading(self):
+        return self._view_loading
 
     @staticmethod
     def _components():
@@ -621,6 +658,7 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             if (
                 self._closed
+                or self._view_loading
                 or self._state in (RunState.RUNNING, RunState.QUOTATION_RUNNING, RunState.STOPPING_AFTER_CYCLE)
                 or (self._thread is not None and self._thread.is_alive())
                 or (self._login_all_thread is not None and self._login_all_thread.is_alive())
@@ -678,6 +716,8 @@ class ProductionBackend(GuiBackend):
     def _run(self):
         try:
             cfg = json.loads(self.production_path.read_text(encoding="utf-8"))
+            self._observation.enable(quotation=cfg.get("v13_enabled") is True,
+                                     tp=cfg.get("tp_enabled") is True)
             if (
                 not cfg.get("spreadsheet_id")
                 or not cfg.get("worksheet_titles")
@@ -780,7 +820,7 @@ class ProductionBackend(GuiBackend):
                             )
                         ),
                         prepare_research,
-                        begin_inquiry=self._begin_inso_inquiry,
+                        begin_inquiry=self._begin_duplicate_check,
                         reset=self._close_inso_order_tab,
                         wait=self._stop.wait,
                         on_success=lambda: self._site_recovered("INSO"),
@@ -791,6 +831,7 @@ class ProductionBackend(GuiBackend):
                         session_guard_factory=self._inso_purchase_session_guard,
                         login_problem=self._manual_review,
                         store=self._v12_store,
+                        observe=self._observe_stage,
                     ),
                     smtp_config=QQSMTPConfig(sender_address="1069599116@qq.com"),
                     recipients=(
@@ -840,6 +881,7 @@ class ProductionBackend(GuiBackend):
             )
             self._v13_enabled = cfg.get("v13_enabled") is True or (
                 getattr(sys, "frozen", False) and Path(sys.executable).stem == "INSO_V1.3")
+            self._observation.enable(quotation=self._v13_enabled, tp=cfg.get("tp_enabled") is True)
             if self._v13_enabled:
                 holds = V13HoldStore(db)
                 holds.migrate()
@@ -851,6 +893,7 @@ class ProductionBackend(GuiBackend):
                 quotation_fx = EcbDailyUsdRmbProvider()
 
                 def run_quotation(worksheet, *, source_store=None, source_reader=None, hold_store=None):
+                    self._observe_stage("quotation", "检查采购报价与跟进", site="INSO")
                     active_reader = source_reader or reader
                     active_store = source_store or self._store
                     active_holds = hold_store or holds
@@ -898,8 +941,7 @@ class ProductionBackend(GuiBackend):
                     stop_requested=self._stop.is_set)
             self._manual_write_service = get_write_service
             self._tp = None
-            if cfg.get("tp_enabled", getattr(sys, "frozen", False)
-                       and Path(sys.executable).stem == "INSO_V1.5") is True:
+            if cfg.get("tp_enabled") is True:
                 from .tp_composition import build_tp_cycle
                 def prepare_tp(key):
                     self._begin_inso_inquiry(key)
@@ -929,6 +971,8 @@ class ProductionBackend(GuiBackend):
                             with web_service.poll_scope(), quotation_operation_scope(), reader.discovery_scope():
                                 self._last_poll = utc_now()
                                 self._cycle_id = "cycle_" + uuid.uuid4().hex
+                                self._observation.begin_cycle()
+                                self._notify()
                                 self._begin_poll_projection()
                                 self._check_site_recovery(rc, cfg)
                                 self._refresh_dashboard_counts(reader, worksheets,
@@ -957,11 +1001,18 @@ class ProductionBackend(GuiBackend):
                                 if not self._site_outages:
                                     self._set_health(("正常", browser_state, "正常", "正常"), "正常")
                             if self._tp is not None and not self._stop.is_set():
+                                self._observe_stage("tp", "读取目标价并核验订单")
                                 # Previous scope releases its three source/input slots.
                                 # TP reads own operation pages on THIS same poll thread.
                                 self._tp.run(cfg["spreadsheet_id"], now=utc_now())
                                 if self._tp.issues:
                                     self._append_log("WARNING", f"TP 有 {len(self._tp.issues)} 条来源或价格待核对，未自动处理。")
+                            # Presentation countdown begins only after ALL existing
+                            # stages. Keep the scheduler's original deadline/order.
+                            self._observation.end_cycle(self._next_poll_at,
+                                stopped=self._stop.is_set())
+                            self._cache_workbench(force=True)
+                            self._notify()
                         except (sqlite3.Error, V12DatabaseError):
                             raise
                         except Exception as exc:
@@ -1037,9 +1088,13 @@ class ProductionBackend(GuiBackend):
                 if self._state not in {RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}:
                     self._state = RunState.STOPPED
                 self._stopped = utc_now()
+                self._observation.end_cycle(stopped=True,
+                    reason=None if self._state is RunState.STOPPED else "业务暂停，请核对异常与健康状态")
+                self._cache_workbench(force=True)
                 self._notify()
 
     def _pause_v12(self, fault):
+        self._observation.pause("inquiry", "采购暂停；报价跟进沿用原有独立策略")
         if _website_failure(fault) is not None and not self._defer_website_poll(
                 fault, timedelta(minutes=15), notify=False):
             self._runtime_error(fault)
@@ -1103,6 +1158,7 @@ class ProductionBackend(GuiBackend):
         return SharedOperations()
 
     def _observe_quotation(self, result, key):
+        self._invalidate_order_view(key)
         dto = quotation_gui(result,key)
         with self._lock:
             inquiry = result.inquiry_id or key
@@ -1114,7 +1170,9 @@ class ProductionBackend(GuiBackend):
                 self._v13_states[key] = dto
                 if result.inquiry_id is None:
                     self._v13_unbound[key] = Order(key,result.queried_mpn or "",None,0,
-                        "",None,None,OrderStatus.ERROR,remark=dto.waiting_label,run_id=self._run_id or "")
+                        "",None,None,OrderStatus.ERROR,remark=dto.waiting_label,run_id=self._run_id or "",
+                        source_sheet=result.source_worksheet.worksheet if result.source_worksheet else None,
+                        source_row=result.source_row_position, module_id="quotation")
             if result.inquiry_id:
                 self._seen(result.inquiry_id)
         log.warning("combined cycle result",extra={"cycle_id":getattr(self,"_cycle_id",None),
@@ -1162,8 +1220,9 @@ class ProductionBackend(GuiBackend):
         return None
 
     def get_manual_order_result(self):
-        with self._lock:
-            return self._manual_result
+        # Immutable reference published by the existing worker (Python 3.12).
+        # GUI reads must not contend with the business lock held during SQL.
+        return self._manual_result
 
     def _wait_between_polls(self, seconds):
         deadline = monotonic() + seconds
@@ -1188,6 +1247,8 @@ class ProductionBackend(GuiBackend):
                 self._poll_idle.clear()
             self._notify()
             try:
+                self._observe_stage("tp" if request[2] == "tp" else "quotation" if request[2] == "quotation" else "inquiry",
+                                    "核验人工操作请求", order_ref=request[1])
                 self._execute_order_action(request)
             finally:
                 self._close_inso_order_tab()
@@ -1196,6 +1257,9 @@ class ProductionBackend(GuiBackend):
                     self._poll_idle.set()
                     if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING} and not self._stop.is_set():
                         self._next_poll_at = utc_now() + timedelta(seconds=seconds)
+                self._observation.end_cycle(self._next_poll_at, stopped=self._stop.is_set(), close_round=False)
+                self._invalidate_order_view(request[1])
+                self._cache_workbench(force=True)
                 self._notify()
             deadline = monotonic() + seconds
         return True
@@ -1312,6 +1376,9 @@ class ProductionBackend(GuiBackend):
                 self._inquiries.append(inquiry)
 
     def _observe_source_failure(self, inquiry_id, result):
+        self._observation.finish_stage("tp" if inquiry_id.startswith("tp_") else "inquiry")
+        self._observe_stage("tp" if inquiry_id.startswith("tp_") else "inquiry",
+                            "处理已读来源结果", order_ref=inquiry_id)
         if result.outcome is not SourceOutcome.SOURCE_UNAVAILABLE:
             return
         code = next((str(f.value) for f in result.evidence.fields if f.key == "failure_code"), "SOURCE_UNAVAILABLE")
@@ -1375,11 +1442,16 @@ class ProductionBackend(GuiBackend):
             raise
 
     def _run_source_query(self, inquiry_id, site, operation, reconnect):
+        self._observe_stage("tp" if inquiry_id.startswith("tp_") else "inquiry",
+                            "六源价格查询", site=site.value, order_ref=inquiry_id)
         from src.core.site_retry import SITE_RETRY_DELAYS, retryable_site_failure
 
         for attempt in range(4):
             if self._stop.is_set():
                 raise V12Fault(FaultScope.V12_PAUSE, "STOP_REQUESTED")
+            module = "tp" if inquiry_id.startswith("tp_") else "inquiry"
+            self._observe_stage(module, "六源价格查询" if not attempt else f"价格查询重试 {attempt}",
+                                site=site.value, order_ref=inquiry_id)
             result = self._run_source_query_once(inquiry_id, site, operation, reconnect)
             source = result.source_result if site is ResearchSource.IC_NET else result
             if source.outcome is not SourceOutcome.SOURCE_UNAVAILABLE:
@@ -1389,6 +1461,7 @@ class ProductionBackend(GuiBackend):
             if (source.outcome is not SourceOutcome.SOURCE_UNAVAILABLE or site is ResearchSource.INSO
                     or not retryable_site_failure(code) or attempt == 3):
                 return result
+            self._observation.wait(module, "等待网站重试", site=site.value)
             if self._stop.wait(SITE_RETRY_DELAYS[attempt]):
                 raise V12Fault(FaultScope.V12_PAUSE, "STOP_REQUESTED")
         raise AssertionError("bounded source loop exhausted")
@@ -1414,7 +1487,13 @@ class ProductionBackend(GuiBackend):
                     raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_RECONNECT_EXHAUSTED") from exc
         raise AssertionError("bounded CDP loop exhausted")
 
+    def _begin_duplicate_check(self, inquiry_id):
+        self._begin_inso_inquiry(inquiry_id)
+        self._observe_stage("inquiry", "检查近七天重复采购记录", site="INSO", order_ref=inquiry_id)
+
     def _begin_inso_inquiry(self, inquiry_id):
+        self._observe_stage("tp" if inquiry_id.startswith("tp_") else "inquiry",
+                            "准备订单调研会话", order_ref=inquiry_id)
         self._seen(inquiry_id)
         if self._active_inso_inquiry != inquiry_id:
             self._close_inso_order_tab()
@@ -1488,6 +1567,7 @@ class ProductionBackend(GuiBackend):
     def _complete_inquiry(self, result):
         """Settle each row before starting the next; never defer to batch drain."""
         preserve = False
+        self._observe_stage("inquiry", "核验采购处理与邮件状态", order_ref=result.inquiry_id)
         try:
             log.warning("combined cycle result", extra={"cycle_id":getattr(self,"_cycle_id",None),
                 "business_module":"V1.2","inquiry_id":result.inquiry_id,"stage":"purchase",
@@ -1495,6 +1575,7 @@ class ProductionBackend(GuiBackend):
             self._seen(result.inquiry_id)
             settled = self._purchase_completion.process(result, at=utc_now())
             self._v12_composition.coordinator.run_notifications(now=utc_now())
+            self._invalidate_order_view(result.inquiry_id)
             if settled is False:
                 preserve = True
                 self._append_log("ERROR", "当前订单结果待核对，已保留页面并阻止该单重发；其他安全订单继续处理。")
@@ -2092,7 +2173,7 @@ class ProductionBackend(GuiBackend):
             return
         self._refresh_history()
         items = {i.inquiry_id: i for i in self._store.all_items()}
-        ids = [i for i in self._inquiries if i in items]
+        ids = [i for i in self._inquiries if i in items][-1000:]
         history_by_id = {order.inquiry_id: order for order in self._history}
         results = []
         for key in ids:
@@ -2128,6 +2209,7 @@ class ProductionBackend(GuiBackend):
             )
         with self._lock:
             self._results = tuple(results) + tuple(self._v13_unbound.values())
+        self._cache_workbench(items=items)
 
     def _refresh_history(self, *, force=False):
         if not self._excel:
@@ -2169,7 +2251,7 @@ class ProductionBackend(GuiBackend):
                 importance=record.importance_raw,
                 processed_at=record.processed_at,
             )
-            for record in records
+            for record in records[:1000]
         )
         with self._lock:
             self._history = orders
@@ -2204,11 +2286,13 @@ class ProductionBackend(GuiBackend):
         """Expose the existing interruptible row wait without changing its policy."""
         with self._lock:
             self._row_cooldown_until = utc_now() + timedelta(seconds=seconds)
+        self._observation.wait("inquiry", "订单间安全等待")
         try:
             return self._stop.wait(seconds)
         finally:
             with self._lock:
                 self._row_cooldown_until = None
+            self._observation.finish_stage("inquiry")
 
     def _business_completed(self, inquiry_id):
         if self._v12_store is None:
@@ -2336,16 +2420,14 @@ class ProductionBackend(GuiBackend):
             return True
 
     def order_mail_running(self) -> bool:
-        with self._lock:
-            return bool(self._order_mail_thread and self._order_mail_thread.is_alive())
+        thread = self._order_mail_thread
+        return bool(thread and thread.is_alive())
 
     def get_order_mail_report(self) -> str | None:
-        with self._lock:
-            return self._order_mail_report
+        return self._order_mail_report
 
     def get_order_mail_stage(self):
-        with self._lock:
-            return self._order_mail_stage
+        return self._order_mail_stage
 
     def _notify_order_exception(self, **kwargs):
         from src.workflow.order_notifications import OrderExceptionNotifications
@@ -2398,13 +2480,11 @@ class ProductionBackend(GuiBackend):
         thread.start()
 
     def login_all_running(self) -> bool:
-        with self._lock:
-            thread = self._login_all_thread
+        thread = self._login_all_thread
         return thread is not None and thread.is_alive()
 
     def get_login_all_report(self) -> SiteLoginReport | None:
-        with self._lock:
-            return self._login_all_report
+        return self._login_all_report
 
     def on_login_all(self, callback) -> None:
         with self._lock:
@@ -2603,6 +2683,9 @@ class ProductionBackend(GuiBackend):
             login_thread.join()
         if mail_thread and mail_thread is not threading.current_thread():
             mail_thread.join()
+        local_thread = self._local_view_thread
+        if local_thread and local_thread is not threading.current_thread():
+            local_thread.join()
         if self._order_notifications is not None:
             self._order_notifications.close()
         with self._lock:
@@ -2612,8 +2695,101 @@ class ProductionBackend(GuiBackend):
 
     def _notify(self):
         status = self.get_status()
+        self._cache_workbench(session=status)
         for cb in tuple(self._status_callbacks):
             cb(status)
+
+    def _observe_stage(self, module, stage, *, site=None, order_ref=None):
+        observer = getattr(self, "_observation", None)
+        if observer is not None:
+            observer.stage(module, stage, site=site, order_ref=order_ref)
+
+    def get_workbench_snapshot(self):
+        # GUI path: only locks and immutable references, never SQLite/Excel/stat.
+        with self._snapshot_lock:
+            snapshot = self._view_snapshot
+        revision, modules, started, tick, finished, timings, durations = self._observation.snapshot()
+        return replace(snapshot, revision=snapshot.revision + revision,
+            modules=modules, cycle_started_at=started, cycle_started_monotonic=tick,
+            cycle_finished_at=finished, local_loading=self._view_loading,
+            timings=timings, cycle_durations=durations)
+
+    def _invalidate_order_view(self, key):
+        # Existing callbacks may run alongside the existing refresh worker.
+        # They mark a bounded dirty key; only the projection gate mutates cache.
+        with self._snapshot_lock:
+            if key in self._view_state_cache and len(self._view_dirty) < 1000:
+                self._view_dirty.add(key)
+
+    def _cache_workbench(self, *, force=False, session=None, items=None):
+        gate = getattr(self, "_view_gate", None)
+        if gate is None or not gate.acquire(blocking=False):
+            return
+        try:
+            if not force and monotonic()-self._view_last_refresh < 2:
+                if session is not None:
+                    with self._snapshot_lock:
+                        self._view_snapshot = replace(self._view_snapshot, session=session)
+                return
+            self._view_last_refresh = monotonic()
+            with self._snapshot_lock:
+                dirty, self._view_dirty = self._view_dirty, set()
+            for key in dirty:
+                self._view_state_cache.pop(key, None)
+            from .tp_composition import tp_display_orders
+            # Existing workers already load these canonical records. Read no
+            # site or production state on demand from the GUI.
+            if items is None:
+                items = {i.inquiry_id: i for i in self._store.all_items()} if self._store else {}
+            merged = {o.inquiry_id: o for o in self._results}
+            merged.update({o.inquiry_id: o for o in tp_display_orders(self._tp)})
+            for order in self._history:
+                merged.setdefault(order.inquiry_id, order)
+            orders, states = [], []
+            for key, order in tuple(merged.items())[:1000]:
+                if key in self._source_overrides:
+                    order = replace(order, **self._source_overrides[key])
+                item = items.get(key)
+                identity = getattr(item, "record_identity", None)
+                if identity is not None:
+                    order = replace(order, source_sheet=identity.worksheet.worksheet,
+                                    source_row=identity.row_position)
+                cached = self._view_state_cache.get(key)
+                if cached is None or cached[0] != order or force:
+                    dto = self.get_v12_order_state(key) if not key.startswith("tp_") else None
+                    self._view_state_cache[key] = (order, dto)
+                dto = self._view_state_cache[key][1]
+                if dto is not None:
+                    # Bound timeline/control count; absence is never success.
+                    dto = replace(dto, event_history=dto.event_history[-30:])
+                    states.append(dto)
+                    unsettled = bool(dto.active_alerts) or dto.business_label in {
+                        V12BusinessLabel.SUBMIT_UNCONFIRMED,
+                        V12BusinessLabel.INTERRUPTED_POSSIBLY_SENT,
+                        V12BusinessLabel.INTERRUPTED_UNSENT,
+                        V12BusinessLabel.STATUS_WRITE_PENDING,
+                        V12BusinessLabel.SOURCE_CHANGED,
+                        V12BusinessLabel.QUOTATION_STATUS_PENDING,
+                    }
+                    unknown_notification = any(a.reason_code is V12ReasonCode.NOTIFICATION_UNKNOWN
+                                               for a in dto.active_alerts)
+                    order = replace(order, business_status=dto.waiting_label or dto.business_label.value,
+                        status=OrderStatus.ERROR if unsettled else order.status,
+                        delivery_status="UNKNOWN" if unknown_notification else order.delivery_status)
+                if key in self._v13_states and order.module_id != "tp":
+                    order = replace(order, modules=("quotation",) if order.module_id == "quotation"
+                                    else ("inquiry", "quotation"))
+                orders.append(order)
+            self._view_state_cache = {o.inquiry_id:self._view_state_cache[o.inquiry_id] for o in orders}
+            projected_session = session or self.get_status()
+            with self._snapshot_lock:
+                self._view_snapshot = WorkbenchSnapshot(self._view_snapshot.revision+1,
+                    projected_session, self._health, tuple(orders),
+                    order_states=tuple(states), logs=tuple(self._logs[-300:]), total_orders=len(merged))
+        except Exception:  # noqa: BLE001 - observation can never stop a business workflow
+            log.debug("Local dashboard projection unavailable")
+        finally:
+            gate.release()
 
     def _append_log(self, level, message):
         entry = LogEntry(utc_now(), level, message)

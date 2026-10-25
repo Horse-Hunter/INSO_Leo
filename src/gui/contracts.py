@@ -267,6 +267,12 @@ class Order:
     run_id: str = ""
     importance: str | None = None
     processed_at: datetime | None = None
+    source_sheet: str | None = None
+    source_row: int | None = None
+    module_id: str = "inquiry"
+    business_status: str | None = None
+    delivery_status: str | None = None
+    modules: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,6 +309,56 @@ class HealthReport:
 
     items: tuple[HealthItem, ...]
     overall: str
+
+
+@dataclass(frozen=True, slots=True)
+class ModuleSnapshot:
+    """Observed boundaries only, never a replacement business state machine."""
+
+    module_id: str
+    name: str
+    status: str = "未启用"
+    stage: str = "尚无执行记录"
+    site: str | None = None
+    order_ref: str | None = None
+    started_at: datetime | None = None
+    started_monotonic: float | None = None
+    changed_at: datetime | None = None
+    last_finished_at: datetime | None = None
+    next_check_at: datetime | None = None
+    waiting_reason: str | None = None
+    elapsed_seconds: float = 0
+
+
+@dataclass(frozen=True, slots=True)
+class StageTiming:
+    module_id: str
+    stage: str
+    site: str | None
+    order_ref: str | None
+    started_at: datetime
+    finished_at: datetime
+    elapsed_seconds: float
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchSnapshot:
+    """Bounded immutable GUI projection, produced on existing business threads."""
+
+    revision: int
+    session: RunSession
+    health: HealthReport
+    orders: tuple[Order, ...] = ()
+    modules: tuple[ModuleSnapshot, ...] = ()
+    order_states: tuple[V12OrderStateDTO, ...] = ()
+    logs: tuple[LogEntry, ...] = ()
+    cycle_started_at: datetime | None = None
+    cycle_started_monotonic: float | None = None
+    cycle_finished_at: datetime | None = None
+    total_orders: int = 0
+    local_loading: bool = False
+    timings: tuple[StageTiming, ...] = ()
+    cycle_durations: tuple[tuple[str, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -371,11 +427,17 @@ class GuiBackend(ABC):
 
         return None
 
+    def get_workbench_snapshot(self) -> WorkbenchSnapshot | None:
+        """Optional in-memory projection; no GUI-triggered file/network/SQL I/O."""
+        return None
+
     def can_order_action(self, inquiry_id: str, action: str) -> bool:
         """Optional idle-only single-order capability."""
         return False
 
-    def request_order_action(self, inquiry_id: str, action: str, *, field=None, value=None) -> str | None:
+    def request_order_action(
+        self, inquiry_id: str, action: str, *, field=None, value=None
+    ) -> str | None:
         """Queue one serial action; return a safe rejection message, or None."""
         return "当前后端不支持此操作。"
 
@@ -414,9 +476,7 @@ class GuiBackend(ABC):
 
         return None
 
-    def on_login_all(
-        self, callback: Callable[[SiteLoginReport], Any] | None
-    ) -> None:
+    def on_login_all(self, callback: Callable[[SiteLoginReport], Any] | None) -> None:
         """Register a callback invoked once per finished sweep."""
 
     @abstractmethod
