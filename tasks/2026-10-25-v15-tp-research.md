@@ -437,3 +437,28 @@ The pure mail timezone test did not create a temp directory. Retain only private
 isolated delivery receipts for no-resend safety, plus one synthetic HTML/PNG
 preview in the canonical visualization output folder. No raw HTML, account,
 customer, real prices, full Sheets or source screenshots were committed.
+
+## Owner-authorized another-order trial — 2026-10-25
+
+Owner requests one more live TP email for a DIFFERENT populated TP row. Select
+one remaining due order through the canonical full Brief/source validation,
+retain full final revalidation, use the same six-source TP execution and isolated
+outbox/SMTP to linan229@qq.com. Preserve prior SENT commands. Existing confirmed
+stopped polling/session protection remains applicable; no production DB/Sheet
+write, polling, extra mail, purchase, packaging or deployment. Bind this request
+to one selected TP key so rerunning a helper cannot advance to another order.
+
+Outcome: selected another verified source2026 row167, rfq_date2026-09-04,
+different from the prior row172. Canonical read_orders validated all due inputs;
+a disposable selection adapter returned only this one order to the unchanged
+TpCycle.run. Full final Brief/source guard was unfiltered and passed. One new
+generation0 command SENT to the same single authorized recipient. Receipt confirms
+Findchips/LCSC/BOM/INSO each have two distinct valid displayed prices; actual
+HTML second column is present. HQEW NO_STRICT_MPN_MATCH; IC.net attempt SUCCESS
+but no usable price retained. No missing quote/false zero was displayed. Below-TP
+urgency is explicit. Isolated ledger now has two TP tasks, three total SENT
+recipients across the three individually authorized messages, zero ordinary items.
+Old SENT payloads unchanged; current source code unchanged. Disposable helper
+retired after resolved path/reparse checks; retain the private selected-key and
+delivery receipt for no-resend safety. Canonical9222 remains available; no foreign
+page cleanup, production DB/Sheets write, poll, purchase, package or deployment.
