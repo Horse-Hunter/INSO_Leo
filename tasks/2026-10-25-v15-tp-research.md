@@ -261,3 +261,33 @@ review_base: c64d9d8076f38d2fe8702f68ab95f612afbcb0f8
   production migration/SMTP, real website date/coverage and 2026 date provenance.
   Unknown infrastructure errors remain fail-closed rather than guessed local.
   Return to CEO for independent review; activation, sending and release stay closed.
+
+## Owner-authorized single-order mail trial — 2026-10-25
+
+Owner now explicitly requests one live trial of the newest dated RFQ_BRIEF row
+with valid TP and the resulting mail to the existing TP recipient. Owner confirms
+ordinary inquiry/quotation polling is stopped (GUI may remain open). This narrow
+authorization supersedes the earlier offline-only restriction for this ONE trial:
+read authorized Sheets and the six existing sources, corroborate the selected
+source anchor, use existing TP research/outbox/QQ SMTP, send only that selected
+TP result to linan229@qq.com. Persist delivery/idempotency in an isolated ignored
+local trial ledger, never the production DB. No automatic poll, other recipients,
+purchase/quotation, Sheets write, browser/profile reset/foreign-page cleanup,
+packaging or deployment. Unknown delivery must not be blindly resent. Source
+release remains REVIEW_REQUIRED; this is not deployment or general activation.
+
+Trial outcome: SENT (SMTP accepted), one command / one recipient, no blind retry.
+Read four populated TP rows; unique newest rfq_date is 2026-09-17, Brief row31,
+source2026 row172. Source anchor corroboration and final fresh Brief/source
+verification passed. Existing six-source execution: Findchips/BOM/INSO SUCCESS;
+IC.net/HQEW NO_STRICT_MPN_MATCH; LCSC SOURCE_UNAVAILABLE. Valid price facts were
+available; no unavailable source quote/date was fabricated. Mail sent through
+existing QQSMTPTransport + V12NotificationWorker to the authorized TP recipient.
+Ignored isolated trial ledger holds one TP task, zero ordinary workflow items,
+one mail command and one SENT recipient. Retain that private delivery receipt to
+prevent replay; do not commit it. Disposable composition script retired after
+verification. Pre-existing CDP pages were protected using existing keepalive
+ownership support; only owned operation pages were retired, client detached,
+canonical9222 remained available. No production DB/Sheet write, ordinary order
+processing, polling, extra notice, package or deployment. Owner can now inspect
+the delivered mail; source status remains REVIEW_REQUIRED.
