@@ -1,5 +1,18 @@
 # Sheets 模块
 
+## V1.5 TP source contract (offline implementation, REVIEW_REQUIRED)
+
+Owner 2026-10-25 confirms 2026/SHAHAB source positions do not shift by insertion.
+`tp_brief.BriefReader` reads exact RFQ_BRIEF A:Q through the dedicated native
+`read_brief` operation, with strict row1/17-header proof and existing retry.
+The generic Google range parser, metadata titles and write allowlists stay closed
+to RFQ_BRIEF; there is no Brief writer. `bind_tp_order` validates explicit
+sheet+sheet_row, exact full MPN, integral positive quantity and available brand;
+SHAHAB date is corroborated against A/DATE. 2026 date provenance remains UNKNOWN
+and is not invented. Duplicate Brief anchors, missing/conflicting source and
+invalid/empty prices never dispatch TP research. No legacy inquiry ID required.
+This extension has synthetic evidence only; no live reads or writes in this phase.
+
 ## RFQ-003 当前状态写回边界（2026-10-07）
 
 复用现有 targeted RAW 单格写及唯一 relocate/re-read；不改身份生成方式。

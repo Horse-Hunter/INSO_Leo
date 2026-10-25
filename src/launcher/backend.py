@@ -529,6 +529,7 @@ class ProductionBackend(GuiBackend):
         self._manual_busy = False
         self._manual_result = None
         self._manual_reader = self._manual_write_service = self._manual_quote = None
+        self._tp = None  # opt-in only; ordinary V1.4 composition is unchanged
         self._source_overrides = {}
         self._v13_states = {}
         self._v13_unbound = {}
@@ -896,6 +897,17 @@ class ProductionBackend(GuiBackend):
                     run_quotation, on_pause=self._pause_v12,
                     stop_requested=self._stop.is_set)
             self._manual_write_service = get_write_service
+            self._tp = None
+            if cfg.get("tp_enabled") is True:
+                from .tp_composition import build_tp_cycle
+                def prepare_tp(key):
+                    self._begin_inso_inquiry(key)
+                    prepare_research()
+                self._tp = build_tp_cycle(path=db, web=web_service, reader=reader,
+                    research=research, outbox=self._v12_store,
+                    worker=self._v12_composition.notification_worker, now=utc_now(),
+                    prepare=prepare_tp, stop_requested=self._stop.is_set,
+                    retry_wait=self._stop.wait)
             self._refresh_history(force=True)
             self._set_health(("正常", "待命", "正常", "正常"), "正常")
 
@@ -943,6 +955,12 @@ class ProductionBackend(GuiBackend):
                                 browser_state = "已连接" if self._research_ready else "待命"
                                 if not self._site_outages:
                                     self._set_health(("正常", browser_state, "正常", "正常"), "正常")
+                            if self._tp is not None and not self._stop.is_set():
+                                # Previous scope releases its three source/input slots.
+                                # TP reads own operation pages on THIS same poll thread.
+                                self._tp.run(cfg["spreadsheet_id"], now=utc_now())
+                                if self._tp.issues:
+                                    self._append_log("WARNING", f"TP 有 {len(self._tp.issues)} 条来源或价格待核对，未自动处理。")
                         except (sqlite3.Error, V12DatabaseError):
                             raise
                         except Exception as exc:
@@ -1117,6 +1135,8 @@ class ProductionBackend(GuiBackend):
             if not self._manual_idle() or self._store is None or self._manual_reader is None:
                 return False
             try:
+                if action == "tp":
+                    return self._tp is not None and self._tp.store.manual_allowed(self._tp_key(inquiry_id))
                 self._store.get_by_inquiry_id(inquiry_id)
                 if action == "purchase":
                     return (self._state is RunState.RUNNING and self._v12_store is not None
@@ -1183,6 +1203,16 @@ class ProductionBackend(GuiBackend):
         request_id, inquiry, action, field, value = request
         success, message = False, "操作未执行。"
         try:
+            if action == "tp":
+                key = self._tp_key(inquiry)
+                from src.workflow.tp_research import load_order
+                order = load_order(self._tp.store.get(key)["order_json"])
+                self._tp.run(order.spreadsheet, now=utc_now(), manual_key=key)
+                with self._lock:
+                    self._manual_result = ManualOrderResult(request_id, inquiry, action, True,
+                        "TP 专项调研已完成并进入原有邮件队列。")
+                self._notify()
+                return
             item = self._store.get_by_inquiry_id(inquiry)
             identity = item.record_identity
             record, status = current_record(self._manual_reader, identity.worksheet, identity.row_position)
@@ -1235,7 +1265,8 @@ class ProductionBackend(GuiBackend):
                 self._pause_v12(exc)
                 message = "采购流程需要人工处理，报价轮询保持原有独立策略。"
         except (KeyError, ValueError) as exc:
-            message = str(exc) if isinstance(exc, ValueError) else "找不到订单的源表定位，未执行操作。"
+            message = ("TP 来源、目标价或邮件发送记录需核对，本次未重复发送。" if action == "tp" else
+                       str(exc) if isinstance(exc, ValueError) else "找不到订单的源表定位，未执行操作。")
         except Exception:  # noqa: BLE001 - targeted edit/read failure is shown without raw provider text
             if action != "edit":
                 raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE" if action == "quotation" else "V12_MANUAL_RETRY_FAILED") from None
@@ -1273,8 +1304,9 @@ class ProductionBackend(GuiBackend):
         inso_auth_stop = result.source is ResearchSource.INSO and code in _INSO_AUTH_STOP_CODES
         notified = self._v12_store is not None
         if notified:
-            mpn = self._store.get_by_inquiry_id(inquiry_id).mpn if self._store is not None else None
-            notify_website_issue(self._v12_store, inquiry_id, result.source,
+            ordinary = not (isinstance(inquiry_id, str) and inquiry_id.startswith("tp_"))
+            mpn = self._store.get_by_inquiry_id(inquiry_id).mpn if self._store is not None and ordinary else None
+            notify_website_issue(self._v12_store, inquiry_id if ordinary else None, result.source,
                 "AUTHENTICATION_REQUIRED" if inso_auth_stop else code, mpn=mpn, at=utc_now())
         login = (inso_auth_stop if result.source is ResearchSource.INSO else
                  any(token in code for token in ("LOGIN", "CREDENTIAL", "AUTHENTICATION", "VERIFICATION", "CHALLENGE", "SESSION_STALE")))
@@ -1944,6 +1976,8 @@ class ProductionBackend(GuiBackend):
             self._alert_owner_of_login(stop_reason=reason)
 
     def _record_fault_alert(self, inquiry_id, phase, reason):
+        if isinstance(inquiry_id, str) and inquiry_id.startswith("tp_"):
+            return  # TP has no V1 inquiry FK; site alerts use the nullable outbox.
         if self._purchase_completion is None or inquiry_id is None:
             return
         try:
@@ -2184,12 +2218,21 @@ class ProductionBackend(GuiBackend):
 
     def get_current_run_results(self):
         with self._lock:
-            return self._results
+            from .tp_composition import tp_display_orders
+            return self._results + tp_display_orders(self._tp)
+
+    def _tp_key(self, row_key):
+        if row_key.startswith("tp_"):
+            return row_key
+        from src.workflow.tp_research import task_key
+        identity = self._store.get_by_inquiry_id(row_key).record_identity
+        return task_key(identity.worksheet.spreadsheet, identity.worksheet.worksheet, identity.row_position)
 
     def get_result_history(self):
         with self._lock:
+            from .tp_composition import tp_display_orders
             return tuple(replace(order, **self._source_overrides[order.inquiry_id])
-                if order.inquiry_id in self._source_overrides else order for order in self._history)
+                if order.inquiry_id in self._source_overrides else order for order in self._history) + tp_display_orders(self._tp)
 
     def get_v12_order_state(self, inquiry_id):
         if inquiry_id in self._v13_states:

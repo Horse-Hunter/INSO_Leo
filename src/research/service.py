@@ -56,6 +56,7 @@ class ResearchService:
         source_observer: Callable | None = None,
         inso_query: Callable | None = None,
         source_query: Callable | None = None,
+        fx_provider=None,
     ) -> None:
         self._icnet = icnet
         self._price_sources = (findchips, hqew, lcsc, bom_ai, inso)
@@ -63,6 +64,11 @@ class ResearchService:
         self._source_observer = source_observer
         self._inso_query = inso_query
         self._source_query = source_query
+        self._fx_provider = fx_provider
+
+    def execute_tp(self, task_id, order, *, now):
+        from .tp import execute_tp
+        return execute_tp(self, task_id, order, now)
 
     def execute(self, research_input: ResearchInput) -> ResearchResult:
         return self.execute_detailed(research_input).result

@@ -1,5 +1,30 @@
 # Research 模块
 
+## V1.5 independent TP research (offline, REVIEW_REQUIRED)
+
+`ResearchService.execute_tp(task_id, order, now=...)` is independent of ordinary
+execute/Excel output. It reuses the same six adapter instances, their existing
+clients/parsers, source retry/session callbacks and shared ECB provider. New
+`research.tp` projects raw candidates because ordinary SourceResult discards
+all but one price and does not preserve every quotation date. No second network,
+browser, login, FX feed or collector is introduced. Ordinary search(), its
+1–6 month windows, PriceCandidate contract and INSO-preferred reference stay intact.
+
+TP expands cumulative calendar windows 1..12 until two distinct positive RMB
+price levels exist or month12. Each stock bucket is independent; duplicate equal
+prices are ties, not a fictitious second price. Per-site quotes retain raw price,
+currency and real quotation date; current prices have no quotation date. BOM
+`is_current` preserves the original parser's explicit current-price marker while
+leaving legacy observed_at behavior unchanged. LCSC and IC.net remain current
+price observations, never dated from capture/update time. No promised website
+history coverage beyond existing captures; real 12-month visibility is UNKNOWN.
+
+Global actual minima use the selected normal-price pool; no-stock fallback only
+when there are no normal quotes and no technical uncertainty. No INSO preference
+or V1.4 reference-price override applies to factual TP ranking. Same ECB provider,
+Decimal legality and current conversion snapshot are used. No quotes means absent
+prices/totals, never zero. Selection semantics require CEO independent review.
+
 ## RFQ-003 来源故障隔离（2026-10-07）
 
 复用 ResearchService 和现有全部 adapters；聚合/价格算法不变。

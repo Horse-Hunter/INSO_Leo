@@ -51,6 +51,7 @@ class DuplicateOutcome(StrEnum):
 
 
 class NotificationKind(StrEnum):
+    TP_RESEARCH = "TP_RESEARCH"
     IMPORTANT_ORDER = "IMPORTANT_ORDER"
     DUPLICATE_ORDER = "DUPLICATE_ORDER"
     PURCHASE_EXCEPTION = "PURCHASE_EXCEPTION"

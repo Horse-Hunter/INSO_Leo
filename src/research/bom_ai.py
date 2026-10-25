@@ -57,6 +57,7 @@ class BomAiPriceRecord:
     raw_price: Decimal
     observed_at: datetime
     currency: str = "RMB"
+    is_current: bool = False
 
     def __post_init__(self) -> None:
         if not self.raw_price.is_finite() or self.raw_price <= 0:
@@ -175,7 +176,7 @@ def parse_bom_ai_price_records(
                     raise BomAiClientError("PRICE_RECORD_UNPARSEABLE") from exc
                 records.append(
                     BomAiPriceRecord(
-                        section_mpn, price, observed.astimezone(UTC), currency
+                        section_mpn, price, observed.astimezone(UTC), currency, not bool(raw_date)
                     )
                 )
         return tuple(records)
@@ -219,6 +220,7 @@ def parse_bom_ai_price_records(
                     price,
                     observed.astimezone(UTC),
                     currency,
+                    not bool(raw_date),
                 )
             )
     return tuple(records)

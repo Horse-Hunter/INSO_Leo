@@ -1,5 +1,19 @@
 # 产品基线
 
+## V1.5 TP implementation authority (Owner 2026-10-25)
+
+Owner approves offline TP design/development following discovery review d67ebfe.
+Original 2026/SHAHAB physical row positions do not shift by insertion. TP uses
+RFQ_BRIEF target_price and independently persisted source-position/requirement
+identity; it must support historical orders without old inquiry/Research IDs.
+Automatic completion is one-shot even after TP edits; manual TP-only rerun is
+allowed through the existing GUI idle scheduler. TP history may extend to twelve
+calendar months; ordinary Research retains its existing six-month policy.
+TP mail goes only to linan229@qq.com and reports factual minima, without INSO's
+ordinary preference override. Other requirement columns are not implemented.
+Source code is REVIEW_REQUIRED, opt-in disabled; no real mail, TP execution,
+production SQLite/Sheet writes, procurement, build or deployment is authorized.
+
 本文件只维护长期产品范围与跨模块业务规则；当前进度与任务状态写在 `control-room/COORDINATION.md` 和对应 RFQ Task Spec，实现细节写在 module docs。
 
 ## V1.1

@@ -461,6 +461,7 @@ def build_research_service(
         source_observer=source_observer,
         inso_query=inso_query,
         source_query=source_query,
+        fx_provider=fx,
     )
 
 

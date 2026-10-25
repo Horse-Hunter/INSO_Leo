@@ -33,11 +33,12 @@ def test_cancel_editor_never_submits(monkeypatch):
     gui._on_order_edit(SimpleNamespace(x=0, y=0))
 
 
-def test_context_menu_uses_backend_eligibility_and_selected_row(monkeypatch):
+@pytest.mark.parametrize("enabled_action", ["quotation", "tp"])
+def test_context_menu_uses_backend_eligibility_and_selected_row(monkeypatch, enabled_action):
     gui = object.__new__(app.InsoDashboardApp)
     selected, commands, requests = [], [], []
     gui._tree = SimpleNamespace(identify_row=lambda y: "id", selection_set=selected.append)
-    gui._backend = SimpleNamespace(can_order_action=lambda i, a: a == "quotation",
+    gui._backend = SimpleNamespace(can_order_action=lambda i, a: a == enabled_action,
         request_order_action=lambda *a, **kw: requests.append(a))
     class Menu:
         def __init__(self, *a, **kw): pass
@@ -48,6 +49,8 @@ def test_context_menu_uses_backend_eligibility_and_selected_row(monkeypatch):
     gui._on_order_context(SimpleNamespace(y=0, x_root=0, y_root=0))
     assert selected == ["id"]
     assert [(c["label"], c["state"]) for c in commands] == [
-        ("重跑采购流程", "disabled"), ("重跑报价流程", "normal")]
-    commands[1]["command"]()
-    assert requests == [("id", "quotation")]
+        ("重跑采购流程", "disabled"),
+        ("重跑报价流程", "normal" if enabled_action == "quotation" else "disabled"),
+        ("重跑 TP 价格", "normal" if enabled_action == "tp" else "disabled")]
+    commands[1 if enabled_action == "quotation" else 2]["command"]()
+    assert requests == [("id", enabled_action)]

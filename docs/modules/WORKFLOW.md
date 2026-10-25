@@ -1,5 +1,29 @@
 # Workflow 模块
 
+## V1.5 requirement-scoped TP tasks (offline, REVIEW_REQUIRED)
+
+`workflow.tp_research` adds workflow_requirements to the existing SQLite file,
+using verified backup and the existing nullable-inquiry outbox upgrade. TP task
+identity is independent of V1.4: source spreadsheet/sheet/physical row + requirement
+kind. Price and Brief position are not task identity. No workflow_items parent
+is synthesized. Ordinary inquiry state and existing Research Excel remain unchanged.
+
+Automatic TP runs once per task; a changed price after completion does not reopen
+it. Explicit manual rerun creates a generation after fresh source/Brief checks.
+Researching/pending/retryable/unknown delivery blocks manual duplication; the same
+existing worker owns send retries. Unknown/SENDING-after-crash remains quarantined.
+Crash after enqueue adopts the immutable command key; before enqueue only read-only
+research can recover. SQLite BEGIN IMMEDIATE claims arbitrate automatic/manual work.
+
+`TP_RESEARCH` commands have inquiry_id=None and a TP/generation command_id; recipient
+is only linan229@qq.com. No duplicate sender/outbox/daemon. A false-by-default
+`production.json.tp_enabled` opt-in assembles TP in the original poller, after its
+ordinary native page scope, using the same 15-minute wait. GUI third action
+重跑 TP 价格 uses the existing idle-command condition and same poll thread.
+TP-only historical rows are exposed by the existing GUI Order DTO; its legacy
+inquiry_id display field holds a tp_ UI key, not a persisted V1.4 inquiry.
+No production config has been edited or opt-in activated in this phase.
+
 ## RFQ-003 当前 V1.2 恢复边界（2026-10-07）
 
 以 `control-room/RFQ-003/TASK_SPEC.md` 为当前规则，不实现 V1.3。

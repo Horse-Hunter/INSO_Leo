@@ -111,7 +111,7 @@ def _column(number):
 
 def _source_values(rows, title, first, start, last, end):
     """Only quantity becomes numeric; never coerce MPN/brand or raw14 strings."""
-    quantity = worksheet_schema(title).quantity_column if title != "报价输入" else None
+    quantity = worksheet_schema(title).quantity_column if title not in {"报价输入", "RFQ_BRIEF"} else None
     answer = []
     for row in rows[start - 1:end]:
         values = []
@@ -181,11 +181,19 @@ class GoogleSheetsWebService:
     def update(self, **kwargs):
         return _Request(lambda: self._execute(kwargs, write=True))
 
-    def _execute(self, options, *, write):
+    def read_brief(self, spreadsheet):
+        """Dedicated exact-sheet read. No range/get/update whitelist is extended."""
+        return self._execute({"spreadsheetId": spreadsheet}, write=False, brief_read=True)
+
+    def _execute(self, options, *, write, brief_read=False):
+        if brief_read and write:
+            raise ValueError("GOOGLE_WRITE_UNCONFIRMED")
         spreadsheet = options.get("spreadsheetId")
         if not isinstance(spreadsheet, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", spreadsheet):
             raise ValueError("GOOGLE_SPREADSHEET_UNCONFIRMED")
         geometry = _range(options["range"]) if "range" in options else None
+        if brief_read:
+            geometry = ("RFQ_BRIEF", 1, 1, 17, None)
         if write and (geometry is None or options.get("valueInputOption") != "RAW"):
             raise ValueError("GOOGLE_WRITE_UNCONFIRMED")
         base = f"https://docs.google.com/spreadsheets/d/{spreadsheet}/edit#gid=0"
@@ -197,7 +205,7 @@ class GoogleSheetsWebService:
                 if write and geometry[0] == "报价输入":
                     actions.ensure_refresh_input_idle()
                 page = actions.open_sheet(select_worksheet=True,
-                                          worksheet=geometry[0] if geometry else "2026")
+                                          worksheet=geometry[0] if geometry and not brief_read else "2026")
                 stage = "google-sheet-ready"
                 page.locator("#t-name-box").wait_for(state="visible", timeout=30000)
                 # Reuse the verified onOpen readiness signal. Selecting SHAHAB
@@ -321,6 +329,11 @@ class GoogleSheetsWebService:
 
     @staticmethod
     def _headers(rows, title):
+        if title == "RFQ_BRIEF":
+            from src.sheets.tp_brief import BRIEF_HEADERS
+            if not rows or tuple(rows[0]) != BRIEF_HEADERS or any(len(r) > 17 for r in rows):
+                raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_SCHEMA_UNAVAILABLE")
+            return
         contracts = {
             "2026": (0, {0: "STATUS", 2: "CLASS", 4: "MPN", 5: "MFR", 6: "Qty"}),
             "SHAHAB": (1, {1: "STATUS", 3: "Part Number", 4: "Brand", 5: "QTY"}),
