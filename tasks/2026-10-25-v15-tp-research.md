@@ -92,3 +92,109 @@ Final status REVIEW_REQUIRED; no release/live authorization inferred.
   future SMTP/migration acceptance and 2026 date provenance remain UNKNOWN.
   Independent TP identity does not require old inquiry_id or Research records.
   No production/live PASS claim. Stop at this review-required delivery.
+
+
+## CEO independent code review — 2026-10-25
+
+**CHANGES_REQUESTED / REVIEW_REQUIRED — TP live activation, real mail, and deployment NOT authorized.**
+
+Reviewed exact commit `0ffd65407f79c0e4ff4eea880571a6de4e08398d`,
+the full delivery/reuse report, TP production source
+(`src/sheets/tp_brief.py`, `src/research/tp.py`,
+`src/workflow/tp_research.py`, `src/launcher/tp_composition.py`,
+new Google/backend/GUI hooks), pertinent existing V1.4 Research,
+Google, workflow outbox/smtp, and the new test source. Scope is 22
+touched files, default `tp_enabled` off. Source reuse largely matches
+the Owner's mandate: existing native CDP TSV and site acquisition
+clients/parsers, existing ECB/Decimal, V12 outbox/notification worker/
+SMTP, existing poll/manual dispatch, and source-only TP DTO/ranking.
+No duplicated browser, site login, SMTP worker or secondary timer was
+found. Ordinary Research's existing 1–6-month algorithm, INSO priority,
+and ordinary Excel writer are not changed by the new TP research entry.
+Synthetic tests/report describe 73 targeted PASS and 2544 full PASS,
+11 SKIP and 2 pre-existing baseline failures; CEO inspected code/tests
+but did NOT independently run the test environment or live business
+acceptance. Reported baseline failure reproduction is executor-only
+evidence.
+
+### P1 BLOCKER: TP-specific failures can stop ordinary V1.4 inquiry/quotation
+
+The backend inserts `self._tp.run(...)` inside the **same** `try`
+around the standard `poll_loop` and forwards its exceptions to
+`_defer_website_poll`, then to `_runtime_error` if not categorized
+(`src/launcher/backend.py`). For example, a changed/missing
+`RFQ_BRIEF` header raises `ValueError("TP_BRIEF_SCHEMA_UNAVAILABLE")`
+from `BriefReader.read`, not a recognized website outage. Thus
+`_defer_website_poll` returns False and the main poll worker invokes
+`_runtime_error`, setting stop and pausing the ordinary procurement /
+quotation loop. TP-only FX/input/mailer/research errors can likewise
+propagate from `TpCycle.run`. This violates the approved requirement
+that *an optional independent TP task must not bring down ordinary
+V1.4 on a TP-local fault*.
+
+Required narrow fix: establish a TP-specific outer error boundary
+in the existing single poll/manual architecture, distinguish
+TP-local schema/invalid input/FX/indeterminate delivery/research
+faults from genuine shared CDP/authorization/production ledger
+integrity/security faults, record and expose a safe TP held/failure
+state for local faults, and **continue ordinary polls**. Genuine
+shared safety faults must retain canonical V1.4 pause/fail-closed
+semantics. Do not add a second scheduler, swallow all exceptions,
+replay purchase/send, bypass existing CDP protections or enable TP.
+Add integration regression proving a synthetic malformed Brief/TP-local
+fault does not stop ordinary follow-up polls, and that a genuine shared
+infrastructure/security fault is still propagated. For manual TP
+action, report the TP-local failure without marking completion or
+pausing unrelated business.
+
+### P2 IMPORTANT: O(N^2) repeated Google downloads in TP cycle
+
+`TpCycle.read_orders` calls the live `reader.read_rows(source)`
+for **each** populated TP row, even if its task already completed
+and needs no research. After **each** research, `TpCycle.run`
+calls `read_orders` again to revalidate the one completed order,
+re-downloading the entire Brief **and every active TP source row**.
+For N active TP rows this incurs N + N*N source read/downloads
+within one full run, plus N+1 Brief downloads, rather than a bounded
+per-source snapshot + targeted fresh final revalidation.
+At the four existing TP rows, a first full pass can mean roughly
+20 source TSV read operations and five Brief reads, on top of normal
+V1.4 polling. Even future 15-minute cycles with all four tasks
+already sent reread all four source rows. This is inefficient and
+unnecessarily drives the protected shared Google UI.
+
+Required minimal improvement before activation: still fetch fresh
+Brief for due discovery and revalidate **that task** and its source
+immediately before enqueueing mail, but avoid rereading other TP
+orders during each final check; batch/cross-reference source rows per
+sheet when safe (respect live freshness before send), and skip source
+reads entirely for automatically completed, non-retryable TP tasks
+unless needed to surface status. Preserve the explicit source-pointer
+identity verification and post-research source-change hold. Add
+counted-read synthetic tests for four TP rows and for already
+completed tasks (no redundant source downloads).
+
+### Accepted safeguards and outstanding acceptance
+
+- Dedicated read-only `RFQ_BRIEF` transport preserves existing source
+  read/write whitelists and typed native TSV geometry.
+- Original source sheet+row and corroborating model/qty/available brand
+  anchor are used without inventing a V1 inquiry ID. Snapshot changes
+  hold; no old Research record is required for old TP orders.
+- TP source selection uses 1..12 months and **distinct** positive RMB
+  price levels, truthful quote-vs-current-date marking, INSO priority
+  *not* substituted for actual factual minimum, and no-stock fallback
+  restricted by technical uncertainty. Four live TP rows still require
+  a separately authorized, real-data preflight.
+- Per-TP durable generation and existing shared outbox prevent blind
+  retry after ambiguous sends; same-thread manual **重跑 TP 价格**
+  is not ordinary purchase/quotation replay.
+- No actual Windows production SMTP, shared CDP, sqlite migration, or
+  full end-to-end 15-minute/12-month website acceptance was executed
+  by CEO; source inspection is not a runtime safety sign-off.
+
+**Disposition:** keep `REVIEW_REQUIRED`; resolve P1 and P2 with
+scoped code/tests on the same V1.5 branch. Return exact new SHA,
+relevant test results and a brief fix map for CEO re-review. No
+packaging, installation, production-data changes, or live email
+authorization is granted by this review.
