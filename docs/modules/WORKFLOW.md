@@ -24,6 +24,12 @@ TP-only historical rows are exposed by the existing GUI Order DTO; its legacy
 inquiry_id display field holds a tp_ UI key, not a persisted V1.4 inquiry.
 No production config has been edited or opt-in activated in this phase.
 
+Owner 2026-10-25 TP mail correction: tp_mail supplies escaped HTML plus the
+existing plain-text alternative. Opening explicitly compares valid RMB minimum
+with TP; dates use Asia/Shanghai calendar days, current prices say 现价. Empty
+sources/missing second/invalid prices and verbose windows are omitted; an entirely
+empty second column is absent. Queue identities and delivery handling are unchanged.
+
 ## RFQ-003 当前 V1.2 恢复边界（2026-10-07）
 
 以 `control-room/RFQ-003/TASK_SPEC.md` 为当前规则，不实现 V1.3。

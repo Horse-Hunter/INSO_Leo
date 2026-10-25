@@ -106,6 +106,52 @@ def test_same_existing_parser_client_two_prices_with_real_dates(source):
     assert result.months == (1 if source is S.LCSC else 10)
 
 
+def test_bom_actual_currency_drives_tp_fx_and_unknown_currency_is_excluded():
+    from tests.research.test_bom_ai import cloud_quote
+    html = '<div class="bom_cloud_block">' + ''.join([
+        cloud_quote("TEST-ABC", "2", "＄2"), cloud_quote("TEST-ABC", "20", "￥20"),
+        cloud_quote("TEST-ABC", "0.01"), cloud_quote("OTHER", "0.001", "＄0.001")]) + '</div>'
+    capture = BomAiCapture(parse_bom_ai_price_records(html, "TEST-ABC"), "https://synthetic.invalid", NOW)
+    adapter = SimpleNamespace(_client=SimpleNamespace(fetch_price_records=lambda _: capture))
+    result = collect_tp(adapter, S.BOM_AI, "TEST-ABC", 100, NOW, TpFx(Fx(), NOW))
+    assert [(q.offer.price, q.offer.currency, q.rmb) for q in result.quotes] == [
+        (Decimal(2), "USD", Decimal(14)), (Decimal(20), "RMB", Decimal(20))]
+    unknown = replace(capture, records=(BomAiPriceRecord("TEST-ABC", Decimal("0.01"), NOW,
+                                                       currency_confirmed=False),))
+    adapter._client.fetch_price_records = lambda _: unknown
+    result = collect_tp(adapter, S.BOM_AI, "TEST-ABC", 100, NOW, TpFx(Fx(), NOW))
+    assert not result.quotes and result.outcome.value == "SOURCE_UNAVAILABLE"
+    assert result.evidence.fields[0].value == "PRICE_CURRENCY_UNCONFIRMED"
+
+
+@pytest.mark.parametrize("no_match", [True, False])
+def test_lcsc_missing_matching_product_is_not_a_website_outage(no_match):
+    from src.research.icnet import IcNetResult
+    from src.research.lcsc import LcscNoMatchingProduct, LcscPageUnavailable
+    from src.research.service import ResearchService
+    from src.research.source_contracts import (
+        SourceEvidence,
+        SourceOutcome,
+        SourceResult,
+    )
+    from src.sheets.tp_brief import bind_tp_order
+    from tests.sheets.test_tp_brief import brief, source
+    def fail(_):
+        raise (LcscNoMatchingProduct("NO_MATCHING_PRODUCT") if no_match else LcscPageUnavailable("LOGIN_REQUIRED"))
+    ic = SourceResult(S.IC_NET, SourceOutcome.NO_VALID_PRICE,
+        SourceEvidence(S.IC_NET, "TEST-ABC", None, SourceOutcome.NO_VALID_PRICE, NOW))
+    empty = SimpleNamespace(_client=SimpleNamespace(fetch_price_records=lambda _: BomAiCapture((), "https://synthetic.invalid", NOW)))
+    service = ResearchService(icnet=SimpleNamespace(search=lambda *a: IcNetResult(ic)),
+        findchips=SimpleNamespace(_client=SimpleNamespace(fetch_first_page=lambda _: FindchipsPage("", "https://synthetic.invalid", NOW))),
+        hqew=SimpleNamespace(_client=SimpleNamespace(fetch_first_page=lambda _: HqewPage("", "https://synthetic.invalid", NOW))),
+        lcsc=SimpleNamespace(_client=SimpleNamespace(fetch_product_page=fail)), bom_ai=empty,
+        inso=SimpleNamespace(_client=SimpleNamespace(fetch_history=lambda _: InsoHistoryCapture((), "https://synthetic.invalid", NOW))),
+        output=None, fx_provider=Fx())
+    result = service.execute_tp("synthetic", bind_tp_order(brief(), "synthetic", [source()]), now=NOW)
+    lcsc = next(s for s in result.sources if s.source is S.LCSC)
+    assert lcsc.outcome is (SourceOutcome.NO_STRICT_MPN_MATCH if no_match else SourceOutcome.SOURCE_UNAVAILABLE)
+
+
 def test_bom_current_marker_retained_without_fabricated_date():
     html = '<h3>TEST-ABC</h3><data><quotePrice>2</quotePrice>当前报价</data>'
     records = parse_bom_ai_price_records(html, "TEST-ABC", captured_at=NOW)

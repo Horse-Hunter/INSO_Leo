@@ -162,7 +162,11 @@ def collect_tp(adapter, source, mpn, quantity, now, fx):
         capture = adapter._client.fetch_price_records(mpn)
         offers = [TpOffer(source, row.mpn, row.raw_price, row.currency,
                           None if row.is_current else row.observed_at, row.is_current)
-                  for row in capture.records]
+                  for row in capture.records if row.currency_confirmed]
+        if not offers and capture.records:
+            return TpSourceResult(source, SourceOutcome.SOURCE_UNAVAILABLE,
+                SourceEvidence(source, mpn, None, SourceOutcome.SOURCE_UNAVAILABLE, now,
+                    fields=(EvidenceField("failure_code", "PRICE_CURRENCY_UNCONFIRMED"),)))
     elif source is ResearchSource.INSO:
         capture = adapter._client.fetch_history(mpn)
         offers = [TpOffer(source, row.mpn, row.price, row.currency, row.observed_at, False)
@@ -193,6 +197,10 @@ def execute_tp(service, task_id, order, now):
             try:
                 return collect_tp(adapter, source, order.mpn, order.quantity, now, fx)
             except Exception as exc:
+                from .lcsc import LcscNoMatchingProduct
+                if source is ResearchSource.LCSC and isinstance(exc, LcscNoMatchingProduct):
+                    return TpSourceResult(source, SourceOutcome.NO_STRICT_MPN_MATCH,
+                        SourceEvidence(source, order.mpn, None, SourceOutcome.NO_STRICT_MPN_MATCH, now))
                 # Reuse typed site reasons; never include exception/page text.
                 code = getattr(exc, "code", None)
                 if not isinstance(code, str):

@@ -156,9 +156,11 @@ def test_mail_no_fake_zero_second_date_and_urgent_when_no_valid_prices(tmp_path)
     command = tp_mail(order, empty, "tp_synthetic:0", NOW)
     assert command.inquiry_id is None
     assert command.text_body.startswith("请人工加急跟进")
-    assert "全局真实最低：无有效报价" in command.text_body
-    assert "全局真实最低：0" not in command.text_body
-    assert "不足两档" in command.text_body
+    assert "请人工加急跟进：暂无有效报价。" in command.text_body
+    assert "最低：" not in command.text_body
+    assert "各来源报价" not in command.text_body
+    assert "不足两档" not in command.text_body
+    assert "预计订单总价" not in command.text_body
     assert len(command.recipients) == 1 and command.recipients[0].address == "linan229@qq.com"
 
 
@@ -167,11 +169,11 @@ def test_tp_equal_target_not_urgent_and_current_quote_has_no_fabricated_date(tmp
     order, = cycle.read_orders("synthetic")
     result = cycle.research.execute_tp("tp_synthetic", order, now=NOW)
     result = replace(result, target_rmb=result.lowest.rmb)
-    assert tp_mail(order, result, "tp_synthetic:0", NOW).text_body.startswith("TP 专项调研")
+    assert tp_mail(order, result, "tp_synthetic:0", NOW).text_body.startswith("最低价等于 TP。")
     current = replace(result.lowest, offer=replace(result.lowest.offer, quoted_at=None, current=True))
     result = replace(result, lowest=current, sources=tuple(replace(s, quotes=(current,)) for s in result.sources))
     body = tp_mail(order, result, "tp_synthetic:0", NOW).text_body
-    assert "现价，报价日期未提供" in body
+    assert "现价" in body and "报价日期未提供" not in body
 
 
 def test_actual_simultaneous_claims_one_winner(tmp_path):

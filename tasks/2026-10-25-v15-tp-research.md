@@ -357,3 +357,54 @@ installation or deployment is authorized by this review.
 **Disposition: P1/P2 `CODE_REVIEW_PASS`.** No further code rework
 requested from this correction review. Approval is source-only; V1.5
 still needs distinct owner release/preflight authorization.
+
+## Owner mail readability and BOM currency correction — 2026-10-25
+
+Scope: inspect the already-sent isolated TP mail; shorten layout with useful
+blank lines, explicit price-vs-TP urgency, valid quotes only and date-only quote
+dates. Audit the same selected BOM source read for original currency and actual
+FX use. Reuse canonical parser/client/ECB/outbox, no ordinary Research policy
+change, polling, production DB or Sheets write. Unproven currency cannot be
+labelled RMB/USD or enter TP minima. Existing single-mail authorization is spent;
+this correction does not itself authorize another real email. Use synthetic
+preview/tests; keep raw live values/HTML/private preview out of Git and reports.
+status: REVIEW_REQUIRED (source correction, no release).
+
+Reuse/fix evidence: existing BOM browser/parser, TP FX conversion and existing
+plain+HTML NotificationCommand were extended; no browser/sender/timer/dependency
+was added. Actual same-order read found two bare quotePrice values but displayed
+fullwidth U+FF04 currency markers in each matched stock-view row. A page-wide
+price-currency form label is NOT row-price proof. Parser now pairs the matched
+row's bom_showunit_price amount/unit with its data price, normalizes fullwidth
+symbols, and holds conflicting/multiple/missing proofs. Explicit raw currency
+also works. currency_confirmed distinguishes bare legacy data; ordinary bare
+RMB compatibility remains, while TP never uses an unconfirmed currency. Verified
+live: two records USD/confirmed, one eligible within TP history, actual ECB USD
+conversion verified by multiplication. No real prices/model/customer in evidence.
+
+Same-order LCSC read reproduced NO_MATCHING_PRODUCT, not site unavailability;
+TP now returns NO_STRICT_MPN_MATCH for that typed result and preserves genuine
+login/read failures as SOURCE_UNAVAILABLE. The earlier run did not retain its
+exact error code, so this reproduction is not proof of its historical error.
+
+Mail: opening states below/equal/above TP (or no valid quote); original currency
+plus RMB, useful order summary, valid source quotes only, optional real second,
+date-only Asia/Shanghai quote dates and truthful current-price label. Plain text
+has blank lines; escaped HTML has a compact summary/table, without empty sources
+or an entirely empty second column. No debug windows/ranking boilerplate.
+
+Verification: final targeted **189 PASS /9.62s**, seven existing/new TP/BOM/GUI/
+Sheets/workflow test modules. Includes multiple synthetic model strings, USD/RMB
+mixed rows/reordering, fullwidth/halfwidth/entity symbols, missing/conflicting/
+hidden/ambiguous currency proofs, actual numeric conversion, LCSC failure split,
+mail threshold/date/HTML escaping/omission cases and existing lifecycle guards.
+Broad **2643 PASS,11 SKIP,2 same baseline FAIL /100.19s** (same RFQ008 recovery
+expectations documented above). Final scoped run additionally covered the empty
+second-column and extra hidden/other-model cases added after suite collection.
+Ruff PASS. Synthetic HTML/PNG layout visually checked; no real order in preview.
+
+Owner subsequently explicitly authorizes ONE corrected email to the same TP
+recipient after the fixes: reuse the same selected order and isolated ledger,
+fresh research and final identity checks, existing manual generation/outbox,
+no production polling or DB write. Prior SENT command is immutable; do not
+overwrite it or blindly retry an UNKNOWN result. Outcome recorded below later.

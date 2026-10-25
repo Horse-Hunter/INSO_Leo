@@ -132,6 +132,69 @@ def test_parser_reads_target_model_from_real_cloud_row_shape() -> None:
     records = parse_bom_ai_price_records(html, "STM32F103C8T6")
     assert len(records) == 1
     assert records[0].raw_price == Decimal("5.495575")
+    assert not records[0].currency_confirmed  # legacy bare number is not proof of RMB
+
+
+def cloud_quote(model, raw, displayed=None, *, extra="", date="2026/10/20 09:00:00"):
+    shown = (f'<section class="bom_container_quote"><span class="bom_orange bom_showunit_price">'
+             f'{displayed}</span></section>') if displayed is not None else ""
+    return (f'<aside class="stock-view"><div class="model" title="{model}"></div>'
+            f'<script><data><quotePrice>{raw}</quotePrice><quoteDate>{date}</quoteDate></data></script>'
+            f'{shown}{extra}</aside>')
+
+
+@pytest.mark.parametrize("raw,displayed,currency,confirmed", [
+    ("2", "＄2", "USD", True), ("2", "$2", "USD", True),
+    ("2", "USD 2", "USD", True), ("2", "US$2", "USD", True),
+    ("2", "￥2", "RMB", True), ("2", "¥2", "RMB", True),
+    ("2", "RMB 2", "RMB", True), ("2", "CNY 2", "RMB", True),
+    ("＄2", None, "USD", True), ("&#65284;2", None, "USD", True),
+    ("¥2", None, "RMB", True), ("2", None, "RMB", False),
+    ("2", "2", "RMB", False), ("2", "EUR 2", "RMB", False),
+    ("USD 2", "RMB 2", "USD", False), ("2", "＄3", "RMB", False),
+    ("USD RMB 2", "USD 2", "USD", False),
+])
+def test_bom_currency_binds_visible_symbol_to_same_quote(raw, displayed, currency, confirmed):
+    html = '<div class="bom_cloud_block">' + cloud_quote("TEST-ABC", raw, displayed) + '</div>'
+    record, = parse_bom_ai_price_records(html, "TEST-ABC")
+    assert (record.raw_price, record.currency, record.currency_confirmed) == (Decimal(2), currency, confirmed)
+
+
+def test_bom_mixed_currencies_models_and_reordering_never_share_currency():
+    quotes = [cloud_quote("TEST-ABC", "2", "＄2"), cloud_quote("TEST-ABC", "3", "￥3"),
+              cloud_quote("OTHER-MODEL", "0.01", "＄0.01"), cloud_quote("TEST-ABC", "4")]
+    for ordered in (quotes, list(reversed(quotes))):
+        records = parse_bom_ai_price_records('<div class="bom_cloud_block">'+''.join(ordered)+'</div>', "TEST-ABC")
+        assert sorted((r.raw_price, r.currency, r.currency_confirmed) for r in records) == [
+            (Decimal(2), "USD", True), (Decimal(3), "RMB", True), (Decimal(4), "RMB", False)]
+
+
+@pytest.mark.parametrize("extra", [
+    '<span class="bom_showunit_price">￥2</span>',
+    '<script><data><quotePrice>2</quotePrice><quoteDate>2026/10/20 09:00:00</quoteDate></data></script>',
+])
+def test_bom_multiple_prices_or_data_records_hold_currency(extra):
+    records = parse_bom_ai_price_records('<div class="bom_cloud_block">'
+        + cloud_quote("TEST-ABC", "2", "＄2", extra=extra) + '</div>', "TEST-ABC")
+    assert records and all(not r.currency_confirmed for r in records)
+
+
+@pytest.mark.parametrize("model", ["PART-A1", "PART-B2", "PART-C3"])
+def test_currency_reading_is_not_bound_to_one_specific_model(model):
+    html = '<div class="bom_cloud_block">'+cloud_quote(model,"7","＄7")+'</div>'
+    record, = parse_bom_ai_price_records(html, model)
+    assert record.mpn == model and record.currency == "USD" and record.currency_confirmed
+
+
+@pytest.mark.parametrize("price_markup", [
+    '<span class="bom_showunit_price-copy">＄2</span>',
+    '<span class="bom_showunit_price" hidden>＄2</span>',
+    '<span class="bom_showunit_price" style="display:none">＄2</span>',
+])
+def test_hidden_or_wrong_price_element_cannot_prove_currency(price_markup):
+    html = '<div class="bom_cloud_block">'+cloud_quote("TEST-ABC","2",extra=price_markup)+'</div>'
+    record, = parse_bom_ai_price_records(html, "TEST-ABC")
+    assert not record.currency_confirmed
 
 
 def test_login_repr_hides_secret_and_client_only_exposes_read_capture() -> None:

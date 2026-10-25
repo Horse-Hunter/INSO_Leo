@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import html as html_module
 import re
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
@@ -58,6 +59,7 @@ class BomAiPriceRecord:
     observed_at: datetime
     currency: str = "RMB"
     is_current: bool = False
+    currency_confirmed: bool = True
 
     def __post_init__(self) -> None:
         if not self.raw_price.is_finite() or self.raw_price <= 0:
@@ -119,7 +121,7 @@ def _child_text(block: str, tag: str) -> str | None:
 
 
 def _parse_price(value: str) -> tuple[Decimal, str]:
-    compact = value.strip()
+    compact = unicodedata.normalize("NFKC", html_module.unescape(value)).strip()
     upper = compact.upper()
     currency = "USD" if "$" in compact or "USD" in upper else "RMB"
     numeric = re.sub(r"(?i)USD|RMB|CNY|US\$|[$¥￥,\s]", "", compact)
@@ -130,6 +132,54 @@ def _parse_price(value: str) -> tuple[Decimal, str]:
     if not price.is_finite() or price <= 0:
         raise BomAiClientError("PRICE_RECORD_UNPARSEABLE")
     return price, currency
+
+
+def _price_currencies(value: str) -> set[str]:
+    text = unicodedata.normalize("NFKC", html_module.unescape(value)).upper()
+    result = set()
+    if "$" in text or "USD" in text:
+        result.add("USD")
+    if any(unit in text for unit in ("RMB", "CNY", "¥")):
+        result.add("RMB")
+    return result
+
+
+_DISPLAY_PRICE = re.compile(
+    r'''<(?P<tag>[a-z][\w:-]*)\b[^>]*\bclass=["'](?P<classes>[^"']*\bbom_showunit_price\b[^"']*)["'][^>]*>'''
+    r'''(?P<price>.*?)</(?P=tag)\s*>''', re.IGNORECASE | re.DOTALL,
+)
+
+
+def _quote_price(raw_price: str, block: str | None = None) -> tuple[Decimal, str, bool]:
+    """Pair the SAME model/offer block's displayed currency with its data price.
+
+    Bare legacy data retains its old RMB value for ordinary V1.4 compatibility,
+    but is explicitly unconfirmed and cannot enter the TP price pool.
+    """
+    price, currency = _parse_price(raw_price)
+    raw_units = _price_currencies(raw_price)
+    confirmed = len(raw_units) == 1
+    if block is not None:
+        displayed = [m for m in _DISPLAY_PRICE.finditer(block) if "bom_showunit_price" in m.group("classes").split()]
+        quote_rows = [d for d in _DATA.findall(block) if _child_text(d, "quotePrice")]
+        if displayed:
+            if len(displayed) != 1 or len(quote_rows) != 1:
+                return price, currency, False
+            match = displayed[0]
+            if re.search(r'''\bhidden\b|display\s*:\s*none|visibility\s*:\s*hidden''', match.group(0), re.IGNORECASE):
+                return price, currency, False
+            text = _TAG.sub("", match.group("price"))
+            units = _price_currencies(text)
+            if len(units) != 1:
+                return price, currency, False
+            try:
+                shown_price, shown_currency = _parse_price(text)
+            except BomAiClientError:
+                return price, currency, False
+            if shown_price != price or raw_units and raw_units != units:
+                return price, currency, False
+            return price, shown_currency, True
+    return price, currency, confirmed
 
 
 def parse_bom_ai_price_records(
@@ -164,7 +214,7 @@ def parse_bom_ai_price_records(
                 raw_date = _child_text(data, "quoteDate")
                 if not raw_price or "*" in raw_price:
                     continue
-                price, currency = _parse_price(raw_price)
+                price, currency, confirmed = _quote_price(raw_price, block)
                 try:
                     if raw_date:
                         observed = datetime.strptime(raw_date, "%Y/%m/%d %H:%M:%S").replace(tzinfo=_CHINA_TZ)
@@ -176,7 +226,7 @@ def parse_bom_ai_price_records(
                     raise BomAiClientError("PRICE_RECORD_UNPARSEABLE") from exc
                 records.append(
                     BomAiPriceRecord(
-                        section_mpn, price, observed.astimezone(UTC), currency, not bool(raw_date)
+                        section_mpn, price, observed.astimezone(UTC), currency, not bool(raw_date), confirmed
                     )
                 )
         return tuple(records)
@@ -204,7 +254,7 @@ def parse_bom_ai_price_records(
                 or (raw_date and "{{" in raw_date)
             ):
                 continue
-            price, currency = _parse_price(raw_price)
+            price, currency, confirmed = _quote_price(raw_price)
             try:
                 if raw_date:
                     observed = datetime.strptime(raw_date, "%Y/%m/%d %H:%M:%S").replace(tzinfo=_CHINA_TZ)
@@ -221,6 +271,7 @@ def parse_bom_ai_price_records(
                     observed.astimezone(UTC),
                     currency,
                     not bool(raw_date),
+                    confirmed,
                 )
             )
     return tuple(records)

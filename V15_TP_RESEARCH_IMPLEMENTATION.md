@@ -139,9 +139,11 @@ remains the public execution entry point. No dependencies were added.
 - `TpCycle.run` performs fresh Brief/source checks before research and again
   before enqueueing. Source changes/FX problems are held, not guessed. Its mail
   includes customer/source row, MPN/quantity, original TP and RMB conversion,
-  stock label/estimated total, six-source minimum/second/date and factual global
-  minimum/second. Lower-than-TP or absent valid prices lead with manual urgency.
-  Missing price/second/total is explicit, never a false zero. Only recipient is
+  stock label/estimated total, valid source minimum/second/date and global
+  minimum/second. Opening explicitly states below/equal/above TP; no valid price
+  leads with manual urgency. Missing prices/seconds/totals and empty sources are
+  omitted. Existing HTML+text payload uses date-only quotes and blank lines, no
+  debug windows or ranking boilerplate. Only recipient is
   linan229@qq.com, through the original outbox and SMTP worker.
 - `build_tp_cycle` is opt-in through `tp_enabled: true` in the existing config
   format; default is disabled, and **no real config was changed**. TP follows the

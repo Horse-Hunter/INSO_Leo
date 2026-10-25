@@ -1,5 +1,16 @@
 # Research 模块
 
+## TP currency correction (2026-10-25, REVIEW_REQUIRED)
+
+BomAiPriceRecord.currency_confirmed records row-scoped currency evidence. The
+shared parser normalizes fullwidth currency symbols and corroborates a matched
+cloud row's displayed bom_showunit_price unit/amount against its data price.
+Missing/conflicting/ambiguous proof is excluded by TP; page-wide form currencies
+are not evidence. Legacy bare-number RMB compatibility remains for ordinary
+Research, with confirmed=False; ordinary 1–6-month policy is unchanged. TP uses
+the existing ECB conversion for confirmed USD and retains original currency.
+LCSC NO_MATCHING_PRODUCT is a TP NO_STRICT_MPN_MATCH, not a website outage.
+
 ## V1.5 independent TP research (offline, REVIEW_REQUIRED)
 
 `ResearchService.execute_tp(task_id, order, now=...)` is independent of ordinary
