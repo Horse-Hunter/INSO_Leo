@@ -416,3 +416,24 @@ with no external timezone-data dependency. All **8 mail tests PASS /0.61s** with
 PYTHONTZPATH removed, including a guard forbidding ZoneInfo use. Existing task
 became FAILED with no new outbox command/delivery; therefore one safe pre-queue
 manual retry is allowed by the same Owner request, never replaying the prior SENT.
+
+Corrected trial completed using source commit
+14cabb7d503364ba6b2f6aeb181a8f470550e8b4: same selected source2026 row172,
+existing TpCycle.run(manual_key), protected CDP and isolated ledger. Fresh six-source
+research and final identity verification passed; confirmed BOM quote currency USD,
+all four eligible USD quotes across sources verified against actual ECB rate.
+LCSC now NO_STRICT_MPN_MATCH. One corrected message SENT at manual generation2
+(generation1 had no queued mail); prior original generation0 remains SENT unchanged.
+Read-only receipt check: two total SENT recipients across the two Owner-authorized
+emails, zero ordinary workflow_items, HTML present, correct below-TP opening,
+BOM USD present, no clock times in body. Sender acceptance is not an inbox-read
+claim. No production ledger/Sheet write, polling, packaging or deployment;9222
+still reachable and foreign pages retained. Owner may inspect newest same-subject
+email. Source correction remains REVIEW_REQUIRED.
+
+Cleanup: retired all five owned test temp directories (278119122 bytes) and the
+owned audit/send/preview helper directory after resolved workspace/reparse checks.
+The pure mail timezone test did not create a temp directory. Retain only private
+isolated delivery receipts for no-resend safety, plus one synthetic HTML/PNG
+preview in the canonical visualization output folder. No raw HTML, account,
+customer, real prices, full Sheets or source screenshots were committed.
