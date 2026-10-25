@@ -136,8 +136,8 @@ class TpStore:
 
 
 def tp_mail(order, result, command_id, now):
+    from datetime import timedelta, timezone
     from html import escape
-    from zoneinfo import ZoneInfo
 
     from src.research.tp import distinct_two
 
@@ -156,7 +156,9 @@ def tp_mail(order, result, command_id, now):
         price = f"{money_text(o.price)} {o.currency}"
         if o.currency not in {"RMB", "CNY"}:
             price += f" ≈ {money_text(q.rmb)} RMB"
-        when = "现价" if o.current else o.quoted_at.astimezone(ZoneInfo("Asia/Shanghai")).date().isoformat()
+        # Quote history is limited to the current12 months; Shanghai is UTC+8.
+        # Match the existing BOM date parser without a tzdata runtime dependency.
+        when = "现价" if o.current else o.quoted_at.astimezone(timezone(timedelta(hours=8))).date().isoformat()
         parts = [price]
         if include_source:
             parts.append(source_name(q))

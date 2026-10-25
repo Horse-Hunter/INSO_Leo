@@ -55,6 +55,15 @@ def test_dates_only_valid_sites_only_clear_names_and_no_debug_noise():
     assert '>次低</th>' not in mail.html_body  # all sites only supplied one valid price
 
 
+def test_mail_date_formatting_does_not_require_installed_iana_timezone_data(monkeypatch):
+    import zoneinfo
+    def forbidden(*a, **k):
+        pytest.fail("Mail dates must not depend on an external tzdata installation")
+    monkeypatch.setattr(zoneinfo, "ZoneInfo", forbidden)
+    order, result = example()
+    assert "2026-10-25" in tp_mail(order, result, "synthetic:0", NOW).text_body
+
+
 def test_second_column_only_appears_when_a_source_has_a_real_second_quote():
     order, result = example()
     second = replace(result.lowest, offer=replace(result.lowest.offer, price=Decimal(3)), rmb=Decimal(21))

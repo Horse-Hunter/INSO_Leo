@@ -408,3 +408,11 @@ recipient after the fixes: reuse the same selected order and isolated ledger,
 fresh research and final identity checks, existing manual generation/outbox,
 no production polling or DB write. Prior SENT command is immutable; do not
 overwrite it or blindly retry an UNKNOWN result. Outcome recorded below later.
+
+First corrected attempt stopped before enqueue because source Python had no
+IANA tzdata; no SMTP attempt/new command was made. Formatter now uses standard
+UTC+8 (same rule as existing BOM parsing for the current12-month China window),
+with no external timezone-data dependency. All **8 mail tests PASS /0.61s** with
+PYTHONTZPATH removed, including a guard forbidding ZoneInfo use. Existing task
+became FAILED with no new outbox command/delivery; therefore one safe pre-queue
+manual retry is allowed by the same Owner request, never replaying the prior SENT.
