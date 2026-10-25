@@ -261,3 +261,69 @@ review_base: c64d9d8076f38d2fe8702f68ab95f612afbcb0f8
   production migration/SMTP, real website date/coverage and 2026 date provenance.
   Unknown infrastructure errors remain fail-closed rather than guessed local.
   Return to CEO for independent review; activation, sending and release stay closed.
+
+
+## CEO independent re-review — P1/P2 correction (2026-10-25)
+
+**CODE_REVIEW_PASS (P1/P2 scope) / LIVE_ACCEPTANCE_PENDING /
+RELEASE_NOT_AUTHORIZED.**
+
+Independently reviewed the exact implementation commit
+`3a06d5bbfe3fba01a93c28cb885babdf5d319329` versus the prior
+CEO review `c64d9d8076f38d2fe8702f68ab95f612afbcb0f8`.
+Nine changed files: TP business/service, dedicated Google Brief
+classification, backend manual TP handling, three existing test
+files and two delivery/task documents. No duplicate source
+collectors, browser framework, SMTP service or timer was added, and
+ordinary Research 1–6 month aggregation/ranking is untouched.
+
+**P1 fixed.** `TpLocalError` distinguishes dedicated Brief schema and
+known TP-only validation failures; `TpCycle.run` is the outer
+single-thread TP boundary. A positive `tp_local_failure_reason`
+classifier examines chained causes/contexts and refuses unclassified,
+wrapped shared security/CDP/auth/SQLite/ledger faults. Recognized
+local schema, source pointer, malformed input, FX-access and pure TP
+calculation/mail-composition failures are held, rather than forwarded
+to the ordinary poll worker's stop path; persisted `workflow_tp_failures`
+adds a sanitized hold record, with existing verified backup before
+schema addition. Shared faults propagate into the existing canonical
+V1.4 fail-closed behavior. Manual TP local failure no longer falsely
+reports success; ambiguous/pending delivery and UNKNOWN retain the
+existing no-blind-resend protection. Synthetic two-iteration launcher
+integration, local-mail/research failures, native vs Brief schema
+classification, shared-fault matrices and manual tests inspect these
+paths. This is code-level validation, not a production isolation claim.
+
+**P2 fixed.** Before touching source worksheets, a fresh Brief
+snapshot identifies durable TP tasks eligible to run. One poll-local
+source snapshot is shared across due tasks from the same source, with
+no cross-poll cache. Immediately before queuing each mail, a separate
+fresh Brief read and **that target's** source read verify the full
+identity and TP values. Duplicate physical anchors (including "010"
+and "10"), missing/changed source model/quantity/brand, changed TP
+and removed Brief rows block email. Completed and non-retryable
+generations skip source reads altogether. Counted synthetic tests for
+four orders yield source reads 20→5 (one source sheet) or 20→6 (two
+source sheets), five Brief reads during the initial four-order pass,
+and only one Brief/no source reads during subsequent completed poll;
+manual single-target rerun retains target-only fresh verification.
+These are synthetic **read counts**, not real Sheets performance
+measurements. Whole-sheet native TSV remains the existing transport,
+not an unauthorized new partial-grid reader.
+
+**Verification scope and remaining gates:** Executor reports 143
+targeted PASS and 2613 full PASS, 11 SKIP, 2 older RFQ008
+manual-hold/recovery expectation failures carried from the prior
+baseline. CEO inspected changed production and test source and the
+executor's evidence, but did **not** run Windows suites or independently
+reproduce the two baseline failures, and performed no real Chrome/CDP,
+Google Sheet, TP research, SMTP, migration or production order action.
+Four real populated TP rows, actual site dates/history for up to 12
+months, production database migration/backups, transport outcomes and
+rollback require a separately Owner-authorized controlled preflight.
+`tp_enabled` remains off; no email delivery, activation, packing,
+installation or deployment is authorized by this review.
+
+**Disposition: P1/P2 `CODE_REVIEW_PASS`.** No further code rework
+requested from this correction review. Approval is source-only; V1.5
+still needs distinct owner release/preflight authorization.
