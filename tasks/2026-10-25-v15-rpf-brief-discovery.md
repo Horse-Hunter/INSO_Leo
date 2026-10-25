@@ -35,3 +35,86 @@ Read existing relevant navigation/safety/module/source/config wiring; reuse cano
 - Checks: 185 PASS; final diff/sensitivity review and publication receipt in Git/chat. Initial timezone collection failure resolved by reusing bundled tzdata, no dependency installation.
 - Limitations: 2026 date provenance, stable external ID and pointer/sort lifecycle, field conflicts, and unmatched local ledger/Research remain documented UNKNOWN. Current two-to-two order/pointer alignment is not a permanent unique business key.
 - Retain this single V1.5 managed worktree for CEO review. No handoff created. Retire owned ignored helpers and synthetic test artifacts only; preserve all other worktrees/runtime/CDP/browser/Profile.
+
+
+## CEO independent discovery review — 2026-10-25
+
+**DISCOVERY_REVIEW_PASS (scope-only) / TP_AUTOMATION_HOLD / LIVE_DELIVERY_NOT_AUTHORIZED.**
+
+Reviewed exact commit `4c349ba02fad986c6ff905b7e3f6f8bdcd1f220e`,
+the entire sanitized `V15_RPF_BRIEF_DISCOVERY.md` and this Task Packet,
+against existing V1.4 GitHub source
+(`src/launcher/google_web.py`, `src/sheets/google_reader.py`,
+`src/sheets/pending.py`, `src/workflow/store.py`,
+`src/research/excel_output.py`). Commit touches exactly two new
+Markdown files, **no production source, test, Google Sheet, or DB files**.
+The report's observed production data and live safety assertions are
+executor-reported evidence, not independently reproduced by this
+reviewer, who did not access Chrome/CDP, business Sheets, local DB
+or source worktrees. Executor's 185 offline PASS was likewise not
+independently executed.
+
+**Accepted discovery facts/evidence:** true tab title is `RFQ_BRIEF`
+(the report records Owner confirmation of title correction); complete
+17-column A:Q header and 85 nonempty rows (41 `2026`, 44 `SHAHAB`).
+Four nonempty `target_price` texts are 3 USD + 1 RMB with no inferred
+sheet numeric/FX contract. The report demonstrates at least one
+unique real source, ledger inquiry-id and Research cross-reference
+for each original worksheet. `rfq_line_id` is currently present and
+distinct across 85 rows but has **no demonstrated shared stable ID
+contract** with the original sheets. The source code corroborates
+the independent-risk constraint that a persisted `inquiry_id` is
+derived from a source worksheet's initial physical position; a current
+brief row number or reordered source row must not synthesize it.
+
+**Crucial implementation gate:** A unique source-row correspondence
+is not equivalent to a unique *existing local inquiry/Research*:
+of the report's 76 uniquely matched source rows, only 18 have
+ledger+Research; 4 have ledger but no Research; 54 lack a matching
+existing local ledger under the inspected method. There are additionally
+duplicate/ambiguous/conflicting source matches. V1.5 must not silently
+skip all such rows and claim support for all brief inquiries, nor
+create a fake `inquiry_id` or dispatch an email for an ambiguous order.
+The report does **not** provide a per-TP-row matrix proving whether
+each of the four currently populated H cells individually has
+unique, stable 2026/SHAHAB linkage and a usable inquiry/Research.
+This is required before any actual TP processing or email.
+
+**Required next nonproduction design/verification gate, not
+rejection of the completed discovery task:**
+1. Produce a fully sanitized **four-target-row** mapping matrix:
+   brief row alias, original `sheet`, exact target price currency/
+   parseability, source match cardinality, whether `sheet_row` points
+   to the same corroborated source, field/date conflicts, existing
+   `inquiry_id` availability, Research availability, and an
+   explicit READY / AMBIGUOUS / UNMATCHED / LOCAL_UNRESOLVED verdict.
+   No actual prices, MPNs, customer values, raw TSV, spreadsheet IDs
+   or sensitive identifying text in Git.
+2. Establish how 2026 `rfq_date` was derived; whether `rfq_line_id`
+   and `sheet_row` survive sorting/insertion/deletion/rebuilding;
+   treat current reversed two-to-two correspondence only as
+   `CURRENT_ORDER_POINTER_ALIGNED`, **not** an automatic durable key.
+   If unavailable, use fail-closed uniqueness + current source
+   revalidation (and explicit unresolved handling), not guessed pairing.
+3. Specify the safe workflow for TP rows **without** a V1.4
+   ledger/Research entry: independently authorized fresh TP research
+   and durable TP-specific idempotency, or a clear per-row hold with
+   operator visibility. Do not automatically create or reuse a
+   worksheet-position-derived V1.4 `inquiry_id`.
+4. Any later transport support for `RFQ_BRIEF` requires a scoped,
+   exact-sheet, header/gid/range-only **read** extension, reusing
+   protected native TSV and existing CDP; never broaden source
+   schema/write allowlists indiscriminately.
+5. Future owner-specific decisions (target-price trigger, 1–12
+   month TP-only windows, lowest/second-lowest/date fidelity, exchange
+   rate, notifications/idempotent retries, UI **重跑 TP 价格**) belong
+   to a separate V1.5 product/design approval, **not** this discovery
+   authorization.
+
+The executor reports preserving user pages/TSV hygiene and readonly DB/
+Excel state; no independent claim of live proof is made here. All
+unresolved `UNKNOWN` items remain explicit. **Disposition:** the
+bounded `DISCOVERY_ONLY` objective is complete and accepted. Leave
+TP polling, email, UI action, production writes, packaging and
+deployment **on hold** until Owner approves a separately reviewed
+implementation design. No work beyond review document was performed.
