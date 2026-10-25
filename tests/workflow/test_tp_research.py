@@ -187,3 +187,148 @@ def test_actual_simultaneous_claims_one_winner(tmp_path):
     with ThreadPoolExecutor(max_workers=2) as executor:
         a, b = executor.submit(claim), executor.submit(claim)
         assert sum(value is not None for value in (a.result(), b.result())) == 1
+
+
+@pytest.mark.parametrize("sheets", [("2026",) * 4, ("2026", "2026", "SHAHAB", "SHAHAB")])
+def test_four_orders_batch_sources_and_completed_poll_reads_no_sources(tmp_path, sheets):
+    from collections import Counter
+    cycle, lines, reader, transport, _ = build(tmp_path, (DeliveryOutcome.SENT,) * 4)
+    lines[:] = [brief(sheet=s, row=str(r)) for r, s in enumerate(sheets, 10)]
+    counts = Counter()
+    def read(worksheet):
+        counts[worksheet.worksheet] += 1
+        return tuple(source(sheet=worksheet.worksheet, position=r) for r in range(10, 14))
+    reader.read_rows = read
+    read_brief = cycle.brief.read
+    def counted_brief(spreadsheet):
+        counts["brief"] += 1
+        return read_brief(spreadsheet)
+    cycle.brief.read = counted_brief
+    cycle.run("synthetic", now=NOW)
+    # One snapshot per sheet + four fresh target-only final checks (was20).
+    assert counts == Counter(sheets) + Counter({s: 1 for s in sheets}) + Counter(brief=5)
+    assert len(transport.calls) == 4
+    counts.clear()
+    cycle.run("synthetic", now=NOW + timedelta(minutes=15))
+    assert counts == {"brief": 1}
+    assert len(transport.calls) == 4
+    counts.clear()
+    cycle.run("synthetic", now=NOW + timedelta(minutes=30),
+              manual_key=task_key("synthetic", "2026", 10))
+    assert counts == {"brief": 2, "2026": 2}
+
+
+@pytest.mark.parametrize("change", ["qty", "mpn", "price", "duplicate", "removed"])
+def test_target_only_fresh_check_still_blocks_changed_identity_or_target(tmp_path, change):
+    cycle, lines, reader, transport, _ = build(tmp_path)
+    def mutate():
+        if change == "qty":
+            reader.rows = [source(qty=101)]
+        elif change == "mpn":
+            reader.rows = [source(mpn="OTHER")]
+        elif change == "price":
+            lines[0] = brief(price="3 USD")
+        elif change == "duplicate":
+            lines.append(brief(row="010", price=""))
+        else:
+            lines.clear()
+    cycle.research.hook = mutate
+    cycle.run("synthetic", now=NOW)
+    assert not transport.calls
+    assert cycle.store.rows()[0]["state"] == "FAILED"
+    assert cycle.issues
+
+
+@pytest.mark.parametrize("phase", ["schema", "research", "mail", "mail_runtime"])
+def test_local_failure_persisted_safe_retry_and_manual_failure(tmp_path, monkeypatch, phase):
+    from src.sheets.tp_brief import TpLocalError
+    from src.workflow import tp_research
+    cycle, _, _, transport, path = build(tmp_path)
+    def fail(*a, **k):
+        if phase == "mail_runtime":
+            raise RuntimeError("synthetic pure TP mail composition failure")
+        if phase == "mail":
+            raise TypeError("synthetic malformed TP result")
+        raise TpLocalError("TP_BRIEF_SCHEMA_UNAVAILABLE" if phase == "schema" else "TP_RESEARCH_FAILED")
+    target, attr = ((cycle.brief, "read") if phase == "schema" else
+                    (cycle.research, "execute_tp") if phase == "research" else (tp_research, "tp_mail"))
+    original = getattr(target, attr)
+    monkeypatch.setattr(target, attr, fail)
+    cycle.run("synthetic", now=NOW)
+    assert not transport.calls and cycle.issues
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT reason FROM workflow_tp_failures").fetchall()
+    if phase != "schema":
+        key = cycle.store.rows()[0]["task_id"]
+        assert cycle.store.get(key)["state"] == "FAILED"
+        with pytest.raises(TpLocalError):
+            cycle.run("synthetic", now=NOW, manual_key=key)
+    monkeypatch.setattr(target, attr, original)
+    cycle.run("synthetic", now=NOW + timedelta(minutes=15))
+    assert len(transport.calls) == 1
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT count(*) FROM workflow_tp_failures").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("phase", ["brief", "source", "prepare", "research", "outbox", "worker"])
+@pytest.mark.parametrize("kind", ["safety", "database", "unknown", "wrapped", "auth", "ledger", "wrapped_unknown"])
+def test_shared_and_unclassified_faults_never_swallowed(tmp_path, phase, kind):
+    from src.inso.session import SecurityViolation
+    from src.launcher.inso_session import InsoAuthenticationError
+    from src.sheets.tp_brief import TpLocalError
+    from src.workflow.v12_faults import FaultScope, V12Fault
+    from src.workflow.v12_store import V12DatabaseError
+    cycle, _, reader, transport, _ = build(tmp_path)
+    error = (V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE") if kind == "safety" else
+             sqlite3.DatabaseError("synthetic integrity fault") if kind == "database" else
+             RuntimeError("unclassified fault") if kind == "unknown" else
+             InsoAuthenticationError("MANUAL_VERIFICATION_REQUIRED") if kind == "auth" else
+             V12DatabaseError("synthetic ledger fault") if kind == "ledger" else
+             TpLocalError("TP_RESEARCH_FAILED"))
+    if kind == "wrapped":
+        error.__cause__ = SecurityViolation("synthetic ownership fault")
+    if kind == "wrapped_unknown":
+        error.__cause__ = RuntimeError("unclassified shared fault")
+    def fail(*a, **k):
+        raise error
+    if phase == "brief":
+        cycle.brief.read = fail
+    elif phase == "source":
+        reader.read_rows = fail
+    elif phase == "prepare":
+        cycle.prepare = fail
+    elif phase == "research":
+        cycle.research.execute_tp = fail
+    elif phase == "outbox":
+        cycle.outbox.enqueue_notification = fail
+    else:
+        cycle.worker.run_due = fail
+    with pytest.raises(type(error)) as caught:
+        cycle.run("synthetic", now=NOW)
+    assert caught.value is error
+    assert not transport.calls
+
+
+@pytest.mark.parametrize("kind", ["data", "invalid_input", "fx", "fx_redirect"])
+def test_tp_research_data_and_fx_failure_classification(tmp_path, kind):
+    from src.research.contracts import InvalidResearchInput
+    from src.research.ecb_fx import EcbFxError
+    from src.research.tp import TpFx
+    cycle, _, _, transport, _ = build(tmp_path)
+    def fail():
+        if kind == "invalid_input":
+            raise InvalidResearchInput("synthetic invalid model input")
+        if kind == "data":
+            raise TypeError("synthetic invalid TP projection")
+        def quote():
+            raise EcbFxError("ECB_UNTRUSTED_REDIRECT" if kind == "fx_redirect" else "ECB_FETCH_FAILED")
+        TpFx(SimpleNamespace(get_quote=quote), NOW).convert(Decimal(1), "USD")
+    cycle.research.hook = fail
+    if kind == "fx_redirect":
+        with pytest.raises(ValueError, match="FX_QUOTE_UNAVAILABLE"):
+            cycle.run("synthetic", now=NOW)
+    else:
+        cycle.run("synthetic", now=NOW)
+        assert cycle.issues
+        assert cycle.store.rows()[0]["state"] == "FAILED"
+    assert not transport.calls

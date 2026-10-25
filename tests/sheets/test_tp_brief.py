@@ -90,3 +90,12 @@ def test_exact_header_and_rows_preserved():
     service.read_brief = lambda _: {"values": [list(reversed(BRIEF_HEADERS))]}
     with pytest.raises(ValueError, match="SCHEMA"):
         BriefReader(service).read("synthetic")
+
+
+@pytest.mark.parametrize("response", [None, {"values": None}, {"values": [None]},
+                                    {"values": [BRIEF_HEADERS, None]},
+                                    {"values": [BRIEF_HEADERS, [123]]}])
+def test_malformed_brief_response_is_explicitly_tp_local(response):
+    from src.sheets.tp_brief import TpLocalError
+    with pytest.raises(TpLocalError, match="TP_BRIEF_SCHEMA_UNAVAILABLE"):
+        BriefReader(SimpleNamespace(read_brief=lambda _: response)).read("synthetic")

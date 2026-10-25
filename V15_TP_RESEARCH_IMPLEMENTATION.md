@@ -5,6 +5,77 @@ baseline: d67ebfe150340ea90760f5a2e44dcd7b92f8dac4
 branch: codex/v1-5-tp-research
 authority: Owner 2026-10-25 feature request; offline development only
 
+## CEO correction delivery (review c64d9d8076f38d2fe8702f68ab95f612afbcb0f8)
+
+P1/P2 only. Existing browser/readers, collectors, ECB, outbox/SMTP, SQLite,
+poll/manual thread and GUI paths remain canonical. No ordinary Research policy,
+purchase/quotation logic, dependency, runtime config, package or deployment change.
+
+### P1: isolated TP holds, shared failures retain canonical handling
+
+- `TpLocalError` identifies TP-only Brief schema failure in BOTH native header
+  validation and the adapter; source-sheet schema/document/gid guards stay shared.
+  Malformed Brief values/rows are also explicit TP schema holds.
+- `TpCycle.run` is the outer TP boundary on the existing poll/manual thread.
+  Recognized TP validation/identity/FX failures, plain TP research calculation
+  errors and pure mail-composition errors are held. Per-task pre-enqueue failure
+  remains FAILED with a safe reason; queued commands are recovered before any
+  retry decision. No ordinary workflow item or fabricated inquiry is inserted.
+- `TpStore.record_issues` persists current cycle/row/task holds in the additive
+  `workflow_tp_failures` table, including malformed Brief/no-bindable-order cases.
+  Migration reuses the existing verified backup before adding either TP table.
+  Existing GUI warnings expose automatic holds; manual failures report failure,
+  never completion. A later corrected poll can retry pre-mail FAILED tasks.
+- `tp_local_failure_reason` positively classifies known TP domains and walks
+  exception causes/contexts (including suppressed context). Shared typed CDP,
+  authorization, security, SQLite/ledger faults and unknown errors propagate to
+  existing recovery/pause/stop handling. ECB untrusted redirects are NOT local
+  missing-FX holds. Unknown browser/provider RuntimeError is deliberately not
+  guessed to be TP-only. Mail composition alone is pure/no shared I/O, so its
+  plain calculation RuntimeError is explicitly local. This is not catch-all
+  continuation or a change to the V1.4 fault policy.
+- Manual handling uses the same classifier. Missing selection is local; malformed
+  persisted order data and local-looking wrappers around shared faults propagate.
+  Existing pending/UNKNOWN outbox delivery still blocks resend.
+
+### P2: due-only snapshots and current-target final check
+
+- `read_orders(..., manual_key=None)` reads fresh Brief once, normalizes source
+  anchors, checks duplicates and persisted eligibility BEFORE source reads, then
+  takes at most one current snapshot per due source worksheet. No cross-poll or
+  pre-write snapshot is reused. Completed/non-retryable tasks read no source.
+- `_revalidate(order)` fetches fresh Brief and only the selected source, binds
+  only the current target and compares the entire TP order immediately before
+  enqueue. It never calls `read_orders` or binds other TP orders. Source model,
+  quantity, available brand/date, TP and source anchor still must agree. Duplicate
+  anchors including `010` vs `10`, removed targets and conflicts hold.
+- Counted synthetic four-order run: **20 -> 5 source reads** for one source,
+  **20 -> 6** for two sources. Fresh Brief remains **5** (discovery + four final
+  checks). All-completed later poll: **1 Brief, 0 source reads**. Manual one-target
+  rerun: **2 Brief, 2 selected-source reads, 0 other-source reads**. Existing native
+  TSV still downloads the selected worksheet; target-only refers to validation,
+  not an invented single-row transport or relaxed range guard.
+
+### Correction file map / verification
+
+| File | Scoped delta |
+| --- | --- |
+| src/sheets/tp_brief.py | explicit local schema error; malformed-response checks |
+| src/launcher/google_web.py | Brief-only header classification; original guards unchanged |
+| src/workflow/tp_research.py | persisted TP holds, local boundary, due/source batching, target-only final check |
+| src/launcher/backend.py | manual local/shared distinction and missing-selection handling |
+| tests/sheets/test_tp_brief.py | malformed schema/value regression |
+| tests/workflow/test_tp_research.py | counted reads, final identity holds, durable retry, shared fault matrix |
+| tests/launcher/test_tp_integration.py | two actual ordinary poll iterations after TP fault; shared stop/manual/native guards |
+| V15_TP_RESEARCH_IMPLEMENTATION.md | this correction map and verification |
+| tasks/2026-10-25-v15-tp-research.md | correction execution evidence; REVIEW_REQUIRED |
+
+Final verification and owned-artifact cleanup are recorded in the Task Packet.
+All tests are synthetic/offline with the existing SMTP guard. No real Sheets,
+CDP, mail, production ledger, purchase, build or deployment was used. Live
+activation/date coverage and the previously documented baseline failures remain
+outside this correction; no new live acceptance is claimed.
+
 ## Reuse audit and design
 
 The [Task Packet](tasks/2026-10-25-v15-tp-research.md) contains the reuse matrix
@@ -19,7 +90,7 @@ unreviewed later fixes, deployment file or runtime configuration was copied.
 | Dates | calendar_month_cutoff and each site's existing quote-date parser | independent TP DTO with current vs real quote date; BOM is_current flag | legacy observed_at and existing PriceCandidate unchanged |
 | FX / ranking | existing ECB provider, USD/RMB quote validation, Decimal, stock buckets | run-local conversion snapshot, factual distinct minimum/second | existing aggregation.py / INSO preference untouched |
 | Mail | same V12Store outbox, V12NotificationWorker, QQSMTPTransport | TP_RESEARCH kind, inquiry_id=None, generation-keyed commands | sender, retries and UNKNOWN quarantine unchanged |
-| SQLite | existing file, verified backup, reviewed V13 nullable-outbox upgrade | one additive workflow_requirements table | no fake workflow_items row or ordinary inquiry mutation |
+| SQLite | existing file, verified backup, reviewed V13 nullable-outbox upgrade | additive workflow_requirements and workflow_tp_failures tables | no fake workflow_items row or ordinary inquiry mutation |
 | Scheduler / GUI | same poll thread, 900-second wait, manual condition/gate and Order DTO | opt-in TP phase, third context action, TP historical display rows | no new thread, daemon, scheduler, browser or GUI shell |
 
 Ordinary SourceResult only retains selected prices and omits some individual

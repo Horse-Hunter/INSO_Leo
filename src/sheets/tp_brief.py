@@ -1,5 +1,6 @@
 """Read-only RFQ_BRIEF contract; explicit source anchor, never a V1 inquiry ID."""
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -14,6 +15,10 @@ BRIEF_HEADERS = (
     "customer_type", "decision_window", "min_datecode", "full_package",
     "customer_default_requirements", "updated_at",
 )
+
+
+class TpLocalError(ValueError):
+    """An explicitly identified TP-only failure; never a shared safety fault."""
 
 
 def quantity_value(value):
@@ -80,13 +85,14 @@ class BriefReader:
     def read(self, spreadsheet):
         response = execute_google_read(lambda: self.service.read_brief(spreadsheet),
                                        retry_wait=self.retry_wait)
-        rows = response.get("values", [])
-        if not rows or tuple(rows[0]) != BRIEF_HEADERS:
-            raise ValueError("TP_BRIEF_SCHEMA_UNAVAILABLE")
+        rows = response.get("values", []) if isinstance(response, Mapping) else None
+        if (not isinstance(rows, (list, tuple)) or not rows
+                or not isinstance(rows[0], (list, tuple)) or tuple(rows[0]) != BRIEF_HEADERS):
+            raise TpLocalError("TP_BRIEF_SCHEMA_UNAVAILABLE")
         result = []
         for position, row in enumerate(rows[1:], 2):
-            if len(row) > 17 or any(not isinstance(v, str) for v in row):
-                raise ValueError("TP_BRIEF_SCHEMA_UNAVAILABLE")
+            if not isinstance(row, (list, tuple)) or len(row) > 17 or any(not isinstance(v, str) for v in row):
+                raise TpLocalError("TP_BRIEF_SCHEMA_UNAVAILABLE")
             if any(v.strip() for v in row):
                 result.append(BriefLine(position, tuple(row) + ("",) * (17-len(row))))
         return tuple(result)

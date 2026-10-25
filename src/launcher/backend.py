@@ -1204,9 +1204,18 @@ class ProductionBackend(GuiBackend):
         success, message = False, "操作未执行。"
         try:
             if action == "tp":
-                key = self._tp_key(inquiry)
+                from src.sheets.tp_brief import TpLocalError
                 from src.workflow.tp_research import load_order
-                order = load_order(self._tp.store.get(key)["order_json"])
+                selected = None
+                try:
+                    key = self._tp_key(inquiry)
+                    selected = self._tp.store.get(key)
+                except KeyError as exc:
+                    if exc.__cause__ is not None or exc.__context__ is not None:
+                        raise
+                if selected is None:
+                    raise TpLocalError("TP_TASK_UNAVAILABLE")
+                order = load_order(selected["order_json"])
                 self._tp.run(order.spreadsheet, now=utc_now(), manual_key=key)
                 with self._lock:
                     self._manual_result = ManualOrderResult(request_id, inquiry, action, True,
@@ -1265,6 +1274,10 @@ class ProductionBackend(GuiBackend):
                 self._pause_v12(exc)
                 message = "采购流程需要人工处理，报价轮询保持原有独立策略。"
         except (KeyError, ValueError) as exc:
+            if action == "tp":
+                from src.workflow.tp_research import tp_local_failure_reason
+                if not tp_local_failure_reason(exc):
+                    raise  # Unknown shared validation/ownership faults keep old policy.
             message = ("TP 来源、目标价或邮件发送记录需核对，本次未重复发送。" if action == "tp" else
                        str(exc) if isinstance(exc, ValueError) else "找不到订单的源表定位，未执行操作。")
         except Exception:  # noqa: BLE001 - targeted edit/read failure is shown without raw provider text

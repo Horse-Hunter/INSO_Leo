@@ -330,9 +330,9 @@ class GoogleSheetsWebService:
     @staticmethod
     def _headers(rows, title):
         if title == "RFQ_BRIEF":
-            from src.sheets.tp_brief import BRIEF_HEADERS
+            from src.sheets.tp_brief import BRIEF_HEADERS, TpLocalError
             if not rows or tuple(rows[0]) != BRIEF_HEADERS or any(len(r) > 17 for r in rows):
-                raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_SCHEMA_UNAVAILABLE")
+                raise TpLocalError("TP_BRIEF_SCHEMA_UNAVAILABLE")
             return
         contracts = {
             "2026": (0, {0: "STATUS", 2: "CLASS", 4: "MPN", 5: "MFR", 6: "Qty"}),

@@ -198,3 +198,66 @@ scoped code/tests on the same V1.5 branch. Return exact new SHA,
 relevant test results and a brief fix map for CEO re-review. No
 packaging, installation, production-data changes, or live email
 authorization is granted by this review.
+
+## Executor correction evidence — P1/P2 only (2026-10-25)
+
+status: REVIEW_REQUIRED
+review_base: c64d9d8076f38d2fe8702f68ab95f612afbcb0f8
+
+- Reused the same V1.5 managed checkout and fast-forwarded cleanly to the CEO
+  review. No new worktree, parallel infrastructure, dependency, live config,
+  production data access, packaging or deployment. Existing V1.4/main dirty work
+  and protected CDP assets were untouched. No handoff was created or consumed.
+- P1 RESOLVED for re-review: explicit TP-only schema/data/research/mail composition
+  boundary and durable cycle/row/task holds. The additive TP failure table uses
+  existing verified migration backup. Existing task/outbox recovery remains the
+  authority on pre/post-enqueue retry and UNKNOWN delivery. Manual local failures
+  cannot report completion; missing selection is local, corrupt persisted payload
+  remains shared. Typed/wrapped CDP/auth/security/SQLite/ledger and unclassified
+  faults continue through existing V1.4 recovery/pause/stop paths. No catch-all
+  business continuation. Ordinary source schema guards remain GLOBAL_STOP.
+- P2 RESOLVED for re-review: fresh Brief due discovery filters durable task states
+  before source I/O; one source snapshot per due worksheet, discarded each run.
+  Final verification rereads Brief and only the current target's source, binds
+  only that target, and compares full order before enqueue. Normalized duplicate
+  anchors, missing targets and changed identity/TP still block mail.
+- Four-order count tests: same-source initial cycle **5 source reads vs20**;
+  two-source cycle **6 vs20**; fresh Brief stays5. Completed next cycle **1 Brief,
+  0 source**. One manual target **2 Brief,2 selected-source,0 unrelated-source**.
+  Native TSV still downloads a full selected sheet; no new row-read framework or
+  relaxed range/write guard. Snapshot reuse is TP-phase-local, not across earlier
+  ordinary purchase/quotation writes or later polls.
+- Changed files, interfaces and fix map: correction section of
+  `V15_TP_RESEARCH_IMPLEMENTATION.md`. Existing collectors, research windows,
+  aggregator, ECB implementation, sender and timer are unchanged. The only new
+  persistence is sanitized TP fault keys/reasons, not copied business payloads.
+- Final targeted **143 PASS /11.01s**: same five test modules as original delivery.
+  Includes malformed native/adapted Brief, TP calculation/input/FX/mail faults,
+  durable retry/manual failure, two real synthetic ordinary poll iterations after
+  TP faults, shared safety stop, cause/context and ledger/auth fault matrices,
+  changed target/source refusal, batching/completion/manual read counters, and
+  existing TP/outbox/GUI regression. A first harness run was interrupted because
+  its substituted runtime-error recorder omitted the stop signal; the harness
+  was corrected and all subsequent targeted runs completed.
+- Broad regression **2613 PASS,11 SKIP,2 same baseline FAIL /102.10s**. Both remain
+  `tests/launcher/test_rfq008_hold_lifecycle.py::test_unsettled_manual_attempt_preserves_durable_old_hold_and_automatic_barrier`
+  `[False-failure0]` / `[True-failure0]`: expected V12Fault versus existing browser
+  recovery deferral. These are the same two failures independently reproduced
+  against the reviewed baseline in the original delivery; their code is unchanged.
+  No failures were suppressed. Final scoped run additionally verifies explicit
+  InvalidResearchInput isolation added after broad-suite collection.
+- Commands: prior documented pytest environment/commands reused, `-q -p
+  no:cacheprovider --tb=short --basetemp <owned-temp>`; broad run uses existing
+  V1.4 release site-packages for pypdf only, no installation. Ruff over all src
+  and changed tests PASS; git diff whitespace review PASS. Existing SMTP guard
+  blocked the same two old tests' connection attempts: no real mail or external
+  action occurred.
+- Retired all **7** owned synthetic test directories after resolved workspace
+  path and nested reparse checks, **408322481 bytes**. No permission/ACL changes,
+  runtime/profile/rollback cleanup or worktree deletion. Retained canonical V1.5
+  checkout `C:\Users\Leo\.codex\worktrees\v1-5-tp-research\INSO_Leo` for review;
+  no duplicate V1.5 checkout was created, so prune/removal was not needed.
+- Remaining UNKNOWNs are unchanged: separately authorized four-live-row preflight,
+  production migration/SMTP, real website date/coverage and 2026 date provenance.
+  Unknown infrastructure errors remain fail-closed rather than guessed local.
+  Return to CEO for independent review; activation, sending and release stay closed.

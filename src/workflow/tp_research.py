@@ -8,10 +8,14 @@ from hashlib import sha256
 from pathlib import Path
 
 from src.research.source_contracts import money_text
-from src.sheets.tp_brief import TpOrder, bind_tp_order, source_worksheet
+from src.sheets.tp_brief import TpLocalError, TpOrder, bind_tp_order, source_worksheet
 
 from .v12_contracts import NotificationCommand, NotificationKind, NotificationRecipient
 from .v12_store import create_verified_backup
+
+
+class _TpDataError(TpLocalError):
+    """Plain calculation failure captured at a TP data/composition boundary."""
 
 
 def task_key(spreadsheet, sheet, row, kind="target_price"):
@@ -40,14 +44,23 @@ class TpStore:
 
     def migrate(self):
         with self.connect() as db:
-            exists = db.execute("SELECT 1 FROM sqlite_master WHERE name='workflow_requirements'").fetchone()
-        if not exists:
+            tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if not {"workflow_requirements", "workflow_tp_failures"} <= tables:
             create_verified_backup(self.path, self.path.parent / "backups" / "tp-upgrade")
         with self.connect() as db:
             db.execute("""CREATE TABLE IF NOT EXISTS workflow_requirements (
                 task_id TEXT PRIMARY KEY, kind TEXT NOT NULL, order_json TEXT NOT NULL,
                 generation INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL,
                 command_id TEXT, reason TEXT, updated_at TEXT NOT NULL)""")
+            db.execute("""CREATE TABLE IF NOT EXISTS workflow_tp_failures (
+                fault_key TEXT PRIMARY KEY, reason TEXT NOT NULL, updated_at TEXT NOT NULL)""")
+
+    def record_issues(self, issues, now):
+        """Current TP holds, including rows that cannot safely form an order."""
+        with self.connect() as db:
+            db.execute("DELETE FROM workflow_tp_failures")
+            db.executemany("INSERT INTO workflow_tp_failures VALUES (?, ?, ?)",
+                           ((str(key), reason, now.isoformat()) for key, reason in issues.items()))
 
     def rows(self):
         with self.connect() as db:
@@ -165,27 +178,83 @@ class TpCycle:
         self.prepare, self.stop_requested = prepare, stop_requested
         self.issues = {}
 
-    def read_orders(self, spreadsheet):
+    def _line_key(self, spreadsheet, line):
+        pointer = line.get("sheet_row")
+        if line.get("sheet") not in {"2026", "SHAHAB"} or not pointer.isdecimal() or int(pointer) < 1:
+            raise ValueError("TP_SOURCE_UNMATCHED")
+        return task_key(spreadsheet, line.get("sheet"), int(pointer))
+
+    def read_orders(self, spreadsheet, *, manual_key=None):
         lines = self.brief.read(spreadsheet)
-        counts = Counter((r.get("sheet"), r.get("sheet_row")) for r in lines if r.get("target_price").strip())
+        # Normalize physical anchors before counting; "010" and "10" are identical.
+        counts = Counter()
+        for line in lines:
+            try:
+                counts[self._line_key(spreadsheet, line)] += 1
+            except ValueError:
+                pass
+        states = {row["task_id"]: row["state"] for row in self.store.rows()}
+        snapshots = {}
         orders = []
         self.issues = {}
         for line in lines:
             if not line.get("target_price").strip():
                 continue
             try:
-                if counts[(line.get("sheet"), line.get("sheet_row"))] != 1:
+                key = self._line_key(spreadsheet, line)
+                if manual_key is not None and key != manual_key:
+                    continue
+                if manual_key is None and states.get(key) not in {None, "PENDING", "FAILED"}:
+                    continue
+                if counts[key] != 1:
                     raise ValueError("TP_SOURCE_AMBIGUOUS")
-                if line.get("sheet") not in {"2026", "SHAHAB"}:
-                    raise ValueError("TP_SOURCE_UNMATCHED")
+                if manual_key is not None and not self.store.manual_allowed(key):
+                    raise TpLocalError("TP_TASK_BUSY_OR_DELIVERY_UNCONFIRMED")
                 source = source_worksheet(spreadsheet, line)
-                orders.append(bind_tp_order(line, spreadsheet, self.reader.read_rows(source)))
+                if source not in snapshots:
+                    snapshots[source] = self.reader.read_rows(source)
+                orders.append(bind_tp_order(line, spreadsheet, snapshots[source]))
             except ValueError as exc:
+                if not tp_local_failure_reason(exc):
+                    raise
                 self.issues[line.brief_row] = str(exc)
         return orders
 
+    def _revalidate(self, order):
+        """Fresh native reads, but only bind the current target, never other orders."""
+        key = task_key(order.spreadsheet, order.sheet, order.row)
+        matches = []
+        for line in self.brief.read(order.spreadsheet):
+            try:
+                if self._line_key(order.spreadsheet, line) == key:
+                    matches.append(line)
+            except ValueError:
+                continue
+        if len(matches) != 1:
+            raise TpLocalError("TP_SOURCE_CHANGED")
+        line = matches[0]
+        current = bind_tp_order(line, order.spreadsheet,
+                               self.reader.read_rows(source_worksheet(order.spreadsheet, line)))
+        if current != order:
+            raise TpLocalError("TP_SOURCE_CHANGED")
+
     def run(self, spreadsheet, *, now, manual_key=None):
-        orders = self.read_orders(spreadsheet)
+        self.issues = {}
+        try:
+            self._run(spreadsheet, now=now, manual_key=manual_key)
+        except ValueError as exc:
+            reason = tp_local_failure_reason(exc)
+            if not reason:
+                raise
+            self.issues[manual_key or "cycle"] = reason
+            self.store.record_issues(self.issues, now)
+            if manual_key is not None:
+                raise TpLocalError(reason) from None
+            return
+        self.store.record_issues(self.issues, now)
+
+    def _run(self, spreadsheet, *, now, manual_key=None):
+        orders = self.read_orders(spreadsheet, manual_key=manual_key)
         found = False
         for order in orders:
             if self.stop_requested():
@@ -197,7 +266,9 @@ class TpCycle:
             found = True
             try:
                 command = self.store.claim(key, order, now, manual=manual_key is not None)
-            except ValueError:
+            except ValueError as exc:
+                if not tp_local_failure_reason(exc):
+                    raise
                 self.issues[key] = "TP_IDENTITY_CHANGED"
                 if manual_key is not None:
                     raise
@@ -208,16 +279,28 @@ class TpCycle:
                 continue
             try:
                 self.prepare(key)
-                result = self.research.execute_tp(key, order, now=now)
+                try:
+                    result = self.research.execute_tp(key, order, now=now)
+                except (TypeError, AttributeError, ArithmeticError) as exc:
+                    # Plain computation/data failures are TP-local. Typed or
+                    # wrapped infrastructure/security exceptions remain shared.
+                    if (type(exc).__module__ not in {"builtins", "decimal"}
+                            or exc.__cause__ is not None or exc.__context__ is not None):
+                        raise
+                    raise _TpDataError("TP_RESEARCH_DATA_INVALID") from None
                 if self.stop_requested():
                     self.store.finish(key, "FAILED", now, "TP_STOPPED")
                     continue
-                # Re-read BOTH Brief and source after research, before queueing mail.
-                current = [o for o in self.read_orders(spreadsheet)
-                           if task_key(o.spreadsheet, o.sheet, o.row) == key]
-                if current != [order]:
-                    raise ValueError("TP_SOURCE_CHANGED")
-                self.outbox.enqueue_notification(tp_mail(order, result, command, now))
+                self._revalidate(order)
+                # Pure mail composition has no shared I/O; unexpected malformed
+                # TP result data must not stop ordinary procurement/quotation.
+                try:
+                    mail = tp_mail(order, result, command, now)
+                except (ValueError, TypeError, AttributeError, KeyError, ArithmeticError, RuntimeError) as exc:
+                    if type(exc).__module__ not in {"builtins", "decimal"}:
+                        raise
+                    raise _TpDataError("TP_MAIL_PREPARATION_FAILED") from None
+                self.outbox.enqueue_notification(mail)
                 self.store.finish(key, "MAIL_QUEUED", now)
             except Exception as exc:
                 # An enqueue may have committed before a crash/error. Inspect its
@@ -225,11 +308,46 @@ class TpCycle:
                 self.store.recover(now, key=key)
                 if self.store.get(key)["state"] == "PENDING":
                     self.store.finish(key, "FAILED", now, "TP_RESEARCH_UNCONFIRMED")
-                if isinstance(exc, ValueError) and str(exc) in {"TP_SOURCE_CHANGED", "FX_QUOTE_UNAVAILABLE"}:
-                    self.issues[key] = str(exc)
+                reason = tp_local_failure_reason(exc)
+                if reason:
+                    if self.store.get(key)["state"] == "FAILED":
+                        self.store.finish(key, "FAILED", now, reason)
+                    self.issues[key] = reason
                     if manual_key is None:
                         continue
+                    raise TpLocalError(reason) from None
                 raise
         self.worker.run_due(now=now)
         if manual_key is not None and not found:
             raise ValueError("TP_SOURCE_UNMATCHED")
+
+
+def tp_local_failure_reason(exc):
+    """Positive classification only. Unknown and wrapped shared faults propagate."""
+    from urllib.error import URLError
+
+    from src.research.contracts import InvalidResearchInput
+    from src.research.ecb_fx import EcbFxError
+
+    reason = "TP_RESEARCH_INPUT_INVALID" if type(exc) is InvalidResearchInput else str(exc)
+    pure, seen = False, set()
+    while exc is not None:
+        if id(exc) in seen:
+            return None
+        seen.add(id(exc))
+        pure = pure or isinstance(exc, _TpDataError)
+        local = isinstance(exc, TpLocalError) or type(exc) is InvalidResearchInput or (type(exc) is ValueError and (
+            str(exc).startswith("TP_") or str(exc) == "FX_QUOTE_UNAVAILABLE"))
+        computation = pure and (type(exc) in {ValueError, TypeError, AttributeError, KeyError, RuntimeError}
+            or isinstance(exc, ArithmeticError) and type(exc).__module__ in {"builtins", "decimal"})
+        fx = reason == "FX_QUOTE_UNAVAILABLE" and (
+            type(exc) in {URLError, TimeoutError, ConnectionError, ConnectionResetError,
+                          ConnectionAbortedError, ConnectionRefusedError}
+            or type(exc) is EcbFxError and str(exc) in {
+                "ECB_FETCH_FAILED", "ECB_INVALID_OBSERVATION", "ECB_DUPLICATE_OBSERVATION",
+                "ECB_MISSING_OBSERVATION", "ECB_OBSERVATION_DATE_MISMATCH"}
+            or type(exc).__module__ == "decimal" and isinstance(exc, ArithmeticError))
+        if not (local or computation or fx):
+            return None
+        exc = exc.__cause__ or exc.__context__
+    return reason
