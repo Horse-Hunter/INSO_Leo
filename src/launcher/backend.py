@@ -1757,11 +1757,16 @@ class ProductionBackend(GuiBackend):
         if "Browser/CDP" in waiting and self._inso_session is not None:
             self._close_inso_order_tab()
         if manual_inso:
-            from .inso_session import authenticated_inso_shell_available
+            from .inso_session import (
+                authenticated_inso_shell_available,
+                inso_session_page_absent,
+            )
             if self._browser_handle is None and rc is not None:
                 self._v13_browser(rc, cfg)
             browser = getattr(self._browser_handle, "browser", None)
-            if not authenticated_inso_shell_available(browser):
+            # A missing page resumes the ordinary guarded session path, not a
+            # successful business read; the outage clock remains unchanged.
+            if not authenticated_inso_shell_available(browser) and not inso_session_page_absent(browser):
                 raise InsoAuthenticationError("MANUAL_VERIFICATION_REQUIRED")
             with self._lock:
                 self._site_manual_wait.discard("INSO")

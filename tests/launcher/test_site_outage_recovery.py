@@ -150,6 +150,55 @@ def test_human_inso_challenge_only_probes_without_credential_or_business_retry(t
     backend.shutdown()
 
 
+@pytest.mark.parametrize('url', [None, 'https://docs.google.com/spreadsheets/example',
+    'https://yingsuo.alperp.cn/login.aspx', 'https://yingsuo.alperp.cn/home.aspx',
+    'https://yingsuo.alperp.cn/InnerEnquiry/YeWuXJ/List.aspx'])
+def test_missing_inso_page_releases_only_manual_gate_not_outage(tmp_path, url):
+    backend = ProductionBackend(root=tmp_path)
+    context = SimpleNamespace(pages=[])
+    if url is not None:
+        context.pages.append(SimpleNamespace(is_closed=lambda: False, context=context,
+            main_frame=SimpleNamespace(url=url), frames=[]))
+    backend._browser_handle = SimpleNamespace(browser=SimpleNamespace(
+        is_connected=lambda: True, contexts=[context]))
+    backend._site_manual_wait.add('INSO')
+    backend._site_outages.update(INSO=123.0, **{'Google Sheets': 456.0})
+    backend._state = RunState.QUOTATION_RUNNING
+    backend._combined = SimpleNamespace(v12_paused=True)
+    try:
+        if url is not None and 'yingsuo.alperp.cn' in url:
+            with pytest.raises(launcher.InsoAuthenticationError, match='MANUAL_VERIFICATION_REQUIRED'):
+                backend._check_site_recovery()
+            assert 'INSO' in backend._site_manual_wait
+            assert backend._combined.v12_paused
+        else:
+            backend._check_site_recovery()
+            assert 'INSO' not in backend._site_manual_wait
+            assert not backend._combined.v12_paused
+            assert backend._state is RunState.RUNNING
+        assert backend._site_outages == {'INSO': 123.0, 'Google Sheets': 456.0}
+        assert not backend._stop.is_set()
+    finally:
+        backend._browser_handle = None  # Synthetic handle has no business/cleanup capability.
+        backend._combined = None
+        backend.shutdown()
+
+
+def test_page_absence_requires_readable_connected_single_context():
+    from src.launcher.inso_session import inso_session_page_absent
+
+    context = SimpleNamespace(pages=[])
+    assert inso_session_page_absent(SimpleNamespace(is_connected=lambda: True, contexts=[context]))
+    assert not inso_session_page_absent(None)
+    assert not inso_session_page_absent(SimpleNamespace(is_connected=lambda: False, contexts=[context]))
+    assert not inso_session_page_absent(SimpleNamespace(is_connected=lambda: True, contexts=[]))
+    assert not inso_session_page_absent(SimpleNamespace(is_connected=lambda: True, contexts=[context, context]))
+    context.pages = [SimpleNamespace(is_closed=lambda: False)]  # Unreadable URL is not absence.
+    assert not inso_session_page_absent(SimpleNamespace(is_connected=lambda: True, contexts=[context]))
+    context.pages = [SimpleNamespace(is_closed=lambda: True)]
+    assert inso_session_page_absent(SimpleNamespace(is_connected=lambda: True, contexts=[context]))
+
+
 
 @pytest.mark.parametrize('reason', ['INSO_QUERY_RETRIES_EXHAUSTED', 'GOOGLE_SPREADSHEET_UNAVAILABLE'])
 def test_actual_poller_observes_twelve_waits_before_three_hour_global_stop(tmp_path, monkeypatch, reason):

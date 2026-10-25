@@ -257,6 +257,19 @@ def _verified_shell_frame(page: Any, context: Any) -> Any | None:
         return None
 
 
+def inso_session_page_absent(browser: Any) -> bool:
+    """Prove no INSO page remains; unreadable/disconnected state is not absence."""
+    try:
+        if browser is None or not browser.is_connected() or len(browser.contexts) != 1:
+            return False
+        return all(
+            page.is_closed() or urlsplit(page.main_frame.url).hostname != _INSO_HOSTNAME
+            for page in tuple(browser.contexts[0].pages)
+        )
+    except Exception:  # noqa: BLE001 - ambiguity must preserve manual verification
+        return False
+
+
 def authenticated_inso_shell_available(browser: Any) -> bool:
     """Observe human recovery without navigation, credentials or login clicks."""
     try:
