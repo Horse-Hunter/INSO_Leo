@@ -1,5 +1,28 @@
 # Windows release
 
+## Owner-authorized V1.5 local release (2026-10-25)
+
+Canonical script/spec supports `-Version 1.5` and optional `-PythonExecutable` to
+reuse the existing release environment. Built source
+ea537060a42c8b8b53c4472034ff7df4e387189c; no new dependency/packaging path.
+Use the standard Python Tcl/Tk directories during build; test overrides pointing
+to frozen _tcl_data can mislead PyInstaller's Tk sibling lookup and must be unset.
+Dependency self-check and RELEASE_SCAN_OK PASS before installation. Installed
+D:/Program_Leo/INSO_Leo/dist/INSO_V1.5/INSO_V1.5.exe; SHA256
+C45F8D8DC98ABE933A36997DDE9A4C85D803B3521FDAB5E4D00D6A3CD159FEF7.
+All2875 program asset hashes verified. Runtime junction points to existing
+INSO_V1.4/runtime; preserve that directory, its order-mail ledger and the central
+V1.2 workflow path. V1.4 program remains unchanged and its self-check PASS.
+V1.5 enables the same serial TP poll phase by default (explicit false overrides),
+retains the cross-version mutex, and uses future Owner229+Shawn TP recipients.
+Two verified trial SENT tasks carried forward with immutable original messages
+and verified pre-change backups; ordinary state unchanged. Full offline suite
+2666 PASS/11 SKIP, installed dependency/idle GUI/CDP/Vault readiness checks PASS.
+Actual GUI opened idle; no --start-inquiry, real SMTP, purchase or Sheet write.
+Live business acceptance remains UNKNOWN. Source changes are REVIEW_REQUIRED;
+Owner explicitly authorized this local release. Existing Task Packet contains
+complete evidence, first failed-build cleanup and retained/retired asset details.
+
 ## Build/release retention (binding)
 
 **Trigger:** every build, frozen test, deployment scan, release or failed attempt. **Executor** reuses `scripts/build_windows_release.ps1` and its existing stage/scanner, avoiding repeated full frozen copies.

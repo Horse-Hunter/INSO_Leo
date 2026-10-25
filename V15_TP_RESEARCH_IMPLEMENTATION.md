@@ -36,6 +36,24 @@ mail effect, verifies pending manual result and durable ordinary quotation holds
 and retains GLOBAL_STOP assertions for unrelated failures. Production recovery
 code is unchanged. Earlier verification statements below are historical snapshots.
 
+Current verification: **2666 PASS,11 SKIP,0 FAIL /103.67s**; Ruff/diff checks PASS.
+Built source ea537060a42c8b8b53c4472034ff7df4e387189c; existing build pipeline,
+frozen self-check and artifact scan PASS. Installed separate
+D:/Program_Leo/INSO_Leo/dist/INSO_V1.5/INSO_V1.5.exe, all2875 assets verified.
+Installed GUI/CDP/credential checks PASS; actual V1.5 window launched idle and
+responding. Existing shared runtime junction retains normal workflow/order-mail
+state; no V1.4 binary/config replacement. Two Owner-approved trial SENT tasks and
+original immutable recipients carried forward under mutex/verified backups;
+ordinary data digests unchanged, integrity/FK checks PASS. Future TP generations
+use both recipients. No real mail, procurement, quotation, Sheet write or polling
+executed in this integration/release task. Live end-to-end business acceptance
+remains UNKNOWN; Owner can start the existing inquiry flow from the open GUI.
+Source status remains REVIEW_REQUIRED, local release explicitly Owner-authorized.
+Cleanup retired590679617 bytes in ten owned temp directories plus helper; canonical
+build stages/work removed, no extra frozen copy. Operational receipts/backups,
+small hash manifest and V1.4 rollback are retained. Exact release hashes and first
+rejected-build diagnosis are recorded in the existing Task Packet.
+
 ## CEO correction delivery (review c64d9d8076f38d2fe8702f68ab95f612afbcb0f8)
 
 P1/P2 only. Existing browser/readers, collectors, ECB, outbox/SMTP, SQLite,

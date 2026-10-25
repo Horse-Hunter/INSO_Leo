@@ -46,7 +46,51 @@ Read-only canonical IC/HQ clients now return valid full-query prices, HQ two
 dated prices; no raw data in evidence. Disposable synthetic receipt migration
 verified exact copy, idempotence, ordinary-state digests unchanged, automatic
 skip and manual rerun allowed. Owner explicitly selects carrying two trial SENT
-states forward. Build/deployment outcome follows below after actual verification.
+states forward.
+
+Local release completed under Owner authorization (source review still
+REVIEW_REQUIRED). Built production source
+ea537060a42c8b8b53c4472034ff7df4e387189c using the canonical script/spec and
+existing release interpreter. First frozen dependency check rejected the build:
+the command had reused test Tcl paths, causing PyInstaller to infer a nonexistent
+Tk sibling. Failed stage was automatically retired. Unsetting those command-local
+test overrides let the original Python Tcl/Tk package correctly; no dependency
+installation, framework change or production-code workaround was introduced.
+Second build: frozen dependency check and RELEASE_SCAN_OK PASS. Installed all
+2875 generic program assets,267875578 bytes, at
+D:/Program_Leo/INSO_Leo/dist/INSO_V1.5 with all SHA256 hashes verified after move.
+EXE SHA256 C45F8D8DC98ABE933A36997DDE9A4C85D803B3521FDAB5E4D00D6A3CD159FEF7.
+Runtime is a junction to the existing V1.4 runtime, preserving order-mail receipts,
+configs, central workflow path and Vault/CDP contracts. V1.4 executable hash
+08A04ED747A6B92E2E3194BB1BFA6F5AFAA4C385F60BC86159525D9BF055D954 unchanged.
+No later divergent V1.4 branch was overlaid onto the reviewed V1.5 baseline.
+
+Installed V1.5 dependency, hidden actual idle GUI, attach-only canonical CDP and
+credential-readiness checks all exit0. GUI title INSO_V1.5,
+business/order threads false at idle check, same protected browser context with
+seven existing pages. Old V1.4 dependency self-check also exit0. Under the existing
+named mutex and verified backups, copied precisely two current SENT TP tasks,
+their existing immutable command payloads and original recipient receipts from
+the private trial ledger into the central workflow file. All ordinary tables/
+non-TP outbox contents compared equal before/after; integrity and foreign-key
+checks PASS. Current tasks remain manual-rerunnable and automatic-complete; no
+old inquiry_id synthesized. Older trial generations stay in the original private
+trial ledger, not replayed. No SMTP, Sheet write, purchase or quotation performed.
+
+Launched the installed V1.5 with NO --start-inquiry argument. Actual INSO_V1.5
+window responding; retained its existing diagnostic observer. No real poll/full
+purchase acceptance was run: ordinary business chain is verified offline, live
+query proof covers IC/HQ, and installed checks prove startup/readiness only.
+Source remains REVIEW_REQUIRED for CEO, despite explicit Owner local release.
+
+Cleanup: all ten owned test/synthetic-migration directories and disposable helper
+retired after absolute-path/reparse checks:590679617 bytes. Failed/successful
+PyInstaller work/staging retired by original script; moved verified artifact so
+no spare frozen copy remains in the worktree. Retain small program hash manifest,
+operational trial receipts, verified migration backups, live V1.5 and required
+V1.4 rollback/runtime. Existing shared assets and unknown dirty work untouched.
+
+### Historical offline phase (superseded only by explicit extensions above)
 
 Offline source implementation and synthetic verification only. No real Sheets/CDP,
 mail, production DB, procurement, build or deployment. Existing V1.5 worktree;
