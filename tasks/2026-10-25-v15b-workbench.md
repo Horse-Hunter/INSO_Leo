@@ -2,7 +2,7 @@
 
 status: RELEASE_HOLD / FINAL_ACCEPTANCE_IN_PROGRESS
 
-## Owner unified task page2026-10-26 (IN_PROGRESS)
+## Owner unified task page2026-10-26 (INSTALLED_IDLE / REVIEW_REQUIRED)
 
 Owner explicitly chose one page and authorized canonical build/overwrite/report.
 Remove duplicate research navigation, retain task status, existing reference price,
@@ -22,6 +22,22 @@ of the now-nine-field observation; corrected only diagnostic consumption to
 include planned-check/recovery fields. Whole scripts Ruff has an unrelated
 pre-existing scanner import-format issue, left untouched; changed files pass.
 Old live65060/64712 already exited normally at11:47:03Z, no forced termination.
+45layout combinations/90recovery loops/three workloadsPASS, zero callbacks.
+Canonical build669fe6ada3a450eaef5f74532a371d6fb55ffd01/self-check/scannerPASS;
+asset-only install2875hashesPASS, originalmutex held, priorprogram and verified
+DB/config/encrypted-vault backed up; no migration/config/ledger/recipient delta,
+TPfalse/V14/runtime intact. NewEXE DA21769649159216BB66604AB601F051C55C192BFA62A3F09991F5EE03BA9A4A,
+realgui_ready69516/observer71664, frozen embedded page list verifies five menus.
+Installed self/idle checksPASS. 121.281s short CPU0.01691%host, RSS95.97–96.09MiB,
+GDI136/USER258 stable; no business started. 24h prior9fsource test uninterrupted
+and source hashes unchanged; cannot claim new five-page build24hPASS.
+Owner authorized overwrite; no actual procurement/Sheets writes/SMTP. Preserve
+RELEASE_HOLD. See updated original report and unified-task-center evidence.
+Retired exact marked frozen stage, synthetic UI output after evidence copy and
+completed pytest tree; retained installed program, immediate rollback/protected
+state and small release diagnostics. Both worktrees retained deliberately: old
+immutable running soak versus new sole active UI implementation; do not archive
+either until review/soak ownership ends. No other checkout or source modified.
 
 ## Owner final recheck and push2026-10-26 (completed checks; REVIEW_REQUIRED)
 

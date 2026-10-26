@@ -1,0 +1,48 @@
+{
+  "pid": 69516,
+  "watch_pid": 71664,
+  "elapsed": 121.39100000000326,
+  "samples": 13,
+  "logical_cpus": 16,
+  "qualification": "Finite read-only GetProcessTimes/GetThreadTimes on installed idle process and its existing observer; menu/tray activity may occur; no business started.",
+  "app": {
+    "seconds": 121.28099999998813,
+    "cpu_host_percent": 0.016909336581988944,
+    "rss_min": 100630528,
+    "rss_max": 100761600,
+    "private_min": 73019392,
+    "private_max": 73224192,
+    "threads_min": 8,
+    "threads_max": 14,
+    "handles_min": 516,
+    "handles_max": 525,
+    "gdi_range": [
+      136,
+      136
+    ],
+    "user_range": [
+      258,
+      258
+    ]
+  },
+  "observer": {
+    "seconds": 121.28100000001723,
+    "cpu_host_percent": 0.0,
+    "rss_min": 21753856,
+    "rss_max": 21803008,
+    "private_min": 15167488,
+    "private_max": 15265792,
+    "threads_min": 1,
+    "threads_max": 4,
+    "handles_min": 128,
+    "handles_max": 128,
+    "gdi_range": [
+      0,
+      0
+    ],
+    "user_range": [
+      1,
+      1
+    ]
+  }
+}
