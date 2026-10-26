@@ -586,3 +586,97 @@ retest are the only new performance work proposed by this review.
 `PERFORMANCE_INVESTIGATION_REQUIRED / BUILD_READY_HOLD /
 RELEASE_HOLD`; no code rewrite, build, installation, TP enable,
 SMTP or production write authorized.
+
+
+## CEO independent CPU-performance review — 2026-10-26
+
+**PERFORMANCE_REVIEW_PASS (scoped sustained idle CPU concern) /
+HISTORICAL_ROOT_CAUSE_UNKNOWN /
+BUILD_READY_PENDING_24H / RELEASE_HOLD.**
+
+Reviewed the exact evidence commit
+`db39980fdf80b791515d07fe3c83dc1956c7eab5`,
+one commit after CEO review
+`7765f07ab8a30e27aae1f378eeda5b77483e4b4f`.
+Compared actual changed-file list, the current
+`V15_UI_UPGRADE_REPORT.md`, `cpu-review/collection.json`,
+post-warmup `summary.json` and `native.jsonl` groups,
+native GetProcessTimes/GetThreadTimes methodology and
+`exact-probe-diff.txt`. The commit changes **no application
+`src/` modules**, frozen assets or production paths: additions
+are finite diagnostic/analysis scripts, evidence and reports.
+The CEO cross-checked committed evidence; the Windows runs
+themselves were performed by Codex, not independently rerun
+by CEO.
+
+**Sustained idle CPU concern is cleared for source-review purposes:**
+same-machine 16 logical CPU, real Windows 125% DPI; paired
+fixed 250 synthetic orders with the same overview/window/initial
+preparation, 60s warm-up, 601.375s visible idle and 601.453s
+genuine tray idle respectively show **0.01835% host** and
+**0.01689% host** process CPU. Independent 10s Win32 process
+and thread counters corroborate 30s GUI sampling. A distinct
+625s post-warm-up reproduction of the prior 1000-row PERF
+setup shows **0.03406% host** during natural foreground
+(22/22 native 30s foreground endpoints). These are not game
+tests or actual production-backend workload and must not be
+extrapolated to live CDP/Research. An auxiliary 250-row tray
+run lasted 571s and was correctly not counted as another
+full ten-minute run.
+
+**Native CPU:** the main Python/Tk GUI thread accounted
+for essentially all measured app user/kernel CPU in the
+valid low-load intervals; Tcl/IME helper threads had
+zero or near-zero *measurable* increments. The thread
+start module/offset is not a native stack, and short
+Win32 time quantization plus thread-exit residuals
+preclude fine-grained attribution. At 250 rows, the
+actual GUI tick cadence remained ~598 times in 601s
+visible and ~200 times in 601s tray; no excessive
+redraw/layout or callback queue accumulation was
+observed. Diagnostic measurement overhead was
+quantified and NOT silently subtracted to obtain
+favorable CPU numbers. Short-run RSS, Private Bytes,
+handles, GDI and USER were broadly stable, but
+cannot prove a 24h no-leak condition.
+
+**Historical uncertainty retained:** the previous 3.278%
+host CPU figure came from two short, differently warmed
+foreground component intervals, while the ~0.192%
+original-demo figure was from a different dynamic
+Mock process during an unexplained instrumentation gap.
+A ~3.404% initial ~1.6s spike was reproduced in the
+old 1000-row setup, but this **does not explain**
+the original 30s/60s high samples; the original
+high-load native stack/thread trace is unavailable.
+Therefore the historical status is
+`NOT_REPRODUCED / ROOT_CAUSE_UNKNOWN`, **not**
+`FIXED`, and there is no evidence-grounded need
+to alter the source, refresh intervals, task scheduler,
+or safety guards.
+
+**Disposition and remaining gates:**
+- Close this **specific 3.28% sustained-frontground-CPU
+  review blocker** as `PERFORMANCE_REVIEW_PASS`;
+  no speculative UI/CTk rewrite or new CPU profiler task.
+- Retain `RELEASE_HOLD`; do not grant `BUILD_READY`
+  until the independently running **true 86400s**
+  synthetic soak has ended and final CPU/memory/handle/
+  queue/callback trends are reviewed against actual
+  timestamps and any sampling gaps.
+- Final live Chrome/Research GPU/CPU/gameplay effects,
+  Windows 100%/150% system DPI, pointer-based context
+  menu, and actual business-write/SMTP integration
+  are **NOT_VERIFIED**. For intended deployment,
+  require explicitly scoped Owner acceptance or
+  controlled tests of material remaining risks; no
+  inferred production authorization. The older
+  installed V1.5 EXE has different default TP behavior
+  and is not the reviewed latest six-page source.
+- Existing demo PID71024 and 24h soak PID70956
+  and their outputs were reported undisturbed by
+  the finite probes; no protected runtime/ledger,
+  outbound messages, app source, or install was changed.
+
+**CEO decision:** scoped CPU review ACCEPTED, no
+source fixes requested, production release remains HOLD.
