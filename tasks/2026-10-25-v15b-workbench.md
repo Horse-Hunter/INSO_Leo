@@ -431,3 +431,125 @@ UNKNOWN/SENDING/RESEARCHING, read-only display and real gate refusal.
 Move to a distinct, Owner-approved release-readiness/preflight
 phase, keeping production activation on HOLD until the remaining
 approval and verification gates are closed.
+
+
+## CEO independent immediate-acceptance review — 2026-10-26
+
+**FUNCTIONAL_ACCEPTANCE_PASS (narrow synthetic UI and explicitly bounded read-only scope) /
+PERFORMANCE_INVESTIGATION_REQUIRED /
+BUILD_READY_HOLD / RELEASE_HOLD.**
+
+Reviewed actual delivery SHA
+`37fe9ac260b162870073967be9f78657f2fe144a` against the
+previous staged-acceptance evidence SHA
+`b2b4936770aad4a8cda53e5ecaf6fbee8475d17b`.
+The four intervening commits add reports, synthetic diagnostic/probe
+scripts, and evidence. The comparison showed **no modification to
+`src/` or production packaging source**. Read the updated
+`V15_UI_UPGRADE_REPORT.md`, component, live-source and Google evidence,
+resource summaries, source-profile output and the read-only probe
+implementations. The CEO did not execute the host Windows tests, inspect
+private production data, or control the running demo/soak processes.
+The user's local report path was not directly read; the committed
+repository report and structured evidence were reviewed instead.
+
+**Functional verdict:** accepted within their proved boundaries.
+Native Tk component probes report 32 passing main checks and 38 passing
+extended checks (overlapping, not additive). They exercise six navigation
+entries, sorting, searches/filters, paging, detail rendering, UNKNOWN,
+bounded log display, three synthetic denied reruns, real Windows tray
+creation/hide/restore, independent clean close, and private mutex
+release. Synthetic actual-user-desktop visibility and X-to-tray/
+double-click restore were separately confirmed by Owner + callback
+logs; the original demo PID71024 intentionally remains running.
+Pointer-hit-tested context-menu interaction remains NOT_VERIFIED;
+Tk widget/menu command coverage does not substitute for mouse testing.
+The targeted regression transcript reports 109 PASS/18.33s; older
+1120 PASS/1 SKIP safety and 2733 PASS/1 SKIP full suites were not
+rerun in this final acceptance.
+
+**Read-only sources:** a finite, non-production-Backend diagnostic
+reused the established CDP/adapter/INSO session paths with blocked
+SMTP and SQL, using one previously permitted test MPN. Its final
+event record shows IC.net, Findchips, HQEW, LCSC, BOM.AI and INSO all
+returned SUCCESS with seven UI stage renders, worker termination and
+no callback error. This is meaningful real acquisition/parsing
+coverage, but does not establish regular production polling, ordinary
+purchase/quotation write safety end-to-end or TP email delivery.
+The separate Google check used canonical guarded native TSV, selected
+one exact stored source row and verified source position, full MPN,
+integer quantity and available brand. It reports no retained full TSV,
+no production DB mutation and preserved original browser pages.
+It did not recheck current RFQ_BRIEF, all historic TP rows, SHAHAB or
+source inquiry dates. Four persisted TP tasks and six existing SENT
+recipient outcomes were reported unchanged; do not replay them.
+No real procurement, Sheets write, SMTP, package or install is approved.
+
+### Performance blocker: inconsistent foreground CPU results; native attribution missing
+
+The clean independent foreground component probe
+`foreground-perf-summary.json` reports 2 stable visible-idle
+30-second intervals with process CPU **3.277883% of a 16-logical-CPU
+host**, while real tray idle is **0.019493% host**. Its additional
+`visible-profile/component-samples.json` has similarly high
+visible-idle samples around 3.21–3.38% host. At the same time, a
+different component test reports 0.752% average visible-host CPU
+over 3 intervals, and the *Owner's original visible Mock PID71024*
+reports **0.192057% host** over another 60-second all-points-foreground
+observation. The setups and loads are not identical; this is a
+repeatable-looking probe-specific anomaly, not proof that the
+ordinary desktop app continuously consumes 3.28% CPU or that it
+would directly reduce game FPS.
+
+The diagnostic 65-second main-thread `cProfile` accounts for only
+0.328 seconds of interpreted/instrumented calls (0.125s sampling
+overhead), including Tk callback registration and CustomTkinter
+appearance/scaling checks. It cannot explain whole-process
+native/OS thread time, cannot by itself identify root cause, and is
+not authority to rewrite UI or suppress refreshes. The recorded
+7,408-second gap in the separately maintained visible-demo observer
+is UNKNOWN but human responsiveness subsequently recovered and
+the original PID was not force restarted; it is not grounds to call
+the UI continuously frozen. Python process memory, handles and
+GDI/USER show no sustained rise in these short samples, but these
+are not final 24h proofs.
+
+**Required narrow follow-up before BUILD_READY:** Reproduce comparable
+natural-foreground vs tray CPU for (a) the surviving original
+Mock PID71024 if safe, and (b) one finite clean diagnostic window
+with fixed row count, same workstation conditions, post-warmup
+10-minute sampling, no forced foreground/lift, no production
+operations, and no new resident sampler. Measure **per-OS-thread**
+user/kernel CPU deltas with built-in Win32/PowerShell/Performance
+Counters (if accessible), map hot thread IDs only when evidence
+supports it, and distinguish native Tk/CTk/GUI vs probe-specific
+overhead and other host processes. Measure foreground/hidden
+transition and deterministic GUI tick/event cadence with the same
+data size and CPU units; do not trust cProfile alone for native
+load. Retain source unchanged during initial diagnosis. When
+attributed, propose the smallest source optimization with a
+before/after identical-condition result and independent scoped
+regression; don't weaken UI data freshness, backend safety gates or
+real timers, and don't touch 24h soak PID70956/output, original
+visible demo, Chrome, production DB, configuration, power plan or
+Windows user focus. If the 3.28% anomaly is not reproducible under
+controlled ordinary GUI conditions, document the cause of divergent
+probe results before treating it as a software regression.
+
+### Still pending before release
+
+The final 24h synthetic soak has not completed its actual 86400s,
+or its full-resource trend has not yet been reviewed; no **24h PASS**
+claim at this commit. Actual Windows 100%/150% DPI and game/FPS
+impact remain NOT_VERIFIED, and true production poll/TP/SMTP/write
+acceptance still requires separate Owner authorization. Existing
+old frozen V1.5 EXE defaults TP ON if absent config and must not be
+mistaken for newer source which defaults TP OFF. Do not activate old
+EXE, overwrite installation or clear historic sent mail receipts.
+
+**Disposition:** scoped UI functional and real read-only acquisition
+acceptance **PASS**; CPU source attribution and equivalent-condition
+retest are the only new performance work proposed by this review.
+`PERFORMANCE_INVESTIGATION_REQUIRED / BUILD_READY_HOLD /
+RELEASE_HOLD`; no code rewrite, build, installation, TP enable,
+SMTP or production write authorized.
