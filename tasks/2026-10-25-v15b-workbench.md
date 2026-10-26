@@ -2,6 +2,27 @@
 
 status: RELEASE_HOLD / FINAL_ACCEPTANCE_IN_PROGRESS
 
+## Owner unified task page2026-10-26 (IN_PROGRESS)
+
+Owner explicitly chose one page and authorized canonical build/overwrite/report.
+Remove duplicate research navigation, retain task status, existing reference price,
+saved source detail and all current action gates in the single task center. Reuse
+existing table, detail, cache, backend, build/deploy paths; no business changes.
+Original C:/Users/Leo/.codex/worktrees/v1-5-tp-research/INSO_Leo stays immutable for
+70956's continuing24h test. Managed detached worktreev15-unified-tasks at45b8bdf
+is the sole active implementation checkout for this UI delta; original is a
+protected test baseline, not a duplicate active implementation. Push fast-forward
+to originalcodex/v1-5-tp-research, reconcile its local checkout only after longsoak.
+Run synthetic UI and full regression, canonical packaging/scanner/self-check,
+then replace only EXE/_internal after normal application exit and backup; keep
+runtime junction, TPfalse, ledger, mail history, V1.4 and longsoak unchanged.
+Full regression2733PASS/1SKIP108.00s; scoped Ruff/diffPASS. Existing synthetic
+UI verifier initially failed before creating UI due stale seven-field unpack
+of the now-nine-field observation; corrected only diagnostic consumption to
+include planned-check/recovery fields. Whole scripts Ruff has an unrelated
+pre-existing scanner import-format issue, left untouched; changed files pass.
+Old live65060/64712 already exited normally at11:47:03Z, no forced termination.
+
 ## Owner final recheck and push2026-10-26 (completed checks; REVIEW_REQUIRED)
 
 Owner confirmed visible UI operations normal and requested another bug check,

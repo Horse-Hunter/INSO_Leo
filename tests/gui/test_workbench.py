@@ -168,6 +168,8 @@ def _check_cached_tk_workbench(monkeypatch):
         )
         for i in range(1000)
     )
+    orders = (replace(orders[0], min_reference_price=Decimal("12.50"),
+                      total_price=Decimal("25.00")),) + orders[1:]
     view = replace(
         snapshot(orders=orders), session=RunSession(None, RunState.STOPPED, None, None)
     )
@@ -188,7 +190,13 @@ def _check_cached_tk_workbench(monkeypatch):
         app._start_on_ready = True
         app._view.show_page("任务中心")
         app._root.update_idletasks()
+        assert app._view.pages == ("总览", "任务中心", "异常与通知", "运行记录", "设置")
+        assert tuple(app._view.nav_buttons) == app._view.pages
+        assert "调研结果" not in app._view.frames
+        displayed = tuple(app._tree.cget("displaycolumns"))
+        assert displayed.index("price") < displayed.index("status")
         assert len(app._tree.get_children()) == 200
+        assert str(app._tree.set("0", "price")) == "12.50"
         app._tree.selection_set("0")
 
         def unchanged(*a, **kw):
@@ -207,6 +215,7 @@ def _check_cached_tk_workbench(monkeypatch):
             if isinstance(w, CTkLabel)
         )
         assert "库存判断" in detail_text and "预计总价" in detail_text
+        assert "调研结果" in detail_text and "12.50" in detail_text
         assert {a for _, a in calls} == {"purchase", "quotation", "tp", "edit"}
         assert all(iid == "0" for iid, _ in calls)
         detail_widgets = tuple(w.winfo_id() for w in app._detail_container.winfo_children())

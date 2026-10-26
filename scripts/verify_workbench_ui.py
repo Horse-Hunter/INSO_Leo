@@ -148,7 +148,7 @@ def main():
         )
         for i in range(1000)
     )
-    revision, modules, started, tick, finished, timings, durations = obs.snapshot()
+    revision, modules, started, tick, finished, timings, durations, plan, site = obs.snapshot()
     snapshot = WorkbenchSnapshot(
         revision,
         replace(backend.get_status(), state=RunState.RUNNING),
@@ -161,6 +161,8 @@ def main():
         cycle_finished_at=finished,
         timings=timings,
         cycle_durations=durations,
+        planned_check_at=plan,
+        recovery_site=site,
     )
     backend.get_workbench_snapshot = lambda: snapshot
     app = InsoDashboardApp(backend)
@@ -210,7 +212,7 @@ def main():
                     app._root.geometry(),
                 )
                 controls = [app._action_button]
-                if page in {"任务中心", "调研结果"}:
+                if page == "任务中心":
                     controls += list(app._view.filters.values())
                 for control in controls:
                     assert (
@@ -261,13 +263,15 @@ def main():
                 obs.pause("inquiry", "合成网络异常：等待人工核对")
             else:
                 obs.enable(quotation=True)
-            r, m, _s, _t, _f, ts, ds = obs.snapshot()
+            r, m, _s, _t, _f, ts, ds, plan, site = obs.snapshot()
             snapshot = replace(
                 snapshot,
                 revision=r,
                 modules=m,
                 timings=ts,
                 cycle_durations=ds,
+                planned_check_at=plan,
+                recovery_site=site,
                 logs=(
                     snapshot.logs
                     + (

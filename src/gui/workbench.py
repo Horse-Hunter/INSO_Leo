@@ -201,7 +201,7 @@ def sort_orders(orders, key, *, reverse=False):
 
 
 class WorkbenchView:
-    pages = ("总览", "任务中心", "调研结果", "异常与通知", "运行记录", "设置")
+    pages = ("总览", "任务中心", "异常与通知", "运行记录", "设置")
 
     def __init__(self, app):
         self.app, self.root = app, app._root
@@ -391,7 +391,6 @@ class WorkbenchView:
 
     def _build_tasks(self):
         frame = self.frame("任务中心")
-        self.frames["调研结果"] = frame
         frame.grid_rowconfigure(1, weight=1)
         frame.grid_columnconfigure(0, weight=1)
         filters = ctk.CTkFrame(frame, fg_color="transparent")
@@ -458,7 +457,9 @@ class WorkbenchView:
             tree.column(
                 key, width=width, minwidth=55, stretch=key in {"model", "status"}
             )
-        tree.configure(displaycolumns=columns[:-1])
+        tree.configure(displaycolumns=(
+            "model", "brand", "quantity", "price", "status", "module", "source", "processed"
+        ))
         tree.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=(10, 0))
         vertical = ttk.Scrollbar(table, orient="vertical", command=tree.yview)
         vertical.grid(row=0, column=1, sticky="ns", pady=(10, 0))
@@ -600,19 +601,7 @@ class WorkbenchView:
         self.configure(self.page_title, text="业务总览" if name == "总览" else name)
         for key, button in self.nav_buttons.items():
             self.configure(button, fg_color=LINE if key == name else "transparent")
-        if name in {"任务中心", "调研结果"}:
-            self.app._tree.configure(
-                displaycolumns=(
-                    "model",
-                    "brand",
-                    "quantity",
-                    "source",
-                    "module",
-                    "status",
-                    "processed",
-                )
-                + (("price",) if name == "调研结果" else ())
-            )
+        if name == "任务中心":
             self.render_orders()
         if self.snapshot is not None:
             self.render(self.snapshot, force=True)
@@ -644,7 +633,7 @@ class WorkbenchView:
             )
             for key in NAMES
         }
-        if self.page in {"任务中心", "调研结果"}:
+        if self.page == "任务中心":
             self.render_orders()
 
     def sort(self, key):
@@ -758,6 +747,7 @@ class WorkbenchView:
             f"库存判断：{order.stock_label or '待验证'}\n重要程度：{order.importance or '暂无记录'}",
             MUTED,
         )
+        line("调研结果", MUTED)
         line(
             "已有参考价："
             + self.app._format_money(order.min_reference_price)

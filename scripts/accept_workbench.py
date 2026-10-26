@@ -494,7 +494,7 @@ def main():
                 foreground_check()
                 controls = [app._action_button] + (
                     list(app._view.filters.values())
-                    if page in {"任务中心", "调研结果"}
+                    if page == "任务中心"
                     else []
                 )
                 visible = all(
