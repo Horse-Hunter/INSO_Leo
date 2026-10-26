@@ -27,6 +27,8 @@ class RuntimeObservation:
         self.timings = deque(maxlen=200)
         self.durations = dict.fromkeys(self.modules, 0.0)
         self.pauses = {}
+        self.planned_check_at = None
+        self.recovery_site = None
 
     def _close_pause(self, key):
         paused = self.pauses.pop(key, None)
@@ -90,6 +92,7 @@ class RuntimeObservation:
 
     def begin_cycle(self):
         with self.lock:
+            self.planned_check_at = self.recovery_site = None
             for key in self.modules:
                 self._close(key)
             self.durations = dict.fromkeys(self.modules, 0.0)
@@ -113,6 +116,7 @@ class RuntimeObservation:
 
     def stage(self, module, stage, *, site=None, order_ref=None):
         with self.lock:
+            self.planned_check_at = None
             if self.modules[module].status == "未启用":
                 return
             old = self.modules[module]
@@ -192,9 +196,12 @@ class RuntimeObservation:
             self.revision += 1
 
     def end_cycle(
-        self, next_check=None, *, stopped=False, reason=None, close_round=True
+        self, next_check=None, *, stopped=False, reason=None, close_round=True,
+        recovery_site=None
     ):
         with self.lock:
+            self.planned_check_at = None if stopped or reason else next_check
+            self.recovery_site = None if stopped or reason else recovery_site
             if close_round and self.cycle_finished_at is None:
                 self.cycle_finished_at = self.clock() if self.cycle_started_at else None
             for key, old in tuple(self.modules.items()):
@@ -217,7 +224,7 @@ class RuntimeObservation:
                     next_check_at=None
                     if stopped or reason or old.status == "已暂停"
                     else next_check,
-                    waiting_reason=reason
+                    waiting_reason=reason or (f"等待{recovery_site}恢复" if recovery_site else None)
                     or (
                         "已停止"
                         if stopped
@@ -247,4 +254,6 @@ class RuntimeObservation:
                 self.cycle_finished_at,
                 tuple(self.timings),
                 tuple(self.durations.items()),
+                self.planned_check_at,
+                self.recovery_site,
             )

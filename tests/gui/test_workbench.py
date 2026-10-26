@@ -143,7 +143,7 @@ with pytest.MonkeyPatch.context() as patch:
     _check_cached_tk_workbench(patch)
 """
     result = subprocess.run(
-        [sys.executable, "-c", code],
+        [sys.executable, "-X", "utf8", "-c", code],
         cwd=Path(__file__).resolve().parents[2],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -153,6 +153,7 @@ with pytest.MonkeyPatch.context() as patch:
         check=False,
     )
     assert result.returncode == 0, result.stdout
+    print(result.stdout, end="")
 
 
 def _check_cached_tk_workbench(monkeypatch):
@@ -172,7 +173,8 @@ def _check_cached_tk_workbench(monkeypatch):
     )
     backend.get_workbench_snapshot = lambda: view
     calls = []
-    backend.can_order_action = lambda iid, action: calls.append((iid, action)) or False
+    backend.order_action_hint = lambda iid, action: calls.append((iid, action)) or False
+    backend.can_order_action = lambda *_: (_ for _ in ()).throw(AssertionError("detail queried durable permissions"))
 
     def forbidden(*a, **kw):
         raise AssertionError("cached tick must not query old history/state/status")
@@ -210,6 +212,7 @@ def _check_cached_tk_workbench(monkeypatch):
         count = len(calls)
         app._view.render_detail(orders[0])
         assert len(calls) == count
+        _check_detail_contention(app, backend, orders[0])
         for page in app._view.pages * 3:
             app._view.show_page(page)
         app._hidden = True
@@ -222,3 +225,67 @@ def _check_cached_tk_workbench(monkeypatch):
         app._root.destroy()
         monkeypatch.undo()
         backend.shutdown()
+
+
+def _check_detail_contention(app, backend, selected):
+    import sqlite3
+    import tempfile
+    from contextlib import closing
+    from threading import Event, Thread
+    from time import perf_counter, sleep
+
+    from src.launcher.backend import ProductionBackend
+
+    with tempfile.TemporaryDirectory() as folder:
+        real = ProductionBackend(root=folder)
+        real._state = RunState.RUNNING
+        real._next_poll_at = datetime.now(UTC) + timedelta(minutes=15)
+        real._manual_reader = object()
+        real._view_snapshot = replace(real._view_snapshot, orders=(selected,))
+        db = str(Path(folder) / "synthetic.sqlite3")
+        with closing(sqlite3.connect(db)) as conn, conn:
+            conn.execute("CREATE TABLE synthetic (value TEXT)")
+
+        class SlowStore:
+            def get_by_inquiry_id(self, _):
+                with closing(sqlite3.connect(db, timeout=2)) as conn:
+                    conn.execute("SELECT * FROM synthetic").fetchall()
+
+        real._store = SlowStore()
+        entered, release = Event(), Event()
+
+        def busy_database():
+            with closing(sqlite3.connect(db)) as conn, conn, real._lock:
+                conn.execute("BEGIN EXCLUSIVE")
+                entered.set()
+                release.wait(10)
+
+        worker = Thread(target=busy_database)
+        worker.start()
+        assert entered.wait(2)
+        backend.order_action_hint = real.order_action_hint
+        backend.can_order_action = real.can_order_action
+        try:
+            for mode in ("SQL_LOCK", "DELAYED_PERMISSION"):
+                queried = []
+                if mode == "DELAYED_PERMISSION":
+                    def slow(*_, queried=queried):
+                        queried.append(True)
+                        sleep(2)
+                        return False
+                    backend.can_order_action = slow
+                painted = []
+                started = perf_counter()
+                app._view.render_detail(replace(selected, model=mode))
+                app._root.after(0, lambda painted=painted: painted.append(True))
+                app._root.update()
+                elapsed_ms = (perf_counter() - started) * 1000
+                assert painted and elapsed_ms < 1000, (mode, elapsed_ms)
+                assert not queried
+                print("SYNTHETIC_DETAIL_RESPONSE_MS", mode, round(elapsed_ms, 3))
+        finally:
+            release.set()
+            worker.join(5)
+            assert not worker.is_alive()
+            real._store = None
+            real.shutdown()

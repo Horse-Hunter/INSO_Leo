@@ -3,6 +3,38 @@
 status: REVIEW_REQUIRED
 authority: Owner pasted V1.5-B task, 2026-10-25
 branch: codex/v1-5-tp-research
+revision_authority: Owner/CEO first UI review, 2026-10-26, a7aaf615449b39f9c3b3606b61c4ffed19aa19e0 CHANGES_REQUESTED
+
+## First-review correction packet (2026-10-26)
+
+Only P1-A actual wait countdown, P1-B deferred recovery observation, and P2
+nonblocking details. Keep six pages, algorithms, serial900-second wait, actual
+manual permission gates, three-hour recovery/safety rules and TP default false.
+No production data/browser/mail/build/deployment. Earlier business deltas retain
+their independent review status; this task does not approve them.
+
+Reuse audit: _wait_between_polls owns the true monotonic wait and resets it after
+manual commands; _next_poll_at also gates manual requests and must remain intact.
+Extend existing RuntimeObservation with a read-only actual wait plan; no scheduler.
+End observation at entry to that same wait, including deferred failures. Reuse
+_site_outages for source text and existing error classification unchanged.
+Details currently call SQLite-backed can_order_action four times on Tk. Replace
+display checks with an in-memory request hint; actual request_order_action and
+execution gates remain authoritative, no cached authorization or new thread.
+
+Verify synthetic TP0/5/10/20-minute durations against actual900-second wait,
+two consecutive recovery rounds, manual/reset/stop constraints, delayed permission
+and SQLite business-lock contention during detail opening, plus full regression.
+Update V15_UI_UPGRADE_REPORT.md, commit/push original branch, REVIEW_REQUIRED.
+
+Revision completion: full2701 PASS/1 SKIP104.27s; targeted81 PASS11.64s,
+Ruff/no-cache and diff whitespace PASS. Final tests show no SMTP attempts.
+Real Tk + synthetic exclusive SQLite/business lock:771.928ms; simulated2s
+permission delay:122.675ms, no blocking permission call from detail rendering.
+Original safety/outage/manual tests retained; no research/workflow algorithm or
+RFQ008 test edit. Old long-performance samples are prior-candidate evidence only.
+Final review transcripts retained under docs/evidence/v15b/pytest-review1-*.txt.
+Owned review temporary artifacts retired after collection; no production change.
 starting_head: 97212f40eb87cad5d0069f0c1f21c4cef71c481b
 reviewed_anchor: a29c1466fc5f246636998919a2abd443960894cf
 

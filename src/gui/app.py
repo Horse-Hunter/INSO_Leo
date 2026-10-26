@@ -529,7 +529,8 @@ class InsoDashboardApp:
         menu = Menu(self._tree, tearoff=False)
         for label, action in (("重跑采购流程", "purchase"), ("重跑报价流程", "quotation"),
                               ("重跑 TP 价格", "tp")):
-            enabled = self._backend.can_order_action(inquiry, action)
+            enabled = (self._backend.order_action_hint(inquiry, action) if hasattr(self, "_view")
+                       else self._backend.can_order_action(inquiry, action))
             menu.add_command(label=label, state="normal" if enabled else "disabled",
                 command=lambda action=action: self._request_order_action(inquiry, action))
         try:

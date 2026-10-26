@@ -359,6 +359,8 @@ class WorkbenchSnapshot:
     local_loading: bool = False
     timings: tuple[StageTiming, ...] = ()
     cycle_durations: tuple[tuple[str, float], ...] = ()
+    planned_check_at: datetime | None = None
+    recovery_site: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -433,6 +435,10 @@ class GuiBackend(ABC):
 
     def can_order_action(self, inquiry_id: str, action: str) -> bool:
         """Optional idle-only single-order capability."""
+        return False
+
+    def order_action_hint(self, inquiry_id: str, action: str) -> bool:
+        """Memory-only display hint, never permission to execute an action."""
         return False
 
     def request_order_action(

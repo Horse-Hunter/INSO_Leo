@@ -4,6 +4,7 @@ No business modules, files, websites, timers or threads are accessed here.
 """
 
 from datetime import datetime, timezone
+from math import ceil
 from time import monotonic
 from tkinter import ttk
 
@@ -80,15 +81,18 @@ def scheduling(snapshot, now=None, tick=None):
     )
     if active:
         return "任务进行中 · " + active.name + " / " + active.stage
-    if session.next_poll_at is None:
+    planned = snapshot.planned_check_at
+    if planned is None and snapshot.cycle_started_at is None:
+        planned = session.next_poll_at  # legacy/mock snapshots without observed rounds
+    if planned is None:
         return "等待调度确认 · 暂无下次检查时间"
     seconds = max(
         0,
-        int(
-            (session.next_poll_at - (now or datetime.now(timezone.utc))).total_seconds()
+        ceil(
+            (planned - (now or datetime.now(timezone.utc))).total_seconds()
         ),
     )
-    return (
+    return (f"等待{snapshot.recovery_site}恢复 · " if snapshot.recovery_site else "") + (
         f"下次检查 {seconds // 60:02d}:{seconds % 60:02d}"
         if seconds
         else "计划时间已到 · 等待工作流确认"
@@ -815,7 +819,7 @@ class WorkbenchView:
             ("重跑报价流程", "quotation"),
             ("重跑 TP 价格", "tp"),
         ):
-            enabled = self.app._backend.can_order_action(order.inquiry_id, action)
+            enabled = self.app._backend.order_action_hint(order.inquiry_id, action)
             button = self.button(
                 box,
                 title,
@@ -833,9 +837,11 @@ class WorkbenchView:
         edit.pack(fill="x", pady=4)
         edit.configure(
             state="normal"
-            if self.app._backend.can_order_action(order.inquiry_id, "edit")
+            if self.app._backend.order_action_hint(order.inquiry_id, "edit")
             else "disabled"
         )
+
+        line("操作请求仍须实时核验订单权限，结果不明的订单不能盲目重发。", MUTED)
 
     def show_detail_frame(self):
         self.detail.grid()
@@ -961,7 +967,8 @@ class WorkbenchView:
                     + timing
                     + "\n"
                     + (
-                        "计划 " + stamp(module.next_check_at)
+                        (f"等待{snapshot.recovery_site}恢复 · " if snapshot.recovery_site else "")
+                        + "计划 " + stamp(module.next_check_at)
                         if module.next_check_at
                         else module.waiting_reason or "暂无计划时间"
                     )

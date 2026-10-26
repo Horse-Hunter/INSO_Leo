@@ -1007,9 +1007,9 @@ class ProductionBackend(GuiBackend):
                                 self._tp.run(cfg["spreadsheet_id"], now=utc_now())
                                 if self._tp.issues:
                                     self._append_log("WARNING", f"TP 有 {len(self._tp.issues)} 条来源或价格待核对，未自动处理。")
-                            # Presentation countdown begins only after ALL existing
-                            # stages. Keep the scheduler's original deadline/order.
-                            self._observation.end_cycle(self._next_poll_at,
+                            # Finish execution observation; the actual wait entry
+                            # publishes its own read-only plan after cleanup.
+                            self._observation.end_cycle(
                                 stopped=self._stop.is_set())
                             self._cache_workbench(force=True)
                             self._notify()
@@ -1204,6 +1204,31 @@ class ProductionBackend(GuiBackend):
             except (KeyError, sqlite3.Error, V12DatabaseError):
                 return False
 
+    def order_action_hint(self, inquiry_id, action):
+        # Display only: no business lock, SQL, or cached authorization. The
+        # canonical request/execute path always checks durable permissions.
+        if not self._manual_idle() or self._store is None or self._manual_reader is None:
+            return False
+        order = next((o for o in self._view_snapshot.orders if o.inquiry_id == inquiry_id), None)
+        if order is None:
+            return False
+        if action == "tp":
+            return self._tp is not None
+        if order.module_id == "tp":
+            return False
+        if action == "purchase":
+            cached = self._view_state_cache.get(inquiry_id)
+            dto = cached[1] if cached else None
+            return (self._state is RunState.RUNNING and self._v12_store is not None
+                and dto is not None and not dto.active_alerts
+                and dto.business_label not in {
+                    V12BusinessLabel.SUBMIT_UNCONFIRMED, V12BusinessLabel.INTERRUPTED_POSSIBLY_SENT,
+                    V12BusinessLabel.STATUS_WRITE_PENDING, V12BusinessLabel.PURCHASE_SENT,
+                    V12BusinessLabel.HUMAN_COMPLETED,
+                }
+                and order.delivery_status != "UNKNOWN")
+        return action == "edit" or (action == "quotation" and self._manual_quote is not None)
+
     def request_order_action(self, inquiry_id, action, *, field=None, value=None):
         with self._manual_condition:
             if not self.can_order_action(inquiry_id, action):
@@ -1226,6 +1251,7 @@ class ProductionBackend(GuiBackend):
 
     def _wait_between_polls(self, seconds):
         deadline = monotonic() + seconds
+        self._observe_poll_wait(seconds)
         while not self._stop.is_set():
             # Give the shared browser back during idle time, on its owner thread.
             # A worker may queue teardown after this wait has already started.
@@ -1257,12 +1283,20 @@ class ProductionBackend(GuiBackend):
                     self._poll_idle.set()
                     if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING} and not self._stop.is_set():
                         self._next_poll_at = utc_now() + timedelta(seconds=seconds)
-                self._observation.end_cycle(self._next_poll_at, stopped=self._stop.is_set(), close_round=False)
+                self._observation.end_cycle(stopped=self._stop.is_set(), close_round=False)
                 self._invalidate_order_view(request[1])
                 self._cache_workbench(force=True)
                 self._notify()
             deadline = monotonic() + seconds
+            self._observe_poll_wait(seconds, close_round=False)
         return True
+
+    def _observe_poll_wait(self, seconds, *, close_round=True):
+        # Read-only plan at the actual wait boundary. Legacy _next_poll_at also
+        # gates manual operations and is deliberately not changed here.
+        self._observation.end_cycle(utc_now() + timedelta(seconds=seconds),
+            stopped=self._stop.is_set(), close_round=close_round,
+            recovery_site=" / ".join(tuple(self._site_outages)) or None)
 
     def _execute_order_action(self, request):
         request_id, inquiry, action, field, value = request
@@ -2708,11 +2742,12 @@ class ProductionBackend(GuiBackend):
         # GUI path: only locks and immutable references, never SQLite/Excel/stat.
         with self._snapshot_lock:
             snapshot = self._view_snapshot
-        revision, modules, started, tick, finished, timings, durations = self._observation.snapshot()
+        revision, modules, started, tick, finished, timings, durations, planned, recovery = self._observation.snapshot()
         return replace(snapshot, revision=snapshot.revision + revision,
             modules=modules, cycle_started_at=started, cycle_started_monotonic=tick,
             cycle_finished_at=finished, local_loading=self._view_loading,
-            timings=timings, cycle_durations=durations)
+            timings=timings, cycle_durations=durations,
+            planned_check_at=planned, recovery_site=recovery)
 
     def _invalidate_order_view(self, key):
         # Existing callbacks may run alongside the existing refresh worker.

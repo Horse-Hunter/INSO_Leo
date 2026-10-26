@@ -1,0 +1,127 @@
+........................................................................ [ 88%]
+.........                                                                [100%]
+=================================== PASSES ====================================
+_ test_two_deferred_rounds_close_execution_and_then_recover[GOOGLE_SPREADSHEET_UNAVAILABLE-Google Sheets] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+_ test_two_deferred_rounds_close_execution_and_then_recover[INSO_QUERY_RETRIES_EXHAUSTED-INSO] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+_ test_only_continuous_three_hour_same_site_outage_can_globally_stop[INSO_QUERY_RETRIES_EXHAUSTED-INSO] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:2006 Production runtime worker failed (V12Fault)
+WARNING  src.launcher.backend:backend.py:2089 Runtime fault
+_ test_only_continuous_three_hour_same_site_outage_can_globally_stop[INSO_AUTHENTICATION_REQUIRED-INSO] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:2006 Production runtime worker failed (V12Fault)
+WARNING  src.launcher.backend:backend.py:2089 Runtime fault
+_ test_only_continuous_three_hour_same_site_outage_can_globally_stop[GOOGLE_SPREADSHEET_UNAVAILABLE-Google Sheets] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:2006 Production runtime worker failed (V12Fault)
+WARNING  src.launcher.backend:backend.py:2089 Runtime fault
+_ test_only_continuous_three_hour_same_site_outage_can_globally_stop[GOOGLE_AUTHENTICATION_REQUIRED-Google Sheets] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:2006 Production runtime worker failed (V12Fault)
+WARNING  src.launcher.backend:backend.py:2089 Runtime fault
+_ test_only_continuous_three_hour_same_site_outage_can_globally_stop[V13_FX_UNAVAILABLE-\u6c47\u7387\u7f51\u7ad9] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:2006 Production runtime worker failed (V12Fault)
+WARNING  src.launcher.backend:backend.py:2089 Runtime fault
+_ test_only_continuous_three_hour_same_site_outage_can_globally_stop[IC_NET_UNAVAILABLE-IC.net] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:2006 Production runtime worker failed (V12Fault)
+WARNING  src.launcher.backend:backend.py:2089 Runtime fault
+_____ test_success_resets_own_site_clock_and_other_sites_do_not_erase_it ______
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+_ test_actual_poll_thread_survives_site_fault_and_reaches_next_poll[INSO_QUERY_RETRIES_EXHAUSTED] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+_ test_actual_poll_thread_survives_site_fault_and_reaches_next_poll[INSO_AUTHENTICATION_REQUIRED] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+_ test_actual_poll_thread_survives_site_fault_and_reaches_next_poll[GOOGLE_SPREADSHEET_UNAVAILABLE] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+_ test_actual_poll_thread_survives_site_fault_and_reaches_next_poll[GOOGLE_AUTHENTICATION_REQUIRED] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+_ test_actual_poll_thread_survives_site_fault_and_reaches_next_poll[CDP_RECONNECT_EXHAUSTED] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+_ test_actual_poll_thread_survives_site_fault_and_reaches_next_poll[V13_FX_UNAVAILABLE] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+_ test_unknown_write_or_local_data_failure_is_not_a_site_retry[GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:2006 Production runtime worker failed (V12Fault)
+WARNING  src.launcher.backend:backend.py:2089 Runtime fault
+_ test_unknown_write_or_local_data_failure_is_not_a_site_retry[GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:2006 Production runtime worker failed (V12Fault)
+WARNING  src.launcher.backend:backend.py:2089 Runtime fault
+_ test_unknown_write_or_local_data_failure_is_not_a_site_retry[SHEETS_SCHEMA_UNAVAILABLE] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:2006 Production runtime worker failed (V12Fault)
+WARNING  src.launcher.backend:backend.py:2089 Runtime fault
+_ test_unknown_write_or_local_data_failure_is_not_a_site_retry[WORKFLOW_LEDGER_UNAVAILABLE] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:2006 Production runtime worker failed (V12Fault)
+WARNING  src.launcher.backend:backend.py:2089 Runtime fault
+_ test_human_inso_challenge_only_probes_without_credential_or_business_retry __
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+_ test_actual_poller_observes_twelve_waits_before_three_hour_global_stop[INSO_QUERY_RETRIES_EXHAUSTED] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:2006 Production runtime worker failed (V12Fault)
+WARNING  src.launcher.backend:backend.py:2089 Runtime fault
+_ test_actual_poller_observes_twelve_waits_before_three_hour_global_stop[GOOGLE_SPREADSHEET_UNAVAILABLE] _
+------------------------------ Captured log call ------------------------------
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:1968 Website recovery deferred
+WARNING  src.launcher.backend:backend.py:2006 Production runtime worker failed (V12Fault)
+WARNING  src.launcher.backend:backend.py:2089 Runtime fault
+_________ test_real_workbench_cached_ticks_filters_details_and_pages __________
+---------------------------- Captured stdout call -----------------------------
+SYNTHETIC_DETAIL_RESPONSE_MS SQL_LOCK 771.928
+SYNTHETIC_DETAIL_RESPONSE_MS DELAYED_PERMISSION 122.675
+81 passed in 11.64s
