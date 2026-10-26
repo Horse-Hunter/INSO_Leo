@@ -2,6 +2,37 @@
 
 status: RELEASE_HOLD / FINAL_ACCEPTANCE_IN_PROGRESS
 
+## Owner final recheck and push2026-10-26 (completed checks; REVIEW_REQUIRED)
+
+Owner confirmed visible UI operations normal and requested another bug check,
+then packaging/push if clear. Prior live64992 exited normally at11:08:09Z;
+clean idle relaunch65060/observer64712 without screenshot tools is under finite
+ten-minute native sampling. Long-test70956 remains untouched. No business src,
+production data or external writes authorized by this check. Existing reviewed
+package remains valid if application inputs unchanged; do not rebuild merely
+for evidence/test edits. Full-suite recheck exposed a repeatable test-side race:
+the manual actor test observes busy=false before wait publication and leaks its
+non-daemon thread on failed assertion. Scope permits minimal test synchronization
+and finally cleanup, retaining the actual 900-second reset and safety assertions.
+Targeted before correction79pass/1fail (80); final full suite2733pass/1skip99s,
+Ruff and diff checkPASS. Earlier full17fail retained; other initial failures not
+reproduced in final fresh process, not all attributed to the single test fix.
+Only tests/docs changed, businesssrc/scripts/packaging unchanged; reuse verified
+installed45E2D241...E989 bundle rather than rebuilding identical inputs. Owner
+confirmed visible UI operations normal. Clean65060 actual warmup62.883s followed
+634.922s/60foreground endpoints: hostCPU0.00338%, observer0%, stable RSS/private/
+handles/GDI/USER; native surviving main thread0.21875user+0.125kernel seconds.
+No screenshot automation or forced foreground. Historical3.264%rootUNKNOWN;
+no speculative code repair/rollback. Old64992normal exit confirmed. Database
+and all2875programassets unchanged,TPfalse,70956longsoak unaffected(src hashes
+identical);24hNOT_VERIFIED. PRODUCTION_INSTALLED_IDLE / REVIEW_REQUIRED /
+RELEASE_HOLD, no automatic business authorization. This checkpoint supersedes
+the old awaiting-normal-exit/resource-retest tasks below. Owner explicitly
+requested package/push; only redacted evidence, tests and reports go to origin.
+Owned failed-test processes and four existing pytest temporary trees were retired
+after process/absolute-path/no-reparse checks; initial collection-only tree did
+not exist. Longsoak, live idle app, production runtime and rollback retained.
+
 ## Owner one-pass V1.5 release + V1.6 preparation2026-10-26
 
 Execution checkpoint: canonical b1cb05e build/install verified2875 assets, new

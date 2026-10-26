@@ -1,0 +1,108 @@
+{
+  "app_pid": 65060,
+  "observer_pid": 64712,
+  "prior_app_normal_exit": true,
+  "screenshots_or_ui_automation": false,
+  "warmup_seconds": 62.882853,
+  "logical_cpus": 16,
+  "samples": 60,
+  "qualification": "Real installed production-backend GUI, idle without business start. Foreground is observed at endpoints, not forced. Historical high-CPU root cause remains UNKNOWN; no application fix.",
+  "app": {
+    "seconds": 634.9219999999914,
+    "cpu_host_percent": 0.003383781787369203,
+    "foreground_endpoints": 60,
+    "rss_range": [
+      100188160,
+      100261888
+    ],
+    "private_range": [
+      72257536,
+      72421376
+    ],
+    "handles_range": [
+      510,
+      518
+    ],
+    "gdi_range": [
+      136,
+      136
+    ],
+    "user_objects_range": [
+      261,
+      261
+    ],
+    "native_thread_range": [
+      5,
+      10
+    ],
+    "surviving_native_threads": [
+      {
+        "tid": 68712,
+        "module": "INSO_V1.5.exe",
+        "user_seconds": 0.21875,
+        "kernel_seconds": 0.125
+      },
+      {
+        "tid": 68652,
+        "module": "tcl86t.dll",
+        "user_seconds": 0.0,
+        "kernel_seconds": 0.0
+      },
+      {
+        "tid": 73320,
+        "module": "SogouPY.ime",
+        "user_seconds": 0.0,
+        "kernel_seconds": 0.0
+      },
+      {
+        "tid": 73724,
+        "module": "ichat_bundle64.dll",
+        "user_seconds": 0.0,
+        "kernel_seconds": 0.0
+      },
+      {
+        "tid": 68836,
+        "module": "isgpet_bundle64.dll",
+        "user_seconds": 0.0,
+        "kernel_seconds": 0.0
+      }
+    ]
+  },
+  "observer": {
+    "seconds": 634.9219999999914,
+    "cpu_host_percent": 0.0,
+    "foreground_endpoints": 0,
+    "rss_range": [
+      21835776,
+      21868544
+    ],
+    "private_range": [
+      15257600,
+      15294464
+    ],
+    "handles_range": [
+      128,
+      128
+    ],
+    "gdi_range": [
+      0,
+      0
+    ],
+    "user_objects_range": [
+      1,
+      1
+    ],
+    "native_thread_range": [
+      1,
+      2
+    ],
+    "surviving_native_threads": [
+      {
+        "tid": 70460,
+        "module": "INSO_V1.5.exe",
+        "user_seconds": 0.0,
+        "kernel_seconds": 0.0
+      }
+    ]
+  }
+}

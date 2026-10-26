@@ -1,5 +1,5 @@
 {
-  "status": "INSTALLED_CANDIDATE_RESOURCE_HOLD",
+  "status": "PRODUCTION_INSTALLED_IDLE_REVIEW_REQUIRED_RELEASE_HOLD",
   "source_sha": "b1cb05ed92370238c13955e91f9287f79cd9f84f",
   "application_source_identical_to": "9f5522d7bef41a15fc099f9ad1545120dd9565c1",
   "installation_path": "D:/Program_Leo/INSO_Leo/dist/INSO_V1.5/INSO_V1.5.exe",
@@ -32,9 +32,9 @@
   "owner_authorized_demo71024_exit": true,
   "demo_exit_receipt": "2026-10-26T08:47:47.319634+00:00",
   "gui_ready_logged": true,
-  "owner_six_page_tray_exit_confirmation": "PENDING",
-  "resource_validation": "FAIL_OR_NOT_CLEARED:121s hostCPU3.26445%, mainGUIthread, memory/handles stable",
-  "clean_restart_without_screenshot": "PENDING_NORMAL_EXIT",
+  "owner_six_page_tray_exit_confirmation": "Owner confirmed normal UI operations; real prior exit receipt verified",
+  "resource_validation": "CLEAN_RESTART_STEADY_LOW; HISTORICAL_ROOT_CAUSE_UNKNOWN; REVIEW_REQUIRED",
+  "clean_restart_without_screenshot": "PASS:634.922s after62.883s warmup; hostCPU0.0033838%",
   "rollback_if_clean_restart_high": "REQUIRED_BY_OWNER",
   "v16_branch_preparation": "PENDING_V15_SAFE_CLOSURE",
   "temporary_frozen_stage_and_real_quote_and_copy_database_retired": true,
@@ -48,9 +48,15 @@
     "tray_short_seconds": 10.046,
     "tray_short_host_cpu_percent": 0.0,
     "tray_native_threads": 6,
-    "real_exit_receipt": false,
+    "real_exit_receipt": true,
     "qualification": "Short native counter observations; no proof of root cause or complete resource acceptance"
   },
   "preserved_old_v15_all2875_assets_match": true,
-  "preserved_old_v15_self_check": "PASS"
+  "preserved_old_v15_self_check": "PASS",
+  "original_64992_normal_exit": "2026-10-26T11:08:09.057080+00:00",
+  "current_idle_app_pid": 65060,
+  "current_observer_pid": 64712,
+  "full_recheck": "2733passed/1skipped99.00s",
+  "test_only_change": "Synchronize manual actor wait publication and always clean up failed test thread",
+  "package_reused_reason": "Application/build/dependency inputs unchanged from reviewed built source"
 }

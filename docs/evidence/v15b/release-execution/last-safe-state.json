@@ -6,15 +6,20 @@
   "all_sent_recipients": 138,
   "production_business_started": false,
   "canonical_mutex_held_by_resident_app": true,
-  "normal_exit_required_before_restart_or_rollback": true,
+  "normal_exit_required_before_restart_or_rollback": false,
   "v16_not_started_due_resource_hold": true,
   "soak_status": {
-    "seconds": 21569.766000000003,
+    "seconds": 28597.75,
     "phase": "visible_idle",
-    "cycle": 70,
+    "cycle": 94,
     "callback_errors": [],
     "guard_attempts": [],
     "max_sample_gap_seconds": 60.10999999998603,
-    "sampled_at": "2026-10-26T09:24:55.655222+00:00"
-  }
+    "sampled_at": "2026-10-26T11:22:03.656325+00:00"
+  },
+  "current_app_pid": 65060,
+  "current_observer_pid": 64712,
+  "current_app_idle": true,
+  "resource_recheck": "634.922s after warmup0.0033838%host; historical root unknown",
+  "source_and_long_test_hashes_unchanged": true
 }

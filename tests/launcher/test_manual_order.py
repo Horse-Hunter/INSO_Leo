@@ -143,11 +143,17 @@ def test_actor_is_serial_and_restarts_full_countdown_after_command(tmp_path, mon
     assert backend.request_order_action(inquiry, "purchase") is None
     thread = Thread(target=lambda: backend._wait_between_polls(900))
     thread.start()
-    from tests.launcher.test_backend import _wait_until
-    assert _wait_until(lambda: bool(observed) and not backend._manual_busy)
-    assert backend.get_status().next_poll_at == NOW + timedelta(minutes=15)
-    backend._stop.set()
-    thread.join(timeout=2)
+    try:
+        from tests.launcher.test_backend import _wait_until
+        assert _wait_until(lambda: bool(observed) and not backend._manual_busy
+                           and backend.get_status().next_poll_at is not None)
+        # The real monotonic deadline is published after cleanup. A few
+        # microseconds may elapse between establishing and publishing it.
+        deadline = backend.get_status().next_poll_at
+        assert NOW + timedelta(seconds=899) <= deadline <= NOW + timedelta(minutes=15)
+    finally:
+        backend._stop.set()
+        thread.join(timeout=2)
     assert not thread.is_alive() and len(observed) == 1
 
 
