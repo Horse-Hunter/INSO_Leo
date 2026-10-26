@@ -197,3 +197,88 @@ Required narrow fix: synchronize the existing permission-window deadline with ac
 `order_action_hint(..., "tp")` returns true whenever `self._tp is not None` and the shared idle flag is true, **before** verifying that the selected item is a TP-capable task or checking its in-memory `business_status` and `delivery_status`. Thus unrelated ordinary orders and TP tasks with an already UNKNOWN/in-flight delivery may have an enabled “重跑 TP 价格” button, while the canonical `TpStore.manual_allowed` correctly denies it. This is not an authorization bypass but creates misleading buttons. Use only the existing in-memory projection to conservatively suppress known-ineligible/UNKNOWN/in-flight TP hints, while preserving the real fresh gate at submit. Do not add UI-thread SQL or permanently cache grants. Test ordinary unrelated order and known TP UNKNOWN/PENDING versus safe SENT/FAILED states.
 
 **Disposition:** retain `REVIEW_REQUIRED`, scope the next patch strictly to the above tiny consistency issues and synthetic tests, re-run targeted + full suites and return new SHA. Current source direction, six-page UI, bounded snapshots, lightweight rendering and original business safety are otherwise accepted in this code-review scope. 24-hour, real OS DPI, production Chrome, live end-to-end and game interference remain NOT_VERIFIED, and unrelated post-`a29c1466` business commits have not received sign-off through this UI review.
+
+
+## CEO independent third review — 2026-10-26
+
+**CODE_REVIEW_PASS (V1.5-B second-correction scope) / LIVE_ACCEPTANCE_PENDING /
+RELEASE_NOT_AUTHORIZED.**
+
+Reviewed exact source commit `bbe2743e0ba3c2f9ddcd25ec0dce7e483652db22`,
+one development commit after CEO review `e984f6bcf55bb56040573e9268f568fd489a90ea`.
+Read its full implementation patch, `src/launcher/backend.py`,
+`src/gui/{contracts,workbench}.py`, the original TP durable
+`TpStore.manual_allowed`, TP canonical `read_orders/_revalidate`,
+and added/updated launcher + real-Tk tests.
+CEO independently verified source/test logic, but did not execute
+Windows tests or real production operations. The executor's final
+transcripts report **119 targeted PASS** and **2733 full PASS / 1 SKIP**;
+Ruff and whitespace checks reported PASS.
+
+### P1 — accepted: idle schedule and canonical manual authorization agree
+
+The pre-TP `_next_poll_at` assignment is gone. At entry to the existing
+single-thread `_wait_between_polls(900)`, and after a permitted
+manual action resets the original wait, `_publish_poll_wait` uses
+the **same monotonic deadline** and remaining duration to publish
+`_next_poll_at` (the existing authorization window) and the
+immutable GUI planned time. An acquired business lock may delay
+publication but does not extend the monotonic waiting interval.
+The original `_poll_idle`, gate, active/busy/queued, stop, and
+durable order/TP permission checks remain. At wait expiry/stop the
+manual window is cleared. Tests cover TP research lasting
+0/5/10/20 minutes, in-window current `can_order_action` and
+UI hint at multiple points including just before expiry, lock delay,
+manual-reset, deferred site recovery, busy/queued/cleanup/stop/pause,
+and original purchase UNKNOWN rejection. No new scheduler or
+resource owner was introduced.
+
+### P2 — accepted: conservative TP display affordance; unchanged execution authority
+
+The additive `Order.tp_task_id` display field is derived only in the
+existing background projection using canonical source workbook/sheet/
+row `task_key`; associated existing TP DTO must have matching exact
+model and quantity. Unlinked orders and mismatched pointers/MPN/qty
+do not receive a positive TP hint. An already identified TP DTO must
+have `business_status` MAIL_QUEUED or FAILED and delivery
+None/SENT/PERMANENT_FAILURE; UNKNOWN, SENDING, PENDING,
+RETRYABLE_FAILURE and RESEARCHING remain disabled. Explicit
+human-requested rerun of a previously SENT generation remains
+consistent with durable `manual_allowed` semantics.
+The hint only looks at memory and never substitutes for
+`request_order_action -> can_order_action -> TpStore.manual_allowed`
+or the existing fresh source/brand validation before enqueuing mail.
+Stale positive GUI data after a changed outbox recipient state remains
+blocked by canonical SQLite authorization. UI detail rendering
+signatures include hints, refreshing linked TP button changes even
+when the ordinary order row itself is unchanged. No SQL is added
+to Tk detail/context menu. Tests cover positive/negative statuses,
+pointer ambiguity, unrelated ordinary records, stale SENT vs
+UNKNOWN/SENDING/RESEARCHING, read-only display and real gate refusal.
+
+### Scope and remaining release gates
+
+- **No further code corrections requested for the two review-2 findings.**
+  The V1.5-B UI code-review track can close as CODE_REVIEW_PASS.
+- This approval is **not** production acceptance, approval of TP
+  activation/real emails, release/install, or an approval of the
+  other non-UI commits added after anchor
+  `a29c1466fc5f246636998919a2abd443960894cf`
+  (currency, mail, full-part search, recipient integration, baseline
+  test expectation changes, etc.). Those require their own review.
+- Synthetic screenshots exist in the repository but were not visually
+  inspectable through this review interface; visual sign-off remains
+  separate. Final exact SHA has **not** completed a 24-hour synthetic
+  stability run, genuine Windows OS DPI tests or real Chrome/CDP,
+  production datastore/SMTP/website integration, GPU/disk/game-load
+  resource measurements. Older performance comparisons refer to a
+  previous UI candidate and may not be re-labelled as final-SHA
+  runtime guarantees.
+- Retain TP disabled unless separately authorized. Do not deploy,
+  package, change production config/data or send live email based
+  on this scope-specific code review.
+
+**Disposition: V1.5-B CODE_REVIEW_PASS (source-only).**
+Move to a distinct, Owner-approved release-readiness/preflight
+phase, keeping production activation on HOLD until the remaining
+approval and verification gates are closed.
