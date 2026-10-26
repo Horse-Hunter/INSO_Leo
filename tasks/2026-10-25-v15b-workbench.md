@@ -1,8 +1,53 @@
 # V1.5-B workbench and lightweight observation
 
-status: REVIEW_REQUIRED
+status: RELEASE_HOLD / FINAL_ACCEPTANCE_IN_PROGRESS
 authority: Owner pasted V1.5-B task, 2026-10-25
 branch: codex/v1-5-tp-research
+
+## Final exact-source Windows acceptance / soak (2026-10-26)
+
+status: IN_PROGRESS / RELEASE_HOLD
+authority: Owner request, CEO9f5522d7bef41a15fc099f9ad1545120dd9565c1
+source_target: 9f5522d7bef41a15fc099f9ad1545120dd9565c1 (src identical to bbe2743)
+
+Only MockBackend/synthetic GUI and finite24h diagnostic. No production backend,
+SQLite, credentials, mail, CDP/profile/sites, packaging/install or game launch.
+No display-setting/priority/power changes or foreground takeover. App source
+must remain unchanged; failures are evidence + minimal suggestions, not fixes.
+Reuse scripts/measure_workbench.process_sample and verify_workbench_ui.capture,
+existing MockBackend, immutable DTO, bounded queue/ring and pure observation.
+The old verify script still unpacks7 observation values and simulates widget DPI;
+do not call that old main as a real OS DPI test. A finite diagnostic adapts current
+9-value snapshot, samples60s, exercises300s, auto-closes at24h. No resident monitor.
+Current actual monitor1920x1080/effective120DPI=125%;100/150 NOT_VERIFIED unless
+real monitors become available without changing Owner settings. Capture own HWND
+only, six pages at1280x720/1920x1080 plus monitor work-area case; report any physical
+overflow of full1080 client height instead of claiming it fits1030px work area.
+24h is NOT_VERIFIED until elapsed samples prove actual continuous run; suspend/
+large gaps, source changes, early exit or callback errors must invalidate claims.
+Update this packet and V15_UI_UPGRADE_REPORT.md; synthetic evidence only in Git.
+Retain owned in-progress soak output until collection; retire disposable smoke
+outputs after preserving essential evidence. No BUILD_READY or deployment claim
+before acceptance evidence and CEO review.
+
+Execution update: 75.078s/6-cycle smoke and final diagnostic44.875s/3-cycle smoke
+complete, no callback/guard errors, src hashes unchanged. Initial ordinary-desktop
+Tk focus attempt was withdrawn/aborted; subsequent tests use a non-input desktop
+created without switching or launching a shell. Consequently real Explorer tray,
+minimize and Owner-desktop interaction are NOT_VERIFIED, not replaced by withdraw.
+18 layout checks/12 own-HWND screenshots at actual120DPI, 14 existing GUI/observer
+tests PASS3.38s, Ruff PASS. scripts/accept_workbench.py is finite diagnostics only.
+24h process70956 started2026-10-26T03:25:25Z, output
+D:/Program_Leo/INSO_Leo/.tmp/v15-final-acceptance-24h; first10min idle then300s
+workloads/60s samples, automatic close after actual86400s. Keep output until final
+collection; no source edits. App queue/after measured, full native Tk event queue
+depth UNKNOWN. Evidence docs/evidence/v15b/final-acceptance; full report current
+section has method/limits/early failures. Heartbeat v1-5 follows this thread every
+2h, quiet while healthy, collect/stop on completion or failure. Actual24h, final
+resource trends/recovery/baseline comparison still NOT_VERIFIED; not BUILD_READY.
+Owned smoke1-6 and pytest temporary directories retired after evidence capture;
+active24h output and its stdout/stderr retained until completion. No other
+worktree, frozen/runtime/rollback/profile or unknown dirty files removed.
 
 ## Second-review correction packet (2026-10-26)
 

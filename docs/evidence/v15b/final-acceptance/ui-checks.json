@@ -1,0 +1,239 @@
+{
+  "layouts": [
+    {
+      "page": "总览",
+      "viewport": "1280x720",
+      "client": [
+        1280,
+        720
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "任务中心",
+      "viewport": "1280x720",
+      "client": [
+        1280,
+        720
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "调研结果",
+      "viewport": "1280x720",
+      "client": [
+        1280,
+        720
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "异常与通知",
+      "viewport": "1280x720",
+      "client": [
+        1280,
+        720
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "运行记录",
+      "viewport": "1280x720",
+      "client": [
+        1280,
+        720
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "设置",
+      "viewport": "1280x720",
+      "client": [
+        1280,
+        720
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "总览",
+      "viewport": "1920x1080",
+      "client": [
+        1920,
+        1055
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "任务中心",
+      "viewport": "1920x1080",
+      "client": [
+        1920,
+        1055
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "调研结果",
+      "viewport": "1920x1080",
+      "client": [
+        1920,
+        1055
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "异常与通知",
+      "viewport": "1920x1080",
+      "client": [
+        1920,
+        1055
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "运行记录",
+      "viewport": "1920x1080",
+      "client": [
+        1920,
+        1055
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "设置",
+      "viewport": "1920x1080",
+      "client": [
+        1920,
+        1055
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "总览",
+      "viewport": "workarea",
+      "client": [
+        1895,
+        965
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "任务中心",
+      "viewport": "workarea",
+      "client": [
+        1895,
+        965
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "调研结果",
+      "viewport": "workarea",
+      "client": [
+        1895,
+        965
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "异常与通知",
+      "viewport": "workarea",
+      "client": [
+        1895,
+        965
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "运行记录",
+      "viewport": "workarea",
+      "client": [
+        1895,
+        965
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    },
+    {
+      "page": "设置",
+      "viewport": "workarea",
+      "client": [
+        1895,
+        965
+      ],
+      "important_controls_fit": true,
+      "actual_os_dpi": 120
+    }
+  ],
+  "mock_feedback_count": 3,
+  "actual_os_dpi": 120,
+  "important_controls_fit": true,
+  "foreground_violations": 0,
+  "button_checks": [
+    {
+      "sample": 0,
+      "title": "重跑采购流程",
+      "enabled": true
+    },
+    {
+      "sample": 0,
+      "title": "重跑报价流程",
+      "enabled": true
+    },
+    {
+      "sample": 0,
+      "title": "重跑 TP 价格",
+      "enabled": false
+    },
+    {
+      "sample": 2,
+      "title": "重跑采购流程",
+      "enabled": false
+    },
+    {
+      "sample": 2,
+      "title": "重跑报价流程",
+      "enabled": false
+    },
+    {
+      "sample": 2,
+      "title": "重跑 TP 价格",
+      "enabled": false
+    },
+    {
+      "sample": 5,
+      "title": "重跑采购流程",
+      "enabled": false
+    },
+    {
+      "sample": 5,
+      "title": "重跑报价流程",
+      "enabled": false
+    },
+    {
+      "sample": 5,
+      "title": "重跑 TP 价格",
+      "enabled": true
+    }
+  ],
+  "not_verified_dpi": [
+    100,
+    150
+  ]
+}

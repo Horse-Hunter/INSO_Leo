@@ -1,0 +1,30 @@
+{
+  "completed": true,
+  "elapsed_seconds": 44.875,
+  "requested_seconds": 35,
+  "continuous_24h_verified": false,
+  "max_sample_gap_seconds": 10.062999999994645,
+  "source_unchanged": true,
+  "error": null,
+  "callback_errors": [],
+  "guard_attempts": [],
+  "cycles": 3,
+  "closed_at": "2026-10-26T03:25:19.116666+00:00",
+  "operation_timings": [
+    {
+      "cycle": 1,
+      "orders": 500,
+      "milliseconds": 200.01709999633022
+    },
+    {
+      "cycle": 2,
+      "orders": 1000,
+      "milliseconds": 162.52360001089983
+    },
+    {
+      "cycle": 3,
+      "orders": 100,
+      "milliseconds": 155.00600001541898
+    }
+  ]
+}

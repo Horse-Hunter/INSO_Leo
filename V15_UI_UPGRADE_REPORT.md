@@ -1,6 +1,75 @@
 # V1.5-B 工作台升级
 
-状态：REVIEW_REQUIRED，交 CEO 独立审核；本任务不发布。
+状态：RELEASE_HOLD。最终验收 IN_PROGRESS，24 小时尚未完成，不能建议 BUILD_READY。
+
+## 最终源码隔离实机验收（2026-10-26，进行中）
+
+受测应用源码：`9f5522d7bef41a15fc099f9ad1545120dd9565c1`。从原 V1.5 分支快进至此，
+开始时工作树干净；该提交相对 `bbe2743e0ba3c2f9ddcd25ec0dce7e483652db22` 仅有任务文档变更。
+本次仅改任务文档、报告及手动诊断脚本，没有修改 `src/`，没有运行早期 V1.5 EXE。
+
+复用审计：沿用 MockBackend、现有六页面 UI、只读观测 DTO、有界事件/日志、既有自身进程
+Win32 采样器及 PrintWindow 截图函数。旧截图入口仍按旧版 7 项观测值解包，并模拟控件缩放，
+不能作为本轮真实 DPI 验收；新增 `scripts/accept_workbench.py` 只补当前 9 项观测、有限时重复
+负载、隔离守卫及证据输出，不是生产入口或新调度系统，无新增依赖。
+
+环境：Windows / Python 3.12.10 / 16 逻辑 CPU；实际单屏 1920×1080、工作区 1920×1030，
+GetDpiForWindow=120，即系统 125%。未调用控件缩放模拟，也未修改显示/电源/优先级设置。
+100% 与 150% 系统 DPI：**NOT_VERIFIED**。
+
+安全自检的早期失败：第一次脚本守卫阻断第三方主题库读取 OS 版本所需的本地子进程；
+缓存 OS 信息后仍遇沙箱 Tcl 读取限制，使用已安装 Tcl、未改文件权限或部署资源。
+随后普通桌面短测发现 Tk 映射会进入前台，守卫立即撤回窗口并终止（约 1.1 秒）；
+此失败不撤销，也不算验收通过。之后改用 CreateDesktop/SetThreadDesktop 建立**不切换的
+非输入隔离桌面**，未启动 Explorer/浏览器/业务进程。这样可以真实创建 Tk/Win32 窗口并
+截取自身 HWND，避免再影响 Owner 的前台；不是在 Owner 当前桌面的人工交互验收。
+恢复路径仅在诊断中抑制 lift，业务源文件保持不变。
+
+| 检查 | 当前实测结果 / 限制 |
+| --- | --- |
+| 六页面 | 已截取 1280×720、1920×1080 客户区各六张，纯合成数据；人工查看小尺寸六页，未见主要按钮溢出 |
+| 实际工作区 | 另检 1895×965 客户区六页；共 18 项主要按钮/筛选控件边界检查通过。1080 高客户区含外框超过 1030 工作区，不能声称物理全屏完整可见 |
+| 模块/阶段/等待 | 三模块合成观测，循环运行阶段及恢复等待；并非业务 TP 已开启或真实网站异常 |
+| 列表/详情/异常 | 搜索、来源/状态筛选、排序、翻页、详情反复打开关闭、UNKNOWN 提示；每页最多 200 行 |
+| 三种重跑 | 普通样本采购/报价可见，TP 样本仅 TP 可见，UNKNOWN 样本全禁用；3 个启用按钮均得到假后端安全拒绝。提示由合成桩控制，不替代持久化授权测试 |
+| 窗口/关闭 | 三种尺寸、隐藏/恢复及正常退出实测。真实最小化、Explorer 托盘图标/菜单/恢复：NOT_VERIFIED；隔离桌面无 shell，隐藏不等于托盘 |
+| 离线回归 | `test_workbench.py` 与 `test_workbench_snapshot.py`：14 PASS，3.38 秒；Ruff / diff whitespace 通过 |
+| 安全守卫 | 网络 connect、SMTP、SQLite、后续子进程及业务组合导入拒绝；通过短测守卫触发 0，回调异常 0，应用源散列不变 |
+| 游戏 | 没有启动游戏或改前台/电源策略；真实 Chrome Research 的帧率影响 NOT_VERIFIED |
+
+短测：先完成 75.078 秒/6 轮，再用最终诊断脚本完成 44.875 秒/3 轮（请求 35 秒，按采样
+周期结束）。覆盖 100/500/1000 条、各轮 300 条合成日志、可见/隐藏交替。后者采样起止：
+RSS 49.97→50.45 MiB、Private 31.66→32.67 MiB、句柄 353→353、GDI 57→57、USER 236→287；
+这是包含初始化/不同订单数量的短测，**不是稳定趋势或泄漏结论**。
+源散列、按钮结果、截图及原始短测采样见 `docs/evidence/v15b/final-acceptance/`。
+
+| 页面 | 1280×720 | 1920×1080 |
+| --- | --- | --- |
+| 总览 | [截图](docs/evidence/v15b/final-acceptance/page-1280x720-0.png) | [截图](docs/evidence/v15b/final-acceptance/page-1920x1080-0.png) |
+| 任务中心 | [截图](docs/evidence/v15b/final-acceptance/page-1280x720-1.png) | [截图](docs/evidence/v15b/final-acceptance/page-1920x1080-1.png) |
+| 调研结果 | [截图](docs/evidence/v15b/final-acceptance/page-1280x720-2.png) | [截图](docs/evidence/v15b/final-acceptance/page-1920x1080-2.png) |
+| 异常与通知 | [截图](docs/evidence/v15b/final-acceptance/page-1280x720-3.png) | [截图](docs/evidence/v15b/final-acceptance/page-1920x1080-3.png) |
+| 运行记录 | [截图](docs/evidence/v15b/final-acceptance/page-1280x720-4.png) | [截图](docs/evidence/v15b/final-acceptance/page-1920x1080-4.png) |
+| 设置 | [截图](docs/evidence/v15b/final-acceptance/page-1280x720-5.png) | [截图](docs/evidence/v15b/final-acceptance/page-1920x1080-5.png) |
+
+有限时 24h 已于 **2026-10-26 11:25:25（北京时间）**启动，PID 70956。
+预计最早 2026-10-27 11:25:27 后结束；启动的独立进程已复查仍存在，stderr 为空。
+原始输出保留在 `D:/Program_Leo/INSO_Leo/.tmp/v15-final-acceptance-24h`，不可在运行中清理。
+先空闲基线 10 分钟，再每 5 分钟执行一次负载、轮换 100/500/1000 条；通常每 60 秒采样，
+操作前后另取一次资源值。采样含 CPU（单核及整机口径）、RSS/Private、系统/Python 线程、
+句柄/GDI/USER、Tk after、应用事件队列、列表/值缓存、日志及 tick/操作耗时。
+Tk 内部 OS 事件队列深度没有公开可靠计数，**UNKNOWN**；记录应用队列和可查询的 after，
+不能把它们当作全部原生事件队列。只写有限日志/JSONL，未引入常驻监控。
+本任务已设每两小时回到本线程收集状态的跟进，健康未完成时静默，完成或失败后收集证据并停止跟进。
+
+**24 小时状态仍为 NOT_VERIFIED**。最终须检实际 elapsed≥86400 秒、最大采样缺口≤180 秒、
+无回调/安全异常、应用源散列未改及正常关闭；休眠/中断不能补算成功。最终资源趋势、
+异常恢复回落及整段峰值待实际完成后分析。旧基线保留于 `performance.json`（97212f4，
+600 秒 idle 的整机 CPU 均值约 0.128%，RSS 74.36–88.23 MiB，Private 53.24–55.07 MiB）。
+旧数据与本次桌面/负载/时长不同，只能分条件参考，不能据短测声称升级节省了多少资源。
+
+当前建议：继续 **RELEASE_HOLD，不满足 BUILD_READY**。待真实时长证据收集及未验证项目
+由 CEO 明确处置后再判断；本次未打包、安装、发信、访问生产数据或网站，没有清理四 TP/六 SENT。
 
 ## CEO 第二轮修正（2026-10-26，当前补丁）
 
