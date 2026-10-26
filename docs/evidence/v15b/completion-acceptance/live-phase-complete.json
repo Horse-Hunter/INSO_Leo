@@ -1,0 +1,60 @@
+{
+  "pid": 65360,
+  "elapsed_seconds": 62.98399999999674,
+  "worker_stopped": true,
+  "close_finalized": true,
+  "callback_errors": [],
+  "tp_enabled": false,
+  "production_backend": false,
+  "smtp_forbidden": true,
+  "sql_forbidden": true,
+  "source_results": [
+    {
+      "kind": "source_result",
+      "at": "2026-10-26T06:36:42.348116+00:00",
+      "site": "ic.net",
+      "outcome": "SUCCESS"
+    },
+    {
+      "kind": "source_result",
+      "at": "2026-10-26T06:37:17.305359+00:00",
+      "site": "findchips",
+      "outcome": "SUCCESS"
+    },
+    {
+      "kind": "source_result",
+      "at": "2026-10-26T06:37:20.568235+00:00",
+      "site": "hqew",
+      "outcome": "SUCCESS"
+    },
+    {
+      "kind": "source_result",
+      "at": "2026-10-26T06:37:26.203079+00:00",
+      "site": "lcsc",
+      "outcome": "SUCCESS"
+    },
+    {
+      "kind": "source_result",
+      "at": "2026-10-26T06:37:30.657813+00:00",
+      "site": "bom.ai",
+      "outcome": "SUCCESS"
+    },
+    {
+      "kind": "source_result",
+      "at": "2026-10-26T06:37:31.867460+00:00",
+      "site": "inso",
+      "outcome": "SUCCESS"
+    }
+  ],
+  "ui_rendered_stages": 7,
+  "screenshots": [
+    "live-stage-0.png",
+    "live-stage-1.png",
+    "live-stage-2.png",
+    "live-stage-3.png",
+    "live-stage-4.png",
+    "live-stage-5.png",
+    "live-stage-6.png"
+  ],
+  "qualification": "Standalone diagnostic GUI bound to real readonly source callbacks; not production workflow polling"
+}

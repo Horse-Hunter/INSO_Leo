@@ -1,0 +1,25 @@
+{
+  "status": "SOURCE_ANCHOR_VERIFIED",
+  "tested_mpn": "STM32G0B0CET6",
+  "one_anchor_only": true,
+  "transport": "Unmodified guarded native TSV; transient full download, exact selected row returned",
+  "underlying_full_tsv_retained": false,
+  "current_rfq_brief_rechecked": false,
+  "source_sheet": "2026",
+  "source_row": 167,
+  "matched_fields": [
+    "spreadsheet",
+    "sheet",
+    "physical_row",
+    "full_mpn",
+    "positive_integer_quantity",
+    "available_brand"
+  ],
+  "date_checked": false,
+  "business_rows_validated": 1,
+  "original_pages_preserved": true,
+  "new_pages_remaining": 0,
+  "production_database_unchanged": true,
+  "read_diagnostics": [],
+  "attempts": 1
+}

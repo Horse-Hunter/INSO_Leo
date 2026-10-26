@@ -1,0 +1,17 @@
+{
+  "application_source_sha": "9f5522d7bef41a15fc099f9ad1545120dd9565c1",
+  "evidence_parent_sha": "90dedf56643dba63e6d88fec292054538a76070b",
+  "source_hashes_unchanged": true,
+  "soak_pid": 70956,
+  "owner_demo_pid": 71024,
+  "protected_processes_preserved": true,
+  "finite_probe_processes_exited": true,
+  "production_tp_sent_counts": [
+    4,
+    6
+  ],
+  "counts_qualification": "Readonly preflight and targeted Google verification; no production mutation",
+  "auto_review": "Explicit lift rejected for possible foreground stealing; removed. Foreground observations do not force focus.",
+  "profile_qualification": "cProfile main-thread attribution with process_time; native threads outside attribution. 0.328s attributed does not explain whole-process foreground CPU; root cause UNKNOWN.",
+  "cleanup": "Completed: owned finite probe outputs and private quote workbook removed; original demo71024 and soak70956 retained."
+}

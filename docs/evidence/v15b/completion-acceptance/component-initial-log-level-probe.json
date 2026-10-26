@@ -1,0 +1,131 @@
+{
+  "pid": 72040,
+  "elapsed_seconds": 9.73499999998603,
+  "checks": [
+    {
+      "check": "nav_command_总览",
+      "passed": true
+    },
+    {
+      "check": "nav_command_任务中心",
+      "passed": true
+    },
+    {
+      "check": "nav_command_调研结果",
+      "passed": true
+    },
+    {
+      "check": "nav_command_异常与通知",
+      "passed": true
+    },
+    {
+      "check": "nav_command_运行记录",
+      "passed": true
+    },
+    {
+      "check": "nav_command_设置",
+      "passed": true
+    },
+    {
+      "check": "table_page_limit",
+      "passed": true
+    },
+    {
+      "check": "search_key_binding",
+      "passed": true
+    },
+    {
+      "check": "filter_source",
+      "passed": true
+    },
+    {
+      "check": "filter_module",
+      "passed": true
+    },
+    {
+      "check": "filter_status",
+      "passed": true
+    },
+    {
+      "check": "heading_registered_sort",
+      "passed": true
+    },
+    {
+      "check": "next_page_changes_rows",
+      "passed": true
+    },
+    {
+      "check": "previous_page_returns",
+      "passed": true
+    },
+    {
+      "check": "detail_hint_0_purchase",
+      "passed": true
+    },
+    {
+      "check": "detail_hint_0_quotation",
+      "passed": true
+    },
+    {
+      "check": "detail_hint_0_tp",
+      "passed": true
+    },
+    {
+      "check": "detail_hint_5_purchase",
+      "passed": true
+    },
+    {
+      "check": "detail_hint_5_quotation",
+      "passed": true
+    },
+    {
+      "check": "detail_hint_5_tp",
+      "passed": true
+    },
+    {
+      "check": "three_reruns_rejected",
+      "passed": true
+    },
+    {
+      "check": "unknown_all_reruns_disabled",
+      "passed": true
+    },
+    {
+      "check": "unchanged_detail_reuses_widgets",
+      "passed": true
+    },
+    {
+      "check": "context_menu_three_registered_actions",
+      "passed": true
+    },
+    {
+      "check": "backend_log_bounded_1000",
+      "passed": false
+    }
+  ],
+  "callback_errors": [
+    "AssertionError"
+  ],
+  "requests": [
+    [
+      "component-0000",
+      "purchase"
+    ],
+    [
+      "component-0000",
+      "quotation"
+    ],
+    [
+      "component-0005",
+      "tp"
+    ]
+  ],
+  "feedback_count": 3,
+  "close_finalized": true,
+  "private_test_mutex_released": true,
+  "original_demo_71024_untouched": true,
+  "original_soak_70956_untouched": true,
+  "tray_thread_stopped": true,
+  "qualification": "Tk widget command/event component test; not native pointer testing or exit of Owner demo",
+  "passed": false
+}

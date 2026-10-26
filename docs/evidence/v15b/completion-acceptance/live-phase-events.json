@@ -1,0 +1,150 @@
+[
+  {
+    "kind": "stage",
+    "at": "2026-10-26T06:36:31.115942+00:00",
+    "site": "INSO",
+    "stage": "复用既有认证与只读租约"
+  },
+  {
+    "kind": "ui_stage_rendered",
+    "site": "INSO",
+    "stage": "复用既有认证与只读租约",
+    "rendered_at": "2026-10-26T06:36:31.337928+00:00",
+    "module_site": "INSO"
+  },
+  {
+    "kind": "auth",
+    "at": "2026-10-26T06:36:36.669113+00:00",
+    "status": "VERIFIED_ORIGINAL_SESSION_GUARDS"
+  },
+  {
+    "kind": "stage",
+    "at": "2026-10-26T06:36:36.670115+00:00",
+    "site": "ic.net",
+    "stage": "真实单型号只读查询"
+  },
+  {
+    "kind": "ui_stage_rendered",
+    "site": "ic.net",
+    "stage": "真实单型号只读查询",
+    "rendered_at": "2026-10-26T06:36:36.827254+00:00",
+    "module_site": "ic.net"
+  },
+  {
+    "kind": "source_result",
+    "at": "2026-10-26T06:36:42.348116+00:00",
+    "site": "ic.net",
+    "outcome": "SUCCESS"
+  },
+  {
+    "kind": "stage",
+    "at": "2026-10-26T06:36:42.348116+00:00",
+    "site": "findchips",
+    "stage": "真实单型号只读查询"
+  },
+  {
+    "kind": "ui_stage_rendered",
+    "site": "findchips",
+    "stage": "真实单型号只读查询",
+    "rendered_at": "2026-10-26T06:36:42.420775+00:00",
+    "module_site": "findchips"
+  },
+  {
+    "kind": "source_result",
+    "at": "2026-10-26T06:37:17.305359+00:00",
+    "site": "findchips",
+    "outcome": "SUCCESS"
+  },
+  {
+    "kind": "stage",
+    "at": "2026-10-26T06:37:17.305359+00:00",
+    "site": "hqew",
+    "stage": "真实单型号只读查询"
+  },
+  {
+    "kind": "ui_stage_rendered",
+    "site": "hqew",
+    "stage": "真实单型号只读查询",
+    "rendered_at": "2026-10-26T06:37:17.406204+00:00",
+    "module_site": "hqew"
+  },
+  {
+    "kind": "source_result",
+    "at": "2026-10-26T06:37:20.568235+00:00",
+    "site": "hqew",
+    "outcome": "SUCCESS"
+  },
+  {
+    "kind": "stage",
+    "at": "2026-10-26T06:37:20.568235+00:00",
+    "site": "lcsc",
+    "stage": "真实单型号只读查询"
+  },
+  {
+    "kind": "ui_stage_rendered",
+    "site": "lcsc",
+    "stage": "真实单型号只读查询",
+    "rendered_at": "2026-10-26T06:37:20.666800+00:00",
+    "module_site": "lcsc"
+  },
+  {
+    "kind": "source_result",
+    "at": "2026-10-26T06:37:26.203079+00:00",
+    "site": "lcsc",
+    "outcome": "SUCCESS"
+  },
+  {
+    "kind": "stage",
+    "at": "2026-10-26T06:37:26.203079+00:00",
+    "site": "bom.ai",
+    "stage": "真实单型号只读查询"
+  },
+  {
+    "kind": "ui_stage_rendered",
+    "site": "bom.ai",
+    "stage": "真实单型号只读查询",
+    "rendered_at": "2026-10-26T06:37:26.342483+00:00",
+    "module_site": "bom.ai"
+  },
+  {
+    "kind": "source_result",
+    "at": "2026-10-26T06:37:30.657813+00:00",
+    "site": "bom.ai",
+    "outcome": "SUCCESS"
+  },
+  {
+    "kind": "stage",
+    "at": "2026-10-26T06:37:30.657813+00:00",
+    "site": "inso",
+    "stage": "真实单型号只读查询"
+  },
+  {
+    "kind": "ui_stage_rendered",
+    "site": "inso",
+    "stage": "真实单型号只读查询",
+    "rendered_at": "2026-10-26T06:37:30.810665+00:00",
+    "module_site": "inso"
+  },
+  {
+    "kind": "source_result",
+    "at": "2026-10-26T06:37:31.867460+00:00",
+    "site": "inso",
+    "outcome": "SUCCESS"
+  },
+  {
+    "kind": "result",
+    "at": "2026-10-26T06:37:31.893248+00:00",
+    "status": "SUCCESS",
+    "private_local_excel_generated": true
+  },
+  {
+    "kind": "browser_final",
+    "at": "2026-10-26T06:37:31.899450+00:00",
+    "original_pages_preserved": true,
+    "new_pages_remaining": 0
+  },
+  {
+    "kind": "done",
+    "at": "2026-10-26T06:37:31.912928+00:00"
+  }
+]

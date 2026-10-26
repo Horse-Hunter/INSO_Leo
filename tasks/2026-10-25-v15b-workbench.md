@@ -1,6 +1,23 @@
 # V1.5-B workbench and lightweight observation
 
 status: RELEASE_HOLD / FINAL_ACCEPTANCE_IN_PROGRESS
+
+Immediate acceptance completion2026-10-26: finite component groups32/38 PASS
+(overlap), GUI regression109 PASS; all six live readonly Research sources SUCCESS
+and seven real callback stages rendered in diagnostic GUI, one Google2026 row167
+source anchor verified through unchanged guarded transport. No production loop,
+Save/Send/SMTP or production mutation. Source hashes unchanged. Original demo71024
+and soak70956 preserved; finite diagnostic processes exited/private mutex released.
+Evidence docs/evidence/v15b/completion-acceptance and current report summary supersede
+earlier pending claims only within their stated method scope. Native pointer menu
+hit-testing,100/150% OS DPI,game impact and actual24h remain NOT_VERIFIED.
+New foreground CPU risk3.278%host vs0.0195%tray; main-thread profile does not explain
+whole-process cost, root cause UNKNOWN. No source repair authorized in this task.
+Keep RELEASE_HOLD, do not recommend BUILD_READY; CEO review evidence/performance
+finding, independently collect actual24h later. Temporary private quote output
+retired with owned finite probe directory, never committed. Existing automation
+must preserve updated Owner tray pass and these live readonly results.
+
 authority: Owner pasted V1.5-B task, 2026-10-25
 branch: codex/v1-5-tp-research
 
@@ -22,6 +39,33 @@ Reuse existing offline gate/state tests with synthetic DB. Evidence/report stays
 in V15_UI_UPGRADE_REPORT.md and docs/evidence/v15b; temporary bootstrap retired on
 exit after preserving reproducible evidence; Owner visible demo may remain open.
 Both process identities/results separate; RELEASE_HOLD regardless of UI outcome.
+
+Owner continuous-execution instruction2026-10-26: finish remaining authorized
+acceptance without per-item pauses. No business source changes. Existing WGC
+capture still fails after allowed recovery; no guessed native pointer input.
+Use original Tk widget commands/events for a finite native-window component
+exercise, explicitly separate from mouse testing. Reuse app/Mock/tray/close and
+SingleInstanceGuard with a private diagnostic mutex name in that test process;
+do not release/claim71024's production-name mutex or stop70956. Finite visible/
+tray resource intervals and process exit checks only, no resident monitor.
+For bounded live read-only completion, existing Core-backed ordinary INSO
+session establishment may be used as the prerequisite of the approved history
+reader; this is reuse of its reviewed authentication path, not a new login system
+or credential change. Existing challenges fail closed, no enrollment/new profile.
+No full production Backend, business DB, procurement Save/Send, Google writes or
+SMTP. Any Research local output stays in the owned probe directory and is not
+committed if it contains actual quotes. Only redacted outcomes/counts and real
+stage timestamps may reach diagnostic UI/logs/evidence. Google whole-sheet TSV
+restriction remains; do not silently scan all orders. Actual24h and DPI limits
+remain; consolidated results and limitations at end, RELEASE_HOLD.
+Bounded Google clarification under Owner's existing read-only/test-model scope:
+use an existing exact physical-row range get for one stored authorized MPN anchor,
+not discovery scans or workflow polling. Canonical native transport necessarily
+downloads/parses temporary full TSV; disclose that limitation, keep its original
+guards/limits/deletion, pass only the selected row to canonical identity binding,
+never retain/export full data or process other business rows. No whitelist/range
+or transport change. This replaces the prior over-conservative decision to avoid
+all cell reads merely because native TSV transport exists; no broader order scan.
 
 Immediate execution snapshot: visible canonical-main Mock PID71024 since12:01:14,
 250 synthetic history rows, production services blocked, original mutex acquired,

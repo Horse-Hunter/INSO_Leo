@@ -1,0 +1,104 @@
+{
+  "method": "Finite native-Tk probe; exclude startup/transitions, same-phase intervals20..40s. CPU host denominator16; not game/24h.",
+  "pid": 70160,
+  "phases": {
+    "visible_idle": {
+      "samples": 3,
+      "host_cpu_mean_percent": 0.7518472619969977,
+      "host_cpu_max_percent": 1.4480579659561696,
+      "rss": {
+        "min": 104534016,
+        "max": 104570880
+      },
+      "private": {
+        "min": 77299712,
+        "max": 77402112
+      },
+      "threads": {
+        "min": 12,
+        "max": 15
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1
+      },
+      "handles": {
+        "min": 577,
+        "max": 580
+      },
+      "gdi": {
+        "min": 137,
+        "max": 137
+      },
+      "user": {
+        "min": 317,
+        "max": 317
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 8
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 0
+      }
+    },
+    "tray_idle": {
+      "samples": 3,
+      "host_cpu_mean_percent": 0.021681439974271983,
+      "host_cpu_max_percent": 0.022786458333333332,
+      "rss": {
+        "min": 105279488,
+        "max": 105316352
+      },
+      "private": {
+        "min": 78815232,
+        "max": 78884864
+      },
+      "threads": {
+        "min": 8,
+        "max": 10
+      },
+      "python_threads": {
+        "min": 2,
+        "max": 2
+      },
+      "handles": {
+        "min": 579,
+        "max": 579
+      },
+      "gdi": {
+        "min": 137,
+        "max": 137
+      },
+      "user": {
+        "min": 320,
+        "max": 320
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 8
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "main": {
+    "checks": 32,
+    "passed": true,
+    "seconds": 231.59299999999348,
+    "close_finalized": true,
+    "private_mutex_released": true
+  },
+  "extended": {
+    "checks": 38,
+    "passed": true,
+    "seconds": 13.155999999988126,
+    "close_finalized": true,
+    "private_mutex_released": true
+  },
+  "application_source_hashes_unchanged": true,
+  "protected_soak_script_changed": false
+}

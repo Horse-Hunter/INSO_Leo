@@ -1,0 +1,24 @@
+{
+  "pid": 69928,
+  "elapsed_seconds": 142.71799999999348,
+  "checks": [
+    {
+      "check": "real_shell_tray_available",
+      "passed": true
+    },
+    {
+      "check": "canonical_tray_restore_visible",
+      "passed": true
+    }
+  ],
+  "callback_errors": [],
+  "requests": [],
+  "feedback_count": 0,
+  "close_finalized": true,
+  "private_test_mutex_released": true,
+  "original_demo_71024_untouched": true,
+  "original_soak_70956_untouched": true,
+  "tray_thread_stopped": true,
+  "qualification": "Tk widget command/event component test; not native pointer testing or exit of Owner demo",
+  "passed": true
+}

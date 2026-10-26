@@ -1,0 +1,9 @@
+{
+  "status": "NOT_VERIFIED",
+  "tested_mpn": "STM32G0B0CET6",
+  "one_anchor_only": true,
+  "transport": "Unmodified guarded native TSV; transient full download, exact selected row returned",
+  "underlying_full_tsv_retained": false,
+  "current_rfq_brief_rechecked": false,
+  "reason": "GOOGLE_WEB_READ_UNAVAILABLE"
+}

@@ -1,0 +1,55 @@
+{
+  "method": "Read-only own-process foreground observation; no explicit lift/foreground forcing. Same-phase20..40s intervals only, excluding transitions.",
+  "phases": {
+    "visible_idle": {
+      "samples": 2,
+      "cpu_host_mean_percent": 3.277883151729191,
+      "all_points_own_window_foreground": true,
+      "all_valid_foreground_handles": true,
+      "rss_max": 102379520,
+      "private_max": 75415552,
+      "native_threads": [
+        12,
+        15
+      ],
+      "python_threads": [
+        1
+      ],
+      "handles": [
+        578,
+        583
+      ],
+      "gdi": [
+        136
+      ],
+      "user": [
+        261
+      ]
+    },
+    "tray_idle": {
+      "samples": 2,
+      "cpu_host_mean_percent": 0.01949326282914004,
+      "all_points_own_window_foreground": false,
+      "all_valid_foreground_handles": true,
+      "rss_max": 103219200,
+      "private_max": 76476416,
+      "native_threads": [
+        12,
+        13
+      ],
+      "python_threads": [
+        2
+      ],
+      "handles": [
+        584,
+        586
+      ],
+      "gdi": [
+        136
+      ],
+      "user": [
+        264
+      ]
+    }
+  }
+}

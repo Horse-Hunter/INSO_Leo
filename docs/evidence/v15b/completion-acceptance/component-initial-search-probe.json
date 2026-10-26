@@ -1,0 +1,50 @@
+{
+  "pid": 69756,
+  "elapsed_seconds": 3.75,
+  "checks": [
+    {
+      "check": "nav_command_总览",
+      "passed": true
+    },
+    {
+      "check": "nav_command_任务中心",
+      "passed": true
+    },
+    {
+      "check": "nav_command_调研结果",
+      "passed": true
+    },
+    {
+      "check": "nav_command_异常与通知",
+      "passed": true
+    },
+    {
+      "check": "nav_command_运行记录",
+      "passed": true
+    },
+    {
+      "check": "nav_command_设置",
+      "passed": true
+    },
+    {
+      "check": "table_page_limit",
+      "passed": true
+    },
+    {
+      "check": "search_key_binding",
+      "passed": false
+    }
+  ],
+  "callback_errors": [
+    "AssertionError"
+  ],
+  "requests": [],
+  "feedback_count": 0,
+  "close_finalized": true,
+  "private_test_mutex_released": true,
+  "original_demo_71024_untouched": true,
+  "original_soak_70956_untouched": true,
+  "tray_thread_stopped": true,
+  "qualification": "Tk widget command/event component test; not native pointer testing or exit of Owner demo",
+  "passed": false
+}

@@ -1,0 +1,15 @@
+{
+  "pid": 72280,
+  "elapsed_seconds": 66.93700000000536,
+  "checks": [],
+  "callback_errors": [],
+  "requests": [],
+  "feedback_count": 0,
+  "close_finalized": true,
+  "private_test_mutex_released": true,
+  "original_demo_71024_untouched": true,
+  "original_soak_70956_untouched": true,
+  "tray_thread_stopped": true,
+  "qualification": "Tk widget command/event component test; not native pointer testing or exit of Owner demo",
+  "passed": true
+}
