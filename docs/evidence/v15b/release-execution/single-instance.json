@@ -1,0 +1,6 @@
+{
+  "canonical_guard_probe_acquired": false,
+  "expected_while_real_instance_resident": false,
+  "duplicate_protection": true,
+  "bypass_used": false
+}

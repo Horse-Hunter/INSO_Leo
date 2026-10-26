@@ -1,0 +1,1120 @@
+[
+  {
+    "at": "2026-10-26T08:56:43.279291+00:00",
+    "seconds": 0.0,
+    "targets": [
+      {
+        "pid": 64992,
+        "wall": 240287.515,
+        "created": 13437478130.04574,
+        "kernel": 166.734375,
+        "user": 66.734375,
+        "foreground": true,
+        "foreground_handle_present": true,
+        "rss": 103075840,
+        "private": 74428416,
+        "handles": 522,
+        "gdi": 136,
+        "user_objects": 261,
+        "threads": [
+          {
+            "created": 13437478130.04574,
+            "kernel": 166.671875,
+            "user": 66.71875,
+            "tid": 70056,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          },
+          {
+            "created": 13437478130.888447,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 70384,
+            "start_module": "tcl86t.dll",
+            "start_offset": "0x165f90"
+          },
+          {
+            "created": 13437478131.024157,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 73136,
+            "start_module": "SogouPY.ime",
+            "start_offset": "0x753478"
+          },
+          {
+            "created": 13437478131.035292,
+            "kernel": 0.015625,
+            "user": 0.0,
+            "tid": 63464,
+            "start_module": "ichat_bundle64.dll",
+            "start_offset": "0x8f300"
+          },
+          {
+            "created": 13437478131.041286,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 72332,
+            "start_module": "isgpet_bundle64.dll",
+            "start_offset": "0xaf00"
+          }
+        ]
+      },
+      {
+        "pid": 71264,
+        "wall": 240287.562,
+        "created": 13437478130.234072,
+        "kernel": 0.078125,
+        "user": 0.0625,
+        "foreground": false,
+        "foreground_handle_present": true,
+        "rss": 21778432,
+        "private": 15147008,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": [
+          {
+            "created": 13437478130.234072,
+            "kernel": 0.0625,
+            "user": 0.046875,
+            "tid": 65732,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "at": "2026-10-26T08:56:53.375958+00:00",
+    "seconds": 10.09399999998277,
+    "targets": [
+      {
+        "pid": 64992,
+        "wall": 240297.609,
+        "created": 13437478130.04574,
+        "kernel": 170.671875,
+        "user": 68.34375,
+        "foreground": true,
+        "foreground_handle_present": true,
+        "rss": 103088128,
+        "private": 74428416,
+        "handles": 528,
+        "gdi": 136,
+        "user_objects": 261,
+        "threads": [
+          {
+            "created": 13437478130.04574,
+            "kernel": 170.578125,
+            "user": 68.3125,
+            "tid": 70056,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          },
+          {
+            "created": 13437478130.888447,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 70384,
+            "start_module": "tcl86t.dll",
+            "start_offset": "0x165f90"
+          },
+          {
+            "created": 13437478131.024157,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 73136,
+            "start_module": "SogouPY.ime",
+            "start_offset": "0x753478"
+          },
+          {
+            "created": 13437478131.035292,
+            "kernel": 0.015625,
+            "user": 0.0,
+            "tid": 63464,
+            "start_module": "ichat_bundle64.dll",
+            "start_offset": "0x8f300"
+          },
+          {
+            "created": 13437478131.041286,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 72332,
+            "start_module": "isgpet_bundle64.dll",
+            "start_offset": "0xaf00"
+          }
+        ]
+      },
+      {
+        "pid": 71264,
+        "wall": 240297.656,
+        "created": 13437478130.234072,
+        "kernel": 0.078125,
+        "user": 0.0625,
+        "foreground": false,
+        "foreground_handle_present": true,
+        "rss": 21778432,
+        "private": 15147008,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": [
+          {
+            "created": 13437478130.234072,
+            "kernel": 0.0625,
+            "user": 0.046875,
+            "tid": 65732,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "at": "2026-10-26T08:57:03.468434+00:00",
+    "seconds": 20.187999999994645,
+    "targets": [
+      {
+        "pid": 64992,
+        "wall": 240307.703,
+        "created": 13437478130.04574,
+        "kernel": 174.734375,
+        "user": 69.796875,
+        "foreground": true,
+        "foreground_handle_present": true,
+        "rss": 103071744,
+        "private": 74428416,
+        "handles": 522,
+        "gdi": 136,
+        "user_objects": 261,
+        "threads": [
+          {
+            "created": 13437478130.04574,
+            "kernel": 174.671875,
+            "user": 69.765625,
+            "tid": 70056,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          },
+          {
+            "created": 13437478130.888447,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 70384,
+            "start_module": "tcl86t.dll",
+            "start_offset": "0x165f90"
+          },
+          {
+            "created": 13437478131.024157,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 73136,
+            "start_module": "SogouPY.ime",
+            "start_offset": "0x753478"
+          },
+          {
+            "created": 13437478131.035292,
+            "kernel": 0.015625,
+            "user": 0.0,
+            "tid": 63464,
+            "start_module": "ichat_bundle64.dll",
+            "start_offset": "0x8f300"
+          },
+          {
+            "created": 13437478131.041286,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 72332,
+            "start_module": "isgpet_bundle64.dll",
+            "start_offset": "0xaf00"
+          }
+        ]
+      },
+      {
+        "pid": 71264,
+        "wall": 240307.75,
+        "created": 13437478130.234072,
+        "kernel": 0.078125,
+        "user": 0.0625,
+        "foreground": false,
+        "foreground_handle_present": true,
+        "rss": 21778432,
+        "private": 15147008,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": [
+          {
+            "created": 13437478130.234072,
+            "kernel": 0.0625,
+            "user": 0.046875,
+            "tid": 65732,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "at": "2026-10-26T08:57:13.561886+00:00",
+    "seconds": 30.280999999988126,
+    "targets": [
+      {
+        "pid": 64992,
+        "wall": 240317.796,
+        "created": 13437478130.04574,
+        "kernel": 178.4375,
+        "user": 71.28125,
+        "foreground": true,
+        "foreground_handle_present": true,
+        "rss": 103071744,
+        "private": 74428416,
+        "handles": 524,
+        "gdi": 136,
+        "user_objects": 261,
+        "threads": [
+          {
+            "created": 13437478130.04574,
+            "kernel": 178.375,
+            "user": 71.25,
+            "tid": 70056,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          },
+          {
+            "created": 13437478130.888447,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 70384,
+            "start_module": "tcl86t.dll",
+            "start_offset": "0x165f90"
+          },
+          {
+            "created": 13437478131.024157,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 73136,
+            "start_module": "SogouPY.ime",
+            "start_offset": "0x753478"
+          },
+          {
+            "created": 13437478131.035292,
+            "kernel": 0.015625,
+            "user": 0.0,
+            "tid": 63464,
+            "start_module": "ichat_bundle64.dll",
+            "start_offset": "0x8f300"
+          },
+          {
+            "created": 13437478131.041286,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 72332,
+            "start_module": "isgpet_bundle64.dll",
+            "start_offset": "0xaf00"
+          }
+        ]
+      },
+      {
+        "pid": 71264,
+        "wall": 240317.843,
+        "created": 13437478130.234072,
+        "kernel": 0.078125,
+        "user": 0.0625,
+        "foreground": false,
+        "foreground_handle_present": true,
+        "rss": 21778432,
+        "private": 15147008,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": [
+          {
+            "created": 13437478130.234072,
+            "kernel": 0.0625,
+            "user": 0.046875,
+            "tid": 65732,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "at": "2026-10-26T08:57:23.657837+00:00",
+    "seconds": 40.375,
+    "targets": [
+      {
+        "pid": 64992,
+        "wall": 240327.89,
+        "created": 13437478130.04574,
+        "kernel": 182.21875,
+        "user": 72.625,
+        "foreground": true,
+        "foreground_handle_present": true,
+        "rss": 103075840,
+        "private": 74428416,
+        "handles": 525,
+        "gdi": 136,
+        "user_objects": 261,
+        "threads": [
+          {
+            "created": 13437478130.04574,
+            "kernel": 182.140625,
+            "user": 72.625,
+            "tid": 70056,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          },
+          {
+            "created": 13437478130.888447,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 70384,
+            "start_module": "tcl86t.dll",
+            "start_offset": "0x165f90"
+          },
+          {
+            "created": 13437478131.024157,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 73136,
+            "start_module": "SogouPY.ime",
+            "start_offset": "0x753478"
+          },
+          {
+            "created": 13437478131.035292,
+            "kernel": 0.015625,
+            "user": 0.0,
+            "tid": 63464,
+            "start_module": "ichat_bundle64.dll",
+            "start_offset": "0x8f300"
+          },
+          {
+            "created": 13437478131.041286,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 72332,
+            "start_module": "isgpet_bundle64.dll",
+            "start_offset": "0xaf00"
+          }
+        ]
+      },
+      {
+        "pid": 71264,
+        "wall": 240327.937,
+        "created": 13437478130.234072,
+        "kernel": 0.078125,
+        "user": 0.0625,
+        "foreground": false,
+        "foreground_handle_present": true,
+        "rss": 21778432,
+        "private": 15147008,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": [
+          {
+            "created": 13437478130.234072,
+            "kernel": 0.0625,
+            "user": 0.046875,
+            "tid": 65732,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "at": "2026-10-26T08:57:33.756297+00:00",
+    "seconds": 50.48499999998603,
+    "targets": [
+      {
+        "pid": 64992,
+        "wall": 240338.0,
+        "created": 13437478130.04574,
+        "kernel": 185.90625,
+        "user": 74.0625,
+        "foreground": true,
+        "foreground_handle_present": true,
+        "rss": 103088128,
+        "private": 74428416,
+        "handles": 522,
+        "gdi": 136,
+        "user_objects": 261,
+        "threads": [
+          {
+            "created": 13437478130.04574,
+            "kernel": 185.8125,
+            "user": 74.03125,
+            "tid": 70056,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          },
+          {
+            "created": 13437478130.888447,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 70384,
+            "start_module": "tcl86t.dll",
+            "start_offset": "0x165f90"
+          },
+          {
+            "created": 13437478131.024157,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 73136,
+            "start_module": "SogouPY.ime",
+            "start_offset": "0x753478"
+          },
+          {
+            "created": 13437478131.035292,
+            "kernel": 0.015625,
+            "user": 0.0,
+            "tid": 63464,
+            "start_module": "ichat_bundle64.dll",
+            "start_offset": "0x8f300"
+          },
+          {
+            "created": 13437478131.041286,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 72332,
+            "start_module": "isgpet_bundle64.dll",
+            "start_offset": "0xaf00"
+          }
+        ]
+      },
+      {
+        "pid": 71264,
+        "wall": 240338.046,
+        "created": 13437478130.234072,
+        "kernel": 0.078125,
+        "user": 0.0625,
+        "foreground": false,
+        "foreground_handle_present": true,
+        "rss": 21778432,
+        "private": 15147008,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": [
+          {
+            "created": 13437478130.234072,
+            "kernel": 0.0625,
+            "user": 0.046875,
+            "tid": 65732,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "at": "2026-10-26T08:57:43.852414+00:00",
+    "seconds": 60.57799999997951,
+    "targets": [
+      {
+        "pid": 64992,
+        "wall": 240348.093,
+        "created": 13437478130.04574,
+        "kernel": 189.671875,
+        "user": 75.5,
+        "foreground": true,
+        "foreground_handle_present": true,
+        "rss": 103096320,
+        "private": 74428416,
+        "handles": 522,
+        "gdi": 136,
+        "user_objects": 261,
+        "threads": [
+          {
+            "created": 13437478130.04574,
+            "kernel": 189.59375,
+            "user": 75.484375,
+            "tid": 70056,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          },
+          {
+            "created": 13437478130.888447,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 70384,
+            "start_module": "tcl86t.dll",
+            "start_offset": "0x165f90"
+          },
+          {
+            "created": 13437478131.024157,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 73136,
+            "start_module": "SogouPY.ime",
+            "start_offset": "0x753478"
+          },
+          {
+            "created": 13437478131.035292,
+            "kernel": 0.015625,
+            "user": 0.0,
+            "tid": 63464,
+            "start_module": "ichat_bundle64.dll",
+            "start_offset": "0x8f300"
+          },
+          {
+            "created": 13437478131.041286,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 72332,
+            "start_module": "isgpet_bundle64.dll",
+            "start_offset": "0xaf00"
+          }
+        ]
+      },
+      {
+        "pid": 71264,
+        "wall": 240348.14,
+        "created": 13437478130.234072,
+        "kernel": 0.078125,
+        "user": 0.0625,
+        "foreground": false,
+        "foreground_handle_present": true,
+        "rss": 21778432,
+        "private": 15147008,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": [
+          {
+            "created": 13437478130.234072,
+            "kernel": 0.0625,
+            "user": 0.046875,
+            "tid": 65732,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "at": "2026-10-26T08:57:53.948844+00:00",
+    "seconds": 70.67199999999139,
+    "targets": [
+      {
+        "pid": 64992,
+        "wall": 240358.187,
+        "created": 13437478130.04574,
+        "kernel": 193.59375,
+        "user": 76.78125,
+        "foreground": true,
+        "foreground_handle_present": true,
+        "rss": 103084032,
+        "private": 74428416,
+        "handles": 525,
+        "gdi": 136,
+        "user_objects": 261,
+        "threads": [
+          {
+            "created": 13437478130.04574,
+            "kernel": 193.53125,
+            "user": 76.75,
+            "tid": 70056,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          },
+          {
+            "created": 13437478130.888447,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 70384,
+            "start_module": "tcl86t.dll",
+            "start_offset": "0x165f90"
+          },
+          {
+            "created": 13437478131.024157,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 73136,
+            "start_module": "SogouPY.ime",
+            "start_offset": "0x753478"
+          },
+          {
+            "created": 13437478131.035292,
+            "kernel": 0.015625,
+            "user": 0.0,
+            "tid": 63464,
+            "start_module": "ichat_bundle64.dll",
+            "start_offset": "0x8f300"
+          },
+          {
+            "created": 13437478131.041286,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 72332,
+            "start_module": "isgpet_bundle64.dll",
+            "start_offset": "0xaf00"
+          }
+        ]
+      },
+      {
+        "pid": 71264,
+        "wall": 240358.234,
+        "created": 13437478130.234072,
+        "kernel": 0.078125,
+        "user": 0.0625,
+        "foreground": false,
+        "foreground_handle_present": true,
+        "rss": 21778432,
+        "private": 15147008,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": [
+          {
+            "created": 13437478130.234072,
+            "kernel": 0.0625,
+            "user": 0.046875,
+            "tid": 65732,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "at": "2026-10-26T08:58:04.042171+00:00",
+    "seconds": 80.76599999997416,
+    "targets": [
+      {
+        "pid": 64992,
+        "wall": 240368.281,
+        "created": 13437478130.04574,
+        "kernel": 197.375,
+        "user": 78.390625,
+        "foreground": true,
+        "foreground_handle_present": true,
+        "rss": 103084032,
+        "private": 74428416,
+        "handles": 522,
+        "gdi": 136,
+        "user_objects": 261,
+        "threads": [
+          {
+            "created": 13437478130.04574,
+            "kernel": 197.28125,
+            "user": 78.375,
+            "tid": 70056,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          },
+          {
+            "created": 13437478130.888447,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 70384,
+            "start_module": "tcl86t.dll",
+            "start_offset": "0x165f90"
+          },
+          {
+            "created": 13437478131.024157,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 73136,
+            "start_module": "SogouPY.ime",
+            "start_offset": "0x753478"
+          },
+          {
+            "created": 13437478131.035292,
+            "kernel": 0.015625,
+            "user": 0.0,
+            "tid": 63464,
+            "start_module": "ichat_bundle64.dll",
+            "start_offset": "0x8f300"
+          },
+          {
+            "created": 13437478131.041286,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 72332,
+            "start_module": "isgpet_bundle64.dll",
+            "start_offset": "0xaf00"
+          }
+        ]
+      },
+      {
+        "pid": 71264,
+        "wall": 240368.328,
+        "created": 13437478130.234072,
+        "kernel": 0.078125,
+        "user": 0.0625,
+        "foreground": false,
+        "foreground_handle_present": true,
+        "rss": 21778432,
+        "private": 15147008,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": [
+          {
+            "created": 13437478130.234072,
+            "kernel": 0.0625,
+            "user": 0.046875,
+            "tid": 65732,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "at": "2026-10-26T08:58:14.142594+00:00",
+    "seconds": 90.85999999998603,
+    "targets": [
+      {
+        "pid": 64992,
+        "wall": 240378.375,
+        "created": 13437478130.04574,
+        "kernel": 201.078125,
+        "user": 79.78125,
+        "foreground": true,
+        "foreground_handle_present": true,
+        "rss": 103071744,
+        "private": 74428416,
+        "handles": 528,
+        "gdi": 136,
+        "user_objects": 261,
+        "threads": [
+          {
+            "created": 13437478130.04574,
+            "kernel": 201.03125,
+            "user": 79.75,
+            "tid": 70056,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          },
+          {
+            "created": 13437478130.888447,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 70384,
+            "start_module": "tcl86t.dll",
+            "start_offset": "0x165f90"
+          },
+          {
+            "created": 13437478131.024157,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 73136,
+            "start_module": "SogouPY.ime",
+            "start_offset": "0x753478"
+          },
+          {
+            "created": 13437478131.035292,
+            "kernel": 0.015625,
+            "user": 0.0,
+            "tid": 63464,
+            "start_module": "ichat_bundle64.dll",
+            "start_offset": "0x8f300"
+          },
+          {
+            "created": 13437478131.041286,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 72332,
+            "start_module": "isgpet_bundle64.dll",
+            "start_offset": "0xaf00"
+          }
+        ]
+      },
+      {
+        "pid": 71264,
+        "wall": 240378.421,
+        "created": 13437478130.234072,
+        "kernel": 0.078125,
+        "user": 0.0625,
+        "foreground": false,
+        "foreground_handle_present": true,
+        "rss": 21778432,
+        "private": 15147008,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": [
+          {
+            "created": 13437478130.234072,
+            "kernel": 0.0625,
+            "user": 0.046875,
+            "tid": 65732,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "at": "2026-10-26T08:58:24.239310+00:00",
+    "seconds": 100.95299999997951,
+    "targets": [
+      {
+        "pid": 64992,
+        "wall": 240388.468,
+        "created": 13437478130.04574,
+        "kernel": 204.78125,
+        "user": 81.390625,
+        "foreground": true,
+        "foreground_handle_present": true,
+        "rss": 103063552,
+        "private": 74428416,
+        "handles": 522,
+        "gdi": 136,
+        "user_objects": 261,
+        "threads": [
+          {
+            "created": 13437478130.04574,
+            "kernel": 204.703125,
+            "user": 81.359375,
+            "tid": 70056,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          },
+          {
+            "created": 13437478130.888447,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 70384,
+            "start_module": "tcl86t.dll",
+            "start_offset": "0x165f90"
+          },
+          {
+            "created": 13437478131.024157,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 73136,
+            "start_module": "SogouPY.ime",
+            "start_offset": "0x753478"
+          },
+          {
+            "created": 13437478131.035292,
+            "kernel": 0.015625,
+            "user": 0.0,
+            "tid": 63464,
+            "start_module": "ichat_bundle64.dll",
+            "start_offset": "0x8f300"
+          },
+          {
+            "created": 13437478131.041286,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 72332,
+            "start_module": "isgpet_bundle64.dll",
+            "start_offset": "0xaf00"
+          }
+        ]
+      },
+      {
+        "pid": 71264,
+        "wall": 240388.531,
+        "created": 13437478130.234072,
+        "kernel": 0.078125,
+        "user": 0.0625,
+        "foreground": false,
+        "foreground_handle_present": true,
+        "rss": 21778432,
+        "private": 15147008,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": [
+          {
+            "created": 13437478130.234072,
+            "kernel": 0.0625,
+            "user": 0.046875,
+            "tid": 65732,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "at": "2026-10-26T08:58:34.333928+00:00",
+    "seconds": 111.06299999999464,
+    "targets": [
+      {
+        "pid": 64992,
+        "wall": 240398.578,
+        "created": 13437478130.04574,
+        "kernel": 208.796875,
+        "user": 82.8125,
+        "foreground": true,
+        "foreground_handle_present": true,
+        "rss": 103075840,
+        "private": 74428416,
+        "handles": 527,
+        "gdi": 136,
+        "user_objects": 261,
+        "threads": [
+          {
+            "created": 13437478130.04574,
+            "kernel": 208.71875,
+            "user": 82.796875,
+            "tid": 70056,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          },
+          {
+            "created": 13437478130.888447,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 70384,
+            "start_module": "tcl86t.dll",
+            "start_offset": "0x165f90"
+          },
+          {
+            "created": 13437478131.024157,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 73136,
+            "start_module": "SogouPY.ime",
+            "start_offset": "0x753478"
+          },
+          {
+            "created": 13437478131.035292,
+            "kernel": 0.015625,
+            "user": 0.0,
+            "tid": 63464,
+            "start_module": "ichat_bundle64.dll",
+            "start_offset": "0x8f300"
+          },
+          {
+            "created": 13437478131.041286,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 72332,
+            "start_module": "isgpet_bundle64.dll",
+            "start_offset": "0xaf00"
+          }
+        ]
+      },
+      {
+        "pid": 71264,
+        "wall": 240398.625,
+        "created": 13437478130.234072,
+        "kernel": 0.078125,
+        "user": 0.0625,
+        "foreground": false,
+        "foreground_handle_present": true,
+        "rss": 21778432,
+        "private": 15147008,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": [
+          {
+            "created": 13437478130.234072,
+            "kernel": 0.0625,
+            "user": 0.046875,
+            "tid": 65732,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "at": "2026-10-26T08:58:44.430538+00:00",
+    "seconds": 121.15599999998813,
+    "targets": [
+      {
+        "pid": 64992,
+        "wall": 240408.671,
+        "created": 13437478130.04574,
+        "kernel": 212.40625,
+        "user": 84.34375,
+        "foreground": true,
+        "foreground_handle_present": true,
+        "rss": 103067648,
+        "private": 74428416,
+        "handles": 522,
+        "gdi": 136,
+        "user_objects": 261,
+        "threads": [
+          {
+            "created": 13437478130.04574,
+            "kernel": 212.34375,
+            "user": 84.3125,
+            "tid": 70056,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          },
+          {
+            "created": 13437478130.888447,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 70384,
+            "start_module": "tcl86t.dll",
+            "start_offset": "0x165f90"
+          },
+          {
+            "created": 13437478131.024157,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 73136,
+            "start_module": "SogouPY.ime",
+            "start_offset": "0x753478"
+          },
+          {
+            "created": 13437478131.035292,
+            "kernel": 0.015625,
+            "user": 0.0,
+            "tid": 63464,
+            "start_module": "ichat_bundle64.dll",
+            "start_offset": "0x8f300"
+          },
+          {
+            "created": 13437478131.041286,
+            "kernel": 0.0,
+            "user": 0.0,
+            "tid": 72332,
+            "start_module": "isgpet_bundle64.dll",
+            "start_offset": "0xaf00"
+          }
+        ]
+      },
+      {
+        "pid": 71264,
+        "wall": 240408.718,
+        "created": 13437478130.234072,
+        "kernel": 0.078125,
+        "user": 0.0625,
+        "foreground": false,
+        "foreground_handle_present": true,
+        "rss": 21778432,
+        "private": 15147008,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": [
+          {
+            "created": 13437478130.234072,
+            "kernel": 0.0625,
+            "user": 0.046875,
+            "tid": 65732,
+            "start_module": "INSO_V1.5.exe",
+            "start_offset": "0xda30"
+          }
+        ]
+      }
+    ]
+  }
+]

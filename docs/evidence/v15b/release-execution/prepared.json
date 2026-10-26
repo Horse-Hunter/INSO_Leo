@@ -1,0 +1,29 @@
+{
+  "backup_root": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.5-final-20261026T084335Z-b1cb05e",
+  "database_path": "D:\\Program_Leo\\INSO_Leo\\.worktrees\\v1-2-design\\dist\\INSO_V1.1\\runtime\\production\\workflow.sqlite3",
+  "database_backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.5-final-20261026T084335Z-b1cb05e\\protected-state\\sqlite\\workflow-v12-pre-migration-20261026T084335931418Z.sqlite3",
+  "integrity": "ok",
+  "all_business_tables_unchanged": true,
+  "immutable_mail_commands_unchanged": true,
+  "canonical_migration_copy_test": "PASS_NO_SCHEMA_OR_ROW_DELTA",
+  "production_migration": "NOT_NEEDED_NOT_EXECUTED",
+  "tp_tasks": 4,
+  "tp_recipient_outcomes": [
+    [
+      "SENT",
+      6
+    ]
+  ],
+  "all_recipient_outcomes": [
+    [
+      "SENT",
+      138
+    ]
+  ],
+  "tp_explicit_false": true,
+  "only_production_config_delta": "tp_enabled=false",
+  "vault_opaque_backup_verified": true,
+  "config_backups_verified": true,
+  "v14_program_preserved": true,
+  "runtime_target": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.4\\runtime"
+}

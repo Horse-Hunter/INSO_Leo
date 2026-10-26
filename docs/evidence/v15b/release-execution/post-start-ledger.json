@@ -1,0 +1,14 @@
+{
+  "ledger_unchanged": true,
+  "immutable_commands_and_all_recipient_rows_unchanged": true,
+  "tp_tasks": 4,
+  "tp_sent_recipients": 6,
+  "all_sent_recipients": 138,
+  "unknown_pending_retry_recipient_count": 0,
+  "filled_opaque_receipts": 4,
+  "filled_backup_verified": true,
+  "filled_unchanged": true,
+  "research_history_read_count": 31,
+  "research_history_backup_verified": true,
+  "tp_explicit_false": true
+}

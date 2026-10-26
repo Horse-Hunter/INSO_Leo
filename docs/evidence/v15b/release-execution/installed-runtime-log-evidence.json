@@ -1,0 +1,30 @@
+[
+  {
+    "path": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.5\\runtime\\logs\\runtime-9a479fc4e02b49d283d55f21ac9349a8.events.jsonl",
+    "pid": 64992,
+    "phase": "gui",
+    "completed": false,
+    "events": [
+      {
+        "at": "2026-10-26T08:48:50.226830+00:00",
+        "event": "previous_exit_unobserved",
+        "pid": 64992
+      },
+      {
+        "at": "2026-10-26T08:48:50.228831+00:00",
+        "event": "start",
+        "pid": 64992
+      },
+      {
+        "at": "2026-10-26T08:48:50.361728+00:00",
+        "event": "observer_started",
+        "pid": 64992
+      },
+      {
+        "at": "2026-10-26T08:48:51.627132+00:00",
+        "event": "gui_ready",
+        "pid": 64992
+      }
+    ]
+  }
+]

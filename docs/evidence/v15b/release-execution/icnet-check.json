@@ -1,0 +1,9 @@
+{
+  "status": "READ_PARSED",
+  "canonical_credential_provider": true,
+  "business_started": false,
+  "parsed_rows": 49,
+  "valid_reference_price": true,
+  "original_pages_preserved": true,
+  "new_pages_remaining": 0
+}

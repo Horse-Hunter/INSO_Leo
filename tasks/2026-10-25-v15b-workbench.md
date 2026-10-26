@@ -2,6 +2,53 @@
 
 status: RELEASE_HOLD / FINAL_ACCEPTANCE_IN_PROGRESS
 
+## Owner one-pass V1.5 release + V1.6 preparation2026-10-26
+
+Execution checkpoint: canonical b1cb05e build/install verified2875 assets, new
+EXE45E2D2412CFC9876108673ADB0D10964E432DA4A6E067D4576A76CDE0252E989.
+Missing locked PDF/timezone restored from approvedV1.4 assets to existing build
+venv with hashes; no source/dependency additions. Backups complete; copy-only
+canonical migrations no row/schema delta, productionDDL not needed. Only config
+deltaTPfalse, fourTP/sixTP-SENT/138allSENT/fourfilled/31history preserved. Installed
+self/idle/CDP/Vault/pip/scanner PASS; V1.4 hashes/idle fallback PASS. Owner permitted
+71024 normal exit and receipt verified,70956 uninterrupted. Live64992/observer71264
+started idle, real Default desktop/gui_ready logged. Actual WGC tool capture fails,
+Owner sixpage/tray-exit confirmation pending. New121s all-foreground native CPU
+3.26445%host, GUI TID70056user17.59375/kernel45.671875s; observer0. Memory/handles
+stable. RESOURCE_HOLD, not CONTROLLED_LIVE_READY. Esc10s0.534%, normal AltF4 tray
+hide10s0%; root causeUNKNOWN, no code fix. Await normal tray exit (no forced kill,
+no guard bypass), then one clean no-screenshot restart; if still high, restore
+verified program-only rollback, retainTPfalse/runtime/ledger. Owner external
+business writesNOT_AUTHORIZED; no procurement/Sheet write/SMTP. V1.6 preparation
+waits safeV1.5closure. Stage/private quote/copyDB retired; retain backup and longrun.
+Current report/evidence release-execution are the source of latest execution state.
+
+LATEST AUTHORITY: Owner explicitly authorizes final canonical Windows build,
+verified backups, compatible migration (copy first, exclusive only), installation,
+real idle desktop/read-only acceptance and V1.6 branch preparation. This supersedes
+prior no-build/no-install restrictions, not the recorded CEO verdicts or actual24h
+requirement. No external procurement/payment/order submit, Google write or SMTP
+without separately identified target/scope and explicit permission. TP must be
+explicitfalse before/after production startup. Never replay4TP/6SENT or UNKNOWN.
+No business source changes; only safe packaging repairs if required. Reuse canonical
+build_windows_release.ps1/spec/scanner/self-checks, existing runtime/Vault/CDP.
+Protect main dirty workspace,70956longrun/source/data and71024demo. Demo currently
+holds canonical single-instance mutex; do not bypass or close without resolving
+Owner's preserve-demo instruction. Continue all independent build/backup/install
+work before asking about this concrete idle-start conflict.
+Verify config/runtime junction/central ledger/mail commands/rollback hashes and
+opaque credential backup. Test canonical schema on copied DB and compare durable
+business and recipient rows; if no migration necessary avoid production DDL.
+Install only program assets in originaldist/INSO_V1.5, preserve runtime junction
+and V1.4. Real UI idle only, no --start-inquiry or polling health shortcut. If
+critical state/TP/startup/resource failure occurs stop advancement and use verified
+rollback. PRODUCTION_INSTALLED/CONTROLLED_LIVE_READY only when corresponding
+checks actually pass; actual automated business NOT_AUTHORIZED. Keep24h pending
+until truly complete. Freeze source/EXE baseline; separate codex V1.6 branch for
+future independent scheduling/priority/bounded concurrency/game-friendly work,
+no V1.6 business implementation in running V1.5 or shared runtime. One existing
+report/task record; no duplicate release system or artificially split tasks.
+
 ## CEO performance-only investigation2026-10-26
 
 Completed bounded sampling: paired fixed250 order case601.375s visible0.01835%

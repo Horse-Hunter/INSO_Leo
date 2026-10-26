@@ -1,6 +1,84 @@
 # V1.5-B 工作台升级
 
-状态：RELEASE_HOLD。最终验收 IN_PROGRESS，24 小时尚未完成，不能建议 BUILD_READY。
+状态：RELEASE_HOLD / INSTALLED_CANDIDATE_RESOURCE_HOLD。正式程序文件已安装，实机资源验收未通过，不能标记 CONTROLLED_LIVE_READY。24 小时尚未完成。
+
+## Owner 一次性发布执行（2026-10-26，当前现场状态）
+
+Owner 最新明确授权构建、备份、必要兼容迁移、安装和真实空闲/只读验收，
+覆盖旧“不打包/不安装”限制；真实采购提交、Google 写入和 SMTP 仍 NOT_AUTHORIZED。
+本轮不以“安装了文件”冒充全部验收或真实自动业务已投产。
+
+### 已完成的构建、备份与安装
+
+- 构建源码 SHA：`b1cb05ed92370238c13955e91f9287f79cd9f84f`，应用 `src/` 与
+  已审核 `9f5522d7bef41a15fc099f9ad1545120dd9565c1` 一致；主仓库脏工作区未改。
+  没有业务或打包源码改动，复用唯一 `build_windows_release.ps1 -Version 1.5 -BuildOnly`。
+- 既有发布 Python 首轮缺少锁定的 pypdf/tzdata，冻结自检失败，原脚本自动清理失败产物。
+  从现有 V1.4 冻结包复用 pypdf6.10.0、tzdata2026.4，逐文件哈希验证后补齐发布环境，
+  清除测试用 Tcl/Tk 覆盖；没有新依赖或新构建系统。重建自检、RELEASE_SCAN_OK、
+  安装后自检、原 idle/CDP/Vault 检查及 pip check 均 PASS。
+- 实际路径：`D:/Program_Leo/INSO_Leo/dist/INSO_V1.5/INSO_V1.5.exe`。
+  新 EXE SHA256：`45E2D2412CFC9876108673ADB0D10964E432DA4A6E067D4576A76CDE0252E989`。
+  全部 2875 项程序资产与经扫描构建产物一致；不是旧 ea537060 的
+  `C45F8D8DC98ABE933A36997DDE9A4C85D803B3521FDAB5E4D00D6A3CD159FEF7`。
+- 恢复点：`D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.5-final-20261026T084335Z-b1cb05e`。
+  `program/` 保存旧 V1.5；`protected-state/` 保存原配置、经验证的 SQLite 在线备份、
+  原加密 Vault 副本、录单回执和历史 Excel；备份不进 Git。原 V1.4 的 2875 项资产未改，
+  其依赖/原空闲启动检查 PASS，可作为保留的回滚入口，未启动其自动业务。
+- runtime junction 仍指向 `D:/Program_Leo/INSO_Leo/dist/INSO_V1.4/runtime`，
+  实际业务 DB 仍为 `.worktrees/v1-2-design/dist/INSO_V1.1/runtime/production/workflow.sqlite3`。
+  只在副本运行原 Workflow/V1.2/V1.3/TP schema 兼容检查，全表行摘要与版本无变化；
+  生产迁移不需要、未执行。源数据库完整性 ok，所有业务行、不可变邮件命令、收件结果一致。
+  原 4TP/6SENT、全部 138SENT、4 个录单回执均保留；当前邮件 UNKNOWN/PENDING/重试数为 0。
+  历史调研 Excel 可读 31 条，已作哈希验证备份，不把数据写入测试仓库或报告。
+- 生产配置唯一变化为增加 `tp_enabled:false`；启动前、后均确认 false。
+  原加密凭据文件未变，SMTP 仅核验凭据存在且对应既定发件配置，没有连接 SMTP 或发信。
+  回滚程序时继续保留显式 false，不能直接恢复“缺省 TP 键”的旧配置而重新开启旧版 TP。
+
+### 真实启动与只读验收
+
+Owner 单独批准退出 Mock71024 后，已取得其正常退出凭据（08:47:47Z）；
+70956 长测未关闭、重启或修改。正式 EXE 无参数、无 `--start-inquiry`，
+16:48:50 本地时间启动 PID64992，原运行观察进程71264，真实桌面为 Default。
+单实例锁仍为原跨版本锁，没有放宽或旁路；正常 GUI 启动只读载入历史，不开始业务。
+日志 `runtime/logs/runtime-9a479fc4e02b49d283d55f21ac9349a8.events.jsonl` 实际记录
+start/observer_started/gui_ready；previous_exit_unobserved 属于之前运行的诊断，
+不据此重发或恢复任何业务。源码/冻结自检不等于 Owner 已逐页确认真实界面。
+
+原 Windows 操作工具两次 WGC 捕获均超时；没有用其他方式注入或截图假冒实机验证。
+Owner 六页/历史/日志、托盘恢复与退出确认仍 PENDING，不标记全部菜单 PASS。
+已用同一工具的新鲜纯文本状态发送 Esc/Alt+F4，正式窗口正常收进真实托盘，
+短时 CPU 接近 0、原生线程由 5 到 6；它仍驻留，不把隐藏当成退出。
+托盘图标没有被工具暴露为目标，最终正常退出需要 Owner 操作已提出，尚未取得退出凭据。
+
+只读网站沿用此前探针及同一测试型号/锚点，没有通过生产“开始运行”触发：
+Findchips/华强/立创/BOM.AI/INSO 成功，IC 初次探针 SOURCE_UNAVAILABLE；
+按正式 Core 凭据接线有界复测后 READ_PARSED（49 行、有效参考价），
+没有修改 IC 业务代码或绕过挑战。Google 2026 第167行单条来源锚点核验成功。
+原页面全部保留、临时所属页面归还，无新 Chrome/Profile；TSV 临时文件未保留。
+这证明相同已审核源适配器的实际只读能力及冻结 CDP 附着，不宣称冻结完整自动业务已运行。
+
+### 新的资源阻断：不得继续宣称可投产
+
+正式 EXE 121.156 秒、13 个全前台端点的外部原生计数，整机 CPU **3.26445%**，
+再次接近旧高值；主要在主 GUI TID70056（用户17.59375秒、内核45.671875秒），
+观察进程 CPU0，非监控进程混算。源进程、输入桌面及采样桌面均 Default，非隔离桌面。
+RSS约98.3MiB、Private约71.0MiB、原生线程5、句柄522–528、GDI136/USER261稳定。
+采样可能包含人工菜单活动，但无法据此排除空闲异常；未以短段或一次低值抹除风险。
+一次安全 Esc 后10秒约0.534%，正常托盘隐藏后10秒约0%，并未做源码“优化”。
+截图工具影响只是待排查可能性，尚无干净重启对照，不把它写成根因。
+
+**执行停在资源验收门禁。** 已请求正常退出这次正式窗口，退出后只做一次不调用截图
+工具的干净重启检查；若仍持续高占用，按 Owner 指令停止并恢复验证过的旧程序文件。
+不能在程序仍驻留/锁仍持有时覆盖回滚；不强杀进程，不写账本、不恢复旧缺省 TP 配置。
+现状态仅为 INSTALLED_CANDIDATE_RESOURCE_HOLD，非 PRODUCTION_INSTALLED/
+CONTROLLED_LIVE_READY，真实采购/写表/SMTP 全部 NOT_AUTHORIZED_NOT_EXECUTED。
+V1.6 分支准备暂待 V1.5 安全收口，不因安装文件成功直接开始新调度实现。
+
+证据：`docs/evidence/v15b/release-execution/`，仅脱敏状态/原生计数/资产校验摘要。
+临时构建 staging、真实报价 Excel 和测试 DB 副本已清理；保护备份、共享运行目录、
+长测及原演示证据目录保留。24小时仍在运行，零守卫/回调异常、最大间隔约60.11秒，
+实际未完成86400秒，不记 PASS，长期无人值守和其他 DPI/游戏影响结论不变。
 
 ## CEO 性能专项复核（2026-10-26，审核锚点 7765f07）
 

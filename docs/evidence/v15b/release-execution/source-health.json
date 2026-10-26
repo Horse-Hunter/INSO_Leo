@@ -1,0 +1,45 @@
+{
+  "source_results": [
+    {
+      "kind": "source_result",
+      "at": "2026-10-26T08:50:56.319351+00:00",
+      "site": "ic.net",
+      "outcome": "SOURCE_UNAVAILABLE"
+    },
+    {
+      "kind": "source_result",
+      "at": "2026-10-26T08:51:15.135560+00:00",
+      "site": "findchips",
+      "outcome": "SUCCESS"
+    },
+    {
+      "kind": "source_result",
+      "at": "2026-10-26T08:51:18.384697+00:00",
+      "site": "hqew",
+      "outcome": "SUCCESS"
+    },
+    {
+      "kind": "source_result",
+      "at": "2026-10-26T08:51:23.482764+00:00",
+      "site": "lcsc",
+      "outcome": "SUCCESS"
+    },
+    {
+      "kind": "source_result",
+      "at": "2026-10-26T08:51:32.006860+00:00",
+      "site": "bom.ai",
+      "outcome": "SUCCESS"
+    },
+    {
+      "kind": "source_result",
+      "at": "2026-10-26T08:51:33.037197+00:00",
+      "site": "inso",
+      "outcome": "SUCCESS"
+    }
+  ],
+  "business_started": false,
+  "tp_enabled": false,
+  "sql_forbidden": true,
+  "smtp_forbidden": true,
+  "qualification": "Reviewed source adapters attached read-only to existing productionCDP; not frozen full business workflow"
+}

@@ -1,0 +1,7 @@
+{
+  "smtp_network_used": false,
+  "smtp_sent": false,
+  "smtp_credential_available": true,
+  "smtp_sender_matches_existing_config": true,
+  "opaque_vault_unchanged": true
+}

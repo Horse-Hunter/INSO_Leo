@@ -1,0 +1,101 @@
+[
+  {
+    "kind": "stage",
+    "at": "2026-10-26T08:50:50.415548+00:00",
+    "site": "INSO",
+    "stage": "复用既有认证与只读租约"
+  },
+  {
+    "kind": "auth",
+    "at": "2026-10-26T08:50:55.922110+00:00",
+    "status": "VERIFIED_ORIGINAL_SESSION_GUARDS"
+  },
+  {
+    "kind": "stage",
+    "at": "2026-10-26T08:50:55.923112+00:00",
+    "site": "ic.net",
+    "stage": "真实单型号只读查询"
+  },
+  {
+    "kind": "source_result",
+    "at": "2026-10-26T08:50:56.319351+00:00",
+    "site": "ic.net",
+    "outcome": "SOURCE_UNAVAILABLE"
+  },
+  {
+    "kind": "stage",
+    "at": "2026-10-26T08:50:56.319351+00:00",
+    "site": "findchips",
+    "stage": "真实单型号只读查询"
+  },
+  {
+    "kind": "source_result",
+    "at": "2026-10-26T08:51:15.135560+00:00",
+    "site": "findchips",
+    "outcome": "SUCCESS"
+  },
+  {
+    "kind": "stage",
+    "at": "2026-10-26T08:51:15.135560+00:00",
+    "site": "hqew",
+    "stage": "真实单型号只读查询"
+  },
+  {
+    "kind": "source_result",
+    "at": "2026-10-26T08:51:18.384697+00:00",
+    "site": "hqew",
+    "outcome": "SUCCESS"
+  },
+  {
+    "kind": "stage",
+    "at": "2026-10-26T08:51:18.384697+00:00",
+    "site": "lcsc",
+    "stage": "真实单型号只读查询"
+  },
+  {
+    "kind": "source_result",
+    "at": "2026-10-26T08:51:23.482764+00:00",
+    "site": "lcsc",
+    "outcome": "SUCCESS"
+  },
+  {
+    "kind": "stage",
+    "at": "2026-10-26T08:51:23.482764+00:00",
+    "site": "bom.ai",
+    "stage": "真实单型号只读查询"
+  },
+  {
+    "kind": "source_result",
+    "at": "2026-10-26T08:51:32.006860+00:00",
+    "site": "bom.ai",
+    "outcome": "SUCCESS"
+  },
+  {
+    "kind": "stage",
+    "at": "2026-10-26T08:51:32.006860+00:00",
+    "site": "inso",
+    "stage": "真实单型号只读查询"
+  },
+  {
+    "kind": "source_result",
+    "at": "2026-10-26T08:51:33.037197+00:00",
+    "site": "inso",
+    "outcome": "SUCCESS"
+  },
+  {
+    "kind": "result",
+    "at": "2026-10-26T08:51:33.083159+00:00",
+    "status": "PARTIAL_SUCCESS",
+    "private_local_excel_generated": true
+  },
+  {
+    "kind": "browser_final",
+    "at": "2026-10-26T08:51:33.089171+00:00",
+    "original_pages_preserved": true,
+    "new_pages_remaining": 0
+  },
+  {
+    "kind": "done",
+    "at": "2026-10-26T08:51:33.101112+00:00"
+  }
+]
