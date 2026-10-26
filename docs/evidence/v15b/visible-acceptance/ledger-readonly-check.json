@@ -1,0 +1,17 @@
+{
+  "integrity": "ok",
+  "tp_tasks": 4,
+  "tp_states": [
+    [
+      "MAIL_QUEUED",
+      4
+    ]
+  ],
+  "tp_recipient_outcomes": [
+    [
+      "SENT",
+      6
+    ]
+  ],
+  "database_unchanged": true
+}

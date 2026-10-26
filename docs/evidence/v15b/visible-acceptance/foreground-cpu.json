@@ -1,0 +1,45 @@
+{
+  "pid": 71024,
+  "seconds": 60.0,
+  "cpu_one_core_percent": 2.578125,
+  "cpu_host_percent": 0.1611328125,
+  "foreground_at_all_seven_points": false,
+  "qualification": "No injected input during this interval; point observations do not prove continuous foreground",
+  "samples": [
+    {
+      "wall": 223133.359,
+      "cpu_seconds": 55.25,
+      "mock_is_foreground": false
+    },
+    {
+      "wall": 223143.359,
+      "cpu_seconds": 55.5625,
+      "mock_is_foreground": false
+    },
+    {
+      "wall": 223153.359,
+      "cpu_seconds": 55.8125,
+      "mock_is_foreground": false
+    },
+    {
+      "wall": 223163.359,
+      "cpu_seconds": 56.109375,
+      "mock_is_foreground": false
+    },
+    {
+      "wall": 223173.359,
+      "cpu_seconds": 56.328125,
+      "mock_is_foreground": false
+    },
+    {
+      "wall": 223183.359,
+      "cpu_seconds": 56.53125,
+      "mock_is_foreground": false
+    },
+    {
+      "wall": 223193.359,
+      "cpu_seconds": 56.796875,
+      "mock_is_foreground": false
+    }
+  ]
+}

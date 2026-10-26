@@ -1,0 +1,5 @@
+{
+  "canonical_mutex_existed_before_launch": false,
+  "canonical_mutex_exists_while_mock_running": true,
+  "read_only_open_error": 0
+}

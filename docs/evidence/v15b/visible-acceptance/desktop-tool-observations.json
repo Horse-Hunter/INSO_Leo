@@ -1,0 +1,19 @@
+{
+  "window": "INSO V1.5 最新源码 b2b4936 | MOCK 合成验收（无生产操作）",
+  "synthetic_only": true,
+  "mouse_acceptance": "NOT_VERIFIED",
+  "capture_first": "FrameArrived timed out: timed out waiting on channel",
+  "capture_after_reselection_retry": "window capture timed out: timed out waiting on channel",
+  "text_only_accessibility": "AVAILABLE; most Tk controls anonymous panes/images",
+  "minimize_pointer_attempt": "coordinate input geometry is unavailable",
+  "keyboard_system_menu": "Alt+Space exposed native system menu; Escape observation no longer showed menu",
+  "sampler_stalled_at_local": "2026-10-26 12:07:46",
+  "sampler_last_seconds": 391.484,
+  "mock_worker_later_cycle": "2026-10-26 12:16:17-18",
+  "visible_responsiveness": "UNKNOWN; Owner Esc/menu check pending",
+  "stderr": "EMPTY at checks",
+  "tray_restore_exit": "NOT_VERIFIED",
+  "first_external_foreground_probe": "Sandbox desktop; cannot classify Owner foreground",
+  "second_external_foreground_probe": "Owner desktop; valid foreground HWND, Mock at all seven points; not responsiveness proof",
+  "no_source_fix_or_force_restart": true
+}

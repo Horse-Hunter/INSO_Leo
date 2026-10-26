@@ -4,6 +4,46 @@ status: RELEASE_HOLD / FINAL_ACCEPTANCE_IN_PROGRESS
 authority: Owner pasted V1.5-B task, 2026-10-25
 branch: codex/v1-5-tp-research
 
+## Immediate visible acceptance (2026-10-26, Owner superseding instruction)
+
+IN_PROGRESS / RELEASE_HOLD. Show reviewed src at b2b4936 on Owner desktop now;
+do not wait for or interrupt process70956/its24h data/source. Reuse gui.main --mock
+semantics, MockBackend, original app/tray/mutex; isolated INSO_RUNTIME_ROOT and
+synthetic data only, explicit tp_enabled=false. No source edits/dependencies.
+Owner authorizes visible interaction, tray/restore/close and finite performance
+sampling of this separate process. Read-only preflight includes old EXE/mutex,
+canonical runtime and fourTP/sixSENT via SQLite mode=ro/immutable if no live WAL.
+Never initialize production Backend or migrate production DB. After visible UI,
+existing approved read-only Google/six-source adapters may query a few previously
+authorized test MPNs only if browser ownership/session safety is satisfied. No
+new browser/profile/login, no automatic business loop, Google writes, procurement
+Save/Send or SMTP. Unsafe/unavailable live paths NOT_VERIFIED; continue other work.
+Reuse existing offline gate/state tests with synthetic DB. Evidence/report stays
+in V15_UI_UPGRADE_REPORT.md and docs/evidence/v15b; temporary bootstrap retired on
+exit after preserving reproducible evidence; Owner visible demo may remain open.
+Both process identities/results separate; RELEASE_HOLD regardless of UI outcome.
+
+Immediate execution snapshot: visible canonical-main Mock PID71024 since12:01:14,
+250 synthetic history rows, production services blocked, original mutex acquired,
+isolated runtime/explicitTPfalse. Five existing site parsers live-read authorized
+STM32G0B0CET6; BOM secondBCM957504-N425G confirms2USD. Google metadata/document/
+sheet guards pass, cells/source-row NOT_VERIFIED (native full TSV avoided). INSO
+verified shell unavailable; guarded history NOT_VERIFIED, no auth/lease bypass.
+Production ro/immutable ledger4TP/6SENT unchanged. Offline1120PASS1SKIP44.04s.
+Critical incomplete UI acceptance: computer-use WGC timeouts after recovery;
+pointer geometry unavailable, native menu keyboard observe only. No actual menu/
+rerun/tray/exit PASS. Self-capture proves visible source window, not operation.
+Visible sample callback stops at12:07:46/391.484s; process alive/Responding true,
+stderr empty. CauseUNKNOWN, Owner Esc/menu responsiveness answer pending. No src
+fix, force kill or restart. Resource13samples/summary carry explicit qualification,
+First60s external observation ran on sandbox desktop, foreground result invalid
+for Owner. Repeat Owner-context60s CPU0.192%host/3.073%onecore, all7points valid
+foregroundMock. UI sampler still stalled, cannot pass idle/responsiveness/tray.
+Mock worker generated another synthetic cycle12:16 while UI samples stayed stale.
+Evidence docs/evidence/v15b/visible-acceptance, current report has full limits.
+Owned offline SQLite temp retired; live Mock/24h directories retained. Follow-up
+heartbeat now protects71024/visible directory separately from70956. Still HOLD.
+
 ## Final exact-source Windows acceptance / soak (2026-10-26)
 
 status: IN_PROGRESS / RELEASE_HOLD

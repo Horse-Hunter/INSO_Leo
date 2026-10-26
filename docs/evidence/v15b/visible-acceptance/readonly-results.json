@@ -1,0 +1,75 @@
+[
+  {
+    "surface": "CDP",
+    "status": "ATTACHED_EXISTING_ONLY",
+    "contexts": 1,
+    "original_pages": 1
+  },
+  {
+    "surface": "IC.net",
+    "status": "READ_PARSED",
+    "mpn": "STM32G0B0CET6",
+    "seconds": 5.781,
+    "parsed_rows": 49,
+    "valid_reference_price": true,
+    "currencies": [
+      "RMB"
+    ]
+  },
+  {
+    "surface": "Findchips",
+    "status": "READ_PARSED",
+    "mpn": "STM32G0B0CET6",
+    "seconds": 10.203,
+    "parsed_offers": 9,
+    "currencies": [
+      "USD"
+    ]
+  },
+  {
+    "surface": "HQEW",
+    "status": "READ_PARSED",
+    "mpn": "STM32G0B0CET6",
+    "seconds": 5.281,
+    "parsed_offers": 40,
+    "currencies": [
+      "RMB"
+    ]
+  },
+  {
+    "surface": "LCSC",
+    "status": "READ_PARSED",
+    "mpn": "STM32G0B0CET6",
+    "seconds": 5.25,
+    "parsed_product": true,
+    "tiers": 3,
+    "currencies": [
+      "RMB"
+    ]
+  },
+  {
+    "surface": "BOM.AI",
+    "status": "READ_PARSED",
+    "mpn": "STM32G0B0CET6",
+    "seconds": 3.125,
+    "parsed_offers": 50,
+    "currencies": [
+      "RMB"
+    ]
+  },
+  {
+    "surface": "INSO",
+    "status": "NOT_VERIFIED",
+    "reason": "GUARDED_OPERATION_LEASE_REQUIRED_NO_PRODUCTION_BACKEND_INITIALIZED"
+  },
+  {
+    "surface": "Google_Sheets",
+    "status": "NOT_VERIFIED",
+    "reason": "NATIVE_TSV_DOWNLOAD_READS_WHOLE_SHEET_NOT_USED_FOR_SMALL_PROBE"
+  },
+  {
+    "surface": "CDP_FINAL",
+    "original_pages_preserved": true,
+    "new_pages_remaining": 0
+  }
+]

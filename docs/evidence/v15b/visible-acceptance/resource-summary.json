@@ -1,0 +1,67 @@
+{
+  "pid": 71024,
+  "samples": 13,
+  "first_seconds": 30.76500000001397,
+  "last_seconds": 391.48400000002584,
+  "qualification": "Visible Mock phase with tool/UI activity; sampling stalled after 12:07:46. NOT a passing idle or responsiveness acceptance.",
+  "warmup_excluded_seconds": 60,
+  "cpu_host_percent": {
+    "mean": 0.6771263012017388,
+    "min": 0.2891064181885224,
+    "max": 1.527605588098143
+  },
+  "rss": {
+    "first": 101593088,
+    "last": 102445056,
+    "min": 101568512,
+    "max": 102445056
+  },
+  "private": {
+    "first": 74956800,
+    "last": 75583488,
+    "min": 74850304,
+    "max": 75685888
+  },
+  "threads": {
+    "first": 15,
+    "last": 9,
+    "min": 7,
+    "max": 15
+  },
+  "python_threads": {
+    "first": 2,
+    "last": 2,
+    "min": 2,
+    "max": 2
+  },
+  "handles": {
+    "first": 590,
+    "last": 585,
+    "min": 579,
+    "max": 590
+  },
+  "gdi": {
+    "first": 136,
+    "last": 136,
+    "min": 136,
+    "max": 136
+  },
+  "user": {
+    "first": 261,
+    "last": 262,
+    "min": 261,
+    "max": 262
+  },
+  "after_callbacks": {
+    "first": 6,
+    "last": 6,
+    "min": 6,
+    "max": 6
+  },
+  "event_queue": {
+    "first": 0,
+    "last": 0,
+    "min": 0,
+    "max": 0
+  }
+}
