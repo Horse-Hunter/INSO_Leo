@@ -676,3 +676,71 @@ TP-default mismatch and unverified final build/live/UI/24h gates.
 No new code correction to the reviewed current source is demanded by
 this review, and nothing herein grants deployment, real mail,
 production database changes or TP enablement.
+
+
+## CEO review of Windows read-only preflight — 2026-10-26
+
+**PREFLIGHT_REVIEW_CONDITIONALLY_ACCEPTED / RELEASE_HOLD (no package/deploy/live TP approval).**
+
+The executor reported a **read-only** local Windows preflight at the visualization
+path `V15_RELEASE_PREFLIGHT_2026-10-26.md`. Its summary reports:
+the installed binary is old `ea537060`; old frozen V1.5 has no explicit
+`tp_enabled` setting and would default TP ON; final source `bbe2743e`
+requires explicit `tp_enabled: true` and thus defaults OFF; new
+six-page UI is NOT installed; neither V1.4 nor V1.5 was running at
+inspection; 2,875 installed program assets match the recorded hash
+manifest; 28 backups passed claimed integrity checks; current ledger
+has four TP tasks and six recipient outcomes all SENT, including
+earlier migrated trial records; no production changes, browser,
+business starts or SMTP occurred in this preflight.
+
+**Evidence boundary:** CEO cross-checked current/latest GitHub code and
+historical `docs/WINDOWS_RELEASE.md` + task records, confirming the
+old-on/new-off TP default and the old installed build identity in
+repository records. The complete local visualization report and its
+raw Windows/SQLite verification output are not mounted or available
+through this GitHub review; the host-side checks, all 2,875 asset
+hashes, 28 backup integrity results, exact four-task/six-recipient
+ledger, physical junction and no-running-process finding are
+**executor-reported, not independently reproduced or authenticated
+by CEO**. The reported six SENT outcomes may not be reset, deleted,
+or treated as permission for a new-generation live TP email.
+Integrity of historical backups alone does not prove the latest
+usable point-in-time rollback snapshot.
+
+**Decision:** no new source blocker established by the preflight
+summary, and no justification to start the legacy binary or perform
+an in-place upgrade. Current complete source UI track and reviewed
+business deltas passed separate *static* code review, but
+production release and live acceptance remain HOLD.
+
+**Next gates, in order:**
+1. Keep production binaries idle. Preserve immutable trial/outbox
+   recipient receipts, shared production runtime, CDP, credentials,
+   backup assets and V1.4 rollback. Never infer new source defaults
+   for the old installed EXE.
+2. Run an isolated, **non-production, no-CDP, no-SMTP**, exact-final-
+   source Windows UI acceptance with synthetic/mock state: six-page
+   layout, genuine OS 100/125/150% DPI, small-window/accessibility,
+   tray/restore/safe close and true progress/countdown behavior.
+3. Run a 24-hour synthetic resource soak for final source (CPU,
+   Private Bytes/RSS, thread/handle/GDI/USER trends, bounded queues
+   and callbacks) and compare against prior baseline; Chrome/game
+   performance with real tasks remains untested, requiring an
+   separately authorized controlled plan. Test results must be real,
+   not promises or extrapolations from the old UI candidate.
+4. Once these pass, seek *separate Owner permission* for a build-only
+   isolated frozen release with explicit `tp_enabled=false`, source/
+   binary provenance, frozen self-check and scan; do not install
+   or switch the junction merely because build succeeded.
+5. Before any later install or activation, independently verify
+   backups/rollback and shared ledger receipts under a stopped
+   single-instance window, reconcile any config opt-in and old
+   binary startup behavior, and obtain further specific Owner approval
+   for deployment/actual site or SMTP activity.
+
+**Review disposition:** CONDITIONAL PREFLIGHT REVIEW ACCEPTED
+on the supplied summary + verifiable GitHub provenance only.
+`RELEASE_HOLD`, TP activation, live SMTP and replacement of installed
+assets remain unapproved. No production source or runtime was changed
+in this CEO review.
