@@ -1436,6 +1436,7 @@ def test_real_poll_seam_stops_batch_on_login_and_resumes_queued_inquiry(tmp_path
     def wait(seconds):
         nonlocal repaired
         waits.append(seconds)
+        backend._publish_poll_wait(seconds)
         assert not backend._stop.is_set() and backend.get_status().next_poll_at is not None
         if len(waits) == 1:
             assert len(calls) == 1
@@ -1724,6 +1725,7 @@ def test_real_poll_google_outage_uses_existing_fifteen_minute_wait_then_recovers
     def wait(seconds):
         waits.append(seconds)
         assert not backend._stop.is_set()
+        backend._publish_poll_wait(seconds)
         assert backend.get_status().next_poll_at is not None
         if len(waits) == 1:
             backend._v12_composition.coordinator.run_notifications(now=launcher.utc_now())

@@ -98,6 +98,8 @@ def test_existing_poll_and_fifteen_minute_wait_opt_in_tp_no_extra_thread(tmp_pat
         calls.append("built")
         def run(*a, **k):
             assert not scope  # previous native page pool retired; same serial poll
+            assert not backend._poll_idle.is_set() and not backend._manual_idle()
+            assert backend._next_poll_at is None
             calls.append("tp")
         return SimpleNamespace(run=run, issues={}, store=SimpleNamespace(rows=lambda: ()))
     monkeypatch.setattr(tp_composition, "build_tp_cycle", build_tp)

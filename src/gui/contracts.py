@@ -273,6 +273,7 @@ class Order:
     business_status: str | None = None
     delivery_status: str | None = None
     modules: tuple[str, ...] = ()
+    tp_task_id: str | None = None  # display association, never execution authority
 
 
 @dataclass(frozen=True, slots=True)

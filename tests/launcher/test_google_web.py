@@ -616,6 +616,7 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
     backend = launcher.ProductionBackend(root=tmp_path, config_path=rc, production_config_path=production)
     def next_poll(seconds):
         waits.append(seconds)
+        backend._publish_poll_wait(seconds)
         assert not backend._stop.is_set() and backend.get_status().next_poll_at is not None
         if len(waits) == 1:
             if failure_mode == 'timeout_then_busy':

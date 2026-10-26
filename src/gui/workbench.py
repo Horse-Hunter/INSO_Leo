@@ -725,9 +725,12 @@ class WorkbenchView:
     def render_detail(self, order):
         state = self.states.get(order.inquiry_id)
         session = self.snapshot.session if self.snapshot is not None else None
+        hints = {action: self.app._backend.order_action_hint(order.inquiry_id, action)
+                 for action in ("purchase", "quotation", "tp", "edit")}
         signature = (
             order,
             state,
+            tuple(hints.items()),  # linked TP delivery can change without changing this ordinary row
             session.state if session else None,
             session.next_poll_at if session else None,
             tuple(t for t in self.snapshot.timings if t.order_ref == order.inquiry_id)[
@@ -819,7 +822,7 @@ class WorkbenchView:
             ("重跑报价流程", "quotation"),
             ("重跑 TP 价格", "tp"),
         ):
-            enabled = self.app._backend.order_action_hint(order.inquiry_id, action)
+            enabled = hints[action]
             button = self.button(
                 box,
                 title,
@@ -837,7 +840,7 @@ class WorkbenchView:
         edit.pack(fill="x", pady=4)
         edit.configure(
             state="normal"
-            if self.app._backend.order_action_hint(order.inquiry_id, "edit")
+            if hints["edit"]
             else "disabled"
         )
 

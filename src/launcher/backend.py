@@ -967,6 +967,7 @@ class ProductionBackend(GuiBackend):
                             if self._stop.is_set():
                                 return
                             self._poll_idle.clear()
+                            self._next_poll_at = None
                         try:
                             with web_service.poll_scope(), quotation_operation_scope(), reader.discovery_scope():
                                 self._last_poll = utc_now()
@@ -994,9 +995,6 @@ class ProductionBackend(GuiBackend):
                                 self._v12_composition.coordinator.run_notifications(
                                     now=utc_now()
                                 )
-                                with self._lock:
-                                    if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}:
-                                        self._next_poll_at = utc_now() + runtime.poll_interval
                                 browser_state = "已连接" if self._research_ready else "待命"
                                 if not self._site_outages:
                                     self._set_health(("正常", browser_state, "正常", "正常"), "正常")
@@ -1213,7 +1211,12 @@ class ProductionBackend(GuiBackend):
         if order is None:
             return False
         if action == "tp":
-            return self._tp is not None
+            key = order.inquiry_id if order.module_id == "tp" else order.tp_task_id
+            target = next((o for o in self._view_snapshot.orders
+                           if o.inquiry_id == key and o.module_id == "tp"), None)
+            return (self._tp is not None and target is not None
+                and target.business_status in {"MAIL_QUEUED", "FAILED"}
+                and target.delivery_status in {None, "SENT", "PERMANENT_FAILURE"})
         if order.module_id == "tp":
             return False
         if action == "purchase":
@@ -1251,7 +1254,7 @@ class ProductionBackend(GuiBackend):
 
     def _wait_between_polls(self, seconds):
         deadline = monotonic() + seconds
-        self._observe_poll_wait(seconds)
+        self._publish_poll_wait(seconds, deadline=deadline)
         while not self._stop.is_set():
             # Give the shared browser back during idle time, on its owner thread.
             # A worker may queue teardown after this wait has already started.
@@ -1260,11 +1263,13 @@ class ProductionBackend(GuiBackend):
             with self._manual_condition:
                 if self._stop.is_set():
                     self._manual_request = None
+                    self._next_poll_at = None
                     return True
                 request, self._manual_request = self._manual_request, None
                 if request is None:
                     remaining = deadline - monotonic()
                     if remaining <= 0:
+                        self._next_poll_at = None
                         return False
                     self._manual_condition.wait(min(remaining, 0.25))
                     continue
@@ -1281,22 +1286,36 @@ class ProductionBackend(GuiBackend):
                 with self._lock:
                     self._manual_busy = False
                     self._poll_idle.set()
-                    if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING} and not self._stop.is_set():
-                        self._next_poll_at = utc_now() + timedelta(seconds=seconds)
                 self._observation.end_cycle(stopped=self._stop.is_set(), close_round=False)
                 self._invalidate_order_view(request[1])
                 self._cache_workbench(force=True)
                 self._notify()
             deadline = monotonic() + seconds
-            self._observe_poll_wait(seconds, close_round=False)
+            self._publish_poll_wait(seconds, close_round=False, deadline=deadline)
+        with self._lock:
+            self._next_poll_at = None
         return True
 
-    def _observe_poll_wait(self, seconds, *, close_round=True):
-        # Read-only plan at the actual wait boundary. Legacy _next_poll_at also
-        # gates manual operations and is deliberately not changed here.
-        self._observation.end_cycle(utc_now() + timedelta(seconds=seconds),
+    def _publish_poll_wait(self, seconds, *, close_round=True, deadline=None):
+        # One actual wait-entry/reset deadline for UI and manual permissions.
+        # Called only after TP/owned-page cleanup; the original monotonic wait
+        # and poll-idle/busy/durable authorization checks remain authoritative.
+        deadline = monotonic() + seconds if deadline is None else deadline
+        with self._lock:
+            remaining = max(0, deadline - monotonic())
+            self._next_poll_at = (utc_now() + timedelta(seconds=remaining)
+                if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}
+                and not self._stop.is_set() and remaining else None)
+            planned = self._next_poll_at
+        self._observation.end_cycle(planned,
             stopped=self._stop.is_set(), close_round=close_round,
             recovery_site=" / ".join(tuple(self._site_outages)) or None)
+        # Publish only the changed time to the existing immutable view. Calling
+        # _notify here would rescan durable state at every wait boundary.
+        with self._snapshot_lock:
+            self._view_snapshot = replace(self._view_snapshot,
+                revision=self._view_snapshot.revision + 1,
+                session=replace(self._view_snapshot.session, next_poll_at=planned))
 
     def _execute_order_action(self, request):
         request_id, inquiry, action, field, value = request
@@ -2771,6 +2790,8 @@ class ProductionBackend(GuiBackend):
                 dirty, self._view_dirty = self._view_dirty, set()
             for key in dirty:
                 self._view_state_cache.pop(key, None)
+            from src.workflow.tp_research import task_key
+
             from .tp_composition import tp_display_orders
             # Existing workers already load these canonical records. Read no
             # site or production state on demand from the GUI.
@@ -2789,6 +2810,12 @@ class ProductionBackend(GuiBackend):
                 if identity is not None:
                     order = replace(order, source_sheet=identity.worksheet.worksheet,
                                     source_row=identity.row_position)
+                    tp_key = task_key(identity.worksheet.spreadsheet,
+                                      identity.worksheet.worksheet, identity.row_position)
+                    target = merged.get(tp_key)
+                    order = replace(order, tp_task_id=tp_key if target is not None
+                        and target.module_id == "tp" and target.model == order.model
+                        and target.quantity == order.quantity else None)
                 cached = self._view_state_cache.get(key)
                 if cached is None or cached[0] != order or force:
                     dto = self.get_v12_order_state(key) if not key.startswith("tp_") else None

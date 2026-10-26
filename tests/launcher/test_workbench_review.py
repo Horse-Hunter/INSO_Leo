@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.gui.contracts import RunState
+from src.gui.contracts import Order, OrderStatus, RunState
 from src.gui.workbench import scheduling
 from src.launcher import backend as launcher
 from src.launcher.backend import ProductionBackend
@@ -59,19 +59,30 @@ def test_tp_duration_never_shortens_actual_wait_or_ui_countdown(tmp_path, monkey
     backend, clock = virtual_backend(tmp_path, monkeypatch)
     backend._observation.begin_cycle()
     legacy_deadline = clock.wall() + timedelta(minutes=15)
-    backend._next_poll_at = legacy_deadline  # the existing manual-operation gate
+    backend._store = SimpleNamespace(all_items=lambda: (), get_by_inquiry_id=lambda _: object())
+    backend._manual_reader = object()
+    backend._history = (Order("synthetic", "DEMO", None, 1, "待验证", None, None, OrderStatus.PENDING),)
+    backend._poll_idle.clear()
+    backend._next_poll_at = None
+    backend._cache_workbench(force=True)
     backend._notify()
     backend._observation.stage("tp", "合成 TP 调研")
     clock.tick += tp_minutes * 60
+    assert not backend.can_order_action("synthetic", "edit")
     assert "本轮进行中" in scheduling(backend.get_workbench_snapshot(), now=clock.wall(), tick=clock.tick)
     backend._observation.end_cycle()  # the normal post-TP boundary
     assert "等待调度确认" in scheduling(backend.get_workbench_snapshot(), now=clock.wall())
     wait_start = clock.wall()
+    assert not backend._manual_idle()  # TP and page cleanup have not released idle
+    backend._poll_idle.set()  # simulate completed owner-page cleanup, before wait entry
+    assert not backend._manual_idle()  # no window is published yet
 
     def check():
         snap = backend.get_workbench_snapshot()
         assert snap.planned_check_at == wait_start + timedelta(minutes=15)
-        assert snap.session.next_poll_at == legacy_deadline
+        assert snap.session.next_poll_at == snap.planned_check_at
+        assert backend.can_order_action("synthetic", "edit")
+        assert backend.order_action_hint("synthetic", "edit")
         remaining = ceil((snap.planned_check_at - clock.wall()).total_seconds())
         assert scheduling(snap, now=clock.wall()) == f"下次检查 {remaining // 60:02d}:{remaining % 60:02d}"
         assert not any(m.started_monotonic is not None for m in snap.modules)
@@ -80,7 +91,9 @@ def test_tp_duration_never_shortens_actual_wait_or_ui_countdown(tmp_path, monkey
     backend._manual_condition = condition
     assert backend._wait_between_polls(900) is False
     assert condition.waited == 900 and clock.wall() == wait_start + timedelta(minutes=15)
-    assert backend._next_poll_at == legacy_deadline  # no early poll or permission expansion
+    assert backend._next_poll_at is None and not backend.can_order_action("synthetic", "edit")
+    assert not backend.order_action_hint("synthetic", "edit")
+    assert wait_start + timedelta(minutes=15) == legacy_deadline + timedelta(minutes=tp_minutes)
     assert "计划时间已到" in scheduling(backend.get_workbench_snapshot(), now=clock.wall())
 
 

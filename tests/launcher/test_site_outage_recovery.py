@@ -88,6 +88,7 @@ def test_actual_poll_thread_survives_site_fault_and_reaches_next_poll(tmp_path, 
         return refresh(*a, **kw)
     def wait(seconds):
         waits.append(seconds)
+        backend._publish_poll_wait(seconds)  # preserve real wait-entry deadline publication
         assert backend._state is RunState.RUNNING and not backend._stop.is_set()
         assert backend._next_poll_at is not None
         backend._v12_composition.coordinator.run_notifications(now=launcher.utc_now())

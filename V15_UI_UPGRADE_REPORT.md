@@ -2,6 +2,54 @@
 
 状态：REVIEW_REQUIRED，交 CEO 独立审核；本任务不发布。
 
+## CEO 第二轮修正（2026-10-26，当前补丁）
+
+依据审核提交 `e984f6bcf55bb56040573e9268f568fd489a90ea`，原分支从该提交继续，
+未重写六页面 UI；第一轮下述 P1-A/P1-B/P2 结论保留为历史，本节说明当前最小增量。
+
+- P1：原 `_manual_idle → can_order_action` 链路保留。移除 TP 前的截止时间赋值，
+  新轮开始先清空旧值；既有等待入口/人工操作后的完整重置入口统一发布 `_next_poll_at`
+  与 `planned_check_at`。两者按同一个原有单调时钟 deadline 的剩余时间计算，发布时业务锁
+  即使延迟，也不能额外延长 900 秒。等待结束/停止关闭时间门禁。
+  `_poll_idle`、`_poll_gate`、busy、已排队请求、运行/停止状态及持久化权限检查均保留。
+  TP、页面清理和人工操作执行期间不开放窗口；没有提前触发下一轮或新增调度路径。
+- P2：新增可选只读 DTO 字段 `Order.tp_task_id`。现有投影后台依据 canonical record_identity
+  的 spreadsheet/sheet/row 调用既有 `task_key`，只关联已存在且完整型号、数量一致的 TP DTO。
+  无 canonical 身份、仅型号相同、来源/字段冲突或 TP 未加载时不显示正向提示，不伪造 inquiry_id。
+  UI 仅查看快照中的关联、business_status、delivery_status：复用现有可重跑集合
+  MAIL_QUEUED/FAILED + None/SENT/PERMANENT_FAILURE；UNKNOWN、SENDING、PENDING、
+  RETRYABLE_FAILURE、RESEARCHING 等明确不允许状态保守禁用。
+  SENT 允许人工明确发起新一代任务，符合既有 TpStore 规则；自动幂等及 UNKNOWN 防重发不改。
+  提示仍不是授权，旧 SENT 快照面对当前 UNKNOWN/SENDING/RESEARCHING 时，原实时门禁拒绝请求。
+
+生产源码只改 `src/launcher/backend.py`、`src/gui/contracts.py` 与 `src/gui/workbench.py`。
+详情差异缓存签名纳入只读提示值；关联 TP 状态变化时，普通订单内容即使不变，重跑按钮也会刷新。
+提示值未变化时保留原详情控件，新增真 Tk 断言同时检查这两个方向；无新增 SQL 或布局重构。
+测试修改原虚拟时间等待/真 Tk 测试并新增 `tests/launcher/test_workbench_review2.py`；
+4 处替换完整等待函数的旧测试桩补调用真实入口发布步骤，原恢复/通知/停止断言未删除或放宽。
+TP 组合测试新增执行/页面清理期间拒绝操作的断言。未改业务算法、月份范围、邮件队列、CDP、
+六页面布局、默认 TP 配置、依赖或线程。其他业务提交仍需各自独立审核。
+
+合成验证覆盖：TP 0/5/10/20 分钟后每个 0.25 秒等待切片的 UI 及 canonical 操作可用性，
+到期拒绝、锁等待延迟、完整人工重置、恢复、停止和已有 UNKNOWN/采购重复保护；
+无 TP 关联/有效关联、来源与型号/数量冲突、10 组 TP 状态组合，以及数据库收件人状态已变更
+而快照未刷新的安全拒绝。所有测试使用临时数据库与假采集/假通知，未进行真实发信或生产操作。
+
+验证结果：最终定向 **119 PASS / 17.53 秒**；最终完整回归 **2733 PASS / 1 SKIP / 105.02 秒**。
+上述最终版本包含四种 TP 耗时下的实际 SQLite 权限门禁，以及普通行不变时的按钮更新断言。
+Ruff（无缓存）及 git diff --check 通过。
+最终两次运行没有 SMTP 尝试记录。纯合成结果保存在
+`docs/evidence/v15b/pytest-review2-full.txt` 和 `pytest-review2-targeted.txt`。
+首轮定向的 6 项旧恢复测试失败来自完整替换等待函数却仍要求预先存在计划时间的测试桩，
+已补入口发布步骤，保留原安全断言。未修改原 RFQ008 测试，也未借本轮认可未审核业务改动。
+中间一轮全量出现 1 FAIL / 2727 PASS / 1 SKIP（117.19 秒），为恢复场景线程未在原 10 秒
+时限内退出；未延长时限。检查中移除新增等待入口的 `_notify` 同步读取，改为仅更新现有
+不可变内存快照，避免额外 SQL 扫描；之后完整回归通过。不将一次超时归因为已证明的唯一原因。
+锁延迟用例另明确禁止该入口调用 `_notify` / `_cache_workbench`。
+本轮全部 `v15b-review2-*` 临时测试目录和中间输出在保存最终证据后退休；沿用原 V1.5
+工作树，不改现有部署、回滚、生产库和 CDP 资产。状态保持 REVIEW_REQUIRED，等待 CEO 独立复审。
+旧长期性能、24h、系统 DPI 和生产链路的验证边界仍有效，没有声称本轮完成新的长期测量。
+
 ## CEO 第一轮修正（2026-10-26）
 
 审核锚点 `a7aaf615449b39f9c3b3606b61c4ffed19aa19e0`，结论 CHANGES_REQUESTED。

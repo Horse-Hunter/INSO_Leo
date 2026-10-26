@@ -3,6 +3,40 @@
 status: REVIEW_REQUIRED
 authority: Owner pasted V1.5-B task, 2026-10-25
 branch: codex/v1-5-tp-research
+
+## Second-review correction packet (2026-10-26)
+
+Authority: Owner + CEO e984f6bcf55bb56040573e9268f568fd489a90ea.
+Only synchronize actual idle/manual window and conservatively project TP hints.
+Reuse the existing wait, _next_poll_at, _poll_idle/_poll_gate, canonical permission
+checks and TpStore manual states. Publish one shared wall deadline at actual wait
+entry/reset; remove pre-TP scheduling timestamp and clear it on wait exit. No new
+scheduler/worker/dependency. The wait still uses the original monotonic900 seconds.
+Reuse TP task_key plus canonical source identity on the existing projection worker
+to link ordinary orders to an existing TP DTO; exact MPN/quantity guard, never MPN
+alone. Hint uses only snapshot fields; mirror existing MAIL_QUEUED/FAILED and
+delivery None/SENT/PERMANENT_FAILURE states. Fresh durable gates remain unchanged.
+Synthetic verification: TP0/5/10/20m at wait boundaries and mid-window, safety
+refusal before cleanup/during manual/after stop, reset, UNKNOWN/duplicate guards,
+ordinary/unlinked/linked TP hints, SENT/UNKNOWN/in-flight/stale snapshots, full suite.
+Window publication derives both displayed and canonical permission time from the
+original monotonic deadline, including a synthetic30-second business-lock delay;
+only the immutable memory view is updated, no new durable-state scan. Detail
+signature includes memory hints so linked TP changes refresh ordinary-row buttons,
+while unchanged hints preserve widgets. Canonical can_order_action/request and
+purchase/recipient protections remain untouched.32 new test cases; four old full
+wait stubs call publication explicitly without weakening their assertions.
+No real business, credentials, mail, packaging/deployment. Other business deltas
+retain independent review status. Deliver original branch, REVIEW_REQUIRED.
+
+Second-review completion: final targeted119 PASS17.53s; full2733 PASS/1 SKIP105.02s;
+Ruff/no-cache and diff whitespace PASS. Both final runs contain no SMTP attempts.
+Evidence: docs/evidence/v15b/pytest-review2-{full,targeted}.txt. Intermediate
+six wait-stub failures and one10-second exit timeout are disclosed in the report;
+timeouts/guards were not relaxed. Final ordinary-detail hint-change assertions
+and unchanged-widget reuse both pass. No workflow/research/source algorithm or
+RFQ008 test change. Owned review2 temp artifacts retired after evidence collection;
+original worktree retained, no deployment/profile/runtime/production DB changes.
 revision_authority: Owner/CEO first UI review, 2026-10-26, a7aaf615449b39f9c3b3606b61c4ffed19aa19e0 CHANGES_REQUESTED
 
 ## First-review correction packet (2026-10-26)

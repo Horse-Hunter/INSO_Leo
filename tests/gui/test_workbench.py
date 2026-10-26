@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from customtkinter import CTkLabel
+from customtkinter import CTkButton, CTkLabel
 
 from src.gui.app import InsoDashboardApp
 from src.gui.contracts import (
@@ -209,9 +209,17 @@ def _check_cached_tk_workbench(monkeypatch):
         assert "库存判断" in detail_text and "预计总价" in detail_text
         assert {a for _, a in calls} == {"purchase", "quotation", "tp", "edit"}
         assert all(iid == "0" for iid, _ in calls)
-        count = len(calls)
+        detail_widgets = tuple(w.winfo_id() for w in app._detail_container.winfo_children())
         app._view.render_detail(orders[0])
-        assert len(calls) == count
+        assert tuple(w.winfo_id() for w in app._detail_container.winfo_children()) == detail_widgets
+        # A linked TP changes its delivery while the ordinary selected row stays
+        # identical. Pure hints must invalidate detail buttons, without SQL.
+        for allowed in (True, False):
+            backend.order_action_hint = lambda _key, action, allowed=allowed: action == "tp" and allowed
+            app._view.render_detail(orders[1])
+            tp_button = next(w for w in app._detail_container.winfo_children()
+                             if isinstance(w, CTkButton) and w.cget("text") == "重跑 TP 价格")
+            assert tp_button.cget("state") == ("normal" if allowed else "disabled")
         _check_detail_contention(app, backend, orders[0])
         for page in app._view.pages * 3:
             app._view.show_page(page)
