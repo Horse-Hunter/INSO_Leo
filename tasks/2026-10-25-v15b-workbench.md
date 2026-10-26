@@ -2,6 +2,39 @@
 
 status: RELEASE_HOLD / FINAL_ACCEPTANCE_IN_PROGRESS
 
+## CEO performance-only investigation2026-10-26
+
+Completed bounded sampling: paired fixed250 order case601.375s visible0.01835%
+host and601.453s real tray0.01689%; auxiliary clean250 visible601.391s0.01608%
+and tray571.344s (not ten-minute PASS); prior exact1000 PERF warm setup625s
+visible0.03406%,22/22 internal foreground points. External10s Win32 counters
+independently agree; retain transient focus departures in raw data. Native
+TIDs72028/72400 are GUI main threads; Tcl helpers no measurable CPU delta;
+no Tk event/layout storm. Sampler's own overhead measured separately, not
+subtracted to beautify app values. First1.6s1000 startup reproduces3.4% spike,
+but does NOT explain historical30/60s high measurements. Historical0.192%
+coincides with originalobserver gap, different dynamic/250+orders setup.
+Original high native trace unavailable; NOT_REPRODUCED/ROOT_CAUSE_UNKNOWN.
+No source correction justified by current evidence; no weakening cadence or
+safety gates. CEO to review evidence rather than Executor declaring fix/PASS
+for old anomaly. RELEASE_HOLD / PERFORMANCE_REVIEW_REQUIRED, no BUILD_READY.
+All3 finite probes/observers exited and temporary artifacts retired after
+evidence copied; protected70956/71024 retained. Evidence cpu-review/, report
+updated; no production data, business calls, packages or source changes.
+
+Authority Owner request/review7765f07. Readonly diagnosis only, src unchanged.
+One finite synthetic app with fixed250 orders,1400x760/125% actual DPI/overview,
+unchanged GUI cadence; post-warmup600s visible then600s real tray. Observe actual
+foreground state, never lift/focus/system settings. Sample same GetProcessTimes
+and GetThreadTimes user/kernel units for clean app and surviving71024 externally;
+Toolhelp thread/module/description queries are readonly, no debug suspension.
+Record diagnostic own cost and native-thread attribution, Tk/CTk callbacks and
+repaint cadence without disabling any work. If1000-row load comparison needed,
+use separate bounded equivalent block and preserve raw boundaries.
+Do not control71024 or70956, do not modify running test source/data, no external
+business/browser/DB/SMTP/build. Temporary helpers/evidence only; final report in
+existing UI report, no code fix without further CEO approval. RELEASE_HOLD.
+
 Immediate acceptance completion2026-10-26: finite component groups32/38 PASS
 (overlap), GUI regression109 PASS; all six live readonly Research sources SUCCESS
 and seven real callback stages rendered in diagnostic GUI, one Google2026 row167

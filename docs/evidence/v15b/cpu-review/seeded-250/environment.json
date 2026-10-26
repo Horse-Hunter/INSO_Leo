@@ -1,0 +1,11 @@
+{
+  "pid": 65428,
+  "main_tid": 72028,
+  "orders": 250,
+  "logical_cpus": 16,
+  "source_sha": "9f5522d7bef41a15fc099f9ad1545120dd9565c1",
+  "source_parent": "7765f07ab8a30e27aae1f378eeda5b77483e4b4f",
+  "tp_enabled": false,
+  "production_backend": false,
+  "methods": "Readonly per-thread Win32 counters; diagnostic callback wrappers, Tk event counters; unchanged business cadence; no focus/lift"
+}

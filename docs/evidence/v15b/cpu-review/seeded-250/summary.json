@@ -1,0 +1,707 @@
+{
+  "logical_cpus": 16,
+  "observations": 137,
+  "wall_span": 1380.5160000000033,
+  "max_gap": 10.187999999994645,
+  "observer_sample_cpu_seconds": 20.25,
+  "qualification": "GetProcessTimes/GetThreadTimes cumulative100ns units; host%=one-core%/logical CPUs; warmup and transition excluded; foreground at interval endpoints is not continuous focus proof; thread exits can leave unaccounted residual.",
+  "groups": {
+    "65428/visible_measure/all": {
+      "intervals": 60,
+      "sampled_seconds": 609.1089999999967,
+      "cpu_user_seconds": 0.515625,
+      "cpu_kernel_seconds": 1.265625,
+      "cpu_host_percent": 0.018277209005284865,
+      "cpu_one_core_percent": 0.29243534408455785,
+      "interval_host_min": 0.0,
+      "interval_host_max": 0.06740890937775174,
+      "rss_min": 95629312,
+      "rss_max": 95813632,
+      "private_min": 72982528,
+      "private_max": 73134080,
+      "handles_min": 549,
+      "handles_max": 559,
+      "gdi_min": 136,
+      "gdi_max": 136,
+      "user_objects_min": 261,
+      "user_objects_max": 261,
+      "thread_leaders": [
+        {
+          "tid": 72028,
+          "module": "python.exe",
+          "offset": "0x12a0",
+          "user": 0.515625,
+          "kernel": 1.265625
+        },
+        {
+          "tid": 73304,
+          "module": "combase.dll",
+          "offset": "0xcf460",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 70928,
+          "module": "ntdll.dll",
+          "offset": "0x4d110",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 72032,
+          "module": "ntdll.dll",
+          "offset": "0x4d110",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 71908,
+          "module": "tcl86t.dll",
+          "offset": "0x165f90",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68764,
+          "module": "tcl86t.dll",
+          "offset": "0x1514a0",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 71364,
+          "module": "SogouPY.ime",
+          "offset": "0x753478",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 72928,
+          "module": "SogouPY.ime",
+          "offset": "0x753478",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "thread_accounted_seconds": 1.78125
+    },
+    "65428/visible_measure/foreground_points": {
+      "intervals": 58,
+      "sampled_seconds": 588.8280000000086,
+      "cpu_user_seconds": 0.46875,
+      "cpu_kernel_seconds": 1.1875,
+      "cpu_host_percent": 0.01757994269973549,
+      "cpu_one_core_percent": 0.28127908319576783,
+      "interval_host_min": 0.0,
+      "interval_host_max": 0.057870370370370364,
+      "rss_min": 95629312,
+      "rss_max": 95813632,
+      "private_min": 72982528,
+      "private_max": 73134080,
+      "handles_min": 549,
+      "handles_max": 559,
+      "gdi_min": 136,
+      "gdi_max": 136,
+      "user_objects_min": 261,
+      "user_objects_max": 261,
+      "thread_leaders": [
+        {
+          "tid": 72028,
+          "module": "python.exe",
+          "offset": "0x12a0",
+          "user": 0.46875,
+          "kernel": 1.1875
+        },
+        {
+          "tid": 73304,
+          "module": "combase.dll",
+          "offset": "0xcf460",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 70928,
+          "module": "ntdll.dll",
+          "offset": "0x4d110",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 72032,
+          "module": "ntdll.dll",
+          "offset": "0x4d110",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 71908,
+          "module": "tcl86t.dll",
+          "offset": "0x165f90",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68764,
+          "module": "tcl86t.dll",
+          "offset": "0x1514a0",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 71364,
+          "module": "SogouPY.ime",
+          "offset": "0x753478",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 72928,
+          "module": "SogouPY.ime",
+          "offset": "0x753478",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "thread_accounted_seconds": 1.65625
+    },
+    "71024/visible_measure/all": {
+      "intervals": 60,
+      "sampled_seconds": 609.125,
+      "cpu_user_seconds": 1.171875,
+      "cpu_kernel_seconds": 2.0625,
+      "cpu_host_percent": 0.03318669197619536,
+      "cpu_one_core_percent": 0.5309870716191257,
+      "interval_host_min": 0.0,
+      "interval_host_max": 0.12518797455868177,
+      "rss_min": 108224512,
+      "rss_max": 109649920,
+      "private_min": 79171584,
+      "private_max": 81379328,
+      "handles_min": 645,
+      "handles_max": 742,
+      "gdi_min": 137,
+      "gdi_max": 137,
+      "user_objects_min": 266,
+      "user_objects_max": 266,
+      "thread_leaders": [
+        {
+          "tid": 70056,
+          "module": "python.exe",
+          "offset": "0x12a0",
+          "user": 1.125,
+          "kernel": 2.0
+        },
+        {
+          "tid": 71584,
+          "module": "tcl86t.dll",
+          "offset": "0x165f90",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 45648,
+          "module": "tcl86t.dll",
+          "offset": "0x1514a0",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 65032,
+          "module": "SogouPY.ime",
+          "offset": "0x753478",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 63668,
+          "module": "ichat_bundle64.dll",
+          "offset": "0x8f300",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68880,
+          "module": "isgpet_bundle64.dll",
+          "offset": "0xaf00",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 58824,
+          "module": "ucrtbase.dll",
+          "offset": "0x21b70",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 67328,
+          "module": "SogouPY.ime",
+          "offset": "0x7534e8",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "thread_accounted_seconds": 3.125
+    },
+    "71024/visible_measure/not_both_foreground": {
+      "intervals": 60,
+      "sampled_seconds": 609.125,
+      "cpu_user_seconds": 1.171875,
+      "cpu_kernel_seconds": 2.0625,
+      "cpu_host_percent": 0.03318669197619536,
+      "cpu_one_core_percent": 0.5309870716191257,
+      "interval_host_min": 0.0,
+      "interval_host_max": 0.12518797455868177,
+      "rss_min": 108224512,
+      "rss_max": 109649920,
+      "private_min": 79171584,
+      "private_max": 81379328,
+      "handles_min": 645,
+      "handles_max": 742,
+      "gdi_min": 137,
+      "gdi_max": 137,
+      "user_objects_min": 266,
+      "user_objects_max": 266,
+      "thread_leaders": [
+        {
+          "tid": 70056,
+          "module": "python.exe",
+          "offset": "0x12a0",
+          "user": 1.125,
+          "kernel": 2.0
+        },
+        {
+          "tid": 71584,
+          "module": "tcl86t.dll",
+          "offset": "0x165f90",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 45648,
+          "module": "tcl86t.dll",
+          "offset": "0x1514a0",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 65032,
+          "module": "SogouPY.ime",
+          "offset": "0x753478",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 63668,
+          "module": "ichat_bundle64.dll",
+          "offset": "0x8f300",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68880,
+          "module": "isgpet_bundle64.dll",
+          "offset": "0xaf00",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 58824,
+          "module": "ucrtbase.dll",
+          "offset": "0x21b70",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 67328,
+          "module": "SogouPY.ime",
+          "offset": "0x7534e8",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "thread_accounted_seconds": 3.125
+    },
+    "65428/visible_measure/not_both_foreground": {
+      "intervals": 2,
+      "sampled_seconds": 20.280999999988126,
+      "cpu_user_seconds": 0.046875,
+      "cpu_kernel_seconds": 0.078125,
+      "cpu_host_percent": 0.0385212760712222,
+      "cpu_one_core_percent": 0.6163404171395552,
+      "interval_host_min": 0.009630793885615952,
+      "interval_host_max": 0.06740890937775174,
+      "rss_min": 95727616,
+      "rss_max": 95748096,
+      "private_min": 73064448,
+      "private_max": 73064448,
+      "handles_min": 549,
+      "handles_max": 549,
+      "gdi_min": 136,
+      "gdi_max": 136,
+      "user_objects_min": 261,
+      "user_objects_max": 261,
+      "thread_leaders": [
+        {
+          "tid": 72028,
+          "module": "python.exe",
+          "offset": "0x12a0",
+          "user": 0.046875,
+          "kernel": 0.078125
+        },
+        {
+          "tid": 71908,
+          "module": "tcl86t.dll",
+          "offset": "0x165f90",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68764,
+          "module": "tcl86t.dll",
+          "offset": "0x1514a0",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 71656,
+          "module": "SogouPY.ime",
+          "offset": "0x753478",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68040,
+          "module": "ichat_bundle64.dll",
+          "offset": "0x8f300",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 65904,
+          "module": "isgpet_bundle64.dll",
+          "offset": "0xaf00",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "thread_accounted_seconds": 0.125
+    },
+    "65428/tray_measure/all": {
+      "intervals": 61,
+      "sampled_seconds": 619.1399999999849,
+      "cpu_user_seconds": 0.53125,
+      "cpu_kernel_seconds": 1.15625,
+      "cpu_host_percent": 0.017034717511387177,
+      "cpu_one_core_percent": 0.27255548018219483,
+      "interval_host_min": 0.0,
+      "interval_host_max": 0.057693727845510634,
+      "rss_min": 96546816,
+      "rss_max": 96563200,
+      "private_min": 73748480,
+      "private_max": 73781248,
+      "handles_min": 559,
+      "handles_max": 559,
+      "gdi_min": 136,
+      "gdi_max": 136,
+      "user_objects_min": 264,
+      "user_objects_max": 264,
+      "thread_leaders": [
+        {
+          "tid": 72028,
+          "module": "python.exe",
+          "offset": "0x12a0",
+          "user": 0.53125,
+          "kernel": 1.15625
+        },
+        {
+          "tid": 71908,
+          "module": "tcl86t.dll",
+          "offset": "0x165f90",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68764,
+          "module": "tcl86t.dll",
+          "offset": "0x1514a0",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 71656,
+          "module": "SogouPY.ime",
+          "offset": "0x753478",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68040,
+          "module": "ichat_bundle64.dll",
+          "offset": "0x8f300",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 65904,
+          "module": "isgpet_bundle64.dll",
+          "offset": "0xaf00",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 42876,
+          "module": "ucrtbase.dll",
+          "offset": "0x21b70",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 65260,
+          "module": "ntdll.dll",
+          "offset": "0x4d110",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "thread_accounted_seconds": 1.6875
+    },
+    "65428/tray_measure/not_both_foreground": {
+      "intervals": 61,
+      "sampled_seconds": 619.1399999999849,
+      "cpu_user_seconds": 0.53125,
+      "cpu_kernel_seconds": 1.15625,
+      "cpu_host_percent": 0.017034717511387177,
+      "cpu_one_core_percent": 0.27255548018219483,
+      "interval_host_min": 0.0,
+      "interval_host_max": 0.057693727845510634,
+      "rss_min": 96546816,
+      "rss_max": 96563200,
+      "private_min": 73748480,
+      "private_max": 73781248,
+      "handles_min": 559,
+      "handles_max": 559,
+      "gdi_min": 136,
+      "gdi_max": 136,
+      "user_objects_min": 264,
+      "user_objects_max": 264,
+      "thread_leaders": [
+        {
+          "tid": 72028,
+          "module": "python.exe",
+          "offset": "0x12a0",
+          "user": 0.53125,
+          "kernel": 1.15625
+        },
+        {
+          "tid": 71908,
+          "module": "tcl86t.dll",
+          "offset": "0x165f90",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68764,
+          "module": "tcl86t.dll",
+          "offset": "0x1514a0",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 71656,
+          "module": "SogouPY.ime",
+          "offset": "0x753478",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68040,
+          "module": "ichat_bundle64.dll",
+          "offset": "0x8f300",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 65904,
+          "module": "isgpet_bundle64.dll",
+          "offset": "0xaf00",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 42876,
+          "module": "ucrtbase.dll",
+          "offset": "0x21b70",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 65260,
+          "module": "ntdll.dll",
+          "offset": "0x4d110",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "thread_accounted_seconds": 1.6875
+    },
+    "71024/tray_measure/all": {
+      "intervals": 62,
+      "sampled_seconds": 629.2189999999828,
+      "cpu_user_seconds": 1.359375,
+      "cpu_kernel_seconds": 2.234375,
+      "cpu_host_percent": 0.035696534116103636,
+      "cpu_one_core_percent": 0.5711445458576582,
+      "interval_host_min": 0.00960144036967652,
+      "interval_host_max": 0.08666859777139507,
+      "rss_min": 109629440,
+      "rss_max": 109686784,
+      "private_min": 81313792,
+      "private_max": 81379328,
+      "handles_min": 738,
+      "handles_max": 742,
+      "gdi_min": 137,
+      "gdi_max": 137,
+      "user_objects_min": 266,
+      "user_objects_max": 266,
+      "thread_leaders": [
+        {
+          "tid": 70056,
+          "module": "python.exe",
+          "offset": "0x12a0",
+          "user": 1.359375,
+          "kernel": 2.234375
+        },
+        {
+          "tid": 71584,
+          "module": "tcl86t.dll",
+          "offset": "0x165f90",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 45648,
+          "module": "tcl86t.dll",
+          "offset": "0x1514a0",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 65032,
+          "module": "SogouPY.ime",
+          "offset": "0x753478",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 63668,
+          "module": "ichat_bundle64.dll",
+          "offset": "0x8f300",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68880,
+          "module": "isgpet_bundle64.dll",
+          "offset": "0xaf00",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 58824,
+          "module": "ucrtbase.dll",
+          "offset": "0x21b70",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 67328,
+          "module": "SogouPY.ime",
+          "offset": "0x7534e8",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "thread_accounted_seconds": 3.59375
+    },
+    "71024/tray_measure/not_both_foreground": {
+      "intervals": 62,
+      "sampled_seconds": 629.2189999999828,
+      "cpu_user_seconds": 1.359375,
+      "cpu_kernel_seconds": 2.234375,
+      "cpu_host_percent": 0.035696534116103636,
+      "cpu_one_core_percent": 0.5711445458576582,
+      "interval_host_min": 0.00960144036967652,
+      "interval_host_max": 0.08666859777139507,
+      "rss_min": 109629440,
+      "rss_max": 109686784,
+      "private_min": 81313792,
+      "private_max": 81379328,
+      "handles_min": 738,
+      "handles_max": 742,
+      "gdi_min": 137,
+      "gdi_max": 137,
+      "user_objects_min": 266,
+      "user_objects_max": 266,
+      "thread_leaders": [
+        {
+          "tid": 70056,
+          "module": "python.exe",
+          "offset": "0x12a0",
+          "user": 1.359375,
+          "kernel": 2.234375
+        },
+        {
+          "tid": 71584,
+          "module": "tcl86t.dll",
+          "offset": "0x165f90",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 45648,
+          "module": "tcl86t.dll",
+          "offset": "0x1514a0",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 65032,
+          "module": "SogouPY.ime",
+          "offset": "0x753478",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 63668,
+          "module": "ichat_bundle64.dll",
+          "offset": "0x8f300",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68880,
+          "module": "isgpet_bundle64.dll",
+          "offset": "0xaf00",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 58824,
+          "module": "ucrtbase.dll",
+          "offset": "0x21b70",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 67328,
+          "module": "SogouPY.ime",
+          "offset": "0x7534e8",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "thread_accounted_seconds": 3.59375
+    }
+  }
+}

@@ -1,0 +1,171 @@
+{
+  "qualification": "Warmup>=60s; internal GetProcessTimes/GetThreadTimes endpoints; all actual focus observations retained; no interpolation across absent endpoints.",
+  "groups": {
+    "tray_measure": {
+      "seconds": 571.3439999999828,
+      "points": 20,
+      "first_seconds": 752.7190000000119,
+      "last_seconds": 1324.0629999999946,
+      "cpu_host_percent": 0.01521221234492751,
+      "user_seconds": 0.3125,
+      "kernel_seconds": 1.078125,
+      "foreground_points": 0,
+      "max_gap": 30.078999999997905,
+      "rss_range": [
+        99237888,
+        99237888
+      ],
+      "private_range": [
+        73457664,
+        73457664
+      ],
+      "thread_leaders": [
+        {
+          "tid": 71240,
+          "module": "python.exe",
+          "user": 0.34375,
+          "kernel": 1.03125
+        },
+        {
+          "tid": 66904,
+          "module": "tcl86t.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 70772,
+          "module": "tcl86t.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 70276,
+          "module": "SogouPY.ime",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 73116,
+          "module": "ichat_bundle64.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "event_deltas": {
+        "FocusOut": 0,
+        "Map": 0,
+        "Expose": 0,
+        "Motion": 0,
+        "Unmap": 0,
+        "Configure": 0,
+        "FocusIn": 0
+      },
+      "callback_deltas": {
+        "ctk_appearance": [
+          18151,
+          0.41400790063198656,
+          0.03125
+        ],
+        "ctk_dpi": [
+          5197,
+          0.5011855012271553,
+          0.046875
+        ],
+        "view_render": [
+          0,
+          0.0,
+          0.0
+        ],
+        "gui_tick": [
+          190,
+          0.008099199767457321,
+          0.0
+        ]
+      },
+      "self_sampler_thread_cpu_seconds": 1.265625
+    },
+    "visible_measure": {
+      "seconds": 601.3910000000033,
+      "points": 21,
+      "first_seconds": 61.14100000000326,
+      "last_seconds": 662.5320000000065,
+      "cpu_host_percent": 0.016076011696217515,
+      "user_seconds": 0.390625,
+      "kernel_seconds": 1.15625,
+      "foreground_points": 19,
+      "max_gap": 30.078999999997905,
+      "rss_range": [
+        98820096,
+        98897920
+      ],
+      "private_range": [
+        73035776,
+        73179136
+      ],
+      "thread_leaders": [
+        {
+          "tid": 71240,
+          "module": "python.exe",
+          "user": 0.390625,
+          "kernel": 1.15625
+        },
+        {
+          "tid": 66904,
+          "module": "tcl86t.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 70772,
+          "module": "tcl86t.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 70276,
+          "module": "SogouPY.ime",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 73116,
+          "module": "ichat_bundle64.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "event_deltas": {
+        "FocusOut": 14,
+        "Map": 0,
+        "Expose": 0,
+        "Motion": 112,
+        "Unmap": 0,
+        "Configure": 2,
+        "FocusIn": 18
+      },
+      "callback_deltas": {
+        "ctk_appearance": [
+          19120,
+          0.4378512017719913,
+          0.0625
+        ],
+        "ctk_dpi": [
+          5472,
+          0.5231404001242481,
+          0.0
+        ],
+        "view_render": [
+          598,
+          0.03958889973000623,
+          0.0
+        ],
+        "gui_tick": [
+          598,
+          0.07128279987955466,
+          0.0
+        ]
+      },
+      "self_sampler_thread_cpu_seconds": 1.234375
+    }
+  }
+}

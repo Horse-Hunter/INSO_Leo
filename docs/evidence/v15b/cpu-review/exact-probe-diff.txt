@@ -1,0 +1,18 @@
+--- previous-component-probe
++++ extended-exact-probe
+@@ -27 +27 @@
+- OUT=OUT/('extended' if QUICK else 'visible-profile' if PROFILE else 'foreground-perf')
++ OUT=OUT/('extended' if QUICK else 'visible-profile' if PROFILE else 'exact-1000')
+@@ -40,0 +41,2 @@
++from native_cpu import snapshot as native_snapshot
++import threading
+@@ -96 +98 @@
+- row=dict(seconds=wall-began,phase=phase,cpu_host_percent=(cpu-last_cpu)/max(.001,wall-last_wall)*100/(os.cpu_count() or 1),
++ row=dict(native=native_snapshot(os.getpid()),seconds=wall-began,phase=phase,cpu_host_percent=(cpu-last_cpu)/max(.001,wall-last_wall)*100/(os.cpu_count() or 1),
+@@ -142,2 +144,2 @@
+-   for delay in (30000,60000):app._root.after(delay,observe)
+-   app._root.after(65000,hide_to_tray)
++   for delay in range(30000,681000,30000):app._root.after(delay,observe)
++   app._root.after(685000,lambda:finish())
+@@ -233,0 +236 @@
++save('environment.json',dict(pid=os.getpid(),orders=1000,main_tid=threading.get_native_id(),logical_cpus=os.cpu_count(),source_sha='9f5522d7bef41a15fc099f9ad1545120dd9565c1',tp_enabled=False,production_backend=False,qualification='Exact prior PERF setup; only extended duration/native counter observations and graceful close instead of focus-restoring tray path.'))

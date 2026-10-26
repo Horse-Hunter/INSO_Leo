@@ -1,0 +1,191 @@
+{
+  "qualification": "Warmup>=60s; internal GetProcessTimes/GetThreadTimes endpoints; all actual focus observations retained; no interpolation across absent endpoints.",
+  "groups": {
+    "tray_measure": {
+      "seconds": 601.4530000000086,
+      "points": 21,
+      "first_seconds": 752.7659999999742,
+      "last_seconds": 1354.2189999999828,
+      "cpu_host_percent": 0.016886190608409728,
+      "user_seconds": 0.515625,
+      "kernel_seconds": 1.109375,
+      "foreground_points": 0,
+      "max_gap": 30.09299999999348,
+      "rss_range": [
+        96546816,
+        96563200
+      ],
+      "private_range": [
+        73748480,
+        73781248
+      ],
+      "thread_leaders": [
+        {
+          "tid": 72028,
+          "module": "python.exe",
+          "user": 0.5,
+          "kernel": 1.125
+        },
+        {
+          "tid": 71908,
+          "module": "tcl86t.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68764,
+          "module": "tcl86t.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 71656,
+          "module": "SogouPY.ime",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68040,
+          "module": "ichat_bundle64.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "event_deltas": {
+        "FocusIn": 0,
+        "Expose": 0,
+        "FocusOut": 0,
+        "Unmap": 0,
+        "Motion": 0,
+        "Configure": 0,
+        "Map": 0
+      },
+      "callback_deltas": {
+        "ctk_text_grid": [
+          0,
+          0.0,
+          0.0
+        ],
+        "ctk_appearance": [
+          19116,
+          0.43562830073642544,
+          0.0625
+        ],
+        "ctk_dpi": [
+          5470,
+          0.5343563013593666,
+          0.03125
+        ],
+        "ctk_text_scrollbars": [
+          5888,
+          0.24770270119188353,
+          0.015625
+        ],
+        "view_render": [
+          0,
+          0.0,
+          0.0
+        ],
+        "gui_tick": [
+          200,
+          0.008633899968117476,
+          0.0
+        ]
+      },
+      "self_sampler_thread_cpu_seconds": 1.328125
+    },
+    "visible_measure": {
+      "seconds": 601.375,
+      "points": 21,
+      "first_seconds": 61.187999999994645,
+      "last_seconds": 662.5629999999946,
+      "cpu_host_percent": 0.01834987528580337,
+      "user_seconds": 0.546875,
+      "kernel_seconds": 1.21875,
+      "foreground_points": 21,
+      "max_gap": 30.078999999997905,
+      "rss_range": [
+        95629312,
+        95813632
+      ],
+      "private_range": [
+        72982528,
+        73134080
+      ],
+      "thread_leaders": [
+        {
+          "tid": 72028,
+          "module": "python.exe",
+          "user": 0.53125,
+          "kernel": 1.25
+        },
+        {
+          "tid": 71908,
+          "module": "tcl86t.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68764,
+          "module": "tcl86t.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 71656,
+          "module": "SogouPY.ime",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68040,
+          "module": "ichat_bundle64.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "event_deltas": {
+        "FocusIn": 9,
+        "Expose": 0,
+        "FocusOut": 3,
+        "Unmap": 0,
+        "Motion": 91,
+        "Configure": 2,
+        "Map": 0
+      },
+      "callback_deltas": {
+        "ctk_text_grid": [
+          0,
+          0.0,
+          0.0
+        ],
+        "ctk_appearance": [
+          19112,
+          0.4353434017393738,
+          0.109375
+        ],
+        "ctk_dpi": [
+          5469,
+          0.519230400735978,
+          0.0625
+        ],
+        "ctk_text_scrollbars": [
+          5884,
+          0.24944759948994033,
+          0.03125
+        ],
+        "view_render": [
+          598,
+          0.039859100070316344,
+          0.015625
+        ],
+        "gui_tick": [
+          598,
+          0.07176840023021214,
+          0.015625
+        ]
+      },
+      "self_sampler_thread_cpu_seconds": 1.296875
+    }
+  }
+}

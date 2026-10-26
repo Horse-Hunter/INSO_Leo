@@ -1,0 +1,48 @@
+{
+  "pid": 65428,
+  "seconds": 1371.3129999999946,
+  "errors": [],
+  "close_finalized": true,
+  "tray_thread_stopped": true,
+  "timings": {
+    "ctk_text_grid": [
+      6,
+      0.00120030008838512,
+      0.0
+    ],
+    "ctk_appearance": [
+      43561,
+      0.9926229023258202,
+      0.21875
+    ],
+    "ctk_dpi": [
+      12468,
+      1.2058342022937723,
+      0.109375
+    ],
+    "ctk_text_scrollbars": [
+      13418,
+      0.5682199001894332,
+      0.046875
+    ],
+    "view_render": [
+      685,
+      0.04806810020818375,
+      0.015625
+    ],
+    "gui_tick": [
+      908,
+      0.09151840067352168,
+      0.015625
+    ]
+  },
+  "events": {
+    "Configure": 297,
+    "Map": 142,
+    "Expose": 234,
+    "Unmap": 201,
+    "Motion": 91,
+    "FocusOut": 19,
+    "FocusIn": 17
+  }
+}

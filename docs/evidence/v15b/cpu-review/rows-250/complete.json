@@ -1,0 +1,38 @@
+{
+  "pid": 69396,
+  "seconds": 1331.2820000000065,
+  "errors": [],
+  "close_finalized": true,
+  "tray_thread_stopped": true,
+  "timings": {
+    "ctk_appearance": [
+      42298,
+      0.9665550026402343,
+      0.09375
+    ],
+    "ctk_dpi": [
+      12110,
+      1.154170701833209,
+      0.046875
+    ],
+    "view_render": [
+      662,
+      0.046325299714226276,
+      0.015625
+    ],
+    "gui_tick": [
+      882,
+      0.08808499944279902,
+      0.0
+    ]
+  },
+  "events": {
+    "Configure": 294,
+    "Map": 142,
+    "Expose": 197,
+    "Unmap": 201,
+    "Motion": 168,
+    "FocusOut": 25,
+    "FocusIn": 23
+  }
+}

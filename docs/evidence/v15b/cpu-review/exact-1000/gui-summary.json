@@ -1,0 +1,56 @@
+{
+  "qualification": "Warmup>=60s; internal GetProcessTimes/GetThreadTimes endpoints; all actual focus observations retained; no interpolation across absent endpoints.",
+  "groups": {
+    "visible_idle": {
+      "seconds": 624.9850000000151,
+      "points": 22,
+      "first_seconds": 61.70299999997951,
+      "last_seconds": 686.6879999999946,
+      "cpu_host_percent": 0.03406331751961964,
+      "user_seconds": 0.796875,
+      "kernel_seconds": 2.609375,
+      "foreground_points": 22,
+      "max_gap": 30.014999999984866,
+      "rss_range": [
+        100634624,
+        101208064
+      ],
+      "private_range": [
+        74653696,
+        75710464
+      ],
+      "thread_leaders": [
+        {
+          "tid": 72400,
+          "module": "python.exe",
+          "user": 0.78125,
+          "kernel": 2.625
+        },
+        {
+          "tid": 69548,
+          "module": "tcl86t.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 65976,
+          "module": "tcl86t.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 69616,
+          "module": "SogouPY.ime",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 70512,
+          "module": "ichat_bundle64.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ]
+    }
+  }
+}

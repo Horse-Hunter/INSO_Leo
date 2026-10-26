@@ -1,0 +1,289 @@
+{
+  "review_sha": "7765f07ab8a30e27aae1f378eeda5b77483e4b4f",
+  "app_sha": "9f5522d7bef41a15fc099f9ad1545120dd9565c1",
+  "src_unchanged": true,
+  "logical_cpus": 16,
+  "actual_dpi_percent": 125,
+  "primary_fixed_orders": 250,
+  "comparison_qualification": "Same250-order paired static-snapshot setup/geometry/page; original71024 is dynamic and not strict equivalent. Foreground sampled, never forced.",
+  "primary": {
+    "tray_measure": {
+      "seconds": 601.4530000000086,
+      "points": 21,
+      "first_seconds": 752.7659999999742,
+      "last_seconds": 1354.2189999999828,
+      "cpu_host_percent": 0.016886190608409728,
+      "user_seconds": 0.515625,
+      "kernel_seconds": 1.109375,
+      "foreground_points": 0,
+      "max_gap": 30.09299999999348,
+      "rss_range": [
+        96546816,
+        96563200
+      ],
+      "private_range": [
+        73748480,
+        73781248
+      ],
+      "thread_leaders": [
+        {
+          "tid": 72028,
+          "module": "python.exe",
+          "user": 0.5,
+          "kernel": 1.125
+        },
+        {
+          "tid": 71908,
+          "module": "tcl86t.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68764,
+          "module": "tcl86t.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 71656,
+          "module": "SogouPY.ime",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68040,
+          "module": "ichat_bundle64.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "event_deltas": {
+        "FocusIn": 0,
+        "Expose": 0,
+        "FocusOut": 0,
+        "Unmap": 0,
+        "Motion": 0,
+        "Configure": 0,
+        "Map": 0
+      },
+      "callback_deltas": {
+        "ctk_text_grid": [
+          0,
+          0.0,
+          0.0
+        ],
+        "ctk_appearance": [
+          19116,
+          0.43562830073642544,
+          0.0625
+        ],
+        "ctk_dpi": [
+          5470,
+          0.5343563013593666,
+          0.03125
+        ],
+        "ctk_text_scrollbars": [
+          5888,
+          0.24770270119188353,
+          0.015625
+        ],
+        "view_render": [
+          0,
+          0.0,
+          0.0
+        ],
+        "gui_tick": [
+          200,
+          0.008633899968117476,
+          0.0
+        ]
+      },
+      "self_sampler_thread_cpu_seconds": 1.328125
+    },
+    "visible_measure": {
+      "seconds": 601.375,
+      "points": 21,
+      "first_seconds": 61.187999999994645,
+      "last_seconds": 662.5629999999946,
+      "cpu_host_percent": 0.01834987528580337,
+      "user_seconds": 0.546875,
+      "kernel_seconds": 1.21875,
+      "foreground_points": 21,
+      "max_gap": 30.078999999997905,
+      "rss_range": [
+        95629312,
+        95813632
+      ],
+      "private_range": [
+        72982528,
+        73134080
+      ],
+      "thread_leaders": [
+        {
+          "tid": 72028,
+          "module": "python.exe",
+          "user": 0.53125,
+          "kernel": 1.25
+        },
+        {
+          "tid": 71908,
+          "module": "tcl86t.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68764,
+          "module": "tcl86t.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 71656,
+          "module": "SogouPY.ime",
+          "user": 0.0,
+          "kernel": 0.0
+        },
+        {
+          "tid": 68040,
+          "module": "ichat_bundle64.dll",
+          "user": 0.0,
+          "kernel": 0.0
+        }
+      ],
+      "event_deltas": {
+        "FocusIn": 9,
+        "Expose": 0,
+        "FocusOut": 3,
+        "Unmap": 0,
+        "Motion": 91,
+        "Configure": 2,
+        "Map": 0
+      },
+      "callback_deltas": {
+        "ctk_text_grid": [
+          0,
+          0.0,
+          0.0
+        ],
+        "ctk_appearance": [
+          19112,
+          0.4353434017393738,
+          0.109375
+        ],
+        "ctk_dpi": [
+          5469,
+          0.519230400735978,
+          0.0625
+        ],
+        "ctk_text_scrollbars": [
+          5884,
+          0.24944759948994033,
+          0.03125
+        ],
+        "view_render": [
+          598,
+          0.039859100070316344,
+          0.015625
+        ],
+        "gui_tick": [
+          598,
+          0.07176840023021214,
+          0.015625
+        ]
+      },
+      "self_sampler_thread_cpu_seconds": 1.296875
+    }
+  },
+  "exact1000": {
+    "seconds": 624.9850000000151,
+    "points": 22,
+    "first_seconds": 61.70299999997951,
+    "last_seconds": 686.6879999999946,
+    "cpu_host_percent": 0.03406331751961964,
+    "user_seconds": 0.796875,
+    "kernel_seconds": 2.609375,
+    "foreground_points": 22,
+    "max_gap": 30.014999999984866,
+    "rss_range": [
+      100634624,
+      101208064
+    ],
+    "private_range": [
+      74653696,
+      75710464
+    ],
+    "thread_leaders": [
+      {
+        "tid": 72400,
+        "module": "python.exe",
+        "user": 0.78125,
+        "kernel": 2.625
+      },
+      {
+        "tid": 69548,
+        "module": "tcl86t.dll",
+        "user": 0.0,
+        "kernel": 0.0
+      },
+      {
+        "tid": 65976,
+        "module": "tcl86t.dll",
+        "user": 0.0,
+        "kernel": 0.0
+      },
+      {
+        "tid": 69616,
+        "module": "SogouPY.ime",
+        "user": 0.0,
+        "kernel": 0.0
+      },
+      {
+        "tid": 70512,
+        "module": "ichat_bundle64.dll",
+        "user": 0.0,
+        "kernel": 0.0
+      }
+    ]
+  },
+  "historical_findings": {
+    "owner_foreground_file_time_local": "2026-10-26 12:19:28",
+    "owner_sampler_gap_local": "12:07..14:14",
+    "original_high_native_trace_available": false,
+    "root_cause": "UNKNOWN",
+    "status": "NOT_REPRODUCED",
+    "startup_peak_reproduced_host_percent": 3.4037
+  },
+  "recommendation": "No business source correction supported by current evidence; CEO review required; RELEASE_HOLD",
+  "cleanup": "Verified: all owned finite probes/observers exited; owned temporary directory retired after evidence copy; protected demo/24h runtime retained.",
+  "protected_pids": [
+    70956,
+    71024
+  ],
+  "probe_pids": [
+    69396,
+    65428,
+    65752
+  ],
+  "observer_pids": [
+    67940,
+    73124,
+    70160
+  ],
+  "initial_observer_syntax_failure": "Fixed before valid observer run; GUI not restarted; warmup excluded; no data fabricated",
+  "private_mutexes_released": {
+    "Local\\INSO_CPU_DIAG_69396": true,
+    "Local\\INSO_CPU_DIAG_65428": true,
+    "Local\\INSO_COMPONENT_ACCEPTANCE_65752": true
+  },
+  "finite_probe_exit_verified": true,
+  "protected_runs_preserved": true,
+  "last_soak_health": {
+    "seconds": 16284.046999999991,
+    "phase": "withdrawn_idle_no_shell_tray",
+    "cycle": 53,
+    "callback_errors": [],
+    "guard_attempts": [],
+    "max_sample_gap_seconds": 60.10999999998603,
+    "sampled_at": "2026-10-26T07:56:49.928612+00:00"
+  }
+}

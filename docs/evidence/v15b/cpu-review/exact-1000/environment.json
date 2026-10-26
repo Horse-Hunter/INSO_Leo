@@ -1,0 +1,10 @@
+{
+  "pid": 65752,
+  "orders": 1000,
+  "main_tid": 72400,
+  "logical_cpus": 16,
+  "source_sha": "9f5522d7bef41a15fc099f9ad1545120dd9565c1",
+  "tp_enabled": false,
+  "production_backend": false,
+  "qualification": "Exact prior PERF setup; only extended duration/native counter observations and graceful close instead of focus-restoring tray path."
+}

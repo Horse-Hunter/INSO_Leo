@@ -1,0 +1,9 @@
+{
+  "pid": 65428,
+  "main_tid": 72028,
+  "phase": "tray_measure",
+  "seconds": 746.234999999986,
+  "orders": 250,
+  "geometry": "1400x760+10+10",
+  "hidden": true
+}
