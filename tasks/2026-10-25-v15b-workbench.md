@@ -138,3 +138,28 @@ Cleanup complete: all owned D:/Program_Leo/INSO_Leo/.tmp/v15b-* artifacts
 retired after evidence collection, no live test Python process remains. Retained
 only necessary synthetic screenshots, JSON and final pytest transcript in Git.
 Reused original V1.5 worktree; no second worktree, deployment or CDP change.
+
+
+## CEO independent second review — 2026-10-26
+
+**CHANGES_REQUESTED (one outstanding P1 UX/permission-consistency issue; narrow P2 hint). LIVE RELEASE / REAL SMTP / DEPLOYMENT NOT AUTHORIZED.**
+
+Reviewed exact implementation SHA `c5610953fb77d6c7c8f43bddb3e73bab760e3351` compared to `a7aaf615449b39f9c3b3606b61c4ffed19aa19e0`, the 11 changed file paths, full UI/launcher/observation source and targeted integration tests. The branch matched that commit before review. Executor's transcripts show **2701 PASS / 1 SKIP** full and **81 PASS** targeted. CEO did not rerun Windows/Tk/pytest or real sites, DB migration, SMTP, packaging or game load; old long-performance results do not measure exact current final SHA.
+
+**P1-A (visual scheduling): ACCEPTED.** The existing monotonic 900-second `_wait_between_polls` remains the actual scheduler. It now enters a separately observed read-only `planned_check_at` at the real wait boundary, after TP/cleanup; `scheduling` uses this read-only plan, ceil()s positive fractional seconds and does not claim an imminent poll during unclosed work. Synthetic tests cover TP delays of 0/5/10/20 minutes, actual virtual wait loop and stop/manual reset.
+
+**P1-B (recovery wait): ACCEPTED.** The same actual wait-entry observation closes execution timing on deferrable Google/INSO failures, reports a recovery site drawn from the existing outage state, and leaves the underlying deferral, three-hour policy, and GLOBAL_STOP policy unmodified. Tests cover two consecutive deferred rounds and recovery.
+
+**P2 (nonblocking detail): ACCEPTED for I/O isolation and authoritative submit gate.** `WorkbenchView.render_detail` and the context menu now call in-memory `order_action_hint` rather than SQL-backed `can_order_action`. The real `request_order_action -> can_order_action` gate remains authoritative. A synthetic exclusive SQLite + business-lock window paints without the blocking authority lookup, and delayed permission lookups do not block the UI. UI hint is a display affordance, never durable authorization.
+
+### Remaining P1 blocker: real idle manual-action window expires before visible countdown
+
+`backend.poll_loop` assigns the **legacy** `_next_poll_at = utc_now()+15m` before TP runs. The correction intentionally leaves that timestamp unchanged, but `_wait_between_polls(900)` now displays an independently computed 15-minute `planned_check_at` **after** TP. `_manual_idle` (used by both `can_order_action` and `order_action_hint`) still checks `_next_poll_at > utc_now()`. Therefore after TP takes 10 minutes, manual actions become unavailable 5 minutes into the **15-minute visible idle countdown**, and for TP duration >=15 minutes they are unavailable throughout actual idle. This discrepancy is deterministic from the source; the added test `test_tp_duration_never_shortens_actual_wait_or_ui_countdown` intentionally asserts `_next_poll_at == legacy_deadline` and does **not** test manual-action enablement in the later idle window.
+
+Required narrow fix: synchronize the existing permission-window deadline with actual entry to `_wait_between_polls`, **without bypassing** `_poll_idle`, `_poll_gate`, `_manual_busy`, stop state, `can_order_action`, and existing SQLite/TP/UNKNOWN purchase/email gates. Preserve one worker and the original full 900-second wait and manual action reset. Do not grant permission before TP/cleanup finishes or after actual wait ends. Add virtual-time UI + canonical `can_order_action` regression for TP taking 0/5/10/20 minutes and for recovery/manual-reset/stop. Ensure an in-flight/UNKNOWN purchase or TP send is still rejected.
+
+### P2 important: TP hint may show impossible/unsafe rerun
+
+`order_action_hint(..., "tp")` returns true whenever `self._tp is not None` and the shared idle flag is true, **before** verifying that the selected item is a TP-capable task or checking its in-memory `business_status` and `delivery_status`. Thus unrelated ordinary orders and TP tasks with an already UNKNOWN/in-flight delivery may have an enabled “重跑 TP 价格” button, while the canonical `TpStore.manual_allowed` correctly denies it. This is not an authorization bypass but creates misleading buttons. Use only the existing in-memory projection to conservatively suppress known-ineligible/UNKNOWN/in-flight TP hints, while preserving the real fresh gate at submit. Do not add UI-thread SQL or permanently cache grants. Test ordinary unrelated order and known TP UNKNOWN/PENDING versus safe SENT/FAILED states.
+
+**Disposition:** retain `REVIEW_REQUIRED`, scope the next patch strictly to the above tiny consistency issues and synthetic tests, re-run targeted + full suites and return new SHA. Current source direction, six-page UI, bounded snapshots, lightweight rendering and original business safety are otherwise accepted in this code-review scope. 24-hour, real OS DPI, production Chrome, live end-to-end and game interference remain NOT_VERIFIED, and unrelated post-`a29c1466` business commits have not received sign-off through this UI review.
