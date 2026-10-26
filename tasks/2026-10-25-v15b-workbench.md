@@ -56,6 +56,14 @@ times out; no further system-menu input. Owner tray hide/double-click restore
 question pending; other pages/search/details/reruns/exit not silently passed.
 70956 original24h healthy, untouched; RELEASE_HOLD.
 
+Owner tray response2026-10-26: "隐藏到托盘、双击恢复都正常".
+Real shell-tray hide viaX/double-click restore OWNER_VERIFIED; canonical show
+callback logged14:19:09.366/14:19:10.385; resumed samplehidden=false andPython3
+including tray thread. Supersedes prior tray-question-pending status only;
+clean exit/mutex release, ordinary minimize and tray idle resource measurement
+stillNOT_VERIFIED. Evidence owner-tray-confirmation.json/mock-events-owner-tray.txt.
+No process/source/DB/config changes; original24h continues independently, HOLD.
+
 ## Final exact-source Windows acceptance / soak (2026-10-26)
 
 status: IN_PROGRESS / RELEASE_HOLD

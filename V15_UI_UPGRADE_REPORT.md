@@ -17,7 +17,13 @@ Private 72.75 MiB、系统/Python 线程 9/2、句柄 631、GDI/USER 137/261、a
 证据 `owner-confirmation.json`、`owner-response-recovery.json`、`resources-owner-confirmation.jsonl`、
 `mock-events-owner-confirmation.txt`。工具重新观察曾报告窗口最小化，按指引激活重试后仍为
 FrameArrived 超时，故没有继续系统菜单操作；这不能替代真实托盘隐藏/双击恢复验证。
-已单独请求 Owner 验证该项，尚未收到结论。原 PID70956 长测仍独立健康，未干预。
+**14:19 更新：** Owner 明确答复“隐藏到托盘、双击恢复都正常”，托盘隐藏及双击恢复记为
+**OWNER_VERIFIED**。原日志在 14:19:09.366、14:19:10.385 出现 `真实托盘命令：show`，
+恢复后采样 hidden=false、Python 线程 3（含实际托盘线程）。这证明本次原生托盘路径有实际
+操作，不再用隔离桌面的 withdraw 模拟代替；没有足够驻留样本证明托盘空闲资源开销。
+普通最小化、托盘菜单退出/进程及锁释放仍 NOT_VERIFIED，不扩大该次确认范围。
+补充证据 `owner-tray-confirmation.json`、`mock-events-owner-tray.txt`；
+原 PID70956 长测仍独立健康，未干预。
 
 Owner 本次明确授权不等长测、立即显示最新源码，并在条件安全时进行少量只读查询。
 实际启动 SHA：`b2b4936770aad4a8cda53e5ecaf6fbee8475d17b`，分支工作树开始时干净，
@@ -47,7 +53,7 @@ Owner 本次明确授权不等长测、立即显示最新源码，并在条件�
 | 三重跑 | 临时桩保留普通样本采购/报价、TP 样本 TP、UNKNOWN 全禁用，以及请求安全拒绝；本窗口实际点击/右键反馈 NOT_VERIFIED；真实业务授权链由本轮离线测试覆盖 |
 | 设置 | 原入口加载，TP false；登录/订单邮件/文件入口仍为 Mock 或拒绝；没有测试真实开关或修改生产配置 |
 | 系统菜单 | 键盘 Alt+Space 后可访问树出现系统菜单，Escape 后菜单消失 |
-| 最小化/真实托盘/恢复/退出 | **NOT_VERIFIED**；鼠标工具没有成功执行最小化，未借此关闭窗口。不能把进程存活当成正常退出证明 |
+| 最小化/真实托盘/恢复/退出 | Owner 实机确认点击 X 隐藏到真实托盘、双击恢复正常，日志 show 佐证；普通最小化及干净退出/锁释放仍 NOT_VERIFIED。不能把恢复或进程存活当成正常退出证明 |
 
 **新验收阻碍需独立复核，不能宣称 UI 已通过。** computer-use 的 WGC 捕获先后报
 `FrameArrived timed out`、`window capture timed out`；按指引重新选择/激活并重试一次仍失败。
@@ -117,7 +123,8 @@ RSS **96.86–97.70 MiB**，Private **71.38–72.18 MiB**；Python 线程 2，�
 
 结论：最新源码确已可见启动，五源只读解析及离线安全测试取得证据；
 Owner 后续确认窗口可见、任务中心切换及倒计时正常，采样已恢复；
-**其余菜单/操作、托盘/退出、历史断档归因、前台空闲、Google 行对应、INSO、真实阶段传递仍未完成。**
+托盘隐藏/双击恢复随后也由 Owner 实机确认通过；
+**其余菜单/操作、干净退出、托盘资源、历史断档归因、前台空闲、Google 行对应、INSO、真实阶段传递仍未完成。**
 保持 **RELEASE_HOLD**，不建议 BUILD_READY；下一步优先完成可见响应与托盘人工/工具复核，
 再做经批准的只读缺项与 24h 收集。打包/安装/部署、真实写表/采购/发信仍需独立授权。
 

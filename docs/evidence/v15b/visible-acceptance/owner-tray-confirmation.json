@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-26",
+  "timezone": "Asia/Shanghai",
+  "pid": 71024,
+  "backend": "MockBackend with synthetic projection",
+  "owner_reply": "隐藏到托盘、双击恢复都正常",
+  "functional_status": "OWNER_VERIFIED",
+  "verified_scope": ["X_hides_to_real_Windows_tray", "double_click_restores_window"],
+  "canonical_callback_log_local": ["14:19:09.366 show", "14:19:10.385 show"],
+  "latest_observed_sample": {"seconds": 8281.078, "hidden": false, "python_threads": 3, "native_threads": 11, "handles": 646},
+  "not_verified": ["clean_exit", "mutex_release_after_exit", "ordinary_minimize", "tray_idle_resource_profile"],
+  "independent_24h_process": {"pid": 70956, "seconds": 10397.078, "cycle": 33, "callback_errors": 0, "guard_attempts": 0, "max_sample_gap_seconds": 60.094},
+  "no_application_or_soak_source_changes": true,
+  "release_state": "RELEASE_HOLD"
+}
