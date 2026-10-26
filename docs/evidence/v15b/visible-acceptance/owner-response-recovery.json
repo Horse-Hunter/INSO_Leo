@@ -1,0 +1,26 @@
+{
+  "observed_at": "2026-10-26T06:16:22.897818+00:00",
+  "pid": 71024,
+  "sampler_resumed": true,
+  "gap_seconds": 7408.312999999995,
+  "last_before_gap_seconds": 391.48400000002584,
+  "first_after_gap_seconds": 7799.7970000000205,
+  "post_recovery_samples": 11,
+  "latest": {
+    "seconds": 8100.656000000017,
+    "hidden": false,
+    "cpu_one_core_percent": 8.67997804537135,
+    "cpu_host_percent": 0.5424986278357093,
+    "after_callbacks": 6,
+    "event_queue": 0,
+    "rss": 105082880,
+    "private": 76288000,
+    "threads": 9,
+    "python_threads": 2,
+    "handles": 631,
+    "gdi": 137,
+    "user": 261
+  },
+  "qualification": "Owner confirmed task-center switch and countdown normal; cause of historical sampling gap UNKNOWN. First gap-spanning CPU sample excluded; no continuous foreground/tray/performance acceptance claim.",
+  "post_gap_cpu_host_mean_percent": 0.1507053990752215
+}

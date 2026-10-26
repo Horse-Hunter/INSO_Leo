@@ -44,6 +44,18 @@ Evidence docs/evidence/v15b/visible-acceptance, current report has full limits.
 Owned offline SQLite temp retired; live Mock/24h directories retained. Follow-up
 heartbeat now protects71024/visible directory separately from70956. Still HOLD.
 
+Owner response update2026-10-26: explicit "窗口可见，桌面已解锁" / "能切换，倒计时正常".
+Visibility/task-center navigation/countdown OWNER_VERIFIED; logs show task-center/
+overview14:14:07-14. Callback sampling resumed, historical7408.313s gap retained;
+no forced restart/src change. Prior pending/still-stalled CURRENT conclusion is
+SUPERSEDED, root cause remainsUNKNOWN. 14:16 snapshot11 post-recovery samples,
+exclude first gap-spanning CPU interval; no long-run/foreground/tray PASS inferred.
+Evidence owner-confirmation/recovery JSON, resumed raw synthetic samples/logs in
+existing visible-acceptance directory. WGC recheck after human response still
+times out; no further system-menu input. Owner tray hide/double-click restore
+question pending; other pages/search/details/reruns/exit not silently passed.
+70956 original24h healthy, untouched; RELEASE_HOLD.
+
 ## Final exact-source Windows acceptance / soak (2026-10-26)
 
 status: IN_PROGRESS / RELEASE_HOLD
