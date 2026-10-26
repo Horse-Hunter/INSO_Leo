@@ -548,3 +548,131 @@ Old SENT payloads unchanged; current source code unchanged. Disposable helper
 retired after resolved path/reparse checks; retain the private selected-key and
 delivery receipt for no-resend safety. Canonical9222 remains available; no foreign
 page cleanup, production DB/Sheets write, poll, purchase, package or deployment.
+
+
+## CEO independent non-UI release readiness review — 2026-10-26
+
+**NON_UI_SOURCE_CODE_REVIEW_PASS / RELEASE_HOLD / NO NEW LIVE ACTIVATION AUTHORIZED.**
+
+Scope: independently inspected the 13 intervening commits from the previous
+CEO-reviewed TP anchor `a29c1466fc5f246636998919a2abd443960894cf`
+to UI review `2288a2ee948921cf679d7883e8bcac77541922b6`,
+separating previously approved V1.5-B UI code from **unreviewed
+business/release deltas**. The main development commits inspected were
+`58dc9efa5bad15187e6fc07866fbcb0cd6e5061a`
+(TP mail/currency),
+`14cabb7d503364ba6b2f6aeb181a8f470550e8b4`
+(fixed UTC+8 mail date), and
+`ea537060a42c8b8b53c4472034ff7df4e387189c`
+(full-MPN retrieval, recipient aggregation, release integration and
+RFQ008 test expectation change). Reviewed corresponding actual
+production source, search and TP/SMTP/recovery tests, owner task,
+V1.5 implementation report and Windows release instructions.
+
+### Source-level conclusions
+
+- **PASS: full-model retrieval change.** Full source MPN is now used
+  for IC.net, HQEW, Findchips, LCSC and BOM searches; INSO keeps its
+  full-model alias. Fuzzy returned-model matching and the source anchor
+  validation remain separate. This is an explicit later Owner requirement,
+  superseding earlier prefix-query assumptions. Related offline tests,
+  including encoding and real parser seams, exist. Actual future site
+  recall and false-negative rates remain unverified outside the known
+  Owner-authorized read-only trial.
+- **PASS: BOM currency confirmation safeguard.** A bare unlabelled
+  price preserves its historical ordinary Research interpretation but
+  is marked **unconfirmed** and excluded from TP. Matching same-offer
+  visible currency, ambiguous/hidden currency and multiple quote blocks
+  are checked conservatively. TP's normal 1..12 month distinct ranking
+  and ECB/Decimal policy are unchanged.
+- **PASS: TP mail/date and two-recipient safeguards.** Plain-text and
+  escaped HTML use verified quote/currency/date provenance, don't
+  fabricate unavailable prices, and format China quotes using fixed
+  UTC+8 without an IANA tzdata runtime dependency. The future TP
+  recipient pair was explicitly Owner-authorized and reuses the existing
+  per-recipient V12 outbox/notification transport. `TpStore.delivery`
+  aggregates all recipient outcomes; UNKNOWN/SENDING/PENDING/
+  RETRYABLE_FAILURE cannot be hidden by another recipient's SENT.
+  Manual new generation remains subject to the original full durable
+  recheck, not a blind retry of prior SENT commands.
+- **PASS: reviewed recovery behavior vs RFQ008 baseline tests.**
+  The formerly failing CDP recovery cases in
+  `test_rfq008_hold_lifecycle.py` now exercise existing deferral,
+  with fake notification side effects and assertions that unresolved
+  quotation holds and automatic barrier remain. Other unrelated
+  global-stop behavior is still asserted. The production recovery
+  algorithm was not modified in that commit. This resolves the
+  **test expectation review**, not a claim that every live outage has
+  been simulated.
+- **PASS for build-path source changes; NOT a deployment sign-off.**
+  The release script/spec extends the established named-version
+  packaging and existing dependency list, with no separate installer
+  pipeline. Source and documentation tests report 2666 PASS/11 SKIP
+  at the integration commit; subsequent UI branch evidence reports
+  2733 PASS/1 SKIP. CEO inspected code and test evidence but did NOT
+  independently execute these suites or verify files on the local
+  Windows machine.
+
+### CRITICAL installed-binary versus reviewed-source discrepancy
+
+The **previously Owner-authorized local EXE** was built at
+`ea537060a42c8b8b53c4472034ff7df4e387189c`.
+That EXE explicitly defaults TP **ON** when `tp_enabled` is absent
+and the frozen executable is named INSO_V1.5. This could run unsent
+TP tasks and queue emails on Start, using the shared V1.4 runtime.
+The **latest CEO-reviewed UI/source at**
+`bbe2743e0ba3c2f9ddcd25ec0dce7e483652db22`
+defaults TP **OFF** unless the existing configuration explicitly sets
+`tp_enabled: true`. Thus the installed old EXE must NEVER be
+mistaken for the latest source's disabled-by-default behavior.
+Verify executable path+hash and actual ignored production config
+**without displaying credentials or changing them**, and do not start
+a real poll in the prior EXE based on the new source's assumptions.
+Current `docs/WINDOWS_RELEASE.md` still describes the historical
+ON-by-default EXE; add a prominent current-source/old-install
+distinction at the next documentation update.
+
+The old local installation and migration of two Owner-authorized
+trial SENT tasks are reported in the task and release docs: built at
+`ea537060`, installed under the separate INSO_V1.5 directory,
+preserved V1.4 binary and shared runtime, and migrated only two current
+SENT TP task/command/recipient receipts after verified backup. CEO
+reviewed **repository evidence only**: the installed artifact, local
+production SQLite/backup, exact live recipient receipts, executable
+hash, and shared junction were NOT independently inspected. Previous
+real trials were authorized for individual target emails; they are
+not approval for unattended future TP mail or broad activation.
+Preserve all original generation and recipient receipts; do not clear
+UNKNOWN, regenerate SENT outbox, or run live SMTP for review.
+
+### Required release gates (not more speculative source refactoring)
+
+1. A separate **read-only** Windows preflight identifies the true
+   installed EXE/source identity, frozen default/actual TP config,
+   shared runtime junction, active single-instance lock, current
+   outbox/recipient outcomes, backups and V1.4 rollback integrity.
+   Do not open browser sessions or initialize production migrations
+   just to inspect them. Do not include account secrets or business
+   content in the report.
+2. Establish the final exact source commit and update release
+   instructions to distinguish the installed old V1.5 from the
+   current UI source. Keep latest TP opt-in OFF unless Owner provides
+   specific fresh authorization; do not assume the old install is safe
+   for a live Start action.
+3. Owner-approved isolated Windows visual/DPI, 24h synthetic
+   stability and Chrome/game-load sampling; current GUI synthetic
+   performance results predate the final UI correction.
+4. Separate explicit approval for packaged-install rehearsal,
+   test of any actual source/TP rows, shared SQLite receipt/backup
+   migration, external emails or regular production activation.
+   Revalidate target-only source identity and all recipients before
+   any authorized mail; exercise rollback using non-destructive
+   checks.
+
+**Disposition:** Unreviewed post-anchor *source changes* examined
+above are `CODE_REVIEW_PASS` within this limited static scope.
+**V1.5 overall release remains HOLD** due to the old installed
+TP-default mismatch and unverified final build/live/UI/24h gates.
+No new code correction to the reviewed current source is demanded by
+this review, and nothing herein grants deployment, real mail,
+production database changes or TP enablement.
