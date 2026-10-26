@@ -795,3 +795,156 @@ or safety guards.
 
 **CEO decision:** scoped CPU review ACCEPTED, no
 source fixes requested, production release remains HOLD.
+
+
+## CEO independent unified-task-center and overwrite review — 2026-10-26
+
+**CODE_REVIEW_PASS (Owner-approved five-page consolidation) /
+INSTALL_EVIDENCE_ACCEPTED (reported local asset-only overwrite) /
+PRODUCTION_INSTALLED_IDLE / REVIEW_REQUIRED / RELEASE_HOLD.**
+
+Reviewed exact comparison
+`45b8bdf9857f210d0c5662914f6d01fd242837c5...`
+`763c553e3ab9ecb94f7bd895a93683450e7e24d4`.
+The comparison has two commits: actual build source
+`669fe6ada3a450eaef5f74532a371d6fb55ffd01`
+and documentation/evidence-only
+`763c553e3ab9ecb94f7bd895a93683450e7e24d4`.
+In the build commit the only **production application module**
+changed is `src/gui/workbench.py`. Other edited paths are
+`tests/gui/test_workbench.py`,
+`scripts/{verify_workbench_ui,accept_workbench}.py`
+and the task report. No update was observed to production
+backend, scheduler, Research adapters, SQLite stores,
+SMTP transport, app entry point, configuration or packaging scripts.
+
+### Functional / safety review — PASS
+
+- Owner's latest five-page requirement explicitly supersedes
+  the former six-page display requirement. The old
+  `调研结果` navigation aliased the same `任务中心`
+  frame and toggled the Treeview display columns; it did not
+  own a separate business execution path. The patch removes
+  the alias/page toggle and preserves the sole task frame.
+- The single task table now displays the existing
+  `min_reference_price` after quantity via
+  `displaycolumns`; underlying per-row `values`,
+  `price` heading sort, 1000-loaded/200-displayed bounds,
+  local search/filters/paging and three-column edit mapping
+  remain coherent with the new visible column order.
+  Price None is still represented as unavailable, never
+  fabricated; full detail still displays the reference
+  price and total, existing saved source rows, missing TP
+  source-history notice and original stage/exception/log
+  text. The detail's small heading `调研结果` is a
+  retained section label, not a second navigation item.
+- No changes to `order_action_hint`, `can_order_action`,
+  `request_order_action`, TP canonical authorization,
+  `UNKNOWN` no-blind-resend safety, purchase guards
+  or outbound transport were made by this patch. Original
+  per-request permission checks remain execution authority.
+- New real-Tk assertions test exactly five menu names,
+  no alias frame, visible nonempty reference price
+  in the intended location, saved detail and reuse of
+  original purchase/quotation/TP/edit actions. The
+  committed executor transcript reports 2733 PASS /
+  1 SKIP (108.00 seconds), no SMTP attempts, 45
+  synthetic page/size/widget-scale combinations,
+  90 failure/recovery/UI cycles without callback
+  errors, and the 100/500/1000-item bounded list
+  workloads. The stale seven-field synthetic verifier
+  unpack was corrected to the existing nine-value
+  observer contract, not by changing production
+  observation. Scoped Ruff/diff checks passed; the
+  unrelated existing scripts-wide lint issue was
+  disclosed and not modified.
+
+### Installed-binary evidence review — conditionally accepted
+
+The executor's published
+`docs/evidence/v15b/unified-task-center/installed.json`
+and `V15_UI_UPGRADE_REPORT.md` report:
+- installed path `D:/Program_Leo/INSO_Leo/dist/INSO_V1.5/INSO_V1.5.exe`;
+  installed EXE SHA256
+  `DA21769649159216BB66604AB601F051C55C192BFA62A3F09991F5EE03BA9A4A`;
+  build source `669fe6ada3a450eaef5f74532a371d6fb55ffd01`;
+  2875 installer program assets matched the canonical build/scanner;
+  installed frozen dependency/idle checks PASS, and
+  `gui_ready` was emitted on real idle startup.
+- A normally exited prior instance, an original
+  single-instance lock during overwrite, and a retained
+  verified previous-program rollback package:
+  `D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.5-unified-20261026T115216Z-669fe6a`.
+  Installation reportedly replaced only EXE/`_internal`;
+  runtime junction and V1.4 assets were preserved, no
+  SQLite migration or production config modification.
+- TP remained explicitly `false`, production
+  business idle, four existing TP tasks / six existing
+  SENT recipient records retained; production ledger,
+  encrypted credentials, backups and outbox recipient
+  digests unchanged before/after launch. No Google
+  write, procurement action or SMTP was reported.
+- A **121.281s short idle measurement** of the actual
+  installed process reports 0.01691% 16-CPU-host process
+  CPU, stable ~95.97–96.09MiB RSS and
+  ~69.64–69.83MiB private bytes; handle, GDI and USER
+  counts were bounded in that short interval only.
+
+**Evidence boundary:** CEO independently checked the
+committed Git diff, relevant application/test source and
+structured evidence, **not** the local production
+Windows filesystem, the actual installed EXE bytes,
+2,875 individually hashed files, production database
+bytes, binary signature, or physical rollback medium.
+These installed-environment facts are executor-reported
+and have supporting committed redacted records, rather
+than newly reproduced by CEO. The frozen page-list
+evidence is a static installed EXE content check, not
+an independent visual/functional run. The submitted
+synthetic PNG could not be independently pixel-rendered
+with this review interface; appearance is not separately
+signed off here. An Owner-authorized installation was
+already performed; this source review does not create
+retroactive production-write authorization.
+
+### Release gates — explicitly not cleared
+
+- `PRODUCTION_INSTALLED_IDLE` is acceptable as the
+  **reported actual installation state**, **not**
+  an approval to press Start for unconstrained automatic
+  purchasing, Google writes, quotations or TP SMTP.
+  Continue `REVIEW_REQUIRED / RELEASE_HOLD` pending
+  separately scoped Owner approvals for actual business
+  write/SMTP and durable state checks. Keep `tp_enabled=false`
+  until separately authorized; do not replay known SENT
+  or unknown delivery commands.
+- Prior protected soak PID70956 was started from the
+  earlier `9f5522d7...` six-page code and
+  **cannot establish a 24-hour PASS** for this five-page
+  `669fe6...` build, even if the full run finishes.
+  New five-page 24h/long-term unattended stability is
+  NOT_VERIFIED. The new 121s idle sample is not
+  a ten-minute/24h test or gameplay result.
+- Windows real OS 100/150% DPI, real Chrome Research
+  while gaming, end-to-end production procurement/
+  sheet-write/SMTP and target-specific reconciliation
+  remain NOT_VERIFIED or NOT_AUTHORIZED as applicable.
+  The previously authorized bounded six-site and
+  one-Google-row read-only results may inform the next
+  acceptance plan but are not a five-page live auto-cycle.
+- Preserve the old frozen worktree and its running
+  baseline soak unchanged until it completes.
+  Keep verified rollback assets, shared runtime,
+  log/outbox/recipient history, TP false, V1.4
+  artifacts and real mutex protocol. Any subsequent
+  V1.6 scheduler implementation must branch from
+  an explicitly frozen five-page V1.5 build baseline
+  without altering the installed V1.5 or shared
+  production runtime before its own approval.
+
+**Disposition: PASS for requested UI consolidation
+and review of the authorized EXE overwrite evidence.
+NO CHANGES_REQUESTED for this exact scoped diff.
+No new install, TP activation or production write
+authority is granted by this review; RELEASE_HOLD
+and actual long-run/operations acceptance continue.**
