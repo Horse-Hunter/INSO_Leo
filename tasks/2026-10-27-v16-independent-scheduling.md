@@ -1387,3 +1387,179 @@ NOT integrated module actor/real browser business concurrency acceptance.
 
 No replacement, browser experiment, production DB/config mutation or test mail
 performed by this resource component. Overall REVIEW_REQUIRED persists.
+
+
+## CEO independent original-source row lease review — 2026-10-27
+
+**Decision: CHANGES_REQUESTED for one source-proven abort/rearm lifecycle bypass;
+FIFO/exact lease semantics and the reuse-first architectural direction are
+accepted as isolated prerequisites, NOT a business-actor or product PASS.**
+
+**Scope/provenance:** reviewed source and evidence commit
+`0e0495a4dd27bca50466266d7a14ebe29ec2c4a0`, exact parent
+`98ffd2ea0688c37b67811f02593b29ee3ef0a27e`. GitHub branch
+`codex/v1-6-independent-scheduling` pointed to this exact head.
+One commit touches existing `src/workflow/service.py`, narrow launcher
+fault propagation, tests, report/task, design and
+`docs/evidence/v16/order-resource-regression.json`; no new ledger, business
+adapter, dependencies, or production runtime changes. Submitted
+2861PASS/1SKIP115.96s, targeted64PASS10.66s, Ruff and diff checks PASS
+are executor-run evidence; reviewer examined source and test logic without
+running Windows tests or touching production.
+
+### Verified source behavior
+
+- Default order admission is CLOSED. Optional
+  `configure_order_leases(capacity)` establishes a finite total
+  outstanding-request budget. Canonical `WorksheetIdentity`
+  (spreadsheet, worksheet) plus physical row index is the
+  **in-memory resource exclusion key**; snapshot/model variation
+  cannot bypass a matching source-row lock. Source identity must
+  still be freshly verified at the existing domain boundary
+  immediately before external effects; physical position alone
+  does not establish permanent business identity.
+- Per-key FIFO is enforced by queue head. Duplicate queued
+  token admission is idempotent; once active it is refused.
+  Distinct source keys can hold concurrent leases. The granted
+  immutable lease object's **identity**, not merely matching
+  fields, together with the admitting scheduler thread is
+  checked on release; copied/foreign/double releases fail with
+  `OrderResourceOwnershipError`. Active work cannot be canceled
+  through a waiting-request cancellation path.
+- `close_order_admissions` cancels only waiting, not active,
+  leases. Successful active release remains possible after
+  ordinary Stop. `abort_module_resource` uses the existing
+  reentrant module lock and closes admission. Backend maps
+  typed ownership faults found in exception chains to
+  resource abort/GLOBAL_STOP and avoids attributing the
+  shared failure to the most recent historic order.
+  This was exercised with isolated tests; no actual
+  cross-thread actor completion/error handoff exists yet.
+
+### Required correction before integrating an actor coordinator
+
+**P1 integration-blocking, source-provable:** an aborted runtime can
+silently clear the abort latch using existing
+`WorkflowRuntime.configure_modules`. Minimal reproduction from
+current code (all on the original owning thread):
+
+1. `runtime.configure_modules({"inquiry": 900})`, then
+   `runtime.configure_order_leases(2)`.
+2. `runtime.claim_due_module()`; call
+   `runtime.abort_module_resource()`. This marks the shared
+   resource failed and closes order admissions.
+3. With no active order requests (or after draining and releasing
+   them), `runtime.configure_modules({"inquiry": 900})`
+   passes its only running/request guards and sets
+   `_module_resource_failed = False`.
+4. `runtime.configure_order_leases(2)` now succeeds and
+   reopens order admission, allowing new
+   `request_order_lease(...)` even though no explicit browser
+   resource reconciliation/new-runtime authorization occurred.
+
+A plain `close_order_admissions` followed by a completed drain
+also allows `configure_order_leases` to rearm admission.
+Whether ordinary stopping permits an intentional new lifecycle
+must be explicit; a fatal resource abort must never be reset by
+ordinary reconfiguration.
+
+**Required minimal fix/test:** define one-way terminal abort
+for this `WorkflowRuntime` instance or an explicitly guarded
+fresh-runtime/new-generation transition. In particular, module
+interval reconfiguration must not clear a faulted order-admission
+resource for the same unsafe generation. Preserve the ability
+to drain/release already active leases. Add regression for
+abort -> drain -> configure_modules -> configure_order_leases ->
+attempted new claim, plus normal Stop -> drain -> attempted
+implicit rearm. Do not rewrite the original scheduler or invent
+a second ledger.
+
+**Additional integration risks to close in follow-up (not a
+failure of the current isolated FIFO unit tests):**
+- A *claimed* lease is considered active before worker dispatch.
+  If Stop happens in that gap, it survives waiting cancellation;
+  actor coordinator must either safely complete/drain it or
+  release it on the admitting scheduler thread, otherwise it
+  leaks a slot indefinitely. Add this exact interruption test
+  during dispatch integration.
+- Finite capacity counts both active and waiting requests.
+  Two pending requests for one busy key can occupy the entire
+  budget while a separate source key could otherwise use a
+  free market slot. This is bounded and not incorrect-source
+  behavior, but can create head-of-line delays and undermine
+  the previously failed TP deadline. Scheduler needs a
+  non-starving admission strategy and measurable due-time
+  latency, not just a FIFO for each key.
+- A typed release/claim ownership error raised on a worker
+  is *not* automatically delivered to the current single
+  Backend thread. Future actor results must carry terminal
+  fault metadata across immutable ports, trigger
+  GLOBAL_STOP and all bound PageResourceAdmission/resource
+  gates, and never leave an active lease orphaned.
+- `WorksheetIdentity + physical row` is a **resource key**,
+  not stable durable business identity; row movement/
+  deleted/reused sheets, different source snapshots, and
+  Sheet IDs/row-index coordinate semantics must be
+  reconciled by existing fresh identity and durable claims
+  before any effect, not by trusting a mere lease.
+  If module-source record keys differ, prove canonical
+  equivalence in the Public Contract first.
+
+### CEO MODULE_INDEX Public Contract decision
+
+**Conditionally approve the proposed minimum integration direction,
+without approving implementation or release.** Reuse existing
+`workflow.WorkflowRuntime` for bounded, fair scheduling and
+canonical source-row leases; Launcher remains composition owner,
+Chrome/CDP lifecycle and protected INSO/Google write owner;
+Research remains read-only owner of six canonical collectors and
+result parsing/FX; GUI consumes immutable bounded progress DTOs,
+and existing V12/TP/SMTP stores own durable claims/receipts.
+The only new cross-module surface is versioned/typed immutable
+module/cycle/source-key request/result/progress + fault/completion
+messages, with explicit admission/teardown ownership. Do not
+pass Backend closures or mutable/sync Playwright objects across
+threads. Exactly bounded fixed-thread market-read clients may
+use the same already-running9222 Chrome, each with its own
+sync Playwright connection and target ID, sharing the existing
+runtime PageResourceAdmission plus canonical source row lease
+and site auth/pacing rules. Keep Google, INSO and external writes
+on original exclusive owner thread with verified idempotency.
+No unbounded queue, new daemon, Profile/Chrome clone or
+parallel ledger.
+
+**Timing contract:** do not block original scheduler waiting for
+an entire Research batch. It must admit/cancel/complete individual
+bounded requests, deliver immutable results asynchronously to
+their correct module cycle and allow due TP to progress without
+waiting for an unrelated long quotation query, subject to
+declared site/auth/order mutual exclusions and 120s order
+cooldown. Validate with a real long quotation and due TP,
+actual parsed source intervals, order-source conflict timeline,
+stop/timeout/UNKNOWN and preserved human pages. The observed
+TP 454.210s lateness remains FAIL/open; no numeric guaranteed
+zero delay is asserted.
+
+**MODULE_INDEX governance:** CEO approves the intended *boundary*
+as a staged Public Contract extension, not an already existing
+contract implementation. Executable interfaces, authority/
+payload safety, versioned canonical identities, bounded queue,
+scheduling fairness and release evidence must be independently
+reviewed before rollout. No repeat approval of pre-authorized
+ordinary business is needed; a separate safe deployment window
+remains necessary for new production source.
+
+**Current production:** executor records Owner restored Start and
+real inquiry17:01:44, quotation17:04:01, TP17:04:34–17:04:51
+(+08), but currently installed executable remains the already
+reviewed `04075bc`. The present source increment is not
+installed and does not change running permissions or status.
+No production intervention, browser experiments or monitoring
+occurred in this CEO review.
+
+**Disposition:** `ORDER_RESOURCE_FIFO_ISOLATED_TESTS_PASS`,
+`ABORT_REARM_LIFECYCLE_CHANGES_REQUESTED`,
+`MODULE_PUBLIC_CONTRACT_DIRECTION_CONDITIONALLY_APPROVED`,
+`ACTOR_BUSINESS_PARALLELISM_NOT_IMPLEMENTED`,
+`TP_TIMELY_DISPATCH_STILL_FAIL`,
+`V16_OVERALL_REVIEW_REQUIRED`.
