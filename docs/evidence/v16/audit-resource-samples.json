@@ -1,0 +1,222 @@
+[
+  {
+    "at": "2026-10-27T03:29:31.838878+00:00",
+    "seconds": 0.43799999996554106,
+    "groups": {
+      "application": {
+        "processes": 1,
+        "rss": 147324928,
+        "private": 115642368,
+        "handles": 5586,
+        "threads": 9,
+        "cpu_host_percent": 0.0,
+        "comparable_processes": 0
+      },
+      "existing_exit_observer": {
+        "processes": 1,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "threads": 1,
+        "cpu_host_percent": 0.0,
+        "comparable_processes": 0
+      },
+      "playwright_driver": {
+        "processes": 1,
+        "rss": 155013120,
+        "private": 169242624,
+        "handles": 217,
+        "threads": 14,
+        "cpu_host_percent": 0.0,
+        "comparable_processes": 0
+      }
+    },
+    "canonical_chrome_root_count": 7
+  },
+  {
+    "at": "2026-10-27T03:30:31.819708+00:00",
+    "seconds": 60.42199999996228,
+    "groups": {
+      "application": {
+        "processes": 1,
+        "rss": 148291584,
+        "private": 115752960,
+        "handles": 5700,
+        "threads": 9,
+        "cpu_host_percent": 0.22466928680982814,
+        "comparable_processes": 1
+      },
+      "existing_exit_observer": {
+        "processes": 1,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "threads": 1,
+        "cpu_host_percent": 0.0,
+        "comparable_processes": 1
+      },
+      "playwright_driver": {
+        "processes": 1,
+        "rss": 153600000,
+        "private": 166141952,
+        "handles": 217,
+        "threads": 14,
+        "cpu_host_percent": 0.06023741747799741,
+        "comparable_processes": 1
+      }
+    },
+    "canonical_chrome_root_count": 7
+  },
+  {
+    "at": "2026-10-27T03:31:31.779939+00:00",
+    "seconds": 120.375,
+    "groups": {
+      "application": {
+        "processes": 1,
+        "rss": 148090880,
+        "private": 115773440,
+        "handles": 5708,
+        "threads": 9,
+        "cpu_host_percent": 0.20361001534522577,
+        "comparable_processes": 1
+      },
+      "existing_exit_observer": {
+        "processes": 1,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "threads": 1,
+        "cpu_host_percent": 0.0,
+        "comparable_processes": 1
+      },
+      "playwright_driver": {
+        "processes": 1,
+        "rss": 154046464,
+        "private": 166760448,
+        "handles": 217,
+        "threads": 14,
+        "cpu_host_percent": 0.0,
+        "comparable_processes": 1
+      }
+    },
+    "canonical_chrome_root_count": 7
+  },
+  {
+    "at": "2026-10-27T03:32:31.808213+00:00",
+    "seconds": 180.40599999995902,
+    "groups": {
+      "application": {
+        "processes": 1,
+        "rss": 147939328,
+        "private": 115437568,
+        "handles": 5736,
+        "threads": 9,
+        "cpu_host_percent": 0.20497222268508605,
+        "comparable_processes": 1
+      },
+      "existing_exit_observer": {
+        "processes": 1,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "threads": 1,
+        "cpu_host_percent": 0.0,
+        "comparable_processes": 1
+      },
+      "playwright_driver": {
+        "processes": 1,
+        "rss": 118730752,
+        "private": 128077824,
+        "handles": 217,
+        "threads": 13,
+        "cpu_host_percent": 0.008133818360519287,
+        "comparable_processes": 1
+      }
+    },
+    "canonical_chrome_root_count": 7
+  },
+  {
+    "at": "2026-10-27T03:33:31.788680+00:00",
+    "seconds": 240.39100000000326,
+    "groups": {
+      "application": {
+        "processes": 1,
+        "rss": 145747968,
+        "private": 116772864,
+        "handles": 1111,
+        "threads": 9,
+        "cpu_host_percent": 0.2442016754186746,
+        "comparable_processes": 1
+      },
+      "existing_exit_observer": {
+        "processes": 1,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "threads": 1,
+        "cpu_host_percent": 0.0,
+        "comparable_processes": 1
+      },
+      "playwright_driver": {
+        "processes": 1,
+        "rss": 122601472,
+        "private": 132411392,
+        "handles": 217,
+        "threads": 14,
+        "cpu_host_percent": 0.04395630157536143,
+        "comparable_processes": 1
+      }
+    },
+    "canonical_chrome_root_count": 7
+  },
+  {
+    "at": "2026-10-27T03:34:31.742963+00:00",
+    "seconds": 300.34399999998277,
+    "groups": {
+      "application": {
+        "processes": 1,
+        "rss": 145641472,
+        "private": 114343936,
+        "handles": 1133,
+        "threads": 9,
+        "cpu_host_percent": 0.22478545694134747,
+        "comparable_processes": 1
+      },
+      "existing_exit_observer": {
+        "processes": 1,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "threads": 1,
+        "cpu_host_percent": 0.0,
+        "comparable_processes": 1
+      }
+    },
+    "canonical_chrome_root_count": 4
+  },
+  {
+    "at": "2026-10-27T03:35:31.765019+00:00",
+    "seconds": 360.35999999998603,
+    "groups": {
+      "application": {
+        "processes": 1,
+        "rss": 145178624,
+        "private": 113885184,
+        "handles": 1121,
+        "threads": 9,
+        "cpu_host_percent": 0.21315930335242778,
+        "comparable_processes": 1
+      },
+      "existing_exit_observer": {
+        "processes": 1,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "threads": 1,
+        "cpu_host_percent": 0.0,
+        "comparable_processes": 1
+      }
+    },
+    "canonical_chrome_root_count": 4
+  }
+]

@@ -1,6 +1,6 @@
 # V1.6 independent scheduling and Owner-authorized production release
 
-status: IN_PROGRESS — CEO71a68f2 audit corrections; production untouched
+status: REVIEW_REQUIRED — P1 corrected offline; remaining requirements open; production untouched
 owner: Owner; executor Codex
 baseline: 669fe6ada3a450eaef5f74532a371d6fb55ffd01
 branch: codex/v1-6-independent-scheduling
@@ -279,16 +279,22 @@ separate deployment proposal, not an automatic consequence of source fixes.
 | A nested execution identity, pending pause and cache | PASS (offline; review required) |24 real-closure cases; frozen-method negative control fails both quote/TP as expected |
 | A independent GUI timing and waiting | PASS (offline; review required) | Ancestor waiting interval preserved; additive per-module start/end/elapsed displayed |
 | A cleanup/shared fault, STOP and120s minimum | PASS (offline; review required) | Actor invalidated on cleanup failure; no next purchase after STOP/shared fault |
-| A full regression | PASS |2783passed/1skipped110.68s;63 targeted11.38s;Ruff/diff PASS |
+| A full regression | PASS | Final source2802passed/1skipped113.81s; frozen-wall32PASS9.55s; isolated cards1PASS3.29s;Ruff/diff PASS; earlier Tk initialization flake retained as UNKNOWN |
 | B real TP independent900s begin/end | NOT_VERIFIED | Existing deployed source emits no independent TP completion receipt |
 | B future-source TP cycle receipts | PASS (offline only) | Three actual empty TpCycle calls at independent900s; no orders/mails used as substitute |
 | B new purchase success | NOT_VERIFIED | Prior source-conflict holds are not successful procurement |
 | B quote/Google write/readback success | NOT_VERIFIED | Prior no-recent/unchanged/identity refusals, no forced writes |
-| B SMTP acceptance vs mailbox delivery | PASS / NOT_VERIFIED | Prior accepted1 recipient; mailbox final delivery unknown |
+| B SMTP transport acceptance in prior export | PASS | Prior accepted1 recipient at10:25:26; current productionDB deliberately not read |
+| B SMTP current UNKNOWN/final mailbox delivery | NOT_VERIFIED | No current DB check or mailbox delivery receipt; no SMTP triggered here |
 | B real restart idempotency | DEFERRED | Current command forbids production restart/DB operations; offline safety regression retained |
-| C genuine overlapping page work | DEFERRED implementation / NOT_VERIFIED overlap | Exact-target event correlation, per-order lease and callback/client isolation incomplete; independent design docs/V16_PAGE_CONCURRENCY_DESIGN.md |
-| D multi-cycle resources/semaphore ownership | NOT_VERIFIED | Prior2x121s aggregate samples only; no demonstrated persistent leak |
-| D main/observer vs browser/game | NOT_VERIFIED | Existing counters exclude Chrome/game costs; no game launch allowed |
+| C concurrency reuse/design and blocker audit | PASS | Independent docs/V16_PAGE_CONCURRENCY_DESIGN.md; preferred bounded same-CDP clients vs broad async conversion |
+| C page concurrency implementation | DEFERRED | Exact-target event correlation, per-order lease and callback/client isolation incomplete |
+| C actual webpage overlap/same-order queue timeline | NOT_VERIFIED | No production browser access; no callback overlap substituted |
+| D strict continuous multi-cycle stability | NOT_VERIFIED | New6min and earlier2x121s intermittent samples; release observed, no proven unattended upper bound |
+| D finite current process counters | PASS |360.36s/7samples and60.375s/3samples; app/observer/driver and ancestry-resolved Chrome roles separated |
+| D native semaphore owner/release | PASS | MainPID74176:5196→576semaphores, total5770→1131handles |
+| D exact allocating objects and long-run upper bound | NOT_VERIFIED | Repeated transient release is not proof of bounded unattended use |
+| D Chrome active workload/game impact | NOT_VERIFIED | Short process-role counts are not active Research GPU or frame-rate acceptance; no game launched |
 | D live EXE menus/tray/normal exit | DEFERRED | Cannot close or control running production this round |
 | D100%/150% systemDPI | DEFERRED | No Owner display-setting changes; prior widget scaling not substitute |
 | D GUI/ledger, recovery/manual consistency | NOT_VERIFIED | Offline checks do not certify current production state |
@@ -350,3 +356,38 @@ so the outer coordinator cannot mask it; unsafe actor remains unclaimable.
 An existing outer pause is retained if another local pause arrives.115targeted
 PASS14.27s and final full2802PASS/1SKIP112.37s, Ruff PASS. These changes remain
 isolated source only; actual production stop/restart not performed.
+
+Final changed application source:04075bc884c9c2927e677edcbddcb43419833aef.
+Cache isolation follow-up: each new execution starts with empty preparation-failure
+cache, preserving/restoring its caller's cache on nesting. This does not depend
+on wall-clock timestamps being different; pending-pause cases freeze wall clock
+and still preserve monotonic timing/context.32PASS9.55s. Final same application
+source full2802PASS/1SKIP113.81s; added existing isolated Tk card assertions1PASS
+3.29s without application source delta. Previous full attempt at that source
+2801PASS/1FAIL/1SKIP had existingMockTk tcl_findLibrary init failure, standalone
+module2PASS1.59s and fresh full passed; root UNKNOWN, not a claimed runtime fix.
+Existing symlink-capability skip independently explained: safety8PASS/1SKIP0.48s.
+StageD finite native observations completed, no monitor persists. Six-minute
+window11:29:31–11:35:31 shows CPU0.20361–0.24420%host, RSS138.45–141.42MiB,
+Private108.61–111.36MiB,9native threads; handles5736peak in samples, then1111.
+Type snapshots5770→1131total and5196→576semaphore establish actual release by
+same main process, not allocating object origin. Observer remains1thread/128handles.
+Chrome root was initially ambiguous because child command lines inherit9222;
+first-window Chrome data not attributed. Separate60s ancestry-resolved window
+finds exactly one root and browser/GPU/renderer/utility/crashpad cohorts. No raw
+command lines saved, no CDP/page/profile access. CPU cohort excludes exited-child
+cost; collection overlaps some offline regression; no isolated/game benchmark.
+Strict continuous multi-cycle stability, UI live consistency and current SMTP
+receipt integrity remain unverified; no fresh productionDB access permitted.
+Current frozen99dd22c log IDs can be affected by P1, so logged cycle counts are
+only tag counts, not independent correct-cycle proof. Full audit report appended
+to V16_RELEASE_REPORT.md; no duplicate completion report. Proposed reviewed later
+asset-only replacement is documented but requires a separate Owner install window;
+no newEXE built or installed, no config/DB/browser/process mutation, no production
+effects or new authority inferred. C remains deferred, not deleted from scope.
+Owned isolated test/resource directories retired after process exit and evidence
+copy;1091805404bytes removed in two checked passes. Small sanitized test stdout
+and committed evidence retained. No production/runtime/rollback/profile/70956
+directory cleaned. No permanent sampler remains. Existing development worktree
+reused; no new worktree or handoff artifact introduced. Final unified checklist
+remains authoritative for open requirements; do not infer all-stage completion.

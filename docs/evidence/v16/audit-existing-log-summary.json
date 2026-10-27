@@ -37,5 +37,6 @@
   "current_smtp_receipts": "NOT_VERIFIED_NO_PRODUCTION_DB_ACCESS",
   "mailbox_delivery": "NOT_VERIFIED",
   "live_restart_idempotency": "DEFERRED_NO_RESTART_AUTHORITY",
-  "qualification": "Sanitized log outcomes do not prove external writes/readback. No new queries, business operations, fabricated success, or historical replays."
+  "qualification": "Sanitized log outcomes do not prove external writes/readback. No new queries, business operations, fabricated success, or historical replays.",
+  "cycle_count_semantics": "Distinct log tags only: frozen99dd22c nested-context defect can misattribute IDs; not proof of independent module runs."
 }

@@ -1,0 +1,25 @@
+{
+  "pid": 74176,
+  "count": 1131,
+  "types": {
+    "Event": 51,
+    "WaitCompletionPacket": 17,
+    "IoCompletion": 8,
+    "TpWorkerFactory": 3,
+    "IRTimer": 6,
+    "UNKNOWN_TYPE_50": 155,
+    "Directory": 2,
+    "File": 48,
+    "Mutant": 111,
+    "ALPC Port": 9,
+    "Semaphore": 576,
+    "Key": 23,
+    "WindowStation": 2,
+    "Desktop": 1,
+    "Process": 2,
+    "Thread": 19,
+    "Section": 92,
+    "Timer": 5,
+    "IoCompletionReserve": 1
+  }
+}

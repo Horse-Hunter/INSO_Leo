@@ -1,5 +1,146 @@
 # V1.6 unified release and initial production verification
 
+## Current CEO remediation delivery —2026-10-27
+
+**REVIEW_REQUIRED / SOURCE_FIXES_NOT_DEPLOYED. Not all V1.6 requirements complete.**
+Remote review71a68f28d90ef96656cb78291c075361cb8112e2 was fetched and inspected,
+not assumed present. Existing clean development checkout reused on independent
+`codex/v1-6-audit-fixes`; review target remains`codex/v1-6-independent-scheduling`.
+Running frozen99dd22c program was never stopped/restarted/replaced. No production
+DB/config/browser session or original24h tree access in this round. Only existing
+sanitized logs/prior exports and finite native process counters were read.
+
+| Stage | Independent commit | Result |
+| --- | --- | --- |
+| A context/timing primary repair |a2bc2f01acbde576caf378d625788cd3e31d0d24|PASS offline, requires review; pushed before later work |
+| B future cycle receipts and existing-log audit |b6187b5ffa8b279c0fc82c57e1e478a9472e2148|Source PASS offline; real TP900s and current SMTP receipt state NOT_VERIFIED |
+| C page concurrency safety design |74f93dd6156d1c1a2fdb6a5d751c80382f7f089f|Design delivered; implementation DEFERRED, actual overlap NOT_VERIFIED |
+| A explicit cancellation/cleanup unwind follow-up |6f8dd048248eae8875fba7a036327242b0e92027|PASS offline |
+| A failure-cache isolation including identical wall time |04075bc884c9c2927e677edcbddcb43419833aef|PASS offline; final changed application source |
+| D resource evidence/checklist and this report |Evidence-only delivery HEAD, full SHA in final handoff|Finite observations PASS; long-term stability NOT_VERIFIED |
+
+### Changes and tests
+
+Backend restores nested cycle/last-poll/research-failure-cache/pending-pause
+metadata on every unwind. It never rolls back business/session changes. Each
+execution starts with an empty failure cache rather than relying on distinct
+wall-clock timestamps; parent cache is restored when nested work exits. Existing
+outer pause wins over subsequent local pause. Observer retains ancestor waiting
+stages, restores outer focus, and stores each module's own start/end/elapsed in
+additive GUI DTO fields, rendered on existing cards. Unsafe cleanup invalidates
+the actor; typed shared fault retains original cause; cancellation propagates
+through CombinedCycle. No next purchase after STOP/shared failure and no shortened
+120s safety wait. Resource ownership and fresh business permissions stay strict.
+
+Changed application files: launcher/backend.py and workbench_snapshot.py;
+workflow/service.py and v13_integration.py; gui/contracts.py, workbench.py, main.py.
+Tests: launcher/test_v16_nested_context.py and test_v16_cycle_receipts.py.
+No business pricing/window/transaction rule, schema, outbox semantics, dependency,
+browser launcher or alternate ledger added. Task packet contains single unified
+PASS/FAIL/NOT_VERIFIED/DEFERRED checklist; existing reports are historical below.
+
+Frozen99dd22c method negative control: two new real-closure tests fail on incorrect
+outer cycle identity, as expected. Repaired real launcher closure -> CombinedCycle
+-> durable V12 flow / V13 engines / TpCycle covers32 cases including raw/typed
+timeouts, pause, STOP, cancellation, shared DB fault, cleanup failure and pending
+outer pause. Only external ports are synthetic; no real mail/site/DB operations.
+115 unwind-targeted PASS14.27s; final frozen-wall cache cases32PASS9.55s and
+final application source full2802PASS/1SKIP113.81s; Ruff/diff PASS. Additional
+existing isolated Tk card assertions1PASS3.29s (no application-source delta)
+verify waiting inquiry120s and borrowed quotation10s display independently.
+No repeated broad visual simulation was added. One earlier full attempt at the
+same application source had2801PASS/1FAIL/1SKIP due to existing Mock Tk initialization
+`invalid command name tcl_findLibrary`; isolated existing module2PASS1.59s and the
+one fresh full confirmation passed. The intermittent Tcl/global-test-state cause
+is UNKNOWN, not called repaired. Skip is existing unavailable symlink capability;
+isolated safety module8PASS/1SKIP0.48s confirms it, no permission rule bypassed.
+
+### Real evidence remains qualified
+
+Existing sanitized logs as of11:23:59 contain purchase5/quotation4 distinct cycle
+tags:8SOURCE_CHANGED,104NO_RECENT_QUOTE,3PRICE_UNCHANGED,4unresolved identities.
+Because the running code has the reviewed nested-context defect, these are
+**log tag counts, not proof of independent correctly attributed module cycles**.
+No newly confirmed procurement or quote Sheet-write/readback success was found.
+No identity/state was changed to force success. Current production TP900s run
+begin/end receipts are absent: NOT_VERIFIED, not inferred from four historical TP.
+
+Future-source logging now records every module begin/terminal phase, cycle,
+monotonic elapsed and next-delay on the existing bounded rotating log, including
+empty TP. Strict allowlists suppress raw bodies/identifiers/nonfinite values.
+Three real empty TpCycle engine invocations900s apart PASS offline; no historical
+SENT used as proof. `completed` means cycle ended, not successful external orders.
+This instrumentation is not in the running EXE and cannot backfill its history.
+
+Prior exported SMTP evidence as of10:25:26:139SENT, historical138 unchanged then;
+one new PURCHASE_EXCEPTION recipient accepted by transport. Current SMTP/UNKNOWN
+state was not reread from productionDB, mailbox final delivery not established,
+and real restart idempotency DEFERRED because restart is prohibited this round.
+Existing offline SENT/UNKNOWN/atomic claims remain covered by full regression.
+
+True webpage parallelism is not implemented. Separate design
+`docs/V16_PAGE_CONCURRENCY_DESIGN.md` identifies exact-target page-event correlation,
+same-URL reuse, sync-object thread affinity, shared auth/pacing, per-order exclusion
+and callback/context gaps. Preferred bounded independent sync-client actors share
+one protected Chrome; INSO/Google/writes remain exclusive. Broad async migration
+cost is higher. No locks removed, profile duplicated or fake overlap timeline
+submitted. Actual browser validation cannot commandeer live session under this
+round's explicit prohibition; C remains open.
+
+### Finite resource evidence, not a stability certificate
+
+Read-only GetProcessTimes/memory/handle/process-tree observations only. Main window
+11:29:31–11:35:31:360.36s,7samples/60s; application CPU0.20361–0.24420%host,
+RSS138.45–141.42MiB,Private108.61–111.36MiB,9native threads. Handles5586→5700→
+5708→5736→1111→1133→1121. A type snapshot confirms owning applicationPID74176
+5770→1131handles and5196→576semaphores (4620released). This repeats earlier transient
+release evidence; exact allocating Python/library/native objects remain UNKNOWN.
+No speculative code fix or forced collection was introduced.
+
+Observer:0%observedCPU/~20.75MiB RSS/1thread/128handles. Playwright driver observed
+in5samples, then absent; surviving-cohort CPU0–0.06024%host. Missing/exited cohorts
+do not mean zero total cost. First inventory matched inherited9222 flags on child
+commands, so Chrome root attribution there was ambiguous and not used. A separate
+60.375s/3sample ancestry-resolved window proves one canonical browser root and
+separate browser/GPU/renderer/utility/crashpad process groups; all reported0CPU in
+those two short comparable intervals. This is not active Research/game evidence.
+Process-role memory counters are included in JSON; RSS sums can double-count
+shared physical pages. No raw process command lines, page/customer data saved.
+Offline regression ran on the same host during part of collection; this is not
+an isolated idle benchmark. GPU utilization, frame rates, per-site attribution,
+strict continuous multi-cycle bounds and unattended V1.6 stability NOT_VERIFIED.
+
+New EXE real menu/tray/normal exit, real stop/restart recovery,100%/150%systemDPI,
+and GUI/live-ledger consistency remain DEFERRED/NOT_VERIFIED per checklist.
+Original9f/70956 result is deliberately not collected by this task and cannot
+certify V1.6. Existing V1.5/V1.4 rollback assets/compatible-ledger strategy retained;
+not re-certified against a newly installed program because no program installed.
+
+### Proposed later deployment (not executed; separate Owner permission required)
+
+1. CEO review P1 and observability commits, with C explicitly deferred. They are
+   source fixes, not permission to overwrite running production.
+2. Obtain a normal stop/install window; drain current effects, verify UNKNOWN,
+   take fresh verified current ledger/config/vault backup and exclusive mutex.
+3. Build only reviewed source using the single existing Windows flow; frozen
+   selfcheck/scan/assets PASS. Preserve working V1.6 and V1.5/V1.4 rollback assets.
+4. Asset-only install; no assumed schema migration or order-state reset. Verify
+   current ledger/SENT/immutable commands before/after. Start idle first.
+5. Resume existing authorized configured business without new per-order approvals.
+   Verify real module-cycle receipts, empty TP and actual900s deadlines; confirm
+   GUI/ledger and external results only when naturally eligible orders occur.
+6. Test live tray/ordered exit/restart in the approved window; run finite multi-cycle
+   resource and long-term checks on reviewed source. Never relabel old9f soak.
+7. Rollback if necessary uses current compatible ledger, never restores old
+   pre-effect DB. Do not resend historical SENT or reset UNKNOWN to manufacture PASS.
+
+Recommendation: a reviewed replacement is needed to deliver P1 fixes/receipts,
+but **do not install in this task**. No unconditional V1.6 completion or webpage-
+parallel/long-term production PASS is claimed. Evidence `docs/evidence/v16/audit-*`.
+
+---
+## Historical initial release snapshot (unchanged facts at original timestamp)
+
 Status: **PRODUCTION_INSTALLED_RUNNING / REVIEW_REQUIRED**.
 As of 2026-10-27 10:27 Asia/Shanghai. This is not a claim that all three
 external write chains or long-term unattended operation have passed.

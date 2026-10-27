@@ -1,0 +1,334 @@
+{
+  "main_window": {
+    "complete": {
+      "complete": true,
+      "elapsed_seconds": 360.35999999998603,
+      "samples": 7,
+      "logical_cpus": 16,
+      "app_pid": 74176,
+      "observer_pid": 84608,
+      "qualification": "Native process counters only; no page/DB/config/profile access, no foreground or priority changes. CPU covers surviving PID cohorts, excludes exited-child CPU. Chrome process roles are metadata, not source attribution. Six minutes is not long-run unattended PASS."
+    },
+    "groups": {
+      "application": {
+        "observed_samples": 7,
+        "cpu_host_percent_range": [
+          0.20361001534522577,
+          0.2442016754186746
+        ],
+        "processes_range": [
+          1,
+          1
+        ],
+        "rss_range": [
+          145178624,
+          148291584
+        ],
+        "private_range": [
+          113885184,
+          116772864
+        ],
+        "handles_range": [
+          1111,
+          5736
+        ],
+        "threads_range": [
+          9,
+          9
+        ]
+      },
+      "existing_exit_observer": {
+        "observed_samples": 7,
+        "cpu_host_percent_range": [
+          0.0,
+          0.0
+        ],
+        "processes_range": [
+          1,
+          1
+        ],
+        "rss_range": [
+          21762048,
+          21762048
+        ],
+        "private_range": [
+          15003648,
+          15003648
+        ],
+        "handles_range": [
+          128,
+          128
+        ],
+        "threads_range": [
+          1,
+          1
+        ]
+      },
+      "playwright_driver": {
+        "observed_samples": 5,
+        "cpu_host_percent_range": [
+          0.0,
+          0.06023741747799741
+        ],
+        "processes_range": [
+          1,
+          1
+        ],
+        "rss_range": [
+          118730752,
+          155013120
+        ],
+        "private_range": [
+          128077824,
+          169242624
+        ],
+        "handles_range": [
+          217,
+          217
+        ],
+        "threads_range": [
+          13,
+          14
+        ]
+      }
+    },
+    "first_at": "2026-10-27T03:29:31.838878+00:00",
+    "last_at": "2026-10-27T03:35:31.765019+00:00",
+    "chrome_root_counts": [
+      7,
+      7,
+      7,
+      7,
+      7,
+      4,
+      4
+    ]
+  },
+  "chrome_window": {
+    "complete": {
+      "complete": true,
+      "elapsed_seconds": 60.375,
+      "samples": 3,
+      "logical_cpus": 16,
+      "app_pid": 74176,
+      "observer_pid": 84608,
+      "qualification": "Native process counters only; no page/DB/config/profile access, no foreground or priority changes. CPU covers surviving PID cohorts, excludes exited-child CPU. Chrome process roles are metadata, not source attribution. One minute is not long-run unattended PASS."
+    },
+    "groups": {
+      "application": {
+        "observed_samples": 3,
+        "cpu_host_percent_range": [
+          0.18545414792595066,
+          0.22774312033579613
+        ],
+        "processes_range": [
+          1,
+          1
+        ],
+        "rss_range": [
+          145584128,
+          146227200
+        ],
+        "private_range": [
+          114454528,
+          114896896
+        ],
+        "handles_range": [
+          1133,
+          1152
+        ],
+        "threads_range": [
+          9,
+          9
+        ]
+      },
+      "chrome_browser": {
+        "observed_samples": 3,
+        "cpu_host_percent_range": [
+          0.0,
+          0.0
+        ],
+        "processes_range": [
+          1,
+          1
+        ],
+        "rss_range": [
+          354439168,
+          354451456
+        ],
+        "private_range": [
+          186339328,
+          186372096
+        ],
+        "handles_range": [
+          3647,
+          3649
+        ],
+        "threads_range": [
+          55,
+          56
+        ]
+      },
+      "chrome_crashpad-handler": {
+        "observed_samples": 3,
+        "cpu_host_percent_range": [
+          0.0,
+          0.0
+        ],
+        "processes_range": [
+          1,
+          1
+        ],
+        "rss_range": [
+          11128832,
+          11128832
+        ],
+        "private_range": [
+          7249920,
+          7249920
+        ],
+        "handles_range": [
+          214,
+          214
+        ],
+        "threads_range": [
+          7,
+          7
+        ]
+      },
+      "chrome_gpu-process": {
+        "observed_samples": 3,
+        "cpu_host_percent_range": [
+          0.0,
+          0.0
+        ],
+        "processes_range": [
+          1,
+          1
+        ],
+        "rss_range": [
+          211697664,
+          211714048
+        ],
+        "private_range": [
+          300548096,
+          300744704
+        ],
+        "handles_range": [
+          675,
+          675
+        ],
+        "threads_range": [
+          72,
+          72
+        ]
+      },
+      "chrome_renderer": {
+        "observed_samples": 3,
+        "cpu_host_percent_range": [
+          0.0,
+          0.0
+        ],
+        "processes_range": [
+          3,
+          3
+        ],
+        "rss_range": [
+          208646144,
+          208646144
+        ],
+        "private_range": [
+          109559808,
+          109559808
+        ],
+        "handles_range": [
+          862,
+          862
+        ],
+        "threads_range": [
+          66,
+          66
+        ]
+      },
+      "chrome_utility": {
+        "observed_samples": 3,
+        "cpu_host_percent_range": [
+          0.0,
+          0.0
+        ],
+        "processes_range": [
+          4,
+          4
+        ],
+        "rss_range": [
+          158789632,
+          158810112
+        ],
+        "private_range": [
+          119201792,
+          119214080
+        ],
+        "handles_range": [
+          1430,
+          1436
+        ],
+        "threads_range": [
+          76,
+          76
+        ]
+      },
+      "existing_exit_observer": {
+        "observed_samples": 3,
+        "cpu_host_percent_range": [
+          0.0,
+          0.0
+        ],
+        "processes_range": [
+          1,
+          1
+        ],
+        "rss_range": [
+          21762048,
+          21762048
+        ],
+        "private_range": [
+          15003648,
+          15003648
+        ],
+        "handles_range": [
+          128,
+          128
+        ],
+        "threads_range": [
+          1,
+          1
+        ]
+      }
+    },
+    "first_at": "2026-10-27T03:36:01.643431+00:00",
+    "last_at": "2026-10-27T03:37:01.661857+00:00",
+    "chrome_root_counts": [
+      1,
+      1,
+      1
+    ]
+  },
+  "native_handle_types": {
+    "owner_pid": 74176,
+    "total_high": 5770,
+    "total_low": 1131,
+    "semaphore_high": 5196,
+    "semaphore_low": 576,
+    "semaphore_reduction": 4620
+  },
+  "conclusion": "REPEATED_TRANSIENT_RELEASE_OBSERVED; long-run bound and allocation origin NOT_VERIFIED",
+  "caveats": [
+    "First window repeated9222 flags in child command lines made Chrome root ambiguous, so no Chrome groups attributed there. Second one-minute window resolved ancestry to one root.",
+    "Surviving-PID CPU cohorts omit exited-child CPU; absence is not evidence of zero total cost.",
+    "Chrome root/renderer/GPU/utility counters describe process roles, not task/site attribution or GPU utilization.",
+    "Same host offline regression ran during part of collection. Not an isolated idle comparison or gaming FPS test.",
+    "Current frozen99dd22c has the reviewed context defect; distinct log cycle tags are not strict independent-module cycle proof.",
+    "No browser session, production database/config, original70956 or its tree was accessed.",
+    "No process control, permanent monitor, system priority/power/display change or speculative fix."
+  ]
+}
