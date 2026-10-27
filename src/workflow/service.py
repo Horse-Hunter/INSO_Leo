@@ -6,10 +6,11 @@ import sqlite3
 import threading
 from collections import deque
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from time import monotonic
 from typing import Protocol
+from uuid import uuid4
 
 from src.research import (
     InvalidResearchInput,
@@ -34,10 +35,14 @@ from src.sheets.brand_write import (
 )
 
 from .market_messages import (
+    BusinessEffectTerminal,
+    BusinessTerminal,
+    BusinessTerminalReceipt,
     MarketCompletion,
     MarketFaultScope,
     MarketModule,
     MarketReadRequest,
+    MarketTaskIdentity,
 )
 from .models import WorkflowStatus, WorkItem
 from .store import DEFAULT_RETRY_DELAYS, WorkflowStateStore
@@ -260,6 +265,13 @@ class OrderResourceLease:
     _owner_thread: int = field(repr=False)
 
 
+@dataclass(frozen=True, slots=True)
+class BusinessContinuationLease:
+    """Extends the SAME canonical source-row lease through original-owner work."""
+    identity: MarketTaskIdentity = field(repr=False)
+    resource: OrderResourceLease = field(repr=False)
+
+
 class WorkflowRuntime:
     """Run the 15-minute poller and single Research worker independently."""
 
@@ -302,6 +314,14 @@ class WorkflowRuntime:
         self._market_running = {}
         self._market_acknowledging = set()
         self._market_source_due = {}
+        self._business_leases = {}
+        self._business_pending = {}
+        self._business_read_sequence = 0
+        self._business_read_nonce = uuid4().hex
+        self._business_reads = {}
+        self._business_effect_active = set()
+        self._business_effect_unknown = set()
+        self._business_finishing = set()
 
     def configure_order_leases(self, capacity):
         """Bound ephemeral admissions to the coordinator's finite worker budget.
@@ -426,6 +446,8 @@ class WorkflowRuntime:
         """Only the admitting scheduler thread can release its exact live lease."""
         with self._module_lock:
             key = self._verify_order_lease(lease)
+            if lease.request_token in self._business_leases and lease.request_token not in self._business_finishing:
+                raise RuntimeError("BUSINESS_TERMINAL_UNACKNOWLEDGED")
             if (lease.request_token in self._market_running
                     and lease.request_token in self._order_dispatched
                     and lease.request_token not in self._market_acknowledging):
@@ -466,11 +488,118 @@ class WorkflowRuntime:
                     if not self._order_waiters[key]:
                         del self._order_waiters[key]
 
+            self._business_pending.clear()
+
     def order_resource_counts(self):
         with self._module_lock:
             return {"capacity": self._order_capacity, "active": len(self._order_active),
                     "waiting": len(self._order_requests)-len(self._order_active),
                     "closed": self._order_closed or self._module_resource_failed}
+
+    def claim_business_continuation(self, identity):
+        """Original owner acquires before queries; no new order ID/ledger/lock.
+
+        Source has already been verified by existing domain code. Physical row
+        remains only an exclusion key, never permission for external effects.
+        None preserves pending FIFO work for later admission; no work is dropped.
+        """
+        with self._module_lock:
+            self._check_market_owner()
+            self._check_order_admission()
+            if type(identity) is not MarketTaskIdentity:
+                raise ValueError("BUSINESS_IDENTITY_INVALID")
+            record, token = identity.source_record, identity.request_id
+            if token in self._business_pending and self._business_pending[token] != identity:
+                raise OrderResourceOwnershipError()
+            if not self.request_order_lease(record.worksheet, record.row_position, token, module_id=identity.module):
+                return None
+            self._business_pending[token] = identity
+            resource = self.try_claim_order_lease(token)
+            if resource is None:
+                return None
+            del self._business_pending[token]
+            handle = BusinessContinuationLease(identity, resource)
+            self._business_leases[token] = handle
+            return handle
+
+    def _verify_business_continuation(self, handle):
+        self._check_market_owner()
+        if (type(handle) is not BusinessContinuationLease
+                or self._business_leases.get(handle.resource.request_token) is not handle):
+            raise OrderResourceOwnershipError()
+        self._verify_order_lease(handle.resource)
+        return handle.resource.request_token
+
+    def require_business_continuation(self, handle):
+        with self._module_lock:
+            token = self._verify_business_continuation(handle)
+            self._check_order_admission()
+            if token in self._business_effect_unknown:
+                raise RuntimeError("BUSINESS_EFFECT_UNCONFIRMED")
+
+    def prepare_business_market_read(self, handle, query, *, due_at):
+        """Issue a fresh transport token, never a new business inquiry/task ID."""
+        with self._module_lock:
+            self.require_business_continuation(handle)
+            token = handle.resource.request_token
+            if token in self._business_effect_active:
+                raise RuntimeError("BUSINESS_EFFECT_RUNNING")
+            if any(owner is handle for owner in self._business_reads.values()):
+                return None  # Sequential per-business acquisition; no unbounded batch.
+            self._business_read_sequence += 1
+            request_id = f"market_{self._business_read_nonce}_{self._business_read_sequence}"
+            identity = replace(handle.identity, request_id=request_id)
+            request = MarketReadRequest(identity, query, due_at, self._module_timer())
+            self._market_requests[request_id] = request
+            self._business_reads[request_id] = handle
+            return request
+
+    def begin_business_effect(self, handle):
+        """Owner-only resource phase, NOT a replacement for domain write gates."""
+        with self._module_lock:
+            self.require_business_continuation(handle)
+            token = handle.resource.request_token
+            if token in self._business_effect_active or any(owner is handle for owner in self._business_reads.values()):
+                raise RuntimeError("BUSINESS_WORK_RUNNING")
+            self._business_effect_active.add(token)
+
+    def acknowledge_business_effect(self, handle, terminal):
+        with self._module_lock:
+            token = self._verify_business_continuation(handle)
+            if token not in self._business_effect_active or not isinstance(terminal, BusinessEffectTerminal):
+                raise OrderResourceOwnershipError()
+            self._business_effect_active.remove(token)
+            if terminal is BusinessEffectTerminal.UNKNOWN:
+                self._business_effect_unknown.add(token)
+                self._abort_resources()  # Keep exact lease held for reconciliation.
+
+    def finish_business_continuation(self, handle, receipt):
+        """Exact admitting owner releases only after read/effect terminal proof.
+
+        Stop/timeout is not proof. UNKNOWN preserves the lease and global latch;
+        canonical persistent business records remain the recovery authority.
+        """
+        with self._module_lock:
+            token = self._verify_business_continuation(handle)
+            if type(receipt) is not BusinessTerminalReceipt or receipt.identity != handle.identity:
+                raise OrderResourceOwnershipError()
+            if any(owner is handle for owner in self._business_reads.values()) or token in self._business_effect_active:
+                raise RuntimeError("BUSINESS_WORK_RUNNING")
+            if receipt.terminal is BusinessTerminal.UNKNOWN or token in self._business_effect_unknown:
+                self._business_effect_unknown.add(token)
+                self._abort_resources()
+                raise RuntimeError("BUSINESS_EFFECT_UNCONFIRMED")
+            self._business_finishing.add(token)
+            try:
+                self.release_order_lease(handle.resource)
+            finally:
+                self._business_finishing.discard(token)
+            del self._business_leases[token]
+
+    def business_resource_counts(self):
+        with self._module_lock:
+            return {"active": len(self._business_leases), "reads": len(self._business_reads),
+                    "effects": len(self._business_effect_active), "unknown": len(self._business_effect_unknown)}
 
     def configure_market_reads(self, capacity):
         """Optional canonical bounded coordinator; not production-enabled."""
@@ -515,7 +644,14 @@ class WorkflowRuntime:
                                and self._module_timer() >= self._market_source_due.get(r.query.source, 0)),
                               key=lambda r: (r.due_at, r.admitted_at))
             for request in eligible:
-                lease = self.try_claim_order_lease(request.identity.request_id)
+                business = self._business_reads.get(request.identity.request_id)
+                if business is not None:
+                    self._verify_business_continuation(business)
+                    lease = business.resource
+                    if lease.request_token in self._order_dispatched:
+                        continue
+                else:
+                    lease = self.try_claim_order_lease(request.identity.request_id)
                 if lease is not None:
                     self._market_running[request.identity.request_id] = lease
                     return request, lease
@@ -529,7 +665,10 @@ class WorkflowRuntime:
                 raise OrderResourceOwnershipError()
             if self.begin_order_dispatch(lease):
                 return True
-            self.cancel_reserved_order_lease(lease)
+            if request.identity.request_id in self._business_reads:
+                del self._business_reads[request.identity.request_id]
+            else:
+                self.cancel_reserved_order_lease(lease)
             self._market_running.pop(request.identity.request_id)
             self._market_requests.pop(request.identity.request_id)
             return False
@@ -544,17 +683,22 @@ class WorkflowRuntime:
             request = self._market_requests.get(token)
             lease = self._market_running.get(token)
             if (request is None or request.identity != completion.identity or lease is None
-                    or token not in self._order_dispatched):
+                    or lease.request_token not in self._order_dispatched):
                 raise OrderResourceOwnershipError()
             if completion.result is not None and (
                     completion.result.source is not request.query.source
                     or completion.result.mode is not request.query.mode):
                 raise OrderResourceOwnershipError()
-            self._market_acknowledging.add(token)
-            try:
-                self.release_order_lease(lease)
-            finally:
-                self._market_acknowledging.discard(token)
+            if token in self._business_reads:
+                # Query terminal does not end the owner-side business transaction.
+                del self._business_reads[token]
+                self._order_dispatched.discard(lease.request_token)
+            else:
+                self._market_acknowledging.add(token)
+                try:
+                    self.release_order_lease(lease)
+                finally:
+                    self._market_acknowledging.discard(token)
             del self._market_running[token]
             del self._market_requests[token]
             if request.query.source is ResearchSource.IC_NET:
@@ -579,11 +723,13 @@ class WorkflowRuntime:
             self.close_order_admissions()
             for token in tuple(self._market_requests):
                 lease = self._market_running.get(token)
-                if lease is not None and token in self._order_dispatched:
+                if lease is not None and lease.request_token in self._order_dispatched:
                     continue
-                if lease is not None:
+                if token in self._business_reads:
+                    del self._business_reads[token]
+                elif lease is not None:
                     self.cancel_reserved_order_lease(lease)
-                    del self._market_running[token]
+                self._market_running.pop(token, None)
                 del self._market_requests[token]
 
     def _abort_resources(self):

@@ -155,3 +155,29 @@ class MarketProgress:
         if (type(self.identity) is not MarketTaskIdentity or not isinstance(self.stage, MarketStage)
                 or not _seconds(self.at)):
             raise ValueError("MARKET_PROGRESS_INVALID")
+
+
+
+class BusinessTerminal(str, Enum):
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    DEFERRED = "deferred"
+    FAILED = "failed"
+    UNKNOWN = "unknown"
+
+
+class BusinessEffectTerminal(str, Enum):
+    CONFIRMED = "confirmed"
+    NOT_PERFORMED = "not_performed"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True, slots=True)
+class BusinessTerminalReceipt:
+    """Resource terminal only; existing domain/SMTP stores own business truth."""
+    identity: MarketTaskIdentity
+    terminal: BusinessTerminal
+
+    def __post_init__(self):
+        if type(self.identity) is not MarketTaskIdentity or not isinstance(self.terminal, BusinessTerminal):
+            raise ValueError("BUSINESS_TERMINAL_INVALID")

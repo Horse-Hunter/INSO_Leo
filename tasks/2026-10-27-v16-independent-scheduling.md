@@ -2425,3 +2425,33 @@ deployment permission is inferred from this Review.
 `D_FOUNDATION_NOT_PRODUCTION_READY`,
 `E_NOT_COMPLETE`, `F_NOT_RUN`,
 `V16_OVERALL_REVIEW_REQUIRED`.
+
+
+## Stage E execution — E-0 verified / E-2 first dependency increment
+
+Remote4b6018b (CEO latest scoped PASS) fast-forwarded; its src tree equals
+18bde855d3323b1a3aa1585ff0e983cdc28cea6a and prior2951/1SKIP evidence. No A/B/C
+rewrite or production reinstall. Owner now requires ALL reports via Owner only;
+Executor must not send reports/messages to CEO tools. Current phase authorizes
+isolated source/tests only, not production browser/runtime/config/DB/SMTP.
+
+Reuse: extend existing Runtime OrderResourceLease/RLock/FIFO, not a parallel
+lock/ledger. New BusinessContinuationLease retains that SAME original-source
+resource across sequential reads, Owner FX/source check and effects. Query
+terminal clears query dispatch metadata but DOES NOT release business lease.
+Exact scheduler owner + immutable matching BusinessTerminalReceipt required
+for release. Active query/effect blocks release; UNKNOWN latches global abort
+and holds lease for canonical durable reconciliation, never inferred safe by
+Stop/timeout. Source-row lease still grants no write/purchase/mail authority.
+New query transport IDs are runtime-nonce+sequence, preserving actual domain IDs
+and rejecting old query terminals without an unbounded tombstone history. Pending
+FIFO identity is retained; Stop cancels undispatched pending requests. Optional
+D single-read compatibility remains; E business continuation uses explicit bound
+read port and cannot use raw release to bypass full-business acknowledgment.
+
+89PASS0.94s focused leases/actors/continuation; Ruff/diffPASS. Tests cover three
+modules same row, independent row, query→effect gap, Stop/drain, unknown effect,
+exact/foreign/copy release and old completion. No new full-regression claim yet;
+full after integration. E1 real module bindings, E3 recovery, E4 GUI/scheduler and
+E5 comprehensive regression still OPEN. This E2 resource contract alone is not
+business success, fresh domain verification or real-browser/TP timing proof.
