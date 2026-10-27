@@ -1,0 +1,24 @@
+{
+  "application_source": "67be3f748f80daff0dfca2f3d64998ce41f53c16",
+  "full_offline": {
+    "passed": 2815,
+    "skipped": 1,
+    "elapsed_seconds": 109.85
+  },
+  "targeted": {
+    "passed": 664,
+    "elapsed_seconds": 6.46
+  },
+  "ownership": {
+    "passed": 20,
+    "elapsed_seconds": 0.58
+  },
+  "installed_application": "04075bc884c9c2927e677edcbddcb43419833aef",
+  "unreviewed_followup_deployed": false,
+  "environment": "Existing global pytest with existing release packages via command-local PYTHONPATH; no dependency installation",
+  "limitations": [
+    "one skipped environment-capability case not counted PASS",
+    "Native browser evidence is separate, not full actor integration",
+    "No production writes/SMTP caused by offline tests"
+  ]
+}

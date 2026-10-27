@@ -1,0 +1,24 @@
+[
+  {
+    "command_tag": "e150a6ea81",
+    "kind": "PURCHASE_EXCEPTION",
+    "created_at": "2026-10-27T06:56:49.260236+00:00",
+    "recipient_tag": "a3e97f0e",
+    "outcome": "SENT",
+    "attempts": 1,
+    "last_attempt_at": "2026-10-27T06:56:49.601552+00:00",
+    "reason": "NOTIFICATION_SENT",
+    "existed_before_install": false
+  },
+  {
+    "command_tag": "6aeaf93492",
+    "kind": "PURCHASE_EXCEPTION",
+    "created_at": "2026-10-27T01:57:23.174536+00:00",
+    "recipient_tag": "a3e97f0e",
+    "outcome": "SENT",
+    "attempts": 1,
+    "last_attempt_at": "2026-10-27T01:57:23.341431+00:00",
+    "reason": "NOTIFICATION_SENT",
+    "existed_before_install": true
+  }
+]

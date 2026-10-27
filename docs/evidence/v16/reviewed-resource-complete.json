@@ -1,0 +1,9 @@
+{
+  "elapsed_seconds": 1800.0630000000237,
+  "samples": 31,
+  "max_gap_seconds": 60.07800000003772,
+  "requested_seconds": 1800,
+  "logical_cpus": 16,
+  "scope": "Finite native process counters for exact new app/observer only; no browser/SQL/config/UI accesses. Not24h, not games, not per-source attribution. Old74176 data separate.",
+  "stopped_early_by_collector": false
+}

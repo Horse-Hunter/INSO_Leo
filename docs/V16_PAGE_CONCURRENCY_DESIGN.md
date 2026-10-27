@@ -1,9 +1,21 @@
 # V1.6 page concurrency — stage C safety design
 
-Status: **DEFERRED implementation / NOT_VERIFIED actual webpage overlap**.
-This document is independent of P1 corrections. No production browser was
-attached, pages opened, profile copied, locks removed or concurrent mode enabled.
-Independent module deadlines and SMTP overlap are not browser parallelism.
+Status2026-10-27: **ISOLATED_PAGE_PREREQUISITE / ACTORS_NOT_IMPLEMENTED**.
+Reviewed04075bc installed under separately authorized window; it excludes this
+new page-factory increment. CEO83bfdfd passed exact-target source prerequisite;
+67be3f7 adds cleanup-fault fail-closed cases, still uninstalled/review-required.
+Owner then safely stopped modules and authorized2own background-page validation.
+Actual same9222 two thread-local clients proved native creation identities and
+navigation overlap0.125/0.532s; each run retained original1page/closed own2pages.
+HQEW navigation/load transitions prevented postnavigationowner proof. This is
+NOT full actor acceptance or business read/write overlap. No session login,
+newChrome/profile/Google/INSO/write/mail or production code change.
+Below is historical initial audit/design: its first-event factory risk is now
+fixed offline and exacttarget verified native; remaining actor/order/auth/result/
+shutdown contracts stay open. Do not read old no-browser-window wording as the
+current authorization or current evidence. Details in canonical task/report and
+reviewed-native-page* evidence. Independent module deadlines and SMTP overlap
+are not browser parallelism.
 
 ## Reuse audit and concrete blockers
 

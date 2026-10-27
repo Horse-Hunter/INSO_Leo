@@ -1,6 +1,6 @@
 # V1.6 independent scheduling and Owner-authorized production release
 
-status: REVIEW_REQUIRED — P1 corrected offline; remaining requirements open; production untouched
+status: REVIEW_REQUIRED — reviewed04075bc installed; real cycles recorded; true parallel actors incomplete; current read-only window safely stopped
 owner: Owner; executor Codex
 baseline: 669fe6ada3a450eaef5f74532a371d6fb55ffd01
 branch: codex/v1-6-independent-scheduling
@@ -276,30 +276,30 @@ separate deployment proposal, not an automatic consequence of source fixes.
 
 | Item | Current result | Evidence / remaining requirement |
 | --- | --- | --- |
-| A nested execution identity, pending pause and cache | PASS (offline; review required) |24 real-closure cases; frozen-method negative control fails both quote/TP as expected |
-| A independent GUI timing and waiting | PASS (offline; review required) | Ancestor waiting interval preserved; additive per-module start/end/elapsed displayed |
-| A cleanup/shared fault, STOP and120s minimum | PASS (offline; review required) | Actor invalidated on cleanup failure; no next purchase after STOP/shared fault |
+| A nested execution identity, pending pause and cache | PASS reviewed/deployed |04075bc installed; real parent ID restored across nested quotation/TP; edge paths offline |
+| A independent GUI timing and waiting | PASS reviewed/deployed | Reviewed module timing source included; full live menu/phase interaction still NOT_VERIFIED |
+| A cleanup/shared fault, STOP and120s minimum | PASS offline reviewed | Existing targeted real-closure tests; no unsafe live fault manufactured |
 | A full regression | PASS | Final source2802passed/1skipped113.81s; frozen-wall32PASS9.55s; isolated cards1PASS3.29s;Ruff/diff PASS; earlier Tk initialization flake retained as UNKNOWN |
-| B real TP independent900s begin/end | NOT_VERIFIED | Existing deployed source emits no independent TP completion receipt |
+| B real TP independent900s begin/end | FAIL timely independent execution; PASS receipts |2 real completedTP cycles; nextbegin1354.210s after finish,454.210s beyond900 due single browser actor |
 | B future-source TP cycle receipts | PASS (offline only) | Three actual empty TpCycle calls at independent900s; no orders/mails used as substitute |
 | B new purchase success | NOT_VERIFIED | Prior source-conflict holds are not successful procurement |
 | B quote/Google write/readback success | NOT_VERIFIED | Prior no-recent/unchanged/identity refusals, no forced writes |
-| B SMTP transport acceptance in prior export | PASS | Prior accepted1 recipient at10:25:26; current productionDB deliberately not read |
-| B SMTP current UNKNOWN/final mailbox delivery | NOT_VERIFIED | No current DB check or mailbox delivery receipt; no SMTP triggered here |
-| B real restart idempotency | DEFERRED | Current command forbids production restart/DB operations; offline safety regression retained |
+| B SMTP transport acceptance in prior export | PASS acceptance only | New runtime fault1SENT, current140SENT; historic139 full receipt rows unchanged |
+| B SMTP current UNKNOWN/final mailbox delivery | NOT_VERIFIED final delivery/live UNKNOWN | Current coherent readonly DB0UNKNOWN/PENDING/SENDING; no live UNKNOWN case to exercise |
+| B real restart idempotency | PASS historical preservation | Normal authorized stop/install/restart;108oldcommands,139oldSENT,4TP fullrows unchanged; no historical replay |
 | C concurrency reuse/design and blocker audit | PASS | Independent docs/V16_PAGE_CONCURRENCY_DESIGN.md; preferred bounded same-CDP clients vs broad async conversion |
-| C page concurrency implementation | DEFERRED | Exact-target event correlation, per-order lease and callback/client isolation incomplete |
-| C actual webpage overlap/same-order queue timeline | NOT_VERIFIED | No production browser access; no callback overlap substituted |
+| C page concurrency implementation | DEFERRED actors; isolated prerequisite implemented |67be3f7 cleanup fault follow-up; exact target proof native PASS; navigation ownership NOT_VERIFIED |
+| C actual webpage overlap/same-order queue timeline | PASS native navigation overlap only; NOT_VERIFIED business/order exclusion | SameChrome/two own pages overlap0.125/0.532s; full actor arbitration NOT_IMPLEMENTED |
 | D strict continuous multi-cycle stability | NOT_VERIFIED | New6min and earlier2x121s intermittent samples; release observed, no proven unattended upper bound |
-| D finite current process counters | PASS |360.36s/7samples and60.375s/3samples; app/observer/driver and ancestry-resolved Chrome roles separated |
+| D finite current process counters | PASS finite30min |31samples/1800.063s, avg0.28961%host; handlespeak5646→1004; RSSgrowth remains open |
 | D native semaphore owner/release | PASS | MainPID74176:5196→576semaphores, total5770→1131handles |
 | D exact allocating objects and long-run upper bound | NOT_VERIFIED | Repeated transient release is not proof of bounded unattended use |
 | D Chrome active workload/game impact | NOT_VERIFIED | Short process-role counts are not active Research GPU or frame-rate acceptance; no game launched |
-| D live EXE menus/tray/normal exit | DEFERRED | Cannot close or control running production this round |
+| D live EXE menus/tray/normal exit | NOT_VERIFIED current interactive suite | Installedself/idlePASS; prior99ddnormalexit0; new GUI screenshot timeout, no guessed input |
 | D100%/150% systemDPI | DEFERRED | No Owner display-setting changes; prior widget scaling not substitute |
 | D GUI/ledger, recovery/manual consistency | NOT_VERIFIED | Offline checks do not certify current production state |
 | D long-term V1.6 unattended stability | NOT_VERIFIED | Old9f/70956 cannot certify V1.6 |
-| D V1.5/V1.4 rollback preservation | PASS (prior evidence) | No current production/backup modification; retain current compatible ledger |
+| D V1.5/V1.4 rollback preservation | PASS fresh verification | V14/V15 manifests unchanged; reviewed install rollback and fresh compatible ledger backup verified |
 
 Reuse: existing module scheduler ownership, observation locks/DTOs, exception
 classification and canonical domain engines. Minimal scope stacks save only
@@ -778,3 +778,43 @@ Future actor coordinator still must promote this client latch/fault across all
 resource admissions even when an adapter wraps errors; that integration is not
 implemented by this prerequisite. No new true parallelism/real-browser PASS.
 Installed04075bc frozen program was not rebuilt or changed by this follow-up.
+
+## Current continuation — reviewed installation and native prerequisite (2026-10-27)
+
+Owner install-window authorization and normal old-program exit supersede earlier
+WAIT_NORMAL_EXIT/NOT_DEPLOYED notes. Application04075bc installed, EXE696E732B...
+verified2875assets; canonical build, backup-copy compatibility, frozen/idle checks
+PASS. Fresh backup/rollback retained, runtime/config/vault/V14/V15 unchanged.
+Actual main85528/observer85924 restored three-module business; real module cycles
+and ledger evidence in reviewed-* JSON and current V16_RELEASE_REPORT section.
+TP second cycle454.210s late despite900s policy: NOT full independent cadencePASS.
+No new verified purchase/Googlewrite; historical4TP/6TP-SENT preserved.
+Google runtime alerts09:57old/14:56new are distinct per-cycle commands, not replay;
+new alert follows5busy reads. No exact DOM root cause or final delivery proof.
+
+Owner separately granted safe-stop/GUI-retained/at most2own CDP tabs window and
+confirmed stop. Same existing9222, independent thread-local sync clients; no new
+Chrome/profile, no credentials/Google/INSO/write/testmail. Native exacttarget,
+initialowner, own cleanup and preservation PASS. Real same-MPNHQEW navigation
+intervals overlap0.125/0.532s; postnavigationowner not verified due navigation/load
+errors. No claim of full actors/source extraction/sameorder queue acceptance.
+No new EXE installation from this unreviewed source. Restoration via GUI pending
+Owner Start confirmation because screenshot FrameArrived timeout/unlabelled Tk.
+
+30min finite exactprocess sampling complete, no new monitor:0.28961%hostCPU,
+RSS114.96→137.50MiB, Private86.67→107.32MiB, handlespeak5646→1004→1138.
+Memoryupperbound/semaphore attribution/games/longrun remainNOT_VERIFIED.
+Unified checklist above updated, not a replacement business state system.
+Overall **REVIEW_REQUIRED / PAGE_PARALLELISM_NOT_READY**; independent cleanup
+commit67be3f748f80daff0dfca2f3d64998ce41f53c16 remains uninstalled.
+
+Additional bounded native IC.net pair: HTTP200, navigationoverlap0.204s, native
+IDs/blankowners/cleanup PASS. Postnavigationowner evaluation contextdestroyed;
+unknown actual marker survival, no challenge bypass or retry of production work.
+Existing1page retained. Combined native evidence closes only creation/cleanup
+capability, not full ownership across navigation or moduleactor integration.
+Current finite collector exited0, owned test scratch retired; production GUI
+retained, restoration via original Start awaiting Owner confirmation.
+
+Final full offline regression on67be3f7 application: **2815PASS/1SKIP109.85s**;
+no source change during/after run, docs/evidence only. No live SMTP/write tests.

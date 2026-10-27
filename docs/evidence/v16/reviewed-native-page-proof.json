@@ -1,0 +1,43 @@
+{
+  "at": "2026-10-27T07:32:31.207727+00:00",
+  "application_source": "67be3f748f80daff0dfca2f3d64998ce41f53c16",
+  "scope": "two native clients / two own temporary pages only; prerequisite, not module actor scheduler",
+  "before_page_count": 1,
+  "after_page_count": 1,
+  "preexisting_targets_preserved": true,
+  "owned_targets_absent": true,
+  "distinct_native_targets": true,
+  "results": [
+    {
+      "actor": 1,
+      "thread": 80488,
+      "create_start": 321634.593,
+      "create_end": 321634.656,
+      "target_id": "1C90F7C97F35E670A8F959484A7BF949",
+      "blank_exact": true,
+      "blank_owner": true,
+      "navigation_start": 321634.671,
+      "navigation_end": 321634.812,
+      "http_status": 200,
+      "expected_host": true,
+      "error_class": "Error",
+      "own_page_closed": true
+    },
+    {
+      "actor": 2,
+      "thread": 80984,
+      "create_start": 321634.593,
+      "create_end": 321634.671,
+      "target_id": "7DA6474B47C93AB945EB8A03DA9010A5",
+      "blank_exact": true,
+      "blank_owner": true,
+      "navigation_start": 321634.671,
+      "navigation_end": 321634.796,
+      "http_status": 200,
+      "expected_host": true,
+      "error_class": "Error",
+      "own_page_closed": true
+    }
+  ],
+  "navigation_overlap_seconds": 0.125
+}

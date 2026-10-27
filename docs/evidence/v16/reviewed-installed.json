@@ -1,0 +1,33 @@
+{
+  "installed_at": "2026-10-27T06:53:09.988273+00:00",
+  "source_application": "04075bc884c9c2927e677edcbddcb43419833aef",
+  "build_head": "1b19390298c6151e08d1e513a2a153ddcae2c1cf",
+  "exe_sha256": "696E732B3B697EBDAE6267118959D11C8C87BE4A2B76DAFD7F17C2EA7127189A",
+  "assets": 2875,
+  "installation": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6",
+  "rollback": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-reviewed-20261027T065133Z\\program",
+  "fresh_ledger_backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-reviewed-20261027T065133Z\\ledger\\workflow-v12-pre-migration-20261027T065137357944Z.sqlite3",
+  "integrity": "ok",
+  "all_tables_unchanged": true,
+  "recipient_states_unchanged": true,
+  "immutable_commands_unchanged": true,
+  "counts": {
+    "recipients_by_outcome": {
+      "SENT": 139
+    },
+    "tp_by_state": {
+      "MAIL_QUEUED": 4
+    },
+    "tp_sent_recipients": 6
+  },
+  "tp_enabled": true,
+  "quotation_enabled": true,
+  "runtime_junction_unchanged": true,
+  "config_and_opaque_secrets_unchanged": true,
+  "v14_v15_assets_unchanged": true,
+  "self_check": true,
+  "idle_self_check": true,
+  "migration_executed_on_production": false,
+  "business_not_started_yet": true,
+  "unreviewed_page_changes_included": false
+}

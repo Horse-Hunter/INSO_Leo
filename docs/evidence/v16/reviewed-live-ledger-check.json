@@ -1,0 +1,31 @@
+{
+  "integrity": "ok",
+  "historic_command_count": 108,
+  "historic_commands_immutable": true,
+  "historic_sent_count": 139,
+  "historic_sent_full_rows_unchanged": true,
+  "historic_tp_count": 4,
+  "historic_tp_full_rows_unchanged": true,
+  "current_recipients": {
+    "SENT": 140
+  },
+  "current_tp_states": {
+    "MAIL_QUEUED": 4
+  },
+  "new_recipient_kind_outcomes": {
+    "PURCHASE_EXCEPTION:SENT": 1
+  },
+  "purchase_outcomes_before": {
+    "AI_RECOGNIZED": 3,
+    "MANUAL_REVIEW": 1,
+    "SAVED": 23,
+    "VALIDATION_FAILED": 3
+  },
+  "purchase_outcomes_current": {
+    "AI_RECOGNIZED": 3,
+    "MANUAL_REVIEW": 1,
+    "SAVED": 23,
+    "VALIDATION_FAILED": 3
+  },
+  "qualification": "SMTP SENT means transport acceptance only; no final mailbox receipt. No forced business writes or replays."
+}

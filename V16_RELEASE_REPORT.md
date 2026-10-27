@@ -1,6 +1,110 @@
 # V1.6 unified release and initial production verification
 
-## Current CEO remediation delivery —2026-10-27
+## Current installed state —2026-10-27 15:40 +08
+
+**REVIEW_REQUIRED / REVIEWED_FIX_INSTALLED / PAGE_PARALLELISM_NOT_READY.**
+Owner separately authorized stop/backup/reviewed install/restore, then confirmed
+normal tray exit. Old99dd main74176/observer84608 exited normally at06:47:18Z,
+exitcode0. Reviewed04075bc application (build checkout1b19390298c6151e08d1e513a2a153ddcae2c1cf)
+installed06:53:09Z at`D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe`.
+EXE SHA256 **696E732B3B697EBDAE6267118959D11C8C87BE4A2B76DAFD7F17C2EA7127189A**.
+2875 assets match;43 locked packages and Tcl8.6.15 checked; canonical build48.718s,
+frozen dependency/self-check/release scan and installed idle-self-check PASS.
+Installed frozen code independently confirms nested context/cycle receipts present
+and later page-factory changes absent. Not a deployment of67be3f7.
+
+Fresh rollback:`D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-reviewed-20261027T065133Z/program`;
+verified canonical SQLite backup and protected opaque config/vault/OAuth copies
+alongside. Full-table/schema/recipient/immutable-command comparisons PASS before
+and after install; canonical migration on COPY unchanged. No production migration
+was needed by installer; normal application still uses existing idempotent init.
+Runtime junction still V1.4 runtime, config/vault/V1.4/V1.5 assets unchanged.
+Rollback restores program only against compatible CURRENT ledger, never old DB.
+TP and quotation explicitly true under Owner authority. Original4TP/6TP-SENT
+preserved. Private manifests/backups retained locally, not uploaded.
+
+### Actual production receipts (not Mock)
+
+Main85528/observer85924 started06:54:03Z; genuine three-module business began
+14:54:06+08. Inquiry2 completed, quotation1 deferred then1 completed, TP2 completed.
+Parent inquiry cycle b8c312... kept the same ID after nested quotation3f0797...
+and TPe5c289... returned, corroborating installed context restoration. Offline
+STOP/pause/shared-fault edge coverage remains distinct from this happy-path proof.
+
+FirstTP completed14:57:05.219, planned next15:12:05.219; actual second begin
+15:19:39.429, completed15:19:52.104. Completion-to-start1354.210s, **454.210s late**
+while quotation held the single browser actor. Independent begin/end receipts and
+900s scheduling policy verified; timely independent execution **FAIL/open**.
+No old4TP/6SENT reused as new TP success. Inquiry next start900.010s after finish;
+quotation deferred-to-next-start900.020s. Still no genuine concurrent module actors.
+
+Actual result counts are log OCCURRENCES, not unique orders: SOURCE_CHANGED4,
+SOURCE_IDENTITY_UNRESOLVED1, NO_RECENT_QUOTE31, PRICE_UNCHANGED1. No new verified
+purchase or Google write/readback success; SAVED23 unchanged. No statuses reset,
+source protections relaxed, or forced write to obtain a PASS. Correctness of
+current conflicting source rows was not independently verified by this experiment.
+
+Coherent read-only ledger check: integrityOK,108 old commands immutable,139 old
+SENT full rows and4TP full rows unchanged; current140SENT, no PENDING/SENDING/UNKNOWN.
+Only new receipt is1PURCHASE_EXCEPTION:SENT Google runtime fault notification.
+Transport SENT means SMTP acceptance, not final delivery. Restart preserved old
+SENT; no live UNKNOWN case existed to exercise. Google alert at09:57:23 belonged
+to old run;14:56:49 belonged to new reviewed run, distinct commands/attempt1.
+New quotation exhausted5GOOGLE_WEB_READ_BUSY checks then deferred; TP subsequently
+completed and later quotation recovered. Exact busy DOM condition UNKNOWN.
+Notification dedup is perCYCLE, not perrun; repeated persistent faults may notify
+again nextcycle. Suggested wording refinement: distinguish busy/read-retry from
+entire Spreadsheet unavailable. No policy/notification hotpatch or test SMTP.
+
+### Read-only native Chrome prerequisite window (Owner explicitly authorized)
+
+Owner confirmed all modules safely stopped, GUI retained. No in-flight receipt
+at entry. Existing9222 Chrome reused, no launch/profile/context clone; max2 own
+background tabs, two independent sync clients each confined to its own thread.
+Canonical uninstalled page factory used unchanged. Two same authorized test-MPN
+HQEW navigations overlapped0.125s (first) /0.532s (second, waiting for load).
+Both returnedHTTP200 at expectedhost; exact blank/native target identity/initial
+owner confirmed. Navigation then encountered context transition(first) or load
+timeout(second); **post-navigation ownership NOT_VERIFIED**, not a PASS.
+First error only class captured, so context-transition cause is inference rather
+than a captured authoritative error message. No raw DOM/account/screenshot saved.
+Both runs closed only their own2targets; initial1page retained and final1page,
+all own targets absent. No Google/INSO operation, credential retrieval/login-form submission, purchase,
+write or testmail; existing browser cookies/session were reused. This proves native dual-client creation/navigation overlap only;
+not price parsing, per-order exclusion, module actors or full parallel acceptance.
+Bounded actor integration, shared fault admission, site auth/pacing and same-order
+queue remain NOT_IMPLEMENTED. Do not install this source prerequisite as fullparallel.
+GUI capture FrameArrived timeout; accessible Tk controls unlabelled, no guessed
+click. Owner asked to use existing Start control to restore original business;
+resume confirmation pending at report timestamp (update on actual evidence).
+A final bounded IC.net pair also returnedHTTP200 and overlapped0.204s. Its
+postnavigationowner evaluation explicitly reported execution-context-destroyed;
+actual marker survival remainsUNKNOWN. Native identity/blankowner/cleanup PASS,
+original1page retained. No challenge/login bypass or forced navigation retry.
+Both sites require further navigation/ownership investigation before enabling
+business actors; not proof that window.name was lost, and not parsing acceptance.
+
+### Finite resource result (distinct main/observer; not24h)
+
+31samples/1800.063s, maxgap60.078s, exact mainPID85528 creation verified.
+Average hostCPU **0.28961%** on16logical CPUs; RSS114.96→137.50MiB,
+Private86.67→107.32MiB, peaks137.70/108.51MiB. Handles1045→peak5646→minimum1004→1138;
+GDI136–138, USER258, native threads9–13. Handles released substantially; allocation
+objects/semaphore ownership not measured this window. Memory has not demonstrated
+a stable upper bound: no no-leak/long-term PASS. Observer128handles, ~20.85MiB,
+CPU below counter resolution. Finite sampler84696 ended with collector exitcode0; no resident monitor.
+Probe prior sample CPU1.89s over1741s,14.44MiB/1thread170handles; not subtracted.
+Other offline checks ran on host, not isolated benchmark. NoChromeGPU/gameFPS or
+foreground-vs-tray attribution. Existing old9f soak evidence cannot certify V1.6.
+
+Evidence:`docs/evidence/v16/reviewed-*`; no customer data/raw mail/credentials/DB.
+Canonical checklist in task updated. Previously written NOT_DEPLOYED/wait-exit
+entries below are historical SUPERSEDED, not current blockers. No new installation
+or source policy change from this native experiment. FullV1.6 remains incomplete;
+new-source browser prerequisite failure and actor integration require work/review.
+
+
+## Historical CEO remediation delivery —2026-10-27 (superseded by current section above)
 
 **REVIEW_REQUIRED / SOURCE_FIXES_NOT_DEPLOYED. Not all V1.6 requirements complete.**
 Remote review71a68f28d90ef96656cb78291c075361cb8112e2 was fetched and inspected,
@@ -396,3 +500,13 @@ reviewed deployment. Old9f soak remains closed and is not restarted. Small new
 summary docs/evidence/v16/remaining-preinstall.json; final/failed test stdout
 retained locally,391424417bytes of completed owned test scratch retired under
 original test-owner identity, no ACL changes or protected-directory cleanup.
+
+### Delivery hygiene for this continuation
+
+Completed cleanup-test scratch directories retired only by checked absolute
+names under D:.tmp, no reparse traversal; protected rollback/runtime unchanged.
+Finite resource collector and browser probe processes exited; no new automation.
+Native browser helper reused canonical source factory and is temporary, not a
+second production browser framework. Full source follow-up **2815PASS/1SKIP109.85s** on67be3f7 application;
+prior targeted664PASS6.46s / ownership20PASS0.58s retained accurately.
+ScopedRuff/diffPASS. One skip remains environment capability, not a passed case.

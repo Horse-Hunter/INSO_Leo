@@ -1,0 +1,237 @@
+{
+  "duration_seconds": 1800.0,
+  "sample_count": 31,
+  "max_gap_seconds": 60.07800000003772,
+  "processes": {
+    "app": {
+      "host_cpu_time_weighted_percent": 0.2896050347222222,
+      "pid": 85528,
+      "first": {
+        "pid": 85528,
+        "creation_filetime": 134375576430278813,
+        "cpu_user_s": 3.78125,
+        "cpu_kernel_s": 4.953125,
+        "rss": 120545280,
+        "private": 90877952,
+        "handles": 1045,
+        "gdi": 136,
+        "user_objects": 258,
+        "native_threads": 12
+      },
+      "last": {
+        "pid": 85528,
+        "creation_filetime": 134375576430278813,
+        "cpu_user_s": 46.1875,
+        "cpu_kernel_s": 45.953125,
+        "rss": 144179200,
+        "private": 112529408,
+        "handles": 1138,
+        "gdi": 136,
+        "user_objects": 258,
+        "native_threads": 9,
+        "host_cpu_percent": 0.2753150140963072
+      },
+      "ranges": {
+        "rss": {
+          "min": 120545280,
+          "max": 144392192
+        },
+        "private": {
+          "min": 90877952,
+          "max": 113778688
+        },
+        "handles": {
+          "min": 1004,
+          "max": 5646
+        },
+        "gdi": {
+          "min": 136,
+          "max": 138
+        },
+        "user_objects": {
+          "min": 258,
+          "max": 258
+        },
+        "native_threads": {
+          "min": 9,
+          "max": 13
+        }
+      },
+      "five_minute_blocks": [
+        {
+          "start_s": 0.0,
+          "end_s": 300.31300000002375,
+          "span_s": 300.31300000002375,
+          "host_cpu_percent": 0.28323313925801835,
+          "rss_last": 126734336,
+          "private_last": 96288768,
+          "handles_last": 1373
+        },
+        {
+          "start_s": 300.31300000002375,
+          "end_s": 600.6410000000033,
+          "span_s": 300.3279999999795,
+          "host_cpu_percent": 0.2916732913681241,
+          "rss_last": 128978944,
+          "private_last": 97673216,
+          "handles_last": 1868
+        },
+        {
+          "start_s": 600.6410000000033,
+          "end_s": 900.9380000000237,
+          "span_s": 300.2970000000205,
+          "host_cpu_percent": 0.22698882273214635,
+          "rss_last": 131383296,
+          "private_last": 100089856,
+          "handles_last": 1880
+        },
+        {
+          "start_s": 900.9380000000237,
+          "end_s": 1201.25,
+          "span_s": 300.31199999997625,
+          "host_cpu_percent": 0.3072975979981063,
+          "rss_last": 134258688,
+          "private_last": 102866944,
+          "handles_last": 3371
+        },
+        {
+          "start_s": 1201.25,
+          "end_s": 1501.5630000000237,
+          "span_s": 300.31300000002375,
+          "host_cpu_percent": 0.3537975379020941,
+          "rss_last": 144388096,
+          "private_last": 113778688,
+          "handles_last": 5524
+        },
+        {
+          "start_s": 1501.5630000000237,
+          "end_s": 1800.0,
+          "span_s": 298.43699999997625,
+          "host_cpu_percent": 0.2745423447830079,
+          "rss_last": 144179200,
+          "private_last": 112529408,
+          "handles_last": 1138
+        }
+      ]
+    },
+    "observer": {
+      "host_cpu_time_weighted_percent": 0.0,
+      "pid": 85924,
+      "first": {
+        "pid": 85924,
+        "creation_filetime": 134375576431890865,
+        "cpu_user_s": 0.078125,
+        "cpu_kernel_s": 0.03125,
+        "rss": 21839872,
+        "private": 15200256,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "native_threads": 1
+      },
+      "last": {
+        "pid": 85924,
+        "creation_filetime": 134375576431890865,
+        "cpu_user_s": 0.078125,
+        "cpu_kernel_s": 0.03125,
+        "rss": 21860352,
+        "private": 15200256,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "native_threads": 1,
+        "host_cpu_percent": 0.0
+      },
+      "ranges": {
+        "rss": {
+          "min": 21839872,
+          "max": 21872640
+        },
+        "private": {
+          "min": 15200256,
+          "max": 15233024
+        },
+        "handles": {
+          "min": 128,
+          "max": 128
+        },
+        "gdi": {
+          "min": 0,
+          "max": 0
+        },
+        "user_objects": {
+          "min": 1,
+          "max": 1
+        },
+        "native_threads": {
+          "min": 1,
+          "max": 2
+        }
+      },
+      "five_minute_blocks": [
+        {
+          "start_s": 0.0,
+          "end_s": 300.31300000002375,
+          "span_s": 300.31300000002375,
+          "host_cpu_percent": 0.0,
+          "rss_last": 21860352,
+          "private_last": 15200256,
+          "handles_last": 128
+        },
+        {
+          "start_s": 300.31300000002375,
+          "end_s": 600.6410000000033,
+          "span_s": 300.3279999999795,
+          "host_cpu_percent": 0.0,
+          "rss_last": 21860352,
+          "private_last": 15200256,
+          "handles_last": 128
+        },
+        {
+          "start_s": 600.6410000000033,
+          "end_s": 900.9380000000237,
+          "span_s": 300.2970000000205,
+          "host_cpu_percent": 0.0,
+          "rss_last": 21860352,
+          "private_last": 15200256,
+          "handles_last": 128
+        },
+        {
+          "start_s": 900.9380000000237,
+          "end_s": 1201.25,
+          "span_s": 300.31199999997625,
+          "host_cpu_percent": 0.0,
+          "rss_last": 21860352,
+          "private_last": 15200256,
+          "handles_last": 128
+        },
+        {
+          "start_s": 1201.25,
+          "end_s": 1501.5630000000237,
+          "span_s": 300.31300000002375,
+          "host_cpu_percent": 0.0,
+          "rss_last": 21860352,
+          "private_last": 15200256,
+          "handles_last": 128
+        },
+        {
+          "start_s": 1501.5630000000237,
+          "end_s": 1800.0,
+          "span_s": 298.43699999997625,
+          "host_cpu_percent": 0.0,
+          "rss_last": 21860352,
+          "private_last": 15200256,
+          "handles_last": 128
+        }
+      ]
+    }
+  },
+  "limits": [
+    "30min active mixed business, not unattended/game test",
+    "No per-object semaphore attribution in this window",
+    "No UI visible/tray phase measurement",
+    "No Chrome/GPU counters here",
+    "Small collector included separately; not subtracted",
+    "Other offline tests ran on host; not isolated benchmark"
+  ]
+}

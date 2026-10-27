@@ -1,0 +1,51 @@
+{
+  "at": "2026-10-27T07:33:07.448228+00:00",
+  "application_source": "67be3f748f80daff0dfca2f3d64998ce41f53c16",
+  "scope": "two native clients / two own temporary pages only; prerequisite, not module actor scheduler",
+  "before_page_count": 1,
+  "after_page_count": 1,
+  "preexisting_targets_preserved": true,
+  "owned_targets_absent": true,
+  "distinct_native_targets": true,
+  "results": [
+    {
+      "actor": 1,
+      "thread": 83052,
+      "create_start": 321655.781,
+      "create_end": 321655.843,
+      "target_id": "3B0E0845140E09BF3E35F8B5402E7970",
+      "blank_exact": true,
+      "blank_owner": true,
+      "navigation_start": 321655.843,
+      "navigation_end": 321656.375,
+      "http_status": 200,
+      "expected_host": true,
+      "phase": "owner_after_navigation",
+      "error_class": "TimeoutError",
+      "error_hints": [
+        "timeout"
+      ],
+      "own_page_closed": true
+    },
+    {
+      "actor": 2,
+      "thread": 81252,
+      "create_start": 321655.781,
+      "create_end": 321655.828,
+      "target_id": "A91D8B9C707A8BC0ED9241ED9061ED1C",
+      "blank_exact": true,
+      "blank_owner": true,
+      "navigation_start": 321655.843,
+      "navigation_end": 321656.484,
+      "http_status": 200,
+      "expected_host": true,
+      "phase": "owner_after_navigation",
+      "error_class": "TimeoutError",
+      "error_hints": [
+        "timeout"
+      ],
+      "own_page_closed": true
+    }
+  ],
+  "navigation_overlap_seconds": 0.5320000000065193
+}

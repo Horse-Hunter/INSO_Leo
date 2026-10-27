@@ -1,0 +1,7 @@
+{
+  "nested_context_method": true,
+  "cycle_receipt_method": true,
+  "sanitized_cycle_fields": true,
+  "unreviewed_expect_event_in_factory": false,
+  "reviewed_expect_page_in_factory": true
+}
