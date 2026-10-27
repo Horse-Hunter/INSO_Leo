@@ -77,6 +77,7 @@ from src.workflow import (
 from src.workflow.dashboard_counts import read_dashboard_counts
 from src.workflow.inso_query import run_inso_query
 from src.workflow.purchase_follow_up import PurchaseFollowUp
+from src.workflow.service import OrderResourceOwnershipError
 from src.workflow.v12_contracts import (
     DeliveryOutcome,
     EventType,
@@ -1234,8 +1235,10 @@ class ProductionBackend(GuiBackend):
             cause, seen = exc, set()
             while cause is not None and id(cause) not in seen:
                 seen.add(id(cause))
-                if isinstance(cause, PageTargetCleanupError):
+                if isinstance(cause, (PageTargetCleanupError, OrderResourceOwnershipError)):
                     runtime.abort_module_resource()
+                    self._state = RunState.GLOBAL_STOP
+                    self._stop.set()
                     raise
                 if (isinstance(cause, (sqlite3.Error, V12DatabaseError, SecurityViolation, ProductionConfigurationError))
                         or getattr(cause, "reason", "") in {"MODULE_RESOURCE_OWNERSHIP_LOST",
@@ -2275,7 +2278,7 @@ class ProductionBackend(GuiBackend):
             page_fault, candidate, visited = None, exc, set()
             while candidate is not None and id(candidate) not in visited:
                 visited.add(id(candidate))
-                if isinstance(candidate, PageTargetCleanupError):
+                if isinstance(candidate, (PageTargetCleanupError, OrderResourceOwnershipError)):
                     page_fault = candidate
                     break
                 candidate = candidate.__cause__ or candidate.__context__

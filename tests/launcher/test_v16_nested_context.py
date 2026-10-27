@@ -206,11 +206,14 @@ def test_page_fault_latch_wins_over_translated_module_completion(tmp_path, monke
     finally:
         backend.shutdown()
 
+@pytest.mark.parametrize('fault_kind', ['page', 'order'])
 @pytest.mark.parametrize('wrapping', ['direct', 'cause', 'context'])
-def test_runtime_resource_fault_is_global_not_attributed_to_last_order(tmp_path, monkeypatch, wrapping):
+def test_runtime_resource_fault_is_global_not_attributed_to_last_order(tmp_path, monkeypatch, wrapping, fault_kind):
     from src.research.cdp_pages import PageTargetCreationUncertain
     backend = launcher.ProductionBackend(root=tmp_path)
-    fault = PageTargetCreationUncertain((OSError('synthetic response lost'),))
+    from src.workflow.service import OrderResourceOwnershipError
+    fault = (PageTargetCreationUncertain((OSError('synthetic response lost'),))
+             if fault_kind == 'page' else OrderResourceOwnershipError())
     error = fault if wrapping == 'direct' else RuntimeError('synthetic adapter wrapper')
     if wrapping == 'cause':
         error.__cause__ = fault
@@ -227,6 +230,6 @@ def test_runtime_resource_fault_is_global_not_attributed_to_last_order(tmp_path,
         backend._runtime_error(error)
         assert backend._state is RunState.GLOBAL_STOP
         assert backend._stop.is_set()
-        assert notices == ['CDP_PAGE_CREATION_UNCONFIRMED']
+        assert notices == [fault.reason]
     finally:
         backend.shutdown()

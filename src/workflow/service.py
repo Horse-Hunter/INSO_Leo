@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from collections import deque
 from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from time import monotonic
 from typing import Protocol
@@ -231,6 +233,25 @@ class WorkflowWorker:
             self._store.record_brand_update(item.id, "UPDATED", now=now)
 
 
+class OrderResourceOwnershipError(RuntimeError):
+    """A resource claim/release did not come from its exact scheduler owner."""
+
+    reason = "ORDER_RESOURCE_OWNERSHIP_LOST"
+
+    def __init__(self):
+        super().__init__(self.reason)
+
+
+@dataclass(frozen=True, slots=True)
+class OrderResourceLease:
+    """Ephemeral source-row exclusion, never durable business permission."""
+
+    worksheet: WorksheetIdentity
+    row_position: int
+    request_token: str
+    _owner_thread: int = field(repr=False)
+
+
 class WorkflowRuntime:
     """Run the 15-minute poller and single Research worker independently."""
 
@@ -261,6 +282,131 @@ class WorkflowRuntime:
         self._module_resource = None
         self._module_owner = None
         self._module_resource_failed = False
+        self._order_capacity = 0
+        self._order_closed = True
+        self._order_requests = {}
+        self._order_waiters = {}
+        self._order_active = {}
+
+    def configure_order_leases(self, capacity):
+        """Bound ephemeral admissions to the coordinator's finite worker budget.
+
+        Default is closed/unconfigured. No pending DB work is consumed or dropped
+        when the budget is full; the existing scheduler must retry admission.
+        """
+        if isinstance(capacity, bool) or not isinstance(capacity, int) or capacity < 1:
+            raise ValueError("INVALID_ORDER_RESOURCE_CAPACITY")
+        with self._module_lock:
+            if self._module_running or self._order_requests:
+                raise RuntimeError("ORDER_RESOURCES_RUNNING")
+            if self._module_resource_failed:
+                raise RuntimeError("MODULE_RESOURCE_OWNERSHIP_LOST")
+            self._order_capacity, self._order_closed = capacity, False
+
+    def request_order_lease(self, worksheet, row_position, request_token):
+        """Queue an original source key; matching snapshots/MPN are not lock keys.
+
+        Callers first verify source identity through existing domain contracts.
+        This lease cannot authorize Google writes, purchases or mail delivery.
+        """
+        if (not isinstance(worksheet, WorksheetIdentity)
+                or not isinstance(worksheet.spreadsheet, str) or not worksheet.spreadsheet.strip()
+                or not isinstance(worksheet.worksheet, str) or not worksheet.worksheet.strip()
+                or isinstance(row_position, bool) or not isinstance(row_position, int) or row_position < 1
+                or not isinstance(request_token, str) or not request_token.strip() or len(request_token) > 160):
+            raise ValueError("INVALID_ORDER_RESOURCE_IDENTITY")
+        key = worksheet, row_position
+        with self._module_lock:
+            self._check_order_admission()
+            old = self._order_requests.get(request_token)
+            if old is not None:
+                if old != (key, threading.get_ident()):
+                    raise OrderResourceOwnershipError()
+                if key in self._order_active and self._order_active[key].request_token == request_token:
+                    raise RuntimeError("ORDER_ALREADY_CLAIMED")
+                return True
+            if len(self._order_requests) >= self._order_capacity:
+                return False
+            self._order_requests[request_token] = key, threading.get_ident()
+            self._order_waiters.setdefault(key, deque()).append(request_token)
+            return True
+
+    def _check_order_admission(self):
+        if self._module_resource_failed:
+            raise RuntimeError("MODULE_RESOURCE_OWNERSHIP_LOST")
+        if self._order_closed:
+            raise RuntimeError("ORDER_ADMISSIONS_CLOSED")
+
+    def try_claim_order_lease(self, request_token):
+        with self._module_lock:
+            self._check_order_admission()
+            pending = self._order_requests.get(request_token)
+            if pending is None:
+                return None
+            key, owner = pending
+            if owner != threading.get_ident():
+                raise OrderResourceOwnershipError()
+            active = self._order_active.get(key)
+            if active is not None:
+                if active.request_token == request_token:
+                    raise RuntimeError("ORDER_ALREADY_CLAIMED")
+                return None
+            if self._order_waiters[key][0] != request_token:
+                return None
+            lease = OrderResourceLease(*key, request_token, owner)
+            self._order_active[key] = lease
+            return lease
+
+    def release_order_lease(self, lease):
+        """Only the admitting scheduler thread can release its exact live lease."""
+        with self._module_lock:
+            if not isinstance(lease, OrderResourceLease):
+                raise OrderResourceOwnershipError()
+            key = lease.worksheet, lease.row_position
+            if (self._order_active.get(key) is not lease
+                    or lease._owner_thread != threading.get_ident()
+                    or not self._order_waiters.get(key)
+                    or self._order_waiters[key][0] != lease.request_token):
+                raise OrderResourceOwnershipError()
+            del self._order_active[key]
+            del self._order_requests[lease.request_token]
+            self._order_waiters[key].popleft()
+            if not self._order_waiters[key]:
+                del self._order_waiters[key]
+
+    def cancel_order_lease_request(self, request_token):
+        with self._module_lock:
+            pending = self._order_requests.get(request_token)
+            if pending is None:
+                return False
+            key, owner = pending
+            if owner != threading.get_ident():
+                raise OrderResourceOwnershipError()
+            if key in self._order_active and self._order_active[key].request_token == request_token:
+                raise RuntimeError("ORDER_STILL_RUNNING")
+            self._order_waiters[key].remove(request_token)
+            del self._order_requests[request_token]
+            if not self._order_waiters[key]:
+                del self._order_waiters[key]
+            return True
+
+    def close_order_admissions(self):
+        """Cancel only undispatched resource requests; active work must drain."""
+        with self._module_lock:
+            self._order_closed = True
+            active = {lease.request_token for lease in self._order_active.values()}
+            for token in tuple(self._order_requests):
+                if token not in active:
+                    key, _ = self._order_requests.pop(token)
+                    self._order_waiters[key].remove(token)
+                    if not self._order_waiters[key]:
+                        del self._order_waiters[key]
+
+    def order_resource_counts(self):
+        with self._module_lock:
+            return {"capacity": self._order_capacity, "active": len(self._order_active),
+                    "waiting": len(self._order_requests)-len(self._order_active),
+                    "closed": self._order_closed or self._module_resource_failed}
 
     def configure_modules(self, intervals, *, timer=monotonic):
         """Extend the existing runtime, not business identities or persistent state.
@@ -274,7 +420,7 @@ class WorkflowRuntime:
                or not 0 < v < float("inf") for v in intervals.values()):
             raise ValueError("INVALID_MODULE_INTERVALS")
         with self._module_lock:
-            if self._module_running:
+            if self._module_running or self._order_requests:
                 raise RuntimeError("MODULES_RUNNING")
             self._module_timer = timer
             self._module_periods = dict(intervals)
@@ -337,6 +483,7 @@ class WorkflowRuntime:
             if self._module_owner != threading.get_ident():
                 raise RuntimeError("MODULE_RESOURCE_OWNERSHIP_LOST")
             self._module_resource_failed = True
+            self.close_order_admissions()
             self._module_paused.update(self._module_periods)
             self._module_running.clear()
             self._module_resource = None

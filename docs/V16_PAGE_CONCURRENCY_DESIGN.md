@@ -128,3 +128,39 @@ no guessed or callback-only parallel implementation is delivered as production
 capability. A future dedicated safe browser acceptance window is needed after
 the ownership/composition changes; it must not commandeer the live session.
 No fabricated real-browser timeline is included. C remains explicitly open.
+
+## Next integration contract — CEO architecture escalation, not production code
+
+The bounded source-row resource component extends existing WorkflowRuntime,
+closed by default; it is ephemeral and cannot replace durable claims. Integration
+still needs a cross-module Public Contract decision under MODULE_INDEX:
+
+1. Immutable module/cycle/source-key request and result/progress messages. Keep
+   existing inquiry/quotation/TP state services and durable gates; no Backend
+   clones and no shared mutable observer/cache/session across actor threads.
+2. Scheduler dispatch must be separate from blocking browser work. Merely placing
+   Research in a pool then waiting synchronously in the owner thread still blocks
+   TP behind a full quotation batch. Do not call that independent execution.
+3. Original browser owner exclusively performs Google/INSO and writes via bounded
+   ordered requests; never preempt an external write or shorten120s safety wait.
+   Two finite market-read clients use their own sync Playwright objects, same
+   existing endpoint, one shared fault admission, original-source leases and
+   serialized per-site auth/pacing. No unbounded executor submission queue.
+4. Research currently composes backend-owned provider/recovery/progress closures.
+   Split acquisition/result handoff through its public composition contract,
+   keeping six collectors, FX and ordinary1–6/TP1–12 selection canonical. Do not
+   share those closures across threads or duplicate a TP collector. BOM credential
+   and login guards must remain; an auth failure requests exclusive recovery,
+   never silently becomes no valid price.
+5. Actor terminal must promote missing native lease, translated ownership faults
+   and teardown uncertainty to shared hard stop. Admit no operation after fault;
+   preserve human pages. Waiting source jobs remain durable; Stop drains known
+   active requests, UNKNOWN remains blocked, no thread termination.
+
+Proposed scope for CEO: approve these existing-module request/result ports before
+implementation changes their Public Contracts. This is a concrete boundary
+escalation, not a request to reapprove already authorized ordinary business.
+Required final proof: actual parsed-source request overlap with independent
+module cycles, same-order exclusion, bounded pages, auth faults, stop/restart,
+manual actions and measured TP delay. Current resource tests prove none of those
+integrated properties. No new production installation is proposed at this stage.

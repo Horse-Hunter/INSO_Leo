@@ -1,0 +1,27 @@
+{
+  "scope": "isolated canonical WorkflowRuntime original-source resource leases; not dispatched or deployed",
+  "baseline_ceo": "98ffd2ea0688c37b67811f02593b29ee3ef0a27e",
+  "targeted": {
+    "passed": 64,
+    "seconds": 10.66
+  },
+  "full": {
+    "passed": 2861,
+    "skipped": 1,
+    "seconds": 115.96
+  },
+  "checks": [
+    "scoped Ruff PASS",
+    "git diff --check PASS"
+  ],
+  "live_business_parallelism": "NOT_VERIFIED",
+  "tp_timely_start": "FAIL prior 454.210s delay; not fixed",
+  "production_replaced": false,
+  "business_resume": {
+    "owner_confirmed": true,
+    "observed_inquiry_start_local": "2026-10-27T17:01:44+08:00",
+    "observed_quotation_start_local": "2026-10-27T17:04:01+08:00",
+    "observed_tp_start_local": "2026-10-27T17:04:34+08:00",
+    "observed_tp_end_local": "2026-10-27T17:04:51+08:00"
+  }
+}

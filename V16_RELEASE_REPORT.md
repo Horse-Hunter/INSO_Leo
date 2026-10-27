@@ -40,7 +40,10 @@ inquiry16:12:24. Later quotation deferredGOOGLEbusy again; current141SENT, histo
 fault notices; no new TPmail/purchase/write success claimed. Not suppressed.
 Owner subsequently authorized/confirmed this NEW safe-stop browser window. All
 own tabs closed; Windows screenshot stillFrameArrivedtimeout/unlabelled controls.
-Owner asked to click开始运行 to restore existing business; confirmation pending.
+Owner confirmed clicking开始运行; subsequent real logs verify inquiry17:01:44,
+quotation17:04:01 and TP17:04:34 starts; TP completed17:04:51 (+08).
+Quotation deferred after32.594s on Google read busy; no permanent outage claim.
+141SENT above is the preceding snapshot, not a claim about all later activity.
 No force-kill, restart or guessed click. Current reviewed EXE stays installed.
 
 Unified task checklist updated; native-identity prerequisite now positive-live
@@ -560,3 +563,50 @@ Native browser helper reused canonical source factory and is temporary, not a
 second production browser framework. Full source follow-up **2815PASS/1SKIP109.85s** on67be3f7 application;
 prior targeted664PASS6.46s / ownership20PASS0.58s retained accurately.
 ScopedRuff/diffPASS. One skip remains environment capability, not a passed case.
+
+
+## 2026-10-27 continuation — bounded original-source order leases (not deployed)
+
+CEO98ffd2ea0688c37b67811f02593b29ee3ef0a27e accepts the prior20fda49
+shared CDP admission/native ownership increment only. Installed04075bc remains
+unchanged; Owner restored business and new17:01–17:04 cycles confirm running.
+
+Reuse audit: WorkflowRuntime already owns the module RLock/resource lifecycle;
+WorksheetIdentity supplies canonical spreadsheet+worksheet identity. Existing
+V12/TP stores remain the durable business/receipt authority. Their separate task
+IDs cannot alone exclude simultaneous work on the same original row. Extend
+that runtime with bounded ephemeral source-row admission; no second ledger,
+scheduler, dependency or business identity. Capacity bounds resource requests,
+not business order throughput. Default admission is closed, not wired into
+production dispatch. Rejected admissions consume no persistent work.
+
+Same original spreadsheet/sheet/physical row queues FIFO across requirement
+tokens; differing snapshot/MPN does not bypass that lock. Exact granted lease
+and admitting scheduler thread required for release; forged/copy/foreign/double
+release fails closed. Stop cancels undispatched requests only; active leases
+remain until known completion/drain. Shared resource abort closes admission;
+backend treats typed ownership faults as GLOBAL_STOP, never a historic-order
+failure. Existing transaction/identity/amount/SENT/UNKNOWN gates stay mandatory.
+
+Targeted64PASS10.66s; final exact application-source full2861PASS/1SKIP115.96s;
+scoped Ruff and git diff checks PASS. Tests cover FIFO, independent sources,
+finite admission, cancellation, stop/drain, foreign/forged release, reconfigure
+refusal and backend global fault attribution. These are isolated resource tests,
+NOT integrated module actor/real browser business concurrency acceptance.
+
+| Unified remaining item | Current status |
+| --- | --- |
+| Previous P1 / reviewed04075bc installation | PASS; not reworked/reinstalled |
+| Native read-only target ownership after navigation | PASS scoped live prerequisite |
+| Shared CDP fault admission | PASS scoped CEO98ffd2e source review |
+| Original-source FIFO resource lease component | PASS offline; REVIEW_REQUIRED |
+| Actor dispatch using these leases + existing durable claims | NOT_VERIFIED / not implemented |
+| Site auth/pacing and protected Google/INSO actor integration | NOT_VERIFIED / not implemented |
+| Fair module result handoff / TP timely900s actual start | FAIL prior454.210s delay; not fixed |
+| Actual business-page overlap and same-order serial timeline | NOT_VERIFIED |
+| Naturally eligible new purchase, Google write/readback, TP mail | NOT_VERIFIED; not manufactured |
+| Sustained V1.6 memory,100/150% systemDPI, Chrome/game impact | NOT_VERIFIED |
+| Deployment of new concurrency source | DEFERRED; current production preserved |
+
+No replacement, browser experiment, production DB/config mutation or test mail
+performed by this resource component. Overall REVIEW_REQUIRED persists.
