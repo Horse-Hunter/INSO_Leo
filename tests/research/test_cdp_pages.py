@@ -21,7 +21,7 @@ class Session:
 
 class Context:
     def __init__(self, *, fail: bool = False) -> None:
-        self.page = object()
+        self.page = SimpleNamespace(evaluate=lambda _: None)
         self.pages = [self.page]
         self.fail = fail
 
@@ -177,6 +177,18 @@ class RacingTargets:
         target = f'owned-{len(self.calls)}'
         noise = SimpleNamespace(url='about:blank#INSO_CREATE:another-task', target='human')
         own = SimpleNamespace(url=params['url'], target='spoof' if self.spoof else target)
+        own.owner_name = ""
+        own.is_closed = lambda: False
+        def evaluate(script, arg=None):
+            if script == "() => history.replaceState(null, '', 'about:blank')":
+                own.url = "about:blank"
+            elif script == "() => window.name":
+                return own.owner_name
+            elif script == "name => { window.name = name; }":
+                own.owner_name = arg
+            else:
+                raise AssertionError("unexpected evaluation")
+        own.evaluate = evaluate
         self.pages.extend([noise, own])
         self.matched = [p for p in self.pages if self.predicate(p)]
         return {'targetId': target}
@@ -215,7 +227,8 @@ def test_creation_filters_foreign_event_then_proves_exact_native_target():
     assert protocol.pages[0].target == 'human'
     assert not protocol.closed
     second = new_background_page(protocol, protocol, timeout_ms=1234)
-    assert second.url != page.url
+    assert protocol.calls[0][1]["url"] != protocol.calls[1][1]["url"]
+    assert second.url == page.url == "about:blank"
     assert second.target == 'owned-2'
 
 
@@ -234,3 +247,12 @@ def test_invalid_owner_creates_no_target_or_client_session():
     with pytest.raises(ValueError, match='INVALID_TAB_OWNER'):
         new_background_page(protocol, protocol, timeout_ms=1234, owner='INVALID')
     assert protocol.calls == []
+
+
+def test_exact_blank_restored_without_losing_task_ownership():
+    from src.research.cdp_pages import page_owner
+    protocol = RacingTargets()
+    page = new_background_page(protocol, protocol, timeout_ms=1234, owner="market-task")
+    assert page.url == "about:blank"
+    assert page_owner(page) == "market-task"
+    assert not protocol.closed

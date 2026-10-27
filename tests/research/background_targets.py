@@ -25,6 +25,17 @@ class BackgroundSession:
         assert command == "Target.createTarget" and params["background"] is True
         page = self.context.new_page()  # Synthetic target-created event/fixture factory.
         page.url = params["url"]
+        original_evaluate = getattr(page, "evaluate", None)
+        def evaluate(script, *args, **kwargs):
+            if script == "() => history.replaceState(null, '', 'about:blank')":
+                page.url = "about:blank"
+                return None
+            if original_evaluate is not None:
+                return original_evaluate(script, *args, **kwargs)
+            if script == "() => window.name":
+                return None
+            raise AssertionError("unexpected synthetic evaluation")
+        page.evaluate = evaluate
         return {"targetId": "synthetic-target"}
 
     def detach(self):

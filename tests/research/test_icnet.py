@@ -113,6 +113,10 @@ class FakeCdpPage:
     def content(self) -> str:
         return self.html
 
+    def evaluate(self, script):
+        assert script == "() => history.replaceState(null, '', 'about:blank')"
+        self.url = "about:blank"
+
     def close(self) -> None:
         self.closed = True
 

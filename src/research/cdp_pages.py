@@ -142,6 +142,9 @@ def new_background_page(
             proof.detach()
         if owner is not None:
             mark_owned_page(page, owner)
+        # Keep exact about:blank for existing navigation-failure and last-tab
+        # guards. Ownership lives in window.name, not the creation fragment.
+        page.evaluate("() => history.replaceState(null, '', 'about:blank')")
         return page
     except Exception:
         if target_id is not None:
