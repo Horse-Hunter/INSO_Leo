@@ -16,6 +16,7 @@ from src.research.cdp_pages import (
     PageTargetOwnershipError,
 )
 from src.research.runtime import ResearchMarketSession
+from src.research.site_login import SITE_AUTH_RECOVERY_REASONS
 from src.workflow.market_messages import (
     MarketCompletion,
     MarketFault,
@@ -61,7 +62,7 @@ def _fault(error, admission, *, initializing=False):
     code = getattr(error, 'reason', None) or getattr(error, 'code', None)
     if code == 'MARKET_OWNER_REQUIRED':
         return MarketFault(MarketFaultScope.SITE_DEFER, 'MARKET_OWNER_REQUIRED', tuple(classes[:8]))
-    if isinstance(code, str) and any(part in code for part in ('LOGIN', 'AUTH', 'CHALLENGE', 'CAPTCHA', 'CREDENTIAL')):
+    if code in SITE_AUTH_RECOVERY_REASONS:
         return MarketFault(MarketFaultScope.SITE_DEFER, 'MARKET_AUTH_REQUIRED', tuple(classes[:8]))
     return MarketFault(MarketFaultScope.FAILED, 'MARKET_SOURCE_FAILED', tuple(classes[:8]))
 
@@ -72,7 +73,7 @@ def _requires_auth(result):
         return False
     evidence = getattr(ordinary, 'source_result', ordinary).evidence
     return any(field.key == 'failure_code' and isinstance(field.value, str)
-               and any(code in field.value for code in ('LOGIN', 'AUTH', 'CHALLENGE', 'CAPTCHA', 'CREDENTIAL'))
+               and field.value in SITE_AUTH_RECOVERY_REASONS
                for field in evidence.fields)
 
 

@@ -357,3 +357,56 @@ def test_initializer_fault_cannot_exit_before_already_committed_enqueue_is_recon
     finally:
         fail.set()
         actors.close()
+
+
+
+@pytest.mark.parametrize('code', ['MANUAL_VERIFICATION_REQUIRED', 'SESSION_STALE', 'SECURITY_EVENT',
+    'OTP_REQUIRED', 'VERIFIED_SESSION_LEASE_REQUIRED', 'SESSION_IDENTITY_UNVERIFIED', 'LOGIN_REQUIRED',
+    'LOGIN_NOT_CONFIRMED', 'LOGIN_CONTROL_AMBIGUOUS'])
+@pytest.mark.parametrize('returned', [False, True])
+def test_canonical_auth_reason_never_becomes_ordinary_source_success(code, returned):
+    from src.research.source_contracts import EvidenceField
+    from src.workflow.market_messages import MarketFaultScope
+    class AuthBlocked(Session):
+        def read(self, query):
+            if not returned:
+                class CanonicalError(RuntimeError):
+                    pass
+                error = CanonicalError('private text must not leave this thread')
+                error.code = code
+                raise error
+            result = SourceResult(query.source, SourceOutcome.SOURCE_UNAVAILABLE,
+                SourceEvidence(query.source, query.mpn, None, SourceOutcome.SOURCE_UNAVAILABLE,
+                    query.reference_at, fields=(EvidenceField('failure_code', code),)))
+            return MarketReadResult(query.source, query.mode, ordinary=result)
+    runtime = WorkflowRuntime(None, None, ())
+    runtime.configure_modules({'quotation': 900, 'tp': 900})
+    admission = PageResourceAdmission()
+    actors = MarketReadActors(runtime, None, admission, session_type=AuthBlocked)
+    actors.start()
+    try:
+        assert actors.admit(request('fault'))
+        actors.dispatch_ready()
+        completion = drain_until(actors, 1)[0]
+        assert completion.terminal is MarketTerminal.FAILED
+        assert completion.result is None
+        assert completion.fault.scope is MarketFaultScope.SITE_DEFER
+        assert completion.fault.reason == 'MARKET_AUTH_REQUIRED'
+        assert ResearchSource.HQEW in actors._blocked_sources
+        assert not runtime.module_resource_failed
+        assert runtime.order_resource_counts()['active'] == 0
+        admission.require_open()  # Recover only this site through original owner.
+    finally:
+        assert actors.close()
+
+
+@pytest.mark.parametrize('code', ['SOURCE_UNAVAILABLE', 'READ_EMPTY', 'AUTHENTICATED_READ_UNAVAILABLE', 'LOGINish_private_text'])
+def test_unknown_or_read_failure_code_is_not_guessed_as_auth(code):
+    from src.launcher.market_actors import _fault
+    from src.workflow.market_messages import MarketFaultScope
+    class Failure(RuntimeError):
+        pass
+    error = Failure()
+    error.code = code
+    fault = _fault(error, PageResourceAdmission())
+    assert fault.scope is MarketFaultScope.FAILED

@@ -62,6 +62,7 @@ from src.research.runtime import (
     load_runtime_config,
     probe_loopback_endpoint,
 )
+from src.research.site_login import AUTH_SESSION_STOP_REASONS
 from src.research.source_contracts import ResearchSource, SourceOutcome
 from src.sheets import WorksheetIdentity
 from src.sheets.google_reader import GoogleSheetsRowReader
@@ -157,14 +158,7 @@ _LOGIN_ALERT_RECIPIENT = "linan229@qq.com"
 
 # Shared by the INSO query boundary and final source observer. Authenticated
 # READ_EMPTY/READ_UNAVAILABLE are read failures, not authentication failures.
-_INSO_AUTH_STOP_CODES = frozenset({
-    "LOGIN_REQUIRED", "AUTHENTICATION_REQUIRED", "AUTHORIZATION_REQUIRED",
-    "AUTHENTICATED_SESSION_REQUIRED", "AUTHENTICATED_SHELL_UNAVAILABLE",
-    "VERIFIED_SESSION_LEASE_REQUIRED", "SESSION_IDENTITY_UNVERIFIED", "SESSION_STALE",
-    "CREDENTIALS_UNAVAILABLE", "CREDENTIAL_NOT_CONFIGURED", "CREDENTIAL_REJECTED",
-    "LOGIN_REJECTED", "MANUAL_VERIFICATION_REQUIRED", "INTERACTIVE_CHALLENGE_REQUIRED",
-    "SECURITY_EVENT", "CAPTCHA_REQUIRED", "OTP_REQUIRED",
-})
+_INSO_AUTH_STOP_CODES = AUTH_SESSION_STOP_REASONS
 
 
 class ProductionConfigurationError(RuntimeError):

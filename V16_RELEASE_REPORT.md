@@ -820,3 +820,28 @@ last additional tests. Previous full2907PASS/1SKIP113.12s belongs to0d77be2 sour
 full final race-corrected source is running and must be recorded separately.
 No production access, deployment or browser experiment. Actual module business
 continuations, auth-owner recovery and Stage F remain OPEN, TP lateness not fixed.
+
+
+## CEO8fb3f50 auth/manual classification correction (not deployed)
+
+Prior frozen actor correction is287e23830dfd4aa226b3162464084ae1e969a4c7,
+full2929PASS/1SKIP117.29s (src tree efe1f4d096d7c8e32e90f6a50cfd365b7356febf).
+This closes the earlier missing final-source full evidence for that increment.
+
+Fix the newly reviewed classification drift without a login recipe or text
+matching. Move exact existing Backend INSO reason set to public Research
+site_login.AUTH_SESSION_STOP_REASONS; Backend's old private name aliases the
+IDENTICAL set, preserving ordinary behavior. Public SITE_AUTH_RECOVERY_REASONS
+extends it only with explicit existing market/site_login emitted codes. Actor
+returned evidence and direct exceptions both use set membership, not substring.
+Manual verification, stale/unverified session, security event, OTP and required
+verified lease defer the site to original owner; no source success/no-price or
+worker login. Authenticated READ_EMPTY/READ_UNAVAILABLE stays a read failure.
+
+304PASS1.30s targeted actor/site retry/login/sweep suite. Includes18 positive
+returned/direct safety-reason cases and4negative non-auth cases. Initial targeted
+command referenced a nonexistent filename and ran no tests; corrected to real
+canonical test files, no dependency or production change. Final full on this
+new classification source follows separately; old2929 is not reused as its PASS.
+Still no module continuation/protected recovery/live callback integration or
+real-browser/TP timeliness/long-term acceptance. Current04075 production unchanged.

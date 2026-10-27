@@ -39,7 +39,9 @@ from dataclasses import dataclass
 from typing import Any
 
 __all__ = [
+    "AUTH_SESSION_STOP_REASONS",
     "REJECTED_PASSWORD_TEXT",
+    "SITE_AUTH_RECOVERY_REASONS",
     "LoginCheckbox",
     "LoginForm",
     "SiteLoginError",
@@ -71,6 +73,25 @@ REJECTED_PASSWORD_TEXT: tuple[str, ...] = (
     "账号或密码错误",
     "用户名或密码错误",
 )
+
+# Explicit existing production auth-stop reasons, shared without a new login
+# recipe. Authenticated read-empty/timeouts are deliberately not auth failures.
+AUTH_SESSION_STOP_REASONS = frozenset({
+    "LOGIN_REQUIRED", "AUTHENTICATION_REQUIRED", "AUTHORIZATION_REQUIRED",
+    "AUTHENTICATED_SESSION_REQUIRED", "AUTHENTICATED_SHELL_UNAVAILABLE",
+    "VERIFIED_SESSION_LEASE_REQUIRED", "SESSION_IDENTITY_UNVERIFIED", "SESSION_STALE",
+    "CREDENTIALS_UNAVAILABLE", "CREDENTIAL_NOT_CONFIGURED", "CREDENTIAL_REJECTED",
+    "LOGIN_REJECTED", "MANUAL_VERIFICATION_REQUIRED", "INTERACTIVE_CHALLENGE_REQUIRED",
+    "SECURITY_EVENT", "CAPTCHA_REQUIRED", "OTP_REQUIRED",
+})
+
+# These exact reasons are emitted by canonical market clients/site_login.
+# Authenticated read-empty/unavailable stays a read failure, not an auth verdict.
+SITE_AUTH_RECOVERY_REASONS = AUTH_SESSION_STOP_REASONS | frozenset({
+    "LOGIN_NOT_CONFIRMED", "LOGIN_NOT_READY", "LOGIN_FORM_UNAVAILABLE",
+    "LOGIN_CONTROL_AMBIGUOUS", "LOGIN_OPTION_UNCONFIRMED", "LOGIN_SUBMIT_FAILED",
+})
+
 
 #: Reads the checkbox a site's styled option label stands for. Measured live
 #: on ``www.bom.ai`` 2026-10-01: the label wraps its own input
