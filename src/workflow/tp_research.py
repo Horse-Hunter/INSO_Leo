@@ -250,6 +250,7 @@ class TpCycle:
         self.research, self.outbox, self.worker = research, outbox, worker
         self.prepare, self.stop_requested = prepare, stop_requested
         self.issues = {}
+        self._continuation_sources = {}
 
     def _line_key(self, spreadsheet, line):
         pointer = line.get("sheet_row")
@@ -258,6 +259,7 @@ class TpCycle:
         return task_key(spreadsheet, line.get("sheet"), int(pointer))
 
     def read_orders(self, spreadsheet, *, manual_key=None):
+        self._continuation_sources = {}
         lines = self.brief.read(spreadsheet)
         # Normalize physical anchors before counting; "010" and "10" are identical.
         counts = Counter()
@@ -285,13 +287,37 @@ class TpCycle:
                     raise TpLocalError("TP_TASK_BUSY_OR_DELIVERY_UNCONFIRMED")
                 source = source_worksheet(spreadsheet, line)
                 if source not in snapshots:
-                    snapshots[source] = self.reader.read_rows(source)
-                orders.append(bind_tp_order(line, spreadsheet, snapshots[source]))
+                    snapshots[source] = tuple(self.reader.read_rows(source))
+                order = bind_tp_order(line, spreadsheet, snapshots[source])
+                target = next(row for row in snapshots[source] if row.row_position == order.row)
+                self._continuation_sources[key] = order, identify_worksheet_row(source, target)
+                orders.append(order)
             except ValueError as exc:
                 if not tp_local_failure_reason(exc):
                     raise
                 self.issues[line.brief_row] = str(exc)
         return orders
+
+    def continuation_source(self, order):
+        """Reuse THIS discovery batch, not another native read of every TP row."""
+        key = task_key(order.spreadsheet, order.sheet, order.row)
+        observed = self._continuation_sources.get(key)
+        if observed is None or observed[0] != order:
+            raise TpLocalError("TP_SOURCE_CHANGED")
+        return observed[1]
+
+    def read_continuation_orders(self, spreadsheet, *, now):
+        """Same positive TP-only isolation at asynchronous cycle discovery."""
+        self.issues = {}
+        try:
+            return self.read_orders(spreadsheet)
+        except ValueError as error:
+            reason = tp_local_failure_reason(error)
+            if not reason:
+                raise
+            self.issues["cycle"] = reason
+            self.store.record_issues(self.issues, now)
+            return ()
 
     def _revalidate(self, order):
         """Fresh native reads, but only bind the current target, never other orders."""

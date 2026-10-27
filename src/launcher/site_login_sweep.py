@@ -434,9 +434,13 @@ def sweep_sites(
     sweep_factory: Callable[..., SiteLoginSweep] = SiteLoginSweep,
     present_failures: bool = True,
     stop_requested: Callable[[], bool] = lambda: False,
+    only_sites: frozenset[str] | None = None,
 ) -> tuple[SiteLoginResult, ...]:
     """Sweep the shared browser, closing only the successful reusable tab."""
 
+    if only_sites is not None and (type(only_sites) is not frozenset or not only_sites
+            or only_sites - {"icnet", "findchips", "hqew", "lcsc", "bom-ai", "inso"}):
+        raise ValueError("SITE_RECOVERY_SELECTION_INVALID")
     options = {}
     if not present_failures:
         options["present_failures"] = False
@@ -453,15 +457,9 @@ def sweep_sites(
         clock=clock,
     )
     try:
-        return sweep.run(
-            build_site_sign_in_steps(
-                bom_ai=bom_ai,
-                provider=provider,
-                timeout_ms=timeout_ms,
-                settle_ms=settle_ms,
-                wait=wait,
-                clock=clock,
-            )
-        )
+        steps = build_site_sign_in_steps(
+            bom_ai=bom_ai, provider=provider, timeout_ms=timeout_ms,
+            settle_ms=settle_ms, wait=wait, clock=clock)
+        return sweep.run(steps if only_sites is None else tuple(step for step in steps if step.key in only_sites))
     finally:
         sweep.close()

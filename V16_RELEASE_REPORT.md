@@ -1029,3 +1029,56 @@ failed because its fake inherited unrelated class-state initialization, fixed
 explicit per-instance setup (no source weakening). No browser/production I/O.
 E4 actual scheduler/GUI assembly and final integrated regression remain OPEN;
 these ports alone do not prove real TP deadline/web overlap or long-term safety.
+
+## Stage E4 — canonical Backend continuation assembly, isolated and default OFF
+
+Reuse one ProductionBackend poll thread + ONE WorkflowRuntime module deadlines,
+source FIFO, fixed MarketReadActors, original three domain continuation ports,
+original fault/three-hour/defer handlers, existing mail worker and GUI DTOs.
+Explicit constructor assembly hook market_actor_factory selects this path for
+isolated validation. Default None preserves all current production/launcher
+behavior; no config, alternate EXE entrypoint, new scheduler/daemon/browser or
+persistent state system. Not a permission to enable it in production.
+
+Each active module keeps its own cycle/task/source context and bounded1terminal
+receipt. Owner steps submit source work and return, never Future.wait on a batch.
+At most3 module transaction reservations coexist, while Runtime itself enforces
+at most2market read execution slots and same-site exclusion. Same source row
+remains FIFO through research, fresh source validation and original effects.
+Reservations waiting on one row cannot consume another row's worker execution
+slot. Original TP batched discovery source snapshots reused; completed TP still
+skip original source reads; claim and pre-mail target revalidation remain fresh.
+
+Query/initialization/native teardown faults close safety admissions before
+result application. Owner effects recheck same shared safety latch. Stop drains
+acknowledged reads; timeout never proves termination; UNKNOWN holds source
+quarantine and original durable command/state. The ended inquiry call releases
+its EXISTING Research worker exclusion while retaining UNKNOWN source/ledger,
+so a later explicit safe new lifecycle is not broken by a stale global lock.
+No forced thread, Chrome, page/profile cleanup or production process action.
+
+Protected INSO preparation is closed before async yield. Each owner INSO read
+and purchase continuation rebinds/verifies its REAL task using original guard;
+no previous task's session is restored by copying mutable browser state. Native
+quote queries stay owner-only. Existing closed-page retry and120s purchase row
+wait pump other eligible modules without reducing their original deadline.
+Google write settlement waits NEVER yield. GUI keeps three independent stages,
+cycle elapsed/deadlines, validated-current-source progress; stale progress is
+ignored. Unchanged resource-wait notifications coalesce, existing bounded GUI
+projection stays authoritative; GUI never reads worker/browser/SQL directly.
+
+Offline actual-call-path checks:9-mode canonical Backend/Runtime/V12/V13/TP
+assembly (normal, Stop, initialization, teardown, in-flight ownership fault,
+quote retry, TP header, TP identity change, unknown purchase; plus inquiry wait
+mode in final source) uses synthetic clients and isolated original SQLite/outbox.
+123PASS15.83s focused before final batching change;113PASS11.05s TP/read batching
+regression after it. Earlier51PASS4.10s safety/UI/sweep scoped and73PASS5.40s
+consumer fault/isolation. Final exact-source full regression follows separately.
+These are NOT real page overlap, measured production TP lateness, actual SMTP
+or live business successes. Real timeliness/website overlap/long-term remain
+NOT_VERIFIED; old454.210s failure is NOT declared fixed by synthetic clocks.
+
+Production04075bc, runtime/config/Vault/SENT/UNKNOWN/Chrome and70956 old soak
+were NOT accessed, replaced or interrupted. Auth allowlists, ordinary1..6month
+and TP1..12month algorithms, purchase permissions and irreversible gates remain
+original. No packaging/install/test email. Reports ONLY to Owner for forwarding.

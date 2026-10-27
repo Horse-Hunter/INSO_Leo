@@ -2580,3 +2580,23 @@ to canonical Owner collector; no truncation/no-price substitution. Single Runtim
 retires only proven undispatched read reservations.83PASS2.92s focused; native
 SiteLoginError cases independently6PASS0.25s. No auth token addition, worker login,
 production use, browser validation or deployment. E4/final E5 remain OPEN.
+
+### E4 implementation increment — actual original Backend assembly (isolated)
+
+Canonical Backend owns per-module bounded continuation contexts, existing
+Runtime deadlines/FIFO/resources own decisions, existing fixed actors own market
+queries. No new timer/worker pool/ledger. Explicit market_actor_factory test/
+review assembly; DEFAULT OFF, installed04075bc untouched. Source reservations
+(max3 configured modules) do not consume the two real market execution slots.
+Original fault/defer/three-hour policy, source fresh checks,120s closed waits,
+SENT/UNKNOWN and original owner-only INSO/Google/purchase writes retained.
+Owner protected read phase closes before yield and rebinds real task before
+INSO/purchase. Google write settlement cannot pump another owner operation.
+Three module stages/cycles/elapsed/deadlines and current-source progress stay
+separate, unchanged notifications coalesce. Shared fault precedes results.
+
+Source tests include actual Backend/Runtime/domain paths with isolated SQLite,
+canonical selectors and thread transport; clients/senders synthetic. Do not call
+this real business/browser or TP wall-clock PASS. Final exact source full/evidence
+next. Scope: E1/E2/E3/E4 OFFLINE_IMPLEMENTED_REVIEW_REQUIRED; E5 full pending;
+F real page overlap/TP deadline/long-run NOT_VERIFIED. No production changes.

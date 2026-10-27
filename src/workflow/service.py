@@ -353,6 +353,7 @@ class WorkflowRuntime:
         self._order_active = {}
         self._order_dispatched = set()
         self._market_owner = None
+        self._market_capacity = 0
         self._market_requests = {}
         self._market_running = {}
         self._market_acknowledging = set()
@@ -365,6 +366,7 @@ class WorkflowRuntime:
         self._business_effect_active = set()
         self._business_effect_unknown = set()
         self._business_finishing = set()
+        self._market_safety_check = None
 
     def configure_order_leases(self, capacity):
         """Bound ephemeral admissions to the coordinator's finite worker budget.
@@ -539,6 +541,34 @@ class WorkflowRuntime:
                     "waiting": len(self._order_requests)-len(self._order_active),
                     "closed": self._order_closed or self._module_resource_failed}
 
+    def business_admission_ready(self, identity):
+        """Queue fairly without repeated browser reads while source is busy."""
+        with self._module_lock:
+            self._check_market_owner()
+            self._check_order_admission()
+            if type(identity) is not MarketTaskIdentity:
+                raise ValueError("BUSINESS_IDENTITY_INVALID")
+            token, record = identity.request_id, identity.source_record
+            if token in self._business_pending and self._business_pending[token] != identity:
+                raise OrderResourceOwnershipError()
+            if not self.request_order_lease(record.worksheet, record.row_position, token, module_id=identity.module):
+                return False
+            self._business_pending[token] = identity
+            key = record.worksheet, record.row_position
+            return (key not in self._order_active and self._order_waiters[key][0] == token
+                    and len(self._order_active) < self._order_capacity)
+
+    def cancel_business_request(self, identity):
+        with self._module_lock:
+            self._check_market_owner()
+            if identity.request_id not in self._business_pending:
+                return False
+            if self._business_pending[identity.request_id] != identity:
+                raise OrderResourceOwnershipError()
+            self.cancel_order_lease_request(identity.request_id)
+            del self._business_pending[identity.request_id]
+            return True
+
     def claim_business_continuation(self, identity):
         """Original owner acquires before queries; no new order ID/ledger/lock.
 
@@ -573,10 +603,27 @@ class WorkflowRuntime:
         self._verify_order_lease(handle.resource)
         return handle.resource.request_token
 
+    def business_continuation_active(self, handle):
+        """Owner can distinguish domain-confirmed finish from pending cleanup."""
+        with self._module_lock:
+            self._check_market_owner()
+            if type(handle) is not BusinessContinuationLease:
+                raise OrderResourceOwnershipError()
+            current = self._business_leases.get(handle.resource.request_token)
+            if current is not None and current is not handle:
+                raise OrderResourceOwnershipError()
+            return current is handle
+
     def require_business_continuation(self, handle):
         with self._module_lock:
             token = self._verify_business_continuation(handle)
             self._check_order_admission()
+            if self._market_safety_check is not None:
+                try:
+                    self._market_safety_check()
+                except Exception:
+                    self._abort_resources()
+                    raise
             if token in self._business_effect_unknown:
                 raise RuntimeError("BUSINESS_EFFECT_UNCONFIRMED")
 
@@ -644,14 +691,22 @@ class WorkflowRuntime:
             return {"active": len(self._business_leases), "reads": len(self._business_reads),
                     "effects": len(self._business_effect_active), "unknown": len(self._business_effect_unknown)}
 
-    def configure_market_reads(self, capacity):
+    def configure_market_reads(self, capacity, *, business_continuations=False, safety_check=None):
         """Optional canonical bounded coordinator; not production-enabled."""
         with self._module_lock:
             if self._market_owner is not None:
                 raise RuntimeError("MARKET_COORDINATOR_ALREADY_CONFIGURED")
             if type(capacity) is not int or not 1 <= capacity <= 2:
                 raise ValueError("MARKET_WORKERS_OUT_OF_BOUNDS")
-            self.configure_order_leases(capacity)
+            if type(business_continuations) is not bool or safety_check is not None and not callable(safety_check):
+                raise ValueError("MARKET_SAFETY_BINDING_INVALID")
+            # Business transaction reservations are bounded by three modules;
+            # worker/query slots remain the independent fixed1..2 actor budget.
+            # Waiting for owner settlement must not occupy a market worker slot.
+            self.configure_order_leases(max(capacity, len(self._module_periods))
+                                        if business_continuations else capacity)
+            self._market_safety_check = safety_check
+            self._market_capacity = capacity
             self._market_owner = threading.get_ident()
 
     def _check_market_owner(self):
@@ -702,8 +757,12 @@ class WorkflowRuntime:
         with self._module_lock:
             self._check_market_owner()
             self._check_order_admission()
+            if len(self._market_running) >= self._market_capacity:
+                return None
+            busy_sources = {self._market_requests[token].query.source for token in self._market_running}
             eligible = sorted((r for token, r in self._market_requests.items()
-                               if token not in self._market_running and r.query.source not in blocked_sources
+                               if token not in self._market_running and r.query.source not in busy_sources
+                               and r.query.source not in blocked_sources
                                and self._module_timer() >= self._market_source_due.get(r.query.source, 0)),
                               key=lambda r: (r.due_at, r.admitted_at))
             for request in eligible:

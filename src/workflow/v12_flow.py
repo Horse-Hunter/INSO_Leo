@@ -224,7 +224,10 @@ class V12WorkflowCoordinator:
 
         return self._notification_worker.run_due(now=now)
 
-    def poll_and_process(
+    def poll_and_process(self, reader, worksheet, *, now):
+        return self.process_pending(self.discover_pending(reader, worksheet, now=now), now=now)
+
+    def discover_pending(
         self,
         reader: WorksheetRowReader,
         worksheet: WorksheetIdentity,
@@ -259,7 +262,7 @@ class V12WorkflowCoordinator:
             if len(matches) == 1:
                 record = replace(record, record_identity=matches[0].record_identity)
             normalized.append(record)
-        return self.process_pending(tuple(normalized), now=now)
+        return tuple(normalized)
 
     def prepare_pending(
         self, records: tuple[PendingSheetRecord, ...], *, now: datetime
@@ -895,6 +898,7 @@ class InquiryOrderContinuation:
         self.reader, self.now = reader, now
         self.worker = self.item = self.research = None
         self._owner, self._closed = threading.get_ident(), False
+        self._worker_released = False
 
     def _check(self):
         import threading
@@ -905,9 +909,13 @@ class InquiryOrderContinuation:
         from .market_messages import BusinessTerminalReceipt
         self.runtime.finish_business_continuation(self.lease,
             BusinessTerminalReceipt(self.lease.identity, terminal))
-        if self.item is not None:
-            self.worker.release_due_claim(self.item)
+        self._release_worker()
         self._closed = True
+
+    def _release_worker(self):
+        if self.item is not None and not self._worker_released:
+            self.worker.release_due_claim(self.item)
+            self._worker_released = True
 
     def cancel(self):
         from .market_messages import BusinessTerminal
@@ -962,6 +970,8 @@ class InquiryOrderContinuation:
             # After the original write-capable route starts, no exception is
             # proof that Save/Google/outbox did not commit. Preserve old ledger.
             self.runtime.acknowledge_business_effect(self.lease, BusinessEffectTerminal.UNKNOWN)
+            self._release_worker()  # domain call ended; durable UNKNOWN + source lease remain
+            self._closed = True
             raise
         unknown = final is not None and final.purchase_outcome in {
             PurchaseOutcome.UNKNOWN_WRITE_OUTCOME, PurchaseOutcome.SUBMIT_UNCONFIRMED,
@@ -969,6 +979,8 @@ class InquiryOrderContinuation:
         self.runtime.acknowledge_business_effect(self.lease,
             BusinessEffectTerminal.UNKNOWN if unknown else BusinessEffectTerminal.CONFIRMED)
         if unknown:
+            self._release_worker()
+            self._closed = True
             raise RuntimeError("INQUIRY_EFFECT_UNCONFIRMED")
         self._release(BusinessTerminal.COMPLETED)
         return final

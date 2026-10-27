@@ -41,6 +41,12 @@ class OwnerMarketResearch:
         self._actors.require_owner_resources(self._runtime)
         self._runtime.require_business_continuation(self._lease)
 
+    def progress_source(self, progress):
+        """Only the current immutable transport request may update its site."""
+        if self._request is not None and progress.identity == self._request.identity:
+            return self._request.query.source
+        return None
+
     def advance(self, completions=()):
         """One owner source at most, never wait for a future or Research batch.
 
@@ -139,5 +145,5 @@ class OwnerMarketResearch:
             if fault.scope is MarketFaultScope.GLOBAL_STOP:
                 self._runtime.fail_market_reads(fault)
                 self._actors.request_stop()
-            raise MarketContinuationFault(fault) from error
+            raise MarketContinuationFault(fault, self._research.source) from error
         return None

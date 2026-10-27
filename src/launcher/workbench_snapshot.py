@@ -31,6 +31,7 @@ class RuntimeObservation:
         self.planned_check_at = None
         self.recovery_site = None
         self._module_scopes = []
+        self.concurrent_modules = False
 
     @contextmanager
     def module_scope(self, module):
@@ -160,6 +161,10 @@ class RuntimeObservation:
                 self.modules[module] = replace(old, cycle_finished_at=self.clock(),
                     cycle_elapsed_seconds=max(0, self.timer()-old.cycle_started_monotonic)
                     if old.cycle_started_monotonic is not None else 0)
+                if self.concurrent_modules and any(
+                        key != module and value.cycle_started_monotonic is not None
+                        and value.cycle_finished_at is None for key, value in self.modules.items()):
+                    self.cycle_finished_at = None
 
     def stage(self, module, stage, *, site=None, order_ref=None):
         with self.lock:
@@ -175,7 +180,8 @@ class RuntimeObservation:
             ):
                 return
             for key, other in tuple(self.modules.items()):
-                if other.started_monotonic is not None and key not in self._module_scopes[:-1]:
+                if (other.started_monotonic is not None and key not in self._module_scopes[:-1]
+                        and (not self.concurrent_modules or key == module)):
                     other = self._close(key)
                     self.modules[key] = replace(
                         other,
@@ -211,6 +217,10 @@ class RuntimeObservation:
 
     def wait(self, module, reason, *, site=None):
         with self.lock:
+            current = self.modules[module]
+            if (current.status == "等待执行" and current.stage == reason and current.site == site
+                    and current.started_monotonic is not None):
+                return
             old = self._close(module)
             if old.status == "未启用":
                 return

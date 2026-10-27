@@ -484,6 +484,11 @@ class _PreparedDuplicateChecker:
 
 def _website_failure(exc):
     """Identify a failed dependency without treating local data errors as outages."""
+    from .market_continuation import MarketContinuationFault
+    if (isinstance(exc, MarketContinuationFault) and exc.source is not None
+            and exc.fault.scope.value in {"site_defer", "failed"}):
+        return {"ic.net": "IC.net", "findchips": "Findchips", "hqew": "华强",
+                "lcsc": "立创", "bom.ai": "正能量", "inso": "INSO"}.get(exc.source.value)
     chain, seen = [], set()
     while exc is not None and id(exc) not in seen:
         seen.add(id(exc))
@@ -524,6 +529,7 @@ class ProductionBackend(GuiBackend):
         v12_adapters: V12ProductionAdapters | None = None,
         defer_local_view: bool = False,
         inquiry_ids: frozenset[str] | None = None,
+        market_actor_factory=None,
     ):
         self.root = Path(root) if root is not None else app_root()
         self._inquiry_scope = inquiry_ids
@@ -549,6 +555,11 @@ class ProductionBackend(GuiBackend):
         self._tp = None  # opt-in only; ordinary V1.4 composition is unchanged
         self._module_runtime = None
         self._module_execute = None
+        self._market_actor_factory = market_actor_factory
+        self._market_actors = None
+        self._continuation_pump = None
+        self._continuation_reader = None
+        self._quotation_factory = None
         self._module_failures = {}
         self._module_pause_requested = None
         self._module_contexts = []
@@ -673,6 +684,7 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             if (
                 self._closed
+                or self._market_actors is not None
                 or self._view_loading
                 or self._state in (RunState.RUNNING, RunState.QUOTATION_RUNNING, RunState.STOPPING_AFTER_CYCLE)
                 or (self._thread is not None and self._thread.is_alive())
@@ -908,14 +920,14 @@ class ProductionBackend(GuiBackend):
 
                 quotation_fx = EcbDailyUsdRmbProvider()
 
-                def run_quotation(worksheet, *, source_store=None, source_reader=None, hold_store=None):
+                def build_quotation(worksheet, *, source_store=None, source_reader=None, hold_store=None):
                     self._observe_stage("quotation", "检查采购报价与跟进", site="INSO")
                     active_reader = source_reader or reader
                     active_store = source_store or self._store
                     active_holds = hold_store or holds
                     cycle = V13QuotationCycle(reader=active_reader, store=active_store,
                         operations=self._v13_operations(rc, cfg), clock=utc_now,
-                        wait=self._stop.wait, stop_requested=self._stop.is_set, fx_provider=quotation_fx,
+                        wait=self._closed_retry_wait, stop_requested=self._stop.is_set, fx_provider=quotation_fx,
                         on_fx_success=lambda: self._site_recovered("汇率网站"),
                         on_query_success=lambda: self._site_recovered("INSO"))
                     def updater():
@@ -940,6 +952,11 @@ class ProductionBackend(GuiBackend):
                         notify=lambda result,key,episode: notify_quotation(self._v12_store,
                             result,key,episode,at=utc_now()), observe=self._observe_quotation,
                         stop_requested=self._stop.is_set)
+                    return integrated
+                self._quotation_factory = build_quotation
+                def run_quotation(worksheet, *, source_store=None, source_reader=None, hold_store=None):
+                    integrated = build_quotation(worksheet, source_store=source_store,
+                        source_reader=source_reader, hold_store=hold_store)
                     for recovery in range(4):
                         try:
                             return integrated.run(worksheet)
@@ -1141,6 +1158,9 @@ class ProductionBackend(GuiBackend):
 
     def _run_independent_poll(self, runtime, cfg, rc, web, reader, worksheets, episodes):
         """One browser actor, independent deadlines; existing mail worker overlaps."""
+        if self._market_actor_factory is not None:
+            from .business_continuations import run_business_continuations
+            return run_business_continuations(self, runtime, cfg, rc, web, reader, worksheets, episodes)
         def execute(module):
             self._last_poll = utc_now()
             self._cycle_id = "cycle_" + uuid.uuid4().hex
@@ -1196,7 +1216,7 @@ class ProductionBackend(GuiBackend):
             self._module_execute = None
             self._module_runtime = None
 
-    def _run_independent_job(self, module):
+    def _run_independent_job(self, module, *, started=None):
         # Sync browser ownership is fixed to this thread. Only closed-row waits
         # nest here; business/session state must not be snapshotted or rolled back.
         nested = bool(self._module_contexts)
@@ -1206,17 +1226,21 @@ class ProductionBackend(GuiBackend):
         self._research_acquire_failure = None  # New execution never inherits another job's failure.
         try:
             with self._observation.module_scope(module):
-                self._run_independent_job_scoped(module)
+                if started is None:
+                    self._run_independent_job_scoped(module)
+                else:
+                    self._run_independent_job_scoped(module, started=started)
         finally:
             self._module_contexts.pop()
             self._module_pause_requested = parent[3]
             if nested:
                 self._cycle_id, self._last_poll, self._research_acquire_failure = parent[:3]
 
-    def _run_independent_job_scoped(self, module):
+    def _run_independent_job_scoped(self, module, *, started=None):
         runtime = self._module_runtime
         retry, paused, reason = None, False, None
-        started, outcome = monotonic(), "failed"
+        started = monotonic() if started is None else started
+        outcome = "failed"
         try:
             self._module_pause_requested = None
             self._page_admission.require_open()
@@ -1282,7 +1306,7 @@ class ProductionBackend(GuiBackend):
                 if not runtime.module_resource_failed:
                     runtime.complete_module(module, retry_after=retry, pause=paused)
                 else:
-                    paused, reason = True, "共享浏览器清理失败，已停止共享业务"
+                    paused, reason = True, "共享资源状态未确认，已停止共享业务"
                     outcome = "failed"
                 self._observation.module_plan(module, None if paused else
                     utc_now()+timedelta(seconds=max(0, runtime.module_plans()[module][0]-monotonic())),
@@ -1713,7 +1737,7 @@ class ProductionBackend(GuiBackend):
         try:
             return run_inso_query(
                 read_attempt, prepare=prepare_attempt, succeeded=succeeded,
-                reset=self._close_inso_order_tab, wait=self._stop.wait,
+                reset=self._close_inso_order_tab, wait=self._closed_retry_wait,
             )
         except V12Fault as exc:
             if exc.reason == "INSO_QUERY_RETRIES_EXHAUSTED" and last_result is not None:
@@ -2232,7 +2256,9 @@ class ProductionBackend(GuiBackend):
             return True
         reason = {"INSO": "INSO_WAITING_RECOVERY", "Google Sheets": "GOOGLE_WAITING_RECOVERY",
                   "IC.net": "IC_NET_WAITING_RECOVERY", "Browser/CDP": "BROWSER_WAITING_RECOVERY",
-                  "汇率网站": "FX_WAITING_RECOVERY"}[site]
+                  "汇率网站": "FX_WAITING_RECOVERY", "Findchips": "FINDCHIPS_WAITING_RECOVERY",
+                  "华强": "HQEW_WAITING_RECOVERY", "立创": "LCSC_WAITING_RECOVERY",
+                  "正能量": "BOM_AI_WAITING_RECOVERY"}[site]
         log.warning("Website recovery deferred", extra={
             "runtime_reason": reason, "runtime_cause": type(exc).__name__})
         if notify and self._v13_ledger_ready:
@@ -2607,12 +2633,35 @@ class ProductionBackend(GuiBackend):
                 overdue_quotation=self._dashboard_counts.overdue_quotation if self._dashboard_counts else None,
             )
 
+    def _closed_retry_wait(self, seconds):
+        """Existing closed-page retry delay; progress other modules meanwhile."""
+        if self._continuation_pump is None:
+            return self._stop.wait(seconds)
+        if not self._module_contexts:
+            raise OrderResourceOwnershipError()
+        runtime, module = self._module_runtime, self._module_contexts[-1]
+        runtime.yield_module_resource(module)
+        try:
+            deadline = monotonic() + seconds
+            while not self._stop.is_set() and monotonic() < deadline:
+                self._continuation_pump()
+                clear = getattr(self._continuation_reader, "clear_discovery_snapshot", None)
+                if clear is not None:
+                    clear()
+                self._stop.wait(min(0.05, max(0, deadline-monotonic())))
+            return self._stop.is_set()
+        finally:
+            if not runtime.module_resource_failed:
+                runtime.resume_module_resource(module)
+
     def _wait_between_rows(self, seconds):
         """Expose the existing interruptible row wait without changing its policy."""
         with self._lock:
             self._row_cooldown_until = utc_now() + timedelta(seconds=seconds)
         self._observation.wait("inquiry", "订单间安全等待")
         try:
+            if self._continuation_pump is not None:
+                return self._closed_retry_wait(seconds)
             if self._module_runtime is not None and self._module_execute is not None:
                 runtime = self._module_runtime
                 runtime.yield_module_resource("inquiry")
@@ -2855,7 +2904,7 @@ class ProductionBackend(GuiBackend):
             except Exception as exc:  # noqa: BLE001 - fail closed at runtime boundary
                 log.debug("login sweep callback failed (%s)", type(exc).__name__)
 
-    def _run_login_sweep(self, *, background=False, check_only=False) -> tuple[SiteLoginResult, ...]:
+    def _run_login_sweep(self, *, background=False, check_only=False, only_sites=None) -> tuple[SiteLoginResult, ...]:
         """Attach the approved CDP browser, sweep it, then give it back."""
 
         try:
@@ -2906,6 +2955,8 @@ class ProductionBackend(GuiBackend):
             options = ({"present_failures": False,
                         "stop_requested": self._immediate_stop_requested,
                         "wait": self._stop.wait} if background else {})
+            if only_sites is not None:
+                options["only_sites"] = only_sites
             results = sweep_sites(
                 handle.browser,
                 bom_ai=research_config.bom_ai,

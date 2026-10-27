@@ -88,8 +88,10 @@ def _progress(queue, message):
 
 def _actor_loop(index, config, admission, stopped, inbox, outbox, progress, transport_lock, session_type):
     # No Backend or WorkflowRuntime reference is passed into this worker.
+    entered = False
     try:
         with session_type(config, admission) as session:
+            entered = True
             while not stopped.is_set():
                 request = inbox.get()
                 if request is None:
@@ -122,7 +124,12 @@ def _actor_loop(index, config, admission, stopped, inbox, outbox, progress, tran
                 outbox.put(terminal)
                 _progress(progress, MarketProgress(request.identity, MarketStage.FINISHED, monotonic()))
     except BaseException as error:  # noqa: BLE001 - terminal receipt must not be lost
-        outbox.put(MarketActorFault(index, _fault(error, admission, initializing=True)))
+        fault = _fault(error, admission, initializing=not entered)
+        if entered and fault.scope is not MarketFaultScope.GLOBAL_STOP:
+            admission.invalidate(PageTargetCleanupError((error,)))
+            fault = MarketFault(MarketFaultScope.GLOBAL_STOP, 'CDP_PAGE_CLEANUP_UNCONFIRMED',
+                                fault.exception_classes)
+        outbox.put(MarketActorFault(index, fault))
         stopped.set()
     finally:
         # If Stop won before a queued request was consumed, acknowledge that it
@@ -143,12 +150,14 @@ def _actor_loop(index, config, admission, stopped, inbox, outbox, progress, tran
 class MarketReadActors:
     """Explicitly started optional Launcher bridge, never a new scheduler."""
 
-    def __init__(self, runtime, config, admission, *, workers=2, session_type=ResearchMarketSession):
+    def __init__(self, runtime, config, admission, *, workers=2, session_type=ResearchMarketSession,
+                 business_continuations=False):
         if (type(runtime) is not WorkflowRuntime or not isinstance(admission, PageResourceAdmission)
                 or type(workers) is not int or not 1 <= workers <= 2 or not isinstance(session_type, type)):
             raise ValueError("MARKET_ACTOR_CONFIG_INVALID")
         self._runtime, self._config, self._admission = runtime, config, admission
         self._owner, self._workers, self._session_type = threading.get_ident(), workers, session_type
+        self._business_continuations = business_continuations
         self._stop = threading.Event()
         self._transport_lock = threading.RLock()
         self._inboxes = [Queue(maxsize=1) for _ in range(workers)]
@@ -199,6 +208,11 @@ class MarketReadActors:
     def site_deferred(self, source):
         self._check_owner()
         return source in self._blocked_sources
+
+    @property
+    def deferred_auth_sources(self):
+        self._check_owner()
+        return frozenset(self._blocked_sources - self._owner_required_sources)
 
     def requires_owner(self, source):
         self._check_owner()
@@ -253,7 +267,8 @@ class MarketReadActors:
         if self._started or self._stop.is_set():
             raise RuntimeError("MARKET_ACTORS_ALREADY_STARTED_OR_STOPPED")
         self._admission.require_open()
-        self._runtime.configure_market_reads(self._workers)
+        self._runtime.configure_market_reads(self._workers,
+            business_continuations=self._business_continuations, safety_check=self._admission.require_open)
         self._started = True
         try:
             for index, inbox in enumerate(self._inboxes):

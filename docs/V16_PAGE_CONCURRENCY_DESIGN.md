@@ -282,3 +282,24 @@ exact/foreign/copy release and old completion. No new full-regression claim yet;
 full after integration. E1 real module bindings, E3 recovery, E4 GUI/scheduler and
 E5 comprehensive regression still OPEN. This E2 resource contract alone is not
 business success, fresh domain verification or real-browser/TP timing proof.
+
+## Stage E owner continuation integration (isolated source, not enabled)
+
+Supersedes earlier executor implementation-only E-open statements for the
+new optional composition, NOT CEO review/release or real acceptance gates.
+Canonical synchronous Research drives same per-source continuation; new owner
+assembly steps the original V12 claims/duplicate/route, V13 protected query/
+update and TP store/outbox. Full source resource remains with exact scheduler
+owner until domain terminal, including FX/fresh source/effects. Fixed actors
+have2slots independent of max3 active module transaction reservations.
+OriginalOwner exclusively rebinds INSO/procurement and owns Google/SMTP gates.
+Stop/unknown cleanup cannot claim release without actual terminal accounting.
+
+No alternate task ledger/config/browser/scheduler. Explicit Backend constructor
+assembly hook defaults OFF. No new production install or protected Chrome test.
+Real source/page overlap, actual TP punctuality and long-term resources remain
+unverified; original454.210s lateness remains acceptance-open. Targeted login
+recovery reuses canonical sweep steps and only successful exact site verdicts.
+Over-limit legal data is read/selected in full on Owner, never truncated low
+quote evidence. Native cleanup fault preserves GLOBAL_STOP and typed cause.
+Latest exact tests and final status in canonical V16_RELEASE_REPORT/task/evidence.
