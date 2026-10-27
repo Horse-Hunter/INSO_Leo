@@ -13,7 +13,7 @@ class Session:
 
     def send(self, command: str, params: dict[str, object]) -> dict[str, str]:
         self.calls.append((command, params))
-        return {"targetId": "synthetic-target"}
+        return {"success": True} if command == "Target.closeTarget" else {"targetId": "synthetic-target"}
 
     def detach(self) -> None:
         self.detached = True
@@ -173,7 +173,7 @@ class RacingTargets:
         self.calls.append((command, params))
         if command == "Target.closeTarget":
             self.closed.append(params['targetId'])
-            return {}
+            return {'success': True}
         target = f'owned-{len(self.calls)}'
         noise = SimpleNamespace(url='about:blank#INSO_CREATE:another-task', target='human')
         own = SimpleNamespace(url=params['url'], target='spoof' if self.spoof else target)
@@ -256,3 +256,72 @@ def test_exact_blank_restored_without_losing_task_ownership():
     assert page.url == "about:blank"
     assert page_owner(page) == "market-task"
     assert not protocol.closed
+
+
+@pytest.mark.parametrize("close_fails,detach_fails", [(True, False), (False, True), (True, True)])
+def test_uncertain_cleanup_preserves_original_failure_and_blocks_client_reuse(close_fails, detach_fails):
+    from src.research.cdp_pages import PageTargetCleanupError
+    protocol = RacingTargets(spoof=True)
+    send = protocol.send
+    def broken_send(command, params):
+        result = send(command, params)
+        if command == "Target.closeTarget" and close_fails:
+            raise OSError("synthetic close failure")
+        return result
+    protocol.send = broken_send
+    def detach():
+        if detach_fails:
+            raise TimeoutError("synthetic detach failure")
+    protocol.detach = detach
+    with pytest.raises(PageTargetCleanupError) as caught:
+        new_background_page(protocol, protocol, timeout_ms=1234)
+    assert isinstance(caught.value.__cause__, ValueError)
+    assert str(caught.value.__cause__) == "TAB_TARGET_ID_MISMATCH"
+    assert protocol.closed == ["owned-1"]
+    calls = list(protocol.calls)
+    with pytest.raises(PageTargetCleanupError):
+        new_background_page(protocol, protocol, timeout_ms=1234)
+    assert protocol.calls == calls  # Not even another createTarget admission.
+
+
+def test_successful_proof_but_failed_detach_never_returns_usable_page():
+    from src.research.cdp_pages import PageTargetCleanupError
+    protocol = RacingTargets()
+    protocol.detach = lambda: (_ for _ in ()).throw(OSError("synthetic detach failure"))
+    with pytest.raises(PageTargetCleanupError) as caught:
+        new_background_page(protocol, protocol, timeout_ms=1234)
+    assert isinstance(caught.value.__cause__, OSError)
+    assert protocol.closed == ["owned-1"]
+    assert protocol._inso_page_resource_failed is True
+
+
+@pytest.mark.parametrize("spoof", [False, True])
+def test_page_linked_session_detach_failure_preserves_primary_and_invalidates(spoof):
+    from src.research.cdp_pages import PageTargetCleanupError
+    protocol = RacingTargets(spoof=spoof)
+    make_proof = protocol.new_cdp_session
+    def broken_proof(page):
+        proof = make_proof(page)
+        proof.detach = lambda: (_ for _ in ()).throw(OSError("synthetic proof detach"))
+        return proof
+    protocol.new_cdp_session = broken_proof
+    with pytest.raises(PageTargetCleanupError) as caught:
+        new_background_page(protocol, protocol, timeout_ms=1234)
+    assert isinstance(caught.value.__cause__, ValueError if spoof else OSError)
+    assert protocol.closed == ["owned-1"]
+    assert protocol._inso_page_resource_failed is True
+
+
+@pytest.mark.parametrize("response", [{"success": False}, {}])
+def test_native_target_close_requires_positive_protocol_confirmation(response):
+    from src.research.cdp_pages import PageTargetCleanupError
+    protocol = RacingTargets(spoof=True)
+    send = protocol.send
+    def unconfirmed(command, params):
+        value = send(command, params)
+        return response if command == "Target.closeTarget" else value
+    protocol.send = unconfirmed
+    with pytest.raises(PageTargetCleanupError):
+        new_background_page(protocol, protocol, timeout_ms=1234)
+    assert protocol.closed == ["owned-1"]
+    assert protocol._inso_page_resource_failed is True

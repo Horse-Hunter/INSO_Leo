@@ -14,6 +14,16 @@ _LOG = logging.getLogger(__name__)
 _OWNER_PREFIX = "INSO_OWNER_TAB:"
 
 
+class PageTargetCleanupError(RuntimeError):
+    """The client cannot safely reuse its page resources after teardown failed."""
+
+    reason = "CDP_PAGE_CLEANUP_UNCONFIRMED"
+
+    def __init__(self, failures):
+        super().__init__(self.reason)
+        self.failure_classes = tuple(type(exc).__name__ for exc in failures)
+
+
 def page_owner(page: Any) -> str | None:
     """Browser-visible ownership survives CDP clients/threads and navigation."""
     if page.is_closed():
@@ -99,6 +109,11 @@ def shared_playwright_factory(
     return factory
 
 
+def _close_created_target(session, target_id):
+    if session.send("Target.closeTarget", {"targetId": target_id}).get("success") is not True:
+        raise RuntimeError("CDP_TARGET_CLOSE_UNCONFIRMED")
+
+
 def new_background_page(
     browser: Any,
     context: Any,
@@ -113,6 +128,8 @@ def new_background_page(
     dedicated window. CDP's background target preserves its window state.
     """
 
+    if getattr(browser, "_inso_page_resource_failed", False) is True:
+        raise PageTargetCleanupError(())
     if owner is not None and not re.fullmatch(r"[a-z][a-z0-9-]{1,40}", owner):
         raise ValueError("INVALID_TAB_OWNER")
     # A task/site owner is not unique per creation. Match a random creation URL
@@ -120,6 +137,8 @@ def new_background_page(
     initial_url = "about:blank#INSO_CREATE:" + uuid4().hex
     session = browser.new_browser_cdp_session()
     target_id: str | None = None
+    failure = None
+    cleanup_failures = []
     try:
         with context.expect_event("page", predicate=lambda page: page.url == initial_url,
                                   timeout=timeout_ms) as pending:
@@ -134,21 +153,46 @@ def new_background_page(
             target_id = session.send("Target.createTarget", params)["targetId"]
         page = pending.value
         proof = context.new_cdp_session(page)
+        proof_failure = None
         try:
             actual = proof.send("Target.getTargetInfo")["targetInfo"]["targetId"]
             if actual != target_id:
                 raise ValueError("TAB_TARGET_ID_MISMATCH")
+        except BaseException as exc:
+            proof_failure = exc
+            raise
         finally:
-            proof.detach()
+            try:
+                proof.detach()
+            except Exception as cleanup:
+                cleanup_failures.append(cleanup)
+                if proof_failure is None:
+                    raise
         if owner is not None:
             mark_owned_page(page, owner)
         # Keep exact about:blank for existing navigation-failure and last-tab
         # guards. Ownership lives in window.name, not the creation fragment.
         page.evaluate("() => history.replaceState(null, '', 'about:blank')")
         return page
-    except Exception:
+    except BaseException as exc:
+        failure = exc
         if target_id is not None:
-            session.send("Target.closeTarget", {"targetId": target_id})
+            try:
+                _close_created_target(session, target_id)
+            except Exception as cleanup:  # noqa: BLE001 - converted to typed resource fault below
+                cleanup_failures.append(cleanup)
         raise
     finally:
-        session.detach()
+        try:
+            session.detach()
+        except Exception as cleanup:  # noqa: BLE001 - converted to typed resource fault below
+            cleanup_failures.append(cleanup)
+            if failure is None and target_id is not None:
+                # A failed detach on the success path still invalidates return.
+                try:
+                    _close_created_target(session, target_id)
+                except Exception as close:  # noqa: BLE001 - converted to typed resource fault below
+                    cleanup_failures.append(close)
+        if cleanup_failures:
+            browser._inso_page_resource_failed = True
+            raise PageTargetCleanupError(cleanup_failures) from (failure or cleanup_failures[0])

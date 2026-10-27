@@ -758,3 +758,23 @@ and gameplay remain unverified.
 `LIVE_BROWSER_OVERLAP_NOT_VERIFIED`,
 `APPROVED_04075BC_INSTALL_STILL_SEPARATE`,
 `V16_OVERALL_REVIEW_REQUIRED`.
+
+## C prerequisite follow-up to CEO83bfdfd (not deployed)
+
+CEO requested closeTarget/detach failure evidence before actors can be enabled.
+Canonical page factory now reports typedCDP_PAGE_CLEANUP_UNCONFIRMED with original
+acquisition failure as cause, records only cleanup exception class names, and
+latches this attached browser client unusable. Subsequent page acquisition on
+that client is refused before issuing any protocol call. Both root-session and
+page-linked proof-session teardown faults covered; a detach failure on success
+never returns a usable page and attempts only its exact native target cleanup.
+CloseTarget must return positive success; false/missing confirmation is a fault.
+No global Chrome close/reset, no arbitrary page cleanup or fallback reuse.
+Tests cover close-only/detach-only/both, proof-session detach with/without original
+mismatch, success-path detach, false/missing native confirmation and denied reuse.
+**664targetedPASS6.46s**, ownership20PASS0.58s, scopedRuff/diffPASS. Prior full2806
+applies to f49d785 application, not mislabeled as full of this new follow-up.
+Future actor coordinator still must promote this client latch/fault across all
+resource admissions even when an adapter wraps errors; that integration is not
+implemented by this prerequisite. No new true parallelism/real-browser PASS.
+Installed04075bc frozen program was not rebuilt or changed by this follow-up.
