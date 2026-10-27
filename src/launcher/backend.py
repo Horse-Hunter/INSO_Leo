@@ -1134,6 +1134,7 @@ class ProductionBackend(GuiBackend):
         def execute(module):
             self._last_poll = utc_now()
             self._cycle_id = "cycle_" + uuid.uuid4().hex
+            self._log_module_cycle(module, "begin", 0)
             self._observation.begin_module(module)
             self._publish_module_plans()
             self._notify()
@@ -1204,12 +1205,14 @@ class ProductionBackend(GuiBackend):
     def _run_independent_job_scoped(self, module):
         runtime = self._module_runtime
         retry, paused, reason = None, False, None
+        started, outcome = monotonic(), "failed"
         try:
             self._module_pause_requested = None
             self._module_execute(module)
             if self._module_pause_requested is not None:
                 raise self._module_pause_requested
             self._module_failures.pop(module, None)
+            outcome = "stopped" if self._stop.is_set() else "completed"
         except (sqlite3.Error, V12DatabaseError):
             raise
         except Exception as exc:
@@ -1224,6 +1227,7 @@ class ProductionBackend(GuiBackend):
                 cause = cause.__cause__ or cause.__context__
             site = _website_failure(exc)
             if site is not None:
+                outcome = "deferred"
                 count = self._module_failures.get(module, (0, None))[0] + 1
                 retry = min(900 * 2**min(count-1, 4), 10800)
                 reason = f"等待{site}恢复"
@@ -1234,6 +1238,7 @@ class ProductionBackend(GuiBackend):
                     raise
                 self._module_failures[module] = (count, reason)
             elif isinstance(exc, V12Fault) and exc.scope is FaultScope.V12_PAUSE:
+                outcome = "paused"
                 paused, reason = True, "模块安全暂停，请查看异常"
                 self._module_failures[module] = (1, reason)
                 self._append_log("ERROR", f"{module}已暂停，其他安全模块继续。")
@@ -1250,13 +1255,23 @@ class ProductionBackend(GuiBackend):
                     runtime.complete_module(module, retry_after=retry, pause=paused)
                 else:
                     paused, reason = True, "共享浏览器清理失败，已停止共享业务"
+                    outcome = "failed"
                 self._observation.module_plan(module, None if paused else
                     utc_now()+timedelta(seconds=max(0, runtime.module_plans()[module][0]-monotonic())),
                     paused=paused, reason=reason)
                 self._observation.finish_module(module)
+                self._log_module_cycle(module, outcome, max(0, monotonic()-started))
                 self._publish_module_plans()
                 self._cache_workbench(force=True)
                 self._notify()
+
+    def _log_module_cycle(self, module, phase, seconds):
+        runtime = self._module_runtime
+        plan = runtime.module_plans()[module]
+        delay = None if plan[2] else max(0, plan[0]-monotonic())
+        log.info("module cycle", extra={"cycle_id": self._cycle_id,
+            "scheduled_module": module, "cycle_phase": phase,
+            "cycle_elapsed": seconds, "cycle_due_in": delay})
 
     def _pause_v12(self, fault):
         if self._module_runtime is not None:

@@ -281,6 +281,7 @@ separate deployment proposal, not an automatic consequence of source fixes.
 | A cleanup/shared fault, STOP and120s minimum | PASS (offline; review required) | Actor invalidated on cleanup failure; no next purchase after STOP/shared fault |
 | A full regression | PASS |2783passed/1skipped110.68s;63 targeted11.38s;Ruff/diff PASS |
 | B real TP independent900s begin/end | NOT_VERIFIED | Existing deployed source emits no independent TP completion receipt |
+| B future-source TP cycle receipts | PASS (offline only) | Three actual empty TpCycle calls at independent900s; no orders/mails used as substitute |
 | B new purchase success | NOT_VERIFIED | Prior source-conflict holds are not successful procurement |
 | B quote/Google write/readback success | NOT_VERIFIED | Prior no-recent/unchanged/identity refusals, no forced writes |
 | B SMTP acceptance vs mailbox delivery | PASS / NOT_VERIFIED | Prior accepted1 recipient; mailbox final delivery unknown |
@@ -314,3 +315,19 @@ DB fault/cleanup failure, and outer pending pause for both inner module types.
 Captured real purchase log records retain outercycle; child mail attempts <=2;
 no manufactured procurement, no real SMTP attempt in passing tests. No production
 file/process/config/DB/browser/protected-soak operations performed this round.
+
+PhaseA independent commit: a2bc2f01acbde576caf378d625788cd3e31d0d24, pushed to
+requested V1.6 branch before subsequent source work. PhaseB adds one allowlisted
+cycle begin/terminal record on existing rotating log (no separate log/monitor or
+ledger), including module/cycle/elapsed/next-delay; zero eligible TP also records
+completion. INFO enabled for backend logger only, root warning policy unchanged.
+`completed` is cycle completion, never external business-success proof. Unknown
+fields/nonfinite values/raw bodies remain redacted. Separate source requires
+future reviewed deployment; it cannot backfill current frozen EXE receipts.
+PhaseB39 targeted PASS7.45s; final source full2794PASS/1SKIP111.03s, Ruff PASS.
+Existing sanitized production log summary as of11:23:59:5purchase/4quotation
+cycle IDs;8SOURCE_CHANGED,104NO_RECENT_QUOTE,3PRICE_UNCHANGED,4unresolved identities.
+No independent TP receipts. Read-only logs do not establish fresh external writes.
+Prior SMTP export as of10:25:26 reports139SENT,138historicalSENT unchanged then;
+current SMTP state NOT_VERIFIED because this round forbids productionDB access.
+No live restart, no repeat mail, no new production/browser/config query.

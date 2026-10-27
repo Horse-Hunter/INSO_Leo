@@ -1,0 +1,41 @@
+{
+  "collected_at": "2026-10-27T03:23:59.620165+00:00",
+  "mode": "EXISTING_REDACTED_LOGS_AND_PRIOR_EXPORTS_ONLY",
+  "live_database_accessed": false,
+  "live_configuration_accessed": false,
+  "browser_accessed": false,
+  "observed_outcome_counts": {
+    "purchase:SOURCE_CHANGED": 8,
+    "quotation:SOURCE_IDENTITY_UNRESOLVED": 4,
+    "quotation:NO_RECENT_QUOTE": 104,
+    "quotation:PRICE_UNCHANGED": 3
+  },
+  "observed_cycle_counts": {
+    "purchase": 5,
+    "quotation": 4
+  },
+  "observed_ranges": {
+    "purchase": {
+      "first": "2026-10-27 09:56:50",
+      "last": "2026-10-27 11:09:39"
+    },
+    "quotation": {
+      "first": "2026-10-27 10:13:06",
+      "last": "2026-10-27 11:23:53"
+    }
+  },
+  "independent_tp_receipts_found": 0,
+  "tp_900s_actual": "NOT_VERIFIED_NO_DEPLOYED_CYCLE_RECEIPTS",
+  "smtp_prior_export_as_of": "2026-10-27T02:25:26.547734+00:00",
+  "smtp_prior_recipient_outcomes": [
+    [
+      "SENT",
+      139
+    ]
+  ],
+  "historical_sent_unchanged_at_prior_export": true,
+  "current_smtp_receipts": "NOT_VERIFIED_NO_PRODUCTION_DB_ACCESS",
+  "mailbox_delivery": "NOT_VERIFIED",
+  "live_restart_idempotency": "DEFERRED_NO_RESTART_AUTHORITY",
+  "qualification": "Sanitized log outcomes do not prove external writes/readback. No new queries, business operations, fabricated success, or historical replays."
+}

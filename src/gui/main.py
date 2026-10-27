@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import logging
+import math
 import re
 import sys
 import tkinter.messagebox
@@ -72,6 +73,20 @@ def _sanitized_line(record: logging.LogRecord) -> str:
         return f"runtime fault reason={runtime_reason} cause={runtime_cause}"
 
     cycle = getattr(record,"cycle_id",None)
+    scheduled = getattr(record, "scheduled_module", None)
+    phase = getattr(record, "cycle_phase", None)
+    seconds = getattr(record, "cycle_elapsed", None)
+    due = getattr(record, "cycle_due_in", None)
+    def valid_seconds(value):
+        return (not isinstance(value, bool) and isinstance(value, (int, float))
+                and math.isfinite(value) and value >= 0)
+    if (isinstance(cycle, str) and re.fullmatch(r"cycle_[a-f0-9]{32}", cycle)
+            and isinstance(scheduled, str) and scheduled in {"inquiry", "quotation", "tp"}
+            and isinstance(phase, str) and phase in {"begin", "completed", "deferred", "paused", "stopped", "failed"}
+            and valid_seconds(seconds) and (due is None or valid_seconds(due))):
+        delay = "NONE" if due is None else f"{due:.3f}"
+        return (f"cycle={cycle} scheduled_module={scheduled} phase={phase} "
+                f"elapsed_s={seconds:.3f} due_in_s={delay}")
     module = getattr(record,"business_module",None)
     inquiry = getattr(record,"inquiry_id",None)
     stage = getattr(record,"stage",None)
@@ -109,6 +124,7 @@ def _configure_startup_log(root: Path) -> Path:
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
     root_logger.setLevel(logging.WARNING)
+    logging.getLogger("src.launcher.backend").setLevel(logging.INFO)
     return path
 
 

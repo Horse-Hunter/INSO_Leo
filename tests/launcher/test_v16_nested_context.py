@@ -1,4 +1,5 @@
 """Real independent closure -> CombinedCycle -> durable flow, isolated ports only."""
+import logging
 import sqlite3
 from contextlib import nullcontext
 from dataclasses import replace
@@ -27,6 +28,7 @@ from tests.workflow.test_v13_quotation import WS
 def test_real_nested_closure_restores_context_and_durable_guards(
         tmp_path, monkeypatch, caplog, inner, failure, outer_pause):
     backend = launcher.ProductionBackend(root=tmp_path)
+    caplog.set_level(logging.INFO, logger="src.launcher.backend")
     monkeypatch.setattr(QQSMTPTransport, "send_operator_alert",
         lambda *_a, **_k: SimpleNamespace(outcome=DeliveryOutcome.SENT))
     time = SimpleNamespace(tick=0.0)
@@ -134,6 +136,11 @@ def test_real_nested_closure_restores_context_and_durable_guards(
         assert len(completed) == 1  # no next purchase after STOP/shared failure
     logs = [r for r in caplog.records if getattr(r, "business_module", None) == "V1.2"]
     assert logs and all(r.cycle_id == outer_identity[0][0] for r in logs)
+    receipts = [r for r in caplog.records if getattr(r, "scheduled_module", None) == inner]
+    assert [r.cycle_phase for r in receipts] == ["begin", "completed" if failure is None
+        else "stopped" if failure == "stop" else "deferred" if failure == "timeout"
+        else "paused" if failure == "pause" else "failed"]
+    assert all(r.cycle_id == entered[0][0] for r in receipts)
     assert not any(running for _, running, _ in runtime.module_plans().values())
     if outer_pause and not expected:
         assert runtime.module_plans()["inquiry"][2]
