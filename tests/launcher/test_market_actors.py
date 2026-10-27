@@ -276,3 +276,84 @@ def test_runtime_reconfiguration_cannot_change_actor_lifecycle_or_pacing():
         runtime.configure_modules({'tp': 900})
     with pytest.raises(RuntimeError, match='MARKET_COORDINATOR_ALREADY_CONFIGURED'):
         runtime.configure_order_leases(20)
+
+
+
+def test_submission_refusal_after_commit_acknowledges_unsubmitted_request(monkeypatch):
+    from queue import Full
+    runtime, _, actors = setup_actors()
+    original = actors._inboxes[0].put_nowait
+    def refuse_job(message):
+        if message is not None:
+            raise Full
+        return original(message)
+    monkeypatch.setattr(actors._inboxes[0], 'put_nowait', refuse_job)
+    try:
+        assert actors.admit(request('slow'))
+        with pytest.raises(RuntimeError, match='MARKET_INBOX_NOT_EMPTY'):
+            actors.dispatch_ready()
+        assert runtime.order_resource_counts()['active'] == 0
+        assert not Session.read_events['slow'].is_set()
+    finally:
+        assert actors.close()
+
+
+@pytest.mark.parametrize('_iteration', range(20))
+def test_stop_after_commit_before_queue_submission_never_executes_request(monkeypatch, _iteration):
+    runtime, _, actors = setup_actors()
+    original = actors._inboxes[0].put_nowait
+    def stop_in_gap(message):
+        if message is not None:
+            actors.request_stop()
+        return original(message)
+    monkeypatch.setattr(actors._inboxes[0], 'put_nowait', stop_in_gap)
+    try:
+        assert actors.admit(request('slow'))
+        # Depending on the worker consuming Stop's sentinel, the job is either
+        # rejected before submission or acknowledged canceled by worker finally.
+        try:
+            actors.dispatch_ready()
+        except RuntimeError as error:
+            assert str(error) == 'MARKET_INBOX_NOT_EMPTY'
+        assert actors.close()
+        assert not Session.read_events['slow'].is_set()
+        assert runtime.order_resource_counts()['active'] == 0
+    finally:
+        assert actors.close()
+
+
+
+def test_initializer_fault_cannot_exit_before_already_committed_enqueue_is_reconciled(monkeypatch):
+    barrier = threading.Barrier(3)
+    fail = threading.Event()
+    class FailingInitializer:
+        def __init__(self, *_args):
+            pass
+        def __enter__(self):
+            barrier.wait(timeout=3)
+            assert fail.wait(3)
+            raise RuntimeError('synthetic initializer failure')
+        def __exit__(self, *_exc):
+            return False
+    runtime = WorkflowRuntime(None, None, ())
+    runtime.configure_modules({'quotation': 900, 'tp': 900})
+    actors = MarketReadActors(runtime, None, PageResourceAdmission(), session_type=FailingInitializer)
+    actors.start()
+    barrier.wait(timeout=3)
+    original = actors._inboxes[0].put_nowait
+    def fault_in_submission_gap(message):
+        if message is not None:
+            fail.set()
+            assert actors._stop.wait(3)  # Failure reached immutable terminal boundary.
+        return original(message)
+    monkeypatch.setattr(actors._inboxes[0], 'put_nowait', fault_in_submission_gap)
+    try:
+        assert actors.admit(request('slow'))
+        actors.dispatch_ready()
+        assert actors.close()
+        assert runtime.module_resource_failed
+        assert runtime.order_resource_counts()['active'] == 0
+        assert actors.faults
+    finally:
+        fail.set()
+        actors.close()

@@ -83,7 +83,7 @@ def _progress(queue, message):
         pass  # Bounded observations may coalesce; terminal results may NOT drop.
 
 
-def _actor_loop(index, config, admission, stopped, inbox, outbox, progress, session_type):
+def _actor_loop(index, config, admission, stopped, inbox, outbox, progress, transport_lock, session_type):
     # No Backend or WorkflowRuntime reference is passed into this worker.
     try:
         with session_type(config, admission) as session:
@@ -124,13 +124,17 @@ def _actor_loop(index, config, admission, stopped, inbox, outbox, progress, sess
     finally:
         # If Stop won before a queued request was consumed, acknowledge that it
         # never touched a page. One slot per actor means at most one such item.
-        try:
-            request = inbox.get_nowait()
-        except Empty:
-            request = None
-        if request is not None:
-            now = monotonic()
-            outbox.put(MarketCompletion(request.identity, MarketTerminal.CANCELLED, now, now))
+        # Serialize final inbox retirement with submit. Even when a fault sets
+        # Stop between commit and enqueue, the worker cannot exit its final
+        # drain before that admitted producer has finished submitting/canceling.
+        with transport_lock:
+            try:
+                request = inbox.get_nowait()
+            except Empty:
+                request = None
+            if request is not None:
+                now = monotonic()
+                outbox.put(MarketCompletion(request.identity, MarketTerminal.CANCELLED, now, now))
 
 
 class MarketReadActors:
@@ -143,6 +147,7 @@ class MarketReadActors:
         self._runtime, self._config, self._admission = runtime, config, admission
         self._owner, self._workers, self._session_type = threading.get_ident(), workers, session_type
         self._stop = threading.Event()
+        self._transport_lock = threading.RLock()
         self._inboxes = [Queue(maxsize=1) for _ in range(workers)]
         # At most one job terminal and one client-teardown fault per actor.
         self._outbox = Queue(maxsize=workers * 2)
@@ -168,7 +173,7 @@ class MarketReadActors:
             for index, inbox in enumerate(self._inboxes):
                 thread = threading.Thread(target=_actor_loop,
                     args=(index, self._config, self._admission, self._stop, inbox,
-                          self._outbox, self._progress, self._session_type),
+                          self._outbox, self._progress, self._transport_lock, self._session_type),
                     name=f'market-read-{index}', daemon=False)
                 thread.start()
                 self._threads.append(thread)
@@ -194,6 +199,10 @@ class MarketReadActors:
     def dispatch_ready(self):
         """Returns immediately; never waits on a Research batch or source query."""
         self._check_owner()
+        with self._transport_lock:
+            return self._dispatch_ready_locked()
+
+    def _dispatch_ready_locked(self):
         if not self._started or self._stop.is_set() or self._paused:
             return 0
         self._admission.require_open()
@@ -225,12 +234,13 @@ class MarketReadActors:
 
     def request_stop(self):
         """Thread-safe signal only; scheduler owner performs lease drain."""
-        self._stop.set()
-        for inbox in self._inboxes:
-            try:
-                inbox.put_nowait(None)
-            except Full:
-                pass  # Worker finally acknowledges the unconsumed request.
+        with self._transport_lock:
+            self._stop.set()
+            for inbox in self._inboxes:
+                try:
+                    inbox.put_nowait(None)
+                except Full:
+                    pass  # Worker finally acknowledges the unconsumed request.
 
     def drain(self):
         self._check_owner()

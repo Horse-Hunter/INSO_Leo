@@ -1932,3 +1932,23 @@ these operation ownership/settlement guards. No new production browser/DB access
 Stage E actor auth/owner recovery integration remains OPEN; this observation
 increment is not full Stage E completion. New executable/install/browser test
 requires existing independent Review and separately authorized safe windows.
+
+
+## Stage D terminal race correction — isolated pre-deployment follow-up
+
+Inspection found a real submit/exit race in the optional uninstalled actor bridge:
+worker fatal/Stop could finish final empty inbox check before an already reserved
+producer enqueued, leaving no terminal. Added one short launcher transport RLock
+shared by submission, normal Stop signal and worker final inbox reconciliation.
+No Research/browser call is under that lock; page reads still overlap. A producer
+cannot enqueue after the worker's final retirement without Stop being visible,
+and committed cancellation reaches scheduler terminal acknowledgment. No second
+resource manager or business ledger. Same-runtime latch remains irreversible.
+
+Final32actor tests PASS0.29s, including20Stop/submit interleavings and a barrier-
+controlled initializer fault in the commit/enqueue gap, assert no real read and
+no active lease residue. Combined actor/parser/backend62PASS10.45s before the
+last additional tests. Previous full2907PASS/1SKIP113.12s belongs to0d77be2 source;
+full final race-corrected source is running and must be recorded separately.
+No production access, deployment or browser experiment. Actual module business
+continuations, auth-owner recovery and Stage F remain OPEN, TP lateness not fixed.
