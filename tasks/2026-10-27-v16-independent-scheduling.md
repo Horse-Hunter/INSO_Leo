@@ -1,6 +1,6 @@
 # V1.6 independent scheduling and Owner-authorized production release
 
-status: REVIEW_REQUIRED — reviewed04075bc unchanged; Owner resumed business; A/B/C scoped accepted; optional D fixes awaiting Review; E/F incomplete
+status: REVIEW_REQUIRED — native login fix + Stage E isolated owner integration submitted;3001PASS/1SKIP; no production change; default actor assembly OFF; real E/F acceptance open
 owner: Owner; executor Codex
 baseline: 669fe6ada3a450eaef5f74532a371d6fb55ffd01
 branch: codex/v1-6-independent-scheduling
@@ -2610,3 +2610,41 @@ business callbacks and before TP enqueue, quarantine canonical pending Google
 write outcome, immediately signal existing actor Stop from original Backend.
 87PASS8.23s affected canonical backend/domain/purchase-completion regression.
 Final-source full next; no production/browser/SMTP use, overall REVIEW_REQUIRED.
+
+
+## Combined Owner handoff — direct login correction and Stage E final offline evidence
+
+Latest requirement: Owner forwards ALL reports; Executor must never message CEO.
+Both requested source tasks delivered together in existing V16_RELEASE_REPORT.md
+(top combined summary), not a second report or task ledger. Current round permits
+isolated source/tests ONLY. Historical broad production authorizations do not
+permit install/restart/Chrome/DB/config/Vault/SMTP activity in THIS round.
+
+Final application3547c4162d0b5c0308c84ae8a7feba23a39f6a70;
+exact src5ce508705c7e4099d41ae5c9456eaf19a80e427b.
+3001PASS/1SKIP120.81s;87PASS8.23s focused. Skip is Windows symlink creation
+unavailable, not waived safety checks. Direct-only68e1a2d remains independently
+reviewable with2961/1SKIP evidence. Initial b35 two legacy callback failures are
+recorded, source-corrected and unchanged old tests now pass. No auth allowlist,
+SMTP sender, old accepted Stop protocol or business permission broadening.
+
+| Unified requirement | Executor status / exact limit |
+| --- | --- |
+| DIRECT_SITE_LOGIN_ERROR | PASS offline; actual native reason_code, pending independent CEO review |
+| E1 original three domain continuation ports | PASS offline; same Backend optional assembly, default OFF |
+| E2 full source transaction / FIFO / actual IDs | PASS offline; canonical Runtime only, two market slots |
+| E3 original owner recovery and over-limit return | PASS offline; no worker login or result truncation |
+| E4 module contexts / Stop / terminal / bounded GUI | PASS offline; actual original call paths with synthetic clients |
+| E5 final full regression | PASS offline3001/1SKIP; source/tree bound in existing JSON |
+| Real browser overlap / actual TP start delay | NOT_VERIFIED; prior454.210s remains acceptance-open |
+| Long-term resource/DPI/game/actual new GUI | NOT_VERIFIED; old9f soak not reused or inspected |
+| Production replacement / enabling new assembly | DEFERRED; no authorization/execution this round |
+| Google prior exact busy branch | NOT_VERIFIED/UNKNOWN; no new production access |
+
+37 finished owned test scratch directories retired after boundary/reparse checks;
+no new dependencies/daemon/scheduler/browser/profile/ledger. No production data,
+credentials, real screenshots/mail bodies or raw TSV committed. Do not interpret
+new actor default-OFF as a change to existing production TP authorization/config.
+Next Owner action: forward the ONE combined report to CEO source review. Future
+real browser/production acceptance needs its own explicit safe window; no current
+production stop requested. Overall V1.6 REVIEW_REQUIRED, not a self-issued PASS.

@@ -1,6 +1,84 @@
 # V1.6 unified release and initial production verification
 
-## Latest execution status — Actor remediation / final offline evidence
+## 本轮统一交付：直接登录异常整改 + 阶段 E 隔离接续集成
+
+**状态：REVIEW_REQUIRED。以下为执行方离线证据，尚无 CEO 对最终源码的独立 PASS。**
+
+本次只做隔离源码开发和离线回归，未安装、未启用新组合、未停止或重启生产，
+未访问生产数据库/config/Vault、9222、Google/六源网站，未采购或真实发信。
+既有正常业务授权不变。本轮不重新核对生产实时状态，也不沿用旧 PID 作判断。
+
+### 结果与边界
+
+| 项目 | 结果 | 准确范围 |
+| --- | --- | --- |
+| `DIRECT_SITE_LOGIN_ERROR_CHANGES_REQUESTED` | PASS（离线，待复审） | 实际 `SiteLoginError.reason_code` 经原精确认证集合进入站点延期；无新增认证 token，无 Worker 登录 |
+| E1 三模块业务接续 | PASS（离线，待复审） | 原询价认领/重复检查/采购路由、原报价受保护历史查询/写回、原 TP 调研/邮件队列已接到同一 Backend 可选组合 |
+| E2 来源行全事务排他 | PASS（离线，待复审） | 同一来源 FIFO，租约覆盖查询、Owner FX、鲜检、外部动作判断、原持久化终态；读返回不释放整笔业务 |
+| E3 认证恢复/大结果 | PASS（离线，待复审） | 原 Owner 登录巡检的精确成功回执恢复对应站点；人工页不清理；合法超限数据交 Owner 完整处理，不截价 |
+| E4 调度/停止/GUI | PASS（离线，待复审） | 一个 Runtime，两个市场执行槽，最多三个模块事务；完整周期身份、原 120 秒等待、停止排空、UNKNOWN 保护及独立界面状态 |
+| E5 最终全量 | PASS（离线） | **3001 PASS / 1 SKIP，120.81 秒**；跳过因本机无符号链接创建能力，未改变权限强行通过 |
+| 实际网页重叠、实际 TP 准时性 | NOT_VERIFIED | 未获本轮真实浏览器测试授权；历史迟到 454.210 秒的验收问题仍 OPEN，合成时钟不能关闭它 |
+| 长期资源、真实 DPI/游戏影响 | NOT_VERIFIED | 未运行新监控或长测；旧 9f 长测未操作、未查询，不作为本版本通过依据 |
+| 新安装/生产并行 | DEFERRED | 本轮未授权；新 Actor 组合默认 OFF，须显式注入已有 Backend 进行隔离/审核测试 |
+| Google 历史不可用通知精确分支 | UNKNOWN | 原诊断仍未安装；本轮未调查会话、未放宽重试或发测试故障邮件 |
+
+**新 Actor 组合默认 OFF，不表示生产 TP 被关闭。** 生产 TP 配置本轮未读未改。
+`MAIL_QUEUED` 仅表示原不可变邮件命令入队确认，不等于 SMTP 接受或邮箱投递。
+报价跟进继续使用原 Owner 的 INSO 历史/Google 路径，没有另造六源报价规则。
+普通 Research 1～6 个月、TP 1～12 个月、采购权限/金额、SENT/UNKNOWN、收件人规则保留。
+
+### 完整 SHA 与测试归属
+
+- 最新远端补充审核基线：`06ed60feb7ce9a56e83e3b251760ef8ba8cad037`。
+- 独立直接登录最小修复：`68e1a2d2aa2b289c1fd38da33686851ff90bec7d`。
+  对应源码树 `0de681c1f7590779f647a17841230b498ff35aef`；92 项专项通过，
+  独立全量 **2961 PASS / 1 SKIP，113.55 秒**。证据提交 `2ea0b9826470f431f1fa8ab5f4269cddc7be98b5`。
+- 最终应用源码：**`3547c4162d0b5c0308c84ae8a7feba23a39f6a70`**。
+- 最终 `src/` 树：**`5ce508705c7e4099d41ae5c9456eaf19a80e427b`**。
+- 最终专项 **87 PASS / 8.23 秒**；完整 **3001 PASS / 1 SKIP / 120.81 秒**，
+  均归属上述最终应用源码。全部变更 Python 文件 Ruff、`git diff --check` 通过。
+- 初次 E4 全量曾有 2 项失败（原等待回调兼容）；修源码恢复原接口，没有改弱原测试。
+  回调后的共享安全复核、Google 写回待确认及入队前故障均已补回归。
+
+| 独立增量 | 完整提交 SHA |
+| --- | --- |
+| E2 原来源全事务租约 | `c0ae6a4b087eaa1622177bceea61b3042ff6113b` |
+| E1 同一 Research 的逐来源接续 | `6d82fcc6b4070d8e572e3f5a9e865daff9bcf2e9` |
+| E1 原 TP 业务接续 | `85002563c39cfd60f17220840d58c6953d0c42b1` |
+| E1 原询价与报价接续 | `1f32f8564574a1ee6f7e35924c84536995717b78` |
+| E3 Owner 恢复与完整结果交接 | `5405275372dab707c73e14d0945d52bfa03d91cc` |
+| E4 原 Backend 实际组合 | `b35e6061d4e0ec28f7f44945b7edd6a21d73ff31` |
+| E5 兼容与安全复核修正 | `3547c4162d0b5c0308c84ae8a7feba23a39f6a70` |
+
+### 文件与复用
+
+17 个应用文件、8 个测试文件有变更，完整清单与机器可读统计见
+[原证据文件](docs/evidence/v16/order-resource-regression.json) 的 `combined_stage_e_final`。
+
+- `launcher`：原 Backend 组合、逐来源交接、原 Actor、原登录巡检、原有界观测；无新定时器/浏览器/发送器。
+- `research`：同步入口与接续入口共用同一六源解析和完成逻辑；TP 一次 Owner 汇率快照。
+- `workflow`：原 Runtime/订单资源、真实任务身份、原状态机/账本/邮件队列；无第二账本、无伪造 inquiry_id。
+- `sheets.pending`：复用原 Schema 的来源快照；TP 复用当前批次映射，已完成 TP 不重复读原订单，动作前仍鲜检目标。
+- 原采购、SMTP、状态存储迁移和六源采集器没有复制；没有新增依赖。
+
+实际隔离测试经过原 Backend/Runtime/三个业务状态机、原 SQLite/outbox 和实际线程传输，
+使用合成数据、假站点客户端及假发信器。13 种组合覆盖正常、Stop、初始化/终退失败、
+在途归属故障、报价重试让出、TP 表头/来源变化、采购 UNKNOWN、120 秒安全间隔、
+品牌回调清理故障、入队前共享故障、Google 状态写回待确认。
+这些不能当作实际网站、真实采购、真实邮件或正式无人值守成功。
+
+### 交接与剩余工作
+
+已退休本轮 **37** 个结束的测试临时目录，逐个核对绝对边界且无重解析点；
+保留小型脱敏 Git 证据，未清理生产、回滚、CDP、未知文件或旧长测。
+
+请 Owner 将本报告和最终提交转交 CEO 独立复审；本执行方不直接向 CEO 发消息。
+复审后才另行安排明确的安全浏览器窗口，验证真实解析结果重叠、同订单排队、
+TP 实际到期延迟和真实界面状态。真实启用、安装、长期运行仍需对应授权及验收。
+**不自行宣布整体 V1.6 PASS、BUILD_READY 或解除任何发布门禁。**
+
+## Historical execution status — Actor remediation (superseded by combined delivery above)
 
 Overall REVIEW_REQUIRED. Production04075bc is unchanged by this task; Owner's
 previous开始运行 confirmation and17:01–17:04 module logs supersede old temporary

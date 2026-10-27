@@ -82,5 +82,100 @@
     "production_modified": false,
     "scope": "typed canonical SiteLoginError.reason_code; exact existing allowlist; no generic reason_code duck typing",
     "overall": "REVIEW_REQUIRED; E/F and historical TP lateness remain OPEN"
+  },
+  "combined_stage_e_final": {
+    "scope": "two-task combined isolated source delivery; executor tests, NOT CEO PASS or production/browser acceptance",
+    "review_basis": "06ed60feb7ce9a56e83e3b251760ef8ba8cad037",
+    "application_source": "3547c4162d0b5c0308c84ae8a7feba23a39f6a70",
+    "src_tree": "5ce508705c7e4099d41ae5c9456eaf19a80e427b",
+    "phases": {
+      "direct_native_login_fix": "68e1a2d2aa2b289c1fd38da33686851ff90bec7d",
+      "direct_fix_evidence": "2ea0b9826470f431f1fa8ab5f4269cddc7be98b5",
+      "E2_canonical_full_business_lease": "c0ae6a4b087eaa1622177bceea61b3042ff6113b",
+      "E1_same_research_continuation": "6d82fcc6b4070d8e572e3f5a9e865daff9bcf2e9",
+      "E1_tp_owner_domain": "85002563c39cfd60f17220840d58c6953d0c42b1",
+      "E1_inquiry_quotation_ports": "1f32f8564574a1ee6f7e35924c84536995717b78",
+      "E3_owner_site_recovery": "5405275372dab707c73e14d0945d52bfa03d91cc",
+      "E4_original_backend_assembly": "b35e6061d4e0ec28f7f44945b7edd6a21d73ff31",
+      "E5_final_safety_corrections": "3547c4162d0b5c0308c84ae8a7feba23a39f6a70"
+    },
+    "generated_at_utc": "2026-10-27T15:46:08.131836+00:00",
+    "environment": {
+      "python": "3.12.10",
+      "platform": "Windows-10-10.0.19045-SP0",
+      "dependency_environment": "existing verified release site-packages; no dependency added"
+    },
+    "targeted": {
+      "passed": 87,
+      "seconds": 8.23,
+      "scope": "canonical backend, three domain continuations, original purchase completion; synthetic clients/stores"
+    },
+    "final_full": {
+      "passed": 3001,
+      "skipped": 1,
+      "seconds": 120.81,
+      "command": "python -m pytest -q tests -rs --tb=short",
+      "skip": "tests/workflow/test_v12_evidence_and_safety.py:56; symlink creation not available in this test environment"
+    },
+    "initial_E4_full": {
+      "application_source": "b35e6061d4e0ec28f7f44945b7edd6a21d73ff31",
+      "src_tree": "fe964266712549a04fdae3bffc7529abb4795f0b",
+      "passed": 2996,
+      "failed": 2,
+      "skipped": 1,
+      "seconds": 132.11,
+      "failure": "unchanged legacy quotation wait callback identity assertions; source corrected, tests not weakened"
+    },
+    "checks": {
+      "scoped_ruff": "PASS",
+      "git_diff_check": "PASS",
+      "new_auth_reason_tokens": [],
+      "source_frozen_during_final_full": true
+    },
+    "assembly_cases": 13,
+    "assembly_case_scope": "actual original Backend/Runtime/V12/V13/TP calls; synthetic clients, controlled clock, isolated original SQLite/outbox, fake transport",
+    "business_default_actor_assembly": "OFF: explicit constructor composition only; this does NOT describe production TP setting",
+    "live_browser_overlap": "NOT_VERIFIED",
+    "actual_tp_timeliness": "NOT_VERIFIED; previous454.210s failure remains acceptance-open",
+    "long_term_resources": "NOT_VERIFIED",
+    "desktop_dpi_game_impact": "NOT_VERIFIED",
+    "google_live_busy_protection_branch": "UNKNOWN; diagnostics not installed; no new production investigation",
+    "production_runtime_config_vault_sqlite_access": false,
+    "production_exe_replaced": false,
+    "real_smtp_or_procurement_or_google_write": false,
+    "protected_cdp_used": false,
+    "old_soak_touched": false,
+    "owned_completed_scratch_dirs_retired": 37,
+    "reparse_exceptions": 0,
+    "changed_application_files": [
+      "src/launcher/backend.py",
+      "src/launcher/business_continuations.py",
+      "src/launcher/market_actors.py",
+      "src/launcher/market_continuation.py",
+      "src/launcher/site_login_sweep.py",
+      "src/launcher/workbench_snapshot.py",
+      "src/research/continuation.py",
+      "src/research/market_contracts.py",
+      "src/research/service.py",
+      "src/research/tp.py",
+      "src/sheets/pending.py",
+      "src/workflow/market_messages.py",
+      "src/workflow/service.py",
+      "src/workflow/tp_research.py",
+      "src/workflow/v12_flow.py",
+      "src/workflow/v13_integration.py",
+      "src/workflow/v13_quotation.py"
+    ],
+    "changed_test_files": [
+      "tests/launcher/test_business_continuation_loop.py",
+      "tests/launcher/test_continuation_safety_ui.py",
+      "tests/launcher/test_domain_continuations.py",
+      "tests/launcher/test_market_actors.py",
+      "tests/launcher/test_market_owner_recovery.py",
+      "tests/launcher/test_tp_continuation.py",
+      "tests/research/test_continuation.py",
+      "tests/workflow/test_business_continuation.py"
+    ],
+    "overall": "REVIEW_REQUIRED; Owner forwards combined report; no direct CEO messaging"
   }
 }
