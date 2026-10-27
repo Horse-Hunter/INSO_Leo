@@ -966,3 +966,162 @@ Current production authority/state remains governed by the separate V1.6 report.
 Collection-owned old output/stdout/stderr and analysis scratch retired only after
 retained evidence byte verification and process absence; source tree preserved.
 Heartbeat collection complete; recurring automation retired, no replacement monitor.
+
+
+## CEO independent historical 24-hour soak closeout — 2026-10-27
+
+**Review verdict: CONTINUITY_AND_SAFETY_PASS /
+MEMORY_DRIFT_REVIEW_REQUIRED.** Accept the old
+`9f5522d7bef41a15fc099f9ad1545120dd9565c1`
+six-page synthetic soak evidence as a completed
+24-hour **continuity and guardrail test**, but
+explicitly DO NOT award a no-memory-leak PASS or
+a newer-build release clearance.
+
+Review anchor:
+`98da80e0019273263761b3e19530e7e319deb5d8`
+→ submitted evidence-only commit
+`f214fd2e5f6bffe9c768e6c60713251bc165df5e`.
+Actual GitHub comparison verified exactly one
+commit, with only `V15_UI_UPGRADE_REPORT.md`,
+this task file and five `soak-24h-*` artifacts
+under `docs/evidence/v15b/final-acceptance/`
+changed/added. No `src/`, build scripts, runtime
+or production business implementation changed.
+
+### Evidence accepted
+
+- `soak-24h-complete.json` and independent
+  `soak-24h-summary.json` describe
+  86444.234s measured monotonic runtime (over
+  the full 86400s threshold), 2012 samples,
+  recomputed max sample gap60.11s, and no
+  recorded callback errors or prohibited
+  network/business guard attempts. Sampling
+  continuity does not prove every GUI instant
+  was responsive; no >60.11s observational gap
+  was reported.
+- 286 synthetic cycles, including143 injected
+  recovery observations, finished; every observed
+  queue burst (maximum256) drained back to0
+  within the next observed<=61.02s, and the
+  final queue was0. The recovery injection
+  did **not** exercise live website faults,
+  production writes or SMTP.
+- Persistent view row cache was bounded<=200;
+  snapshot logs<=300; backend ring<=1000;
+  Python threads1, settled native threads5,
+  steady Windows handles345, GDI objects57.
+  Thus no evidence of cumulative callback,
+  handle, log or queue leak within this test.
+  USER objects ended287 and ranged236–288;
+  startup handles353 settled345.
+- Post-warmup time-weighted app CPU:
+  0.0194325% of a16-logical-CPU whole host
+  across covered intervals. On >=30s
+  intervals, weighted0.0159891% and
+  maximum0.0776974%; short sub-30s
+  endpoint peaks do not imply sustained
+  >0.07% load. Samples are phase-endpoint
+  labelled and can straddle synthetic
+  visibility/exercise transitions, so
+  these numbers are NOT a real Windows
+  Explorer tray or actual-game benchmark.
+- User's protected original source checkout
+  reportedly remained clean, with110 source
+  hashes checked against the launch manifest.
+  We reviewed the committed report/structured
+  evidence, not the Windows source tree or
+  original hash verification execution.
+  The original compact
+  `soak-24h-samples.jsonl.gz` is retained
+  with an original-files SHA256 manifest and
+  executor-reported byte verification. Its
+  full decompressed2012-row raw series was
+  not independently recomputed in this
+  GitHub text-only review. Reported cleaning
+  of owned original samples, stdout/stderr
+  and scratch did not touch protected Git,
+  runtime, backups or active V1.6.
+- The completion JSON is written **before**
+  the application closes. Later absence
+  of PID70956 and empty stderr support
+  normal shutdown and no forced termination,
+  but **process exit code was not captured**.
+  No `exit=0` or fully proven clean process
+  exit claim is made.
+
+### Memory drift determination — REVIEW REQUIRED
+
+The submitted hourly summary visibly rises
+across the full 24 hours, and reported
+first→last data agree with aggregate summary:
+- RSS 50.01→64.75MiB, **+14.7422MiB**;
+  linear slope approximately **+0.595MiB/h**.
+- Private Bytes 31.69→47.29MiB,
+  **+15.5977MiB**; slope
+  approximately **+0.614MiB/h**.
+
+There is no demonstrated RSS or private-memory
+plateau within this run. This is real measured
+growth and precludes a claim that the old
+synthetic process is stable in memory or
+certified leak-free over24h. However, stable
+GDI/handles/caches and lack of heap/native
+allocation tracing do not establish an
+unbounded software leak or culpability of
+specific app/Tk/allocator/test harness code.
+The total observed growth (~15–16MiB/day)
+is a nontrivial trend worth carrying forward,
+but at end-of-test absolute RSS~64.75MiB it
+is **not** by itself evidence of impending
+exhaustion or a production emergency.
+Do not extrapolate a constant slope for
+weeks or claim causation. No speculative
+code changes, forced process restart or
+fresh background monitoring are authorized
+by this old-soak review.
+
+**Risk classification: historical old-source
+memory trend OPEN, root cause UNKNOWN, scoped
+P2 observation, not a known live V1.6
+failure.** For the next Owner-approved
+reviewed V1.6 deployment acceptance,
+reuse finite memory/handle checkpoints
+and existing bounded logging to compare
+its **own** repeated business cycles.
+Only pursue a short isolated allocation/
+reference attribution if the issue actually
+reproduces and matters on that version.
+Do not re-open or silently modify the
+historical `9f` source merely to make
+this obsolete test pass.
+
+### Strict scope
+
+The tested program was the **old six-page**
+source `9f5522d7...`, under Windows125% DPI
+in a non-input desktop without Explorer.
+This review **does not** provide24h evidence
+for five-page `669fe6a...`, frozen
+V1.6 `99dd22c...` or V1.6 source fixes
+`04075bc...`. It cannot certify
+Windows100/150% actual OS DPI, genuine
+Explorer tray in this isolated test,
+browser/Chrome/game FPS, production Research,
+Google writes, purchase/quotation outcomes,
+SMTP delivery, or V1.6 stability. The
+separately Owner-verified earlier tray
+result remains separate and valid only
+for its checked scope.
+
+Disposition:
+**OLD9F_SOAK_CLOSED_CONTINUITY_PASS /
+MEMORY_DRIFT_REVIEW_REQUIRED /
+NO_NEW_BUILD_OR_RELEASE_AUTHORITY.**
+Prior original V1.5 reviews remain preserved.
+Do not change current V1.6 production
+authorization/status, start new monitoring,
+delete existing protected evidence, or
+release any former build/production hold
+on the strength of this old soak.
