@@ -1,0 +1,31 @@
+{
+  "source_sha": "99dd22c43fd83852dc1d45d13c4cfed46b0ebe0d",
+  "installed": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6",
+  "exe_sha256": "16e38f30e253041f7ed41e0447def744f6912d7b310f6dbdf616556cdbdc8b82",
+  "assets_verified": 2875,
+  "runtime_target": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.4\\runtime",
+  "backup_root": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-before-20261027T015035Z",
+  "v15_rollback": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.5",
+  "config_delta": [
+    "v16_enabled=true",
+    "tp_enabled=true",
+    "module_intervals_seconds"
+  ],
+  "intervals_seconds": {
+    "inquiry": 900,
+    "quotation": 900,
+    "tp": 900
+  },
+  "v13_enabled": true,
+  "tp_enabled": true,
+  "selfcheck": "PASS",
+  "idlecheck": "PASS",
+  "business_started": false,
+  "ledger_all_rows_unchanged": true,
+  "immutable_commands_unchanged": true,
+  "tp_tasks": 4,
+  "tp_sent": 6,
+  "vault_unchanged": true,
+  "v14_v15_preserved": true,
+  "rollback_rule": "Stop V1.6 normally; restore backed-up configuration and start unchanged V1.5 against current compatible ledger. Never restore pre-live ledger after new effects."
+}

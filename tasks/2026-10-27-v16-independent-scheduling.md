@@ -1,6 +1,6 @@
 # V1.6 independent scheduling and Owner-authorized production release
 
-status: IN_PROGRESS
+status: REVIEW_REQUIRED — installed/live, external-success acceptance incomplete
 owner: Owner; executor Codex
 baseline: 669fe6ada3a450eaef5f74532a371d6fb55ffd01
 branch: codex/v1-6-independent-scheduling
@@ -37,12 +37,12 @@ isolated, durable ledger/security/ownership failures retain shared-stop semantic
 Manual actions reuse original condition/gate and fresh permission checks.
 
 ## Acceptance and verification
-- [ ] independent deadlines/fairness, safe resource arbitration, shutdown and manual races
-- [ ] SMTP parallel with browser, same-order serialization, SENT/UNKNOWN protection
-- [ ] per-module failures/backoff and GUI real schedules/version, bounded resources
-- [ ] full offline and synthetic race/fault regressions, real read-only adapters
-- [ ] canonical frozen selfcheck/scan/manifest, rollback and database/config/vault backup
-- [ ] stop V1.5 normally, verified V1.6 shared-runtime install, all-module production
+- [x] independent deadlines/fairness, safe resource arbitration, shutdown and manual races (offline)
+- [x] SMTP parallel with browser, same-order serialization, SENT/UNKNOWN protection (offline; real notification accepted)
+- [x] per-module failures/backoff and GUI schedules/version (offline; live resource short-check only)
+- [x] full offline and synthetic race/fault regressions, real read-only adapters
+- [x] canonical frozen selfcheck/scan/manifest, rollback and database/config/vault backup
+- [x] stop V1.5 normally, verified V1.6 shared-runtime install, three-module configuration/start
 - [ ] external outcomes checked, truthful counts/failures/UNKNOWN and final CEO audit
 
 ## Verified facts and unresolved risks
@@ -56,7 +56,7 @@ CPU/game impact and transaction constraints beyond existing narrow gate.
 
 ## Execution log
 Branch/worktree isolated from exact baseline. No V1.5/longsoak files changed.
-Full source/governance audit in progress; no production writes or new execution.
+Initial source/governance audit completed; early no-live state SUPERSEDED below.
 
 2026-10-27 pre-build: implementation extends only existing WorkflowRuntime,
 launcher composition, notification worker and five-page observation. Fixed actor
@@ -81,3 +81,29 @@ V1.6 migrations on copy produced no schema/row delta, production migration NOT_N
 FourTP/sixTP-SENT and138totalSENT preserved; V1.5 rollback assets2875 verified.
 Owner normal V1.5 exit2026-10-27T01:32:46Z code0. Protected70956 unaffected.
 Build/install/live acceptance next; no production side effects executed yet.
+
+2026-10-27 release/live update (supersedes pre-build next step): source99dd22c
+built using canonical script, RELEASE_SCAN_OK and frozen selfcheck PASS. New EXE
+16E38F30E253041F7ED41E0447DEF744F6912D7B310F6DBDF616556CDBDC8B82 installed at
+dist/INSO_V1.6;2875asset comparison, installed self/idlecheck PASS. Existing mutex
+held for verified backup/install; ledger zero delta pre-business. Owner-authorized
+config sets v16/tp true, preserves quotationtrue, independent periods900each.
+V1.4/V1.5 remain intact; runtime junction unchanged. Real EXE74176/observer84608
+started09:54:40 --start-inquiry. Source conflicts held per task; no forced writes.
+As of10:27: fourSOURCE_CHANGED results across2orders/3logged inquiry cycles;
+quote1cycle31NO_RECENT_QUOTE/1PRICE_UNCHANGED/1SOURCE_IDENTITY_UNRESOLVED;
+onePURCHASE_EXCEPTION notification command, one newly acceptedSMTP recipient.
+Historical138SENT, fourTP/sixTP-SENT/immutable commands unchanged, integrityok.
+No new procurementSAVED or quoteSheet-write confirmed. TP enabled, preflight4
+already_processed/0new candidates; independent live TP completion NOT_VERIFIED.
+Real UI window version enumerated; live control inspection blocked by app-approval
+timeout, so newEXE menu/tray/exit NOT_VERIFIED (synthetic/oldV1.5 not substituted).
+Two121s finite resource samples: hostCPU0.33085%/0.28956%; handles3982..5118 then
+933..1041 after batch. Peak is transient, not established unbounded leak; longer
+V1.6 soak/game impact UNKNOWN. Full report and allowlisted evidence linked in
+V16_RELEASE_REPORT.md. No speculative business/resource fix made after build.
+Owned267925710-byte stage retired after asset verification; exact owned exited
+test trees, production compatibility copy and temporary real research workbook
+retired. Protected original70956/testtree, live runtime, rollback/config/vault/DB
+backups and V1.5 report tree retained; no new handoff or duplicate V1.6 worktree.
+CEO final audit next. Source frozen at99dd22c; subsequent commits evidence only.

@@ -1,0 +1,48 @@
+{
+  "pid": 74176,
+  "watch_pid": 84608,
+  "elapsed": 121.89000000001397,
+  "samples": 13,
+  "logical_cpus": 16,
+  "qualification": "Finite read-only GetProcessTimes/GetThreadTimes on installed live process and its existing observer; menu/tray activity may occur; authorized production business active; excludes Chrome child resource totals.",
+  "app": {
+    "seconds": 121.75,
+    "cpu_host_percent": 0.28955980492813144,
+    "rss_min": 141799424,
+    "rss_max": 144568320,
+    "private_min": 110764032,
+    "private_max": 113176576,
+    "threads_min": 10,
+    "threads_max": 11,
+    "handles_min": 933,
+    "handles_max": 1041,
+    "gdi_range": [
+      136,
+      136
+    ],
+    "user_range": [
+      258,
+      258
+    ]
+  },
+  "observer": {
+    "seconds": 121.76600000000326,
+    "cpu_host_percent": 0.0,
+    "rss_min": 21762048,
+    "rss_max": 21762048,
+    "private_min": 15003648,
+    "private_max": 15003648,
+    "threads_min": 1,
+    "threads_max": 1,
+    "handles_min": 128,
+    "handles_max": 128,
+    "gdi_range": [
+      0,
+      0
+    ],
+    "user_range": [
+      1,
+      1
+    ]
+  }
+}

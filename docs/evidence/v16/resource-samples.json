@@ -1,0 +1,808 @@
+[
+  {
+    "phase": "live",
+    "at": "2026-10-27T02:17:46.610281+00:00",
+    "seconds": 0.0,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 302750.843,
+        "kernel": 46.125,
+        "user": 37.15625,
+        "rss": 137842688,
+        "private": 106737664,
+        "handles": 3982,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 9
+      },
+      {
+        "pid": 84608,
+        "wall": 302750.89,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "live",
+    "at": "2026-10-27T02:17:56.701224+00:00",
+    "seconds": 10.09399999998277,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 302760.937,
+        "kernel": 46.375,
+        "user": 37.390625,
+        "rss": 138166272,
+        "private": 106835968,
+        "handles": 4055,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 11
+      },
+      {
+        "pid": 84608,
+        "wall": 302760.984,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "live",
+    "at": "2026-10-27T02:18:06.797807+00:00",
+    "seconds": 20.18800000002375,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 302771.031,
+        "kernel": 46.578125,
+        "user": 37.734375,
+        "rss": 138420224,
+        "private": 107786240,
+        "handles": 4132,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 9
+      },
+      {
+        "pid": 84608,
+        "wall": 302771.093,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "live",
+    "at": "2026-10-27T02:18:16.904115+00:00",
+    "seconds": 30.29700000002049,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 302781.14,
+        "kernel": 46.9375,
+        "user": 37.984375,
+        "rss": 138362880,
+        "private": 106668032,
+        "handles": 4226,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 9
+      },
+      {
+        "pid": 84608,
+        "wall": 302781.203,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "live",
+    "at": "2026-10-27T02:18:27.012699+00:00",
+    "seconds": 40.40700000000652,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 302791.25,
+        "kernel": 47.1875,
+        "user": 38.25,
+        "rss": 139231232,
+        "private": 107450368,
+        "handles": 4302,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 9
+      },
+      {
+        "pid": 84608,
+        "wall": 302791.312,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "live",
+    "at": "2026-10-27T02:18:37.114854+00:00",
+    "seconds": 50.51600000000326,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 302801.359,
+        "kernel": 47.5,
+        "user": 38.515625,
+        "rss": 139501568,
+        "private": 107450368,
+        "handles": 4419,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 9
+      },
+      {
+        "pid": 84608,
+        "wall": 302801.421,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "live",
+    "at": "2026-10-27T02:18:47.228792+00:00",
+    "seconds": 60.625,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 302811.468,
+        "kernel": 47.8125,
+        "user": 38.84375,
+        "rss": 138293248,
+        "private": 106041344,
+        "handles": 4493,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 9
+      },
+      {
+        "pid": 84608,
+        "wall": 302811.531,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "live",
+    "at": "2026-10-27T02:18:57.359670+00:00",
+    "seconds": 70.75,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 302821.593,
+        "kernel": 48.109375,
+        "user": 39.140625,
+        "rss": 138493952,
+        "private": 107175936,
+        "handles": 4584,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 9
+      },
+      {
+        "pid": 84608,
+        "wall": 302821.656,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "live",
+    "at": "2026-10-27T02:19:07.467174+00:00",
+    "seconds": 80.85999999998603,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 302831.703,
+        "kernel": 48.296875,
+        "user": 39.3125,
+        "rss": 139780096,
+        "private": 107757568,
+        "handles": 4672,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 9
+      },
+      {
+        "pid": 84608,
+        "wall": 302831.765,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "live",
+    "at": "2026-10-27T02:19:17.594033+00:00",
+    "seconds": 90.98499999998603,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 302841.828,
+        "kernel": 48.640625,
+        "user": 39.578125,
+        "rss": 140668928,
+        "private": 108843008,
+        "handles": 4857,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 9
+      },
+      {
+        "pid": 84608,
+        "wall": 302841.89,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "live",
+    "at": "2026-10-27T02:19:27.692368+00:00",
+    "seconds": 101.07799999997951,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 302851.921,
+        "kernel": 48.875,
+        "user": 39.8125,
+        "rss": 140820480,
+        "private": 108843008,
+        "handles": 4955,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 9
+      },
+      {
+        "pid": 84608,
+        "wall": 302851.984,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "live",
+    "at": "2026-10-27T02:19:37.800542+00:00",
+    "seconds": 111.18800000002375,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 302862.031,
+        "kernel": 49.109375,
+        "user": 40.046875,
+        "rss": 141377536,
+        "private": 110215168,
+        "handles": 5012,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 9
+      },
+      {
+        "pid": 84608,
+        "wall": 302862.109,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "live",
+    "at": "2026-10-27T02:19:47.923554+00:00",
+    "seconds": 121.31300000002375,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 302872.156,
+        "kernel": 49.390625,
+        "user": 40.3125,
+        "rss": 141582336,
+        "private": 110215168,
+        "handles": 5118,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 9
+      },
+      {
+        "pid": 84608,
+        "wall": 302872.218,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "post-cycle",
+    "at": "2026-10-27T02:23:29.765318+00:00",
+    "seconds": 0.0,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 303094.0,
+        "kernel": 54.53125,
+        "user": 44.703125,
+        "rss": 143646720,
+        "private": 113090560,
+        "handles": 933,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 10
+      },
+      {
+        "pid": 84608,
+        "wall": 303094.062,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "post-cycle",
+    "at": "2026-10-27T02:23:39.887109+00:00",
+    "seconds": 10.125,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 303104.125,
+        "kernel": 54.796875,
+        "user": 44.90625,
+        "rss": 143736832,
+        "private": 113176576,
+        "handles": 954,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 10
+      },
+      {
+        "pid": 84608,
+        "wall": 303104.187,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "post-cycle",
+    "at": "2026-10-27T02:23:50.014085+00:00",
+    "seconds": 20.25,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 303114.25,
+        "kernel": 55.03125,
+        "user": 45.234375,
+        "rss": 143736832,
+        "private": 113176576,
+        "handles": 965,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 10
+      },
+      {
+        "pid": 84608,
+        "wall": 303114.343,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "post-cycle",
+    "at": "2026-10-27T02:24:00.183445+00:00",
+    "seconds": 30.42099999997299,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 303124.421,
+        "kernel": 55.21875,
+        "user": 45.5625,
+        "rss": 144171008,
+        "private": 113176576,
+        "handles": 994,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 10
+      },
+      {
+        "pid": 84608,
+        "wall": 303124.5,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "post-cycle",
+    "at": "2026-10-27T02:24:10.347324+00:00",
+    "seconds": 40.57799999997951,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 303134.578,
+        "kernel": 55.453125,
+        "user": 45.875,
+        "rss": 142925824,
+        "private": 111550464,
+        "handles": 1009,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 10
+      },
+      {
+        "pid": 84608,
+        "wall": 303134.671,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "post-cycle",
+    "at": "2026-10-27T02:24:20.515948+00:00",
+    "seconds": 50.75,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 303144.75,
+        "kernel": 55.75,
+        "user": 46.265625,
+        "rss": 143409152,
+        "private": 112041984,
+        "handles": 1013,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 10
+      },
+      {
+        "pid": 84608,
+        "wall": 303144.828,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "post-cycle",
+    "at": "2026-10-27T02:24:30.650582+00:00",
+    "seconds": 60.89000000001397,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 303154.89,
+        "kernel": 55.890625,
+        "user": 46.390625,
+        "rss": 143532032,
+        "private": 112259072,
+        "handles": 1025,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 10
+      },
+      {
+        "pid": 84608,
+        "wall": 303154.968,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "post-cycle",
+    "at": "2026-10-27T02:24:40.785139+00:00",
+    "seconds": 71.01500000001397,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 303165.015,
+        "kernel": 56.03125,
+        "user": 46.671875,
+        "rss": 143040512,
+        "private": 112078848,
+        "handles": 1015,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 10
+      },
+      {
+        "pid": 84608,
+        "wall": 303165.109,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "post-cycle",
+    "at": "2026-10-27T02:24:50.953697+00:00",
+    "seconds": 81.18699999997625,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 303175.187,
+        "kernel": 56.203125,
+        "user": 46.796875,
+        "rss": 143904768,
+        "private": 112758784,
+        "handles": 1031,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 11
+      },
+      {
+        "pid": 84608,
+        "wall": 303175.281,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "post-cycle",
+    "at": "2026-10-27T02:25:01.097098+00:00",
+    "seconds": 91.32799999997951,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 303185.328,
+        "kernel": 56.40625,
+        "user": 46.96875,
+        "rss": 141799424,
+        "private": 110764032,
+        "handles": 1021,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 11
+      },
+      {
+        "pid": 84608,
+        "wall": 303185.421,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "post-cycle",
+    "at": "2026-10-27T02:25:11.263487+00:00",
+    "seconds": 101.5,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 303195.5,
+        "kernel": 56.546875,
+        "user": 47.25,
+        "rss": 143695872,
+        "private": 112414720,
+        "handles": 1029,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 11
+      },
+      {
+        "pid": 84608,
+        "wall": 303195.562,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "post-cycle",
+    "at": "2026-10-27T02:25:21.381532+00:00",
+    "seconds": 111.625,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 303205.625,
+        "kernel": 56.75,
+        "user": 47.546875,
+        "rss": 144314368,
+        "private": 112992256,
+        "handles": 1041,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 11
+      },
+      {
+        "pid": 84608,
+        "wall": 303205.687,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  },
+  {
+    "phase": "post-cycle",
+    "at": "2026-10-27T02:25:31.507349+00:00",
+    "seconds": 121.75,
+    "targets": [
+      {
+        "pid": 74176,
+        "wall": 303215.75,
+        "kernel": 57.0625,
+        "user": 47.8125,
+        "rss": 144568320,
+        "private": 113065984,
+        "handles": 1027,
+        "gdi": 136,
+        "user_objects": 258,
+        "threads": 11
+      },
+      {
+        "pid": 84608,
+        "wall": 303215.828,
+        "kernel": 0.046875,
+        "user": 0.0625,
+        "rss": 21762048,
+        "private": 15003648,
+        "handles": 128,
+        "gdi": 0,
+        "user_objects": 1,
+        "threads": 1
+      }
+    ]
+  }
+]

@@ -1,0 +1,90 @@
+{
+  "at": "2026-10-27T02:25:26.547734+00:00",
+  "integrity": "ok",
+  "historical_immutable": {
+    "workflow_v12_notification_commands": true,
+    "workflow_requirements": true
+  },
+  "historical_sent_unchanged": true,
+  "historical_sent_count": 138,
+  "new_notification_commands": 1,
+  "new_command_kinds": [
+    "PURCHASE_EXCEPTION"
+  ],
+  "recipient_outcomes": [
+    [
+      "SENT",
+      139
+    ]
+  ],
+  "changed_workflow_items": 2,
+  "business_states": [
+    [
+      "DUPLICATE_STOPPED",
+      1
+    ],
+    [
+      "HUMAN_COMPLETED",
+      1
+    ],
+    [
+      "INTERRUPTED_UNSENT",
+      17
+    ],
+    [
+      "INVALID_INPUT_SKIPPED",
+      1
+    ],
+    [
+      "PURCHASE_EXCEPTION",
+      2
+    ],
+    [
+      "PURCHASE_RECORDED",
+      21
+    ],
+    [
+      "RESEARCH_FAILED",
+      1
+    ],
+    [
+      "SOURCE_CHANGED",
+      2
+    ],
+    [
+      "STATUS_WRITE_PENDING",
+      2
+    ]
+  ],
+  "purchase_outcomes": [
+    [
+      "AI_RECOGNIZED",
+      3
+    ],
+    [
+      "MANUAL_REVIEW",
+      1
+    ],
+    [
+      "SAVED",
+      23
+    ],
+    [
+      "VALIDATION_FAILED",
+      3
+    ]
+  ],
+  "new_events": [
+    [
+      "SECURITY_CHECK_FAILED",
+      null,
+      4
+    ]
+  ],
+  "tp_task_states": [
+    [
+      "MAIL_QUEUED",
+      4
+    ]
+  ]
+}

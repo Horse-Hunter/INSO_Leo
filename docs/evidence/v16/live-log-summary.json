@@ -1,0 +1,15 @@
+{
+  "as_of": "2026-10-27T02:27:01.230817+00:00",
+  "business_results": {
+    "purchase:SOURCE_CHANGED": 4,
+    "quotation:SOURCE_IDENTITY_UNRESOLVED": 1,
+    "quotation:NO_RECENT_QUOTE": 31,
+    "quotation:PRICE_UNCHANGED": 1
+  },
+  "cycles_observed": {
+    "purchase": 3,
+    "quotation": 1
+  },
+  "tp_cycle_completion": "NOT_INDEPENDENTLY_OBSERVED; enabled in canonical runtime, no eligible new TP in preflight",
+  "qualification": "Counts from current-run sanitized log only; not external submission success or recipient delivery proof."
+}

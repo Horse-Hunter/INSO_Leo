@@ -1,0 +1,18 @@
+{
+  "source_sha": "99dd22c43fd83852dc1d45d13c4cfed46b0ebe0d",
+  "full_tests": "2759 passed,1 skipped,100.86 seconds",
+  "ruff": "PASS",
+  "release_scan": "RELEASE_SCAN_OK",
+  "build_selfcheck": "PASS",
+  "installed_idlecheck": "PASS",
+  "status": "PRODUCTION_INSTALLED_RUNNING / REVIEW_REQUIRED; full end-to-end live success NOT_VERIFIED",
+  "real_purchase_submissions_confirmed": 0,
+  "real_quotation_writes_confirmed": 0,
+  "new_smtp_accepted_recipients": 1,
+  "real_tp_new_tasks": 0,
+  "historical_tp_tasks_preserved": 4,
+  "historical_tp_sent_preserved": 6,
+  "original_longsoak": "PID70956 source9f, still running; not24h PASS",
+  "windows_ui": "Versioned real window enumerated; synthetic five-page checks PASS; live control inspection unavailable after app approval timeout",
+  "native_handles": "Query-period3982..5118, later post-batch933..1041; transient peak observed, no proof of unbounded growth. Longer V1.6 soak NOT_VERIFIED."
+}
