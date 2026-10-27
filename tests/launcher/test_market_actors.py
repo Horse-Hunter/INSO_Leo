@@ -410,3 +410,52 @@ def test_unknown_or_read_failure_code_is_not_guessed_as_auth(code):
     error.code = code
     fault = _fault(error, PageResourceAdmission())
     assert fault.scope is MarketFaultScope.FAILED
+
+
+@pytest.mark.parametrize('code', ['MANUAL_VERIFICATION_REQUIRED', 'SESSION_STALE',
+    'SESSION_IDENTITY_UNVERIFIED', 'OTP_REQUIRED', 'SECURITY_EVENT', 'LOGIN_NOT_CONFIRMED'])
+def test_direct_native_site_login_error_defers_site_and_acknowledges_resource(code):
+    from src.research.site_login import SiteLoginError
+    from src.workflow.market_messages import MarketFaultScope
+    class NativeAuthBlocked(Session):
+        def read(self, query):
+            raise SiteLoginError(code)
+    runtime = WorkflowRuntime(None, None, ())
+    runtime.configure_modules({'quotation': 900, 'tp': 900})
+    admission = PageResourceAdmission()
+    actors = MarketReadActors(runtime, None, admission, session_type=NativeAuthBlocked)
+    actors.start()
+    try:
+        assert actors.admit(request('native-auth'))
+        assert actors.dispatch_ready() == 1
+        completion, = drain_until(actors, 1)
+        assert completion.terminal is MarketTerminal.FAILED and completion.result is None
+        assert completion.fault.scope is MarketFaultScope.SITE_DEFER
+        assert completion.fault.reason == 'MARKET_AUTH_REQUIRED'
+        assert completion.fault.exception_classes == ('SiteLoginError',)
+        assert ResearchSource.HQEW in actors._blocked_sources
+        assert runtime.order_resource_counts()['active'] == 0
+        assert not runtime.module_resource_failed
+        admission.require_open()
+    finally:
+        assert actors.close()
+
+
+@pytest.mark.parametrize('code', ['READ_EMPTY', 'AUTHENTICATED_READ_UNAVAILABLE', 'LOGINish_private_text'])
+def test_native_non_auth_reason_and_untyped_reason_code_not_inferred(code):
+    from src.launcher.market_actors import _fault
+    from src.research.site_login import SiteLoginError
+    from src.workflow.market_messages import MarketFaultScope
+    assert _fault(SiteLoginError(code), PageResourceAdmission()).scope is MarketFaultScope.FAILED
+    foreign = RuntimeError('MANUAL_VERIFICATION_REQUIRED')
+    foreign.reason_code = 'MANUAL_VERIFICATION_REQUIRED'
+    assert _fault(foreign, PageResourceAdmission()).scope is MarketFaultScope.FAILED
+
+
+def test_native_site_login_error_during_initialization_remains_global_stop():
+    from src.launcher.market_actors import _fault
+    from src.research.site_login import SiteLoginError
+    from src.workflow.market_messages import MarketFaultScope
+    fault = _fault(SiteLoginError('OTP_REQUIRED'), PageResourceAdmission(), initializing=True)
+    assert fault.scope is MarketFaultScope.GLOBAL_STOP
+    assert fault.reason == 'MARKET_ACTOR_INITIALIZATION_FAILED'

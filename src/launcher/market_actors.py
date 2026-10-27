@@ -16,7 +16,7 @@ from src.research.cdp_pages import (
     PageTargetOwnershipError,
 )
 from src.research.runtime import ResearchMarketSession
-from src.research.site_login import SITE_AUTH_RECOVERY_REASONS
+from src.research.site_login import SITE_AUTH_RECOVERY_REASONS, SiteLoginError
 from src.workflow.market_messages import (
     MarketCompletion,
     MarketFault,
@@ -59,7 +59,8 @@ def _fault(error, admission, *, initializing=False):
     if initializing or not isinstance(error, Exception):
         admission.invalidate(PageTargetOwnershipError((error,)))
         return MarketFault(MarketFaultScope.GLOBAL_STOP, 'MARKET_ACTOR_INITIALIZATION_FAILED', tuple(classes[:8]))
-    code = getattr(error, 'reason', None) or getattr(error, 'code', None)
+    code = (error.reason_code if isinstance(error, SiteLoginError) else
+            getattr(error, 'reason', None) or getattr(error, 'code', None))
     if code == 'MARKET_OWNER_REQUIRED':
         return MarketFault(MarketFaultScope.SITE_DEFER, 'MARKET_OWNER_REQUIRED', tuple(classes[:8]))
     if code in SITE_AUTH_RECOVERY_REASONS:
