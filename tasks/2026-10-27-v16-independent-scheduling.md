@@ -818,3 +818,258 @@ retained, restoration via original Start awaiting Owner confirmation.
 
 Final full offline regression on67be3f7 application: **2815PASS/1SKIP109.85s**;
 no source change during/after run, docs/evidence only. No live SMTP/write tests.
+
+
+## CEO independent V1.6 continuation review — 2026-10-27
+
+**Review verdict: PARTIAL_PASS / CHANGES_REQUESTED_FOR_OUTSTANDING_V1.6.**
+Accept evidence of the specifically reviewed `04075bc` installation,
+real module-cycle observability, historic receipt preservation and
+the narrow `67be3f7` known-target cleanup-failure source increment.
+Do **not** issue overall V1.6 PASS: 900-second timely TP scheduling
+**FAIL** (454.210s late); complete safe multi-actor browser execution,
+post-navigation ownership and external purchase/Sheet E2E remain open.
+No live program, GUI, browser, Chrome profile, SMTP, SQLite, config or
+deployment was touched by this independent GitHub review.
+
+**Review references and exact diff.** Prior CEO review
+`83bfdfd2ae6fcc63316c802341ffa28f4b894f77`
+→ submitted branch HEAD
+`40b16ae3fff53dae63e44ccd610f2615edea88d8`
+(two commits: `67be3f748f80daff0dfca2f3d64998ce41f53c16`
+source/tests and `40b16ae...` documentary evidence).
+Only changed application module
+`src/research/cdp_pages.py`, with tests in existing
+`tests/research/test_cdp_pages.py`; no production
+pricing, source identity, purchase, SMTP, database,
+scheduler or config policy changed by this incremental source fix.
+Separate frozen reviewed install checkout
+`1b19390298c6151e08d1e513a2a153ddcae2c1cf`
+still differs from approved source
+`04075bc884c9c2927e677edcbddcb43419833aef`
+by documents/evidence only, not `src/`.
+All later page-source code is NOT in the approved installed EXE.
+
+### 1. Installed reviewed executable: EVIDENCE_ACCEPTED
+
+Executor-published installation and frozen-code evidence records
+original PID74176/observer84608 normal exit, an Owner-authorized
+drain/build/install/idle/resume window, release-locked dependencies,
+Tcl8.6.15, verified 2875 assets, matching application freeze,
+and installed EXE SHA256
+`696E732B3B697EBDAE6267118959D11C8C87BE4A2B76DAFD7F17C2EA7127189A`.
+Fresh rollback program and compatible ledger/config/vault backups
+are documented; migration on copy unchanged, production migration
+not requested, runtime junction plus V1.4/V1.5 rollback retained.
+Frozen installed-code checks show scoped P1 restoration and per-module
+cycle logging, with old page factory rather than unreviewed patch.
+GitHub review independently checked the evidence and source commit
+separation; it did **not** recompute local EXE bytes or inspect
+protected local copies.
+
+Live ledger snapshot reports `integrity=ok`, 108 historical
+commands immutable, full rows for 139 prior SENT and 4 historical
+TP tasks unchanged (including 6 historical TP-SENT), total SENT
+now 140 with exactly one new PURCHASE_EXCEPTION recipient.
+No PENDING, SENDING or UNKNOWN in the submitted snapshot;
+purchase SAVED remains 23. This is durable receipt preservation
+and naturally occurring SMTP transport acceptance, not confirmed
+mailbox delivery or an externally successful new purchase.
+No new procurement SAVED/Google write-readback was independently
+substantiated.
+
+### 2. Real module scheduling: TP deadline FAIL
+
+Accepted structured business receipts show:
+- TP cycle1 completed 14:57:05.219 +08 with
+  next planned at 15:12:05.219.
+- TP cycle2 began 15:19:39.429; actual start
+  occurred 1354.210s after previous completion,
+  **454.210s later** than the configured 900s.
+- Between those times quotation used the
+  serialized browser actor 15:11:49.311–15:19:39.320.
+  Independent monotonically computed due dates,
+  real TP begin/end and the corrected nested inquiry
+  cycle identity are observed; no evidence of
+  independent **timely actor** execution.
+- Inquiry next observed begin ~900.010s after its
+  completion; quotation deferred-to-retry
+  ~900.020s. These good individual periods do not
+  erase the TP starvation/deadline problem.
+  Nothing proves all modules will run within their
+  deadlines under sustained contention.
+
+Disposition: `TP_REAL_CYCLE_RECEIPTS_PASS`,
+`TP_900S_TIMELY_EXECUTION_FAIL`. Require
+bounded fair resource admission/safe yield
+or separate read-only browser actor isolation
+without weakening protected INSO/Google/order
+claims, 120s completed-row cooldown or
+SENT/UNKNOWN guards. Test a real long quotation
+while TP becomes due; record delay and recovery.
+Do not reduce safety or force a transaction
+merely to obtain a good timing result.
+
+### 3. Uninstalled page-factory cleanup fault fix:
+KNOWN_TARGET_SOURCE_SCOPE_PASS, actor safety open
+
+Reviewed `67be3f7` source/tests: a typed
+`CDP_PAGE_CLEANUP_UNCONFIRMED` reports
+closeTarget confirmation errors and root/proof
+CDP-session detach errors. It preserves the
+original acquisition failure as cause,
+carries bounded exception class names,
+attempts to close only the exact known created
+target, marks that Playwright Browser wrapper
+unusable on failed cleanup, and blocks subsequent
+page acquisition on **that wrapper**. Tests cover
+close-only/detach-only/both, success-path detach,
+proof-session teardown and missing/false native
+close confirmation. Executor-reported
+2815 PASS / 1 SKIP (109.85s), 664 targeted PASS,
+20 ownership PASS, Ruff/diff PASS; review
+inspected actual code and tests, not rerun
+Windows test suite.
+
+Two explicitly **unresolved safety boundaries**
+remain before actor integration:
+1. If `Target.createTarget` executed in Chrome
+   but the send/response fails **before targetId
+   is returned**, current code cannot know the
+   target to close. Because `target_id` is
+   still None, a successful session detach
+   allows another acquisition on that wrapper:
+   an ambiguous target creation is not latched
+   as uncertain browser state. Test this precise
+   failure model and fail closed for further
+   admissions until ownership is reconciled.
+   Never close a guessed/human tab.
+2. The latch is attached to an individual
+   Python Browser wrapper; a newly connected
+   actor/client on the same Chrome can obtain
+   a different wrapper. No shared coordinator
+   currently promotes the cleanup fault
+   through adapters to all affected admissions.
+   `CDP_PAGE_CLEANUP_UNCONFIRMED` is not in
+   the current launcher global-fault reason
+   allowlist, and source adapters can wrap
+   exceptions. Require explicit propagation
+   before enabling multi-actor production;
+   do not treat a local latch as a system-wide
+   stop.
+
+These forward-looking blockers do **not**
+retroactively invalidate the narrow already
+tested known-target cleanup fix, but preclude
+a safe parallel-actor release.
+
+### 4. Genuine native CDP prerequisite:
+creation and navigation overlap only
+
+Executor's bounded Owner-authorized tests use
+the original9222 Chrome, at most two own tabs,
+thread-local sync Playwright clients and no
+new profile/INSO/Google/business write.
+Published HQEW pairs overlap 0.125s and
+0.532s navigation intervals; IC.net pair
+overlaps 0.204s. Each reports HTTP200, exact
+native initial target and blank owner and
+owner-only cleanup with pre-existing one
+human page preserved. These are meaningful
+real CDP navigation overlap observations,
+not just callback/sleep overlap.
+
+However, after navigation the ownership
+evaluation failed (timeout or destroyed
+execution context). Neither marker survival
+nor the required safe post-navigation lifecycle
+is proven. Real module actors, source extraction,
+shared source/order exclusion, site auth/pacing,
+fault admission and resource-limited scheduling
+remain NOT_IMPLEMENTED / NOT_VERIFIED.
+The current experiment was authorized only
+with business safely stopped; it does not
+authorize deploying the new source as a
+concurrent production feature.
+
+### 5. Current errors, mail and resources
+
+Review of `reviewed-google-alerts.json`
+shows two different source-run cycle commands
+(09:57 old / 14:56 new), each attempt1 and
+same configured recipient, not historical
+resend. New quotation cycle has
+5 GOOGLE_WEB_READ_BUSY observations and
+eventual deferral; later cycle completed.
+This supports transient/recoverable busy,
+**not** a permanent whole-Sheets outage.
+Exact underlying DOM/lock cause remains
+UNKNOWN. Future wording/cross-cycle
+notification noise is an optional separate
+review, not permission to suppress real
+faults or bypass state protection.
+
+Finite 1800.063s/31sample same-PID app
+counter window: average host CPU0.289605%
+(16 logical CPUs), RSS114.96→137.50MiB
+(+22.54MiB), private86.67→107.32MiB
+(+20.65MiB); handles peak5646 and fall
+to1004 before ending1138; GDI136–138
+and USER258. This **supports transient
+handle release**, but a 30min rising-memory
+window does not establish a stable memory
+plateau or prove a permanent leak. Cause,
+semaphore allocation attribution, continuous
+multi-cycle upper bound, Chrome/GPU and
+gaming FPS remain NOT_VERIFIED. Old V1.5
+six-page 9f soak is NOT a V1.6 certificate.
+No new monitor or speculative repair required
+by this review.
+
+### Disposition / next bounded execution scope
+
+- **Accept** reviewed 04075bc installation evidence,
+  P1 in-live cycle attribution, current ledger
+  preservation, source-only 67be3f7 known-target
+  cleanup remediation and real dual-client
+  initial navigation/cleanup observations.
+- **CHANGES_REQUESTED for overall completion**
+  because TP timely dispatch FAIL, genuine actor
+  coordination + post-navigation ownership not
+  verified, ambiguous create-target outcome and
+  cross-client fail-closed propagation remain.
+  No production source hotpatch is authorized.
+- **Current operational status:** per executor,
+  Owner safely stopped business but kept GUI
+  open for isolated CDP verification; original
+  Start action was requested but **resume
+  confirmation is pending**. Do not label
+  current business RUNNING without new evidence.
+  Do not use inaccessible Tk labels as
+  authorization to guess controls; do not
+  force-kill Chrome or create a new profile.
+  Owner has already authorized existing
+  business, but the review cannot assert it
+  resumed.
+- Required next work: on an isolated development
+  branch, prove post-navigation ownership
+  using verified native target ID (with safe
+  execution-context lifecycle), globalized
+  fail-closed admission for uncertain creations
+  and cleanup errors, per-source order identity
+  leases and paced website login; then bounded
+  fair scheduling with TP deadline instrumentation.
+  Keep current reviewed EXE separate until new
+  source is independently reviewed and installed.
+- Retain open: naturally eligible verified
+  purchase/quotation Google writes, external
+  readback, TP fresh delivery, SMTP delivered
+  evidence, V1.6 live new EXE GUI/tray/DPI/
+  restart and long-term/game performance.
+
+**Final status:** `REVIEWED_04075BC_INSTALL_EVIDENCE_ACCEPTED`,
+`67BE_KNOWN_TARGET_CLEANUP_SOURCE_PASS_ONLY`,
+`TP_TIMELY_START_FAIL`,
+`CDP_PAGE_OWNER_AFTER_NAV_NOT_VERIFIED`,
+`MULTI_ACTOR_NOT_IMPLEMENTED`,
+`V16_OVERALL_REVIEW_REQUIRED`.
