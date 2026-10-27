@@ -560,3 +560,18 @@ ledger: never restore a stale pre-effect DB.
 `FULL_PRODUCTION_E2E_NOT_VERIFIED`.
 This review only writes the task audit note; it
 does not deploy, run, stop or modify production.
+
+## Remaining-order continuation2026-10-27 (after CEO PASS)
+
+Owner remaining-order incorporated; no new ledger or worktree. Stage1 source
+freeze/preinstall checks PASS: remoteee49203 preserved, src equals04075bc;
+existing release runtime Tcl8.6.15/imports ready;43targetedPASS13.91s using existing
+zoneinfo command-local override (initial global-Python collection lackedtzdata).
+Actual oldEXE hash and74176/84608 presence verified read-only; no live mutation.
+One-time install/drain/backup/build/asset-only/idle/resume/current-ledger rollback
+plan in V16_RELEASE_REPORT.md. Stage2 WAIT_OWNER_INSTALL_WINDOW, not NOT_DEPLOYED
+success. Stage3 realTP/currentSMTP/GUI/long-run still NOT_VERIFIED. Historical
+9f soak formally closed at63e635062db9592681c1a16bab674b66cc346441, continuity
+PASS / memory drift review required; no oldsoak restart or protected-tree changes.
+Page-concurrency increment remains independent from install candidate04075bc;
+no actual webpage overlap claimed. Existing unified checklist remains canonical.

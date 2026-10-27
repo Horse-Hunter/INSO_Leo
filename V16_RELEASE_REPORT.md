@@ -275,3 +275,61 @@ chains PASS or V1.6 long-term unattended acceptance PASS. Owner need not approve
 ordinary configured tasks again. Required correction of held source identities
 must use existing fresh verification; never reset their state to force a result.
 Evidence: `docs/evidence/v16/`; task record provides detailed scope/test log.
+
+## 2026-10-27 remaining execution — reviewed-source installation preparation
+
+Current instruction is the Owner's remaining-needs order, superseding the prior
+round's blanket evidence-only restrictions while preserving the explicit live
+replacement boundary. Remote CEO PASS ee49203dbae39e79eca1f1c90164f643ba2fe03c
+fetched and fast-forwarded in the existing clean checkout; no new worktree.
+`git diff 04075bc..HEAD -- src` empty. P1 is accepted and is NOT reopened.
+Reviewed application04075bc remains the **only proposed installation candidate**;
+future page-parallel increments must not be included without independent review.
+
+Preinstall check: existing release Python at
+D:/Program_Leo/INSO_Leo/.worktrees/v1-4-order-mail-inspection/.venv-release/Scripts/python.exe
+imports PyInstaller/customtkinter/playwright and initializes Tcl8.6.15. No dependency
+installed. Ordinary global Python first lacked tzdata during test collection;
+reused release environment's existing zoneinfo via command-local PYTHONTZPATH,
+then targeted reviewed-path43PASS13.91s. Prior reviewed full2802PASS/1SKIP remains
+applicable because source unchanged; no repeated full suite without source delta.
+Canonical scripts/build_windows_release.ps1 -Version1.6 -BuildOnly with explicit
+PythonExecutable is the sole build path; no new launcher/release system.
+
+Read-only installed identity: main74176 / observer84608 still present, actual
+D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe SHA256
+16E38F30E253041F7ED41E0447DEF744F6912D7B310F6DBDF616556CDBDC8B82.
+No stop/restart or production config/SQLite/browser access. V1.5/V1.4 EXE paths
+and before-20261027T015035Z backup are present; presence is not a fresh full rollback
+integrity certification. Fresh backup and full manifest verification wait for stop.
+
+### One-time proposed installation window (NOT AUTHORIZED yet)
+
+1. Stop admissions using existing normal UI stop/drain, let in-flight effects
+   settle, then normal exit and confirm both process exit and exclusive mutex.
+   If current effects cannot settle/UNKNOWN or ownership uncertain, preserve state
+   and stop affected installation step; never force-kill Chrome or replay effects.
+2. Fresh canonical SQLite backup after exclusive access; integrity_check, full-table
+   and immutable-command/recipient fingerprints; preserve SENT/UNKNOWN/PENDING,
+   original4TP/6TP-SENT, all newer naturally produced effects. Opaque credential
+   and config backups verified locally without exposing contents. Record junction.
+3. Canonical single formal build from exactly reviewed04075bc, frozen dependency
+   selfcheck, artifact scan/asset hashes. No page-parallel code in this artifact.
+   Do not assume migrations; test existing canonical compatibility on backup copy.
+4. Asset-only EXE/_internal replacement after verified rollback backup. Keep runtime
+   junction/current compatible ledger, V1.5/V1.4 programs and protected Chrome.
+5. Installed selfcheck, safe idle startup, version/assets/GUI/log/ledger comparison,
+   single-instance check. Restore already-authorized existing three-module business
+   only after these checks; no expanded recipients/permissions/forced old tasks.
+6. Observe real per-module receipts, especially emptyTP900s start/end and UI,
+   natural eligible outcomes, current SMTP and finite multi-cycle resources.
+   External success requires result/readback, SMTP acceptance is not delivery.
+7. If startup/integrity/safety fault: stop affected work normally and restore
+   prior verified **program assets only against current compatible ledger**;
+   never restore stale pre-effect DB or reset historical mail statuses.
+
+Impact: automatic checks pause during drain/build/installation/idle verification;
+no duplicate production instance. Window length is measured, not guaranteed.
+Unique Owner action: authorize this normal stop/install/resume window. If existing
+UI cannot be normally exited by available tools, Owner uses tray Exit once.
+No production replacement, migration or backup was performed by preparation.
