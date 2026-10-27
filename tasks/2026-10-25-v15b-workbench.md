@@ -948,3 +948,21 @@ NO CHANGES_REQUESTED for this exact scoped diff.
 No new install, TP activation or production write
 authority is granted by this review; RELEASE_HOLD
 and actual long-run/operations acceptance continue.**
+
+## 2026-10-27 — completed historical 9f soak (independent of V1.6)
+
+**CONTINUITY_AND_SAFETY_PASS / MEMORY_DRIFT_REVIEW_REQUIRED / REVIEW_REQUIRED.**
+86444.23s actual monotonic elapsed;2012 samples;max gap60.11s;callback/guard0;
+all110src hashes unchanged. Original70956 now absent after script normal close;
+exit code NOT_CAPTURED (no invented code0).286 cycles/143 injected recoveries;
+all observed queue bursts drain, caches/logs bounded, steady handles345/GDI57.
+Warmed host CPU0.01943%; RSS+14.74MiB/Private+15.60MiB over24h with ongoing
+~0.6MiB/h drift, so no stable-memory/no-leak PASS. CauseUNKNOWN; no source fix.
+See final section of V15_UI_UPGRADE_REPORT.md and final-acceptance/soak-24h-*.
+The earlier '24h still running' lines are historical/SUPERSEDED for70956 only.
+This proves old9f continuity, not five-page669fe6a or V1.6 long-run acceptance.
+No production environment or V1.6 worktree touched; no release gate lifted.
+Current production authority/state remains governed by the separate V1.6 report.
+Collection-owned old output/stdout/stderr and analysis scratch retired only after
+retained evidence byte verification and process absence; source tree preserved.
+Heartbeat collection complete; recurring automation retired, no replacement monitor.

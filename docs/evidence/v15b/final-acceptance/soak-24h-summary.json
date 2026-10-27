@@ -1,0 +1,4013 @@
+{
+  "scope": "Old six-page 9f5522d7 synthetic only; NOT five-page 669fe6a or V1.6",
+  "result": "CONTINUITY_AND_SAFETY_PASS / MEMORY_DRIFT_REVIEW_REQUIRED / NOT_BUILD_READY",
+  "verification": {
+    "elapsed_seconds": 86444.23399999997,
+    "requested_seconds": 86400,
+    "max_recorded_gap_seconds": 60.10999999998603,
+    "recomputed_max_gap_seconds": 60.10999999998603,
+    "sample_count": 2012,
+    "callback_errors": [],
+    "guard_attempts": [],
+    "source_unchanged_rechecked": true,
+    "source_file_count": 110,
+    "process_70956_absent": true,
+    "normal_close_path": "finish saves completion then invokes app._on_close; process absent, stderr empty; no forced stop",
+    "exit_code": "NOT_CAPTURED; completion is written before GUI close; do not claim exit code 0",
+    "sleep": "No sampling hiatus >60.11 seconds observed; no sleep pause substituted for continuous test"
+  },
+  "environment": {
+    "source_sha": "9f5522d7bef41a15fc099f9ad1545120dd9565c1",
+    "pid": 70956,
+    "started_at": "2026-10-26T03:25:25.830217+00:00",
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "logical_cpus": 16,
+    "actual_window_dpi": 120,
+    "os_scaling_percent": 125.0,
+    "foreground_policy": "Non-input Win32 desktop; never switched; NOACTIVATE + bottom",
+    "shell_tray": "NOT_VERIFIED: isolated desktop has no Explorer shell"
+  },
+  "closed_at": "2026-10-27T03:26:10.777810+00:00",
+  "all": {
+    "samples": 2012,
+    "rss": {
+      "min": 52441088,
+      "max": 67899392,
+      "mean": 60643926.52087475,
+      "first": 52441088,
+      "last": 67899392
+    },
+    "private": {
+      "min": 33234944,
+      "max": 49590272,
+      "mean": 41892784.60437376,
+      "first": 33234944,
+      "last": 49590272
+    },
+    "handles": {
+      "min": 345,
+      "max": 353,
+      "mean": 345.0089463220676,
+      "first": 353,
+      "last": 345
+    },
+    "gdi": {
+      "min": 57,
+      "max": 57,
+      "mean": 57,
+      "first": 57,
+      "last": 57
+    },
+    "user": {
+      "min": 236,
+      "max": 288,
+      "mean": 274.32157057654075,
+      "first": 236,
+      "last": 287
+    },
+    "threads": {
+      "min": 5,
+      "max": 11,
+      "mean": 5.011431411530815,
+      "first": 11,
+      "last": 5
+    },
+    "python_threads": {
+      "min": 1,
+      "max": 1,
+      "mean": 1,
+      "first": 1,
+      "last": 1
+    },
+    "after_callbacks": {
+      "min": 5,
+      "max": 6,
+      "mean": 5.999502982107356,
+      "first": 5,
+      "last": 6
+    },
+    "event_queue": {
+      "min": 0,
+      "max": 256,
+      "mean": 73.1610337972167,
+      "first": 0,
+      "last": 0
+    },
+    "view_rows_cache": {
+      "min": 100,
+      "max": 200,
+      "mean": 166.8986083499006,
+      "first": 200,
+      "last": 200
+    },
+    "view_value_cache": {
+      "min": 22,
+      "max": 22,
+      "mean": 22,
+      "first": 22,
+      "last": 22
+    },
+    "snapshot_logs": {
+      "min": 10,
+      "max": 300,
+      "mean": 298.558648111332,
+      "first": 10,
+      "last": 300
+    },
+    "backend_log_ring": {
+      "min": 0,
+      "max": 1000,
+      "mean": 990.8548707753479,
+      "first": 0,
+      "last": 1000
+    },
+    "tick_max_ms": {
+      "min": 2.7020999987144023,
+      "max": 13.857999991159886,
+      "mean": 7.708668051346897,
+      "first": 2.7020999987144023,
+      "last": 6.768900027964264
+    }
+  },
+  "post_600s_cpu": {
+    "interval_weighted_host_percent": 0.019432527303362646,
+    "max_interval_host_percent": 2.734375,
+    "covered_seconds": 85884.10999999996,
+    "intervals_at_least_30s": {
+      "count": 1431,
+      "weighted_host_percent": 0.015989083247006878,
+      "max_host_percent": 0.07769735376482745
+    }
+  },
+  "groups": {
+    "exercise|500": {
+      "samples": 96,
+      "rss": {
+        "min": 52748288,
+        "max": 67899392,
+        "mean": 60655488,
+        "first": 52748288,
+        "last": 67899392
+      },
+      "private": {
+        "min": 34082816,
+        "max": 49590272,
+        "mean": 41900544,
+        "first": 34144256,
+        "last": 49590272
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 242,
+        "mean": 242,
+        "first": 242,
+        "last": 242
+      },
+      "threads": {
+        "min": 5,
+        "max": 7,
+        "mean": 5.020833333333333,
+        "first": 7,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 256,
+        "max": 256,
+        "mean": 256,
+        "first": 256,
+        "last": 256
+      },
+      "view_rows_cache": {
+        "min": 200,
+        "max": 200,
+        "mean": 200,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 300,
+        "max": 1000,
+        "mean": 992.7083333333334,
+        "first": 300,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 2.7020999987144023,
+        "max": 13.857999991159886,
+        "mean": 7.658910426471266,
+        "first": 2.7020999987144023,
+        "last": 6.768900027964264
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.03467144534823563,
+        "max_interval_host_percent": 0.074961619650731,
+        "covered_seconds": 4131.979999999923
+      }
+    },
+    "withdrawn_idle_no_shell_tray|500": {
+      "samples": 288,
+      "rss": {
+        "min": 52752384,
+        "max": 67887104,
+        "mean": 60574876.44444445,
+        "first": 52752384,
+        "last": 67887104
+      },
+      "private": {
+        "min": 34082816,
+        "max": 49590272,
+        "mean": 41833742.222222224,
+        "first": 34144256,
+        "last": 49590272
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 243,
+        "max": 287,
+        "mean": 279.6666666666667,
+        "first": 243,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 7,
+        "mean": 5.020833333333333,
+        "first": 7,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 42.666666666666664,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 200,
+        "max": 200,
+        "mean": 200,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 300,
+        "max": 1000,
+        "mean": 985.4166666666666,
+        "first": 300,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 2.7020999987144023,
+        "max": 13.857999991159886,
+        "mean": 7.630281258874068,
+        "first": 2.7020999987144023,
+        "last": 6.768900027964264
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.012670341559764695,
+        "max_interval_host_percent": 1.3884774881800033,
+        "covered_seconds": 12339.656000000017
+      }
+    },
+    "exercise|1000": {
+      "samples": 95,
+      "rss": {
+        "min": 52912128,
+        "max": 67887104,
+        "mean": 60649515.11578947,
+        "first": 52912128,
+        "last": 67887104
+      },
+      "private": {
+        "min": 34082816,
+        "max": 49590272,
+        "mean": 41894448.50526316,
+        "first": 34082816,
+        "last": 49590272
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 242,
+        "mean": 242,
+        "first": 242,
+        "last": 242
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 256,
+        "max": 256,
+        "mean": 256,
+        "first": 256,
+        "last": 256
+      },
+      "view_rows_cache": {
+        "min": 200,
+        "max": 200,
+        "mean": 200,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 600,
+        "max": 1000,
+        "mean": 995.7894736842105,
+        "first": 600,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 2.7020999987144023,
+        "max": 13.857999991159886,
+        "mean": 7.758043166923974,
+        "first": 2.7020999987144023,
+        "last": 6.768900027964264
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.03512825042345279,
+        "max_interval_host_percent": 0.0635021304630923,
+        "covered_seconds": 4094.9279999997525
+      }
+    },
+    "visible_idle|500": {
+      "samples": 288,
+      "rss": {
+        "min": 52912128,
+        "max": 67899392,
+        "mean": 60745927.11111111,
+        "first": 52912128,
+        "last": 67899392
+      },
+      "private": {
+        "min": 34082816,
+        "max": 49590272,
+        "mean": 41994794.666666664,
+        "first": 34082816,
+        "last": 49590272
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 288,
+        "mean": 279.65625,
+        "first": 242,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 43.55555555555556,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 200,
+        "max": 200,
+        "mean": 200,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 600,
+        "max": 1000,
+        "mean": 997.2222222222222,
+        "first": 600,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 2.7020999987144023,
+        "max": 13.857999991159886,
+        "mean": 7.844298968343032,
+        "first": 2.7020999987144023,
+        "last": 6.768900027964264
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.021583858330325174,
+        "max_interval_host_percent": 2.734375,
+        "covered_seconds": 12356.420000000158
+      }
+    },
+    "visible_idle|1000": {
+      "samples": 287,
+      "rss": {
+        "min": 52977664,
+        "max": 67887104,
+        "mean": 60687905.89547038,
+        "first": 52977664,
+        "last": 67887104
+      },
+      "private": {
+        "min": 34082816,
+        "max": 49590272,
+        "mean": 41931808.11149826,
+        "first": 34082816,
+        "last": 49590272
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 288,
+        "mean": 279.801393728223,
+        "first": 287,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 42.815331010452965,
+        "first": 0,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 200,
+        "max": 200,
+        "mean": 200,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 600,
+        "max": 1000,
+        "mean": 994.4250871080139,
+        "first": 600,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 5.1967000181321055,
+        "max": 13.857999991159886,
+        "mean": 7.722022309505871,
+        "first": 5.1967000181321055,
+        "last": 6.768900027964264
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.02216450379416287,
+        "max_interval_host_percent": 1.6458918539067495,
+        "covered_seconds": 12345.542000000132
+      }
+    },
+    "exercise|100": {
+      "samples": 95,
+      "rss": {
+        "min": 53006336,
+        "max": 67899392,
+        "mean": 60691596.12631579,
+        "first": 53006336,
+        "last": 67899392
+      },
+      "private": {
+        "min": 34082816,
+        "max": 49590272,
+        "mean": 41942005.22105263,
+        "first": 34082816,
+        "last": 49590272
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 242,
+        "mean": 242,
+        "first": 242,
+        "last": 242
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 256,
+        "max": 256,
+        "mean": 256,
+        "first": 256,
+        "last": 256
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 100,
+        "mean": 100,
+        "first": 100,
+        "last": 100
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 900,
+        "max": 1000,
+        "mean": 998.9473684210526,
+        "first": 900,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 5.1967000181321055,
+        "max": 13.857999991159886,
+        "mean": 7.711087378342391,
+        "first": 5.1967000181321055,
+        "last": 6.768900027964264
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.02961605860282984,
+        "max_interval_host_percent": 0.08432308396372493,
+        "covered_seconds": 4082.1919999998936
+      }
+    },
+    "withdrawn_idle_no_shell_tray|100": {
+      "samples": 288,
+      "rss": {
+        "min": 53006336,
+        "max": 67899392,
+        "mean": 60706844.44444445,
+        "first": 53006336,
+        "last": 67899392
+      },
+      "private": {
+        "min": 34082816,
+        "max": 49590272,
+        "mean": 41949596.44444445,
+        "first": 34082816,
+        "last": 49590272
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 243,
+        "max": 287,
+        "mean": 279.6666666666667,
+        "first": 243,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 42.666666666666664,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 100,
+        "mean": 100,
+        "first": 100,
+        "last": 100
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 900,
+        "max": 1000,
+        "mean": 997.9166666666666,
+        "first": 900,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 5.1967000181321055,
+        "max": 13.857999991159886,
+        "mean": 7.687539594068464,
+        "first": 5.1967000181321055,
+        "last": 6.768900027964264
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.012579636770302,
+        "max_interval_host_percent": 0.8447772491223572,
+        "covered_seconds": 12351.0
+      }
+    },
+    "visible_idle|100": {
+      "samples": 283,
+      "rss": {
+        "min": 53071872,
+        "max": 67899392,
+        "mean": 60731724.890459366,
+        "first": 53075968,
+        "last": 67899392
+      },
+      "private": {
+        "min": 34082816,
+        "max": 49590272,
+        "mean": 41985273.66784453,
+        "first": 34082816,
+        "last": 49590272
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 288,
+        "mean": 279.52650176678446,
+        "first": 242,
+        "last": 242
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 44.32508833922262,
+        "first": 256,
+        "last": 256
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 100,
+        "mean": 100,
+        "first": 100,
+        "last": 100
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 5.1967000181321055,
+        "max": 13.857999991159886,
+        "mean": 7.706502482830629,
+        "first": 5.1967000181321055,
+        "last": 6.768900027964264
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.02163132281741128,
+        "max_interval_host_percent": 2.0837037695334986,
+        "covered_seconds": 12094.549000000057
+      }
+    },
+    "withdrawn_idle_no_shell_tray|1000": {
+      "samples": 282,
+      "rss": {
+        "min": 53219328,
+        "max": 67887104,
+        "mean": 60678754.042553194,
+        "first": 53219328,
+        "last": 67887104
+      },
+      "private": {
+        "min": 34082816,
+        "max": 49590272,
+        "mean": 41917505.36170213,
+        "first": 34082816,
+        "last": 49590272
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 243,
+        "max": 287,
+        "mean": 279.6666666666667,
+        "first": 243,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 42.666666666666664,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 200,
+        "max": 200,
+        "mean": 200,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.2661000119987875,
+        "max": 13.857999991159886,
+        "mean": 7.83739433539635,
+        "first": 11.015400028554723,
+        "last": 6.768900027964264
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.01218295315384223,
+        "max_interval_host_percent": 0.6374428851147809,
+        "covered_seconds": 12087.843000000023
+      }
+    }
+  },
+  "hourly": [
+    {
+      "hour": 0,
+      "samples": 80,
+      "rss": {
+        "min": 52441088,
+        "max": 53440512,
+        "mean": 53112729.6,
+        "first": 52441088,
+        "last": 53440512
+      },
+      "private": {
+        "min": 33234944,
+        "max": 34177024,
+        "mean": 34078873.6,
+        "first": 33234944,
+        "last": 34082816
+      },
+      "handles": {
+        "min": 345,
+        "max": 353,
+        "mean": 345.225,
+        "first": 353,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 236,
+        "max": 288,
+        "mean": 275.25,
+        "first": 236,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 11,
+        "mean": 5.2875,
+        "first": 11,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 5,
+        "max": 6,
+        "mean": 5.9875,
+        "first": 5,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.6,
+        "first": 0,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 172.5,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 10,
+        "max": 300,
+        "mean": 263.75,
+        "first": 10,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 0,
+        "max": 1000,
+        "mean": 770,
+        "first": 0,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 2.7020999987144023,
+        "max": 11.015400028554723,
+        "mean": 7.918802519270685,
+        "first": 2.7020999987144023,
+        "last": 11.015400028554723
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.018382921013803778,
+        "max_interval_host_percent": 2.734375,
+        "covered_seconds": 3543.3280000000377
+      }
+    },
+    {
+      "hour": 1,
+      "samples": 84,
+      "rss": {
+        "min": 53510144,
+        "max": 53981184,
+        "mean": 53789403.428571425,
+        "first": 53510144,
+        "last": 53981184
+      },
+      "private": {
+        "min": 35135488,
+        "max": 35254272,
+        "mean": 35209216,
+        "first": 35135488,
+        "last": 35254272
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 288,
+        "mean": 274.35714285714283,
+        "first": 242,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 11.015400028554723,
+        "max": 11.015400028554723,
+        "mean": 11.015400028554723,
+        "first": 11.015400028554723,
+        "last": 11.015400028554723
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.01837159585059188,
+        "max_interval_host_percent": 1.1993980284262609,
+        "covered_seconds": 3603.984000000026
+      }
+    },
+    {
+      "hour": 2,
+      "samples": 84,
+      "rss": {
+        "min": 54046720,
+        "max": 54767616,
+        "mean": 54543798.85714286,
+        "first": 54046720,
+        "last": 54767616
+      },
+      "private": {
+        "min": 35254272,
+        "max": 35733504,
+        "mean": 35648414.47619048,
+        "first": 35254272,
+        "last": 35733504
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 288,
+        "mean": 274.35714285714283,
+        "first": 242,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.281400012085214,
+        "max": 11.015400028554723,
+        "mean": 8.615382162263684,
+        "first": 11.015400028554723,
+        "last": 6.673500000033528
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.019049183715543434,
+        "max_interval_host_percent": 0.5333168992715056,
+        "covered_seconds": 3603.95199999999
+      }
+    },
+    {
+      "hour": 3,
+      "samples": 84,
+      "rss": {
+        "min": 54898688,
+        "max": 55783424,
+        "mean": 55362023.61904762,
+        "first": 54898688,
+        "last": 55783424
+      },
+      "private": {
+        "min": 35733504,
+        "max": 37400576,
+        "mean": 36334201.9047619,
+        "first": 35733504,
+        "last": 37400576
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 288,
+        "mean": 274.35714285714283,
+        "first": 242,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.673500000033528,
+        "max": 6.673500000033528,
+        "mean": 6.673500000033528,
+        "first": 6.673500000033528,
+        "last": 6.673500000033528
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.01948466566026473,
+        "max_interval_host_percent": 0.4505704613854151,
+        "covered_seconds": 3603.594999999914
+      }
+    },
+    {
+      "hour": 4,
+      "samples": 84,
+      "rss": {
+        "min": 55898112,
+        "max": 56352768,
+        "mean": 56132510.47619048,
+        "first": 55898112,
+        "last": 56352768
+      },
+      "private": {
+        "min": 37445632,
+        "max": 37498880,
+        "mean": 37474304,
+        "first": 37445632,
+        "last": 37498880
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 288,
+        "mean": 274.3095238095238,
+        "first": 242,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.634299992583692,
+        "max": 6.673500000033528,
+        "mean": 6.673033333278172,
+        "first": 6.673500000033528,
+        "last": 6.634299992583692
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.018591439197933008,
+        "max_interval_host_percent": 0.296875,
+        "covered_seconds": 3603.3889999999665
+      }
+    },
+    {
+      "hour": 5,
+      "samples": 84,
+      "rss": {
+        "min": 56352768,
+        "max": 56967168,
+        "mean": 56834584.38095238,
+        "first": 56352768,
+        "last": 56967168
+      },
+      "private": {
+        "min": 37498880,
+        "max": 38047744,
+        "mean": 37907260.952380955,
+        "first": 37498880,
+        "last": 38047744
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 288,
+        "mean": 274.2857142857143,
+        "first": 242,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.2661000119987875,
+        "max": 6.634299992583692,
+        "mean": 6.6299166594814904,
+        "first": 6.634299992583692,
+        "last": 6.2661000119987875
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.018510602994811776,
+        "max_interval_host_percent": 0.29879525752122027,
+        "covered_seconds": 3603.298000000039
+      }
+    },
+    {
+      "hour": 6,
+      "samples": 84,
+      "rss": {
+        "min": 56967168,
+        "max": 57495552,
+        "mean": 57132275.809523806,
+        "first": 56967168,
+        "last": 57495552
+      },
+      "private": {
+        "min": 38047744,
+        "max": 38326272,
+        "mean": 38094165.333333336,
+        "first": 38047744,
+        "last": 38326272
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.2142857142857,
+        "first": 242,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.2661000119987875,
+        "max": 6.364900007611141,
+        "mean": 6.321380961924747,
+        "first": 6.2661000119987875,
+        "last": 6.364900007611141
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.01767022808270793,
+        "max_interval_host_percent": 0.21404109589041095,
+        "covered_seconds": 3603.341999999946
+      }
+    },
+    {
+      "hour": 7,
+      "samples": 84,
+      "rss": {
+        "min": 57495552,
+        "max": 58281984,
+        "mean": 57889255.61904762,
+        "first": 57495552,
+        "last": 58281984
+      },
+      "private": {
+        "min": 38326272,
+        "max": 39829504,
+        "mean": 38985923.047619045,
+        "first": 38326272,
+        "last": 39829504
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.25,
+        "first": 242,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.364900007611141,
+        "max": 13.857999991159886,
+        "mean": 10.379605950479995,
+        "first": 6.364900007611141,
+        "last": 13.857999991159886
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.018454652713548444,
+        "max_interval_host_percent": 0.1932875824690928,
+        "covered_seconds": 3603.639000000054
+      }
+    },
+    {
+      "hour": 8,
+      "samples": 84,
+      "rss": {
+        "min": 58347520,
+        "max": 58966016,
+        "mean": 58702701.71428572,
+        "first": 58347520,
+        "last": 58966016
+      },
+      "private": {
+        "min": 39829504,
+        "max": 40103936,
+        "mean": 39986322.28571428,
+        "first": 39829504,
+        "last": 40103936
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.26190476190476,
+        "first": 242,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 13.857999991159886,
+        "max": 13.857999991159886,
+        "mean": 13.857999991159886,
+        "first": 13.857999991159886,
+        "last": 13.857999991159886
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.0217300672791499,
+        "max_interval_host_percent": 0.19579807923677708,
+        "covered_seconds": 3604.2369999999355
+      }
+    },
+    {
+      "hour": 9,
+      "samples": 84,
+      "rss": {
+        "min": 58966016,
+        "max": 59633664,
+        "mean": 59227331.047619045,
+        "first": 58966016,
+        "last": 59633664
+      },
+      "private": {
+        "min": 40103936,
+        "max": 40652800,
+        "mean": 40319561.14285714,
+        "first": 40103936,
+        "last": 40652800
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.2142857142857,
+        "first": 242,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.648799986578524,
+        "max": 13.857999991159886,
+        "mean": 10.682519036760953,
+        "first": 13.857999991159886,
+        "last": 6.648799986578524
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.02067339119030297,
+        "max_interval_host_percent": 0.15109624446181893,
+        "covered_seconds": 3604.2330000000366
+      }
+    },
+    {
+      "hour": 10,
+      "samples": 84,
+      "rss": {
+        "min": 59699200,
+        "max": 59961344,
+        "mean": 59845875.809523806,
+        "first": 59699200,
+        "last": 59961344
+      },
+      "private": {
+        "min": 40652800,
+        "max": 40652800,
+        "mean": 40652800,
+        "first": 40652800,
+        "last": 40652800
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.25,
+        "first": 242,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.648799986578524,
+        "max": 6.648799986578524,
+        "mean": 6.648799986578524,
+        "first": 6.648799986578524,
+        "last": 6.648799986578524
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.020647625375242576,
+        "max_interval_host_percent": 0.1438148125422617,
+        "covered_seconds": 3604.0010000000184
+      }
+    },
+    {
+      "hour": 11,
+      "samples": 84,
+      "rss": {
+        "min": 60010496,
+        "max": 60899328,
+        "mean": 60513426.28571428,
+        "first": 60010496,
+        "last": 60899328
+      },
+      "private": {
+        "min": 40652800,
+        "max": 42278912,
+        "mean": 41941918.47619048,
+        "first": 40652800,
+        "last": 42278912
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.2857142857143,
+        "first": 242,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.319299980532378,
+        "max": 6.648799986578524,
+        "mean": 6.480127364435854,
+        "first": 6.648799986578524,
+        "last": 6.319299980532378
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.020382942582204928,
+        "max_interval_host_percent": 0.13104397607923976,
+        "covered_seconds": 3602.889999999985
+      }
+    },
+    {
+      "hour": 12,
+      "samples": 83,
+      "rss": {
+        "min": 60948480,
+        "max": 61046784,
+        "mean": 61033953.15662651,
+        "first": 60948480,
+        "last": 61046784
+      },
+      "private": {
+        "min": 42278912,
+        "max": 42278912,
+        "mean": 42278912,
+        "first": 42278912,
+        "last": 42278912
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.13253012048193,
+        "first": 242,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 74.02409638554217,
+        "first": 256,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.26506024096386,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.319299980532378,
+        "max": 7.033300003968179,
+        "mean": 6.835444575787174,
+        "first": 6.319299980532378,
+        "last": 7.033300003968179
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.01948508660528387,
+        "max_interval_host_percent": 0.11813256048396603,
+        "covered_seconds": 3543.3750000001164
+      }
+    },
+    {
+      "hour": 13,
+      "samples": 84,
+      "rss": {
+        "min": 61046784,
+        "max": 61763584,
+        "mean": 61487250.28571428,
+        "first": 61046784,
+        "last": 61763584
+      },
+      "private": {
+        "min": 42278912,
+        "max": 42831872,
+        "mean": 42677491.809523806,
+        "first": 42278912,
+        "last": 42831872
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.2857142857143,
+        "first": 287,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 0,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 7.033300003968179,
+        "max": 7.033300003968179,
+        "mean": 7.033300003968179,
+        "first": 7.033300003968179,
+        "last": 7.033300003968179
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.018970429891188058,
+        "max_interval_host_percent": 0.11889755703772233,
+        "covered_seconds": 3603.4700000000303
+      }
+    },
+    {
+      "hour": 14,
+      "samples": 84,
+      "rss": {
+        "min": 61763584,
+        "max": 62459904,
+        "mean": 62018803.809523806,
+        "first": 61763584,
+        "last": 62459904
+      },
+      "private": {
+        "min": 42831872,
+        "max": 43106304,
+        "mean": 42874343.61904762,
+        "first": 42831872,
+        "last": 43106304
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.2857142857143,
+        "first": 287,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 0,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.573100050445646,
+        "max": 7.033300003968179,
+        "mean": 6.737723844014996,
+        "first": 7.033300003968179,
+        "last": 6.808800040744245
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.019078917061241346,
+        "max_interval_host_percent": 0.11070045342925446,
+        "covered_seconds": 3603.454000000085
+      }
+    },
+    {
+      "hour": 15,
+      "samples": 84,
+      "rss": {
+        "min": 62459904,
+        "max": 62992384,
+        "mean": 62804601.9047619,
+        "first": 62459904,
+        "last": 62992384
+      },
+      "private": {
+        "min": 43106304,
+        "max": 44429312,
+        "mean": 44318817.52380952,
+        "first": 43106304,
+        "last": 44429312
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.2857142857143,
+        "first": 287,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 0,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.808800040744245,
+        "max": 6.808800040744245,
+        "mean": 6.808800040744245,
+        "first": 6.808800040744245,
+        "last": 6.808800040744245
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.018781794081201585,
+        "max_interval_host_percent": 0.10238370635416029,
+        "covered_seconds": 3603.2649999999558
+      }
+    },
+    {
+      "hour": 16,
+      "samples": 84,
+      "rss": {
+        "min": 62992384,
+        "max": 63660032,
+        "mean": 63369703.61904762,
+        "first": 62992384,
+        "last": 63660032
+      },
+      "private": {
+        "min": 44429312,
+        "max": 45133824,
+        "mean": 44840813.71428572,
+        "first": 44429312,
+        "last": 45133824
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.2857142857143,
+        "first": 287,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 0,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.808800040744245,
+        "max": 6.808800040744245,
+        "mean": 6.808800040744245,
+        "first": 6.808800040744245,
+        "last": 6.808800040744245
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.019132953932096363,
+        "max_interval_host_percent": 0.09999786671207549,
+        "covered_seconds": 3603.484999999986
+      }
+    },
+    {
+      "hour": 17,
+      "samples": 84,
+      "rss": {
+        "min": 63660032,
+        "max": 64253952,
+        "mean": 63999366.0952381,
+        "first": 63660032,
+        "last": 64253952
+      },
+      "private": {
+        "min": 45133824,
+        "max": 45408256,
+        "mean": 45293909.333333336,
+        "first": 45133824,
+        "last": 45408256
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.2857142857143,
+        "first": 287,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 0,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.4916000119410455,
+        "max": 6.547600030899048,
+        "mean": 6.520776212536951,
+        "first": 6.547600030899048,
+        "last": 6.516300025396049
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.020054821774078174,
+        "max_interval_host_percent": 0.09457850772762885,
+        "covered_seconds": 3603.4039999999804
+      }
+    },
+    {
+      "hour": 18,
+      "samples": 84,
+      "rss": {
+        "min": 64253952,
+        "max": 64864256,
+        "mean": 64712070.0952381,
+        "first": 64253952,
+        "last": 64864256
+      },
+      "private": {
+        "min": 45408256,
+        "max": 46735360,
+        "mean": 45933129.14285714,
+        "first": 45408256,
+        "last": 46735360
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.2857142857143,
+        "first": 287,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 0,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.516300025396049,
+        "max": 6.516300025396049,
+        "mean": 6.516300025396049,
+        "first": 6.516300025396049,
+        "last": 6.516300025396049
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.019430897679072235,
+        "max_interval_host_percent": 0.08797515765142314,
+        "covered_seconds": 3603.5149999998976
+      }
+    },
+    {
+      "hour": 19,
+      "samples": 84,
+      "rss": {
+        "min": 64864256,
+        "max": 65671168,
+        "mean": 65349924.571428575,
+        "first": 64864256,
+        "last": 65671168
+      },
+      "private": {
+        "min": 46735360,
+        "max": 47284224,
+        "mean": 47003257.9047619,
+        "first": 46735360,
+        "last": 47284224
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.2857142857143,
+        "first": 287,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 0,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.516300025396049,
+        "max": 7.904500002041459,
+        "mean": 7.276504774511393,
+        "first": 6.516300025396049,
+        "last": 7.904500002041459
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.020054710464269543,
+        "max_interval_host_percent": 0.0950852900423903,
+        "covered_seconds": 3603.423999999999
+      }
+    },
+    {
+      "hour": 20,
+      "samples": 84,
+      "rss": {
+        "min": 65671168,
+        "max": 65802240,
+        "mean": 65718759.61904762,
+        "first": 65671168,
+        "last": 65802240
+      },
+      "private": {
+        "min": 47284224,
+        "max": 47284224,
+        "mean": 47284224,
+        "first": 47284224,
+        "last": 47284224
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.2857142857143,
+        "first": 287,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 0,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 7.904500002041459,
+        "max": 7.904500002041459,
+        "mean": 7.904500002041459,
+        "first": 7.904500002041459,
+        "last": 7.904500002041459
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.019350176791020555,
+        "max_interval_host_percent": 0.07838127268297082,
+        "covered_seconds": 3603.4069999999483
+      }
+    },
+    {
+      "hour": 21,
+      "samples": 84,
+      "rss": {
+        "min": 65802240,
+        "max": 66883584,
+        "mean": 66471936,
+        "first": 65802240,
+        "last": 66883584
+      },
+      "private": {
+        "min": 47284224,
+        "max": 47984640,
+        "mean": 47731760.76190476,
+        "first": 47284224,
+        "last": 47984640
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.2738095238095,
+        "first": 287,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 0,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.5648999880068,
+        "max": 7.904500002041459,
+        "mean": 7.23469999502413,
+        "first": 7.904500002041459,
+        "last": 6.5648999880068
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.01994650036396279,
+        "max_interval_host_percent": 0.08476822021172292,
+        "covered_seconds": 3603.3890000000247
+      }
+    },
+    {
+      "hour": 22,
+      "samples": 84,
+      "rss": {
+        "min": 66883584,
+        "max": 67620864,
+        "mean": 67186688,
+        "first": 66883584,
+        "last": 67620864
+      },
+      "private": {
+        "min": 47984640,
+        "max": 49315840,
+        "mean": 48625420.190476194,
+        "first": 47984640,
+        "last": 49315840
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.2857142857143,
+        "first": 287,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 0,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.5648999880068,
+        "max": 6.768900027964264,
+        "mean": 6.676614295602555,
+        "first": 6.5648999880068,
+        "last": 6.768900027964264
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.02021880875054607,
+        "max_interval_host_percent": 0.08432308396372493,
+        "covered_seconds": 3603.157999999996
+      }
+    },
+    {
+      "hour": 23,
+      "samples": 84,
+      "rss": {
+        "min": 67620864,
+        "max": 67899392,
+        "mean": 67774902.85714285,
+        "first": 67620864,
+        "last": 67899392
+      },
+      "private": {
+        "min": 49315840,
+        "max": 49590272,
+        "mean": 49472658.28571428,
+        "first": 49315840,
+        "last": 49590272
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 242,
+        "max": 287,
+        "mean": 274.23809523809524,
+        "first": 287,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 256,
+        "mean": 73.14285714285714,
+        "first": 0,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 100,
+        "max": 200,
+        "mean": 166.66666666666666,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.768900027964264,
+        "max": 6.768900027964264,
+        "mean": 6.768900027964264,
+        "first": 6.768900027964264,
+        "last": 6.768900027964264
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.019810895286044853,
+        "max_interval_host_percent": 0.07769735376482745,
+        "covered_seconds": 3603.4069999999483
+      }
+    },
+    {
+      "hour": 24,
+      "samples": 1,
+      "rss": {
+        "min": 67899392,
+        "max": 67899392,
+        "mean": 67899392,
+        "first": 67899392,
+        "last": 67899392
+      },
+      "private": {
+        "min": 49590272,
+        "max": 49590272,
+        "mean": 49590272,
+        "first": 49590272,
+        "last": 49590272
+      },
+      "handles": {
+        "min": 345,
+        "max": 345,
+        "mean": 345,
+        "first": 345,
+        "last": 345
+      },
+      "gdi": {
+        "min": 57,
+        "max": 57,
+        "mean": 57,
+        "first": 57,
+        "last": 57
+      },
+      "user": {
+        "min": 287,
+        "max": 287,
+        "mean": 287,
+        "first": 287,
+        "last": 287
+      },
+      "threads": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "first": 5,
+        "last": 5
+      },
+      "python_threads": {
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "first": 1,
+        "last": 1
+      },
+      "after_callbacks": {
+        "min": 6,
+        "max": 6,
+        "mean": 6,
+        "first": 6,
+        "last": 6
+      },
+      "event_queue": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "first": 0,
+        "last": 0
+      },
+      "view_rows_cache": {
+        "min": 200,
+        "max": 200,
+        "mean": 200,
+        "first": 200,
+        "last": 200
+      },
+      "view_value_cache": {
+        "min": 22,
+        "max": 22,
+        "mean": 22,
+        "first": 22,
+        "last": 22
+      },
+      "snapshot_logs": {
+        "min": 300,
+        "max": 300,
+        "mean": 300,
+        "first": 300,
+        "last": 300
+      },
+      "backend_log_ring": {
+        "min": 1000,
+        "max": 1000,
+        "mean": 1000,
+        "first": 1000,
+        "last": 1000
+      },
+      "tick_max_ms": {
+        "min": 6.768900027964264,
+        "max": 6.768900027964264,
+        "mean": 6.768900027964264,
+        "first": 6.768900027964264,
+        "last": 6.768900027964264
+      },
+      "cpu": {
+        "interval_weighted_host_percent": 0.014633072773581947,
+        "max_interval_host_percent": 0.014633072773581947,
+        "covered_seconds": 60.06300000002375
+      }
+    }
+  ],
+  "memory_trend": {
+    "rss": {
+      "linear_mib_per_hour": 0.5949758218384017,
+      "first_to_last_mib": 14.7421875
+    },
+    "private": {
+      "linear_mib_per_hour": 0.6137539133265398,
+      "first_to_last_mib": 15.59765625
+    }
+  },
+  "queue_recovery": {
+    "observed_bursts_drained": 286,
+    "max_seconds_to_next_zero": 61.01600000000326,
+    "final_queue": 0
+  },
+  "operations": {
+    "count": 286,
+    "synthetic_recovery_even_cycles": 143,
+    "milliseconds_min": 112.5459999893792,
+    "milliseconds_median": 167.36669998499565,
+    "milliseconds_max": 260.3040999965742
+  },
+  "old_comparison": {
+    "v15b-baseline-idle": {
+      "idle": {
+        "cpu_host_mean_percent": 0.12755166073238827,
+        "rss": {
+          "min": 77971456,
+          "max": 92512256,
+          "first": 77971456,
+          "last": 92512256
+        },
+        "private": {
+          "min": 55824384,
+          "max": 57749504,
+          "first": 55988224,
+          "last": 57679872
+        },
+        "handles": {
+          "min": 543,
+          "max": 551,
+          "first": 551,
+          "last": 543
+        },
+        "gdi": {
+          "min": 133,
+          "max": 133,
+          "first": 133,
+          "last": 133
+        },
+        "user": {
+          "min": 189,
+          "max": 189,
+          "first": 189,
+          "last": 189
+        }
+      }
+    },
+    "v15b-baseline-foreground": {
+      "foreground": {
+        "cpu_host_mean_percent": 0.1571243379824852,
+        "rss": {
+          "min": 79323136,
+          "max": 94597120,
+          "first": 79323136,
+          "last": 94597120
+        },
+        "private": {
+          "min": 58593280,
+          "max": 59707392,
+          "first": 58761216,
+          "last": 59641856
+        },
+        "handles": {
+          "min": 543,
+          "max": 551,
+          "first": 551,
+          "last": 543
+        },
+        "gdi": {
+          "min": 133,
+          "max": 133,
+          "first": 133,
+          "last": 133
+        },
+        "user": {
+          "min": 189,
+          "max": 189,
+          "first": 189,
+          "last": 189
+        }
+      },
+      "tray": {
+        "cpu_host_mean_percent": 0.09298770904620107,
+        "rss": {
+          "min": 94691328,
+          "max": 95739904,
+          "first": 95535104,
+          "last": 94691328
+        },
+        "private": {
+          "min": 58343424,
+          "max": 60264448,
+          "first": 60264448,
+          "last": 58343424
+        },
+        "handles": {
+          "min": 560,
+          "max": 560,
+          "first": 560,
+          "last": 560
+        },
+        "gdi": {
+          "min": 133,
+          "max": 133,
+          "first": 133,
+          "last": 133
+        },
+        "user": {
+          "min": 192,
+          "max": 192,
+          "first": 192,
+          "last": 192
+        }
+      }
+    },
+    "v15b-accepted-idle": {
+      "idle": {
+        "cpu_host_mean_percent": 0.020557445514940653,
+        "rss": {
+          "min": 44941312,
+          "max": 45109248,
+          "first": 44986368,
+          "last": 45101056
+        },
+        "private": {
+          "min": 28241920,
+          "max": 28340224,
+          "first": 28340224,
+          "last": 28241920
+        },
+        "handles": {
+          "min": 277,
+          "max": 285,
+          "first": 285,
+          "last": 277
+        },
+        "gdi": {
+          "min": 56,
+          "max": 56,
+          "first": 56,
+          "last": 56
+        },
+        "user": {
+          "min": 224,
+          "max": 224,
+          "first": 224,
+          "last": 224
+        }
+      }
+    },
+    "v15b-accepted-foreground": {
+      "foreground": {
+        "cpu_host_mean_percent": 0.016016678946999225,
+        "rss": {
+          "min": 45809664,
+          "max": 67817472,
+          "first": 45809664,
+          "last": 67817472
+        },
+        "private": {
+          "min": 28659712,
+          "max": 29065216,
+          "first": 28749824,
+          "last": 29065216
+        },
+        "handles": {
+          "min": 277,
+          "max": 285,
+          "first": 285,
+          "last": 277
+        },
+        "gdi": {
+          "min": 56,
+          "max": 56,
+          "first": 56,
+          "last": 56
+        },
+        "user": {
+          "min": 265,
+          "max": 265,
+          "first": 265,
+          "last": 265
+        }
+      },
+      "tray": {
+        "cpu_host_mean_percent": 0.01756804947579069,
+        "rss": {
+          "min": 69201920,
+          "max": 69234688,
+          "first": 69234688,
+          "last": 69222400
+        },
+        "private": {
+          "min": 30904320,
+          "max": 30994432,
+          "first": 30994432,
+          "last": 30904320
+        },
+        "handles": {
+          "min": 301,
+          "max": 301,
+          "first": 301,
+          "last": 301
+        },
+        "gdi": {
+          "min": 56,
+          "max": 56,
+          "first": 56,
+          "last": 56
+        },
+        "user": {
+          "min": 268,
+          "max": 268,
+          "first": 268,
+          "last": 268
+        }
+      }
+    }
+  },
+  "limitations": [
+    "CPU interval is labelled by endpoint; intervals can straddle exercise/visibility changes; not true focused foreground or real Explorer tray.",
+    "RSS/private steadily drift upward; no heap allocation trace, cannot distinguish app, Tk, allocator or diagnostic retention. No speculative source change.",
+    "Only process-local resources measured. Native thread COUNT present; no 24h per-thread CPU stack/attribution.",
+    "DPI100/150, Chrome/game FPS, newer five-page and V1.6 long-term stability NOT_VERIFIED.",
+    "Mock recovery uses observation injection, no real website or business failure recovery.",
+    "Existing real tray Owner acceptance is separate and not replaced by hidden-window data."
+  ]
+}

@@ -802,3 +802,78 @@ Private Bytes 在前 30 轮增加约 0.262 MiB，后 60 轮持平。此短循环
   54 组合及 90 循环针对最后排队启动小修之前的界面；最终排队启动另由回归与短测覆盖。
 
 完成后保持 REVIEW_REQUIRED，等待 CEO 源码和合成截图审核；不自行打包或发布。
+
+## 2026-10-27 — old 9f baseline 24-hour collection completed
+
+**CONTINUITY_AND_SAFETY_PASS / MEMORY_DRIFT_REVIEW_REQUIRED.** This is a historical
+six-page synthetic result only. It does not validate five-page `669fe6a` or V1.6,
+and does not change either version's production authorization or release status.
+The later V1.6 production/audit report is authoritative for current live business.
+
+- Source `9f5522d7bef41a15fc099f9ad1545120dd9565c1`; protected checkout remained
+  `45b8bdf9857f210d0c5662914f6d01fd242837c5`, clean. All 110 Python source hashes
+  independently rechecked against launch manifest: identical. No source change.
+- Windows / Python 3.12.10 / 16 logical CPUs / actual 125% OS DPI. PID70956 ran
+  2026-10-26 03:25:25Z to 2026-10-27 03:26:10Z. Measured monotonic duration
+  **86444.23s**, 2012 samples, recomputed maximum gap **60.11s** (limit180s).
+  No observable sleep-sized sampling interruption. Callback errors0, safety
+  guard attempts0, stderr0bytes. No production dependencies or network accessed.
+- Completion used the script's normal close path; exact PID absent on collection,
+  no forced stop/restart. Exit code was not captured, so **do not claim code0**.
+  Completion JSON is written before close and is not itself an exit receipt.
+- 286 exercise cycles, including143 injected recovery observations. Operation
+  median167.37ms, range112.55–260.30ms. Recovery is synthetic state injection,
+  not actual website recovery. Queued events peak256, all286 bursts drain to0
+  within61.02s of observed burst; final0. Tk after5–6; row cache<=200,
+  value cache22; snapshot logs<=300; backend ring<=1000; Python threads1.
+- Warmed duration-weighted host CPU **0.01943%** including interval boundaries.
+  Interval labels reflect the endpoint, and may straddle exercise/visibility
+  changes; the table is not a controlled focused-foreground/tray comparison.
+
+| Synthetic orders | Visible endpoint CPU% | Hidden endpoint CPU% | Exercise endpoint CPU% |
+|---|---:|---:|---:|
+|100|0.02163|0.01258|0.02962|
+|500|0.02158|0.01267|0.03467|
+|1000|0.02216|0.01218|0.03513|
+
+Hidden means withdrawn on a non-input desktop **without Explorer**, not real tray.
+Raw sub-second sampled peaks are unsuitable as sustained CPU claims. The retained
+summary separately reports intervals >=30s, all startup and exercise samples.
+GDI57 constant; steady handles345; USER242–288, returning to287; native threads
+settled at5 (startup11). These measurements belong only to70956, not V1.6/Chrome.
+
+**Memory does not establish a stable plateau:** RSS50.01→64.75MiB (+14.74),
+Private31.69→47.29MiB (+15.60). Hourly mean linear trends approximately
++0.595MiB/h RSS / +0.614MiB/h Private across hours0–23. At hour1/12/23,
+Private means were33.58/40.32/47.18MiB. Repeated recovery does not return memory
+fully to the early baseline, despite stable handles, callbacks and bounded logs.
+No allocation trace exists to distinguish Tk/allocator/application retention from
+measurement-harness retention. **No speculative code fix or no-leak PASS.**
+Minimum next suggestion for CEO: inspect retained references/allocation attribution
+in a finite isolated reproduction if this old-source drift is relevant to the
+current application; no new monitor or production replacement in this collection.
+
+Old `performance.json` baseline idle/foreground/tray CPU was0.12755/0.15712/0.09299%;
+accepted short-run was0.02056/0.01602/0.01757%. Old baseline foreground RSS ended
+90.22MiB vs current64.75MiB, but durations, loads, desktop, shell and logging differ.
+These are contextual figures, **not a normalized speedup or leak comparison**.
+The old short-run accepted Private plateau cannot establish today's 24h plateau.
+Historical3.264%CPU root cause remainsUNKNOWN; no new claim of repair.
+
+Evidence: `docs/evidence/v15b/final-acceptance/soak-24h-*` includes completion,
+heartbeat, exact compressed synthetic samples, hourly/group summary and original
+file manifest. Existing synthetic screenshots/environment/UI checks are retained.
+No duplicate screenshots or production data added. Current remote CEO review
+`98da80e0019273263761b3e19530e7e319deb5d8` was preserved before appending this result.
+
+**Not verified:** 100%/150% OS DPI; real Explorer tray by this soak; Chrome/game FPS;
+five-page/V1.6 long run; native per-thread CPU attribution over24h; final exit code.
+Owner's separately confirmed real tray behavior remains valid separate evidence.
+No BUILD_READY or live readiness granted; CEO review required for memory trend.
+
+Collection cleanup: after byte-for-byte verification of retained samples,
+completion, screenshots/environment/UI checks and exact70956 absence, retired
+only its1,659,592byte original output plus empty stdout/stderr and the finite
+analysis scratch files. Original immutable source checkout retained clean;
+latest report checkout remains the sole V1.5 evidence location. No worktree,
+rollback, runtime, V1.6 process or production data was removed or updated.

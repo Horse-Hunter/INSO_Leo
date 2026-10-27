@@ -1,0 +1,1445 @@
+{
+  "completed": true,
+  "elapsed_seconds": 86444.23399999997,
+  "requested_seconds": 86400,
+  "continuous_24h_verified": true,
+  "max_sample_gap_seconds": 60.10999999998603,
+  "source_unchanged": true,
+  "error": null,
+  "callback_errors": [],
+  "guard_attempts": [],
+  "cycles": 286,
+  "closed_at": "2026-10-27T03:26:10.777810+00:00",
+  "operation_timings": [
+    {
+      "cycle": 1,
+      "orders": 500,
+      "milliseconds": 198.33729998208582
+    },
+    {
+      "cycle": 2,
+      "orders": 1000,
+      "milliseconds": 153.9708999916911
+    },
+    {
+      "cycle": 3,
+      "orders": 100,
+      "milliseconds": 187.99700000090525
+    },
+    {
+      "cycle": 4,
+      "orders": 500,
+      "milliseconds": 136.59429998369887
+    },
+    {
+      "cycle": 5,
+      "orders": 1000,
+      "milliseconds": 189.2989000189118
+    },
+    {
+      "cycle": 6,
+      "orders": 100,
+      "milliseconds": 128.0384999990929
+    },
+    {
+      "cycle": 7,
+      "orders": 500,
+      "milliseconds": 164.02200001175515
+    },
+    {
+      "cycle": 8,
+      "orders": 1000,
+      "milliseconds": 155.4619999951683
+    },
+    {
+      "cycle": 9,
+      "orders": 100,
+      "milliseconds": 158.41629999340512
+    },
+    {
+      "cycle": 10,
+      "orders": 500,
+      "milliseconds": 193.71700001647696
+    },
+    {
+      "cycle": 11,
+      "orders": 1000,
+      "milliseconds": 206.90729998750612
+    },
+    {
+      "cycle": 12,
+      "orders": 100,
+      "milliseconds": 137.77939998544753
+    },
+    {
+      "cycle": 13,
+      "orders": 500,
+      "milliseconds": 184.47579999337904
+    },
+    {
+      "cycle": 14,
+      "orders": 1000,
+      "milliseconds": 174.41710000275634
+    },
+    {
+      "cycle": 15,
+      "orders": 100,
+      "milliseconds": 150.13950000866316
+    },
+    {
+      "cycle": 16,
+      "orders": 500,
+      "milliseconds": 154.45619999081828
+    },
+    {
+      "cycle": 17,
+      "orders": 1000,
+      "milliseconds": 192.02670000959188
+    },
+    {
+      "cycle": 18,
+      "orders": 100,
+      "milliseconds": 126.30009997519664
+    },
+    {
+      "cycle": 19,
+      "orders": 500,
+      "milliseconds": 192.44139999500476
+    },
+    {
+      "cycle": 20,
+      "orders": 1000,
+      "milliseconds": 178.5393999889493
+    },
+    {
+      "cycle": 21,
+      "orders": 100,
+      "milliseconds": 155.98579999641515
+    },
+    {
+      "cycle": 22,
+      "orders": 500,
+      "milliseconds": 154.76469998247921
+    },
+    {
+      "cycle": 23,
+      "orders": 1000,
+      "milliseconds": 199.182699987432
+    },
+    {
+      "cycle": 24,
+      "orders": 100,
+      "milliseconds": 128.11380001949146
+    },
+    {
+      "cycle": 25,
+      "orders": 500,
+      "milliseconds": 195.41580000077374
+    },
+    {
+      "cycle": 26,
+      "orders": 1000,
+      "milliseconds": 161.63200000301003
+    },
+    {
+      "cycle": 27,
+      "orders": 100,
+      "milliseconds": 200.73450001655146
+    },
+    {
+      "cycle": 28,
+      "orders": 500,
+      "milliseconds": 143.93500000005588
+    },
+    {
+      "cycle": 29,
+      "orders": 1000,
+      "milliseconds": 210.78520000446588
+    },
+    {
+      "cycle": 30,
+      "orders": 100,
+      "milliseconds": 154.24880001228303
+    },
+    {
+      "cycle": 31,
+      "orders": 500,
+      "milliseconds": 199.0804999950342
+    },
+    {
+      "cycle": 32,
+      "orders": 1000,
+      "milliseconds": 163.8532000069972
+    },
+    {
+      "cycle": 33,
+      "orders": 100,
+      "milliseconds": 197.1839000179898
+    },
+    {
+      "cycle": 34,
+      "orders": 500,
+      "milliseconds": 147.4400000006426
+    },
+    {
+      "cycle": 35,
+      "orders": 1000,
+      "milliseconds": 204.23200001823716
+    },
+    {
+      "cycle": 36,
+      "orders": 100,
+      "milliseconds": 177.77969999588095
+    },
+    {
+      "cycle": 37,
+      "orders": 500,
+      "milliseconds": 198.54129999293946
+    },
+    {
+      "cycle": 38,
+      "orders": 1000,
+      "milliseconds": 170.79620002186857
+    },
+    {
+      "cycle": 39,
+      "orders": 100,
+      "milliseconds": 173.17789999651723
+    },
+    {
+      "cycle": 40,
+      "orders": 500,
+      "milliseconds": 161.98100001201965
+    },
+    {
+      "cycle": 41,
+      "orders": 1000,
+      "milliseconds": 207.4154999863822
+    },
+    {
+      "cycle": 42,
+      "orders": 100,
+      "milliseconds": 135.72520000161603
+    },
+    {
+      "cycle": 43,
+      "orders": 500,
+      "milliseconds": 207.47920000576414
+    },
+    {
+      "cycle": 44,
+      "orders": 1000,
+      "milliseconds": 146.34989999467507
+    },
+    {
+      "cycle": 45,
+      "orders": 100,
+      "milliseconds": 195.00579999294132
+    },
+    {
+      "cycle": 46,
+      "orders": 500,
+      "milliseconds": 160.9634000051301
+    },
+    {
+      "cycle": 47,
+      "orders": 1000,
+      "milliseconds": 183.45770001178607
+    },
+    {
+      "cycle": 48,
+      "orders": 100,
+      "milliseconds": 144.03649998712353
+    },
+    {
+      "cycle": 49,
+      "orders": 500,
+      "milliseconds": 213.35340000223368
+    },
+    {
+      "cycle": 50,
+      "orders": 1000,
+      "milliseconds": 190.4768999957014
+    },
+    {
+      "cycle": 51,
+      "orders": 100,
+      "milliseconds": 180.22239999845624
+    },
+    {
+      "cycle": 52,
+      "orders": 500,
+      "milliseconds": 165.72550000273623
+    },
+    {
+      "cycle": 53,
+      "orders": 1000,
+      "milliseconds": 191.15099997725338
+    },
+    {
+      "cycle": 54,
+      "orders": 100,
+      "milliseconds": 165.1576999865938
+    },
+    {
+      "cycle": 55,
+      "orders": 500,
+      "milliseconds": 173.18599999998696
+    },
+    {
+      "cycle": 56,
+      "orders": 1000,
+      "milliseconds": 157.41620000335388
+    },
+    {
+      "cycle": 57,
+      "orders": 100,
+      "milliseconds": 178.72579998220317
+    },
+    {
+      "cycle": 58,
+      "orders": 500,
+      "milliseconds": 190.83870001486503
+    },
+    {
+      "cycle": 59,
+      "orders": 1000,
+      "milliseconds": 198.5661000071559
+    },
+    {
+      "cycle": 60,
+      "orders": 100,
+      "milliseconds": 130.29240001924336
+    },
+    {
+      "cycle": 61,
+      "orders": 500,
+      "milliseconds": 205.7007999974303
+    },
+    {
+      "cycle": 62,
+      "orders": 1000,
+      "milliseconds": 171.83570002089255
+    },
+    {
+      "cycle": 63,
+      "orders": 100,
+      "milliseconds": 143.27669999329373
+    },
+    {
+      "cycle": 64,
+      "orders": 500,
+      "milliseconds": 155.85519999149255
+    },
+    {
+      "cycle": 65,
+      "orders": 1000,
+      "milliseconds": 204.74350001313724
+    },
+    {
+      "cycle": 66,
+      "orders": 100,
+      "milliseconds": 128.60940000973642
+    },
+    {
+      "cycle": 67,
+      "orders": 500,
+      "milliseconds": 213.7957000231836
+    },
+    {
+      "cycle": 68,
+      "orders": 1000,
+      "milliseconds": 193.8615000108257
+    },
+    {
+      "cycle": 69,
+      "orders": 100,
+      "milliseconds": 170.38210001192056
+    },
+    {
+      "cycle": 70,
+      "orders": 500,
+      "milliseconds": 162.07409999333322
+    },
+    {
+      "cycle": 71,
+      "orders": 1000,
+      "milliseconds": 185.4571000149008
+    },
+    {
+      "cycle": 72,
+      "orders": 100,
+      "milliseconds": 154.2763999896124
+    },
+    {
+      "cycle": 73,
+      "orders": 500,
+      "milliseconds": 160.61110000009649
+    },
+    {
+      "cycle": 74,
+      "orders": 1000,
+      "milliseconds": 140.13820001855493
+    },
+    {
+      "cycle": 75,
+      "orders": 100,
+      "milliseconds": 154.3727999960538
+    },
+    {
+      "cycle": 76,
+      "orders": 500,
+      "milliseconds": 173.8160999957472
+    },
+    {
+      "cycle": 77,
+      "orders": 1000,
+      "milliseconds": 234.62169998674653
+    },
+    {
+      "cycle": 78,
+      "orders": 100,
+      "milliseconds": 121.94780001300387
+    },
+    {
+      "cycle": 79,
+      "orders": 500,
+      "milliseconds": 178.71340000419877
+    },
+    {
+      "cycle": 80,
+      "orders": 1000,
+      "milliseconds": 189.22070000553504
+    },
+    {
+      "cycle": 81,
+      "orders": 100,
+      "milliseconds": 149.77730001555756
+    },
+    {
+      "cycle": 82,
+      "orders": 500,
+      "milliseconds": 138.13239999581128
+    },
+    {
+      "cycle": 83,
+      "orders": 1000,
+      "milliseconds": 183.8866999896709
+    },
+    {
+      "cycle": 84,
+      "orders": 100,
+      "milliseconds": 142.1507999766618
+    },
+    {
+      "cycle": 85,
+      "orders": 500,
+      "milliseconds": 191.9262999726925
+    },
+    {
+      "cycle": 86,
+      "orders": 1000,
+      "milliseconds": 180.06260000402108
+    },
+    {
+      "cycle": 87,
+      "orders": 100,
+      "milliseconds": 178.88720001792535
+    },
+    {
+      "cycle": 88,
+      "orders": 500,
+      "milliseconds": 152.8153000108432
+    },
+    {
+      "cycle": 89,
+      "orders": 1000,
+      "milliseconds": 201.64349998231046
+    },
+    {
+      "cycle": 90,
+      "orders": 100,
+      "milliseconds": 146.03460000944324
+    },
+    {
+      "cycle": 91,
+      "orders": 500,
+      "milliseconds": 211.4628999843262
+    },
+    {
+      "cycle": 92,
+      "orders": 1000,
+      "milliseconds": 166.9425999862142
+    },
+    {
+      "cycle": 93,
+      "orders": 100,
+      "milliseconds": 162.95369999716058
+    },
+    {
+      "cycle": 94,
+      "orders": 500,
+      "milliseconds": 168.2452000095509
+    },
+    {
+      "cycle": 95,
+      "orders": 1000,
+      "milliseconds": 186.19649999891408
+    },
+    {
+      "cycle": 96,
+      "orders": 100,
+      "milliseconds": 151.7498000175692
+    },
+    {
+      "cycle": 97,
+      "orders": 500,
+      "milliseconds": 197.73409998742864
+    },
+    {
+      "cycle": 98,
+      "orders": 1000,
+      "milliseconds": 153.57480000238866
+    },
+    {
+      "cycle": 99,
+      "orders": 100,
+      "milliseconds": 172.10150000755675
+    },
+    {
+      "cycle": 100,
+      "orders": 500,
+      "milliseconds": 151.6266000107862
+    },
+    {
+      "cycle": 101,
+      "orders": 1000,
+      "milliseconds": 204.07709997380152
+    },
+    {
+      "cycle": 102,
+      "orders": 100,
+      "milliseconds": 187.3390999971889
+    },
+    {
+      "cycle": 103,
+      "orders": 500,
+      "milliseconds": 214.2640000092797
+    },
+    {
+      "cycle": 104,
+      "orders": 1000,
+      "milliseconds": 190.22439999389462
+    },
+    {
+      "cycle": 105,
+      "orders": 100,
+      "milliseconds": 203.28439999138936
+    },
+    {
+      "cycle": 106,
+      "orders": 500,
+      "milliseconds": 192.5121999811381
+    },
+    {
+      "cycle": 107,
+      "orders": 1000,
+      "milliseconds": 184.9017000058666
+    },
+    {
+      "cycle": 108,
+      "orders": 100,
+      "milliseconds": 141.00510001298971
+    },
+    {
+      "cycle": 109,
+      "orders": 500,
+      "milliseconds": 201.05280002462678
+    },
+    {
+      "cycle": 110,
+      "orders": 1000,
+      "milliseconds": 179.73910001455806
+    },
+    {
+      "cycle": 111,
+      "orders": 100,
+      "milliseconds": 217.41919999476522
+    },
+    {
+      "cycle": 112,
+      "orders": 500,
+      "milliseconds": 177.65470000449568
+    },
+    {
+      "cycle": 113,
+      "orders": 1000,
+      "milliseconds": 234.24389999127015
+    },
+    {
+      "cycle": 114,
+      "orders": 100,
+      "milliseconds": 151.0468999913428
+    },
+    {
+      "cycle": 115,
+      "orders": 500,
+      "milliseconds": 217.19369999482296
+    },
+    {
+      "cycle": 116,
+      "orders": 1000,
+      "milliseconds": 187.5992999994196
+    },
+    {
+      "cycle": 117,
+      "orders": 100,
+      "milliseconds": 185.30270000337623
+    },
+    {
+      "cycle": 118,
+      "orders": 500,
+      "milliseconds": 188.53430001763627
+    },
+    {
+      "cycle": 119,
+      "orders": 1000,
+      "milliseconds": 230.67759998957627
+    },
+    {
+      "cycle": 120,
+      "orders": 100,
+      "milliseconds": 157.18539999215864
+    },
+    {
+      "cycle": 121,
+      "orders": 500,
+      "milliseconds": 209.53919997555204
+    },
+    {
+      "cycle": 122,
+      "orders": 1000,
+      "milliseconds": 180.55699998512864
+    },
+    {
+      "cycle": 123,
+      "orders": 100,
+      "milliseconds": 176.21599999256432
+    },
+    {
+      "cycle": 124,
+      "orders": 500,
+      "milliseconds": 169.18389999773353
+    },
+    {
+      "cycle": 125,
+      "orders": 1000,
+      "milliseconds": 203.75059999059886
+    },
+    {
+      "cycle": 126,
+      "orders": 100,
+      "milliseconds": 128.68100000196137
+    },
+    {
+      "cycle": 127,
+      "orders": 500,
+      "milliseconds": 215.66509999684058
+    },
+    {
+      "cycle": 128,
+      "orders": 1000,
+      "milliseconds": 167.9592999862507
+    },
+    {
+      "cycle": 129,
+      "orders": 100,
+      "milliseconds": 170.11030000867322
+    },
+    {
+      "cycle": 130,
+      "orders": 500,
+      "milliseconds": 157.31969999615103
+    },
+    {
+      "cycle": 131,
+      "orders": 1000,
+      "milliseconds": 196.85119998757727
+    },
+    {
+      "cycle": 132,
+      "orders": 100,
+      "milliseconds": 122.4997999961488
+    },
+    {
+      "cycle": 133,
+      "orders": 500,
+      "milliseconds": 199.74009998259135
+    },
+    {
+      "cycle": 134,
+      "orders": 1000,
+      "milliseconds": 169.75790000287816
+    },
+    {
+      "cycle": 135,
+      "orders": 100,
+      "milliseconds": 175.2175999863539
+    },
+    {
+      "cycle": 136,
+      "orders": 500,
+      "milliseconds": 151.58609999343753
+    },
+    {
+      "cycle": 137,
+      "orders": 1000,
+      "milliseconds": 179.07290000584908
+    },
+    {
+      "cycle": 138,
+      "orders": 100,
+      "milliseconds": 157.59129996877164
+    },
+    {
+      "cycle": 139,
+      "orders": 500,
+      "milliseconds": 198.8816000521183
+    },
+    {
+      "cycle": 140,
+      "orders": 1000,
+      "milliseconds": 146.351000003051
+    },
+    {
+      "cycle": 141,
+      "orders": 100,
+      "milliseconds": 145.84329997887835
+    },
+    {
+      "cycle": 142,
+      "orders": 500,
+      "milliseconds": 148.55129999341443
+    },
+    {
+      "cycle": 143,
+      "orders": 1000,
+      "milliseconds": 186.47989997407421
+    },
+    {
+      "cycle": 144,
+      "orders": 100,
+      "milliseconds": 126.74380000680685
+    },
+    {
+      "cycle": 145,
+      "orders": 500,
+      "milliseconds": 186.7381000192836
+    },
+    {
+      "cycle": 146,
+      "orders": 1000,
+      "milliseconds": 150.8839000016451
+    },
+    {
+      "cycle": 147,
+      "orders": 100,
+      "milliseconds": 162.12960000848398
+    },
+    {
+      "cycle": 148,
+      "orders": 500,
+      "milliseconds": 163.67140004877
+    },
+    {
+      "cycle": 149,
+      "orders": 1000,
+      "milliseconds": 184.89859998226166
+    },
+    {
+      "cycle": 150,
+      "orders": 100,
+      "milliseconds": 122.5974999833852
+    },
+    {
+      "cycle": 151,
+      "orders": 500,
+      "milliseconds": 187.57070001447573
+    },
+    {
+      "cycle": 152,
+      "orders": 1000,
+      "milliseconds": 160.51030001835898
+    },
+    {
+      "cycle": 153,
+      "orders": 100,
+      "milliseconds": 170.46860000118613
+    },
+    {
+      "cycle": 154,
+      "orders": 500,
+      "milliseconds": 149.2119999602437
+    },
+    {
+      "cycle": 155,
+      "orders": 1000,
+      "milliseconds": 198.88630002969876
+    },
+    {
+      "cycle": 156,
+      "orders": 100,
+      "milliseconds": 135.4732000036165
+    },
+    {
+      "cycle": 157,
+      "orders": 500,
+      "milliseconds": 182.65159998554736
+    },
+    {
+      "cycle": 158,
+      "orders": 1000,
+      "milliseconds": 149.98370001558214
+    },
+    {
+      "cycle": 159,
+      "orders": 100,
+      "milliseconds": 165.4209999833256
+    },
+    {
+      "cycle": 160,
+      "orders": 500,
+      "milliseconds": 145.77289996668696
+    },
+    {
+      "cycle": 161,
+      "orders": 1000,
+      "milliseconds": 214.47730000363663
+    },
+    {
+      "cycle": 162,
+      "orders": 100,
+      "milliseconds": 123.31609998364002
+    },
+    {
+      "cycle": 163,
+      "orders": 500,
+      "milliseconds": 196.83799997437745
+    },
+    {
+      "cycle": 164,
+      "orders": 1000,
+      "milliseconds": 159.60529999574646
+    },
+    {
+      "cycle": 165,
+      "orders": 100,
+      "milliseconds": 166.70220001833513
+    },
+    {
+      "cycle": 166,
+      "orders": 500,
+      "milliseconds": 142.7902999566868
+    },
+    {
+      "cycle": 167,
+      "orders": 1000,
+      "milliseconds": 196.92610000493005
+    },
+    {
+      "cycle": 168,
+      "orders": 100,
+      "milliseconds": 127.31369998073205
+    },
+    {
+      "cycle": 169,
+      "orders": 500,
+      "milliseconds": 187.59509996743873
+    },
+    {
+      "cycle": 170,
+      "orders": 1000,
+      "milliseconds": 154.34629999799654
+    },
+    {
+      "cycle": 171,
+      "orders": 100,
+      "milliseconds": 145.4966999590397
+    },
+    {
+      "cycle": 172,
+      "orders": 500,
+      "milliseconds": 191.48300000233576
+    },
+    {
+      "cycle": 173,
+      "orders": 1000,
+      "milliseconds": 189.2947999876924
+    },
+    {
+      "cycle": 174,
+      "orders": 100,
+      "milliseconds": 126.40800001099706
+    },
+    {
+      "cycle": 175,
+      "orders": 500,
+      "milliseconds": 179.77240000618622
+    },
+    {
+      "cycle": 176,
+      "orders": 1000,
+      "milliseconds": 150.50270000938326
+    },
+    {
+      "cycle": 177,
+      "orders": 100,
+      "milliseconds": 163.3167000254616
+    },
+    {
+      "cycle": 178,
+      "orders": 500,
+      "milliseconds": 160.2536999853328
+    },
+    {
+      "cycle": 179,
+      "orders": 1000,
+      "milliseconds": 200.94520004931837
+    },
+    {
+      "cycle": 180,
+      "orders": 100,
+      "milliseconds": 135.15270000789315
+    },
+    {
+      "cycle": 181,
+      "orders": 500,
+      "milliseconds": 187.12309998227283
+    },
+    {
+      "cycle": 182,
+      "orders": 1000,
+      "milliseconds": 159.48010003194213
+    },
+    {
+      "cycle": 183,
+      "orders": 100,
+      "milliseconds": 169.93999999249354
+    },
+    {
+      "cycle": 184,
+      "orders": 500,
+      "milliseconds": 147.60940003907308
+    },
+    {
+      "cycle": 185,
+      "orders": 1000,
+      "milliseconds": 191.41680002212524
+    },
+    {
+      "cycle": 186,
+      "orders": 100,
+      "milliseconds": 121.79469998227432
+    },
+    {
+      "cycle": 187,
+      "orders": 500,
+      "milliseconds": 172.35629999777302
+    },
+    {
+      "cycle": 188,
+      "orders": 1000,
+      "milliseconds": 151.06559998821467
+    },
+    {
+      "cycle": 189,
+      "orders": 100,
+      "milliseconds": 159.87960004713386
+    },
+    {
+      "cycle": 190,
+      "orders": 500,
+      "milliseconds": 156.81150002637878
+    },
+    {
+      "cycle": 191,
+      "orders": 1000,
+      "milliseconds": 203.0384999816306
+    },
+    {
+      "cycle": 192,
+      "orders": 100,
+      "milliseconds": 131.32350001251325
+    },
+    {
+      "cycle": 193,
+      "orders": 500,
+      "milliseconds": 183.30769997555763
+    },
+    {
+      "cycle": 194,
+      "orders": 1000,
+      "milliseconds": 152.14890002971515
+    },
+    {
+      "cycle": 195,
+      "orders": 100,
+      "milliseconds": 167.1012999722734
+    },
+    {
+      "cycle": 196,
+      "orders": 500,
+      "milliseconds": 162.36139996908605
+    },
+    {
+      "cycle": 197,
+      "orders": 1000,
+      "milliseconds": 185.6466000317596
+    },
+    {
+      "cycle": 198,
+      "orders": 100,
+      "milliseconds": 124.27549995481968
+    },
+    {
+      "cycle": 199,
+      "orders": 500,
+      "milliseconds": 182.7567999716848
+    },
+    {
+      "cycle": 200,
+      "orders": 1000,
+      "milliseconds": 152.21659996313974
+    },
+    {
+      "cycle": 201,
+      "orders": 100,
+      "milliseconds": 158.5771000245586
+    },
+    {
+      "cycle": 202,
+      "orders": 500,
+      "milliseconds": 160.14149994589388
+    },
+    {
+      "cycle": 203,
+      "orders": 1000,
+      "milliseconds": 200.17440000083297
+    },
+    {
+      "cycle": 204,
+      "orders": 100,
+      "milliseconds": 133.74040002236143
+    },
+    {
+      "cycle": 205,
+      "orders": 500,
+      "milliseconds": 188.72439995175228
+    },
+    {
+      "cycle": 206,
+      "orders": 1000,
+      "milliseconds": 140.08550002472475
+    },
+    {
+      "cycle": 207,
+      "orders": 100,
+      "milliseconds": 151.56239998759702
+    },
+    {
+      "cycle": 208,
+      "orders": 500,
+      "milliseconds": 153.38649996556342
+    },
+    {
+      "cycle": 209,
+      "orders": 1000,
+      "milliseconds": 179.58459997316822
+    },
+    {
+      "cycle": 210,
+      "orders": 100,
+      "milliseconds": 144.43320001009852
+    },
+    {
+      "cycle": 211,
+      "orders": 500,
+      "milliseconds": 164.83460000017658
+    },
+    {
+      "cycle": 212,
+      "orders": 1000,
+      "milliseconds": 149.50160001171753
+    },
+    {
+      "cycle": 213,
+      "orders": 100,
+      "milliseconds": 157.26240002550185
+    },
+    {
+      "cycle": 214,
+      "orders": 500,
+      "milliseconds": 132.48540001222864
+    },
+    {
+      "cycle": 215,
+      "orders": 1000,
+      "milliseconds": 197.4468000116758
+    },
+    {
+      "cycle": 216,
+      "orders": 100,
+      "milliseconds": 131.06109999353066
+    },
+    {
+      "cycle": 217,
+      "orders": 500,
+      "milliseconds": 181.35999998776242
+    },
+    {
+      "cycle": 218,
+      "orders": 1000,
+      "milliseconds": 148.17800000309944
+    },
+    {
+      "cycle": 219,
+      "orders": 100,
+      "milliseconds": 163.38899999391288
+    },
+    {
+      "cycle": 220,
+      "orders": 500,
+      "milliseconds": 156.47599997464567
+    },
+    {
+      "cycle": 221,
+      "orders": 1000,
+      "milliseconds": 181.6162000177428
+    },
+    {
+      "cycle": 222,
+      "orders": 100,
+      "milliseconds": 123.80619999021292
+    },
+    {
+      "cycle": 223,
+      "orders": 500,
+      "milliseconds": 177.4973000283353
+    },
+    {
+      "cycle": 224,
+      "orders": 1000,
+      "milliseconds": 135.67230000626296
+    },
+    {
+      "cycle": 225,
+      "orders": 100,
+      "milliseconds": 153.80859997821972
+    },
+    {
+      "cycle": 226,
+      "orders": 500,
+      "milliseconds": 157.51879999879748
+    },
+    {
+      "cycle": 227,
+      "orders": 1000,
+      "milliseconds": 201.1579000391066
+    },
+    {
+      "cycle": 228,
+      "orders": 100,
+      "milliseconds": 128.0661000055261
+    },
+    {
+      "cycle": 229,
+      "orders": 500,
+      "milliseconds": 177.8016000171192
+    },
+    {
+      "cycle": 230,
+      "orders": 1000,
+      "milliseconds": 151.98279998730868
+    },
+    {
+      "cycle": 231,
+      "orders": 100,
+      "milliseconds": 165.09409999707714
+    },
+    {
+      "cycle": 232,
+      "orders": 500,
+      "milliseconds": 130.7916000369005
+    },
+    {
+      "cycle": 233,
+      "orders": 1000,
+      "milliseconds": 202.11120002204552
+    },
+    {
+      "cycle": 234,
+      "orders": 100,
+      "milliseconds": 134.29819996235892
+    },
+    {
+      "cycle": 235,
+      "orders": 500,
+      "milliseconds": 182.5609999941662
+    },
+    {
+      "cycle": 236,
+      "orders": 1000,
+      "milliseconds": 156.0215000063181
+    },
+    {
+      "cycle": 237,
+      "orders": 100,
+      "milliseconds": 168.75260003143921
+    },
+    {
+      "cycle": 238,
+      "orders": 500,
+      "milliseconds": 163.79119997145608
+    },
+    {
+      "cycle": 239,
+      "orders": 1000,
+      "milliseconds": 186.71669997274876
+    },
+    {
+      "cycle": 240,
+      "orders": 100,
+      "milliseconds": 139.27489996422082
+    },
+    {
+      "cycle": 241,
+      "orders": 500,
+      "milliseconds": 196.66789995972067
+    },
+    {
+      "cycle": 242,
+      "orders": 1000,
+      "milliseconds": 158.78429997246712
+    },
+    {
+      "cycle": 243,
+      "orders": 100,
+      "milliseconds": 163.71680004522204
+    },
+    {
+      "cycle": 244,
+      "orders": 500,
+      "milliseconds": 132.6507999910973
+    },
+    {
+      "cycle": 245,
+      "orders": 1000,
+      "milliseconds": 192.02579994453117
+    },
+    {
+      "cycle": 246,
+      "orders": 100,
+      "milliseconds": 127.19359999755397
+    },
+    {
+      "cycle": 247,
+      "orders": 500,
+      "milliseconds": 183.66849998710677
+    },
+    {
+      "cycle": 248,
+      "orders": 1000,
+      "milliseconds": 153.49250001600012
+    },
+    {
+      "cycle": 249,
+      "orders": 100,
+      "milliseconds": 166.95939999772236
+    },
+    {
+      "cycle": 250,
+      "orders": 500,
+      "milliseconds": 133.5247000097297
+    },
+    {
+      "cycle": 251,
+      "orders": 1000,
+      "milliseconds": 196.31349999690428
+    },
+    {
+      "cycle": 252,
+      "orders": 100,
+      "milliseconds": 129.9443999887444
+    },
+    {
+      "cycle": 253,
+      "orders": 500,
+      "milliseconds": 183.32609999924898
+    },
+    {
+      "cycle": 254,
+      "orders": 1000,
+      "milliseconds": 154.71670002443716
+    },
+    {
+      "cycle": 255,
+      "orders": 100,
+      "milliseconds": 167.47489996487275
+    },
+    {
+      "cycle": 256,
+      "orders": 500,
+      "milliseconds": 180.04779994953424
+    },
+    {
+      "cycle": 257,
+      "orders": 1000,
+      "milliseconds": 204.85420001205057
+    },
+    {
+      "cycle": 258,
+      "orders": 100,
+      "milliseconds": 155.87949997279793
+    },
+    {
+      "cycle": 259,
+      "orders": 500,
+      "milliseconds": 206.0357999871485
+    },
+    {
+      "cycle": 260,
+      "orders": 1000,
+      "milliseconds": 179.34440000681207
+    },
+    {
+      "cycle": 261,
+      "orders": 100,
+      "milliseconds": 152.33299997635186
+    },
+    {
+      "cycle": 262,
+      "orders": 500,
+      "milliseconds": 158.38669997174293
+    },
+    {
+      "cycle": 263,
+      "orders": 1000,
+      "milliseconds": 192.82090000342578
+    },
+    {
+      "cycle": 264,
+      "orders": 100,
+      "milliseconds": 116.56949995085597
+    },
+    {
+      "cycle": 265,
+      "orders": 500,
+      "milliseconds": 203.14019999932498
+    },
+    {
+      "cycle": 266,
+      "orders": 1000,
+      "milliseconds": 184.33960003312677
+    },
+    {
+      "cycle": 267,
+      "orders": 100,
+      "milliseconds": 167.25850000511855
+    },
+    {
+      "cycle": 268,
+      "orders": 500,
+      "milliseconds": 181.2559999525547
+    },
+    {
+      "cycle": 269,
+      "orders": 1000,
+      "milliseconds": 233.5453000268899
+    },
+    {
+      "cycle": 270,
+      "orders": 100,
+      "milliseconds": 138.7817999930121
+    },
+    {
+      "cycle": 271,
+      "orders": 500,
+      "milliseconds": 260.3040999965742
+    },
+    {
+      "cycle": 272,
+      "orders": 1000,
+      "milliseconds": 199.78500000433996
+    },
+    {
+      "cycle": 273,
+      "orders": 100,
+      "milliseconds": 198.396599967964
+    },
+    {
+      "cycle": 274,
+      "orders": 500,
+      "milliseconds": 148.94560002721846
+    },
+    {
+      "cycle": 275,
+      "orders": 1000,
+      "milliseconds": 194.24400001298636
+    },
+    {
+      "cycle": 276,
+      "orders": 100,
+      "milliseconds": 112.5459999893792
+    },
+    {
+      "cycle": 277,
+      "orders": 500,
+      "milliseconds": 257.68369995057583
+    },
+    {
+      "cycle": 278,
+      "orders": 1000,
+      "milliseconds": 165.09020002558827
+    },
+    {
+      "cycle": 279,
+      "orders": 100,
+      "milliseconds": 163.45870000077412
+    },
+    {
+      "cycle": 280,
+      "orders": 500,
+      "milliseconds": 155.61100002378225
+    },
+    {
+      "cycle": 281,
+      "orders": 1000,
+      "milliseconds": 203.66250001825392
+    },
+    {
+      "cycle": 282,
+      "orders": 100,
+      "milliseconds": 130.0710000214167
+    },
+    {
+      "cycle": 283,
+      "orders": 500,
+      "milliseconds": 210.87219996843487
+    },
+    {
+      "cycle": 284,
+      "orders": 1000,
+      "milliseconds": 163.7458999757655
+    },
+    {
+      "cycle": 285,
+      "orders": 100,
+      "milliseconds": 150.29810002306476
+    },
+    {
+      "cycle": 286,
+      "orders": 500,
+      "milliseconds": 154.67349998652935
+    }
+  ]
+}
