@@ -1648,3 +1648,182 @@ These are in-memory ports, not external logs/export or authority for effects.
 2868PASS1SKIP112.36s; no new full claim for this separate additive port commit.
 Actor lifecycle, actual source handoff and fair module continuations still not
 integrated; real browser proof and TP lateness remain open. Production unchanged.
+## CEO independent Stage A/B source review — 2026-10-27
+
+**Scoped CEO decision: STAGE_A_PASS /
+STAGE_B_ATOMIC_STOP_SOURCE_PASS /
+STAGE_B_DISTINCT_SOURCE_SLOT_BOUND_PASS /
+STAGE_B_CROSS_MODULE_FAIRNESS_CHANGES_REQUESTED.
+ACTOR_NOT_IMPLEMENTED; TP_TIMELY_900S_STILL_FAIL;
+V16_OVERALL_REVIEW_REQUIRED.**
+
+**Provenance and scope.** Actual remote branch HEAD fetched:
+`42a881231da1221343aa1766ca732a0c5fe96d5d`;
+Stage A `4a669daea75ad4ba8227787de1dc1c8e265e9abe`
+followed the previous CEO source review, and B is one
+fast-forward commit on A. Reviewer compared both changes and
+read `src/workflow/service.py`,
+`tests/workflow/test_order_resource_leases.py`,
+unified report and `docs/evidence/v16/order-resource-regression.json`.
+The final B source is not installed; current production remains
+the previously reviewed `04075bc`.
+Executor-reported offline A:65 targeted PASS/
+2864PASS+1SKIP full (112.70s); B:69 targeted PASS/
+2868PASS+1SKIP full (112.36s); Ruff/diff PASS.
+CEO reviewed source/test design and committed evidence, did
+not independently run Windows pytest or touch production.
+
+### A: source-reviewed PASS / prior abort/rearm finding CLOSED
+
+`configure_modules` no longer resets a fatal
+`_module_resource_failed` latch and refuses
+reconfiguration on that same failed runtime.
+`_order_terminal` is set on ordinary Stop or
+shared abort; `configure_order_leases` cannot
+reopen it, including after active leases have
+drained or Stop preceded initial configuration.
+The exact scheduler-thread lease may still
+release safely after closure. Separate fresh
+runtime creation is a distinct lifecycle and
+is NOT automatic authorization to reuse unsafe
+Chrome. A's prior reproducible
+abort → drain → configure_modules →
+configure_order_leases bypass is closed by
+source and regression tests.
+
+### B: precise local contracts that PASS
+
+- `begin_order_dispatch` validates exact
+  granted object and admitting scheduler thread
+  under the same runtime RLock. A competing
+  `close_order_admissions` either precedes
+  the transition (returns False; scheduler
+  cancels reserved lease) or follows it
+  (committed lease survives for completion).
+  Duplicate dispatch/forged or copied/foreign
+  handles are rejected in tests.
+- Distinct source keys, not total same-key
+  waiting tokens, consume the finite
+  `capacity` reservation budget. Same-key
+  queued requests are bounded to configured
+  module count, and per-key FIFO plus
+  cross-key simultaneous claims were tested.
+  This fixes the previously demonstrated
+  "same-row waiters consume other-row slot"
+  issue in the isolated component.
+- No module actor, asynchronous result
+  handoff, worker terminal acknowledgment,
+  scheduler fairness or real browser/TP
+  deadline acceptance was implemented.
+  In particular, the in-memory
+  `_order_dispatched` flag is **not** evidence
+  of actual worker submission/completion;
+  `release_order_lease` can currently
+  be called after the flag is set without
+  proof of worker terminal acknowledgment.
+  That handoff must be modeled and tested
+  by the Stage C coordinator; do not treat
+  these local stop-boundary tests as end-to-end
+  drain safety.
+
+### B cross-module fairness issue: CHANGES_REQUESTED before actor integration
+
+Current `request_order_lease` caps the queue for
+one source key by
+`max(1, len(self._module_periods))`, but
+the request's *module identity is not stored
+or verified* and `request_token` is just
+an arbitrary nonempty string. Thus, with
+three modules configured, three requests from
+inquiry to the same source row can exhaust
+that row's three slots, causing a newly due
+quotation or TP on the same source row to
+return False. The source comment
+"At most one queued request per configured
+module per source slot" is not implemented
+as stated. Even though mutual exclusion
+prevents concurrent same-row processing,
+this is not a cross-module non-starvation
+guarantee. The existing B tests use three
+different token labels and do not assert
+a verified module identity; they therefore
+do not refute this counterexample.
+
+**Required minimal follow-up:** under the
+already CEO-approved immutable Public
+Contract, carry a validated `module_id`
+(or otherwise enforce one pending slot per
+actual module/cycle on a source row) rather
+than interpreting the token text. Test
+multiple cycles of one module trying to fill
+a same-key queue, then another module's
+arrival and eventual admission; preserve
+per-source FIFO, different-source progress,
+exact owner release, finite budget and
+pending-work preservation. Do not invent
+a second scheduler or durable ledger.
+Where business policy truly permits multiple
+requests per same module, implement explicit
+fair scheduling rather than merely using
+module count as a queue-length proxy.
+A bounded request budget is not an absolute
+start-deadline guarantee: continue to
+measure actual TP due-to-start latency.
+
+**Further Stage C integration gates:**
+- Reserve→begin_order_dispatch→worker submit
+  failure or Stop in between must have an
+  exact scheduler-owned rollback/drain
+  acknowledgment; never free an active
+  lease while worker may still touch its
+  source. Use immutable terminal result
+  and fault receipt, not arbitrary local
+  release timing.
+- Ensure source identity is validated
+  against fresh spreadsheet/snapshot data
+  before write effects. Physical sheet row
+  is a resource key, not durable identity.
+- Preserve single Chrome, bounded
+  independent sync market readers, shared
+  PageResourceAdmission, site auth/pacing,
+  exclusive Google/INSO owner and original
+  SENT/UNKNOWN/120s barriers. Do not block
+  the owner scheduler synchronously on a
+  whole quotation Research batch. Show a
+  real due-TP/long-quotation timeline.
+- No deployment or production behavior
+  changes are authorized by this review.
+
+### Google notification: READ_ONLY_FINDINGS, ROOT_CAUSE_UNKNOWN
+
+Read-only record shows four separate
+`QuotationInputBusy` /
+`GOOGLE_WEB_READ_BUSY` exhaustion groups
+(09:57:23,14:56:49,16:03:20,17:04:34
++08, five open-sheet attempts per group).
+These indicate a protected quotation-input
+page could not be safely acquired/reused
+before TSV reading, **not** that Google
+is wholly unreachable. Current sanitized
+logs do not differentiate protected pooled
+entry vs unsafe pending/dialog surface vs
+three-owned-pages capacity. Exact branch
+cause UNKNOWN; manually opening Sheets
+does not bypass owner/settlement safety.
+Repeated cycles may generate separate
+fault notices; the groups alone do not
+prove four successfully delivered emails.
+Next bounded change may add sanitized
+branch-specific codes/count bands under
+existing tests/observability only, without
+page closure, guard bypass, SMTP test send
+or arbitrary production intervention.
+
+**Final:** `A_PASS`,
+`B_LOCAL_STOP_AND_DISTINCT_SLOT_PASS`,
+`B_FAIRNESS_CHANGES_REQUESTED`,
+`GOOGLE_BUSY_BRANCH_UNKNOWN`,
+`PARALLEL_BUSINESS_ACTORS_NOT_IMPLEMENTED`,
+`PREVIOUS_TP_454_210S_DELAY_OPEN`,
+`CURRENT_PRODUCTION_04075BC_UNCHANGED`,
+`V16_REVIEW_REQUIRED`.
