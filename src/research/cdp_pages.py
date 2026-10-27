@@ -6,6 +6,7 @@ import logging
 import re
 from collections.abc import Callable
 from typing import Any, Self
+from uuid import uuid4
 
 _LOG = logging.getLogger(__name__)
 
@@ -112,13 +113,16 @@ def new_background_page(
     dedicated window. CDP's background target preserves its window state.
     """
 
+    if owner is not None and not re.fullmatch(r"[a-z][a-z0-9-]{1,40}", owner):
+        raise ValueError("INVALID_TAB_OWNER")
+    # A task/site owner is not unique per creation. Match a random creation URL
+    # first, then prove the Page's native targetId before touching its document.
+    initial_url = "about:blank#INSO_CREATE:" + uuid4().hex
     session = browser.new_browser_cdp_session()
     target_id: str | None = None
     try:
-        with context.expect_page(timeout=timeout_ms) as pending:
-            if owner is not None and not re.fullmatch(r"[a-z][a-z0-9-]{1,40}", owner):
-                raise ValueError("INVALID_TAB_OWNER")
-            initial_url = "about:blank" if owner is None else "about:blank#" + _OWNER_PREFIX + owner
+        with context.expect_event("page", predicate=lambda page: page.url == initial_url,
+                                  timeout=timeout_ms) as pending:
             params = {"url": initial_url, "background": True}
             # A windowless bootstrap has no existing tab/window to reuse.
             # Ask Chrome to create that first window minimized, rather than
@@ -129,11 +133,18 @@ def new_background_page(
                 params["browserContextId"] = browser_context_id
             target_id = session.send("Target.createTarget", params)["targetId"]
         page = pending.value
+        proof = context.new_cdp_session(page)
+        try:
+            actual = proof.send("Target.getTargetInfo")["targetInfo"]["targetId"]
+            if actual != target_id:
+                raise ValueError("TAB_TARGET_ID_MISMATCH")
+        finally:
+            proof.detach()
         if owner is not None:
             mark_owned_page(page, owner)
         return page
     except Exception:
-        if target_id is not None and owner is None:
+        if target_id is not None:
             session.send("Target.closeTarget", {"targetId": target_id})
         raise
     finally:

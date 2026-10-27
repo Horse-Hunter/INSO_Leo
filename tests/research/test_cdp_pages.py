@@ -25,9 +25,14 @@ class Context:
         self.pages = [self.page]
         self.fail = fail
 
-    def expect_page(self, *, timeout: int) -> "Context":
-        assert timeout == 1234
+    def expect_event(self, event, *, predicate, timeout: int) -> "Context":
+        assert event == "page" and timeout == 1234
+        self.predicate = predicate
         return self
+
+    def new_cdp_session(self, page):
+        return SimpleNamespace(send=lambda _: {"targetInfo": {"targetId": "synthetic-target"}},
+                               detach=lambda: None)
 
     def __enter__(self) -> Self:
         return self
@@ -49,7 +54,7 @@ def test_new_cdp_page_stays_in_background_and_detaches_session() -> None:
     )
     assert page is not None
     assert session.calls == [
-        ("Target.createTarget", {"url": "about:blank", "background": True})
+        ("Target.createTarget", {"url": session.calls[0][1]["url"], "background": True})
     ]
     assert session.detached
 
@@ -64,7 +69,7 @@ def test_new_cdp_page_targets_isolated_browser_context() -> None:
         (
             "Target.createTarget",
             {
-                "url": "about:blank",
+                "url": session.calls[0][1]["url"],
                 "background": True,
                 "browserContextId": "ephemeral-context",
             },
@@ -147,7 +152,85 @@ def test_windowless_first_target_is_minimized_without_activation_or_foreground_f
     new_background_page(SimpleNamespace(new_browser_cdp_session=lambda: session),
                         context, timeout_ms=1234)
     assert session.calls == [("Target.createTarget", {
-        "url": "about:blank", "background": True,
+        "url": session.calls[0][1]["url"], "background": True,
         "newWindow": True, "windowState": "minimized",
     })]
     assert session.detached
+
+class RacingTargets:
+    """Interleave another actor/human event before the requested target event."""
+
+    def __init__(self, *, spoof=False, fail_proof=False):
+        self.pages = []
+        self.calls = []
+        self.spoof, self.fail_proof = spoof, fail_proof
+        self.closed = []
+
+    def new_browser_cdp_session(self):
+        return self
+
+    def send(self, command, params):
+        self.calls.append((command, params))
+        if command == "Target.closeTarget":
+            self.closed.append(params['targetId'])
+            return {}
+        target = f'owned-{len(self.calls)}'
+        noise = SimpleNamespace(url='about:blank#INSO_CREATE:another-task', target='human')
+        own = SimpleNamespace(url=params['url'], target='spoof' if self.spoof else target)
+        self.pages.extend([noise, own])
+        self.matched = [p for p in self.pages if self.predicate(p)]
+        return {'targetId': target}
+
+    def detach(self):
+        pass
+
+    def expect_event(self, event, *, predicate, timeout):
+        assert event == 'page'
+        self.predicate = predicate
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        pass
+
+    @property
+    def value(self):
+        return self.matched[0]
+
+    def new_cdp_session(self, page):
+        assert page.target != 'human'
+        def proof(_):
+            if self.fail_proof:
+                raise TimeoutError('synthetic-target-proof')
+            return {'targetInfo': {'targetId': page.target}}
+        return SimpleNamespace(send=proof, detach=lambda: None)
+
+
+def test_creation_filters_foreign_event_then_proves_exact_native_target():
+    protocol = RacingTargets()
+    page = new_background_page(protocol, protocol, timeout_ms=1234)
+    assert page.target == 'owned-1'
+    assert protocol.pages[0].target == 'human'
+    assert not protocol.closed
+    second = new_background_page(protocol, protocol, timeout_ms=1234)
+    assert second.url != page.url
+    assert second.target == 'owned-2'
+
+
+@pytest.mark.parametrize('kwargs,error', [({'spoof': True}, ValueError),
+                                          ({'fail_proof': True}, TimeoutError)])
+def test_mismatched_or_unprovable_target_closes_only_created_target(kwargs, error):
+    protocol = RacingTargets(**kwargs)
+    with pytest.raises(error):
+        new_background_page(protocol, protocol, timeout_ms=1234, owner='market-task')
+    assert protocol.closed == ['owned-1']
+    assert protocol.pages[0].target == 'human'
+
+
+def test_invalid_owner_creates_no_target_or_client_session():
+    protocol = RacingTargets()
+    with pytest.raises(ValueError, match='INVALID_TAB_OWNER'):
+        new_background_page(protocol, protocol, timeout_ms=1234, owner='INVALID')
+    assert protocol.calls == []

@@ -158,9 +158,14 @@ class FakeCdpContext:
         self.pages.append(page)
         return page
 
-    def expect_page(self, *, timeout: int) -> _PendingPage:
+    def expect_event(self, event, *, predicate, timeout: int) -> _PendingPage:
         assert timeout > 0
         return _PendingPage(self)
+
+    def new_cdp_session(self, page):
+        from types import SimpleNamespace
+        return SimpleNamespace(send=lambda _: {"targetInfo": {"targetId": "target-1"}},
+                               detach=lambda: None)
 
 
 class FakeCdpBrowser:

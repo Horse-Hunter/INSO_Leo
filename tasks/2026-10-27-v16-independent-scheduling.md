@@ -575,3 +575,18 @@ success. Stage3 realTP/currentSMTP/GUI/long-run still NOT_VERIFIED. Historical
 PASS / memory drift review required; no oldsoak restart or protected-tree changes.
 Page-concurrency increment remains independent from install candidate04075bc;
 no actual webpage overlap claimed. Existing unified checklist remains canonical.
+
+### Independent page-ownership increment (not part of reviewed installation)
+
+Source-only first prerequisite: canonical new_background_page now filters a
+per-create random blank URL and proves returned Page's native Target.getTargetInfo
+targetId equals Target.createTarget's exact response before marking/navigating.
+First foreign event or spoofed creation URL cannot authorize a foreign page.
+Failure closes only the target created by that request, including owner-tagged
+creation failures. No new browser/client/profile/production toggle.
+Existing adapter protocol fixtures upgraded, research481PASS3.24s; targeted
+ownership11PASS0.54s covers foreign events, mismatched target, proof timeout,
+unique creations and invalid owner. ScopedRuff PASS. This is a page factory
+prerequisite ONLY, not actor integration, same-order arbitration or true browser
+parallelism. No real browser access or overlap claim; full regression pending
+before source review. Keep separate from installed04075bc candidate.

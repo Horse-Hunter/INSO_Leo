@@ -23,7 +23,8 @@ class BackgroundSession:
 
     def send(self, command, params):
         assert command == "Target.createTarget" and params["background"] is True
-        self.context.new_page()  # Synthetic target-created event/fixture factory.
+        page = self.context.new_page()  # Synthetic target-created event/fixture factory.
+        page.url = params["url"]
         return {"targetId": "synthetic-target"}
 
     def detach(self):
@@ -31,7 +32,9 @@ class BackgroundSession:
 
 
 def attach_background_protocol(context, browser=None):
-    context.expect_page = lambda **_: PendingPage(context)
+    context.expect_event = lambda *_, **__: PendingPage(context)
+    context.new_cdp_session = lambda page: SimpleNamespace(
+        send=lambda _: {"targetInfo": {"targetId": "synthetic-target"}}, detach=lambda: None)
     context.browser = browser or SimpleNamespace()
     context.browser.new_browser_cdp_session = lambda: BackgroundSession(context)
     return context.browser
