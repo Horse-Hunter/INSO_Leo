@@ -286,7 +286,7 @@ separate deployment proposal, not an automatic consequence of source fixes.
 | B quote/Google write/readback success | NOT_VERIFIED | Prior no-recent/unchanged/identity refusals, no forced writes |
 | B SMTP acceptance vs mailbox delivery | PASS / NOT_VERIFIED | Prior accepted1 recipient; mailbox final delivery unknown |
 | B real restart idempotency | DEFERRED | Current command forbids production restart/DB operations; offline safety regression retained |
-| C genuine overlapping page work | NOT_VERIFIED | Must not describe serial actor or fake callback as webpage parallelism |
+| C genuine overlapping page work | DEFERRED implementation / NOT_VERIFIED overlap | Exact-target event correlation, per-order lease and callback/client isolation incomplete; independent design docs/V16_PAGE_CONCURRENCY_DESIGN.md |
 | D multi-cycle resources/semaphore ownership | NOT_VERIFIED | Prior2x121s aggregate samples only; no demonstrated persistent leak |
 | D main/observer vs browser/game | NOT_VERIFIED | Existing counters exclude Chrome/game costs; no game launch allowed |
 | D live EXE menus/tray/normal exit | DEFERRED | Cannot close or control running production this round |
@@ -330,4 +330,14 @@ cycle IDs;8SOURCE_CHANGED,104NO_RECENT_QUOTE,3PRICE_UNCHANGED,4unresolved identi
 No independent TP receipts. Read-only logs do not establish fresh external writes.
 Prior SMTP export as of10:25:26 reports139SENT,138historicalSENT unchanged then;
 current SMTP state NOT_VERIFIED because this round forbids productionDB access.
-No live restart, no repeat mail, no new production/browser/config query.
+No live restart, no repeat mail, no productionDB/browser/config query; only
+existing sanitized logfiles were read as explicitly allowed in phaseB.
+
+PhaseB commit b6187b5ffa8b279c0fc82c57e1e478a9472e2148 is source/log observability,
+not deployed instrumentation. PhaseC independently documents existing first-page
+event binding race, same-URL reuse, sync thread affinity and shared callback/order
+identity gaps. Preferred bounded same-CDP independent sync-client actors reuse
+adapters; broad async migration deferred. No unsupported parallel mode wired in,
+no callback timing presented as actual webpage overlap. Implementation and actual
+timeline remain open; safe acceptance needs a window that does not commandeer
+current live browser. The explicit no-production-browser constraint is honored.
