@@ -680,3 +680,94 @@ def _optional_text_sequence(raw: Mapping, key: str) -> tuple[str, ...] | None:
 
 if __name__ == "__main__":  # pragma: no cover - manual readiness entry point
     raise SystemExit(main())
+
+
+class MarketReadOwnerRequired(RuntimeError):
+    """This source/auth transition must remain on the original browser owner."""
+
+    reason = "MARKET_OWNER_REQUIRED"
+
+
+class ResearchMarketSession:
+    """One thread-local attached client, assembled from canonical source clients.
+
+    Lifecycle is owned by Launcher. No credentials are resolved or login submitted
+    here. BOM and INSO keep their existing owner-side protected/authenticated path.
+    This optional interface is not connected to production module execution yet.
+    """
+
+    def __init__(self, config, admission):
+        import threading
+
+        from .cdp_pages import PageResourceAdmission
+        if (type(config) is not ResearchRuntimeConfig or config.cdp.cdp_url.rstrip('/') != 'http://127.0.0.1:9222'
+                or config.icnet.mode != 'cdp' or not isinstance(admission, PageResourceAdmission)):
+            raise ValueError("MARKET_SESSION_CONFIG_INVALID")
+        self._config, self._admission = config, admission
+        self._thread = threading.get_ident()
+        self._playwright = self._browser = self._service = None
+
+    def _check_thread(self):
+        import threading
+        if threading.get_ident() != self._thread:
+            from .cdp_pages import PageTargetOwnershipError
+            fault = PageTargetOwnershipError((RuntimeError("MARKET_SESSION_THREAD_MISMATCH"),))
+            self._admission.invalidate(fault)
+            raise fault
+
+    def __enter__(self):
+        from playwright.sync_api import sync_playwright
+
+        from .cdp_pages import bind_page_admission
+        self._check_thread()
+        self._admission.require_open()
+        if self._playwright is not None:
+            raise RuntimeError("MARKET_SESSION_ALREADY_OPEN")
+        self._playwright = sync_playwright().start()
+        try:
+            self._browser = self._playwright.chromium.connect_over_cdp(
+                self._config.cdp.cdp_url, timeout=self._config.browser.timeout_ms)
+            bind_page_admission(self._browser, self._admission)
+            if not self._browser.is_connected() or len(self._browser.contexts) != 1:
+                raise RuntimeError("MARKET_CDP_CONTEXT_INVALID")
+            # These providers capture only this actor's client, on this thread.
+            # None of the clients below can submit a login form.
+            factory = shared_playwright_factory(lambda: (self._playwright, self._browser),
+                                                 admission=self._admission)
+            common = {"cdp_url": self._config.cdp.cdp_url,
+                      "timeout_ms": self._config.browser.timeout_ms, "playwright_factory": factory}
+            self._service = build_research_service(self._config,
+                icnet_client=CdpIcNetClient(**common, login_provider=None),
+                findchips_client=CdpFindchipsClient(**common, login_provider=None),
+                hqew_client=CdpHqewClient(**common, login_provider=None, navigate=True),
+                lcsc_client=CdpLcscClient(**common, login_provider=None),
+                playwright_provider=lambda: (self._playwright, self._browser),
+                page_admission=self._admission)
+            return self
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+
+    def read(self, query):
+        from uuid import uuid4
+
+        from .cdp_pages import market_read_pages
+        from .source_contracts import ResearchSource
+        self._check_thread()
+        self._admission.require_open()
+        if self._service is None:
+            raise RuntimeError("MARKET_SESSION_NOT_OPEN")
+        if query.source in {ResearchSource.BOM_AI, ResearchSource.INSO}:
+            raise MarketReadOwnerRequired()
+        with market_read_pages('market-' + uuid4().hex, self._admission):
+            result = self._service.read_market_source(query)
+        self._admission.require_open()  # Adapters may translate a teardown fault.
+        return result
+
+    def __exit__(self, *_exc):
+        self._check_thread()
+        playwright, self._playwright = self._playwright, None
+        self._browser = self._service = None
+        if playwright is not None:
+            playwright.stop()  # Detach this actor's client only. Never browser.close.
+        return False

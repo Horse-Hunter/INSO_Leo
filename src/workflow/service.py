@@ -17,6 +17,8 @@ from src.research import (
     ResearchResult,
     ResearchStatus,
 )
+from src.research.icnet import ICNET_MIN_INTERVAL_SECONDS
+from src.research.source_contracts import ResearchSource
 from src.sheets import (
     PendingSheetRecord,
     SheetRecordIdentity,
@@ -31,7 +33,12 @@ from src.sheets.brand_write import (
     write_brand_safely,
 )
 
-from .market_messages import MarketModule
+from .market_messages import (
+    MarketCompletion,
+    MarketFaultScope,
+    MarketModule,
+    MarketReadRequest,
+)
 from .models import WorkflowStatus, WorkItem
 from .store import DEFAULT_RETRY_DELAYS, WorkflowStateStore
 from .v12_store import V12DatabaseError
@@ -290,6 +297,11 @@ class WorkflowRuntime:
         self._order_waiters = {}
         self._order_active = {}
         self._order_dispatched = set()
+        self._market_owner = None
+        self._market_requests = {}
+        self._market_running = {}
+        self._market_acknowledging = set()
+        self._market_source_due = {}
 
     def configure_order_leases(self, capacity):
         """Bound ephemeral admissions to the coordinator's finite worker budget.
@@ -300,6 +312,8 @@ class WorkflowRuntime:
         if isinstance(capacity, bool) or not isinstance(capacity, int) or capacity < 1:
             raise ValueError("INVALID_ORDER_RESOURCE_CAPACITY")
         with self._module_lock:
+            if self._market_owner is not None:
+                raise RuntimeError("MARKET_COORDINATOR_ALREADY_CONFIGURED")
             if self._module_running or self._order_requests:
                 raise RuntimeError("ORDER_RESOURCES_RUNNING")
             if self._module_resource_failed:
@@ -412,6 +426,10 @@ class WorkflowRuntime:
         """Only the admitting scheduler thread can release its exact live lease."""
         with self._module_lock:
             key = self._verify_order_lease(lease)
+            if (lease.request_token in self._market_running
+                    and lease.request_token in self._order_dispatched
+                    and lease.request_token not in self._market_acknowledging):
+                raise RuntimeError("MARKET_TERMINAL_UNACKNOWLEDGED")
             self._order_dispatched.discard(lease.request_token)
             del self._order_active[key]
             del self._order_requests[lease.request_token]
@@ -454,6 +472,127 @@ class WorkflowRuntime:
                     "waiting": len(self._order_requests)-len(self._order_active),
                     "closed": self._order_closed or self._module_resource_failed}
 
+    def configure_market_reads(self, capacity):
+        """Optional canonical bounded coordinator; not production-enabled."""
+        with self._module_lock:
+            if self._market_owner is not None:
+                raise RuntimeError("MARKET_COORDINATOR_ALREADY_CONFIGURED")
+            if type(capacity) is not int or not 1 <= capacity <= 2:
+                raise ValueError("MARKET_WORKERS_OUT_OF_BOUNDS")
+            self.configure_order_leases(capacity)
+            self._market_owner = threading.get_ident()
+
+    def _check_market_owner(self):
+        if self._market_owner != threading.get_ident():
+            raise OrderResourceOwnershipError()
+
+    def admit_market_read(self, request):
+        with self._module_lock:
+            self._check_market_owner()
+            self._check_order_admission()
+            if type(request) is not MarketReadRequest:
+                raise ValueError("MARKET_REQUEST_INVALID")
+            token = request.identity.request_id
+            old = self._market_requests.get(token)
+            if old is not None:
+                if old != request:
+                    raise OrderResourceOwnershipError()
+                return True
+            record = request.identity.source_record
+            if not self.request_order_lease(record.worksheet, record.row_position, token,
+                                            module_id=request.identity.module):
+                return False
+            self._market_requests[token] = request
+            return True
+
+    def claim_market_read(self, *, blocked_sources=()):
+        """Nonblocking earliest due eligible request; same source row stays FIFO."""
+        with self._module_lock:
+            self._check_market_owner()
+            self._check_order_admission()
+            eligible = sorted((r for token, r in self._market_requests.items()
+                               if token not in self._market_running and r.query.source not in blocked_sources
+                               and self._module_timer() >= self._market_source_due.get(r.query.source, 0)),
+                              key=lambda r: (r.due_at, r.admitted_at))
+            for request in eligible:
+                lease = self.try_claim_order_lease(request.identity.request_id)
+                if lease is not None:
+                    self._market_running[request.identity.request_id] = lease
+                    return request, lease
+            return None
+
+    def commit_market_dispatch(self, request, lease):
+        with self._module_lock:
+            self._check_market_owner()
+            if (self._market_requests.get(request.identity.request_id) is not request
+                    or self._market_running.get(request.identity.request_id) is not lease):
+                raise OrderResourceOwnershipError()
+            if self.begin_order_dispatch(lease):
+                return True
+            self.cancel_reserved_order_lease(lease)
+            self._market_running.pop(request.identity.request_id)
+            self._market_requests.pop(request.identity.request_id)
+            return False
+
+    def acknowledge_market_terminal(self, completion):
+        """Release only after exact request terminal delivery on scheduler owner."""
+        with self._module_lock:
+            self._check_market_owner()
+            if type(completion) is not MarketCompletion:
+                raise ValueError("MARKET_COMPLETION_INVALID")
+            token = completion.identity.request_id
+            request = self._market_requests.get(token)
+            lease = self._market_running.get(token)
+            if (request is None or request.identity != completion.identity or lease is None
+                    or token not in self._order_dispatched):
+                raise OrderResourceOwnershipError()
+            if completion.result is not None and (
+                    completion.result.source is not request.query.source
+                    or completion.result.mode is not request.query.mode):
+                raise OrderResourceOwnershipError()
+            self._market_acknowledging.add(token)
+            try:
+                self.release_order_lease(lease)
+            finally:
+                self._market_acknowledging.discard(token)
+            del self._market_running[token]
+            del self._market_requests[token]
+            if request.query.source is ResearchSource.IC_NET:
+                # Reuse canonical IC.net90s pacing across independent clients.
+                # Completion-based fence is conservative; no sleeping worker or
+                # additional timer. Other sites remain available to dispatch.
+                self._market_source_due[request.query.source] = self._module_timer() + ICNET_MIN_INTERVAL_SECONDS
+            if completion.fault is not None and completion.fault.scope is MarketFaultScope.GLOBAL_STOP:
+                self._abort_resources()
+
+    def fail_market_reads(self, fault):
+        with self._module_lock:
+            self._check_market_owner()
+            if fault.scope is not MarketFaultScope.GLOBAL_STOP:
+                raise ValueError("MARKET_GLOBAL_FAULT_REQUIRED")
+            self._abort_resources()
+
+    def close_market_reads(self):
+        """Owner cancels waiting/reserved work; submitted work awaits terminal."""
+        with self._module_lock:
+            self._check_market_owner()
+            self.close_order_admissions()
+            for token in tuple(self._market_requests):
+                lease = self._market_running.get(token)
+                if lease is not None and token in self._order_dispatched:
+                    continue
+                if lease is not None:
+                    self.cancel_reserved_order_lease(lease)
+                    del self._market_running[token]
+                del self._market_requests[token]
+
+    def _abort_resources(self):
+        self._module_resource_failed = True
+        self.close_order_admissions()
+        self._module_paused.update(self._module_periods)
+        self._module_running.clear()
+        self._module_resource = None
+
     def configure_modules(self, intervals, *, timer=monotonic):
         """Extend the existing runtime, not business identities or persistent state.
 
@@ -468,6 +607,8 @@ class WorkflowRuntime:
         with self._module_lock:
             if self._module_resource_failed:
                 raise RuntimeError("MODULE_RESOURCE_OWNERSHIP_LOST")
+            if self._market_owner is not None:
+                raise RuntimeError("MARKET_COORDINATOR_ALREADY_CONFIGURED")
             if self._module_running or self._order_requests:
                 raise RuntimeError("MODULES_RUNNING")
             self._module_timer = timer
@@ -529,11 +670,7 @@ class WorkflowRuntime:
         with self._module_lock:
             if self._module_owner != threading.get_ident():
                 raise RuntimeError("MODULE_RESOURCE_OWNERSHIP_LOST")
-            self._module_resource_failed = True
-            self.close_order_admissions()
-            self._module_paused.update(self._module_periods)
-            self._module_running.clear()
-            self._module_resource = None
+            self._abort_resources()
 
     def reset_module(self, module):
         with self._module_lock:

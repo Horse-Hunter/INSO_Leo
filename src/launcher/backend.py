@@ -2268,6 +2268,20 @@ class ProductionBackend(GuiBackend):
         self._notify()
         return True
 
+    def accept_market_fault(self, fault):
+        """Original owner consumes immutable actor fault via existing stop path.
+
+        Port only: optional actors are not enabled in production composition.
+        No worker calls this method or accesses Backend state directly.
+        """
+        from src.workflow.market_messages import MarketFault, MarketFaultScope
+        if type(fault) is not MarketFault or fault.scope is not MarketFaultScope.GLOBAL_STOP:
+            raise ValueError("MARKET_GLOBAL_FAULT_REQUIRED")
+        error = PageTargetCleanupError(())
+        error.reason, error.failure_classes = fault.reason, fault.exception_classes
+        self._page_admission.invalidate(error)
+        self._runtime_error(error)
+
     def _runtime_error(self, exc):
         log.warning("Production runtime worker failed (%s)", type(exc).__name__)
         with self._lock:

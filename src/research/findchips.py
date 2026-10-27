@@ -17,7 +17,7 @@ from urllib.request import Request, urlopen
 
 from src.core.mpn import lookup_mpn_query
 
-from .cdp_pages import new_background_page
+from .cdp_pages import close_research_page, new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .site_login import (
     REJECTED_PASSWORD_TEXT,
@@ -301,7 +301,7 @@ class CdpFindchipsClient:
                             )
                     return FindchipsPage(html, current_url, datetime.now(UTC))
                 finally:
-                    page.close()
+                    close_research_page(page)
         except FindchipsPageUnavailable:
             raise
         except Exception as error:

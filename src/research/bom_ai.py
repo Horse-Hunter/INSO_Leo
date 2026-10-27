@@ -16,7 +16,7 @@ from urllib.parse import quote, urlsplit
 
 from src.core.mpn import lookup_mpn_query
 
-from .cdp_pages import new_background_page
+from .cdp_pages import close_research_page, new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .site_login import (
     REJECTED_PASSWORD_TEXT,
@@ -528,7 +528,7 @@ class CdpBomAiAuthenticatedBrowser:
         finally:
             if created_page and page is not None:
                 with contextlib.suppress(Exception):
-                    page.close()
+                    close_research_page(page)
 
     def _login_once_if_required(
         self, page: object, login: BomAiLogin, target_url: str

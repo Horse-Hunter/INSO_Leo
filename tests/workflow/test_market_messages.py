@@ -106,3 +106,10 @@ def test_only_canonical_deeply_immutable_source_results_cross_port():
     with pytest.raises(ValueError):
         MarketProgress(item.identity, 'unbounded free-text stage', 1)
     assert MarketProgress(item.identity, MarketStage.READING, 1).stage is MarketStage.READING
+
+
+
+def test_ordinary_module_cannot_silently_use_tp_month_selection_profile():
+    item = request()
+    with pytest.raises(ValueError, match='MARKET_MODULE_QUERY_MODE_MISMATCH'):
+        replace(item, identity=replace(item.identity, module=MarketModule.QUOTATION))

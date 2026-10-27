@@ -6,6 +6,8 @@ import logging
 import re
 import threading
 from collections.abc import Callable
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any, Self
 from uuid import uuid4
 
@@ -49,15 +51,15 @@ class PageResourceAdmission:
     def invalidate(self, error):
         with self._lock:
             if self._failure is None:
-                self._failure = type(error), error.failure_classes
+                self._failure = type(error), error.reason, error.failure_classes
 
     def require_open(self):
         with self._lock:
             failure = self._failure
         if failure is not None:
-            kind, classes = failure
+            kind, reason, classes = failure
             error = kind(())
-            error.failure_classes = classes
+            error.reason, error.failure_classes = reason, classes
             raise error
 
 
@@ -229,6 +231,78 @@ def shared_playwright_factory(
     return factory
 
 
+_MARKET_PAGES = ContextVar("market_owned_pages", default=None)
+
+
+@contextmanager
+def market_read_pages(owner, admission):
+    """Thread-local scope around canonical clients, never a second page manager.
+
+    Only pages created by new_background_page within this exact request can be
+    retired. Shared resource uncertainty preserves pages and fails closed.
+    """
+    if not isinstance(admission, PageResourceAdmission) or _MARKET_PAGES.get() is not None:
+        raise ValueError("INVALID_MARKET_PAGE_SCOPE")
+    if not isinstance(owner, str) or not re.fullmatch(r"market-[a-f0-9]{32}", owner):
+        raise ValueError("INVALID_MARKET_PAGE_SCOPE")
+    admission.require_open()
+    scope = (owner, admission, [])
+    token = _MARKET_PAGES.set(scope)
+    try:
+        yield
+    finally:
+        try:
+            for page in tuple(scope[2]):
+                close_research_page(page)
+            admission.require_open()
+        finally:
+            _MARKET_PAGES.reset(token)
+
+
+def close_research_page(page):
+    """Legacy close outside actors; exact owned read target proof inside actors."""
+    scope = _MARKET_PAGES.get()
+    if scope is None:
+        page.close()
+        return
+    owner, admission, pages = scope
+    admission.require_open()
+    try:
+        if not any(candidate is page for candidate in pages):
+            raise PageTargetOwnershipError((ValueError("MARKET_PAGE_NOT_CREATED_BY_REQUEST"),))
+        if page.is_closed():
+            return
+        if native_page_owner(page) != owner:
+            raise PageTargetOwnershipError((ValueError("MARKET_NATIVE_OWNER_MISMATCH"),))
+        # A changed nonempty marker can indicate a preserved human review page.
+        # Native target proof survives legitimate navigation clearing window.name.
+        if page_owner(page) not in (None, owner):
+            raise PageTargetOwnershipError((ValueError("MARKET_PAGE_REASSIGNED"),))
+        lease = page._inso_native_page_owner
+        context, browser = lease[2:]
+        if not any(candidate is not page and not candidate.is_closed() for candidate in context.pages):
+            # Canonical last-tab protection. A neutral blank is deliberately not
+            # owned by this request and must survive its teardown.
+            token = _MARKET_PAGES.set(None)
+            try:
+                blank = new_background_page(browser, context, timeout_ms=10000)
+                if blank is page or blank.is_closed() or blank.url != "about:blank":
+                    raise PageTargetCleanupError(())
+            finally:
+                _MARKET_PAGES.reset(token)
+        admission.require_open()
+        page.close()
+        if not page.is_closed():
+            raise PageTargetCleanupError(())
+    except PageTargetCleanupError as fault:
+        admission.invalidate(fault)
+        raise
+    except Exception as failure:
+        fault = PageTargetCleanupError((failure,))
+        admission.invalidate(fault)
+        raise fault from failure
+
+
 def _close_created_target(session, target_id):
     if session.send("Target.closeTarget", {"targetId": target_id}).get("success") is not True:
         raise RuntimeError("CDP_TARGET_CLOSE_UNCONFIRMED")
@@ -249,6 +323,13 @@ def new_background_page(
     """
 
     admission = getattr(browser, "_inso_page_admission", None)
+    scope = _MARKET_PAGES.get()
+    if scope is not None:
+        if admission is not scope[1] or owner not in (None, scope[0]):
+            fault = PageTargetOwnershipError((ValueError("MARKET_PAGE_ADMISSION_MISMATCH"),))
+            scope[1].invalidate(fault)
+            raise fault
+        owner = scope[0]
     if isinstance(admission, PageResourceAdmission):
         admission.require_open()
     if getattr(browser, "_inso_page_resource_failed", False) is True:
@@ -306,6 +387,8 @@ def new_background_page(
             admission.require_open()
         if owner is not None:
             page._inso_native_page_owner = (target_id, owner, context, browser)
+        if scope is not None:
+            scope[2].append(page)
         return page
     except BaseException as exc:
         failure = exc

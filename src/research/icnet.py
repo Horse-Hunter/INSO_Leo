@@ -18,7 +18,7 @@ from urllib.parse import quote, urlsplit
 
 from src.core.mpn import lookup_mpn_query
 
-from .cdp_pages import new_background_page
+from .cdp_pages import close_research_page, new_background_page
 from .site_login import (
     REJECTED_PASSWORD_TEXT,
     LoginForm,
@@ -37,6 +37,7 @@ from .source_contracts import (
     is_strict_mpn_match,
 )
 
+ICNET_MIN_INTERVAL_SECONDS = 90.0
 ICNET_SITE_ID = "ic.net.cn"
 ICNET_HOME_URL = "https://www.ic.net.cn/"
 ICNET_LOGIN_URL = "https://member.ic.net.cn/login.php"
@@ -546,7 +547,7 @@ class CdpIcNetClient:
         timeout_ms: int = 45_000,
         settle_ms: int = 5_000,
         navigate: bool = True,
-        min_interval_seconds: float = 90.0,
+        min_interval_seconds: float = ICNET_MIN_INTERVAL_SECONDS,
         login_provider: IcNetLoginProvider | None = None,
         playwright_factory: Callable[[], object] | None = None,
         tab_owner: str | None = None,
@@ -675,7 +676,7 @@ class CdpIcNetClient:
                     )
                 finally:
                     if owned:
-                        page.close()
+                        close_research_page(page)
         except IcNetPageUnavailable:
             raise
         except timeout_error as error:

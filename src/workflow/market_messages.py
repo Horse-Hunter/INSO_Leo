@@ -8,7 +8,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from math import isfinite
 
-from src.research.market_contracts import MarketReadQuery, MarketReadResult
+from src.research.market_contracts import (
+    MarketReadMode,
+    MarketReadQuery,
+    MarketReadResult,
+)
 from src.sheets.pending import (
     IdentifyingSnapshot,
     SheetRecordIdentity,
@@ -85,6 +89,9 @@ class MarketReadRequest:
         if (type(self.identity) is not MarketTaskIdentity or type(self.query) is not MarketReadQuery
                 or not _seconds(self.due_at) or not _seconds(self.admitted_at)):
             raise ValueError("MARKET_REQUEST_INVALID")
+        expected = MarketReadMode.TP_OFFERS if self.identity.module is MarketModule.TP else MarketReadMode.ORDINARY
+        if self.query.mode is not expected:
+            raise ValueError("MARKET_MODULE_QUERY_MODE_MISMATCH")
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,7 +105,7 @@ class MarketFault:
                 or not _CODE.fullmatch(self.reason)
                 or self.reason not in _RESOURCE | {"MARKET_SOURCE_FAILED", "MARKET_ACTOR_INITIALIZATION_FAILED",
                     "MARKET_SOURCE_TIMEOUT", "MARKET_AUTH_REQUIRED", "MARKET_PROTOCOL_INVALID",
-                    "MARKET_RESULT_INVALID"}
+                    "MARKET_RESULT_INVALID", "MARKET_OWNER_REQUIRED"}
                 or type(self.exception_classes) is not tuple
                 or len(self.exception_classes) > 8
                 or any(not isinstance(v, str) or not _CLASS.fullmatch(v) for v in self.exception_classes)):

@@ -131,8 +131,8 @@ def select_tp_offers(source, offers, *, query, now, fx):
                           tuple(chosen), months)
 
 
-def collect_tp(adapter, source, mpn, quantity, now, fx):
-    """Project existing clients/parsers; do not create a browser/client or alter search()."""
+def collect_tp_offers(adapter, source, mpn, quantity, now):
+    """Canonical raw acquisition; keeps projection/FX on the task owner."""
     offers = []
     if source is ResearchSource.FINDCHIPS:
         from .findchips import parse_findchips_offers
@@ -173,6 +173,14 @@ def collect_tp(adapter, source, mpn, quantity, now, fx):
                   for row in capture.records if row.price.is_finite() and row.price > 0]
     else:
         raise ValueError("TP_SOURCE_UNSUPPORTED")
+    return tuple(offers)
+
+
+def collect_tp(adapter, source, mpn, quantity, now, fx):
+    """Preserve ordinary TP behavior through the same acquisition and selector."""
+    offers = collect_tp_offers(adapter, source, mpn, quantity, now)
+    if isinstance(offers, TpSourceResult):
+        return offers  # Existing typed currency-unconfirmed BOM outcome.
     return select_tp_offers(source, offers, query=mpn, now=now, fx=fx)
 
 

@@ -16,7 +16,7 @@ from urllib.request import Request, urlopen
 
 from src.core.mpn import lookup_mpn_prefix, lookup_mpn_query, normalize_lookup_mpn
 
-from .cdp_pages import new_background_page
+from .cdp_pages import close_research_page, new_background_page
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .site_login import (
     REJECTED_PASSWORD_TEXT,
@@ -424,7 +424,7 @@ class CdpLcscClient:
                         )
                     return LcscPage("", page.url, datetime.now(UTC), product)
                 finally:
-                    page.close()
+                    close_research_page(page)
         except LcscError:
             raise
         except Exception as exc:

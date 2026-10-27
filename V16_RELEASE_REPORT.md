@@ -716,3 +716,68 @@ corrected fixtures and final88PASS. Prior B full2868/1SKIP belongs to earlier
 source only. Added each module's100repeated cycles vs other modules' admission,
 eventualFIFOclaim and independent-source progress, module forgery/type refusal.
 No actual deadline/worker acknowledgment/business parallelism PASS inferred.
+
+
+## Stage D — optional bounded read actors and canonical source handoff (PARTIAL)
+
+Not connected to ProductionBackend's running module loop and NOT deployed.
+Extends one WorkflowRuntime with bounded request registration, earliest-due
+eligible selection, per-source module-aware FIFO leases, dispatch transition and
+exact immutable terminal acknowledgment. A coordinator-dispatched lease cannot
+be released through the raw lease API before terminal acknowledgment. Stop
+cancels waiting/reserved work and retains submitted requests until acknowledged.
+Late/different-cycle/source results are rejected. No additional durable queue.
+
+Launcher MarketReadActors explicitly starts at most2fixed non-daemon threads;
+blocking inbox wait creates no idle monitoring loop. Each thread constructs,
+uses and detaches its own ResearchMarketSession. No Backend/WorkflowRuntime,
+Page/Browser/credential/session object is sent into worker arguments. Transport
+inboxes1peractor, terminal outbox2peractor, bounded enum observations4peractor;
+no unbounded executor. No synchronous whole-batch wait on dispatch_ready.
+Known submit refusal gets scheduler-owned canceled terminal; Stop/initialization/
+teardown and typed native-lease failures have explicit terminal/fault messages.
+Faults close shared admission, latch Runtime; Backend accept_market_fault port
+uses original GLOBAL_STOP/notification path without blaming a historic order.
+The port must still be consumed by future production composition, not a worker.
+
+Research reuses all canonical parsers/adapters. collect_tp now calls extracted
+collect_tp_offers then the SAME selection/FX logic; ordinary service unchanged.
+New single-source interface performs no Excel writes, business mutation or
+Backend callbacks. TP raw offers retain currency/date and IC.net stock/brand;
+existing task owner keeps its one TpFx snapshot. ResearchMarketSession attaches
+only same9222, IC.net configured CDP only, navigation to own pages, no login
+providers. Four market sources usable in optional port; BOM auth and INSO remain
+on existing owner path, not removed from six-source normal/TP research. BOM
+actor requests explicitly hand back MARKET_OWNER_REQUIRED, never no-price.
+
+Canonical factory supplies task-scoped native target ownership. Canonical source
+finally blocks use close_research_page: legacy behavior outside optional scope;
+inside, prove exact request-created native target before retirement, preserve
+changed review markers, neutral blank protects last tab, shared uncertainty
+stops without sweeping. Missing native lease explicitly invalidates common
+admission even if adapter translates fault. No browser/Profile clone/launch.
+
+Same-site actor queries conservatively serialize. Shared IC.net fence reuses
+canonical90s rule across clients, checked by Runtime without a sleeping timer;
+other source tasks remain dispatchable. Existing owner login/recovery coordination
+and module-level protected operation handoff are NOT yet wired (Stage E open).
+Normal inquiry/quotation query mode cannot silently use TP offer/month profile.
+
+Tests: final targeted60PASS0.37s; earlier integrated parser/scope/backend58PASS
+10.63s and first actor5PASS0.21s. Intermediate full2901PASS/1SKIP115.24s belongs
+to pre-final mode/init-latch hardening only; final full to follow. Tests use actual
+Python worker/queue paths + Events and existing synthetic HTML parsers, NOT real
+Chrome or business success. They verify independent TP read can dispatch/return
+while synthetic quotation read is unfinished, source-row serial completion,
+Stop, initializer/native fault, terminal lease and existingIC90s pacing. No sleep/
+Mock interval is claimed as web overlap or corrected real TP latency.
+
+Remaining integration is material: current lease spans a READ REQUEST, not an
+entire pending procurement/quotation/TP transaction. Existing synchronous domain
+flows and Excel/FX finalization must resume on original owner with the same
+real identity and a lease held across the full business continuation; no writes
+can be enabled using this optional query bridge alone. All six source results,
+owner auth recovery and GUI cycle/state handoff must remain canonical. Payload
+bounds reject oversized data without truncation; owner fallback/chunk handling
+needs review before broad use. Real browser Stage F not authorized this round.
+Thus actual BUSINESS_ACTORS_NOT_INTEGRATED / TP454.210s_DELAY_OPEN persists.

@@ -233,3 +233,28 @@ def test_runtime_resource_fault_is_global_not_attributed_to_last_order(tmp_path,
         assert notices == [fault.reason]
     finally:
         backend.shutdown()
+
+
+
+def test_immutable_actor_fault_uses_original_backend_global_stop(tmp_path, monkeypatch):
+    from src.workflow.market_messages import MarketFault, MarketFaultScope
+    backend = launcher.ProductionBackend(root=tmp_path)
+    backend._active_inso_inquiry = 'historic-synthetic-order'
+    backend._v13_ledger_ready = True
+    backend._v12_store = object()
+    notices = []
+    backend._v12_composition = SimpleNamespace(coordinator=SimpleNamespace(run_notifications=lambda **_: None))
+    monkeypatch.setattr(launcher, 'notify_runtime_fault', lambda store, run, reason, **_: notices.append(reason))
+    monkeypatch.setattr(backend, '_record_fault_alert', lambda *_: pytest.fail('not a historical order fault'))
+    try:
+        fault = MarketFault(MarketFaultScope.GLOBAL_STOP, 'CDP_PAGE_OWNERSHIP_UNCONFIRMED', ('ValueError',))
+        backend.accept_market_fault(fault)
+        assert backend._state is RunState.GLOBAL_STOP and backend._stop.is_set()
+        assert notices == [fault.reason]
+        from src.research.cdp_pages import PageTargetCleanupError
+        with pytest.raises(PageTargetCleanupError) as caught:
+            backend._page_admission.require_open()
+        assert caught.value.reason == fault.reason
+        assert caught.value.failure_classes == ('ValueError',)
+    finally:
+        backend.shutdown()

@@ -66,6 +66,36 @@ class ResearchService:
         self._source_query = source_query
         self._fx_provider = fx_provider
 
+    def read_market_source(self, query):
+        """One canonical read without Excel, business state, callbacks or INSO.
+
+        A caller supplies an actor-local service; Backend-bound service instances
+        must never be handed to another thread. TP returns raw native offers so
+        the task owner retains its single FX snapshot and existing selection.
+        """
+        from .market_contracts import MarketReadMode, MarketReadQuery, MarketReadResult
+        from .tp import TpOffer, TpSourceResult, collect_tp_offers
+        if type(query) is not MarketReadQuery:
+            raise ValueError("MARKET_QUERY_PARAMETERS_INVALID")
+        if query.source is ResearchSource.IC_NET:
+            result = self._icnet.search(query.mpn, query.brand, query.quantity)
+            if query.mode is MarketReadMode.ORDINARY:
+                return MarketReadResult(query.source, query.mode, ordinary=result)
+            candidate = result.source_result.price_candidate
+            offers = () if candidate is None else (TpOffer(query.source, candidate.matched_mpn,
+                candidate.raw_price, candidate.raw_currency, None, True),)
+            return MarketReadResult(query.source, query.mode, offers=offers, icnet_context=result)
+        sources = (ResearchSource.FINDCHIPS, ResearchSource.HQEW, ResearchSource.LCSC,
+                   ResearchSource.BOM_AI, ResearchSource.INSO)
+        adapter = self._price_sources[sources.index(query.source)]
+        if query.mode is MarketReadMode.ORDINARY:
+            return MarketReadResult(query.source, query.mode,
+                                    ordinary=adapter.search(query.mpn, query.quantity))
+        offers = collect_tp_offers(adapter, query.source, query.mpn, query.quantity, query.reference_at)
+        if isinstance(offers, TpSourceResult):
+            raise ValueError("MARKET_OWNER_REQUIRED")  # noqa: TRY004 - typed acquisition outcome
+        return MarketReadResult(query.source, query.mode, offers=offers)
+
     def execute_tp(self, task_id, order, *, now):
         from .tp import execute_tp
         return execute_tp(self, task_id, order, now)
