@@ -1,6 +1,7 @@
 """Independent requirement identity and lifecycle; existing outbox owns delivery."""
 import json
 import sqlite3
+import threading
 from collections import Counter
 from dataclasses import asdict
 from decimal import Decimal
@@ -8,6 +9,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from src.research.source_contracts import money_text
+from src.sheets.pending import identify_worksheet_row
 from src.sheets.tp_brief import TpLocalError, TpOrder, bind_tp_order, source_worksheet
 
 from .v12_contracts import NotificationCommand, NotificationKind, NotificationRecipient
@@ -304,10 +306,77 @@ class TpCycle:
         if len(matches) != 1:
             raise TpLocalError("TP_SOURCE_CHANGED")
         line = matches[0]
-        current = bind_tp_order(line, order.spreadsheet,
-                               self.reader.read_rows(source_worksheet(order.spreadsheet, line)))
+        worksheet = source_worksheet(order.spreadsheet, line)
+        rows = tuple(self.reader.read_rows(worksheet))
+        current = bind_tp_order(line, order.spreadsheet, rows)
         if current != order:
             raise TpLocalError("TP_SOURCE_CHANGED")
+        targets = [row for row in rows if row.row_position == order.row]
+        if len(targets) != 1:
+            raise TpLocalError("TP_SOURCE_AMBIGUOUS")
+        return identify_worksheet_row(worksheet, targets[0])
+
+
+    def complete_order(self, order, key, command, result, *, now, expected_source=None):
+        """Original owner only. Same source/command/Stop gates before enqueue."""
+        if key != task_key(order.spreadsheet, order.sheet, order.row):
+            raise TpLocalError("TP_IDENTITY_CHANGED")
+        state = self.store.get(key)
+        if (state["state"] != "RESEARCHING" or state["command_id"] != command
+                or state["order_json"] != order_json(order)):
+            raise TpLocalError("TP_TASK_BUSY_OR_DELIVERY_UNCONFIRMED")
+        if self.stop_requested():
+            self.store.finish(key, "FAILED", now, "TP_STOPPED")
+            return
+        current = self._revalidate(order)
+        if expected_source is not None and current != expected_source:
+            raise TpLocalError("TP_SOURCE_CHANGED")
+        try:
+            mail = tp_mail(order, result, command, now)
+        except (ValueError, TypeError, AttributeError, KeyError, ArithmeticError, RuntimeError) as exc:
+            if type(exc).__module__ not in {"builtins", "decimal"}:
+                raise
+            raise _TpDataError("TP_MAIL_PREPARATION_FAILED") from None
+        # Recheck after the source read/composition, before persistent enqueue.
+        if self.stop_requested():
+            self.store.finish(key, "FAILED", now, "TP_STOPPED")
+            return
+        self.outbox.enqueue_notification(mail)
+        self.store.finish(key, "MAIL_QUEUED", now)
+
+    def begin_continuation(self, order, identity, runtime, *, now, manual=False):
+        """Optional E path; claim SAME source resource before durable TP work.
+
+        No worker/Browser enters Workflow. Caller advances returned Research on
+        owner/market ports and returns to this same durable business finish.
+        """
+        from .market_messages import MarketModule, MarketTaskIdentity
+        key = task_key(order.spreadsheet, order.sheet, order.row)
+        if (type(identity) is not MarketTaskIdentity or identity.module is not MarketModule.TP
+                or identity.domain_task_id != key):
+            raise ValueError("TP_CONTINUATION_IDENTITY_INVALID")
+        if self.stop_requested():
+            return None
+        if self._revalidate(order) != identity.source_record:
+            raise TpLocalError("TP_SOURCE_CHANGED")
+        lease = runtime.claim_business_continuation(identity)
+        if lease is None:
+            return None
+        work = TpOrderContinuation(self, runtime, lease, order, now)
+        try:
+            self.store.register(order, now)
+            command = self.store.claim(key, order, now, manual=manual)
+            if command is None:
+                work.cancel()
+                return None
+            work.command = command
+            self.prepare(key)
+            work.research = self.research.begin_tp(key, order, now=now)
+            return work
+        except Exception:
+            work.fail()
+            raise
+
 
     def run(self, spreadsheet, *, now, manual_key=None):
         self.issues = {}
@@ -359,20 +428,7 @@ class TpCycle:
                             or exc.__cause__ is not None or exc.__context__ is not None):
                         raise
                     raise _TpDataError("TP_RESEARCH_DATA_INVALID") from None
-                if self.stop_requested():
-                    self.store.finish(key, "FAILED", now, "TP_STOPPED")
-                    continue
-                self._revalidate(order)
-                # Pure mail composition has no shared I/O; unexpected malformed
-                # TP result data must not stop ordinary procurement/quotation.
-                try:
-                    mail = tp_mail(order, result, command, now)
-                except (ValueError, TypeError, AttributeError, KeyError, ArithmeticError, RuntimeError) as exc:
-                    if type(exc).__module__ not in {"builtins", "decimal"}:
-                        raise
-                    raise _TpDataError("TP_MAIL_PREPARATION_FAILED") from None
-                self.outbox.enqueue_notification(mail)
-                self.store.finish(key, "MAIL_QUEUED", now)
+                self.complete_order(order, key, command, result, now=now)
             except Exception as exc:
                 # An enqueue may have committed before a crash/error. Inspect its
                 # immutable key before making read-only research eligible again.
@@ -391,6 +447,82 @@ class TpCycle:
         self.worker.run_due(now=now)
         if manual_key is not None and not found:
             raise ValueError("TP_SOURCE_UNMATCHED")
+
+
+class TpOrderContinuation:
+    """One original-owner TP claim, canonical outbox, no additional ledger."""
+    def __init__(self, cycle, runtime, lease, order, now):
+        self._cycle, self._runtime, self.lease = cycle, runtime, lease
+        self.order, self.now = order, now
+        self.command, self.research = None, None
+        self._owner, self._closed = threading.get_ident(), False
+
+    def _check(self):
+        if self._owner != threading.get_ident() or self._closed:
+            raise RuntimeError("TP_CONTINUATION_OWNER_OR_LIFETIME_INVALID")
+
+    def _release(self, terminal):
+        from .market_messages import BusinessTerminalReceipt
+        self._runtime.finish_business_continuation(self.lease,
+            BusinessTerminalReceipt(self.lease.identity, terminal))
+        self._closed = True
+
+    def complete(self, completion):
+        from .market_messages import (
+            BusinessEffectTerminal,
+            BusinessResearchCompletion,
+            BusinessTerminal,
+        )
+        self._check()
+        if type(completion) is not BusinessResearchCompletion or completion.identity != self.lease.identity:
+            raise ValueError("TP_CONTINUATION_RESULT_MISMATCH")
+        result = completion.result
+        self._runtime.require_business_continuation(self.lease)
+        self._runtime.begin_business_effect(self.lease)
+        try:
+            self._cycle.complete_order(self.order, self.lease.identity.domain_task_id,
+                self.command, result, now=self.now, expected_source=self.lease.identity.source_record)
+        except Exception:
+            # No blind retry after enqueue: canonical command lookup is the
+            # authority. If reconciliation itself fails, retain the source.
+            try:
+                self._recover()
+            except Exception:
+                self._runtime.acknowledge_business_effect(self.lease, BusinessEffectTerminal.UNKNOWN)
+                raise
+            self._runtime.acknowledge_business_effect(self.lease, BusinessEffectTerminal.CONFIRMED)
+            self._release(BusinessTerminal.FAILED)
+            raise
+        self._runtime.acknowledge_business_effect(self.lease, BusinessEffectTerminal.CONFIRMED)
+        self._release(BusinessTerminal.COMPLETED)
+
+    def _recover(self):
+        if self.command is None:
+            return
+        key = self.lease.identity.domain_task_id
+        state = self._cycle.store.get(key)
+        if state["command_id"] != self.command or state["order_json"] != order_json(self.order):
+            raise RuntimeError("TP_CONTINUATION_COMMAND_CHANGED")
+        self._cycle.store.recover(self.now, key=key)
+        if self._cycle.store.get(key)["state"] in {"PENDING", "RESEARCHING"}:
+            self._cycle.store.finish(key, "FAILED", self.now, "TP_RESEARCH_UNCONFIRMED")
+
+    def fail(self):
+        from .market_messages import BusinessTerminal, BusinessTerminalReceipt
+        self._check()
+        try:
+            self._recover()
+        except Exception:
+            self._runtime.finish_business_continuation(self.lease,
+                BusinessTerminalReceipt(self.lease.identity, BusinessTerminal.UNKNOWN))
+            raise
+        self._release(BusinessTerminal.FAILED)
+
+    def cancel(self):
+        from .market_messages import BusinessTerminal
+        self._check()
+        self._recover()
+        self._release(BusinessTerminal.CANCELLED)
 
 
 def tp_local_failure_reason(exc):

@@ -181,3 +181,22 @@ class BusinessTerminalReceipt:
     def __post_init__(self):
         if type(self.identity) is not MarketTaskIdentity or not isinstance(self.terminal, BusinessTerminal):
             raise ValueError("BUSINESS_TERMINAL_INVALID")
+
+
+@dataclass(frozen=True, slots=True)
+class BusinessResearchCompletion:
+    """Original owner result; full domain/cycle/source identity cannot be lost."""
+    identity: MarketTaskIdentity
+    result: object = field(repr=False)
+
+    def __post_init__(self):
+        from src.research.service import ResearchExecution
+        from src.research.tp import TpResearchResult
+        if type(self.identity) is not MarketTaskIdentity:
+            raise ValueError("BUSINESS_RESEARCH_IDENTITY_INVALID")
+        expected = TpResearchResult if self.identity.module is MarketModule.TP else ResearchExecution
+        if type(self.result) is not expected:
+            raise ValueError("BUSINESS_RESEARCH_RESULT_INVALID")
+        if (expected is ResearchExecution
+                and self.result.result.inquiry_id != self.identity.domain_task_id):
+            raise ValueError("BUSINESS_RESEARCH_TASK_MISMATCH")
