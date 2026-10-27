@@ -13,6 +13,8 @@ from decimal import Decimal
 from tkinter import Menu, messagebox, simpledialog
 from typing import Any
 
+from src.core.app_paths import application_name
+
 from .contracts import (
     GuiBackend,
     LogEntry,
@@ -234,7 +236,7 @@ class InsoDashboardApp:
         self._root = ctk.CTk()
         if diagnostics is not None:
             self._root.report_callback_exception = diagnostics.tk_exception
-        self._root.title("INSO LEO — Procurement Automation Control Center")
+        self._root.title(f"INSO LEO {application_name().replace('INSO_', '')} — Procurement Automation Control Center")
         self._root.geometry("1400x850")
         self._root.minsize(800, 440)
         self._hidden = False

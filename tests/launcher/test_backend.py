@@ -294,10 +294,14 @@ def test_production_composition_builds_real_seams_without_network(
     backend.shutdown()
 
 
+@pytest.mark.parametrize("independent", [False, True])
 def test_empty_poll_defers_browser_bootstrap_until_an_inquiry_is_due(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, independent
 ):
     production, research_config, rows = _write_runtime_configs(tmp_path)
+    config = json.loads(production.read_text(encoding="utf-8"))
+    config["v16_enabled"] = independent
+    production.write_text(json.dumps(config), encoding="utf-8")
     sheets_called = Event()
     browser_calls = []
     monkeypatch.setattr(
@@ -432,7 +436,15 @@ def test_readiness_failure_closes_owned_browser_without_research_retry(
         browser_acquirer=acquire_browser,
     )
     backend.start()
-    assert sheets_called.wait(5)
+    if not sheets_called.wait(5):
+        import sys
+        import threading
+        import traceback
+
+        frames = sys._current_frames()
+        diagnostic = {t.name: "".join(traceback.format_stack(frames[t.ident]))
+                      for t in threading.enumerate() if t.ident in frames}
+        pytest.fail(f"Sheets not reached; state={backend.get_status()!r}; threads={diagnostic}")
     assert _wait_until(lambda: backend.get_status().next_poll_at is not None)
     assert backend.get_status().state is RunState.RUNNING and not backend._stop.is_set()
     backend.request_stop_after_cycle()

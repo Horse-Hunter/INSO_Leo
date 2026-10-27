@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Mapping
 from datetime import datetime
+from threading import Lock, get_ident
 from typing import Protocol
 
 from .v12_contracts import (
@@ -56,8 +57,26 @@ class V12NotificationWorker:
     def __init__(self, store: V12Store, transport: NotificationTransport) -> None:
         self._store = store
         self._transport = transport
+        self._dispatch_lock = Lock()
+        self._deferred = False
+        self._dispatch_owner = None
+
+    def defer_delivery(self):
+        """Canonical launcher worker dispatches; callers only enqueue in SQLite."""
+        with self._dispatch_lock:
+            self._deferred = True
+            self._dispatch_owner = None
+
+    def bind_delivery_thread(self):
+        with self._dispatch_lock:
+            if self._dispatch_owner not in (None, get_ident()):
+                raise RuntimeError("NOTIFICATION_WORKER_OWNERSHIP_LOST")
+            self._dispatch_owner = get_ident()
 
     def run_due(self, *, now: datetime, limit: int = 16) -> int:
+        with self._dispatch_lock:
+            if self._deferred and self._dispatch_owner != get_ident():
+                return 0  # No network on the shared browser actor.
         commands = self._store.claim_due_notifications(now=now, limit=limit)
         sent_attempts = 0
         for command in commands:

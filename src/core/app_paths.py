@@ -11,8 +11,8 @@ def application_name() -> str:
     """Use the validated frozen product name; source dashboards keep their label."""
     name = Path(sys.executable).stem
     return name if getattr(sys, "frozen", False) and name in {
-        "INSO_V1.1", "INSO_V1.2", "INSO_V1.3", "INSO_V1.4", "INSO_V1.5"
-    } else "INSO_V1.4"
+        "INSO_V1.1", "INSO_V1.2", "INSO_V1.3", "INSO_V1.4", "INSO_V1.5", "INSO_V1.6"
+    } else "INSO_V1.6"
 
 
 def app_root(*, module_file: str | Path | None = None, frozen: bool | None = None,

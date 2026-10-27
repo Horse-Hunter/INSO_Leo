@@ -114,6 +114,25 @@ class RuntimeObservation:
         if self.modules["inquiry"].status != "已暂停":
             self.stage("inquiry", "读取询价与采购状态")
 
+    def begin_module(self, module):
+        with self.lock:
+            self.cycle_started_at, self.cycle_started_monotonic = self.clock(), self.timer()
+            self.cycle_finished_at = None
+            self.durations[module] = 0.0
+        self.stage(module, "检查模块待办")
+
+    def module_plan(self, module, next_check, *, paused=False, reason=None):
+        with self.lock:
+            old = self._close(module)
+            self.modules[module] = replace(old,
+                status="已暂停" if paused else "等待执行", next_check_at=next_check,
+                stage=reason or "等待独立检查周期", waiting_reason=reason)
+            self.revision += 1
+
+    def finish_module(self):
+        with self.lock:
+            self.cycle_finished_at = self.clock()
+
     def stage(self, module, stage, *, site=None, order_ref=None):
         with self.lock:
             self.planned_check_at = None

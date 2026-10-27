@@ -46,7 +46,7 @@ def _diagnose_vault() -> int:
             for item in sites
         ],
     }
-    if Path(sys.executable).stem in {"INSO_V1.4", "INSO_V1.5"}:
+    if Path(sys.executable).stem in {"INSO_V1.4", "INSO_V1.5", "INSO_V1.6"}:
         from src.core import get_login
         try:
             login = get_login("imap.qq.com")
@@ -86,7 +86,7 @@ def _self_check() -> int:
         import customtkinter  # noqa: F401 - import is the packaging check
 
         from src.gui import main  # noqa: F401 - import is the packaging check
-        if Path(sys.executable).stem in {"INSO_V1.4", "INSO_V1.5"}:
+        if Path(sys.executable).stem in {"INSO_V1.4", "INSO_V1.5", "INSO_V1.6"}:
             from io import BytesIO
             from zoneinfo import ZoneInfo
 
@@ -105,7 +105,7 @@ def _self_check() -> int:
 
 def _idle_self_check() -> int:
     """Construct and render the real idle dashboard; never press Start or acquire CDP."""
-    from src.core.app_paths import app_root
+    from src.core.app_paths import app_root, application_name
     from src.gui.app import InsoDashboardApp
     from src.gui.contracts import RunState
     from src.launcher.backend import ProductionBackend
@@ -134,7 +134,7 @@ def _idle_self_check() -> int:
         )
         return (
             0
-            if report["title"] == "INSO LEO — Procurement Automation Control Center"
+            if report["title"] == "INSO LEO " + application_name().replace("INSO_", "") + " — Procurement Automation Control Center"
             and backend.get_status().state is RunState.STOPPED
             and not report["business_thread_started"]
             and not report["order_thread_started"]

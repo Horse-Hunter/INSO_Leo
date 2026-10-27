@@ -41,6 +41,7 @@ from src.gui.contracts import (
 from src.gui.state import utc_now
 from src.inso.duplicate_history import InsoDuplicateHistoryReader
 from src.inso.purchase_writer import InsoPurchaseWriter, PlaywrightParentProductFields
+from src.inso.session import SecurityViolation
 from src.inso.write_safety import OwnerAuthorizedSaveAndSendGate
 from src.launcher.purchase_completion import PurchaseCompletionActions
 from src.research import ResearchInput, ResearchResult
@@ -537,6 +538,10 @@ class ProductionBackend(GuiBackend):
         self._manual_result = None
         self._manual_reader = self._manual_write_service = self._manual_quote = None
         self._tp = None  # opt-in only; ordinary V1.4 composition is unchanged
+        self._module_runtime = None
+        self._module_execute = None
+        self._module_failures = {}
+        self._module_pause_requested = None
         self._source_overrides = {}
         self._v13_states = {}
         self._v13_unbound = {}
@@ -954,8 +959,28 @@ class ProductionBackend(GuiBackend):
             self._refresh_history(force=True)
             self._set_health(("正常", "待命", "正常", "正常"), "正常")
 
+            independent = cfg.get("v16_enabled", getattr(sys, "frozen", False)
+                and Path(sys.executable).stem == "INSO_V1.6") is True
+            if independent:
+                configured = cfg.get("module_intervals_seconds", {})
+                if not isinstance(configured, dict) or set(configured) - {"inquiry", "quotation", "tp"}:
+                    raise ProductionConfigurationError("INVALID_MODULE_INTERVALS")
+                periods = {"inquiry": configured.get("inquiry", 900)}
+                if self._v13_enabled:
+                    periods["quotation"] = configured.get("quotation", 900)
+                if self._tp is not None:
+                    periods["tp"] = configured.get("tp", 900)
+                runtime.configure_modules(periods)
+                self._module_runtime = runtime
+                self._module_failures.clear()
+                self._v12_composition.notification_worker.defer_delivery()
+
             def poll_loop():
                 try:
+                    if independent:
+                        self._run_independent_poll(runtime, cfg, rc, web_service,
+                                                   reader, worksheets, follow_up_store)
+                        return
                     while True:
                         # This thread starts the Playwright client (the V1.2
                         # duplicate check prepares the session first), so it also
@@ -1042,6 +1067,8 @@ class ProductionBackend(GuiBackend):
 
             def worker_loop():
                 try:
+                    if independent:
+                        self._v12_composition.notification_worker.bind_delivery_thread()
                     while not self._stop.is_set():
                         try:
                             BrowserHandle.drain_deferred_stops()
@@ -1091,7 +1118,125 @@ class ProductionBackend(GuiBackend):
                 self._cache_workbench(force=True)
                 self._notify()
 
+    def _publish_module_plans(self):
+        runtime = self._module_runtime
+        if runtime is None:
+            return
+        for key, (due, running, paused) in runtime.module_plans().items():
+            if not running:
+                self._observation.module_plan(key,
+                    None if paused else utc_now() + timedelta(seconds=max(0, due-monotonic())),
+                    paused=paused, reason=self._module_failures.get(key, (0, None))[1])
+
+    def _run_independent_poll(self, runtime, cfg, rc, web, reader, worksheets, episodes):
+        """One browser actor, independent deadlines; existing mail worker overlaps."""
+        def execute(module):
+            self._last_poll = utc_now()
+            self._cycle_id = "cycle_" + uuid.uuid4().hex
+            self._observation.begin_module(module)
+            self._publish_module_plans()
+            self._notify()
+            with web.poll_scope(), quotation_operation_scope(), reader.discovery_scope():
+                self._check_site_recovery(rc, cfg)
+                if module in {"inquiry", "quotation"}:
+                    self._refresh_dashboard_counts(reader, worksheets, episodes=episodes, now=utc_now())
+                if module == "inquiry":
+                    self._begin_poll_projection()
+                    if self._combined is not None:
+                        self._combined.run_inquiry(reader, worksheets, now=utc_now())
+                    else:
+                        self._v12_composition.coordinator.begin_poll_cycle()
+                        for worksheet in worksheets:
+                            if self._immediate_stop_requested():
+                                break
+                            self._v12_composition.coordinator.poll_and_process(reader, worksheet, now=utc_now())
+                    if not self._immediate_stop_requested():
+                        self._purchase_completion.retry_saved_statuses(at=utc_now())
+                        self._idle_login_tick(now=utc_now())
+                elif module == "quotation":
+                    self._combined.run_quotation(reader, worksheets)
+                else:
+                    self._observe_stage("tp", "读取目标价并核验订单")
+                    self._tp.run(cfg["spreadsheet_id"], now=utc_now())
+                    if self._tp.issues:
+                        self._append_log("WARNING", f"TP 有 {len(self._tp.issues)} 条待核对，其他任务继续。")
+        self._module_execute = execute
+        try:
+            while not self._stop.is_set():
+                BrowserHandle.drain_deferred_stops()
+                module = runtime.claim_due_module()
+                if module is None:
+                    self._publish_module_plans()
+                    if self._wait_between_polls(runtime.module_delay()):
+                        break
+                    continue
+                with self._poll_gate:
+                    if self._stop.is_set():
+                        runtime.complete_module(module)
+                        break
+                    self._poll_idle.clear()
+                    self._next_poll_at = None
+                try:
+                    self._run_independent_job(module)
+                finally:
+                    self._poll_idle.set()
+        finally:
+            self._module_execute = None
+            self._module_runtime = None
+
+    def _run_independent_job(self, module):
+        runtime = self._module_runtime
+        retry, paused, reason = None, False, None
+        try:
+            self._module_pause_requested = None
+            self._module_execute(module)
+            if self._module_pause_requested is not None:
+                raise self._module_pause_requested
+            self._module_failures.pop(module, None)
+        except (sqlite3.Error, V12DatabaseError):
+            raise
+        except Exception as exc:
+            cause, seen = exc, set()
+            while cause is not None and id(cause) not in seen:
+                seen.add(id(cause))
+                if (isinstance(cause, (sqlite3.Error, V12DatabaseError, SecurityViolation, ProductionConfigurationError))
+                        or getattr(cause, "reason", "") in {"MODULE_RESOURCE_OWNERSHIP_LOST",
+                            "NOTIFICATION_WORKER_OWNERSHIP_LOST", "INSO_OPERATION_NOT_CLOSED",
+                            "GOOGLE_OPERATION_NOT_CLOSED", "WORKFLOW_LEDGER_UNAVAILABLE"}):
+                    raise
+                cause = cause.__cause__ or cause.__context__
+            site = _website_failure(exc)
+            if site is not None:
+                count = self._module_failures.get(module, (0, None))[0] + 1
+                retry = min(900 * 2**min(count-1, 4), 10800)
+                reason = f"等待{site}恢复"
+                since = self._site_outages.get(site, monotonic())
+                if site != "Browser/CDP" and monotonic()-since >= 10800:
+                    paused, retry, reason = True, None, f"{site}连续三小时未恢复，请人工处理"
+                elif not self._defer_website_poll(exc, timedelta(seconds=retry)):
+                    raise
+                self._module_failures[module] = (count, reason)
+            elif isinstance(exc, V12Fault) and exc.scope is FaultScope.V12_PAUSE:
+                paused, reason = True, "模块安全暂停，请查看异常"
+                self._module_failures[module] = (1, reason)
+                self._append_log("ERROR", f"{module}已暂停，其他安全模块继续。")
+            else:
+                raise  # unknown/shared integrity or ownership fault is never swallowed
+        finally:
+            self._close_inso_order_tab()
+            runtime.complete_module(module, retry_after=retry, pause=paused)
+            self._observation.module_plan(module, None if paused else
+                utc_now()+timedelta(seconds=max(0, runtime.module_plans()[module][0]-monotonic())),
+                paused=paused, reason=reason)
+            self._observation.finish_module()
+            self._publish_module_plans()
+            self._cache_workbench(force=True)
+            self._notify()
+
     def _pause_v12(self, fault):
+        if self._module_runtime is not None:
+            self._module_pause_requested = fault
+            return  # independent loop classifies and isolates this exact module
         self._observation.pause("inquiry", "采购暂停；报价跟进沿用原有独立策略")
         if _website_failure(fault) is not None and not self._defer_website_poll(
                 fault, timedelta(minutes=15), notify=False):
@@ -1291,6 +1436,11 @@ class ProductionBackend(GuiBackend):
                 self._cache_workbench(force=True)
                 self._notify()
             deadline = monotonic() + seconds
+            if self._module_runtime is not None:
+                module = {"purchase": "inquiry", "quotation": "quotation", "tp": "tp"}.get(request[2], "inquiry")
+                self._module_runtime.reset_module(module)
+                self._publish_module_plans()
+                deadline = monotonic() + self._module_runtime.module_delay()
             self._publish_poll_wait(seconds, close_round=False, deadline=deadline)
         with self._lock:
             self._next_poll_at = None
@@ -1310,6 +1460,8 @@ class ProductionBackend(GuiBackend):
         self._observation.end_cycle(planned,
             stopped=self._stop.is_set(), close_round=close_round,
             recovery_site=" / ".join(tuple(self._site_outages)) or None)
+        if self._module_runtime is not None and not self._stop.is_set():
+            self._publish_module_plans()
         # Publish only the changed time to the existing immutable view. Calling
         # _notify here would rescan durable state at every wait boundary.
         with self._snapshot_lock:
@@ -2341,6 +2493,22 @@ class ProductionBackend(GuiBackend):
             self._row_cooldown_until = utc_now() + timedelta(seconds=seconds)
         self._observation.wait("inquiry", "订单间安全等待")
         try:
+            if self._module_runtime is not None and self._module_execute is not None:
+                runtime = self._module_runtime
+                runtime.yield_module_resource("inquiry")
+                deadline = monotonic() + seconds
+                try:
+                    while not self._stop.is_set() and monotonic() < deadline:
+                        other = runtime.claim_due_module(exclude=("inquiry",))
+                        if other is not None:
+                            self._run_independent_job(other)
+                            if self._manual_reader is not None:
+                                self._manual_reader.clear_discovery_snapshot()
+                        else:
+                            self._stop.wait(min(0.25, max(0, deadline-monotonic())))
+                    return self._stop.is_set()
+                finally:
+                    runtime.resume_module_resource("inquiry")
             return self._stop.wait(seconds)
         finally:
             with self._lock:

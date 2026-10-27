@@ -224,7 +224,7 @@ class WorkbenchView:
         self.label(self.nav, "INSO LEO", 20).grid(
             row=0, column=0, padx=18, pady=(26, 0), sticky="w"
         )
-        self.label(self.nav, "采购自动化工作站", 11, MUTED).grid(
+        self.label(self.nav, application_name().replace("INSO_", "") + " · 业务工作台", 11, MUTED).grid(
             row=1, column=0, padx=18, pady=(4, 28), sticky="w"
         )
         self.nav_buttons = {}
@@ -582,7 +582,7 @@ class WorkbenchView:
             frame, "打开结果目录", self.app._backend.open_results_dir, width=220
         ).grid(row=5, column=0, sticky="w", pady=8)
         self.label(
-            frame, "关于 · " + application_name() + " / V1.5-B 源码候选", 12, MUTED
+            frame, "关于 · " + application_name(), 12, MUTED
         ).grid(row=6, column=0, sticky="w", pady=(25, 8))
         self.label(
             frame,
@@ -961,7 +961,8 @@ class WorkbenchView:
                     + "\n"
                     + (
                         (f"等待{snapshot.recovery_site}恢复 · " if snapshot.recovery_site else "")
-                        + "计划 " + stamp(module.next_check_at)
+                        + "下次 " + stamp(module.next_check_at)
+                        + " · " + str(max(0, ceil((module.next_check_at - datetime.now(timezone.utc)).total_seconds()))) + " 秒"
                         if module.next_check_at
                         else module.waiting_reason or "暂无计划时间"
                     )

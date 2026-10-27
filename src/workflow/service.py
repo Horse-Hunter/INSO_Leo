@@ -6,6 +6,7 @@ import sqlite3
 import threading
 from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime, timedelta, timezone
+from time import monotonic
 from typing import Protocol
 
 from src.research import (
@@ -251,6 +252,91 @@ class WorkflowRuntime:
         self.worksheets = tuple(worksheets)
         self.poll_interval = poll_interval
         self.worker_idle_interval = worker_idle_interval
+        self._module_lock = threading.RLock()
+        self._module_timer = monotonic
+        self._module_due = {}
+        self._module_periods = {}
+        self._module_running = set()
+        self._module_paused = set()
+        self._module_resource = None
+        self._module_owner = None
+
+    def configure_modules(self, intervals, *, timer=monotonic):
+        """Extend the existing runtime, not business identities or persistent state.
+
+        Shared browser/Sheets/Excel operations have one fixed thread owner.
+        Recipient delivery remains on the existing independent mail worker.
+        """
+        if not intervals or set(intervals) - {"inquiry", "quotation", "tp"}:
+            raise ValueError("INVALID_MODULE_INTERVALS")
+        if any(isinstance(v, bool) or not isinstance(v, (int, float))
+               or not 0 < v < float("inf") for v in intervals.values()):
+            raise ValueError("INVALID_MODULE_INTERVALS")
+        with self._module_lock:
+            if self._module_running:
+                raise RuntimeError("MODULES_RUNNING")
+            self._module_timer = timer
+            self._module_periods = dict(intervals)
+            self._module_due = dict.fromkeys(intervals, timer())
+            self._module_paused.clear()
+            self._module_resource = self._module_owner = None
+
+    def claim_due_module(self, *, exclude=()):
+        with self._module_lock:
+            owner = threading.get_ident()
+            if self._module_resource is not None or self._module_owner not in (None, owner):
+                return None
+            now = self._module_timer()
+            due = [k for k, at in self._module_due.items() if at <= now
+                   and k not in self._module_running | self._module_paused
+                   and k not in exclude]
+            if not due:
+                return None
+            key = min(due, key=lambda k: self._module_due[k])
+            self._module_owner, self._module_resource = owner, key
+            self._module_running.add(key)
+            return key
+
+    def complete_module(self, module, *, retry_after=None, pause=False):
+        with self._module_lock:
+            if self._module_resource != module or self._module_owner != threading.get_ident():
+                raise RuntimeError("MODULE_RESOURCE_OWNERSHIP_LOST")
+            self._module_running.remove(module)
+            self._module_resource = None
+            self._module_due[module] = self._module_timer() + (
+                self._module_periods[module] if retry_after is None else retry_after)
+            if pause:
+                self._module_paused.add(module)
+
+    def yield_module_resource(self, module):
+        """Only at a closed order boundary, on the same browser-owner thread."""
+        with self._module_lock:
+            if self._module_resource != module or self._module_owner != threading.get_ident():
+                raise RuntimeError("MODULE_RESOURCE_OWNERSHIP_LOST")
+            self._module_resource = None
+
+    def resume_module_resource(self, module):
+        with self._module_lock:
+            if (self._module_resource is not None or module not in self._module_running
+                    or self._module_owner != threading.get_ident()):
+                raise RuntimeError("MODULE_RESOURCE_OWNERSHIP_LOST")
+            self._module_resource = module
+
+    def reset_module(self, module):
+        with self._module_lock:
+            if module in self._module_periods:
+                self._module_due[module] = self._module_timer() + self._module_periods[module]
+
+    def module_plans(self):
+        with self._module_lock:
+            return {k: (at, k in self._module_running, k in self._module_paused)
+                    for k, at in self._module_due.items()}
+
+    def module_delay(self):
+        with self._module_lock:
+            due = [at for k, at in self._module_due.items()
+                   if k not in self._module_running | self._module_paused]
+            return max(0, min(due) - self._module_timer()) if due else 1.0
 
     def run_poll(self, *, now: datetime | None = None) -> int:
         return self.poller.poll(self.worksheets, now=now)

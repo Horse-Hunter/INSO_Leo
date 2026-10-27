@@ -330,6 +330,10 @@ class CombinedCycle:
         self.v12_paused = False
 
     def run(self, reader, worksheets, *, now):
+        self.run_inquiry(reader, worksheets, now=now)
+        self.run_quotation(reader, worksheets)
+
+    def run_inquiry(self, reader, worksheets, *, now):
         self.v12.begin_poll_cycle()
         if not self.v12_paused:
             try:
@@ -374,6 +378,7 @@ class CombinedCycle:
                     cause = cause.__cause__
                 self.v12_paused = True
                 self.on_pause(V12Fault(FaultScope.V12_PAUSE, "V12_INTERNAL_FAILURE"))
+    def run_quotation(self, reader, worksheets):
         # Writes in inquiry must be visible to quotation discovery. Fresh source
         # checks inside writers/recovery never use this optional snapshot.
         getattr(reader, "clear_discovery_snapshot", lambda: None)()
