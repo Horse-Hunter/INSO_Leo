@@ -2493,3 +2493,29 @@ business continuation, same-source-row end-to-end exclusion,
 site recovery and original Google/INSO/SMTP safeguards before enabling
 actors. TP historical 454.210s lateness, real query overlap, long-term
 resource stability and Stage F authorization stay OPEN.
+
+
+## Direct canonical SiteLoginError supplemental remediation (isolated)
+
+CEO basis06ed60feb7ce9a56e83e3b251760ef8ba8cad037; only newly requested route
+changed. Application68e1a2d2aa2b289c1fd38da33686851ff90bec7d, exact src tree
+0de681c1f7590779f647a17841230b498ff35aef. _fault recognizes reason_code ONLY
+on actual Research SiteLoginError instances; existing .code/.reason and returned
+SourceEvidence paths and EXACT SITE_AUTH_RECOVERY_REASONS are unchanged. No
+new safety tokens, exception-text parsing, login recipe, worker credential,
+Stop/Public Contract or original Owner permission change.
+
+92PASS1.13s actor/site_login focused. Actual SiteLoginError raised by actor test
+session covers manual challenge, stale/unverified session, OTP, security event,
+market login-not-confirmed. All yield SITE_DEFER/no result, blocked site, exact
+terminal lease release, shared runtime remains open. Native/untyped non-auth
+negatives and native initialization GLOBAL_STOP tested; existing adapter/evidence
+positives, resource/cleanup and Stop races retained. Exact frozen-source full:
+2961PASS/1SKIP113.55s. Ruff/diffPASS. Executor Windows offline evidence only,
+not CEO independent rerun or real browser/production validation.
+
+Overall REVIEW_REQUIRED; E/F and historical454.210s TP lateness remain open.
+Owner asked to complete BOTH supplemental remediation and isolated continuation;
+prior E work is preserved in local codex/v1-6-e-continuation-isolated, not mixed
+into this scoped fix. Continuation resumes in separate increments. Final combined
+report goes to Owner for forwarding; never sent directly to CEO.

@@ -65,5 +65,22 @@
     "completed_owned_scratch_dirs_retired": 15,
     "retained": "small sanitized evidence and local test stdout",
     "google_live_busy_branch": "UNKNOWN"
+  },
+  "direct_site_login_remediation": {
+    "review_basis": "06ed60feb7ce9a56e83e3b251760ef8ba8cad037",
+    "application_source": "68e1a2d2aa2b289c1fd38da33686851ff90bec7d",
+    "src_tree": "0de681c1f7590779f647a17841230b498ff35aef",
+    "focused_passed": 92,
+    "focused_seconds": 1.13,
+    "full_passed": 2961,
+    "full_skipped": 1,
+    "full_seconds": 113.55,
+    "ruff": "PASS",
+    "diff_check": "PASS",
+    "new_auth_reason_tokens": [],
+    "real_browser_exercised": false,
+    "production_modified": false,
+    "scope": "typed canonical SiteLoginError.reason_code; exact existing allowlist; no generic reason_code duck typing",
+    "overall": "REVIEW_REQUIRED; E/F and historical TP lateness remain OPEN"
   }
 }
