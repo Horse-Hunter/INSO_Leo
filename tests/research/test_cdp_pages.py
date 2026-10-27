@@ -3,7 +3,11 @@ from typing import Self
 
 import pytest
 
-from src.research.cdp_pages import new_background_page, shared_playwright_factory
+from src.research.cdp_pages import (
+    native_page_owner,
+    new_background_page,
+    shared_playwright_factory,
+)
 
 
 class Session:
@@ -325,3 +329,210 @@ def test_native_target_close_requires_positive_protocol_confirmation(response):
         new_background_page(protocol, protocol, timeout_ms=1234)
     assert protocol.closed == ["owned-1"]
     assert protocol._inso_page_resource_failed is True
+
+@pytest.mark.parametrize('failure_mode', ['raise', 'missing', 'invalid'])
+def test_ambiguous_native_creation_blocks_all_bound_clients_without_guessing(failure_mode):
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        PageTargetCreationUncertain,
+        bind_page_admission,
+    )
+    admission = PageResourceAdmission()
+    first, second = RacingTargets(), RacingTargets()
+    bind_page_admission(first, admission)
+    bind_page_admission(second, admission)
+    original = first.send
+    def uncertain(command, params):
+        value = original(command, params)  # Chrome did create the page.
+        if command == 'Target.createTarget':
+            if failure_mode == 'raise':
+                raise OSError('synthetic response lost')
+            return {} if failure_mode == 'missing' else {'targetId': 123}
+        return value
+    first.send = uncertain
+    with pytest.raises(PageTargetCreationUncertain) as caught:
+        new_background_page(first, first, timeout_ms=1234, owner='task-one')
+    assert caught.value.__cause__ is not None
+    assert len(first.pages) == 2  # Foreign/human + uncertain owned target, not guessed closed.
+    assert first.closed == []
+    with pytest.raises(PageTargetCreationUncertain):
+        new_background_page(second, second, timeout_ms=1234)
+    assert second.calls == []
+    with pytest.raises(PageTargetCreationUncertain):
+        bind_page_admission(RacingTargets(), admission)  # Reconnect cannot reset it.
+
+
+def test_known_cleanup_failure_blocks_distinct_wrapper_without_remote_calls():
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        PageTargetCleanupError,
+        bind_page_admission,
+    )
+    admission = PageResourceAdmission()
+    first, second = RacingTargets(spoof=True), RacingTargets()
+    bind_page_admission(first, admission)
+    bind_page_admission(second, admission)
+    original = first.send
+    def failed_close(command, params):
+        if command == 'Target.closeTarget':
+            raise OSError('synthetic close failure')
+        return original(command, params)
+    first.send = failed_close
+    with pytest.raises(PageTargetCleanupError):
+        new_background_page(first, first, timeout_ms=1234)
+    with pytest.raises(PageTargetCleanupError):
+        new_background_page(second, second, timeout_ms=1234)
+    assert second.calls == []
+
+
+def test_postnavigation_owner_uses_native_target_not_destroyed_javascript_context():
+    from src.research.cdp_pages import native_page_owner
+    protocol = RacingTargets()
+    page = new_background_page(protocol, protocol, timeout_ms=1234, owner='task-one')
+    page.url = 'https://synthetic.invalid/redirected'
+    page.owner_name = ''  # Site may change window.name.
+    page.evaluate = lambda *args: (_ for _ in ()).throw(RuntimeError('context destroyed'))
+    assert native_page_owner(page) == 'task-one'
+    page.is_closed = lambda: True
+    assert native_page_owner(page) is None
+
+
+def test_postnavigation_target_mismatch_fails_closed_without_closing_a_foreign_page():
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        PageTargetOwnershipError,
+        bind_page_admission,
+    )
+    admission = PageResourceAdmission()
+    protocol = RacingTargets()
+    bind_page_admission(protocol, admission)
+    page = new_background_page(protocol, protocol, timeout_ms=1234, owner='task-one')
+    page.target = 'human'
+    # Native target changed under the claimed wrapper: reject, never adopt/re-tag.
+    protocol.new_cdp_session = lambda _: SimpleNamespace(
+        send=lambda _: {'targetInfo': {'targetId': 'human'}}, detach=lambda: None)
+    with pytest.raises(PageTargetOwnershipError):
+        native_page_owner(page)
+    assert protocol.closed == []
+    with pytest.raises(PageTargetOwnershipError):
+        admission.require_open()
+
+
+def test_invalid_admission_rebinding_cannot_clear_fault():
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        PageTargetOwnershipError,
+        bind_page_admission,
+    )
+    browser = RacingTargets()
+    first, second = PageResourceAdmission(), PageResourceAdmission()
+    bind_page_admission(browser, first)
+    with pytest.raises(PageTargetOwnershipError):
+        bind_page_admission(browser, second)
+    for admission in (first, second):
+        with pytest.raises(PageTargetOwnershipError):
+            admission.require_open()
+    assert browser.calls == []
+
+def test_native_owner_detach_failure_invalidates_shared_admission():
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        PageTargetCleanupError,
+        bind_page_admission,
+    )
+    admission = PageResourceAdmission()
+    protocol = RacingTargets()
+    bind_page_admission(protocol, admission)
+    page = new_background_page(protocol, protocol, timeout_ms=1234, owner='task-one')
+    make = protocol.new_cdp_session
+    def broken(page):
+        session = make(page)
+        session.detach = lambda: (_ for _ in ()).throw(OSError('synthetic detach'))
+        return session
+    protocol.new_cdp_session = broken
+    with pytest.raises(PageTargetCleanupError):
+        native_page_owner(page)
+    with pytest.raises(PageTargetCleanupError):
+        admission.require_open()
+    assert protocol.closed == []
+
+
+def test_another_client_fault_during_creation_prevents_return_and_closes_only_own_target():
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        PageTargetCreationUncertain,
+        bind_page_admission,
+    )
+    admission = PageResourceAdmission()
+    protocol = RacingTargets()
+    bind_page_admission(protocol, admission)
+    make = protocol.new_cdp_session
+    def proof(page):
+        session = make(page)
+        admission.invalidate(PageTargetCreationUncertain((OSError('other client response lost'),)))
+        return session
+    protocol.new_cdp_session = proof
+    with pytest.raises(PageTargetCreationUncertain):
+        new_background_page(protocol, protocol, timeout_ms=1234, owner='task-one')
+    assert protocol.closed == ['owned-1']
+    assert protocol.pages[0].target == 'human'
+
+
+def test_shared_admission_fault_metadata_is_thread_safe_and_does_not_reuse_exception_objects():
+    from concurrent.futures import ThreadPoolExecutor
+
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        PageTargetCreationUncertain,
+    )
+    admission = PageResourceAdmission()
+    admission.invalidate(PageTargetCreationUncertain((OSError('sensitive synthetic text'),)))
+    def check(_):
+        try:
+            admission.require_open()
+        except PageTargetCreationUncertain as error:
+            assert str(error) == 'CDP_PAGE_CREATION_UNCONFIRMED'
+            assert error.failure_classes == ('OSError',)
+            return error
+        pytest.fail('must reject')
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        errors = list(executor.map(check, range(4)))
+    assert len({id(error) for error in errors}) == 4
+
+@pytest.mark.parametrize('shared', [False, True])
+def test_injected_admission_covers_reused_and_fallback_clients_without_closing_browser(shared, monkeypatch):
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        PageTargetCreationUncertain,
+    )
+    browser = _FakeBrowser()
+    calls = []
+    class Manager:
+        def __enter__(self):
+            calls.append('enter')
+            return SimpleNamespace(chromium=SimpleNamespace(
+                connect_over_cdp=lambda *a, **k: calls.append('connect') or browser))
+        def __exit__(self, *exc):
+            calls.append('exit')
+            return False
+    monkeypatch.setattr('playwright.sync_api.sync_playwright', lambda: Manager())
+    admission = PageResourceAdmission()
+    provider = (lambda: (object(), browser)) if shared else (lambda: None)
+    factory = shared_playwright_factory(provider, admission=admission)
+    with factory() as playwright:
+        assert playwright.chromium.connect_over_cdp('http://127.0.0.1:9222') is browser
+        assert browser._inso_page_admission is admission
+    assert calls == ([] if shared else ['enter', 'connect', 'exit'])
+    admission.invalidate(PageTargetCreationUncertain((OSError('synthetic lost response'),)))
+    with pytest.raises(PageTargetCreationUncertain):
+        factory()
+    assert calls == ([] if shared else ['enter', 'connect', 'exit'])
+
+
+def test_native_identity_does_not_override_legacy_write_marker_quarantine():
+    from src.research.cdp_pages import page_owner
+    protocol = RacingTargets()
+    page = new_background_page(protocol, protocol, timeout_ms=1234, owner='google-operation')
+    page.owner_name = ''
+    assert page_owner(page) is None  # Existing write/quarantine contract unchanged.
+    assert native_page_owner(page) == 'google-operation'  # Explicit read-only capability only.

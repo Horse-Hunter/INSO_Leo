@@ -307,3 +307,55 @@ def test_every_login_sweep_step_including_inso_stops_auth_and_unknown(site, code
         assert calls == [1] and not waits and verdict.site == site.value
     finally:
         sweep.close()
+
+@pytest.mark.parametrize('wrapped', [False, True])
+def test_shared_page_uncertainty_is_not_source_retry_or_success(wrapped):
+    from src.research.cdp_pages import (
+        PageTargetCreationUncertain,
+        bind_page_admission,
+    )
+    backend = ProductionBackend()
+    calls = []
+    browser = SimpleNamespace()
+    bind_page_admission(browser, backend._page_admission)
+    def operation():
+        calls.append('source')
+        fault = PageTargetCreationUncertain((OSError('synthetic uncertain response'),))
+        backend._page_admission.invalidate(fault)
+        if wrapped:
+            return result(ResearchSource.LCSC, code='SOURCE_UNAVAILABLE')
+        raise RuntimeError('adapter wrapped cause') from fault
+    try:
+        with pytest.raises(PageTargetCreationUncertain):
+            backend._run_source_query('synthetic', ResearchSource.LCSC, operation,
+                lambda: pytest.fail('uncertain resource must not reconnect'))
+        with pytest.raises(PageTargetCreationUncertain):
+            backend._run_source_query('synthetic', ResearchSource.LCSC,
+                lambda: pytest.fail('must not admit another source'), lambda: None)
+        assert calls == ['source']
+    finally:
+        backend.shutdown()
+
+
+def test_uncertain_resource_teardown_detaches_only_never_sweeps_pages(monkeypatch):
+    from src.launcher.browser_bootstrap import BrowserHandle, park_shared_cdp
+    from src.research.cdp_pages import PageTargetCreationUncertain, bind_page_admission
+    backend = ProductionBackend()
+    calls = []
+    browser = SimpleNamespace()
+    handle = BrowserHandle(owned=False, browser=browser,
+        playwright=SimpleNamespace(stop=lambda: calls.append('disconnect')))
+    backend._browser_handle = handle
+    backend._inso_session = SimpleNamespace(close_after_drain=lambda: pytest.fail('uncertain page sweep'))
+    bind_page_admission(browser, backend._page_admission)
+    backend._page_admission.invalidate(PageTargetCreationUncertain((OSError('synthetic response lost'),)))
+    try:
+        with pytest.raises(PageTargetCreationUncertain):
+            backend._close_inso_order_tab()
+        with pytest.raises(PageTargetCreationUncertain):
+            park_shared_cdp(browser)  # Even a direct legacy cleanup caller is refused.
+        backend._release_idle_browser(force=True)
+        assert calls == ['disconnect']
+        assert backend._browser_handle is None
+    finally:
+        backend.shutdown()

@@ -45,7 +45,12 @@ from src.inso.session import SecurityViolation
 from src.inso.write_safety import OwnerAuthorizedSaveAndSendGate
 from src.launcher.purchase_completion import PurchaseCompletionActions
 from src.research import ResearchInput, ResearchResult
-from src.research.cdp_pages import new_background_page
+from src.research.cdp_pages import (
+    PageResourceAdmission,
+    PageTargetCleanupError,
+    bind_page_admission,
+    new_background_page,
+)
 from src.research.credentials import CoreLoginBridge
 from src.research.ecb_fx import EcbDailyUsdRmbProvider
 from src.research.excel_output import ResearchExcelOutput
@@ -523,6 +528,7 @@ class ProductionBackend(GuiBackend):
         self.production_path = Path(production_config_path) if production_config_path is not None else runtime_config_path("production.json", root=self.root)
         self.cdp_probe = cdp_probe
         self._browser_acquirer = browser_acquirer
+        self._page_admission = PageResourceAdmission()
         self._browser_handle: BrowserHandle | None = None
         self._inso_session: InsoResearchSession | None = None
         self._inso_cdp_url: str | None = None
@@ -800,6 +806,7 @@ class ProductionBackend(GuiBackend):
                 rc,
                 inso_operation_access=self._inso_operation_access,
                 playwright_provider=self._research_playwright_provider,
+                page_admission=self._page_admission,
                 source_observer=self._observe_source_failure,
                 inso_query=lambda iid, operation: self._run_inso_query(iid, operation, lambda: self._ensure_research_ready(rc, cfg)),
                 source_query=lambda iid, site, operation: self._run_source_query(iid, site, operation,
@@ -1209,7 +1216,11 @@ class ProductionBackend(GuiBackend):
         started, outcome = monotonic(), "failed"
         try:
             self._module_pause_requested = None
-            self._module_execute(module)
+            self._page_admission.require_open()
+            try:
+                self._module_execute(module)
+            finally:
+                self._page_admission.require_open()
             if self._module_pause_requested is not None:
                 raise self._module_pause_requested
             self._module_failures.pop(module, None)
@@ -1223,10 +1234,15 @@ class ProductionBackend(GuiBackend):
             cause, seen = exc, set()
             while cause is not None and id(cause) not in seen:
                 seen.add(id(cause))
+                if isinstance(cause, PageTargetCleanupError):
+                    runtime.abort_module_resource()
+                    raise
                 if (isinstance(cause, (sqlite3.Error, V12DatabaseError, SecurityViolation, ProductionConfigurationError))
                         or getattr(cause, "reason", "") in {"MODULE_RESOURCE_OWNERSHIP_LOST",
                             "NOTIFICATION_WORKER_OWNERSHIP_LOST", "INSO_OPERATION_NOT_CLOSED",
-                            "GOOGLE_OPERATION_NOT_CLOSED", "WORKFLOW_LEDGER_UNAVAILABLE"}):
+                            "GOOGLE_OPERATION_NOT_CLOSED", "WORKFLOW_LEDGER_UNAVAILABLE",
+                            "CDP_PAGE_CLEANUP_UNCONFIRMED", "CDP_PAGE_CREATION_UNCONFIRMED",
+                            "CDP_PAGE_OWNERSHIP_UNCONFIRMED"}):
                     raise
                 cause = cause.__cause__ or cause.__context__
             site = _website_failure(exc)
@@ -1251,6 +1267,9 @@ class ProductionBackend(GuiBackend):
         finally:
             try:
                 self._close_inso_order_tab()
+            except PageTargetCleanupError:
+                runtime.abort_module_resource()
+                raise
             except Exception as cleanup:
                 runtime.abort_module_resource()
                 raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_OPERATION_NOT_CLOSED") from cleanup
@@ -1299,9 +1318,11 @@ class ProductionBackend(GuiBackend):
         self._notify()
 
     def _v13_browser(self, rc, cfg):
+        self._page_admission.require_open()
         for attempt in range(4):
             handle = self._browser_handle
             if handle is not None and handle.browser is not None and handle.browser.is_connected():
+                bind_page_admission(handle.browser, self._page_admission)
                 self._site_recovered("Browser/CDP")
                 return handle
             try:
@@ -1310,8 +1331,11 @@ class ProductionBackend(GuiBackend):
                 self._browser_handle = self._browser_acquirer(rc.cdp.cdp_url,self.root,cfg,
                     probe=self.cdp_probe or probe_loopback_endpoint)
                 if self._browser_handle.browser.is_connected():
+                    bind_page_admission(self._browser_handle.browser, self._page_admission)
                     self._site_recovered("Browser/CDP")
                     return self._browser_handle
+            except PageTargetCleanupError:
+                raise
             except Exception:  # noqa: BLE001 - only shared CDP acquisition
                 log.warning("V1.3 shared CDP recovery attempt failed")
         raise V12Fault(FaultScope.GLOBAL_STOP,"CDP_RECONNECT_EXHAUSTED")
@@ -1719,7 +1743,17 @@ class ProductionBackend(GuiBackend):
     def _run_source_query_once(self, inquiry_id, site, operation, reconnect):
         """Three bounded shared-CDP recoveries, independent of per-query retry."""
         for attempt in range(4):
-            result = operation()
+            admission = getattr(self, "_page_admission", None)
+            if admission is not None:
+                admission.require_open()
+            try:
+                result = operation()
+            finally:
+                # Adapters may translate the original browser exception into a
+                # generic unavailable result. Never accept that after resource
+                # uncertainty, reconnect, aggregate or prepare a notification.
+                if admission is not None:
+                    admission.require_open()
             source_result = result.source_result if site is ResearchSource.IC_NET else result
             code = next((str(f.value) for f in source_result.evidence.fields if f.key == "failure_code"), "")
             if not any(token in code for token in ("CDP", "PLAYWRIGHT", "CONTEXT")):
@@ -1780,6 +1814,7 @@ class ProductionBackend(GuiBackend):
         park_shared_cdp(browser)
 
     def _close_inso_order_tab(self, *, preserve=False):
+        self._page_admission.require_open()
         session = self._inso_session
         if preserve and session is not None:
             try:
@@ -1865,6 +1900,7 @@ class ProductionBackend(GuiBackend):
     def _open_research_session(self, research_config, production_config) -> None:
         """Acquire or reuse the approved CDP browser and verify the INSO shell."""
 
+        self._page_admission.require_open()
         probe = self.cdp_probe or probe_loopback_endpoint
         try:
             self._browser_handle = self._browser_handle or self._browser_acquirer(
@@ -1879,6 +1915,8 @@ class ProductionBackend(GuiBackend):
             raise BrowserBootstrapError(
                 "approved CDP browser could not be acquired"
             ) from exc
+        if self._browser_handle.browser is not None:
+            bind_page_admission(self._browser_handle.browser, self._page_admission)
         try:
             readiness = assess_readiness(
                 research_config.cdp.cdp_url,
@@ -1954,6 +1992,14 @@ class ProductionBackend(GuiBackend):
             self._inso_session = None
             self._inso_guard = None
             self._research_ready = False
+        try:
+            self._page_admission.require_open()
+        except PageTargetCleanupError:
+            # No generic park/close sweep when a target's creation/ownership is
+            # uncertain. Detach this client only; keep every browser page.
+            if handle is not None:
+                handle.disconnect()
+            return
         if (self._keepalive_protected_targets or self._site_manual_wait) and handle is not None:
             handle.disconnect()  # Target IDs/human wait survive detach; never close protected pages.
             return
@@ -2101,6 +2147,7 @@ class ProductionBackend(GuiBackend):
         browser = getattr(handle, "browser", None)
         if playwright is None or browser is None:
             return None
+        bind_page_admission(browser, self._page_admission)
         return playwright, browser
 
     def _save_target(self, inquiry_id):
@@ -2225,7 +2272,14 @@ class ProductionBackend(GuiBackend):
             prolonged = (site is not None and site != "Browser/CDP"
                          and site in self._site_outages
                          and monotonic() - self._site_outages[site] >= 3 * 60 * 60)
-            self._state = RunState.GLOBAL_STOP if prolonged else RunState.MODULE_PAUSED
+            page_fault, candidate, visited = None, exc, set()
+            while candidate is not None and id(candidate) not in visited:
+                visited.add(id(candidate))
+                if isinstance(candidate, PageTargetCleanupError):
+                    page_fault = candidate
+                    break
+                candidate = candidate.__cause__ or candidate.__context__
+            self._state = RunState.GLOBAL_STOP if prolonged or page_fault is not None else RunState.MODULE_PAUSED
             cause = exc
             while cause is not None:
                 if isinstance(cause, V12Fault):
@@ -2294,6 +2348,8 @@ class ProductionBackend(GuiBackend):
                 break
             cause = cause.__cause__
         shared_fault = self._state is RunState.GLOBAL_STOP
+        if page_fault is not None:
+            reason = page_fault.reason
         if prolonged:
             reason = {"INSO": "INSO_OUTAGE_THREE_HOURS", "Google Sheets": "GOOGLE_OUTAGE_THREE_HOURS",
                       "IC.net": "IC_NET_OUTAGE_THREE_HOURS", "汇率网站": "FX_OUTAGE_THREE_HOURS"}[site]

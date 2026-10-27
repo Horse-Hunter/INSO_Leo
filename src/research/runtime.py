@@ -376,6 +376,7 @@ def build_research_service(
     inso_browser: InsoReadOnlyBrowser | None = None,
     inso_operation_access: InsoOperationAccess | Callable[[], InsoOperationAccess] | None = None,
     playwright_provider: Callable[[], tuple[object, object] | None] | None = None,
+    page_admission=None,
     source_observer: Callable | None = None,
     inso_query: Callable | None = None,
     source_query: Callable | None = None,
@@ -399,8 +400,8 @@ def build_research_service(
     fx = fx_provider or EcbDailyUsdRmbProvider()
     browser = config.browser
     playwright_factory = (
-        shared_playwright_factory(playwright_provider)
-        if playwright_provider is not None
+        shared_playwright_factory(playwright_provider, admission=page_admission)
+        if playwright_provider is not None or page_admission is not None
         else None
     )
 

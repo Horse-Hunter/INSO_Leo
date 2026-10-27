@@ -16,7 +16,12 @@ from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 from src.core.app_paths import resolve_app_path
-from src.research.cdp_pages import new_background_page, page_owner
+from src.research.cdp_pages import (
+    PageResourceAdmission,
+    PageTargetCleanupError,
+    new_background_page,
+    page_owner,
+)
 
 
 class BrowserBootstrapError(RuntimeError):
@@ -29,6 +34,11 @@ class BrowserBootstrapError(RuntimeError):
 
 def park_shared_cdp(browser) -> None:
     """Retain a blank and independently owned review tabs without closing Chrome."""
+    admission = getattr(browser, "_inso_page_admission", None)
+    if isinstance(admission, PageResourceAdmission):
+        admission.require_open()
+    if getattr(browser, "_inso_page_resource_failed", False) is True:
+        raise PageTargetCleanupError(())
     contexts = tuple(browser.contexts)
     if not browser.is_connected() or len(contexts) != 1:
         raise BrowserBootstrapError("CDP_CONTEXT_NOT_UNIQUE")

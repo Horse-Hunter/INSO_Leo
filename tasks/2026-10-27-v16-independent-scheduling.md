@@ -1073,3 +1073,70 @@ by this review.
 `CDP_PAGE_OWNER_AFTER_NAV_NOT_VERIFIED`,
 `MULTI_ACTOR_NOT_IMPLEMENTED`,
 `V16_OVERALL_REVIEW_REQUIRED`.
+
+## Execution after CEO59f0628 — native identity and shared fail-closed admission
+
+Remote59f0628529ca830bc4dbdafc596e164db863516e fetched and fast-forwarded;
+no prior P1/installed04075bc redo, no production replacement. Reused canonical
+research.cdp_pages/shared_playwright_factory, Research composition, backend
+source-query gate, WorkflowRuntime.abort_module_resource and existing teardown.
+No separate browser manager/scheduler/outbox/DB/dependency or new Profile.
+
+Minimum delta (isolated source only):
+- Attempted Target.createTarget with lost/missing/invalid native response is
+  CDP_PAGE_CREATION_UNCONFIRMED even if Chrome created a page. No guessing or
+  enumeration-close; latch resource uncertainty, preserve orphan/foreign pages.
+- Inject one PageResourceAdmission through backend and canonical Research factory,
+  including fallback clients, same guard across all bound wrappers. Reconnect or
+  rebind cannot clear it; inconsistent guard binding invalidates both. Metadata
+  only, thread-safe; exception objects/Playwright objects never shared via guard.
+- Source-query before/finally gate defeats translated SOURCE_UNAVAILABLE results;
+  module before/finally gate defeats softened completion. New faults abort all
+  runtime resource admissions, become GLOBAL_STOP, retain exact reason and are
+  not attributed to last historic order. No blind retry/website deferral.
+- On uncertainty, old close/park sweeps are refused before touching pages;
+  release detaches only its client. Known-target factory failure still closes
+  only exact created target, preserving primary cause and cleanup fault details.
+- Explicit native_page_owner for factory-created read-only actor pages proves
+  Page-linked Target.getTargetInfo against original target ID, without evaluating
+  a changing document. Existing page_owner marker checks intentionally unchanged:
+  Google/INSO marker loss must still quarantine the write surface. New API is
+  NOT a bypass for write auth/document/gid/status/settlement gates.
+
+Owner confirmed prior Start action (actual name开始运行). Independent new cycles
+were observed15:59:46 inquiry /16:02:35 quotation /16:03:20 TP, TPcompleted16:03:37,
+inquirycompleted16:12:24. Latest readonly ledger check before this experiment:
+141SENT total, old139SENT/108commands/4TP fullrows unchanged,0pending/sending/unknown.
+Two postinstall runtime alerts, not TP/price mail or historical replay. Existing
+Googlebusy behavior persists; no notification suppression or identity relaxation.
+Owner then explicitly authorized and confirmed a NEW safe-stop window, GUIkept.
+
+Native verification under this window: same9222, no newChrome/Profile/context,
+max2own background tabs, independent thread-local sync clients sharing admission.
+HQEW andICnet pairs: eachHTTP200, exacttarget/owner beforeANDafter navigationPASS,
+actual navigationoverlap0.109s /0.219s, precise closeTarget positive confirmations,
+original1page preserved/final1page, every own target absent. No JS-based ownership
+assumption, rawDOM/account/screenshot/credentials retrieval/login/Google/INSO/
+write/purchase/testSMTP. Native evidence predates only stronger rebind/terminal/
+teardown/attribution hardening; navigation proof itself unchanged. Final source
+must still pass offline regression; not falsely exact-hash live deployment proof.
+
+Regression first found a real legacy safety compatibility issue: replacing
+page_owner by native identity would close a marker-cleared Google review page.
+Fixed by EXPLICIT independent native API; old marker-quarantine regression nowPASS.
+Do not change that test into an acceptance of unsafe ownership fallback.
+296targetedPASS12.00s; legacy/source combined389PASS14.22s; newedge71PASS10.37s;
+final source-safety/teardown309PASS13.04s. Intermediate full2834/2836PASS each1SKIP
+are not mislabeled final latest-source full; final full result recorded below.
+
+Current boundary: native ownership prerequisite positive live proof and shared
+admission safety source increment only. No actual module actor pool, per-order
+arbitration/siteauth pacing or timelyTP scheduling delivered by this increment.
+Guard lifetime is one runtime; no claim of automatic cross-process orphan
+reconciliation. No failed-resource reset API or auto-reuse. Human-preserved page
+handoff across disconnected clients remains a separate required actor contract.
+Current production EXE04075bc unchanged, program installation not authorized here.
+Owner asked to click开始运行 after own pages closed because Windowsscreenshot
+FrameArrived still timesout/unlabelled controls; no guessed click or process kill.
+
+Final full offline regression of this application increment: **2840PASS/1SKIP113.03s**, scopedRuff/diffPASS. No source change after this run. InstalledEXE not rebuilt or replaced.

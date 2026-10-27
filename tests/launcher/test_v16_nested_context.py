@@ -24,7 +24,7 @@ from tests.workflow.test_v13_quotation import WS
 
 
 @pytest.mark.parametrize("inner", ["quotation", "tp"])
-@pytest.mark.parametrize("failure", [None, "timeout", "raw_timeout", "pause", "stop", "cancel", "shared", "cleanup"])
+@pytest.mark.parametrize("failure", [None, "timeout", "raw_timeout", "pause", "stop", "cancel", "shared", "cleanup", "pagefault"])
 @pytest.mark.parametrize("outer_pause", [False, True])
 def test_real_nested_closure_restores_context_and_durable_guards(
         tmp_path, monkeypatch, caplog, inner, failure, outer_pause):
@@ -96,6 +96,11 @@ def test_real_nested_closure_restores_context_and_durable_guards(
             raise TimeoutError("synthetic unclassified read timeout")
         if failure == "pause":
             raise V12Fault(FaultScope.V12_PAUSE, "INNER_PAUSE")
+        if failure == "pagefault":
+            from src.research.cdp_pages import PageTargetCreationUncertain
+            fault = PageTargetCreationUncertain((OSError("synthetic response lost"),))
+            backend._page_admission.invalidate(fault)
+            raise fault
         if failure == "shared":
             raise sqlite3.DatabaseError("synthetic integrity fault")
         if failure == "stop":
@@ -123,7 +128,7 @@ def test_real_nested_closure_restores_context_and_durable_guards(
     monkeypatch.setattr(backend, "_close_inso_order_tab", close)
     monkeypatch.setattr(backend._stop, "wait", lambda seconds: (setattr(time, "tick", time.tick+seconds) or False))
     monkeypatch.setattr(backend, "_wait_between_polls", lambda _: True)
-    expected = failure in {"shared", "cleanup", "cancel"} or (failure == "raw_timeout" and inner == "quotation")
+    expected = failure in {"shared", "cleanup", "cancel", "pagefault"} or (failure == "raw_timeout" and inner == "quotation")
     if expected:
         with pytest.raises((sqlite3.DatabaseError, RuntimeError)) as raised:
             backend._run_independent_poll(runtime, {"spreadsheet_id": "synthetic"}, None,
@@ -147,7 +152,7 @@ def test_real_nested_closure_restores_context_and_durable_guards(
     assert backend._observation.cycle_started_at == NOW
     assert backend._observation.cycle_started_monotonic == 0
     assert backend._observation.cycle_finished_at == clock()
-    if failure not in {"stop", "cancel", "shared", "cleanup", "raw_timeout"}:
+    if failure not in {"stop", "cancel", "shared", "cleanup", "raw_timeout", "pagefault"}:
         assert len(completed) == 2 and time.tick >= 124  # original120s minimum
         wait = [t for t in backend._observation.timings if t.module_id == "inquiry"
                 and t.stage == "订单间安全等待"]
@@ -164,7 +169,7 @@ def test_real_nested_closure_restores_context_and_durable_guards(
     assert not any(running for _, running, _ in runtime.module_plans().values())
     if outer_pause and not expected:
         assert runtime.module_plans()["inquiry"][2]
-    if failure == "cleanup":
+    if failure in {"cleanup", "pagefault"}:
         assert runtime.module_resource_failed
         with pytest.raises(RuntimeError, match="MODULE_RESOURCE_OWNERSHIP_LOST"):
             runtime.claim_due_module()
@@ -175,3 +180,53 @@ def test_real_nested_closure_restores_context_and_durable_guards(
     assert not writer.commands  # no valid business price, never fabricate a purchase
     assert len(transport.calls) <= 2  # never duplicate TP delivery
 
+
+@pytest.mark.parametrize('soft_failure', [False, True])
+def test_page_fault_latch_wins_over_translated_module_completion(tmp_path, monkeypatch, soft_failure):
+    from src.research.cdp_pages import PageTargetCreationUncertain
+    backend = launcher.ProductionBackend(root=tmp_path)
+    runtime = WorkflowRuntime(None, None, ())
+    runtime.configure_modules({'inquiry': 900, 'tp': 900})
+    assert runtime.claim_due_module() == 'inquiry'
+    backend._module_runtime = runtime
+    def translated(_):
+        backend._page_admission.invalidate(PageTargetCreationUncertain((OSError('synthetic lost response'),)))
+        if soft_failure:
+            raise V12Fault(FaultScope.V12_PAUSE, 'TRANSLATED_SOURCE_FAILURE')
+    backend._module_execute = translated
+    monkeypatch.setattr(backend, '_close_inso_order_tab', lambda: None)
+    monkeypatch.setattr(backend, '_cache_workbench', lambda **_: None)
+    try:
+        with pytest.raises(PageTargetCreationUncertain):
+            backend._run_independent_job_scoped('inquiry')
+        assert runtime.module_resource_failed
+        assert all(paused for _, _, paused in runtime.module_plans().values())
+        with pytest.raises(RuntimeError, match='MODULE_RESOURCE_OWNERSHIP_LOST'):
+            runtime.claim_due_module()
+    finally:
+        backend.shutdown()
+
+@pytest.mark.parametrize('wrapping', ['direct', 'cause', 'context'])
+def test_runtime_resource_fault_is_global_not_attributed_to_last_order(tmp_path, monkeypatch, wrapping):
+    from src.research.cdp_pages import PageTargetCreationUncertain
+    backend = launcher.ProductionBackend(root=tmp_path)
+    fault = PageTargetCreationUncertain((OSError('synthetic response lost'),))
+    error = fault if wrapping == 'direct' else RuntimeError('synthetic adapter wrapper')
+    if wrapping == 'cause':
+        error.__cause__ = fault
+    elif wrapping == 'context':
+        error.__context__ = fault
+    backend._active_inso_inquiry = 'historic-synthetic-order'
+    backend._v13_ledger_ready = True
+    backend._v12_store = object()
+    notices = []
+    backend._v12_composition = SimpleNamespace(coordinator=SimpleNamespace(run_notifications=lambda **_: None))
+    monkeypatch.setattr(launcher, 'notify_runtime_fault', lambda store, run, reason, **_: notices.append(reason))
+    monkeypatch.setattr(backend, '_record_fault_alert', lambda *_: pytest.fail('must not blame historic order'))
+    try:
+        backend._runtime_error(error)
+        assert backend._state is RunState.GLOBAL_STOP
+        assert backend._stop.is_set()
+        assert notices == ['CDP_PAGE_CREATION_UNCONFIRMED']
+    finally:
+        backend.shutdown()

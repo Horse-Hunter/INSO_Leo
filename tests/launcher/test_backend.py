@@ -781,7 +781,7 @@ def test_research_playwright_provider_shares_then_releases_the_live_session():
             self.stopped = True
 
     playwright = _FakePlaywright()
-    browser = object()
+    browser = SimpleNamespace()
     backend._browser_handle = BrowserHandle(
         owned=False, playwright=playwright, browser=browser
     )
