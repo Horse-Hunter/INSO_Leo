@@ -2560,3 +2560,14 @@ domain task ID, Owner observation/protected INSO context and TP FX snapshot.
 test_six_price_sources,test_tp}.py and tests/workflow/test_tp_research.py.
 E1 PARTIAL: domain claim/finalize integration follows; scheduler/live timing
 not accepted. E3/E4/E5 still OPEN. No production operations; Owner-only reports.
+
+### E1 three original-domain ports — source increment / not deployed
+
+Extracted canonical V12 prepare/settle and worker claim; V13 per-candidate
+protected query/settle; same TP outbox. Each holds canonical source transaction
+through original business finish; immutable results reject wrong module/cycle/
+domain/source. Original purchase rules, duplicate guards, SENT/UNKNOWN and120s
+row wait remain authoritative.5 new isolated domain testsPASS0.91s, original
+137 testsPASS11.07s and quote93PASS5.29s. E3/E4/final E5 remain open; real timing/
+web overlap NOT_VERIFIED. Scope strictly offline, default installed program
+unchanged; report to Owner only. Direct login patch separately68e1a2d.

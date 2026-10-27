@@ -979,3 +979,29 @@ restored and all passed. One earlier command referenced a nonexistent test file
 and ran nothing. No tests weakened. Production/browser/config/DB untouched.
 Status E1 PARTIAL, E2 resource contract offline PASS, E3/E4/E5 integrated OPEN.
 All delivery reports go ONLY to Owner for forwarding, never sent to CEO tools.
+
+## Stage E1 — three original-domain continuation ports (isolated)
+
+Canonical Research/retained-source increments c0ae6a4,6d82fcc,8500256 were
+preserved separately while native login correction68e1a2d and exact evidence
+2ea0b98 were completed;402ec1f combines histories, keeping CEO supplemental
+review and both records intact. Prior isolated E tree (without new login fix)
+ran2967PASS/1SKIP118.18s; this number is NOT attribution for later source.
+
+V12 now exposes its SAME prepare/settle and durable WorkflowWorker claim ports.
+Owner does duplicate check before asynchronous Research and uses original brand,
+notification, amount/permission and purchase routing after fresh source check.
+V13 exposes its SAME closed per-candidate protected INSO query and original
+settle/update path; no invented six-source quotation policy. TP already binds
+canonical Research/outbox continuation. Full source-row resource survives read
+return through fresh verification and durable business terminal for all3 ports.
+Original single worker exclusion is reused for V12; no new lock/DB/ledger.
+Immutable owner completion retains module/cycle/domain/observed-source identity.
+Potential write UNKNOWN retains source and global abort; no blind retries.
+
+Offline checks:137PASS11.07s existing V12/V13/RFQ006 after seam extraction;
+93PASS5.29s quote/read integration after binding;5PASS0.91s new actual domain
+ports. TP/actor/resource141PASS8.77s earlier incremental source. Subsequent final
+regression must be separately bound. No production/real browser/SMTP operation.
+E1 ports OFFLINE IMPLEMENTED; E3 owner recovery, E4 scheduler/GUI assembly and
+E5 final integration remain OPEN. Not evidence of TP punctuality or real overlap.

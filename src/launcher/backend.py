@@ -215,7 +215,7 @@ class _Observer:
         self.manual_review = manual_review
         self.prepare = prepare
 
-    def execute(self, item: ResearchInput) -> ResearchResult:
+    def _prepare(self, item):
         self.seen(item.inquiry_id)
         if self.prepare is not None:
             try:
@@ -224,12 +224,20 @@ class _Observer:
                 raise ResearchPreparationError(
                     "CDP browser requires manual handling"
                 ) from exc
-        result = self.service.execute(item)
+    def begin_detailed(self, item, *, now=None):
+        self._prepare(item)
+        return self.service.begin_detailed(item, now=now)
+
+    def execute(self, item: ResearchInput) -> ResearchResult:
+        self._prepare(item)
+        return self.review_result(self.service.execute(item))
+
+    def review_result(self, result):
         for detail in (result.remarks or "").split("；"):
             remarks = detail.casefold()
             if not any(marker in remarks for marker in self._HUMAN_ACTION_MARKERS):
                 continue
-            self.manual_review(item.inquiry_id, detail)
+            self.manual_review(result.inquiry_id, detail)
             # Do not let a partial result route into notification/purchase or
             # consume this inquiry. Existing queue release makes it resumable.
             if "ic.net" in remarks or "inso" in remarks or "英索" in remarks:

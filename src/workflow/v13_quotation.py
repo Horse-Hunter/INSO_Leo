@@ -209,102 +209,113 @@ class V13QuotationCycle:
         except Exception:  # noqa: BLE001 - includes close/result adapter contract failures
             raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE") from None
 
+    def read_candidates(self, worksheet):
+        return read_v13_candidates(self._reader, worksheet, self._store, discovery=True)
+
     def _run(self, worksheet, *, skip, on_result):
-        candidates = read_v13_candidates(self._reader, worksheet, self._store, discovery=True)
         results = []
-        for candidate in candidates:
+        for candidate in self.read_candidates(worksheet):
             if self._stop():
                 raise V13Stopped("STOP_REQUESTED")
-
-            if skip(candidate):
-                continue
-
-            if isinstance(candidate, V13QuotationResult):
-                results.append(on_result(candidate))
-                continue
-
-            def operation(candidate=candidate):
-                if self._stop():
-                    raise V13Stopped("STOP_REQUESTED")
-                try:
-                    item = self._store.get_by_inquiry_id(candidate.inquiry_id)
-                except KeyError:
-                    raise V13SourceRowError(RowErrorReason.SOURCE_IDENTITY_UNRESOLVED) from None
-                except V12Fault:
-                    raise
-                except Exception:  # noqa: BLE001 - only shared ledger access
-                    raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
-                if item.record_identity != candidate.record_identity:
-                    raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
-                # Query-only work may reuse discovery; the updater independently
-                # re-reads identity/status before any baseline or business write.
-                fresh_rows = _read_source_rows(self._reader, worksheet, discovery=True)
-                try:
-                    row = relocate_quotation_source(
-                        item.record_identity, fresh_rows, expected_brand=_expected_brand(item),
-                    )
-                except QuotationSourceAmbiguous:
-                    raise V13SourceRowError(RowErrorReason.SOURCE_IDENTITY_AMBIGUOUS) from None
-                except SheetRecordConflict:
-                    raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED) from None
-                from src.sheets.worksheet_schema import worksheet_schema
-                if row.cells.get(worksheet_schema(worksheet.worksheet).status_column) != candidate.source_status:
-                    raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
-                bindings, ambiguous = _source_bindings(_ledger_items(self._store), worksheet, fresh_rows)
-                bound = bindings.get(row.row_position, [])
-                if row.row_position in ambiguous or len(bound) != 1:
-                    raise V13SourceRowError(RowErrorReason.SOURCE_IDENTITY_AMBIGUOUS)
-                if bound[0].inquiry_id != candidate.inquiry_id:
-                    raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
-                access = self._operations.open(candidate.inquiry_id)
-                try:
-                    rows = self._quotes.read(access, candidate.queried_mpn)
-                    self._on_query_success()  # INSO read succeeded even if another site's FX fails.
-                    # Query-time clock sampled after this attempt completes, not batch start.
-                    try:
-                        quote = select_recent_lowest(rows, queried_mpn=candidate.queried_mpn,
-                                                     now=self._clock(), currency_rate=self.currency_rate)
-                        return quote, True
-                    except QuotationPriceUnavailable as exc:
-                        if exc.code.startswith("QUOTE_FX"):
-                            raise V12Fault(FaultScope.GLOBAL_STOP, "V13_FX_UNAVAILABLE") from None
-                        raise V13SourceRowError(RowErrorReason.QUOTE_PRICE_UNCOMPARABLE) from None
-                except InsoQuotationAuthenticationError:
-                    self._operations.preserve()
-                    raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED") from None
-                except InsoDuplicateHistoryError:
-                    return None, False
-
-            try:
-                quote, _ = run_inso_query(
-                    operation, succeeded=lambda result: result[1],
-                    reset=getattr(self._operations, "reset", self._operations.close), wait=self._wait,
-                    stop_fault=lambda: V13Stopped("STOP_REQUESTED"),
-                )
-            except V13SourceRowError as exc:
-                self._operations.close()
-                results.append(on_result(V13QuotationResult(
-                    candidate.inquiry_id, candidate.record_identity, candidate.queried_mpn,
-                    QuotationOutcome.ROW_FAILED, None, exc.reason, worksheet, candidate.source_row_position, candidate.source_status,
-                )))
-                continue
-            except V12Fault:
-                # Engine closes failed query tabs before exhaustion; auth tabs protected.
-                raise
-            except V13Stopped:
-                self._operations.close()
-                raise
-            except Exception:  # noqa: BLE001 - unknown adapter failures stop shared business
-                self._operations.close()
-                raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE") from None
-            self._operations.close()
-            results.append(on_result(V13QuotationResult(
-                candidate.inquiry_id, candidate.record_identity, candidate.queried_mpn,
-                QuotationOutcome.QUOTE_FOUND if quote is not None else QuotationOutcome.NO_RECENT_QUOTE,
-                quote, source_worksheet=worksheet, source_row_position=candidate.source_row_position,
-                source_status=candidate.source_status,
-            )))
+            if not skip(candidate):
+                results.append(self.execute_candidate(candidate, worksheet, on_result=on_result))
         return tuple(results)
+
+    def execute_candidate(self, candidate, worksheet, *, on_result=lambda result: result):
+        """One original protected query; page closes before owner continuation."""
+        if self._stop():
+            raise V13Stopped("STOP_REQUESTED")
+        try:
+            return self._execute_candidate(candidate, worksheet, on_result=on_result)
+        except (V12Fault, V13Stopped):
+            raise
+        except Exception:  # noqa: BLE001 - preserve canonical shared-fault policy
+            raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE") from None
+
+    def _execute_candidate(self, candidate, worksheet, *, on_result):
+        if isinstance(candidate, V13QuotationResult):
+            return on_result(candidate)
+
+        def operation(candidate=candidate):
+            if self._stop():
+                raise V13Stopped("STOP_REQUESTED")
+            try:
+                item = self._store.get_by_inquiry_id(candidate.inquiry_id)
+            except KeyError:
+                raise V13SourceRowError(RowErrorReason.SOURCE_IDENTITY_UNRESOLVED) from None
+            except V12Fault:
+                raise
+            except Exception:  # noqa: BLE001 - only shared ledger access
+                raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
+            if item.record_identity != candidate.record_identity:
+                raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
+            # Query-only work may reuse discovery; the updater independently
+            # re-reads identity/status before any baseline or business write.
+            fresh_rows = _read_source_rows(self._reader, worksheet, discovery=True)
+            try:
+                row = relocate_quotation_source(
+                    item.record_identity, fresh_rows, expected_brand=_expected_brand(item),
+                )
+            except QuotationSourceAmbiguous:
+                raise V13SourceRowError(RowErrorReason.SOURCE_IDENTITY_AMBIGUOUS) from None
+            except SheetRecordConflict:
+                raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED) from None
+            from src.sheets.worksheet_schema import worksheet_schema
+            if row.cells.get(worksheet_schema(worksheet.worksheet).status_column) != candidate.source_status:
+                raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
+            bindings, ambiguous = _source_bindings(_ledger_items(self._store), worksheet, fresh_rows)
+            bound = bindings.get(row.row_position, [])
+            if row.row_position in ambiguous or len(bound) != 1:
+                raise V13SourceRowError(RowErrorReason.SOURCE_IDENTITY_AMBIGUOUS)
+            if bound[0].inquiry_id != candidate.inquiry_id:
+                raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
+            access = self._operations.open(candidate.inquiry_id)
+            try:
+                rows = self._quotes.read(access, candidate.queried_mpn)
+                self._on_query_success()  # INSO read succeeded even if another site's FX fails.
+                # Query-time clock sampled after this attempt completes, not batch start.
+                try:
+                    quote = select_recent_lowest(rows, queried_mpn=candidate.queried_mpn,
+                                                 now=self._clock(), currency_rate=self.currency_rate)
+                    return quote, True
+                except QuotationPriceUnavailable as exc:
+                    if exc.code.startswith("QUOTE_FX"):
+                        raise V12Fault(FaultScope.GLOBAL_STOP, "V13_FX_UNAVAILABLE") from None
+                    raise V13SourceRowError(RowErrorReason.QUOTE_PRICE_UNCOMPARABLE) from None
+            except InsoQuotationAuthenticationError:
+                self._operations.preserve()
+                raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED") from None
+            except InsoDuplicateHistoryError:
+                return None, False
+
+        try:
+            quote, _ = run_inso_query(
+                operation, succeeded=lambda result: result[1],
+                reset=getattr(self._operations, "reset", self._operations.close), wait=self._wait,
+                stop_fault=lambda: V13Stopped("STOP_REQUESTED"),
+            )
+        except V13SourceRowError as exc:
+            self._operations.close()
+            return on_result(V13QuotationResult(
+                candidate.inquiry_id, candidate.record_identity, candidate.queried_mpn,
+                QuotationOutcome.ROW_FAILED, None, exc.reason, worksheet, candidate.source_row_position, candidate.source_status,
+            ))
+        except V12Fault:
+            # Engine closes failed query tabs before exhaustion; auth tabs protected.
+            raise
+        except V13Stopped:
+            self._operations.close()
+            raise
+        except Exception:  # noqa: BLE001 - unknown adapter failures stop shared business
+            self._operations.close()
+            raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE") from None
+        self._operations.close()
+        return on_result(V13QuotationResult(
+            candidate.inquiry_id, candidate.record_identity, candidate.queried_mpn,
+            QuotationOutcome.QUOTE_FOUND if quote is not None else QuotationOutcome.NO_RECENT_QUOTE,
+            quote, source_worksheet=worksheet, source_row_position=candidate.source_row_position,
+            source_status=candidate.source_status,
+        ))
 
 
 def expected_source_brand(item: WorkItem) -> object:

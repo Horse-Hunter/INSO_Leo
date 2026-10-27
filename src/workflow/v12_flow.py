@@ -261,14 +261,13 @@ class V12WorkflowCoordinator:
             normalized.append(record)
         return self.process_pending(tuple(normalized), now=now)
 
-    def process_pending(
+    def prepare_pending(
         self, records: tuple[PendingSheetRecord, ...], *, now: datetime
-    ) -> tuple[V12FlowResult, ...]:
+    ):
         enqueued: list[PendingSheetRecord] = []
         if self._inquiry_ids is not None:
             records = tuple(record for record in records
                             if self._workflow_store.inquiry_id_for(record.record_identity) in self._inquiry_ids)
-        skipped: list[V12FlowResult] = []
         held: dict[str, str | None] = {}
         # Owner rule: a row whose quantity cell is not a number (a column
         # legend, a blank, a textual placeholder) is not an inquiry. It is held
@@ -333,11 +332,17 @@ class V12WorkflowCoordinator:
                 at=now,
             )
 
+        return records, held, by_row
+
+    def process_pending(
+        self, records: tuple[PendingSheetRecord, ...], *, now: datetime
+    ) -> tuple[V12FlowResult, ...]:
+        records, held, by_row = self.prepare_pending(records, now=now)
         wrapped_research = _DuplicateThenResearch(self, now)
         worker = WorkflowWorker(
             self._workflow_store, wrapped_research, brand_updater=self._brand_updater
         )
-        results: list[V12FlowResult] = list(skipped)
+        results: list[V12FlowResult] = []
         # The durable queue is the only bound on this drain. Bounding it to the
         # rows this poll inserted stranded every inquiry an earlier poll had
         # released (for example while the production INSO session needed manual
@@ -386,30 +391,9 @@ class V12WorkflowCoordinator:
                 break
             remaining.remove(inquiry_id)
             research_result = self._research_results.get(inquiry_id)
-            if item.status.value in {"RETRY_WAIT", "RESEARCHING", "QUEUED"}:
-                if research_result is not None and research_result.status is ResearchStatus.RETRYABLE_FAILURE:
-                    self._notify_a_if_nonduplicate(inquiry_id, research_result, now)
-                    self._workflow_store.finish_row_failure(item.id,
-                        research_result.reason_code.value if research_result.reason_code else "RESEARCH_SOURCE_FAILURE", now=now)
-                    self._set_state(inquiry_id, BusinessState.RESEARCH_FAILED, EventType.RESEARCH_FAILED, now)
-                    results.append(self._result(inquiry_id, waiting_reason="RESEARCH_NOT_SUCCESSFUL"))
-                    continue
-                if research_result is not None:
-                    self._notify_a_if_nonduplicate(inquiry_id, research_result, now)
-                self._set_state(
-                    inquiry_id,
-                    BusinessState.RESEARCH_RETRY_WAIT,
-                    EventType.RESEARCH_RETRY_SCHEDULED,
-                    now,
-                )
-                results.append(
-                    self._result(
-                        inquiry_id,
-                        waiting_reason="RESEARCH_RETRY_WAIT",
-                    )
-                )
-            elif research_result is not None:
-                results.append(self._route_after_research(inquiry_id, research_result, now))
+            settled = self.settle_research(item, research_result, now=now)
+            if settled is not None:
+                results.append(settled)
         # The existing explicit recovery entry point already knows how to use
         # persisted Research. Wire it into the normal pending-row poll rather
         # than requeueing/deleting completed work or researching it again.
@@ -441,6 +425,73 @@ class V12WorkflowCoordinator:
                     item.inquiry_id, confirmed, now=now, record=record
                 ))
         return tuple(results)
+
+    def settle_research(self, item, research_result, *, now):
+        inquiry_id = item.inquiry_id
+        if item.status.value in {"RETRY_WAIT", "RESEARCHING", "QUEUED"}:
+            if research_result is not None and research_result.status is ResearchStatus.RETRYABLE_FAILURE:
+                self._notify_a_if_nonduplicate(inquiry_id, research_result, now)
+                self._workflow_store.finish_row_failure(item.id,
+                    research_result.reason_code.value if research_result.reason_code else "RESEARCH_SOURCE_FAILURE", now=now)
+                self._set_state(inquiry_id, BusinessState.RESEARCH_FAILED, EventType.RESEARCH_FAILED, now)
+                return self._result(inquiry_id, waiting_reason="RESEARCH_NOT_SUCCESSFUL")
+            if research_result is not None:
+                self._notify_a_if_nonduplicate(inquiry_id, research_result, now)
+            self._set_state(
+                inquiry_id,
+                BusinessState.RESEARCH_RETRY_WAIT,
+                EventType.RESEARCH_RETRY_SCHEDULED,
+                now,
+            )
+            return self._result(inquiry_id, waiting_reason="RESEARCH_RETRY_WAIT")
+        elif research_result is not None:
+            return self._route_after_research(inquiry_id, research_result, now)
+
+    def begin_continuation(self, record, identity, runtime, reader, *, now):
+        """Original V12 identity/duplicate/store path, with Research suspended."""
+        from .market_messages import MarketModule, MarketTaskIdentity
+        inquiry_id = self._workflow_store.inquiry_id_for(record.record_identity)
+        if (type(identity) is not MarketTaskIdentity or identity.module is not MarketModule.INQUIRY
+                or identity.domain_task_id != inquiry_id or identity.source_record != record.record_identity):
+            raise ValueError("INQUIRY_CONTINUATION_IDENTITY_INVALID")
+        if not self._before_next_row():
+            return None
+        fresh = [r for r in query_pending_records(reader, record.record_identity.worksheet)
+                 if r.row_position == record.row_position]
+        if len(fresh) != 1 or fresh[0] != record:
+            raise SheetRecordConflict("source changed before inquiry continuation")
+        lease = runtime.claim_business_continuation(identity)
+        if lease is None:
+            return None
+        work = InquiryOrderContinuation(self, runtime, lease, reader, now)
+        try:
+            self._current_reader = reader
+            _, held, _ = self.prepare_pending((record,), now=now)
+            if inquiry_id in held:
+                work.cancel()
+                return None
+            worker = WorkflowWorker(self._workflow_store, self._research, brand_updater=self._brand_updater)
+            work.worker = worker
+            work.item = worker.begin_due_one(now=now, inquiry_ids=frozenset({inquiry_id}))
+            if work.item is None:
+                work.cancel()
+                return None
+            if work.item.record_identity != identity.source_record:
+                raise SheetRecordConflict("claimed source changed")
+            research_input = worker.research_input(work.item)
+            self._check_duplicate(research_input, at=now)
+            work.research = self._research.begin_detailed(research_input, now=now)
+            return work
+        except ResearchPreparationError:
+            if work.item is not None:
+                self._workflow_store.release_unprepared(work.item.id, now=now)
+                self._set_state(work.item.inquiry_id, BusinessState.RESEARCH_RETRY_WAIT,
+                    EventType.RESEARCH_RETRY_SCHEDULED, now)
+            work.cancel()
+            raise
+        except Exception:
+            work.cancel()
+            raise
 
     def confirm_duplicate_and_route(
         self,
@@ -834,6 +885,93 @@ class V12WorkflowCoordinator:
             self._on_result(result)
         self._row_closed = waiting_reason not in {"RESEARCH_RETRY_WAIT", "DUPLICATE_CONFIRMATION_REQUIRED"}
         return result
+
+
+class InquiryOrderContinuation:
+    """Original-owner durable Research claim through original purchase routing."""
+    def __init__(self, coordinator, runtime, lease, reader, now):
+        import threading
+        self.coordinator, self.runtime, self.lease = coordinator, runtime, lease
+        self.reader, self.now = reader, now
+        self.worker = self.item = self.research = None
+        self._owner, self._closed = threading.get_ident(), False
+
+    def _check(self):
+        import threading
+        if self._owner != threading.get_ident() or self._closed:
+            raise RuntimeError("INQUIRY_CONTINUATION_OWNER_OR_LIFETIME_INVALID")
+
+    def _release(self, terminal):
+        from .market_messages import BusinessTerminalReceipt
+        self.runtime.finish_business_continuation(self.lease,
+            BusinessTerminalReceipt(self.lease.identity, terminal))
+        if self.item is not None:
+            self.worker.release_due_claim(self.item)
+        self._closed = True
+
+    def cancel(self):
+        from .market_messages import BusinessTerminal
+        self._check()
+        # Existing RESEARCHING state is preserved for canonical interrupted-run
+        # quarantine; Stop is not evidence of successful completion or no work.
+        self._release(BusinessTerminal.CANCELLED)
+
+    def defer(self, reason):
+        from .market_messages import BusinessTerminal
+        self._check()
+        if self.item is not None:
+            self.worker.require_due_claim(self.item)
+            self.coordinator._workflow_store.schedule_retry(self.item.id, error=reason, now=self.now)
+            self.coordinator._set_state(self.item.inquiry_id, BusinessState.RESEARCH_RETRY_WAIT,
+                EventType.RESEARCH_RETRY_SCHEDULED, self.now)
+        self._release(BusinessTerminal.DEFERRED)
+
+    def complete(self, completion):
+        from .market_messages import (
+            BusinessEffectTerminal,
+            BusinessResearchCompletion,
+            BusinessTerminal,
+        )
+        self._check()
+        if type(completion) is not BusinessResearchCompletion or completion.identity != self.lease.identity:
+            raise ValueError("INQUIRY_CONTINUATION_RESULT_MISMATCH")
+        self.runtime.require_business_continuation(self.lease)
+        self.worker.require_due_claim(self.item)
+        fresh = [record for record in query_pending_records(self.reader, self.lease.identity.source_record.worksheet)
+                 if record.row_position == self.lease.identity.source_record.row_position]
+        if len(fresh) != 1 or fresh[0].record_identity != self.lease.identity.source_record:
+            self.coordinator._workflow_store.mark_interrupted(self.item.id, now=self.now)
+            self.coordinator._set_state(self.item.inquiry_id, BusinessState.SOURCE_CHANGED,
+                EventType.SECURITY_CHECK_FAILED, self.now)
+            self._release(BusinessTerminal.FAILED)
+            raise SheetRecordConflict("source changed before inquiry effects")
+        if self.coordinator._stop_requested():
+            self.cancel()
+            raise V12Fault(FaultScope.V12_PAUSE, "STOP_REQUESTED")
+        execution = completion.result
+        result = execution.result
+        review = getattr(self.coordinator._research, "review_result", None)
+        if review is not None:
+            review(result)
+        self.runtime.begin_business_effect(self.lease)
+        try:
+            self.coordinator._research_results[self.item.inquiry_id] = result
+            item = self.worker.finish_due_one(self.item, result, now=self.now)
+            final = self.coordinator.settle_research(item, result, now=self.now)
+        except Exception:
+            # After the original write-capable route starts, no exception is
+            # proof that Save/Google/outbox did not commit. Preserve old ledger.
+            self.runtime.acknowledge_business_effect(self.lease, BusinessEffectTerminal.UNKNOWN)
+            raise
+        unknown = final is not None and final.purchase_outcome in {
+            PurchaseOutcome.UNKNOWN_WRITE_OUTCOME, PurchaseOutcome.SUBMIT_UNCONFIRMED,
+            PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED}
+        self.runtime.acknowledge_business_effect(self.lease,
+            BusinessEffectTerminal.UNKNOWN if unknown else BusinessEffectTerminal.CONFIRMED)
+        if unknown:
+            raise RuntimeError("INQUIRY_EFFECT_UNCONFIRMED")
+        self._release(BusinessTerminal.COMPLETED)
+        return final
 
 
 class _DuplicateThenResearch:

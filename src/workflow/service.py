@@ -134,6 +134,49 @@ class WorkflowWorker:
         self._research = research
         self._brand_updater = brand_updater
         self._retry_delays = tuple(retry_delays)
+        self._continuation_item = None
+        self._continuation_owner = None
+
+    @staticmethod
+    def research_input(item):
+        return _research_input(item)
+
+    def begin_due_one(self, *, now=None, inquiry_ids=None):
+        """Existing durable claim and worker exclusion, retained until finish."""
+        if self._continuation_item is not None or not _RESEARCH_WORKER_LOCK.acquire(blocking=False):
+            return None
+        try:
+            item = (self._store.claim_due(now=now) if inquiry_ids is None
+                    else self._store.claim_due(now=now, inquiry_ids=inquiry_ids))
+            if item is None:
+                _RESEARCH_WORKER_LOCK.release()
+                return None
+            self._continuation_item, self._continuation_owner = item, threading.get_ident()
+            return item
+        except BaseException:
+            _RESEARCH_WORKER_LOCK.release()
+            raise
+
+    def require_due_claim(self, item):
+        if self._continuation_item is not item or self._continuation_owner != threading.get_ident():
+            raise RuntimeError("WORKFLOW_CONTINUATION_OWNER_LOST")
+        current = self._store.get(item.id)
+        if (current.inquiry_id != item.inquiry_id or current.status is not WorkflowStatus.RESEARCHING
+                or current.attempt_count != item.attempt_count or current.record_identity != item.record_identity):
+            raise RuntimeError("WORKFLOW_CONTINUATION_CLAIM_CHANGED")
+
+    def finish_due_one(self, item, result, *, now):
+        self.require_due_claim(item)
+        if result.inquiry_id != item.inquiry_id:
+            raise ValueError("WORKFLOW_CONTINUATION_RESULT_MISMATCH")
+        self._finish(item, result, now=now)
+        return self._store.get(item.id)
+
+    def release_due_claim(self, item):
+        if self._continuation_item is not item or self._continuation_owner != threading.get_ident():
+            raise RuntimeError("WORKFLOW_CONTINUATION_OWNER_LOST")
+        self._continuation_item = self._continuation_owner = None
+        _RESEARCH_WORKER_LOCK.release()
 
     def process_due_one(self, *, now: datetime | None = None, inquiry_ids=None) -> WorkItem | None:
         if not _RESEARCH_WORKER_LOCK.acquire(blocking=False):

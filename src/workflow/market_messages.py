@@ -200,3 +200,19 @@ class BusinessResearchCompletion:
         if (expected is ResearchExecution
                 and self.result.result.inquiry_id != self.identity.domain_task_id):
             raise ValueError("BUSINESS_RESEARCH_TASK_MISMATCH")
+
+
+@dataclass(frozen=True, slots=True)
+class BusinessQuotationCompletion:
+    """Protected Owner quotation result, never sent to a market worker."""
+    identity: MarketTaskIdentity
+    result: object = field(repr=False)
+
+    def __post_init__(self):
+        from .v13_quotation import V13QuotationResult
+        if (type(self.identity) is not MarketTaskIdentity or self.identity.module is not MarketModule.QUOTATION
+                or type(self.result) is not V13QuotationResult
+                or self.result.inquiry_id != self.identity.domain_task_id
+                or self.result.source_worksheet != self.identity.source_record.worksheet
+                or self.result.source_row_position != self.identity.source_record.row_position):
+            raise ValueError("BUSINESS_QUOTATION_IDENTITY_INVALID")

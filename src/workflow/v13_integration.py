@@ -185,7 +185,7 @@ class V13IntegratedCycle:
         self.notify, self.observe, self.stop = notify, observe, stop_requested
         self.follow_up = follow_up
 
-    def run(self, worksheet):
+    def prepare_run(self, worksheet):
         if not self.stop():
             self.follow_up(worksheet)  # Even held rows can require human follow-up.
         blocked_ids, blocked_locations = set(), set()
@@ -268,53 +268,156 @@ class V13IntegratedCycle:
         except Exception as exc:
             raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE") from exc
 
-        def skip(candidate):
-            return (
-                candidate.inquiry_id in blocked_ids
-                or candidate.source_row_position in blocked_locations
+        return observed_records, blocked_ids, blocked_locations
+
+    def run(self, worksheet):
+        observed_records, blocked_ids, blocked_locations = self.prepare_run(worksheet)
+        return self.cycle.run(worksheet,
+            skip=lambda candidate: candidate.inquiry_id in blocked_ids
+                or candidate.source_row_position in blocked_locations,
+            on_result=lambda result: self.settle_result(result, observed_records))
+
+    def begin_continuation(self, candidate, identity, runtime, observed_records):
+        from src.sheets.pending import identify_worksheet_row
+
+        from .market_messages import MarketModule, MarketTaskIdentity
+        if (type(identity) is not MarketTaskIdentity or identity.module is not MarketModule.QUOTATION
+                or identity.domain_task_id != candidate.inquiry_id
+                or identity.source_record.row_position != candidate.source_row_position):
+            raise ValueError("QUOTATION_CONTINUATION_IDENTITY_INVALID")
+        if self.stop():
+            return None
+        worksheet = identity.source_record.worksheet
+        # Binding still belongs to canonical quotation parser/store, not row/MPN
+        # guesswork. A relocated candidate requires fresh admission at its row.
+        current = [item for item in self.cycle.read_candidates(worksheet)
+                   if item.inquiry_id == candidate.inquiry_id
+                   and item.source_row_position == candidate.source_row_position]
+        rows = [row for row in self.reader.read_rows(worksheet)
+                if row.row_position == identity.source_record.row_position]
+        if (len(current) != 1 or current[0] != candidate or len(rows) != 1
+                or identify_worksheet_row(worksheet, rows[0]) != identity.source_record):
+            raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
+        lease = runtime.claim_business_continuation(identity)
+        if lease is None:
+            return None
+        return QuotationOrderContinuation(self, runtime, lease, candidate, observed_records)
+
+    def settle_result(self, result, observed_records):
+        if self.stop():
+            raise V13Stopped("STOP_REQUESTED")
+        try:
+            final = (
+                self.updater_factory().update_one(result)
+                if result.outcome is QuotationOutcome.QUOTE_FOUND
+                else result
             )
+            if not isinstance(final, V13QuotationResult):
+                raise TypeError("invalid updater result contract")
+        except V13SourceRowError as exc:
+            final = replace(result, outcome=QuotationOutcome.ROW_FAILED, row_error_reason=exc.reason)
+        except (V12Fault, V13Stopped):
+            raise
+        except (sqlite3.Error, V12DatabaseError):
+            raise V12Fault(
+                FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE"
+            ) from None
+        except Exception:  # noqa: BLE001 - shared read boundary or isolated row adapter
+            raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE") from None
+        key = final.inquiry_id
+        if final.outcome is QuotationOutcome.ROW_FAILED:
+            record = next(
+                (
+                    r
+                    for r in observed_records
+                    if r.row_position == final.source_row_position
+                ),
+                None,
+            )
+            identity = record.record_identity if record else final.record_identity
+            if identity is None:
+                raise V12Fault(FaultScope.GLOBAL_STOP, "HOLD_IDENTITY_UNAVAILABLE")
+            # Strip quotation data from durable operational state.
+            key, episode = self.holds.hold(replace(final, quotation=None), identity)
+            self.notify(final, key, episode)
+        self.observe(final, key)
+        return final
 
-        def settle(result):
-            if self.stop():
-                raise V13Stopped("STOP_REQUESTED")
-            try:
-                final = (
-                    self.updater_factory().update_one(result)
-                    if result.outcome is QuotationOutcome.QUOTE_FOUND
-                    else result
-                )
-                if not isinstance(final, V13QuotationResult):
-                    raise TypeError("invalid updater result contract")
-            except V13SourceRowError as exc:
-                final = replace(result, outcome=QuotationOutcome.ROW_FAILED, row_error_reason=exc.reason)
-            except (V12Fault, V13Stopped):
-                raise
-            except (sqlite3.Error, V12DatabaseError):
-                raise V12Fault(
-                    FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE"
-                ) from None
-            except Exception:  # noqa: BLE001 - shared read boundary or isolated row adapter
-                raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE") from None
-            key = final.inquiry_id
-            if final.outcome is QuotationOutcome.ROW_FAILED:
-                record = next(
-                    (
-                        r
-                        for r in observed_records
-                        if r.row_position == final.source_row_position
-                    ),
-                    None,
-                )
-                identity = record.record_identity if record else final.record_identity
-                if identity is None:
-                    raise V12Fault(FaultScope.GLOBAL_STOP, "HOLD_IDENTITY_UNAVAILABLE")
-                # Strip quotation data from durable operational state.
-                key, episode = self.holds.hold(replace(final, quotation=None), identity)
-                self.notify(final, key, episode)
-            self.observe(final, key)
-            return final
 
-        return self.cycle.run(worksheet, skip=skip, on_result=settle)
+
+class QuotationOrderContinuation:
+    """Original Owner INSO query and Google update, one closed row boundary."""
+    def __init__(self, cycle, runtime, lease, candidate, observed_records):
+        import threading
+        self.cycle, self.runtime, self.lease = cycle, runtime, lease
+        self.candidate, self.records = candidate, observed_records
+        self._owner, self._closed, self._read = threading.get_ident(), False, False
+
+    def _check(self):
+        import threading
+        if self._owner != threading.get_ident() or self._closed:
+            raise RuntimeError("QUOTATION_CONTINUATION_OWNER_OR_LIFETIME_INVALID")
+
+    def _revalidate(self):
+        from src.sheets.pending import identify_worksheet_row
+        source = self.lease.identity.source_record
+        rows = [row for row in self.cycle.reader.read_rows(source.worksheet)
+                if row.row_position == source.row_position]
+        if len(rows) != 1 or identify_worksheet_row(source.worksheet, rows[0]) != source:
+            raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
+
+    def read_owner(self):
+        from .market_messages import BusinessQuotationCompletion
+        self._check()
+        if self._read:
+            raise RuntimeError("QUOTATION_CONTINUATION_ALREADY_READ")
+        self.runtime.require_business_continuation(self.lease)
+        self._revalidate()
+        result = self.cycle.cycle.execute_candidate(self.candidate, self.lease.identity.source_record.worksheet)
+        self.runtime.require_business_continuation(self.lease)
+        self._read = True
+        return BusinessQuotationCompletion(self.lease.identity, result)
+
+    def cancel(self):
+        from .market_messages import BusinessTerminal, BusinessTerminalReceipt
+        self._check()
+        self.runtime.finish_business_continuation(self.lease,
+            BusinessTerminalReceipt(self.lease.identity, BusinessTerminal.CANCELLED))
+        self._closed = True
+
+    def complete(self, completion):
+        from .market_messages import (
+            BusinessEffectTerminal,
+            BusinessQuotationCompletion,
+            BusinessTerminal,
+            BusinessTerminalReceipt,
+        )
+        self._check()
+        if (not self._read or type(completion) is not BusinessQuotationCompletion
+                or completion.identity != self.lease.identity):
+            raise ValueError("QUOTATION_CONTINUATION_RESULT_MISMATCH")
+        self.runtime.require_business_continuation(self.lease)
+        if self.cycle.stop():
+            self.cancel()
+            raise V13Stopped("STOP_REQUESTED")
+        self._revalidate()
+        self.runtime.begin_business_effect(self.lease)
+        try:
+            result = self.cycle.settle_result(completion.result, self.records)
+        except Exception:
+            self.runtime.acknowledge_business_effect(self.lease, BusinessEffectTerminal.UNKNOWN)
+            raise
+        uncertain = result.row_error_reason in {
+            RowErrorReason.UPDATE_RESULT_UNCONFIRMED, RowErrorReason.SOURCE_STATUS_NOT_UPDATED,
+            RowErrorReason.QUOTE_INPUT_READBACK_MISMATCH}
+        self.runtime.acknowledge_business_effect(self.lease,
+            BusinessEffectTerminal.UNKNOWN if uncertain else BusinessEffectTerminal.CONFIRMED)
+        if uncertain:
+            raise RuntimeError("QUOTATION_EFFECT_UNCONFIRMED")
+        self.runtime.finish_business_continuation(self.lease,
+            BusinessTerminalReceipt(self.lease.identity, BusinessTerminal.COMPLETED))
+        self._closed = True
+        return result
 
 
 class CombinedCycle:
