@@ -2262,3 +2262,166 @@ before consuming success and bridge original owner's auth recovery/GUI events.
 Do not enable this single-query optional bridge as if it protects a whole order.
 Then request a separate authorized safe real-browser window for parsed-source
 and due-TP timelines, without using normal production as an experiment.
+
+
+## CEO independent terminal race and explicit auth reasons re-review — 2026-10-27
+
+**Verdict: TERMINAL_SUBMIT_EXIT_RACE_SOURCE_PASS /
+AUTH_SITE_REASON_CLASSIFICATION_SOURCE_PASS /
+FINAL_OFFLINE_REGRESSION_EVIDENCE_ACCEPTED /
+OPTIONAL_ACTOR_FOUNDATION_ONLY /
+BUSINESS_CONTINUATION_NOT_IMPLEMENTED /
+V16_OVERALL_REVIEW_REQUIRED.** This is a narrowly scoped
+independent review; accepted A/B/C fixes, existing reviewed
+P1 and installed `04075bc` are not reopened.
+Reviewer accessed GitHub code and executor-submitted
+regression evidence only. No protected Chrome, production
+EXE/SQLite/config/Vault, SMTP, Google or purchase operation.
+
+**Precise provenance.** Remote
+`codex/v1-6-independent-scheduling` HEAD
+`d9bfaefbe7581c500b132c84ba61d4478cdf3169`,
+parent application source
+`f7d70baa51f942f27064ee9f84684549f1795d7b`.
+The two commits have the identical Git `src/` tree
+`18bde855d3323b1a3aa1585ff0e983cdc28cea6a`;
+evidence commit alters only
+`V16_RELEASE_REPORT.md`,
+`tasks/2026-10-27-v16-independent-scheduling.md` and
+`docs/evidence/v16/order-resource-regression.json`.
+Prior terminal-race source
+`287e23830dfd4aa226b3162464084ae1e969a4c7`
+was merged with existing CEO
+`8fb3f504e5537f5951e64467dbb4a033248a4af6`
+via `ba54598f...`; `f7d70ba` then made the
+explicit auth classification fix.
+No parallel implementation or unreviewed production
+installation is accepted here.
+
+**Review of the exact Stop/commit/enqueue/final-exit race
+(`287e238`): PASS in source/isolated thread tests.**
+Previously the worker's final `get_nowait` could
+finish before a coordinator with an already-committed
+lease enqueued the request; this had no terminal
+receipt and stranded the slot. The narrow
+`MarketReadActors._transport_lock` now serializes
+`dispatch_ready` reservation+enqueue, thread-safe
+`request_stop` and worker finally's queued
+job cancellation. A worker fatal sets stop before
+final lock reconciliation; either submission wins
+then final draining acknowledges cancellation, or
+final retirement wins and subsequent dispatch sees
+stop. The lock is **not held during browser reads,
+source parsing or external operations**. The existing
+scheduler-owned immutable `MarketCompletion`
+acknowledgment releases the exact resource.
+Regression directly tests submit refusal, twenty
+stop-in-the-gap interleavings and a barrier-controlled
+initializer exception between commit and queue
+insertion; each asserts no read and zero surviving
+active leases. Executor reported32 focused actor
+PASS (0.29s). This is a bounded invariant proof
+in supplied test execution, not a guarantee about
+future business owner continuation or every
+possible external-client failure.
+
+**Review of explicit auth/manual safety reasons
+(`f7d70ba`): PASS for scoped actor classification.**
+The prior `_INSO_AUTH_STOP_CODES` frozen set from
+Backend was moved **without member changes** to
+`src/research/site_login.AUTH_SESSION_STOP_REASONS`,
+with Backend's original identifier aliasing it.
+Research also declares
+`SITE_AUTH_RECOVERY_REASONS` as that canonical
+set plus exact pre-existing market login codes.
+Actor `_fault` for thrown typed site codes
+and `_requires_auth` for returned
+`SourceEvidence.failure_code` now use
+exact set membership, not substring/free-text
+parsing. Existing
+`MANUAL_VERIFICATION_REQUIRED`,
+`SESSION_STALE`, `SECURITY_EVENT`,
+`OTP_REQUIRED`, `VERIFIED_SESSION_LEASE_REQUIRED`,
+`SESSION_IDENTITY_UNVERIFIED`,
+`LOGIN_REQUIRED` and explicit market login
+codes yield `SITE_DEFER / MARKET_AUTH_REQUIRED`
+with no successful source result; known read
+failures such as `READ_EMPTY` and
+`AUTHENTICATED_READ_UNAVAILABLE` remain
+ordinary read failures. This preserves
+worker no-login and owner-only recovery.
+Executor reported304 targeted auth/site PASS
+(1.30s) including18 positive returned/raised
+cases and4 negative cases. No login
+or credential operation was exercised by CEO.
+
+**Final exact-source test evidence:** published
+`order-resource-regression.json` records
+`2951 PASS / 1 SKIP` in114.03s,
+Ruff/diff PASS, actor race32 PASS,
+auth/site304 PASS, Google122 PASS.
+Unlike earlier `2907`, `2929` or
+`2901` runs, this record binds explicitly
+to `f7d70ba` and the exact verified
+`src/` tree. Tests were run by Executor
+on Windows, **not independently rerun by
+CEO**. Reported15 owned finished test
+scratch folders were retired; untouched
+production/rollback/unknown paths
+were not independently inspected.
+
+**Unresolved actor-integration/release gates:**
+- `MarketReadActors` remains optional and not
+  attached to the running module business
+  loop. Authentication `SITE_DEFER` marks a
+  site blocked and awaits the original
+  browser owner; safe owner-side recovery,
+  re-admission and protected/manual page
+  preservation are NOT IMPLEMENTED here.
+  Classification PASS is not login-recovery PASS.
+- Current source-row lease spans only an
+  individual market read, not the complete
+  procurement/quotation/TP business
+  continuation. Add one canonical owner-side
+  continuation, fresh source identity and
+  existing Google/INSO/write/SENT/UNKNOWN
+  gates before any effects. No duplicate
+  ledger or extra Chrome/Profile.
+- Unbound actors, application GUI progression,
+  fault port consumer, terminal reconciling
+  of unusually delayed/stuck native worker,
+  authentication pacing, request/result
+  collection across all six canonical sources,
+  and long-term memory/Chrome/game benchmarks
+  need separate code and acceptance. A
+  `close(timeout)` returning False does not
+  guarantee OS thread exit; do not force
+  Chrome/thread shutdown to pass tests.
+- The previous genuine TP start lateness
+  `454.210s` is still FAIL/open. Synthetic
+  actor test overlap is not proof of actual
+  live page-source/result concurrency.
+  Stage F safe browser acceptance had no
+  authorization or execution in this round.
+- The Google fixed-code busy branch
+  diagnostics remain **uninstalled**, so
+  the precise trigger for historical
+  `GOOGLE_WEB_READ_BUSY` notifications
+  remains UNKNOWN; no fault test SMTP
+  was sent.
+- Production is still executor-reported
+  reviewed `04075bc`; current historical
+  SENT/UNKNOWN/commands and rollback
+  protections were not touched or
+  independently read live. Do not claim
+  new deployment/business success.
+
+**CEO release posture:** Scoped correction findings
+from `8fb3f50` are CLOSED; continue Stage E
+canonical owner business continuation and
+recovery with separated evidence. No reapproval
+of prior ordinary business is requested, and no
+deployment permission is inferred from this Review.
+`D_FOUNDATION_NOT_PRODUCTION_READY`,
+`E_NOT_COMPLETE`, `F_NOT_RUN`,
+`V16_OVERALL_REVIEW_REQUIRED`.
