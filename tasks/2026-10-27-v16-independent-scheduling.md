@@ -620,3 +620,141 @@ Full detail and single rollout/rollback plan remain in V16_RELEASE_REPORT.md.
 Completed own test dirs391424417bytes retired; production/rollback/oldsoak/Vault/
 Profile untouched. Existing one V1.6 checkout reused; no new worktree/handoff.
 Remaining whole V1.6 status staysREVIEW_REQUIRED, not DONE or production E2E PASS.
+
+
+## CEO page factory exact-target prerequisite re-review — 2026-10-27
+
+**Verdict: PAGE_FACTORY_SOURCE_REVIEW_PASS (isolated, offline prerequisite only).**
+This is **NOT** a V1.6 actor/concurrent-browser/business-release PASS
+and **NOT** a change to the already Owner-authorized 04075bc
+reviewed-only installation candidate. Production remains
+`AUTHORIZED_WAIT_NORMAL_EXIT / NOT_DEPLOYED` as executor reported;
+no production or Chrome operation was performed by CEO.
+
+Independently verified remote branch
+`codex/v1-6-independent-scheduling` at
+`34d0fd4f6514036065c0222fbe31d5548b3c8e10`.
+Diff relative to reviewed CEO
+`ee49203dbae39e79eca1f1c90164f643ba2fe03c`:
+four commits—documentation-only install freeze
+`1b19390298c6151e08d1e513a2a153ddcae2c1cf`;
+page-source
+`49677b7e658034f687fa0ed73c5bb5ff6bfadf3d`;
+blank-URL compatibility follow-up
+`f49d78526f6c30cc57b710f466883792ff574e0d`;
+report/evidence head `34d0fd4...`.
+Only application source delta is
+`src/research/cdp_pages.py` (+19/-5);
+corresponding fixture/tests are
+`tests/research/background_targets.py`,
+`tests/research/test_cdp_pages.py`, and
+`tests/research/test_icnet.py`.
+Independent diff `04075bc..1b19390`
+contains documentation/evidence only, confirming
+the installation candidate's `src/` remains the
+earlier independently reviewed source.
+
+### Reviewed page-factory contract
+
+- Validates owner *before* creation. Creates a
+  per-invocation unpredictable `about:blank#INSO_CREATE:<uuid>`
+  URL; `expect_event("page")` selects only that event,
+  not the first unrelated page. Receives
+  `Target.createTarget` targetId and separately
+  checks the Page-linked CDP
+  `Target.getTargetInfo` targetId against it
+  before marking ownership or returning Page.
+- On successful proof, preserves the existing
+  `window.name` page-owner marker and restores
+  the exact `about:blank` URL with
+  `history.replaceState` for old keepalive and
+  initial-navigation guards; no owner/page
+  application business rule or Chrome profile
+  lifetime changed.
+- On acquisition/proof/marker failure, attempts
+  native `Target.closeTarget` using only the
+  exact target ID returned by this invocation,
+  never by enumerating or closing another
+  task's matched Page. This is an important
+  safety improvement over a first-page event
+  without native identity proof. Note that
+  browser protocol teardown can itself fail:
+  success of close is **not guaranteed**,
+  and a teardown exception could mask an
+  earlier failure. Before enabling independent
+  actors, add an offline targeted fault test
+  for closeTarget or detach failure and ensure
+  resource-failure reporting does not authorize
+  subsequent unsafe page reuse. Do not
+  broaden this into another rewrite of the
+  already reviewed installation candidate.
+- Source tests inspect foreign/spoofed events,
+  per-create uniqueness, native mismatched
+  target, proof timeout, invalid owner,
+  exact blank restoration and window.name
+  retention. Existing adapter tests were
+  updated to preserve previous expectations.
+  The original pre-fix fragment regression
+  against exact `about:blank` has been
+  fixed in the second source commit.
+- Submitted execution logs report
+  2806 PASS / 1 SKIP (110.02s) on final
+  application source, plus 12 focused
+  positive checks (0.57s), Ruff and diff
+  checks PASS. Prior dependency/fixture
+  failures and one symlink capability skip
+  are disclosed, not passed off as live tests.
+  CEO read GitHub code/tests/evidence, did
+  not independently execute Windows pytest.
+- Playwright supports a browser-context
+  page event and Page-linked CDP session,
+  and CDP supports creation/target-info
+  identity checks. **However** these tests
+  use simulated protocol objects only; they
+  cannot prove real Chrome initial URL
+  event timing, URL reset success, owner
+  persistence after subsequent navigation
+  or multi-client contention on protected
+  Chrome. A dedicated future bounded
+  read-only Chrome integration test is
+  required before deployment as true
+  page-level parallelism; no live/browser
+  experiment was performed here.
+
+### Release and outstanding tasks
+
+**PASS is scoped strictly to the offline page
+factory identity prerequisite.** It does not
+approve installation of
+`49677b7...` / `f49d785...`, which remain
+separate from approved 04075bc build.
+Missing: bounded independent sync actors,
+per-source order leases, same-site auth
+pacing/locking, callback/thread isolation,
+real navigation overlap, and true
+actor cancellation/shutdown. Those are
+`NOT_IMPLEMENTED`/`NOT_VERIFIED`.
+
+Owner authorized the normal stop/backup/build/
+install/idle/resume window for the earlier
+reviewed-only 04075bc source. Executor reported
+current old EXE/PIDs still live because safe
+GUI exit could not be automated. Do not
+force-kill the protected browser, guess
+unlabelled Tk controls or bypass normal
+purchase/SMTP draining. Continue installation
+only after independently verified normal
+main/observer exit and current-ledger backup;
+there is **no need to repeat the already
+given Owner installation authorization**.
+Never restore a pre-live database or replay
+SENT/UNKNOWN. Real TP cycles, current SMTP
+status, naturally eligible purchase/Sheet
+success, updated UI, long-term stability
+and gameplay remain unverified.
+
+**Final:** `PAGE_FACTORY_OFFLINE_PASS`,
+`PARALLEL_ACTORS_NOT_IMPLEMENTED`,
+`LIVE_BROWSER_OVERLAP_NOT_VERIFIED`,
+`APPROVED_04075BC_INSTALL_STILL_SEPARATE`,
+`V16_OVERALL_REVIEW_REQUIRED`.
