@@ -2425,3 +2425,71 @@ deployment permission is inferred from this Review.
 `D_FOUNDATION_NOT_PRODUCTION_READY`,
 `E_NOT_COMPLETE`, `F_NOT_RUN`,
 `V16_OVERALL_REVIEW_REQUIRED`.
+
+## CEO supplemental independent review — direct canonical login exception gap (2026-10-27)
+
+**Verdict update (precisely bounded):** STOP_COMMIT_FINAL_EXIT_RACE_SOURCE_PASS
+remains accepted. Exact-name `SourceEvidence.failure_code` and adapter
+`.code` / `.reason` auth-classification paths remain accepted.
+**DIRECT_SITE_LOGIN_ERROR_CHANGES_REQUESTED** for the advertised
+"direct exceptions" coverage of `f7d70baa51f942f27064ee9f84684549f1795d7b`.
+V1.6 overall **REVIEW_REQUIRED**; no new deployment/Stage F authorization.
+
+**Independently source-proven missing route:** The canonical
+`src/research/site_login.py` `SiteLoginError.__init__` stores its immutable
+safe reason in `error.reason_code` (not `.code` or `.reason`).
+`src/launcher/market_actors.py::_fault` currently obtains only
+`getattr(error, 'reason', None) or getattr(error, 'code', None)`.
+Thus a directly raised `SiteLoginError('MANUAL_VERIFICATION_REQUIRED')`
+(or `SESSION_STALE`, `OTP_REQUIRED`, `LOGIN_NOT_CONFIRMED`, etc.) from
+`session.read` is deterministically mapped to
+`MarketFault(FAILED, 'MARKET_SOURCE_FAILED')`, **not**
+`SITE_DEFER / MARKET_AUTH_REQUIRED`; the source will not be blocked.
+The new parametrized direct-exception tests create a synthetic exception
+with `.code`, so they do not exercise the actual canonical
+`SiteLoginError.reason_code` interface.
+
+**Impact/scope:** The current optional `ResearchMarketSession` sets
+`login_provider=None` and canonical CDP clients usually translate
+`SiteLoginError` to adapter errors carrying `.code`; therefore this
+is a **provable classifier/API coverage gap**, not proof that the
+currently installed `04075bc` has hit it or that any real browser
+login was bypassed. The actor remains uninstalled. No change to the
+previously accepted Stop race, Backend's identical auth-stop set, or
+final-source test attribution follows from this finding.
+
+**Executor minimum remedy, under the SAME Stage D task (no new architecture):**
+1. In the single existing `_fault` classifier, recognize the typed
+   canonical `SiteLoginError.reason_code` (and, if warranted by actual
+   adapter wrapping, inspect documented typed causes) while using the
+   existing `SITE_AUTH_RECOVERY_REASONS` exact allowlist. Never parse
+   exception text, URL, credential or arbitrary page content; do not
+   broaden a login recipe, launch a worker login, or change original
+   Backend safety-gate behavior.
+2. Regression must **raise actual `SiteLoginError` instances directly**
+   from an actor test session, not merely a fake exception with
+   `.code`: exercise manual challenge, stale/unverified session, OTP,
+   security event and at least one market login code. Assert
+   `SITE_DEFER / MARKET_AUTH_REQUIRED`, no result/success, site blocked,
+   shared runtime not falsely globally stopped, and exact resource
+   lease released on terminal acknowledgment. Retain adapter `.code`
+   and returned-evidence positives, non-auth negatives, plus
+   initialization failure GLOBAL_STOP and cleanup/resource GLOBAL_STOP.
+3. Run the focused suite and the exact post-fix full offline regression;
+   bind both to the **new final application SHA and src tree**, keep
+   deterministic tests and no production/browser/SMTP/SQLite use.
+   Report newly identified safety reason tokens separately if any,
+   without blindly labeling normal READ_EMPTY/READ_UNAVAILABLE as auth.
+
+**Evidence quality:** The existing `d9bfaef` JSON asserts
+2951PASS/1SKIP/114.03s against the verified `f7d70ba` Git src tree;
+it is Executor-produced output, not an independent CEO Windows rerun.
+No GitHub commit status checks were returned for `f7d70ba`.
+Those numbers are not deleted or reassigned, but do **not** cover the
+specific native exception case above.
+
+**Stage E/F remains unchanged:** Complete the original owner-side
+business continuation, same-source-row end-to-end exclusion,
+site recovery and original Google/INSO/SMTP safeguards before enabling
+actors. TP historical 454.210s lateness, real query overlap, long-term
+resource stability and Stage F authorization stay OPEN.
