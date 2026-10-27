@@ -233,6 +233,17 @@ def _check_cached_tk_workbench(monkeypatch):
         _check_detail_contention(app, backend, orders[0])
         for page in app._view.pages * 3:
             app._view.show_page(page)
+        now = datetime(2026, 1, 1, tzinfo=UTC)
+        nested_view = replace(view, modules=(
+            ModuleSnapshot("inquiry", "询价采购", status="等待执行", stage="订单间安全等待",
+                           cycle_started_at=now, cycle_elapsed_seconds=120),
+            ModuleSnapshot("quotation", "报价跟进", status="运行中", stage="合成只读查询",
+                           cycle_started_at=now+timedelta(seconds=2), cycle_elapsed_seconds=10)))
+        app._view.show_page("总览")
+        app._view.render(nested_view, force=True)
+        assert "订单间安全等待" in app._view.cards["inquiry"][1].cget("text")
+        assert "本轮耗时 120 秒" in app._view.cards["inquiry"][1].cget("text")
+        assert "本轮耗时 10 秒" in app._view.cards["quotation"][1].cget("text")
         app._hidden = True
         monkeypatch.setattr(app._view, "render", unchanged)
         app._root.after_cancel(app._after_id)

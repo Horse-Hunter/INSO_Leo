@@ -1193,6 +1193,7 @@ class ProductionBackend(GuiBackend):
         parent = (self._cycle_id, self._last_poll, self._research_acquire_failure,
                   self._module_pause_requested)
         self._module_contexts.append(module)
+        self._research_acquire_failure = None  # New execution never inherits another job's failure.
         try:
             with self._observation.module_scope(module):
                 self._run_independent_job_scoped(module)

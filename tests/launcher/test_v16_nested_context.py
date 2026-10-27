@@ -33,7 +33,9 @@ def test_real_nested_closure_restores_context_and_durable_guards(
     monkeypatch.setattr(QQSMTPTransport, "send_operator_alert",
         lambda *_a, **_k: SimpleNamespace(outcome=DeliveryOutcome.SENT))
     time = SimpleNamespace(tick=0.0)
-    clock = lambda: NOW + timedelta(seconds=time.tick)
+    # Pending-pause cases also freeze wall time: cache isolation must not depend
+    # on two tasks receiving different wall-clock timestamps.
+    clock = lambda: NOW if outer_pause else NOW + timedelta(seconds=time.tick)
     monkeypatch.setattr(launcher, "utc_now", clock)
     monkeypatch.setattr(launcher, "monotonic", lambda: time.tick)
     backend._observation = RuntimeObservation(clock=clock, timer=lambda: time.tick)
@@ -84,6 +86,7 @@ def test_real_nested_closure_restores_context_and_durable_guards(
         assert entered[-1][0] != outer_identity[0][0]
         outer = backend._observation.modules["inquiry"]
         assert outer.status == "等待执行" and outer.stage == "订单间安全等待"
+        assert backend._research_acquire_failure is None
         backend._observe_stage(inner, "合成只读端口", order_ref="inner-order")
         time.tick += 10
         backend._research_acquire_failure = (backend._last_poll, "inner-cache")
@@ -142,6 +145,7 @@ def test_real_nested_closure_restores_context_and_durable_guards(
     assert cards[inner].cycle_elapsed_seconds == 10
     assert cards["inquiry"].cycle_finished_at == clock()
     assert backend._observation.cycle_started_at == NOW
+    assert backend._observation.cycle_started_monotonic == 0
     assert backend._observation.cycle_finished_at == clock()
     if failure not in {"stop", "cancel", "shared", "cleanup", "raw_timeout"}:
         assert len(completed) == 2 and time.tick >= 124  # original120s minimum
