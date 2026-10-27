@@ -391,3 +391,172 @@ and committed evidence retained. No production/runtime/rollback/profile/70956
 directory cleaned. No permanent sampler remains. Existing development worktree
 reused; no new worktree or handoff artifact introduced. Final unified checklist
 remains authoritative for open requirements; do not infer all-stage completion.
+
+
+## CEO independent remediation re-review — 2026-10-27
+
+**Decision: PASS for the explicitly delivered A/B-source/C-design/D-evidence
+remediation scope. The prior P1/P2 SOURCE CHANGES_REQUESTED is resolved
+at source-review level. This is NOT V1.6 overall release closeout:
+`REVIEW_REQUIRED / SOURCE_FIXES_NOT_DEPLOYED`.**
+
+Review basis: originally reviewed commit
+`71a68f28d90ef96656cb78291c075361cb8112e2`;
+submitted reviewed head
+`f023495a89d098ddffc3674e4160be4dba4be678`;
+final application source
+`04075bc884c9c2927e677edcbddcb43419833aef`.
+GitHub branch and 6-commit fast-forward were independently confirmed.
+Commit sequence:
+`a2bc2f01acbde576caf378d625788cd3e31d0d24`,
+`b6187b5ffa8b279c0fc82c57e1e478a9472e2148`,
+`74f93dd6156d1c1a2fdb6a5d751c80382f7f089f`,
+`6f8dd048248eae8875fba7a036327242b0e92027`,
+`04075bc884c9c2927e677edcbddcb43419833aef`,
+`f023495a89d098ddffc3674e4160be4dba4be678`.
+Exact comparison from 04075 to f023 changed documentation and
+allowlisted audit evidence only, not application/test code.
+Review accessed GitHub code, test sources, task/report, design
+document and allowlisted JSON evidence; no independent Windows
+execution, EXE/hash recomputation, local DB inspection,
+browser interaction or production modification.
+
+### A — SOURCE_FIX_REVIEW_PASS (prior P1/P2)
+
+- Scoped `_run_independent_job` preserves the outer
+  `_cycle_id`, `_last_poll`, preparation-error cache and
+  pending pause when a due quotation/TP runs inside the
+  120-second closed-row wait. A new job resets only its
+  own preparation cache, including when wall-clock values
+  are identical. Business/session/recipient state is not
+  reverted; original durable authorization remains.
+- RuntimeObservation's nested module scope restores the
+  caller's cycle focus while preserving the ancestor
+  wait stage. Additive immutable per-module start/end/
+  elapsed fields are shown on the same five-page workbench.
+- Cancellation can propagate through CombinedCycle;
+  cleanup failure preserves original exception cause as
+  typed GLOBAL_STOP and permanently invalidates browser
+  resource admissions for that runtime. Existing module
+  ownership, stop, source identity and SMTP protections
+  have not been removed.
+- Examined `tests/launcher/test_v16_nested_context.py`:
+  32 parametrized real launcher closure → CombinedCycle →
+  durable V12/V13/TP engines, with synthetic external
+  ports and isolated ledgers. Tests verify parent
+  cycle/cache attribution, prior pending pause, real
+  cooldown lower bound, cleanup and cancellation,
+  bounded receipt counts, state/ledger integrity.
+  Frozen-old-method two-negative-controls and
+  targeted results are submitted. `test_v16_cycle_receipts`
+  exercises three real *empty* TP domain-cycle calls,
+  with synthetic time 900s apart, and a strict
+  sanitized-record allowlist.
+- Executor-reported final offline full:
+  2802 PASS / 1 SKIP (113.81s), targeted 115 PASS,
+  identical-wall nested 32 PASS, isolated UI card 1 PASS;
+  Ruff/diff PASS. Reviewer inspected code and tests,
+  not independently executed the Windows suite.
+  Earlier intermittent Mock Tk `tcl_findLibrary`
+  failure remains root-cause UNKNOWN even though the
+  later full rerun passed; existing symlink capability
+  skip remains disclosed. No reason from this evidence
+  to label either failure a production business defect
+  or silently call it fully fixed.
+
+### B — SOURCE_LOGGING_PASS, LIVE_TP_NOT_VERIFIED
+
+- Structured rotating logger now emits allowlisted
+  per-module begin/terminal phases, bounded cycle UUID,
+  module, elapsed and next-delay, including empty TP
+  cycles. `completed` is an execution-cycle receipt,
+  NOT purchase/Sheet-write/mail success. Logger and
+  sanitization source and invalid-field tests were
+  reviewed.
+- Those new receipts are NOT installed in the frozen
+  running `99dd22c` executable. Existing sanitized
+  logs to 11:23:59 +08 show five purchase/four
+  quotation distinct *tags* and classified refusals;
+  the prior P1 defect prevents treating these tags as
+  proven accurate individual cycles. Real independent
+  TP 900-second begin/end remains NOT_VERIFIED.
+  Previously exported 139 accepted SENT recipients
+  is historical-as-of evidence, not a fresh DB read
+  or actual final mailbox delivery.
+
+### C — DESIGN_PASS_ONLY; PAGE_CONCURRENCY_DEFERRED
+
+- `docs/V16_PAGE_CONCURRENCY_DESIGN.md` explicitly
+  identifies existing CDP context-wide first-page
+  event race, same-URL reuse, sync-object thread
+  ownership, shared site auth/pacing, source-key/order
+  lease, callbacks and immutable handoff requirements.
+  Bounded same-Chrome independent sync-client actors
+  is a reasonable incremental candidate; exact-target
+  ownership, verified source-key isolation, INSO/Google
+  exclusivity, bounded resource use and real overlapping
+  navigation timelines are still required.
+- No actual simultaneous browser-source queries or
+  Owner-authorized Chrome experiments were delivered.
+  Independent deadlines plus overlapping SMTP is
+  NOT equivalent to browser-query parallelism. Do not
+  promote C to implementation PASS or omit it
+  from future required scope.
+
+### D — FINITE_RESOURCE_EVIDENCE_ACCEPTED; SOAK OPEN
+
+- Native counters were taken from the older running
+  frozen V1.6 program without process control. Six
+  minutes / seven samples show app CPU
+  0.20361–0.24420% host, RSS138.45–141.42MiB,
+  private108.61–111.36MiB, nine native threads,
+  handles peaking5736 before falling1111.
+  Same-PID type snapshots confirm semaphores
+  5196→576 and total handles 5770→1131.
+  Thus real release was observed, not a proven
+  unbounded handle leak or a proven perpetual bound.
+- Initial Chrome-root attribution was ambiguous
+  owing to inherited flags, correctly excluded;
+  later 60s ancestry-resolved window identifies
+  roles, but does not prove active browser
+  workload/game frame-rate performance. Exited-child
+  CPU, GPU utilization, continuous multi-cycle
+  bounds and the original old-9f soak remain
+  explicitly out of the V1.6 stability certificate.
+- Executor reports retiring ~1.09GB of marked owned
+  temporary artifacts without deleting production,
+  rollback, profile, original protected soak or
+  current compatible ledger; GitHub review cannot
+  independently inspect those local deletions.
+
+### Exact boundaries and disposition
+
+**Accept this remediation delivery** and close prior
+P1/P2 **source-review** objections. Do not assert
+all V1.6 requirements are complete. The present
+production EXE/source remains
+`99dd22c43fd83852dc1d45d13c4cfed46b0ebe0d`
+as reported. No new EXE was built/installed and
+no live business, SMTP, Sheets, DB or browser work
+was performed in this remediation round.
+
+Outstanding after this PASS: install/verify reviewed
+source at a separately Owner-approved normal window;
+observe real empty TP cycle receipts and authentic
+900-second timing; natural eligible procurement and
+quotation Google write/readback results; current
+SMTP/UNKNOWN and restart idempotency; real new
+EXE GUI/menu/tray/exit/DPI/ledger consistency;
+true independent CDP page-query overlap; long-run
+V1.6 and gameplay impact. Do not manipulate
+identities/UNKNOWN to manufacture success.
+Keep historic SENT and rollback current compatible
+ledger: never restore a stale pre-effect DB.
+
+**CEO final classification for this turn:**
+`REMEDIATION_REVIEW_PASS`,
+`SOURCE_FIXES_NOT_DEPLOYED`,
+`V16_OVERALL_REVIEW_REQUIRED`,
+`FULL_PRODUCTION_E2E_NOT_VERIFIED`.
+This review only writes the task audit note; it
+does not deploy, run, stop or modify production.
