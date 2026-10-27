@@ -333,3 +333,66 @@ no duplicate production instance. Window length is measured, not guaranteed.
 Unique Owner action: authorize this normal stop/install/resume window. If existing
 UI cannot be normally exited by available tools, Owner uses tray Exit once.
 No production replacement, migration or backup was performed by preparation.
+
+## 2026-10-27 execution update — installation AUTHORIZED, awaiting normal exit
+
+Owner explicitly authorized the proposed single stop/backup/build/install/idle/
+resume-business window. The earlier "NOT AUTHORIZED yet" deployment boundary is
+**SUPERSEDED by that authorization**, not by source tests. Actual replacement has
+**NOT occurred**: last exact process check still shows74176(main)/84608(observer),
+installed EXE16E38F30...DC8B82 unchanged. Windows skill tool found/restored the one
+correct V1.6 window, but screenshot failed twice and accessibility exposes only
+unlabelled Tk panes. No guessed click, force-kill or alternate UI automation.
+Owner asked only to Safe Stop, allow drain, then tray Exit; authorization itself
+need not be requested again. Once clean exit is verified, continue the approved
+single installation workflow; do not ask approval at each normal check.
+
+Reviewed artifact must use **04075bc application / 1b19390298c6151e08d1e513a2a153ddcae2c1cf
+checkout**. No P1 rewrite. All43release-lock packages match in existing release
+Python, Tcl8.6.15 ready. Necessary43targetedPASS13.91s; prior reviewed2802PASS/1SKIP
+still applies to unchanged candidate. No replacement build has been made while
+normal exit is outstanding; no production backup/migration/state change performed.
+V1.4/V1.5 and existing backup assets are retained, current-ledger-only rollback
+strategy unchanged. Fresh integrity/recipient/immutable-command verification is
+still required after drain; old139SENT statistics are not current receipt proof.
+
+### Independent C prerequisite — exact native page identity (NOT installed)
+
+Separate source49677b7e658034f687fa0ed73c5bb5ff6bfadf3d, compatibility follow-up
+f49d78526f6c30cc57b710f466883792ff574e0d. Only production-source change is
+research/cdp_pages.py: random per-create marker filters foreign page events,
+then page-specific CDP Target.getTargetInfo must match the exact createTarget
+response before assigning ownership. Failure closes only that exact created
+native target. Never selects first same-site page or clears other actor pages.
+After proof, remove creation fragment using history.replaceState; preserve
+window.name ownership and exactabout:blank used by existing initial-navigation
+failure and last-tab guards. No Chrome launch, context/profile clone, adapter
+pricing/FX/month-window/outbox/transaction change, source allowlist expansion,
+new dependency, timer, daemon or production toggle.
+
+Initial full test exposed real compatibility issues in this **uninstalled** delta:
+creation fragment broke exact-blank guards; fixed in follow-up before delivery.
+Test fixture event/native-target protocol updated in tests/research/background_targets.py,
+test_cdp_pages.py and test_icnet.py. Final full **2806PASS/1SKIP110.02s**;
+additional positive ownership/blank tests **12PASS0.57s**; scoped Ruff/diff PASS.
+One additional test-only positive case was added after full run; no further
+application-source change. Native browser behavior is not yet tested.
+Global interpreter initially lacked tzdata/pypdf; reused existing release packages
+with command-local PYTHONPATH, without installing anything. First release-Python
+full also lacked pytest in a subprocess; corrected inherited environment, not
+product source. All earlier failed attempts remain classified in small evidence.
+
+**This closes only an offline ownership prerequisite.** Finite independent sync
+actors, cross-module order/resource arbitration, auth/pacing integration, actual
+web navigation overlap timeline and real-browser acceptance remain **NOT_IMPLEMENTED /
+NOT_VERIFIED**. No claims based on thread/callback/sleep overlap. This independent
+increment cannot be mixed into already approved04075bc installation. It requires
+its own CEO source review and later safe browser acceptance window.
+
+Existing unified checklist remains authoritative. Stage2 is now
+**AUTHORIZED_WAIT_NORMAL_EXIT / NOT_DEPLOYED**, stages3/5 not falsely passed;
+TP900s real receipts and currentSMTP/restart/GUI/long-run evidence wait for the
+reviewed deployment. Old9f soak remains closed and is not restarted. Small new
+summary docs/evidence/v16/remaining-preinstall.json; final/failed test stdout
+retained locally,391424417bytes of completed owned test scratch retired under
+original test-owner identity, no ACL changes or protected-directory cleanup.

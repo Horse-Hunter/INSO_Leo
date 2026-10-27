@@ -1,0 +1,78 @@
+{
+  "observed_at": "2026-10-27T06:42:59.577273+00:00",
+  "review": "ee49203dbae39e79eca1f1c90164f643ba2fe03c",
+  "reviewed_install_application": "04075bc884c9c2927e677edcbddcb43419833aef",
+  "install_freeze_head": "1b19390298c6151e08d1e513a2a153ddcae2c1cf",
+  "owner_install_window": "AUTHORIZED; waiting normal stop/tray exit, tool screenshot unavailable",
+  "installed_program_replaced": false,
+  "last_observed_main_pid": 74176,
+  "last_observed_observer_pid": 84608,
+  "installed_exe_sha256": "16E38F30E253041F7ED41E0447DEF744F6912D7B310F6DBDF616556CDBDC8B82",
+  "release_lock_packages": 43,
+  "release_lock_mismatches": [],
+  "release_tcl": "8.6.15",
+  "preinstall_targeted": {
+    "passed": 43,
+    "seconds": 13.91
+  },
+  "independent_page_ownership": {
+    "primary_source": "49677b7e658034f687fa0ed73c5bb5ff6bfadf3d",
+    "blank_compatibility_source": "f49d78526f6c30cc57b710f466883792ff574e0d",
+    "full_passed": 2806,
+    "full_skipped": 1,
+    "full_seconds": 110.02,
+    "additional_positive_targeted_passed": 12,
+    "additional_targeted_seconds": 0.57,
+    "scoped_ruff": "PASS",
+    "installed": false,
+    "actual_browser_overlap": "NOT_VERIFIED",
+    "actors_and_scheduler_integration": "NOT_IMPLEMENTED"
+  },
+  "failed_checks_preserved": [
+    "Initial global Python collection missing tzdata then pypdf; no dependency install, reused existing release site-packages through command-local PYTHONPATH.",
+    "First release-interpreter full run:2796PASS/10FAIL/1SKIP; one subprocess missing pytest, nine blank-URL compatibility failures.",
+    "After first correction:652PASS/8FAIL; owned-page marker still broke initial-navigation guard and synthetic window.name fallback. Final application fix restores exact blank for all returned pages while preserving window.name; final full passed."
+  ],
+  "cleanup": {
+    "kept_due_reparse": [],
+    "total_bytes": 391424417.0,
+    "initial_sandbox_attempt": "Access denied, no permission/ACL changes; final cleanup under same owner as tests",
+    "retired": [
+      {
+        "name": "v16-reviewed-preinstall-tests-fixed",
+        "bytes": 30486528.0
+      },
+      {
+        "name": "v16-page-owner-tests",
+        "bytes": 159188.0
+      },
+      {
+        "name": "v16-page-owner-tests-corrected",
+        "bytes": 159249.0
+      },
+      {
+        "name": "v16-target-proof-full-release-env",
+        "bytes": 174676344.0
+      },
+      {
+        "name": "v16-target-proof-blank-tests",
+        "bytes": 5634196.0
+      },
+      {
+        "name": "v16-target-proof-blank-fixed",
+        "bytes": 5634198.0
+      },
+      {
+        "name": "v16-target-proof-final-full",
+        "bytes": 174674714.0
+      }
+    ]
+  },
+  "qualifications": [
+    "No production config/SQLite/CDP/profile/mail/Sheets accessed or mutated. Process metadata and installed EXE hash only.",
+    "No new build or install has run; existing process continues. Owner normal exit required because tool cannot safely identify controls.",
+    "Exact-target tests are synthetic protocol tests, not actual browser or webpage overlap.",
+    "Independent page-source commits MUST NOT enter reviewed installation until their own review.",
+    "Current SMTP/TP/new business success/stability/DPI/gameplay remain unverified; historical evidence not promoted."
+  ]
+}

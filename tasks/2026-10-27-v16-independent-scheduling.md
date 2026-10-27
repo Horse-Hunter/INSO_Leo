@@ -590,3 +590,33 @@ unique creations and invalid owner. ScopedRuff PASS. This is a page factory
 prerequisite ONLY, not actor integration, same-order arbitration or true browser
 parallelism. No real browser access or overlap claim; full regression pending
 before source review. Keep separate from installed04075bc candidate.
+
+## Remaining-order checkpoint — Owner install window AUTHORIZED
+
+Earlier WAIT_OWNER_INSTALL_WINDOW is SUPERSEDED: Owner explicitly approved normal
+stop/fresh backup/reviewed-only build/install/idle/resume. Next prerequisite is
+normal old74176/84608 exit, not another permission request. Computer Use could
+restore correct window but screenshot failed twice and Tk controls unlabelled;
+Owner Safe Stop then tray Exit requested, no guessed input or force-kill. At last
+metadata check both remain, so no build/backup/DB/config/browser/install occurred.
+
+| Existing item | Current result |
+|---|---|
+| Reviewed04075bc candidate source freeze | PASS;1b19390 holds exact reviewed src |
+| Release environment / lock | PASS;43packages exact,Tcl8.6.15; no new dependency |
+| Necessary preinstall targeted |43PASS13.91s |
+| Repair install |AUTHORIZED_WAIT_NORMAL_EXIT / NOT_DEPLOYED |
+| C exact native target correlation |PASS offline / REVIEW_REQUIRED;49677b7 + f49d785 |
+| C blank keepalive/navigation compatibility |PASS offline; full2806PASS/1SKIP110.02s, additional12PASS0.57s |
+| C finite client actors / runtime order leases |NOT_IMPLEMENTED |
+| C real navigation/request overlap |NOT_VERIFIED; no real browser attached |
+| RealTP900s / new mail / restart / GUI / long-run |NOT_VERIFIED; no old receipt reused as new success |
+
+Independent page increment touches only canonicalresearch/cdp_pages.py plus3test
+files; no business rule or dependency change, MUST NOT enter reviewed04075bc build.
+Failed first full exposed exactblank contract conflicts, corrected before final
+full; fixture/environment problems retained, not called production failures.
+Full detail and single rollout/rollback plan remain in V16_RELEASE_REPORT.md.
+Completed own test dirs391424417bytes retired; production/rollback/oldsoak/Vault/
+Profile untouched. Existing one V1.6 checkout reused; no new worktree/handoff.
+Remaining whole V1.6 status staysREVIEW_REQUIRED, not DONE or production E2E PASS.
