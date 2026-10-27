@@ -288,6 +288,7 @@ class WorkflowRuntime:
         self._order_requests = {}
         self._order_waiters = {}
         self._order_active = {}
+        self._order_dispatched = set()
 
     def configure_order_leases(self, capacity):
         """Bound ephemeral admissions to the coordinator's finite worker budget.
@@ -328,7 +329,12 @@ class WorkflowRuntime:
                 if key in self._order_active and self._order_active[key].request_token == request_token:
                     raise RuntimeError("ORDER_ALREADY_CLAIMED")
                 return True
-            if len(self._order_requests) >= self._order_capacity:
+            # Bound distinct source slots separately from same-row FIFO waiters.
+            # At most one queued request per configured module per source slot.
+            # Duplicate-key waiters cannot consume another row's execution slot.
+            if key not in self._order_waiters and len(self._order_waiters) >= self._order_capacity:
+                return False
+            if len(self._order_waiters.get(key, ())) >= max(1, len(self._module_periods)):
                 return False
             self._order_requests[request_token] = key, threading.get_ident()
             self._order_waiters.setdefault(key, deque()).append(request_token)
@@ -356,21 +362,52 @@ class WorkflowRuntime:
                 return None
             if self._order_waiters[key][0] != request_token:
                 return None
+            if len(self._order_active) >= self._order_capacity:
+                return None
             lease = OrderResourceLease(*key, request_token, owner)
             self._order_active[key] = lease
             return lease
 
+    def _verify_order_lease(self, lease):
+        if not isinstance(lease, OrderResourceLease):
+            raise OrderResourceOwnershipError()
+        key = lease.worksheet, lease.row_position
+        if (self._order_active.get(key) is not lease
+                or lease._owner_thread != threading.get_ident()
+                or not self._order_waiters.get(key)
+                or self._order_waiters[key][0] != lease.request_token):
+            raise OrderResourceOwnershipError()
+        return key
+
+    def begin_order_dispatch(self, lease):
+        """Atomic Stop/dispatch boundary, called by the admitting scheduler.
+
+        True commits this request to the in-flight drain set. False means Stop
+        won; caller must cancel its reservation, never submit it to a worker.
+        A committed request must acknowledge terminal work before release.
+        """
+        with self._module_lock:
+            self._verify_order_lease(lease)
+            if lease.request_token in self._order_dispatched:
+                raise RuntimeError("ORDER_ALREADY_DISPATCHED")
+            if self._order_closed or self._module_resource_failed:
+                return False
+            self._order_dispatched.add(lease.request_token)
+            return True
+
+    def cancel_reserved_order_lease(self, lease):
+        """Scheduler-only rollback of a claim that never crossed dispatch."""
+        with self._module_lock:
+            self._verify_order_lease(lease)
+            if lease.request_token in self._order_dispatched:
+                raise RuntimeError("ORDER_STILL_RUNNING")
+            self.release_order_lease(lease)
+
     def release_order_lease(self, lease):
         """Only the admitting scheduler thread can release its exact live lease."""
         with self._module_lock:
-            if not isinstance(lease, OrderResourceLease):
-                raise OrderResourceOwnershipError()
-            key = lease.worksheet, lease.row_position
-            if (self._order_active.get(key) is not lease
-                    or lease._owner_thread != threading.get_ident()
-                    or not self._order_waiters.get(key)
-                    or self._order_waiters[key][0] != lease.request_token):
-                raise OrderResourceOwnershipError()
+            key = self._verify_order_lease(lease)
+            self._order_dispatched.discard(lease.request_token)
             del self._order_active[key]
             del self._order_requests[lease.request_token]
             self._order_waiters[key].popleft()

@@ -33,5 +33,15 @@
     "full_seconds": 112.7,
     "production_changed": false,
     "terminal_close": "same runtime cannot rearm via module or lease configuration"
+  },
+  "stage_b_dispatch": {
+    "targeted_pass": 69,
+    "targeted_seconds": 10.47,
+    "full_pass": 2868,
+    "full_skip": 1,
+    "full_seconds": 112.36,
+    "production_changed": false,
+    "integrated_actor_queue": "NOT_IMPLEMENTED",
+    "tp_timeliness": "NOT_FIXED"
   }
 }

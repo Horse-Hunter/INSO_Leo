@@ -189,3 +189,59 @@ def test_close_before_initial_configuration_is_terminal_too():
     value.configure_modules({'tp': 900})
     with pytest.raises(RuntimeError, match='ORDER_ADMISSIONS_CLOSED'):
         value.configure_order_leases(2)
+
+
+@pytest.mark.parametrize('stop_first', [True, False])
+def test_stop_at_claim_dispatch_boundary_cancels_reservation_or_drains_actual_work(stop_first):
+    value = runtime()
+    value.request_order_lease(SHEET, 1, 'one')
+    lease = value.try_claim_order_lease('one')
+    if stop_first:
+        # Stop may originate on GUI thread; only admitting owner releases.
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(value.close_order_admissions).result()
+        assert value.begin_order_dispatch(lease) is False
+        value.cancel_reserved_order_lease(lease)
+    else:
+        assert value.begin_order_dispatch(lease) is True
+        value.close_order_admissions()
+        with pytest.raises(RuntimeError, match='ORDER_STILL_RUNNING'):
+            value.cancel_reserved_order_lease(lease)
+        value.release_order_lease(lease)  # actual worker terminal acknowledged
+    assert value.order_resource_counts()['active'] == 0
+    with pytest.raises(OrderResourceOwnershipError):
+        value.begin_order_dispatch(lease)
+
+
+def test_dispatch_identity_and_duplicate_dispatch_are_strict():
+    value = runtime()
+    value.request_order_lease(SHEET, 1, 'one')
+    lease = value.try_claim_order_lease('one')
+    with pytest.raises(OrderResourceOwnershipError):
+        value.begin_order_dispatch(replace(lease))
+    with ThreadPoolExecutor(max_workers=1) as pool, pytest.raises(OrderResourceOwnershipError):
+        pool.submit(value.begin_order_dispatch, lease).result()
+    assert value.begin_order_dispatch(lease)
+    with pytest.raises(RuntimeError, match='ORDER_ALREADY_DISPATCHED'):
+        value.begin_order_dispatch(lease)
+    value.release_order_lease(lease)
+
+
+def test_busy_source_waiters_do_not_fill_other_sources_execution_budget():
+    value = runtime(2)
+    for token in ['inquiry', 'quotation', 'tp']:
+        assert value.request_order_lease(SHEET, 1, token)
+    assert not value.request_order_lease(SHEET, 1, 'extra')
+    assert value.request_order_lease(SHEET, 2, 'independent-tp')
+    first = value.try_claim_order_lease('inquiry')
+    independent = value.try_claim_order_lease('independent-tp')
+    assert first is not None and independent is not None
+    assert value.try_claim_order_lease('quotation') is None
+    value.release_order_lease(independent)
+    value.release_order_lease(first)
+    next_one = value.try_claim_order_lease('quotation')
+    assert next_one is not None
+    value.release_order_lease(next_one)
+    last = value.try_claim_order_lease('tp')
+    value.release_order_lease(last)
+    assert value.order_resource_counts()['waiting'] == 0

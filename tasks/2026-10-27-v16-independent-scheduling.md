@@ -1584,3 +1584,44 @@ configuration. Existing wrong-thread and copied-lease regressions retained.
 Initial Ruff cached invocation hit write permission; no-cache succeeded without
 ACL changes. Stage A source ready for independent Review. Stages B–F still open;
 this does not implement business actors or correct TP454.210s delay.
+
+
+## Stage B — Stop/dispatch boundary and bounded source fairness
+
+Extends the same WorkflowRuntime, not a worker pool or business execution path.
+Exact scheduler-owned lease has an atomic begin_order_dispatch transition under
+existing lock. Stop-before-transition returns False: scheduler must cancel its
+reserved lease without dispatch; Stop-after-transition drains acknowledged work.
+Only scheduler owner can cancel a never-dispatched reservation. Committed work
+cannot be canceled through reservation API; duplicate dispatch, copied/wrong-
+thread handles are rejected. Future coordinator must acknowledge submit failure,
+worker cancellation or completion before releasing; this API alone is not an
+integrated queue/worker proof. No in-flight business result is fabricated.
+
+Fairness delta: capacity bounds distinct original-source slots/active leases.
+Same-row FIFO waiters no longer consume independent-row slots. Each source
+queue is bounded by configured module count (at least1); overflow remains in
+existing domain work, not dropped. Total transient requests <= capacity times
+module count; active leases <= capacity. This is browser resource budgeting,
+not an order-processing limit. Still no fair module deadline dispatch integration
+or numeric TP timeliness claim; observed454.210s delay remains open.
+
+Tests69PASS10.47s targeted; final full2868PASS/1SKIP112.36s; Ruff/diff PASS.
+Exact Stop-before/after-dispatch, reserved rollback, active drain, duplicate,
+foreign/copy dispatch and independent-row progress under busy-row waiters added.
+No production DB/config/EXE/browser access by implementation or tests.
+
+### Google fault notices — existing production log only, no browser experiment
+
+Available sanitized logs2026-10-27 show retry exhaustion at09:57:23,14:56:49,
+16:03:20,17:04:34 (+08). Each group has5google-open-sheet failures classified
+QuotationInputBusy/GOOGLE_WEB_READ_BUSY. This proves failure before TSV download,
+not that Google cannot open or that every site operation is down. Existing code
+can raise busy for protected pooled entry, unsafe pending/dialog surface, or
+>=3owned operation pages. Logs lack branch-specific detail; which condition
+actually fired remains UNKNOWN. A manually openable Sheet does not clear these
+settlement/ownership guards. Existing notices deduplicate by cycle, so repeated
+failed cycles can generate new notices; these log observations are not fresh
+SMTP receipt/final delivery proof. No test SMTP, cleanup of protected pages or
+production notification change performed. Minimum follow-up is branch-specific
+sanitized diagnostics, retaining all existing protection and bounded retries.
