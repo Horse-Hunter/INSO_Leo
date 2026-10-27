@@ -341,3 +341,12 @@ adapters; broad async migration deferred. No unsupported parallel mode wired in,
 no callback timing presented as actual webpage overlap. Implementation and actual
 timeline remain open; safe acceptance needs a window that does not commandeer
 current live browser. The explicit no-production-browser constraint is honored.
+
+P1 unwind follow-up after stageC design: added rawTimeoutError and explicit
+V13Stopped cases (32 nested cases total). CombinedCycle must propagate borrowed
+cancellation rather than recategorizing it as an inquiry-local failure. Failed
+cleanup is now typed GLOBAL_STOP/INSO_OPERATION_NOT_CLOSED with original cause,
+so the outer coordinator cannot mask it; unsafe actor remains unclaimable.
+An existing outer pause is retained if another local pause arrives.115targeted
+PASS14.27s and final full2802PASS/1SKIP112.37s, Ruff PASS. These changes remain
+isolated source only; actual production stop/restart not performed.

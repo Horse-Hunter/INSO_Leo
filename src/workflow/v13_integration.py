@@ -341,6 +341,8 @@ class CombinedCycle:
                     if self.stop():
                         return
                     self.v12.poll_and_process(reader, worksheet, now=now)
+            except V13Stopped:
+                raise  # A borrowed quotation cancellation must unwind its caller.
             except (sqlite3.Error, V12DatabaseError):
                 raise V12Fault(
                     FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE"

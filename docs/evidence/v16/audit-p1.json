@@ -4,6 +4,7 @@
   "negative_control": {"original_execution_method": "exact frozen99dd22c AST", "expected_failures": 2, "reason": "outer cycle identity overwritten after quotation or TP"},
   "targeted": {"passed": 63, "seconds": 11.38, "real_nested_cases": 24},
   "full": {"passed": 2783, "skipped": 1, "seconds": 110.68},
+  "final_unwind_followup": {"real_nested_cases": 32, "targeted_passed": 115, "targeted_seconds": 14.27, "full_passed": 2802, "full_skipped": 1, "full_seconds": 112.37, "scope": "Explicit cancellation and raw timeout; typed shared cleanup fault retains original cause; existing outer pause wins over later local pause"},
   "ruff": "PASS",
   "diff_check": "PASS",
   "production_replaced": false,

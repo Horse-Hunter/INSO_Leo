@@ -1213,6 +1213,9 @@ class ProductionBackend(GuiBackend):
                 raise self._module_pause_requested
             self._module_failures.pop(module, None)
             outcome = "stopped" if self._stop.is_set() else "completed"
+        except V13Stopped:
+            outcome = "stopped"
+            raise
         except (sqlite3.Error, V12DatabaseError):
             raise
         except Exception as exc:
@@ -1247,9 +1250,9 @@ class ProductionBackend(GuiBackend):
         finally:
             try:
                 self._close_inso_order_tab()
-            except Exception:
+            except Exception as cleanup:
                 runtime.abort_module_resource()
-                raise  # preserve cleanup failure; no parent resource may resume
+                raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_OPERATION_NOT_CLOSED") from cleanup
             finally:
                 if not runtime.module_resource_failed:
                     runtime.complete_module(module, retry_after=retry, pause=paused)
@@ -1275,7 +1278,8 @@ class ProductionBackend(GuiBackend):
 
     def _pause_v12(self, fault):
         if self._module_runtime is not None:
-            self._module_pause_requested = fault
+            if self._module_pause_requested is None:
+                self._module_pause_requested = fault
             return  # independent loop classifies and isolates this exact module
         self._observation.pause("inquiry", "采购暂停；报价跟进沿用原有独立策略")
         if _website_failure(fault) is not None and not self._defer_website_poll(

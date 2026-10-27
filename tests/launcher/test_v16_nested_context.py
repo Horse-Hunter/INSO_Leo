@@ -16,6 +16,7 @@ from src.workflow.v12_contracts import DeliveryOutcome
 from src.workflow.v12_faults import FaultScope, V12Fault
 from src.workflow.v12_smtp_transport import QQSMTPTransport
 from src.workflow.v13_integration import CombinedCycle
+from src.workflow.v13_quotation import V13Stopped
 from tests.workflow.test_rfq006_integration import fixture as quote_fixture
 from tests.workflow.test_tp_research import build as tp_fixture
 from tests.workflow.test_v12_flow import NOW, SHEET, FakeSheetsReader, _make_flow
@@ -23,7 +24,7 @@ from tests.workflow.test_v13_quotation import WS
 
 
 @pytest.mark.parametrize("inner", ["quotation", "tp"])
-@pytest.mark.parametrize("failure", [None, "timeout", "pause", "stop", "shared", "cleanup"])
+@pytest.mark.parametrize("failure", [None, "timeout", "raw_timeout", "pause", "stop", "cancel", "shared", "cleanup"])
 @pytest.mark.parametrize("outer_pause", [False, True])
 def test_real_nested_closure_restores_context_and_durable_guards(
         tmp_path, monkeypatch, caplog, inner, failure, outer_pause):
@@ -88,18 +89,28 @@ def test_real_nested_closure_restores_context_and_durable_guards(
         backend._research_acquire_failure = (backend._last_poll, "inner-cache")
         if failure == "timeout":
             raise V12Fault(FaultScope.GLOBAL_STOP, "IC_NET_UNAVAILABLE")
+        if failure == "raw_timeout":
+            raise TimeoutError("synthetic unclassified read timeout")
         if failure == "pause":
             raise V12Fault(FaultScope.V12_PAUSE, "INNER_PAUSE")
         if failure == "shared":
             raise sqlite3.DatabaseError("synthetic integrity fault")
         if failure == "stop":
             backend._stop.set()
+        if failure == "cancel":
+            backend._stop.set()
+            raise V13Stopped("synthetic cancellation")
     # Keep both real domain engines. Only their external data ports are synthetic.
     original_read = quote_service.cycle._quotes.read
     quote_service.cycle._quotes.read = lambda *a, **k: (inner_port() or original_read(*a, **k))
     tp.research.hook = inner_port
+    def pause(fault):
+        previous = backend._module_pause_requested
+        backend._pause_v12(fault)
+        if previous is not None:
+            assert backend._module_pause_requested is previous
     backend._combined = CombinedCycle(flow, lambda _: quote_service.run(WS),
-        on_pause=backend._pause_v12, stop_requested=backend._stop.is_set)
+        on_pause=pause, stop_requested=backend._stop.is_set)
     for method in ("_check_site_recovery", "_refresh_dashboard_counts", "_cache_workbench",
                    "_notify", "_idle_login_tick", "_refresh"):
         monkeypatch.setattr(backend, method, lambda *_a, **_k: None)
@@ -109,11 +120,16 @@ def test_real_nested_closure_restores_context_and_durable_guards(
     monkeypatch.setattr(backend, "_close_inso_order_tab", close)
     monkeypatch.setattr(backend._stop, "wait", lambda seconds: (setattr(time, "tick", time.tick+seconds) or False))
     monkeypatch.setattr(backend, "_wait_between_polls", lambda _: True)
-    expected = failure in {"shared", "cleanup"}
+    expected = failure in {"shared", "cleanup", "cancel"} or (failure == "raw_timeout" and inner == "quotation")
     if expected:
-        with pytest.raises((sqlite3.DatabaseError, RuntimeError)):
+        with pytest.raises((sqlite3.DatabaseError, RuntimeError)) as raised:
             backend._run_independent_poll(runtime, {"spreadsheet_id": "synthetic"}, None,
                 SimpleNamespace(poll_scope=nullcontext), reader, (SHEET,), None)
+        if failure == "cleanup":
+            assert raised.value.reason == "INSO_OPERATION_NOT_CLOSED"
+            assert str(raised.value.__cause__) == "synthetic cleanup failure"
+        if failure == "cancel":
+            assert isinstance(raised.value, V13Stopped)
     else:
         backend._run_independent_poll(runtime, {"spreadsheet_id": "synthetic"}, None,
             SimpleNamespace(poll_scope=nullcontext), reader, (SHEET,), None)
@@ -127,7 +143,7 @@ def test_real_nested_closure_restores_context_and_durable_guards(
     assert cards["inquiry"].cycle_finished_at == clock()
     assert backend._observation.cycle_started_at == NOW
     assert backend._observation.cycle_finished_at == clock()
-    if failure not in {"stop", "shared", "cleanup"}:
+    if failure not in {"stop", "cancel", "shared", "cleanup", "raw_timeout"}:
         assert len(completed) == 2 and time.tick >= 124  # original120s minimum
         wait = [t for t in backend._observation.timings if t.module_id == "inquiry"
                 and t.stage == "订单间安全等待"]
@@ -138,7 +154,7 @@ def test_real_nested_closure_restores_context_and_durable_guards(
     assert logs and all(r.cycle_id == outer_identity[0][0] for r in logs)
     receipts = [r for r in caplog.records if getattr(r, "scheduled_module", None) == inner]
     assert [r.cycle_phase for r in receipts] == ["begin", "completed" if failure is None
-        else "stopped" if failure == "stop" else "deferred" if failure == "timeout"
+        else "stopped" if failure in {"stop", "cancel"} else "deferred" if failure == "timeout"
         else "paused" if failure == "pause" else "failed"]
     assert all(r.cycle_id == entered[0][0] for r in receipts)
     assert not any(running for _, running, _ in runtime.module_plans().values())
