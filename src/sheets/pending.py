@@ -157,6 +157,12 @@ def query_records_by_status(
     return tuple(pending)
 
 
+def identify_worksheet_row(worksheet: WorksheetIdentity, row: WorksheetRow) -> SheetRecordIdentity:
+    """Canonical observed identity, including historical/non-pending statuses."""
+    return SheetRecordIdentity(worksheet, row.row_position,
+                               _source_snapshot(row, worksheet_schema(worksheet.worksheet)))
+
+
 def _customer_name(row: WorksheetRow, schema: WorksheetSchema) -> str | None:
     if schema.fixed_customer_name is not None:
         return schema.fixed_customer_name

@@ -928,3 +928,54 @@ Owner asked to complete BOTH supplemental remediation and isolated continuation;
 prior E work is preserved in local codex/v1-6-e-continuation-isolated, not mixed
 into this scoped fix. Continuation resumes in separate increments. Final combined
 report goes to Owner for forwarding; never sent directly to CEO.
+
+
+## Stage E execution — E-0 verified / E-2 first dependency increment
+
+Remote4b6018b (CEO latest scoped PASS) fast-forwarded; its src tree equals
+18bde855d3323b1a3aa1585ff0e983cdc28cea6a and prior2951/1SKIP evidence. No A/B/C
+rewrite or production reinstall. Owner now requires ALL reports via Owner only;
+Executor must not send reports/messages to CEO tools. Current phase authorizes
+isolated source/tests only, not production browser/runtime/config/DB/SMTP.
+
+Reuse: extend existing Runtime OrderResourceLease/RLock/FIFO, not a parallel
+lock/ledger. New BusinessContinuationLease retains that SAME original-source
+resource across sequential reads, Owner FX/source check and effects. Query
+terminal clears query dispatch metadata but DOES NOT release business lease.
+Exact scheduler owner + immutable matching BusinessTerminalReceipt required
+for release. Active query/effect blocks release; UNKNOWN latches global abort
+and holds lease for canonical durable reconciliation, never inferred safe by
+Stop/timeout. Source-row lease still grants no write/purchase/mail authority.
+New query transport IDs are runtime-nonce+sequence, preserving actual domain IDs
+and rejecting old query terminals without an unbounded tombstone history. Pending
+FIFO identity is retained; Stop cancels undispatched pending requests. Optional
+D single-read compatibility remains; E business continuation uses explicit bound
+read port and cannot use raw release to bypass full-business acknowledgment.
+
+89PASS0.94s focused leases/actors/continuation; Ruff/diffPASS. Tests cover three
+modules same row, independent row, query→effect gap, Stop/drain, unknown effect,
+exact/foreign/copy release and old completion. No new full-regression claim yet;
+full after integration. E1 real module bindings, E3 recovery, E4 GUI/scheduler and
+E5 comprehensive regression still OPEN. This E2 resource contract alone is not
+business success, fresh domain verification or real-browser/TP timing proof.
+
+## Stage E1 increment — canonical Research owner continuation
+
+Depends on c0ae6a4 (E2 retained-source transaction resource). ResearchService
+synchronous ordinary/TP entrypoints now drive the SAME one-source continuation;
+canonical adapters, collectors, calendar selectors, ranking, Excel and FX are
+reused. Owner accepts frozen actor results one source at a time and owns final
+aggregation. TP retains one TpFx snapshot. Ordinary foreign-currency sources
+remain Owner-side until raw ordinary projection is safely split; initial actor
+eligibility ordinary IC/HQ, TP IC/Findchips/HQ/LCSC, never BOM/INSO on workers.
+This is a Research public seam, NOT yet three domain modules attached to the
+production scheduler or proof of timely TP / actual website overlap.
+
+197PASS8.51s Research/TP/domain regression, including mixed actor/Owner result
+equivalence, six-source order, Owner callbacks, one FX, no TP ordinary Excel,
+wrong source/thread and incomplete/double finish. First run found3 regressions
+in existing collector monkeypatch injection; dynamic canonical collect_tp call
+restored and all passed. One earlier command referenced a nonexistent test file
+and ran nothing. No tests weakened. Production/browser/config/DB untouched.
+Status E1 PARTIAL, E2 resource contract offline PASS, E3/E4/E5 integrated OPEN.
+All delivery reports go ONLY to Owner for forwarding, never sent to CEO tools.

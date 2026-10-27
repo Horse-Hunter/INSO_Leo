@@ -164,6 +164,45 @@ class MarketReadActors:
         if threading.get_ident() != self._owner:
             raise OrderResourceOwnershipError()
 
+    @property
+    def admission(self):
+        return self._admission
+
+    @property
+    def stopped(self):
+        return self._stop.is_set()
+
+    def require_owner_resources(self, runtime):
+        self._check_owner()
+        if runtime is not self._runtime or not self._started:
+            raise OrderResourceOwnershipError()
+        try:
+            self._admission.require_open()
+        except PageTargetCleanupError as error:
+            runtime.fail_market_reads(_fault(error, self._admission))
+            self.request_stop()
+            raise
+        if runtime.module_resource_failed:
+            raise OrderResourceOwnershipError()
+        if self._stop.is_set():
+            raise RuntimeError("MARKET_ACTORS_STOPPED")
+
+    def invalidate_owner_result(self):
+        self._check_owner()
+        error = PageTargetOwnershipError(())
+        self._admission.invalidate(error)
+        self._runtime.fail_market_reads(_fault(error, self._admission))
+        self.request_stop()
+
+    def site_deferred(self, source):
+        self._check_owner()
+        return source in self._blocked_sources
+
+    def owner_source_available(self, source):
+        """Owner-side canonical read cannot race a worker's same-site query."""
+        self._check_owner()
+        return source not in {request.query.source for request, _ in self._slots.values()}
+
     def start(self):
         self._check_owner()
         if self._started or self._stop.is_set():

@@ -5,7 +5,6 @@ from decimal import Decimal
 
 from .fx import UsdRmbQuote
 from .source_contracts import (
-    PRICE_SOURCES,
     EvidenceField,
     ResearchSource,
     SourceEvidence,
@@ -185,47 +184,14 @@ def collect_tp(adapter, source, mpn, quantity, now, fx):
 
 
 def execute_tp(service, task_id, order, now):
-    fx = TpFx(service._fx_provider, now)
-    target_rmb = fx.convert(order.target_price, order.currency)
-    def call(source, operation):
-        return (service._source_query(task_id, source, operation)
-                if service._source_query else operation())
-    icnet = call(ResearchSource.IC_NET, lambda: service._icnet.search(
-        order.mpn, order.brand, order.quantity))
-    native = icnet.source_result
-    candidate = native.price_candidate
-    quotes = () if candidate is None else (TpQuote(TpOffer(ResearchSource.IC_NET,
-        candidate.matched_mpn, candidate.raw_price, candidate.raw_currency, None, True),
-        fx.convert(candidate.raw_price, candidate.raw_currency)),)
-    results = [TpSourceResult(ResearchSource.IC_NET, native.outcome, native.evidence, quotes)]
-    if service._source_observer:
-        service._source_observer(task_id, native)
-    for source, adapter in zip(PRICE_SOURCES[1:], service._price_sources, strict=True):
-        def operation(adapter=adapter, source=source):
-            try:
-                return collect_tp(adapter, source, order.mpn, order.quantity, now, fx)
-            except Exception as exc:
-                from .lcsc import LcscNoMatchingProduct
-                if source is ResearchSource.LCSC and isinstance(exc, LcscNoMatchingProduct):
-                    return TpSourceResult(source, SourceOutcome.NO_STRICT_MPN_MATCH,
-                        SourceEvidence(source, order.mpn, None, SourceOutcome.NO_STRICT_MPN_MATCH, now))
-                # Reuse typed site reasons; never include exception/page text.
-                code = getattr(exc, "code", None)
-                if not isinstance(code, str):
-                    if isinstance(exc, ValueError) and str(exc) == "FX_QUOTE_UNAVAILABLE":
-                        code = "FX_QUOTE_UNAVAILABLE"
-                    else:
-                        raise
-                return TpSourceResult(source, SourceOutcome.SOURCE_UNAVAILABLE,
-                    SourceEvidence(source, order.mpn, None, SourceOutcome.SOURCE_UNAVAILABLE,
-                        now, fields=(EvidenceField("failure_code", code),)))
-        def search(source=source, operation=operation):
-            return call(source, operation)
-        result = (service._inso_query(task_id, search)
-                  if source is ResearchSource.INSO and service._inso_query else search())
-        results.append(result)
-        if service._source_observer:
-            service._source_observer(task_id, result)
+    continuation = service.begin_tp(task_id, order, now=now)
+    while not continuation.ready:
+        continuation.accept_owner(continuation.read_owner())
+    return continuation.finish()
+
+
+def finish_tp(order, icnet, results, *, target_rmb, fx):
+    """Same canonical ranking, called once by the original task owner."""
     normal = [q for result in results for q in result.quotes if q.offer.stocked]
     fallback_pool = [q for result in results for q in result.quotes if not q.offer.stocked]
     fallback = bool(not normal and fallback_pool
