@@ -23,5 +23,15 @@
     "observed_quotation_start_local": "2026-10-27T17:04:01+08:00",
     "observed_tp_start_local": "2026-10-27T17:04:34+08:00",
     "observed_tp_end_local": "2026-10-27T17:04:51+08:00"
+  },
+  "stage_a_lifecycle": {
+    "review_basis": "4c40ba4cac9de570fa869a43110257a9c815a825",
+    "targeted_pass": 65,
+    "targeted_seconds": 11.15,
+    "full_pass": 2864,
+    "full_skip": 1,
+    "full_seconds": 112.7,
+    "production_changed": false,
+    "terminal_close": "same runtime cannot rearm via module or lease configuration"
   }
 }

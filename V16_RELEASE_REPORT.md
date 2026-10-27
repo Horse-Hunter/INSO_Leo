@@ -610,3 +610,24 @@ NOT integrated module actor/real browser business concurrency acceptance.
 
 No replacement, browser experiment, production DB/config mutation or test mail
 performed by this resource component. Overall REVIEW_REQUIRED persists.
+
+
+## Stage A — terminal lease lifecycle correction (2026-10-27)
+
+CEO4c40ba4 / architecture3d77a67 followed. Minimum delta in existing
+WorkflowRuntime: configure_modules refuses a faulted runtime and never resets
+its fatal latch. Order admission close is terminal even before first configure;
+configure_order_leases cannot reopen it after Stop/drain. An explicit new
+WorkflowRuntime is required for a new safe lifecycle; construction alone does
+not verify a browser or grant business authority. Exact active lease release
+still works after close/abort; pending entries are canceled. Existing same-row
+FIFO, capacity and foreign/forged/double-release protections remain unchanged.
+No new scheduler/resource manager/ledger, no deployment or production changes.
+
+Tests:65PASS11.15s targeted; full2864PASS/1SKIP112.70s; Ruff --no-cache and
+git diff checks PASS. Added fatal abort/drain/reconfigure refusal, ordinary
+Stop/drain implicit rearm refusal, fresh runtime separation and close-before-
+configuration. Existing wrong-thread and copied-lease regressions retained.
+Initial Ruff cached invocation hit write permission; no-cache succeeded without
+ACL changes. Stage A source ready for independent Review. Stages B–F still open;
+this does not implement business actors or correct TP454.210s delay.

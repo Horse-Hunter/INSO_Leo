@@ -284,6 +284,7 @@ class WorkflowRuntime:
         self._module_resource_failed = False
         self._order_capacity = 0
         self._order_closed = True
+        self._order_terminal = False
         self._order_requests = {}
         self._order_waiters = {}
         self._order_active = {}
@@ -301,6 +302,8 @@ class WorkflowRuntime:
                 raise RuntimeError("ORDER_RESOURCES_RUNNING")
             if self._module_resource_failed:
                 raise RuntimeError("MODULE_RESOURCE_OWNERSHIP_LOST")
+            if self._order_terminal:
+                raise RuntimeError("ORDER_ADMISSIONS_CLOSED")
             self._order_capacity, self._order_closed = capacity, False
 
     def request_order_lease(self, worksheet, row_position, request_token):
@@ -394,6 +397,7 @@ class WorkflowRuntime:
         """Cancel only undispatched resource requests; active work must drain."""
         with self._module_lock:
             self._order_closed = True
+            self._order_terminal = True
             active = {lease.request_token for lease in self._order_active.values()}
             for token in tuple(self._order_requests):
                 if token not in active:
@@ -420,6 +424,8 @@ class WorkflowRuntime:
                or not 0 < v < float("inf") for v in intervals.values()):
             raise ValueError("INVALID_MODULE_INTERVALS")
         with self._module_lock:
+            if self._module_resource_failed:
+                raise RuntimeError("MODULE_RESOURCE_OWNERSHIP_LOST")
             if self._module_running or self._order_requests:
                 raise RuntimeError("MODULES_RUNNING")
             self._module_timer = timer
@@ -427,7 +433,6 @@ class WorkflowRuntime:
             self._module_due = dict.fromkeys(intervals, timer())
             self._module_paused.clear()
             self._module_resource = self._module_owner = None
-            self._module_resource_failed = False
 
     def claim_due_module(self, *, exclude=()):
         with self._module_lock:

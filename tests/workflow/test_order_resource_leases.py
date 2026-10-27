@@ -154,3 +154,38 @@ def test_reconfiguration_cannot_steal_live_resource_claims():
     with pytest.raises(OrderResourceOwnershipError):
         value.request_order_lease(SHEET,44,'one')
     assert value.order_resource_counts()['waiting'] == 1
+
+
+@pytest.mark.parametrize('fatal', [False, True])
+def test_terminal_close_cannot_be_rearmed_by_configuration_after_drain(fatal):
+    value = runtime()
+    value.request_order_lease(SHEET, 1, 'running')
+    active = value.try_claim_order_lease('running')
+    value.request_order_lease(SHEET, 1, 'waiting')
+    if fatal:
+        assert value.claim_due_module() == 'inquiry'
+        value.abort_module_resource()
+    else:
+        value.close_order_admissions()
+    assert value.order_resource_counts()['waiting'] == 0
+    value.release_order_lease(active)
+    if fatal:
+        with pytest.raises(RuntimeError, match='MODULE_RESOURCE_OWNERSHIP_LOST'):
+            value.configure_modules({'inquiry': 900})
+    else:
+        value.configure_modules({'inquiry': 900})
+    with pytest.raises(RuntimeError, match='MODULE_RESOURCE_OWNERSHIP_LOST|ORDER_ADMISSIONS_CLOSED'):
+        value.configure_order_leases(3)
+    with pytest.raises(RuntimeError, match='MODULE_RESOURCE_OWNERSHIP_LOST|ORDER_ADMISSIONS_CLOSED'):
+        value.request_order_lease(SHEET, 2, 'new')
+    assert value.order_resource_counts()['active'] == 0
+    fresh = runtime()
+    assert fresh.request_order_lease(SHEET, 2, 'explicit-fresh-runtime')
+
+
+def test_close_before_initial_configuration_is_terminal_too():
+    value = WorkflowRuntime(None, None, ())
+    value.close_order_admissions()
+    value.configure_modules({'tp': 900})
+    with pytest.raises(RuntimeError, match='ORDER_ADMISSIONS_CLOSED'):
+        value.configure_order_leases(2)
