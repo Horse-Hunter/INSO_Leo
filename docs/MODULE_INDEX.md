@@ -90,3 +90,62 @@ owns file input/start upload/readback; launcher composes it after field checks,
 before local processed receipt. No Save/review-submit/deployment is authorized.
 Earlier no-PDF statements describe historical phases, superseded for this button.
 Boundary extension awaits CEO independent review under RFQ-013.
+
+
+## V1.6 proposed module actor Public Contract — CEO boundary decision (2026-10-27)
+
+**Status: CONDITIONALLY APPROVED BOUNDARY ONLY / NOT IMPLEMENTED / NOT DEPLOYED.**
+This records the CEO architecture decision for the existing module
+responsibilities. It is NOT a permission to run concurrent business,
+a new canonical scheduler, or a replacement for runtime safety review.
+See `tasks/2026-10-27-v16-independent-scheduling.md` for the exact
+reviewed commit, findings and blocked order-lease abort/rearm sequence.
+
+**Trigger:** before changing a cross-module Public Contract to execute
+market Research asynchronously or deploying independent market actors.
+
+**Canonical owners and sequence:**
+1. `workflow` owns one `WorkflowRuntime` bounded, fairly admitted
+   scheduler and the original-source spreadsheet/sheet/physical-row FIFO
+   *resource* lease. Correct its abort/rearm lifecycle first. Existing
+   V12/TP/SMTP durable ledgers and fresh business identity/authorization
+   checks remain the only authorities for external effects.
+2. `launcher` owns assembly, runtime faults, cancellation and client
+   lifecycle. It dispatches typed immutable module/cycle/source-key
+   requests and receives bounded immutable result/progress/fault/terminal
+   messages. It must not synchronously wait for the whole Research batch
+   on its sole browser-owner scheduler thread. Error delivery from
+   workers must globally close affected admissions and release active
+   leases by their exact admitting scheduler owner after acknowledged
+   terminal work.
+3. `research` owns existing six source adapters, read-only source
+   acquisition and canonical parser/aggregation/FX behavior. Two
+   bounded fixed-thread market-read sync clients may use the same
+   existing9222 Chrome and their own Playwright/target resources.
+   No Backend-bound closure, mutable browser/Playwright object,
+   credentials or existing session instance crosses worker threads.
+   Client errors/unknown ownership cannot be softened to a successful
+   source result. Source-site login and pacing must be serialized
+   under the canonical site contract.
+4. Existing original browser owner exclusively performs protected
+   INSO/Google interactions and ALL external writes. It revalidates
+   fresh row/snapshot/business permission and durable SENT/UNKNOWN
+   before any effect; a resource lease alone is never authority.
+   `gui` receives bounded immutable DTOs only.
+5. STOP closes new admissions, cancels undispatched requests and
+   safely drains/reconciles active leases. Preserve manual review
+   pages, unknown external outcomes and120-second row cooldown.
+   No new Chrome/Profile, daemon, second Research adapter, separate
+   persistent queue/ledger, unbounded executor or invented order ID.
+
+**Completion evidence / enforcement:** Before changing this status,
+require offline contract/fault tests for cross-module same-row
+exclusion, wrong-thread releases, abort/rearm, stop-before-dispatch,
+fair admission and site auth; plus an Owner-authorized actual browser
+window proving distinct parsed-source queries overlap while same
+source orders serialize. Prove TP's previous454.210-second lateness
+is addressed under contention and all resources remain bounded.
+Independent CEO source Review and separate Owner production-install
+authorization are required for the new executable. Publish evidence
+in existing canonical V1.6 task/report; retire only owned temporary
+test resources, never production/rollback/protected pages.
