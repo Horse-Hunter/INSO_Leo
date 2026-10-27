@@ -2455,3 +2455,14 @@ exact/foreign/copy release and old completion. No new full-regression claim yet;
 full after integration. E1 real module bindings, E3 recovery, E4 GUI/scheduler and
 E5 comprehensive regression still OPEN. This E2 resource contract alone is not
 business success, fresh domain verification or real-browser/TP timing proof.
+
+### E1 canonical Research continuation — executor increment
+
+Reuse-first: extract existing ordinary completion and TP ranking without a
+second parser/aggregation policy. Both old synchronous paths drive the same
+owner continuation. Actor payload consumption preserves source order, original
+domain task ID, Owner observation/protected INSO context and TP FX snapshot.
+197PASS8.51s on tests/research/{test_continuation,test_aggregation_service,
+test_six_price_sources,test_tp}.py and tests/workflow/test_tp_research.py.
+E1 PARTIAL: domain claim/finalize integration follows; scheduler/live timing
+not accepted. E3/E4/E5 still OPEN. No production operations; Owner-only reports.

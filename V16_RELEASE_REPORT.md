@@ -932,3 +932,24 @@ exact/foreign/copy release and old completion. No new full-regression claim yet;
 full after integration. E1 real module bindings, E3 recovery, E4 GUI/scheduler and
 E5 comprehensive regression still OPEN. This E2 resource contract alone is not
 business success, fresh domain verification or real-browser/TP timing proof.
+
+## Stage E1 increment — canonical Research owner continuation
+
+Depends on c0ae6a4 (E2 retained-source transaction resource). ResearchService
+synchronous ordinary/TP entrypoints now drive the SAME one-source continuation;
+canonical adapters, collectors, calendar selectors, ranking, Excel and FX are
+reused. Owner accepts frozen actor results one source at a time and owns final
+aggregation. TP retains one TpFx snapshot. Ordinary foreign-currency sources
+remain Owner-side until raw ordinary projection is safely split; initial actor
+eligibility ordinary IC/HQ, TP IC/Findchips/HQ/LCSC, never BOM/INSO on workers.
+This is a Research public seam, NOT yet three domain modules attached to the
+production scheduler or proof of timely TP / actual website overlap.
+
+197PASS8.51s Research/TP/domain regression, including mixed actor/Owner result
+equivalence, six-source order, Owner callbacks, one FX, no TP ordinary Excel,
+wrong source/thread and incomplete/double finish. First run found3 regressions
+in existing collector monkeypatch injection; dynamic canonical collect_tp call
+restored and all passed. One earlier command referenced a nonexistent test file
+and ran nothing. No tests weakened. Production/browser/config/DB untouched.
+Status E1 PARTIAL, E2 resource contract offline PASS, E3/E4/E5 integrated OPEN.
+All delivery reports go ONLY to Owner for forwarding, never sent to CEO tools.
