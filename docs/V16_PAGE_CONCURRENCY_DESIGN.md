@@ -164,3 +164,26 @@ Required final proof: actual parsed-source request overlap with independent
 module cycles, same-order exclusion, bounded pages, auth faults, stop/restart,
 manual actions and measured TP delay. Current resource tests prove none of those
 integrated properties. No new production installation is proposed at this stage.
+
+
+## Stage C — immutable Public Contract, isolated and uninstalled
+
+Implements CEO3d77a67 approved boundaries without enabling business actors.
+Research owns MarketReadQuery/Result: five market sources only (INSO excluded),
+ordinary canonical SourceResult/IcNetResult or TP raw TpOffer tuple; IC.net TP
+context retains stock/brand. TP raw handoff deliberately avoids independent FX
+snapshots per worker; existing owner-side TpFx/ranking remains canonical.
+Workflow owns version1 task identity using existing SheetRecordIdentity and
+real domain task ID, module/cycle/request IDs, monotonic due/admission times,
+immutable completion/cancel/fault and bounded enum progress. No fabricated
+inquiry ID, new business ledger, callback, browser or session in payload.
+
+Exact canonical deeply immutable payload validation rejects mutable evidence,
+noncanonical objects, wrong source/mode, invalid identity/version, NaN times,
+protected INSO, naive reference date and free-text faults. Resource fault reasons
+cannot use non-global scope. Default repr excludes source snapshot/MPN/result.
+These are in-memory ports, not external logs/export or authority for effects.
+40PASS0.57s (message+lease tests), scoped Ruff/diff PASS. Prior A/B full remains
+2868PASS1SKIP112.36s; no new full claim for this separate additive port commit.
+Actor lifecycle, actual source handoff and fair module continuations still not
+integrated; real browser proof and TP lateness remain open. Production unchanged.
