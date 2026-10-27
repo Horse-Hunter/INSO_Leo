@@ -107,3 +107,159 @@ test trees, production compatibility copy and temporary real research workbook
 retired. Protected original70956/testtree, live runtime, rollback/config/vault/DB
 backups and V1.5 report tree retained; no new handoff or duplicate V1.6 worktree.
 CEO final audit next. Source frozen at99dd22c; subsequent commits evidence only.
+
+
+## CEO independent final audit — 2026-10-27
+
+**Verdict: CHANGES_REQUESTED (source-level nested execution context);
+PRODUCTION_INSTALLED_RUNNING is executor-reported, not full production
+E2E PASS. Audit-only: no live process, configuration, database, browser
+or business operation was changed.**
+
+Review anchor: baseline
+`669fe6ada3a450eaef5f74532a371d6fb55ffd01`;
+application code
+`99dd22c43fd83852dc1d45d13c4cfed46b0ebe0d`;
+evidence head
+`df6646c7542bea98f2aaeb8218e9254c7873a9c2`.
+The exact GitHub comparison consists of one application/test/
+packaging commit followed by one documentation/evidence commit.
+Reviewed changed application source (`src/workflow/service.py`,
+`src/launcher/backend.py`, `src/launcher/workbench_snapshot.py`,
+`src/workflow/v12_notifications.py`,
+`src/workflow/v13_integration.py`), published synthetic tests,
+the release report, actual-production ledger/log summaries,
+installation and native-resource counters. The review did not
+independently execute Windows EXE, inspect local sensitive
+SQLite bytes or remotely control the live instance.
+
+### Accepted findings / retained guardrails
+
+- The added WorkflowRuntime module clocks are monotonic,
+  independently configured and claim/complete one shared
+  browser resource from a fixed owner thread. This provides
+  independent *scheduling*, NOT simultaneous browser/CDP
+  queries. Existing outbox worker delivery can overlap the
+  browser actor. No new browser service, persistent business
+  state system or concurrent Playwright sync object use
+  was introduced by this change.
+- Existing durable purchase/quotation/TP identity checks,
+  SMTP recipient claim semantics, SENT/UNKNOWN protection
+  and normal rollback strategy remain present. Original
+  cooldown does not get shortened by the yielded work;
+  nested work may extend elapsed cooldown. Existing
+  test report: 2759 PASS / 1 SKIP. These facts do not
+  amount to full live business E2E acceptance.
+- Executor-reported install at
+  `D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe`;
+  SHA256
+  `16E38F30E253041F7ED41E0447DEF744F6912D7B310F6DBDF616556CDBDC8B82`,
+  asset-count 2875, backup and current ledger compatibility
+  checks were submitted. Owner authorized existing configured
+  production business; this review does NOT revoke or
+  expand that authority. Preserve V1.5/V1.4 backups and
+  always roll back program/config against **current**
+  durable ledger, never an older DB snapshot after effects.
+- Evidence as of ~10:27 +08 reports source identity
+  `SOURCE_CHANGED` refusal, quotation
+  `NO_RECENT_QUOTE`/identity refusal/unchanged price,
+  one new PURCHASE_EXCEPTION SMTP recipient marked SENT,
+  stable historical four TP/six TP-SENT and 138 pre-live
+  historical SENT. No newly confirmed purchase SAVED or
+  quotation Sheet-write; no new TP candidate and TP
+  completed-cycle independent receipt is NOT_VERIFIED.
+  SMTP SENT means transport accepted, not mailbox delivery.
+- Two ~121s resource intervals show 0.33085% and
+  0.28956% whole-host application CPU on 16 logical CPUs;
+  handles reached >5,000 during a query and fell to
+  <1,041 at a subsequent batch boundary. Do not label
+  a proven persistent leak, nor pronounce it safe for
+  unattended multi-cycle use. Browser child CPU/GPU
+  and gameplay impact not included. Existing long soak
+  PID70956 uses old 9f source and cannot certify V1.6.
+
+### P1 — nested module overwrites caller's execution identity
+
+`src/launcher/backend.py`: V1.6 `execute(module)`
+sets instance-wide `self._cycle_id` and
+`self._last_poll` at the start of every module.
+`_wait_between_rows` yields the inquiry's browser
+resource and directly invokes
+`_run_independent_job(other)` for due quotation/TP,
+then resumes the *same* outer inquiry invocation.
+There is no save-and-restore of those per-execution
+fields when the inner job exits. Subsequent outer
+purchase results/alerts and `_complete_inquiry`
+log using `self._cycle_id`; the Research
+preparation-failure cache also keys against
+`self._last_poll`. Hence a borrowed nested module
+can cause a later outer inquiry event/cache to be
+associated with the **inner** run identity.
+This is source-provable control-flow risk, NOT a
+claim that an actual incorrect purchase was made.
+Existing test
+`test_completed_row_cooldown_runs_due_modules`
+mocks `_module_execute` and does not assert the
+real nested run identity is restored. P1 requires
+a deterministic offline real-closure regression,
+a minimally scoped identity/context repair if
+reproduced, and corresponding review before
+claiming final source PASS.
+
+### P2 — nested module alters outer observation/timing context
+
+`RuntimeObservation.begin_module` rewrites
+shared `cycle_started_at` and
+`cycle_started_monotonic`;
+`stage` closes other modules' active stages.
+When inner quotation/TP borrows the browser during
+outer inquiry's row cooldown, observation can lose
+the original inquiry waiting-stage accounting,
+and `finish_module` assigns one shared
+`cycle_finished_at`. This risks GUI timing and
+audit timeline misrepresentation. Test the exact
+nested wait → inner module → resume → outer
+completion sequence, with exception and stop
+variants; preserve the old 120s safety minimum
+and immutable business state.
+
+### Additional acceptance gaps (not invented defects)
+
+- Only one browser actor is permitted by design.
+  There is no actual CDP site-level parallel
+  browser execution yet, despite Owner's earlier
+  interest in independently owned short-lived
+  tabs. It must be described as serialized
+  browser operation plus independent deadlines
+  and parallel SMTP, not three parallel CDP
+  site workers. Treat further tab-level parallelism
+  as a separately reviewed feature, not a
+  permission to share sync Playwright across threads.
+- Independent actual TP cycle completion/log proof
+  is missing; do not treat four already-processed
+  tasks as new TP success. Real production
+  procurement/Sheet-write success is likewise
+  not demonstrated, though safe refusals are
+  meaningful. Synthetic new-EXE UI tests do not
+  replace unverified live control/tray checks.
+- Release/long-term stability, 100/150% OS DPI,
+  Chrome/gaming performance and native semaphore
+  lifetime attribution remain NOT_VERIFIED.
+
+### Disposition
+
+**CHANGES_REQUESTED for unconditional V1.6 source/release sign-off.**
+Do NOT represent current V1.6 as a full three-module
+external-write success or stable unattended PASS.
+No emergency rollback is inferred from the currently
+submitted evidence; no live-process changes were
+made or authorized by this audit. Preserve the
+running program/ledger and original protected
+soak. First reproduce P1/P2 offline against the
+frozen V1.6 source and return a minimal patch +
+tests as a separate review, plus independent
+read-only evidence of TP cycle execution and
+multi-cycle resources. If actual integrity/
+idempotency faults appear, escalate for explicit
+Owner operational decision rather than changing
+running production from this review.
