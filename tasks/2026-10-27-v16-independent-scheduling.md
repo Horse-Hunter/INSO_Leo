@@ -2571,3 +2571,12 @@ row wait remain authoritative.5 new isolated domain testsPASS0.91s, original
 137 testsPASS11.07s and quote93PASS5.29s. E3/E4/final E5 remain open; real timing/
 web overlap NOT_VERIFIED. Scope strictly offline, default installed program
 unchanged; report to Owner only. Direct login patch separately68e1a2d.
+
+### E3 source increment — original Owner recovery / no truncation
+
+Explicit recovery reuses original login sweep at quiescent owner boundary, exact
+successful site verdict only. Typed over-budget legal source results hand back
+to canonical Owner collector; no truncation/no-price substitution. Single Runtime
+retires only proven undispatched read reservations.83PASS2.92s focused; native
+SiteLoginError cases independently6PASS0.25s. No auth token addition, worker login,
+production use, browser validation or deployment. E4/final E5 remain OPEN.

@@ -1005,3 +1005,27 @@ ports. TP/actor/resource141PASS8.77s earlier incremental source. Subsequent fina
 regression must be separately bound. No production/real browser/SMTP operation.
 E1 ports OFFLINE IMPLEMENTED; E3 owner recovery, E4 scheduler/GUI assembly and
 E5 final integration remain OPEN. Not evidence of TP punctuality or real overlap.
+
+## Stage E3 — original-owner recovery and bounded-payload handoff
+
+Reuse canonical SiteLoginSweep/GUI frozen verdicts via explicit owner-only
+recover_sites_on_owner callback after all market slots acknowledge cleanup.
+Only exact successful canonical site verdicts re-admit that auth-blocked source;
+manual/failed/mismatched verdicts keep protection. Stop/global resource fault
+cannot recover/rearm. No worker credentials/login/new sweep recipe or timer.
+
+Valid payloads above existing transport limit now raise typed
+MarketPayloadLimitError, route MARKET_OWNER_REQUIRED, and use original Owner
+canonical full source collector/selector instead of slicing or pretending empty.
+Owner-required source remains worker-blocked for the run. Pending undispatched
+reads retire only on exact Runtime proof; submitted queries still drain. Site
+failures do not become successful no-price results. Auth allowlist unchanged.
+
+83PASS2.92s actor/recovery/TP/inquiry/quotation/market-read focused.129-offer
+case has actual lowest at last record and confirms it survives Owner full read.
+Native direct exception six cases also independently6PASS/58 deselected0.25s;
+removed test fixture initialization-order dependency. Earlier new recovery test
+failed because its fake inherited unrelated class-state initialization, fixed
+explicit per-instance setup (no source weakening). No browser/production I/O.
+E4 actual scheduler/GUI assembly and final integrated regression remain OPEN;
+these ports alone do not prove real TP deadline/web overlap or long-term safety.

@@ -418,6 +418,8 @@ def test_direct_native_site_login_error_defers_site_and_acknowledges_resource(co
     from src.research.site_login import SiteLoginError
     from src.workflow.market_messages import MarketFaultScope
     class NativeAuthBlocked(Session):
+        def __init__(self, config, admission):
+            self.owner = threading.get_ident()
         def read(self, query):
             raise SiteLoginError(code)
     runtime = WorkflowRuntime(None, None, ())

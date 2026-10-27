@@ -43,6 +43,10 @@ class MarketReadQuery:
             raise ValueError("MARKET_QUERY_PARAMETERS_INVALID")
 
 
+class MarketPayloadLimitError(ValueError):
+    """Valid canonical data exceeds transport budget; owner must read in full."""
+
+
 def _immutable_payload(value, depth=0):
     # Exact canonical frozen types only. Never admit arbitrary dataclasses,
     # mutable evidence values, exceptions, callbacks, or Playwright proxies.
@@ -50,13 +54,15 @@ def _immutable_payload(value, depth=0):
         raise ValueError("MARKET_PAYLOAD_TOO_DEEP")
     if value is None or type(value) in {bool, int, str, date, datetime, Decimal, float}:
         if isinstance(value, str) and len(value) > 8192:
-            raise ValueError("MARKET_PAYLOAD_TOO_LARGE")
+            raise MarketPayloadLimitError("MARKET_PAYLOAD_TOO_LARGE")
         if isinstance(value, (float, Decimal)) and not isfinite(value):
             raise ValueError("MARKET_PAYLOAD_NONFINITE")
         return
     if type(value) in {ResearchSource, SourceOutcome}:
         return
-    if type(value) is tuple and len(value) <= 128:
+    if type(value) is tuple:
+        if len(value) > 128:
+            raise MarketPayloadLimitError("MARKET_PAYLOAD_TOO_LARGE")
         for child in value:
             _immutable_payload(child, depth + 1)
         return

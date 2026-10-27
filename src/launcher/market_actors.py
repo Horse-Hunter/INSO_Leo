@@ -15,6 +15,7 @@ from src.research.cdp_pages import (
     PageTargetCleanupError,
     PageTargetOwnershipError,
 )
+from src.research.market_contracts import MarketPayloadLimitError
 from src.research.runtime import ResearchMarketSession
 from src.research.site_login import SITE_AUTH_RECOVERY_REASONS, SiteLoginError
 from src.workflow.market_messages import (
@@ -61,7 +62,7 @@ def _fault(error, admission, *, initializing=False):
         return MarketFault(MarketFaultScope.GLOBAL_STOP, 'MARKET_ACTOR_INITIALIZATION_FAILED', tuple(classes[:8]))
     code = (error.reason_code if isinstance(error, SiteLoginError) else
             getattr(error, 'reason', None) or getattr(error, 'code', None))
-    if code == 'MARKET_OWNER_REQUIRED':
+    if code == 'MARKET_OWNER_REQUIRED' or isinstance(error, MarketPayloadLimitError):
         return MarketFault(MarketFaultScope.SITE_DEFER, 'MARKET_OWNER_REQUIRED', tuple(classes[:8]))
     if code in SITE_AUTH_RECOVERY_REASONS:
         return MarketFault(MarketFaultScope.SITE_DEFER, 'MARKET_AUTH_REQUIRED', tuple(classes[:8]))
@@ -156,6 +157,7 @@ class MarketReadActors:
         self._progress = Queue(maxsize=workers * 4)
         self._threads, self._slots = [], {}
         self._blocked_sources = set()
+        self._owner_required_sources = set()
         self._paused = False
         self._started = False
         self._faults = []
@@ -197,6 +199,49 @@ class MarketReadActors:
     def site_deferred(self, source):
         self._check_owner()
         return source in self._blocked_sources
+
+    def requires_owner(self, source):
+        self._check_owner()
+        return source in self._owner_required_sources
+
+    def recover_sites_on_owner(self, sweep):
+        """Explicit original Owner recovery, reusing the canonical login sweep.
+
+        Not a worker login, timer or automatic unverified unblock. Any active
+        market pages must first acknowledge terminal cleanup. Failed/manual
+        verdicts preserve the block and protected pages; only exact successful
+        canonical site verdicts re-admit that source.
+        """
+        from src.gui.contracts import SiteLoginOutcome, SiteLoginResult
+        from src.research.source_contracts import ResearchSource
+        self.require_owner_resources(self._runtime)
+        if not self.quiescent:
+            return ()
+        prior, self._paused = self._paused, True
+        try:
+            results = sweep()  # Original Owner callback, NEVER sent to workers.
+            self.require_owner_resources(self._runtime)
+            if (type(results) is not tuple or any(type(r) is not SiteLoginResult for r in results)
+                    or len({r.site for r in results}) != len(results)):
+                raise ValueError("MARKET_RECOVERY_VERDICT_INVALID")
+            labels = {'IC 现货网': ResearchSource.IC_NET, 'Findchips': ResearchSource.FINDCHIPS,
+                      '华强电子网': ResearchSource.HQEW, '立创商城': ResearchSource.LCSC}
+            recovered = []
+            for result in results:
+                source = labels.get(result.site)
+                if (source in self._blocked_sources and source not in self._owner_required_sources
+                        and result.outcome in {SiteLoginOutcome.ALREADY_SIGNED_IN, SiteLoginOutcome.SIGNED_IN}):
+                    self._blocked_sources.remove(source)
+                    recovered.append(source)
+            return tuple(recovered)
+        except BaseException as error:
+            fault = _fault(error, self._admission)
+            if fault.scope is MarketFaultScope.GLOBAL_STOP:
+                self._runtime.fail_market_reads(fault)
+                self.request_stop()
+            raise
+        finally:
+            self._paused = prior
 
     def owner_source_available(self, source):
         """Owner-side canonical read cannot race a worker's same-site query."""
@@ -314,6 +359,8 @@ class MarketReadActors:
                     self.request_stop()
                 elif message.fault.scope is MarketFaultScope.SITE_DEFER:
                     self._blocked_sources.add(request.query.source)
+                    if message.fault.reason == 'MARKET_OWNER_REQUIRED':
+                        self._owner_required_sources.add(request.query.source)
             completed.append(message)
         if self._stop.is_set():
             self._runtime.close_market_reads()

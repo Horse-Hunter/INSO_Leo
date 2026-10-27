@@ -17,8 +17,8 @@ from .market_actors import _fault
 
 
 class MarketContinuationFault(RuntimeError):
-    def __init__(self, fault):
-        self.fault = fault
+    def __init__(self, fault, source=None):
+        self.fault, self.source = fault, source
         super().__init__(fault.reason)
 
 
@@ -74,20 +74,32 @@ class OwnerMarketResearch:
             if message.terminal is MarketTerminal.CANCELLED:
                 raise MarketContinuationCancelled('MARKET_CONTINUATION_CANCELLED')
             if message.fault is not None:
-                self._finished = True
-                raise MarketContinuationFault(message.fault)
-            self._require_open()
-            try:
-                self._research.accept_actor(message.result)
-            except Exception as error:
-                self._finished = True
-                fault = _fault(error, self._actors.admission)
-                if fault.scope is MarketFaultScope.GLOBAL_STOP:
-                    self._runtime.fail_market_reads(fault)
-                    self._actors.request_stop()
-                raise MarketContinuationFault(fault) from error
+                if message.fault.reason != 'MARKET_OWNER_REQUIRED':
+                    self._finished = True
+                    raise MarketContinuationFault(message.fault, self._research.source)
+            else:
+                self._require_open()
+                try:
+                    self._research.accept_actor(message.result)
+                except Exception as error:
+                    self._finished = True
+                    fault = _fault(error, self._actors.admission)
+                    if fault.scope is MarketFaultScope.GLOBAL_STOP:
+                        self._runtime.fail_market_reads(fault)
+                        self._actors.request_stop()
+                    raise MarketContinuationFault(fault, self._research.source) from error
+
         if self._request is not None:
-            return None
+            source = self._request.query.source
+            if self._actors.site_deferred(source) and self._runtime.cancel_undispatched_market_read(self._request):
+                self._request = None
+                if not self._actors.requires_owner(source):
+                    from src.workflow.market_messages import MarketFault
+                    self._finished = True
+                    raise MarketContinuationFault(MarketFault(MarketFaultScope.SITE_DEFER,
+                        'MARKET_AUTH_REQUIRED'), source)
+            else:
+                return None
         if self._research.ready:
             self._require_open()
             result = self._research.finish()
@@ -95,10 +107,10 @@ class OwnerMarketResearch:
             self._finished = True
             return BusinessResearchCompletion(self._lease.identity, result)
         query = self._research.market_query
-        if query is not None:
+        if query is not None and not self._actors.requires_owner(query.source):
             if self._actors.site_deferred(query.source):
                 from src.workflow.market_messages import MarketFault
-                raise MarketContinuationFault(MarketFault(MarketFaultScope.SITE_DEFER, 'MARKET_AUTH_REQUIRED'))
+                raise MarketContinuationFault(MarketFault(MarketFaultScope.SITE_DEFER, 'MARKET_AUTH_REQUIRED'), self._research.source)
             request = self._runtime.prepare_business_market_read(self._lease, query, due_at=self._due_at)
             if request is None:
                 raise RuntimeError('OWNER_RESEARCH_REQUEST_ALREADY_PENDING')
@@ -116,7 +128,7 @@ class OwnerMarketResearch:
             if any(field.key == 'failure_code' and field.value in SITE_AUTH_RECOVERY_REASONS
                    for field in native.evidence.fields if isinstance(field.value, str)):
                 from src.workflow.market_messages import MarketFault
-                raise MarketContinuationFault(MarketFault(MarketFaultScope.SITE_DEFER, 'MARKET_AUTH_REQUIRED'))
+                raise MarketContinuationFault(MarketFault(MarketFaultScope.SITE_DEFER, 'MARKET_AUTH_REQUIRED'), self._research.source)
             self._research.accept_owner(value)
         except MarketContinuationFault:
             self._finished = True

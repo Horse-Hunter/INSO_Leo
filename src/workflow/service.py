@@ -677,6 +677,26 @@ class WorkflowRuntime:
             self._market_requests[token] = request
             return True
 
+    def cancel_undispatched_market_read(self, request):
+        """Exact Owner may retire a pending read, never assume active work ended."""
+        with self._module_lock:
+            self._check_market_owner()
+            token = request.identity.request_id
+            if self._market_requests.get(token) is not request:
+                raise OrderResourceOwnershipError()
+            lease = self._market_running.get(token)
+            if lease is not None and lease.request_token in self._order_dispatched:
+                return False
+            if token in self._business_reads:
+                del self._business_reads[token]
+            elif lease is not None:
+                self.cancel_reserved_order_lease(lease)
+            else:
+                self.cancel_order_lease_request(token)
+            self._market_requests.pop(token)
+            self._market_running.pop(token, None)
+            return True
+
     def claim_market_read(self, *, blocked_sources=()):
         """Nonblocking earliest due eligible request; same source row stays FIFO."""
         with self._module_lock:
