@@ -1913,3 +1913,22 @@ owner auth recovery and GUI cycle/state handoff must remain canonical. Payload
 bounds reject oversized data without truncation; owner fallback/chunk handling
 needs review before broad use. Real browser Stage F not authorized this round.
 Thus actual BUSINESS_ACTORS_NOT_INTEGRATED / TP454.210s_DELAY_OPEN persists.
+
+
+## Google busy observation follow-up (separate from actor deployment)
+
+Only adds fixed sanitized step labels immediately before the SAME existing
+QuotationInputBusy raises: refresh-surface, refresh-uncertain, protected-entry,
+pooled-unsafe and page-budget. No text/URL/account/worksheet value or screenshot
+logged, no guard bypass, no retry/mail-policy change, no page mutation/cleanup.
+122PASS1.99s Google transport/update regressions; new3branches assert unchanged
+exception and original page set/human-page preservation. The two refresh paths
+retain original recovery tests. This source is NOT installed, so prior current
+production notices still have UNKNOWN precise busy branch; do not infer a cause
+from new diagnostics that have never run there. Four observed retry-exhaustion
+groups each failed before TSV download; manual Sheet access can coexist with
+these operation ownership/settlement guards. No new production browser/DB access.
+
+Stage E actor auth/owner recovery integration remains OPEN; this observation
+increment is not full Stage E completion. New executable/install/browser test
+requires existing independent Review and separately authorized safe windows.

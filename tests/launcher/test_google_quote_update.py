@@ -520,3 +520,45 @@ def test_initial_update_click_timeout_is_preserved_and_never_reclicked(monkeypat
     with pytest.raises(QuotationInputBusy):
         other.open_quote_input()
     assert not page.closed and page.clicks == ['更新报价']
+
+
+
+@pytest.mark.parametrize('branch', ['protected', 'unsafe', 'budget'])
+def test_busy_branch_observation_preserves_original_rejection_and_owned_pages(branch, caplog):
+    from src.launcher.google_quote_update import (
+        _POLL_GOOGLE_PAGES,
+        google_operation_scope,
+    )
+    from src.sheets.quotation_input import QuotationInputBusy
+    actions, browser = adapter()
+    human = browser.contexts[0].pages[0]
+    with google_operation_scope():
+        page = actions.open_sheet(select_worksheet=True, worksheet='2026')
+        actions.close()
+        pool = _POLL_GOOGLE_PAGES.get()
+        entry = next(iter(pool.values()))
+        if branch == 'protected':
+            entry['protected'] = True
+            expected = 'google-busy-protected-entry'
+        elif branch == 'unsafe':
+            page.popup = 'synthetic pending dialog'
+            expected = 'google-busy-pooled-unsafe'
+        else:
+            # Full ownership budget, not a cleanup permission.
+            pool.clear()
+            for _ in range(2):
+                extra = Page(browser.contexts[0])
+                extra.url = page.url
+                extra.owner_name = 'INSO_OWNER_TAB:google-operation'
+                browser.contexts[0].pages.append(extra)
+            expected = 'google-busy-page-budget'
+        before = tuple(browser.contexts[0].pages)
+        second = GoogleQuotationUpdateActions(browser_handle=actions._handle, location=location())
+        with pytest.raises(QuotationInputBusy, match='GOOGLE_QUOTATION_INPUT_BUSY'):
+            second.open_sheet(select_worksheet=True, worksheet='2026')
+        assert expected in [getattr(record, 'inso_step', None) for record in caplog.records]
+        assert tuple(browser.contexts[0].pages) == before
+        assert not human.closed
+        # No page/URL/dialog content is carried in the diagnostic extras.
+        assert all(getattr(record, 'inso_cause', None) is None for record in caplog.records
+                   if getattr(record, 'inso_step', None) == expected)

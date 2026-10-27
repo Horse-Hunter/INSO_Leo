@@ -135,6 +135,7 @@ class GoogleQuotationUpdateActions:
                     continue
                 if not page.evaluate("() => window.__insoRefreshPending === true"):
                     if page.evaluate(_UNSAFE_POLL_PAGE):
+                        log_step("google-busy-refresh-surface")
                         raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
                     continue
                 recovery = GoogleQuotationUpdateActions(browser_handle=self._handle,
@@ -152,6 +153,7 @@ class GoogleQuotationUpdateActions:
                         recovery._script_pending = False
                 except Exception:  # noqa: BLE001 - occupied/uncertain input defers only this attempt
                     recovery._guard()
+                    log_step("google-busy-refresh-uncertain")
                     raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from None
                 recovery.close()
 
@@ -232,6 +234,7 @@ class GoogleQuotationUpdateActions:
             previous = entry["actions"]
             previous._page = entry["page"]
             previous._guard()
+            log_step("google-busy-protected-entry")
             raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
         if entry is not None and not entry["protected"]:
             self._page, self._poll_entry = entry["page"], entry
@@ -247,6 +250,7 @@ class GoogleQuotationUpdateActions:
                              else "google-tab-ownership-lost")
                     raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SPREADSHEET_UNAVAILABLE")
                 if self._page.evaluate(_UNSAFE_POLL_PAGE):
+                    log_step("google-busy-pooled-unsafe")
                     raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
             except Exception:
                 # Preserve genuine unfinished work without repeatedly adding tabs.
@@ -270,6 +274,7 @@ class GoogleQuotationUpdateActions:
             for page in browser.contexts[0].pages
         )
         if owned_pages >= 3:
+            log_step("google-busy-page-budget")
             raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
         try:
             self._page = new_background_page(browser, browser.contexts[0], timeout_ms=self._timeout,
