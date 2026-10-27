@@ -953,6 +953,11 @@ class WorkbenchView:
                     if module.status in {"已暂停", "需要人工处理"}
                     else "最近阶段结束 " + stamp(module.last_finished_at)
                 )
+                if module.cycle_started_at is not None:
+                    timing = ("本轮开始 " + stamp(module.cycle_started_at)
+                        + f"\n本轮耗时 {module.cycle_elapsed_seconds:.0f} 秒"
+                        + (" · 结束 " + stamp(module.cycle_finished_at)
+                           if module.cycle_finished_at is not None else ""))
                 self.configure(
                     detail,
                     text=module.stage

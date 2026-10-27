@@ -260,6 +260,7 @@ class WorkflowRuntime:
         self._module_paused = set()
         self._module_resource = None
         self._module_owner = None
+        self._module_resource_failed = False
 
     def configure_modules(self, intervals, *, timer=monotonic):
         """Extend the existing runtime, not business identities or persistent state.
@@ -280,9 +281,12 @@ class WorkflowRuntime:
             self._module_due = dict.fromkeys(intervals, timer())
             self._module_paused.clear()
             self._module_resource = self._module_owner = None
+            self._module_resource_failed = False
 
     def claim_due_module(self, *, exclude=()):
         with self._module_lock:
+            if self._module_resource_failed:
+                raise RuntimeError("MODULE_RESOURCE_OWNERSHIP_LOST")
             owner = threading.get_ident()
             if self._module_resource is not None or self._module_owner not in (None, owner):
                 return None
@@ -321,6 +325,21 @@ class WorkflowRuntime:
                     or self._module_owner != threading.get_ident()):
                 raise RuntimeError("MODULE_RESOURCE_OWNERSHIP_LOST")
             self._module_resource = module
+
+    @property
+    def module_resource_failed(self):
+        with self._module_lock:
+            return self._module_resource_failed
+
+    def abort_module_resource(self):
+        """A failed browser cleanup invalidates the whole actor, never reuses it."""
+        with self._module_lock:
+            if self._module_owner != threading.get_ident():
+                raise RuntimeError("MODULE_RESOURCE_OWNERSHIP_LOST")
+            self._module_resource_failed = True
+            self._module_paused.update(self._module_periods)
+            self._module_running.clear()
+            self._module_resource = None
 
     def reset_module(self, module):
         with self._module_lock:

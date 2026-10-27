@@ -1,6 +1,6 @@
 # V1.6 independent scheduling and Owner-authorized production release
 
-status: REVIEW_REQUIRED — installed/live, external-success acceptance incomplete
+status: IN_PROGRESS — CEO71a68f2 audit corrections; production untouched
 owner: Owner; executor Codex
 baseline: 669fe6ada3a450eaef5f74532a371d6fb55ffd01
 branch: codex/v1-6-independent-scheduling
@@ -263,3 +263,54 @@ multi-cycle resources. If actual integrity/
 idempotency faults appear, escalate for explicit
 Owner operational decision rather than changing
 running production from this review.
+
+## Unified remaining acceptance — Owner2026-10-27 (current authority)
+
+This instruction supersedes this packet's earlier release authority for this
+round: no stopping/restarting/replacing live V1.6 EXE, no production DB/config/
+browser or protected24h-tree operations. Only isolated code/tests and existing
+sanitized evidence. Reuse clean V1.6 development checkout on independent branch
+codex/v1-6-audit-fixes from remotely verified71a68f2; do not create duplicate trees.
+PhaseA is independently committed before B/C/D; any future install requires a
+separate deployment proposal, not an automatic consequence of source fixes.
+
+| Item | Current result | Evidence / remaining requirement |
+| --- | --- | --- |
+| A nested execution identity, pending pause and cache | PASS (offline; review required) |24 real-closure cases; frozen-method negative control fails both quote/TP as expected |
+| A independent GUI timing and waiting | PASS (offline; review required) | Ancestor waiting interval preserved; additive per-module start/end/elapsed displayed |
+| A cleanup/shared fault, STOP and120s minimum | PASS (offline; review required) | Actor invalidated on cleanup failure; no next purchase after STOP/shared fault |
+| A full regression | PASS |2783passed/1skipped110.68s;63 targeted11.38s;Ruff/diff PASS |
+| B real TP independent900s begin/end | NOT_VERIFIED | Existing deployed source emits no independent TP completion receipt |
+| B new purchase success | NOT_VERIFIED | Prior source-conflict holds are not successful procurement |
+| B quote/Google write/readback success | NOT_VERIFIED | Prior no-recent/unchanged/identity refusals, no forced writes |
+| B SMTP acceptance vs mailbox delivery | PASS / NOT_VERIFIED | Prior accepted1 recipient; mailbox final delivery unknown |
+| B real restart idempotency | DEFERRED | Current command forbids production restart/DB operations; offline safety regression retained |
+| C genuine overlapping page work | NOT_VERIFIED | Must not describe serial actor or fake callback as webpage parallelism |
+| D multi-cycle resources/semaphore ownership | NOT_VERIFIED | Prior2x121s aggregate samples only; no demonstrated persistent leak |
+| D main/observer vs browser/game | NOT_VERIFIED | Existing counters exclude Chrome/game costs; no game launch allowed |
+| D live EXE menus/tray/normal exit | DEFERRED | Cannot close or control running production this round |
+| D100%/150% systemDPI | DEFERRED | No Owner display-setting changes; prior widget scaling not substitute |
+| D GUI/ledger, recovery/manual consistency | NOT_VERIFIED | Offline checks do not certify current production state |
+| D long-term V1.6 unattended stability | NOT_VERIFIED | Old9f/70956 cannot certify V1.6 |
+| D V1.5/V1.4 rollback preservation | PASS (prior evidence) | No current production/backup modification; retain current compatible ledger |
+
+Reuse: existing module scheduler ownership, observation locks/DTOs, exception
+classification and canonical domain engines. Minimal scope stacks save only
+execution metadata, not mutable business/session results. Failed cleanup latches
+actor invalid and pauses all resource dependents; ownership checks remain strict.
+Per-module observation fields are additive, no new state ledger or GUI pages.
+
+PhaseA execution: `_run_independent_job` now scopes cycle/last-poll/research-failure
+cache/pending-pause metadata. Context finally restores ancestors on all unwind
+paths; never copies back sessions or mutable business results. Observation scopes
+retain ancestor waiting time and restore global focus while keeping child results.
+Independent DTO cycle start/end/elapsed has its own fields, rendered in same cards.
+Cleanup failure exposed by real-path tests now invalidates actor and rejects any
+subsequent claim instead of masking the original fault with a resume error.
+Regression follows actual launcher closure -> CombinedCycle -> real durable V12
+flow, V13IntegratedCycle/V13QuotationCycle and TpCycle, with only external ports
+synthetic; uses independent test ledgers. Includes timeout/local pause/STOP/shared
+DB fault/cleanup failure, and outer pending pause for both inner module types.
+Captured real purchase log records retain outercycle; child mail attempts <=2;
+no manufactured procurement, no real SMTP attempt in passing tests. No production
+file/process/config/DB/browser/protected-soak operations performed this round.

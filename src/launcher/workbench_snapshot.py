@@ -1,6 +1,7 @@
 """Bounded observation of existing boundaries; no I/O, threads or scheduling."""
 
 from collections import deque
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime
 from threading import RLock
@@ -29,6 +30,25 @@ class RuntimeObservation:
         self.pauses = {}
         self.planned_check_at = None
         self.recovery_site = None
+        self._module_scopes = []
+
+    @contextmanager
+    def module_scope(self, module):
+        """Restore only caller observation, never an inner module's new result."""
+        with self.lock:
+            saved = (self.cycle_started_at, self.cycle_started_monotonic,
+                     self.cycle_finished_at, self.planned_check_at, self.recovery_site)
+            nested = bool(self._module_scopes)
+            self._module_scopes.append(module)
+        try:
+            yield
+        finally:
+            with self.lock:
+                self._module_scopes.pop()
+                if nested:
+                    (self.cycle_started_at, self.cycle_started_monotonic,
+                     self.cycle_finished_at, self.planned_check_at, self.recovery_site) = saved
+                self.revision += 1
 
     def _close_pause(self, key):
         paused = self.pauses.pop(key, None)
@@ -119,6 +139,9 @@ class RuntimeObservation:
             self.cycle_started_at, self.cycle_started_monotonic = self.clock(), self.timer()
             self.cycle_finished_at = None
             self.durations[module] = 0.0
+            self.modules[module] = replace(self.modules[module],
+                cycle_started_at=self.clock(), cycle_started_monotonic=self.timer(),
+                cycle_finished_at=None, cycle_elapsed_seconds=0)
         self.stage(module, "检查模块待办")
 
     def module_plan(self, module, next_check, *, paused=False, reason=None):
@@ -129,9 +152,14 @@ class RuntimeObservation:
                 stage=reason or "等待独立检查周期", waiting_reason=reason)
             self.revision += 1
 
-    def finish_module(self):
+    def finish_module(self, module=None):
         with self.lock:
             self.cycle_finished_at = self.clock()
+            if module is not None:
+                old = self.modules[module]
+                self.modules[module] = replace(old, cycle_finished_at=self.clock(),
+                    cycle_elapsed_seconds=max(0, self.timer()-old.cycle_started_monotonic)
+                    if old.cycle_started_monotonic is not None else 0)
 
     def stage(self, module, stage, *, site=None, order_ref=None):
         with self.lock:
@@ -147,7 +175,7 @@ class RuntimeObservation:
             ):
                 return
             for key, other in tuple(self.modules.items()):
-                if other.started_monotonic is not None:
+                if other.started_monotonic is not None and key not in self._module_scopes[:-1]:
                     other = self._close(key)
                     self.modules[key] = replace(
                         other,
@@ -224,6 +252,8 @@ class RuntimeObservation:
             if close_round and self.cycle_finished_at is None:
                 self.cycle_finished_at = self.clock() if self.cycle_started_at else None
             for key, old in tuple(self.modules.items()):
+                if self._module_scopes and not stopped and not reason and key != self._module_scopes[-1]:
+                    continue
                 if old.status == "未启用":
                     continue
                 old = self._close(key)
@@ -265,7 +295,8 @@ class RuntimeObservation:
                         m, elapsed_seconds=max(0, self.timer() - self.pauses[key][1])
                     )
                     if key in self.pauses
-                    else m
+                    else replace(m, cycle_elapsed_seconds=max(0, self.timer()-m.cycle_started_monotonic))
+                    if m.cycle_started_monotonic is not None and m.cycle_finished_at is None else m
                     for key, m in self.modules.items()
                 ),
                 self.cycle_started_at,

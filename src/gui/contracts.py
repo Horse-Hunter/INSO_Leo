@@ -329,6 +329,10 @@ class ModuleSnapshot:
     next_check_at: datetime | None = None
     waiting_reason: str | None = None
     elapsed_seconds: float = 0
+    cycle_started_at: datetime | None = None
+    cycle_started_monotonic: float | None = None
+    cycle_finished_at: datetime | None = None
+    cycle_elapsed_seconds: float = 0
 
 
 @dataclass(frozen=True, slots=True)

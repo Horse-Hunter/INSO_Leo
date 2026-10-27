@@ -1,0 +1,12 @@
+{
+  "review_anchor": "71a68f28d90ef96656cb78291c075361cb8112e2",
+  "frozen_application": "99dd22c43fd83852dc1d45d13c4cfed46b0ebe0d",
+  "negative_control": {"original_execution_method": "exact frozen99dd22c AST", "expected_failures": 2, "reason": "outer cycle identity overwritten after quotation or TP"},
+  "targeted": {"passed": 63, "seconds": 11.38, "real_nested_cases": 24},
+  "full": {"passed": 2783, "skipped": 1, "seconds": 110.68},
+  "ruff": "PASS",
+  "diff_check": "PASS",
+  "production_replaced": false,
+  "production_db_config_browser_accessed": false,
+  "qualification": "Offline real orchestration closure and domain engines, synthetic external ports and isolated durable ledgers. Not production E2E acceptance."
+}

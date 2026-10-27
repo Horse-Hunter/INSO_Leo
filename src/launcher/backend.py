@@ -542,6 +542,7 @@ class ProductionBackend(GuiBackend):
         self._module_execute = None
         self._module_failures = {}
         self._module_pause_requested = None
+        self._module_contexts = []
         self._source_overrides = {}
         self._v13_states = {}
         self._v13_unbound = {}
@@ -1185,6 +1186,22 @@ class ProductionBackend(GuiBackend):
             self._module_runtime = None
 
     def _run_independent_job(self, module):
+        # Sync browser ownership is fixed to this thread. Only closed-row waits
+        # nest here; business/session state must not be snapshotted or rolled back.
+        nested = bool(self._module_contexts)
+        parent = (self._cycle_id, self._last_poll, self._research_acquire_failure,
+                  self._module_pause_requested)
+        self._module_contexts.append(module)
+        try:
+            with self._observation.module_scope(module):
+                self._run_independent_job_scoped(module)
+        finally:
+            self._module_contexts.pop()
+            self._module_pause_requested = parent[3]
+            if nested:
+                self._cycle_id, self._last_poll, self._research_acquire_failure = parent[:3]
+
+    def _run_independent_job_scoped(self, module):
         runtime = self._module_runtime
         retry, paused, reason = None, False, None
         try:
@@ -1223,15 +1240,23 @@ class ProductionBackend(GuiBackend):
             else:
                 raise  # unknown/shared integrity or ownership fault is never swallowed
         finally:
-            self._close_inso_order_tab()
-            runtime.complete_module(module, retry_after=retry, pause=paused)
-            self._observation.module_plan(module, None if paused else
-                utc_now()+timedelta(seconds=max(0, runtime.module_plans()[module][0]-monotonic())),
-                paused=paused, reason=reason)
-            self._observation.finish_module()
-            self._publish_module_plans()
-            self._cache_workbench(force=True)
-            self._notify()
+            try:
+                self._close_inso_order_tab()
+            except Exception:
+                runtime.abort_module_resource()
+                raise  # preserve cleanup failure; no parent resource may resume
+            finally:
+                if not runtime.module_resource_failed:
+                    runtime.complete_module(module, retry_after=retry, pause=paused)
+                else:
+                    paused, reason = True, "共享浏览器清理失败，已停止共享业务"
+                self._observation.module_plan(module, None if paused else
+                    utc_now()+timedelta(seconds=max(0, runtime.module_plans()[module][0]-monotonic())),
+                    paused=paused, reason=reason)
+                self._observation.finish_module(module)
+                self._publish_module_plans()
+                self._cache_workbench(force=True)
+                self._notify()
 
     def _pause_v12(self, fault):
         if self._module_runtime is not None:
@@ -2508,7 +2533,8 @@ class ProductionBackend(GuiBackend):
                             self._stop.wait(min(0.25, max(0, deadline-monotonic())))
                     return self._stop.is_set()
                 finally:
-                    runtime.resume_module_resource("inquiry")
+                    if not runtime.module_resource_failed:
+                        runtime.resume_module_resource("inquiry")
             return self._stop.wait(seconds)
         finally:
             with self._lock:
