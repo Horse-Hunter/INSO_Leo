@@ -1932,3 +1932,234 @@ these operation ownership/settlement guards. No new production browser/DB access
 Stage E actor auth/owner recovery integration remains OPEN; this observation
 increment is not full Stage E completion. New executable/install/browser test
 requires existing independent Review and separately authorized safe windows.
+
+
+## CEO independent B/C/D optional actor and Google diagnostic review — 2026-10-27
+
+**CEO verdict:** `B_REAL_MODULE_FIFO_PASS`,
+`C_V1_IMMUTABLE_PORT_SOURCE_PASS`,
+`D_OPTIONAL_BOUNDED_ACTOR_FOUNDATION_CONDITIONALLY_ACCEPTED`,
+`D_AUTH_CLASSIFICATION_CHANGES_REQUESTED`,
+`GOOGLE_SANITIZED_BUSY_DIAGNOSTICS_SOURCE_PASS`,
+`BUSINESS_CONTINUATION_NOT_IMPLEMENTED`,
+`FINAL_D_FULL_REGRESSION_NOT_YET_EVIDENCED`,
+`TP_TIMELINESS_FAIL_OPEN`,
+`V16_OVERALL_REVIEW_REQUIRED`.
+
+**Scope/provenance:** Independently fetched GitHub branch at
+`0d77be23fe1bd1c56b9478f9059be453b93c6ef0`
+and compared to CEO `393a89244d20c235b5de76623d7fd2defd51b1ec`.
+Five commits: independent C
+`c71ac4f9c22edd9587f710d086f23db95b576efa`,
+merge `9ef130a...` containing both C and CEO review,
+B fix `583f1c07412671670d9d9522de493d296f51c03a`,
+optional actor `18320d6bfd288369c9bb75211359465310b5bb26`,
+and Google labels
+`0d77be23fe1bd1c56b9478f9059be453b93c6ef0`.
+Checked actual `src/workflow/service.py`,
+`src/workflow/market_messages.py`,
+`src/research/market_contracts.py`,
+`src/research/runtime.py`,
+`src/research/service.py`, `src/research/tp.py`,
+`src/research/cdp_pages.py`, canonical changed site
+adapters, `src/launcher/market_actors.py`,
+`src/launcher/backend.py`,
+`src/launcher/google_quote_update.py` and focused tests.
+No current production browser/DB/config/SMTP/Google/sales
+operations or installation in this review. Installed production
+remains reviewed `04075bc`, as executor reported.
+
+### B: prior fairness finding CLOSED in isolated API
+
+`request_order_lease` now REQUIRES a real
+`MarketModule`, checks it is configured, stores the
+module with canonical source key, token and owner thread.
+A second request from the same module/source row is
+refused regardless of its cycle-token text. Different
+modules retain per-source FIFO, other source rows retain
+independent slots; forged module substitution with same
+token fails. Reviewed parametrized100-repeat-per-module
+tests and reported88 targeted PASS. This closes the
+CEO393a892 module-identity queue-slot finding, not
+any guarantee of business-level deadline scheduling.
+
+### C: bounded immutable v1 message contract accepted
+
+Research's `MarketReadQuery/Result` carries source,
+ordinary vs raw TP-offer mode, bounded parameters and
+canonical read-only result types. Workflow's v1
+`MarketTaskIdentity` wraps real
+`SheetRecordIdentity`, module, cycle, request and
+domain task IDs. Typed bounded completion, progress,
+fault and terminal states reject mutable/unrecognized
+payload shapes, unbounded string fields,
+nonfinite timestamps and protected INSO source.
+Resource ownership faults cannot be converted into
+ordinary non-global errors. Default repr excludes
+sensitive source snapshot and result fields. These
+are in-memory ports, not durable claims, serialization
+guarantees, external write authority or a second
+ledger. Submitted40 focused PASS belongs to C and
+must not be counted as a complete D suite.
+
+### D: optional isolated actor foundation accepted, NOT actor E2E
+
+`MarketReadActors` is *not* wired into
+`ProductionBackend` module execution. It explicitly
+starts at most two fixed non-daemon market-read threads,
+with one bounded inbox per worker, a bounded terminal
+queue and coalescible progress. Worker constructs and
+tears down its own `ResearchMarketSession`, its own
+sync Playwright/CDP client on that very thread,
+reuses the existing9222 Chrome and canonical factory/
+source parsers. No Browser/Page/Backend closure is sent
+across a worker boundary; the shared runtime admission
+is metadata-only. BOM and INSO continue to require
+original owner-side protected flow; no actor login,
+credential retrieval or external write was authorized.
+Page-scoped native target proof and per-request
+cleanup preserve review pages and latch uncertain
+resource states. An explicit immutable `MarketFault`
+port exists for the original Backend's
+GLOBAL_STOP path but is not yet consumed by live
+production composition.
+
+The canonical `WorkflowRuntime` arbitrates per-source
+module-aware FIFO and at most two active clients,
+does not make the original scheduler synchronously
+wait for the full Research batch, enforces same-site
+conservative serialization plus IC.net's shared90s
+pacing and checks exact terminal/cycle/source
+acknowledgment before releasing coordinator-dispatched
+leases. Synthetic real Python threads/queues
+exercise long unrelated quotation read concurrent
+with TP completion, same-row serial progression,
+Stop/reserved/submit/cancel/drain, mismatched
+terminal, setup fault and shared native ownership
+fault. Submitted D final targeted60PASS;
+earlier focused58PASS, while offline full
+2901PASS/1SKIP was explicitly on an *intermediate*
+source. At this reviewed head **no final-source
+full regression evidence was supplied**; do not
+upgrade it to final full PASS until the executor
+supplies an exact SHA + full result.
+
+### D source-proven blocking classification bug before actor integration
+
+**Fix a concrete auth/manual-guard misclassification in
+`src/launcher/market_actors.py`.** The
+`_requires_auth` evidence-field check and
+`_fault` direct-exception check use substring
+heuristics `LOGIN/AUTH/CHALLENGE/CAPTCHA/CREDENTIAL`.
+Existing canonical site/auth guard reasons also include
+`MANUAL_VERIFICATION_REQUIRED`, `SESSION_STALE`,
+`SECURITY_EVENT`, `OTP_REQUIRED`,
+`VERIFIED_SESSION_LEASE_REQUIRED` and related manual
+verification cases. Several of these do NOT contain
+the tested substrings. Hence a canonical ordinary
+`SourceResult(SOURCE_UNAVAILABLE)` with
+`failure_code=MANUAL_VERIFICATION_REQUIRED`
+may incorrectly produce
+`MarketCompletion(SUCCEEDED, result=...)`;
+the same reason as a directly raised adapter
+exception may be downgraded to
+`MARKET_SOURCE_FAILED` rather than
+`MARKET_AUTH_REQUIRED`. This is source-provable
+classification drift; it is *not* evidence of an
+actual live login bypass, as this optional bridge
+is uninstalled. Use canonical explicit safety
+reason semantics, not broad exception-text
+matching or a second login recipe. Targeted
+tests must cover both returned typed unavailable
+and directly raised cases for manual verification,
+stale/unknown session, security event and OTP;
+no worker may log in or reinterpret manual
+verification as no valid price. A legitimate
+site-defer must be handed back to original owner
+for safe recovery, not silently treated as a
+terminal ordinary source success.
+
+### Integration blockers still OPEN (Stage E/F)
+
+1. Current lease protects **one market read**, NOT
+   whole inquiry/quotation/TP source-row business
+   continuation. Acknowledgment removes that lease
+   before the original owner resumes FX, aggregation,
+   Sheets read/revalidate and any external action.
+   Design explicit owner-side continuation/transaction
+   exclusion and fresh durable validation before
+   all writes; never let another module mutate the
+   same logical source row in the gap. A read lease
+   alone grants no business authority.
+2. Existing `MarketReadActors` bridge has not been
+   connected to the three module state machines,
+   protected original-owner Google/INSO operations,
+   auth recovery/GUI progress, or the production
+   `accept_market_fault` entrypoint. Actor
+   SITE_DEFER currently accumulates a blocked source
+   without a proven reviewed safe resume signal.
+   Correlate immutable results with the correct
+   task/cycle/source snapshot; reject stale or wrong
+   result, and ensure owner sees any shared global
+   fault *before* applying returned success.
+3. Bounded queues/Stop semantics are scoped to
+   test clients: final source must prove
+   submit-failure, delayed terminal, worker
+   teardown failure, cancellation and bounded
+   timeout (returning false from `close` is not
+   guaranteed process shutdown) against the
+   actual orchestrator. No forced thread/Chrome
+   termination and no speculative page cleanup.
+4. C's bounded payload validation rejects
+   oversized legitimate parser output rather
+   than truncating it; the owner requires a
+   documented safe deferral/chunking behavior,
+   not an automatic invented truncated price.
+   Confirm TP owner's single FX snapshot and
+   ordinary source-result equivalence with
+   golden tests across all canonical source
+   modes before introducing external effects.
+5. The demonstrated prior TP due-to-start
+   delay454.210s is still **FAIL/open**.
+   Synthetic event overlap and real earlier
+   native navigation overlap do not constitute
+   independent live module business concurrency.
+   Stage F needs Owner-approved safe window,
+   real parsed-source timelines, same-order
+   serial proof, source auth/pacing, bounded
+   CPU/Chrome handles, actual TP deadline,
+   GUI/restart/UNKNOWN and long-term stability.
+
+### Google fixed-code observation: source-only PASS
+
+`0d77be23` inserts exactly five static,
+sanitized `log_step` tags at existing
+`QuotationInputBusy` guard branches
+(refresh surface/uncertain, protected entry,
+pooled unsafe and page budget), with no
+extra DOM/customer values, browser action,
+guard weakening, retry change or
+SMTP behavior change. Executor reports
+122 targeted Google tests PASS; the new
+three branch tests verify unchanged error
+and page preservation. This is an uninstalled
+diagnostic, so current live four historical
+Google read-busy groups have exact underlying
+branch **UNKNOWN**. Manual ability to open
+the spreadsheet does not establish the protected
+operation surface is reusable. Do not close
+human review pages or test-send to "prove"
+a cause.
+
+**Final review scope:** B module-aware fairness
+and C v1 interface accepted as isolated sources;
+D optional actor transport/lease foundation
+accepted with the precise auth-classification
+repair **CHANGES_REQUESTED before enabling
+module continuation**, and final-source full
+regression evidence outstanding. Stage E
+business integration and Stage F authentic
+parallel/timeliness/soak remain entirely
+`NOT_IMPLEMENTED/NOT_VERIFIED` as specified.
+No old P1 or installed04075bc redo; no new
+deployment or browser experiment approved.
