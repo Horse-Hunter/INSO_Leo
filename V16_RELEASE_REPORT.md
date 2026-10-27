@@ -1,5 +1,62 @@
 # V1.6 unified release and initial production verification
 
+## Latest execution status — Actor remediation / final offline evidence
+
+Overall REVIEW_REQUIRED. Production04075bc is unchanged by this task; Owner's
+previous开始运行 confirmation and17:01–17:04 module logs supersede old temporary
+safe-stop/pending-resume statements below. No current real process state is
+inferred from an old PID. No production EXE/config/Vault/SQLite/SMTP/browser
+operation or installation was performed by this continuation.
+
+| Stage / issue | Result and exact scope |
+| --- | --- |
+| A terminal lifecycle | PASS; source4a669daea75ad4ba8227787de1dc1c8e265e9abe; CEO393a892 accepts |
+| B Stop + actual module FIFO | PASS scoped;42a881231da1221343aa1766ca732a0c5fe96d5d then583f1c07412671670d9d9522de493d296f51c03a; CEO8fb3f50 accepts |
+| C immutable typed ports | PASS scoped;c71ac4f9c22edd9587f710d086f23db95b576efa; CEO8fb3f50 accepts |
+| D optional read-actor foundation | PARTIAL;18320d6bfd288369c9bb75211359465310b5bb26, not enabled; scoped foundation accepted |
+| D submit/final exit race | Fixed287e23830dfd4aa226b3162464084ae1e969a4c7; final owner terminal still required; REVIEW_REQUIRED |
+| D manual/auth classification | Fixedf7d70baa51f942f27064ee9f84684549f1795d7b using canonical exact reason sets; REVIEW_REQUIRED |
+| E full business continuation/owner auth/GUI binding | NOT_IMPLEMENTED; ports are prerequisites only |
+| F real business-page overlap / TP due-to-start | NOT_VERIFIED; prior454.210s lateness remains FAIL/open |
+| Google busy diagnostics | Source-onlyPASS0d77be23fe1bd1c56b9478f9059be453b93c6ef0; live precise branch UNKNOWN |
+| Deployment/current production replacement | NOT_AUTHORIZED this round / not performed |
+| V1.6 long run,100/150%DPI, Chrome game impact | NOT_VERIFIED; old9f soak cannot substitute |
+
+Final application source **f7d70baa51f942f27064ee9f84684549f1795d7b**;
+Git src tree **18bde855d3323b1a3aa1585ff0e983cdc28cea6a**.
+Exact final full **2951PASS /1SKIP /114.03s**, scoped Ruff --no-cache and diffPASS.
+Auth/retry/site login focused304PASS1.30s; actor Stop/submit32PASS0.29s;
+Google transport122PASS1.99s. Tests use synthetic data/HTML and real local Python
+threads/queues only, with no network/business/SMTP. This is NOT actual website
+concurrency or repaired live TP scheduling proof. Previous failed commands/test
+fixture corrections remain historical and are not counted as successful runs.
+15existing completed task-owned test directories retired by checked explicit
+absolute names, no reparse traversal/ACL change; small stdout/summary evidence
+retained. No persistent monitor or worker left by tests.
+
+Changed production-source files grouped by purpose: workflow/service.py owns
+lease lifecycle/fairness/read handoff; workflow/market_messages.py and
+research/market_contracts.py own immutable ports; launcher/market_actors.py owns
+optional bounded thread transport; launcher/backend.py adds explicit fault port
+and reuses unchanged old auth-stop set; research/runtime.py creates thread-local
+read session; research/service.py and tp.py expose existing source acquisition;
+research/cdp_pages.py and five market source finally blocks verify own cleanup;
+research/icnet.py shares its existing90s constant; research/site_login.py exports
+existing safety semantics; launcher/google_quote_update.py only logs fixed busy
+branches. Corresponding workflow/launcher/research tests and existing report/
+task/design/evidence updated. No price algorithm/month window/SMTP/production DB
+schema/120s wait or procurement permission change, no new dependencies.
+
+Recommended next work: keep current reviewed production installed. Integrate
+owner-side business continuations with one lease held across read, FX/projection,
+fresh source/durable validation and external effects; bind actor global faults
+before consuming success and bridge original owner's auth recovery/GUI events.
+Do not enable this single-query optional bridge as if it protects a whole order.
+Then request a separate authorized safe real-browser window for parsed-source
+and due-TP timelines, without using normal production as an experiment.
+
+## Historical execution records (latest status above takes precedence)
+
 ## Current source safety continuation after CEO59f0628 —2026-10-27
 
 **REVIEW_REQUIRED. Installed04075bc unchanged. New source20fda49c4573a0c59917d8ddf009655d220a41a2 NOT_DEPLOYED.**
