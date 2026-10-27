@@ -1143,3 +1143,200 @@ Final full offline regression of this application increment: **2840PASS/1SKIP113
 
 Source safety increment committed20fda49c4573a0c59917d8ddf009655d220a41a2.
 Evidence/report follow-up records current proof and qualifications; no new production installation.
+
+
+## CEO independent page-admission isolation re-review — 2026-10-27
+
+**Verdict: ISOLATED_SOURCE_SAFETY_REVIEW_PASS /
+NATIVE_PAGE_OWNER_PREREQUISITE_PASS /
+NOT_DEPLOYED / V16_OVERALL_REVIEW_REQUIRED.**
+This is a scoped independent review of the isolated page
+creation/cleanup/admission and native read-only owner
+safety increment, NOT a review reopening previously
+accepted P1 or the installed `04075bc` artifact.
+No production/Chrome/UI/SMTP/Sheets/SQLite configuration
+or process action was performed by this reviewer.
+
+**Verified provenance.** Prior CEO
+`59f0628529ca830bc4dbdafc596e164db863516e`
+→ application source commit
+`20fda49c4573a0c59917d8ddf009655d220a41a2`
+→ evidence HEAD
+`12e77749ec93e8c5c7a8845a8614e3ee4811a59f`.
+Remote branch points exactly to evidence HEAD and
+comparison shows one isolated source/test commit
+plus one documentation/evidence commit. New source
+delta is limited to `src/research/cdp_pages.py`,
+`src/research/runtime.py`,
+`src/launcher/backend.py`,
+`src/launcher/browser_bootstrap.py`, with matching
+tests and task notes. Evidence head changes reports,
+design and allowlisted `page-admission-*` JSON,
+not application source. Reviewer fetched and
+inspected actual source, changed tests, structured
+proof and GitHub diff, but did not independently run
+the Windows suite or replay protected Chrome.
+
+### Source findings — PASS for submitted prerequisite
+
+1. `Target.createTarget` sets
+   `creation_attempted` before the protocol send.
+   A thrown/lost, absent or unusable returned target ID
+   becomes typed `CDP_PAGE_CREATION_UNCONFIRMED`.
+   No arbitrary tab is guessed closed; wrapper and
+   the bound PageResourceAdmission latch failure.
+   Other bound wrappers/reconnect paths subsequently
+   fail `require_open`. When native target is
+   positively known and cleanup fails, typed
+   `CDP_PAGE_CLEANUP_UNCONFIRMED` remains fail-closed.
+2. A single thread-safe `PageResourceAdmission`
+   is created by ProductionBackend and passed through
+   canonical Research composition,
+   `shared_playwright_factory`, reuse and private
+   fallback attachment, browser reacquisition and
+   the source/module before/finally gates.
+   Conflicting rebind invalidates both admissions;
+   uncertain state is not reset on reconnect.
+   Metadata only (exception classes/type) is
+   shared, not Playwright/exception instances.
+   `_run_independent_job_scoped` and
+   `_runtime_error` propagate typed faults into
+   resource abort / GLOBAL_STOP rather than website
+   retries or attaching the fault to an unrelated
+   historic inquiry.
+3. Under page uncertainty, source cleanup/park
+   boundaries refuse generic browser-page sweep
+   before enumerating/closing pages.
+   `_release_idle_browser` detaches the
+   attachment only. Legacy write surface
+   `page_owner` and its marker-loss quarantine
+   remain in place; no native target proof can
+   itself authorize Google/INSO writes.
+4. New explicit `native_page_owner` verifies a
+   factory-issued original target lease through
+   Page-linked `Target.getTargetInfo` on each
+   call without document JavaScript, allowing
+   read-only identity checks through document
+   navigation/context changes. Target mismatch
+   and CDP proof session teardown failures
+   fail closed on a bound client. It is explicitly
+   **not** a substitute for existing write-authority
+   markers or business idempotency.
+
+### Evidence accepted, bounded correctly
+
+- Submitted final unchanged source
+  `20fda49c...` reports full offline
+  `2840 PASS / 1 SKIP` in113.03s,
+  final targeted `309 PASS` in13.04s,
+  Ruff/diff PASS. Existing earlier full
+  run identified a marker-quarantine regression;
+  test/source correction restored the old
+  marker safety rule before final full PASS.
+- Native Owner-authorized two-client/two-own-page
+  read-only tests at existing9222 report
+  HQEW overlapping navigation by0.109s and
+  IC.net by0.219s, HTTP200, native ID and
+  owner proof both **before and after**
+  navigation, exact owned target closure and
+  original one page preserved. This resolves
+  the earlier **narrow postnavigation native
+  identity proof gap**; it is NOT proof of
+  business source parsing, shared runtime
+  fault handoff, three actual module actors,
+  per-order exclusions, authentication pacing,
+  900s timely TP or production parallelism.
+- Native probe source hash differs from the
+  final hardened source because live proof
+  preceded final rebind/terminal/teardown
+  changes; `native_page_owner` implementation
+  was reported unchanged. Final full offline
+  regression complements but does not
+  replace a complete final-source live test.
+  No page-source increment has been installed.
+- Older installed reviewed executable remains
+  `04075bc884c9c2927e677edcbddcb43419833aef`
+  per the submitted report. Actual subsequent
+  business cycles around15:59 inquiry,
+  16:02 quotation,16:03 TP were observed
+  following an Owner-confirmed **prior** Start.
+  Current read-only ledger evidence reports
+  108 historical immutable commands,139
+  historical SENT,4 TP task full rows unchanged,
+  new current141 SENT with no
+  PENDING/SENDING/UNKNOWN (two new
+  runtime fault notices, not fresh TP or
+  quote success). This latest browser test
+  took place after **another safe stop**;
+  Owner confirmation of *resuming after
+  this newest window* was still pending at
+  the evidence timestamp. Do not assert
+  currently RUNNING merely from earlier
+  post-resume cycles.
+
+### Explicit remaining actor-integration safety contracts
+
+These do **not** invalidate the scoped source
+PASS but MUST precede an actual actor rollout:
+
+- Every future actor/fallback and callback
+  must be bound to the *same* runtime
+  admission **before** browser operations.
+  Reject unbound work, prevent races between
+  admission checks and foreign-client
+  invalidation, and propagate global fault
+  stop across actor ownership boundaries.
+  The current guard is runtime-scoped,
+  not process-global or cross-process
+  orphan recovery.
+- The explicit read-only `native_page_owner`
+  currently throws typed
+  `CDP_PAGE_OWNERSHIP_UNCONFIRMED`
+  for a missing native lease without access
+  to any bound browser/admission to invalidate.
+  Actor orchestration must treat this as a
+  hard failure, never swallow it into a
+  normal unavailable answer or proceed with
+  page navigation or a business result.
+  Continue to distinguish read-only native
+  identity from legacy writable marker
+  identity. Test this path in an integrated
+  actor terminal and teardown scenario.
+- Build and verify existing WorkflowRuntime's
+  **canonical source-row order lease** across
+  inquiry, quotation and TP, site authentication
+  pacing and protected INSO/Google exclusive
+  operations. Resource fairness/preemption
+  must address the previously demonstrated TP
+  start 454.210s late. Independent monotonic
+  timers are not sufficient proof of timely
+  execution. Include actual thread/target/
+  request time overlap and conflicting-order
+  serial timelines with bounded resources.
+- No code or mock tests here implement a
+  bounded multi-actor production worker,
+  durable cross-module source lease,
+  independent page-query business result
+  handoff, resource fair scheduler or final
+  business E2E. Those stay NOT_IMPLEMENTED/
+  NOT_VERIFIED; do not deploy a partial
+  read-only page prerequisite as complete
+  parallel execution.
+- Open operational acceptance remains:
+  naturally eligible purchase + Google
+  Sheet write/readback, eligible TP mail,
+  current SMTP unknown/restart behavior,
+  100/150% system DPI, actual GUI/tray,
+  V1.6 sustained memory/Chrome/game impact.
+  The earlier old-9f V1.5 soak is not a
+  V1.6 certificate.
+
+**Disposition:** Accept current isolated
+source-safety increment without reopening
+P1 or reinstalling `04075bc`.
+Continue independent development of
+source-row order leases and actor integration
+in separate reviewable commits; do not
+deploy, restart or assert production
+completion from this review. Overall
+`REVIEW_REQUIRED` persists.
