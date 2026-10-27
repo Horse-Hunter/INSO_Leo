@@ -1,0 +1,90 @@
+{
+  "at": "2026-10-27T08:18:48.444675+00:00",
+  "source_sha256": "f1d347b10beeebfa221c4585b6c566baa84aa1f3e0cc922365a8dbd579237300",
+  "scope": "Owner safe-stop window, existing9222 only, max2own tabs, native ownership prerequisite only; no actual business actor scheduling/source extraction/write/SMTP",
+  "pairs": [
+    {
+      "site": "hqew",
+      "before_pages": 1,
+      "after_pages": 1,
+      "preexisting_targets_preserved": true,
+      "owned_targets_absent": true,
+      "distinct_created_targets": true,
+      "actors": [
+        {
+          "site": "hqew",
+          "actor": 1,
+          "native_thread_id": 86756,
+          "create_start": 324413.359,
+          "create_end": 324413.437,
+          "target_id": "9DE58202F832FBE05605F767F302DD85",
+          "before_navigation_owner": true,
+          "navigation_start": 324413.453,
+          "navigation_end": 324413.562,
+          "http_status": 200,
+          "native_owner_after_navigation": true,
+          "proof_end": 324413.781,
+          "own_close_confirmed": true
+        },
+        {
+          "site": "hqew",
+          "actor": 2,
+          "native_thread_id": 86108,
+          "create_start": 324413.359,
+          "create_end": 324413.421,
+          "target_id": "40EE92540A229B41898FB1F1A15E3EF5",
+          "before_navigation_owner": true,
+          "navigation_start": 324413.453,
+          "navigation_end": 324413.578,
+          "http_status": 200,
+          "native_owner_after_navigation": true,
+          "proof_end": 324413.593,
+          "own_close_confirmed": true
+        }
+      ],
+      "navigation_overlap_seconds": 0.10899999999674037
+    },
+    {
+      "site": "icnet",
+      "before_pages": 1,
+      "after_pages": 1,
+      "preexisting_targets_preserved": true,
+      "owned_targets_absent": true,
+      "distinct_created_targets": true,
+      "actors": [
+        {
+          "site": "icnet",
+          "actor": 1,
+          "native_thread_id": 80780,
+          "create_start": 324414.515,
+          "create_end": 324414.578,
+          "target_id": "5B8F3E817C13E351EDB19BC946FDC591",
+          "before_navigation_owner": true,
+          "navigation_start": 324414.593,
+          "navigation_end": 324414.812,
+          "http_status": 200,
+          "native_owner_after_navigation": true,
+          "proof_end": 324414.906,
+          "own_close_confirmed": true
+        },
+        {
+          "site": "icnet",
+          "actor": 2,
+          "native_thread_id": 86400,
+          "create_start": 324414.515,
+          "create_end": 324414.562,
+          "target_id": "418B6D4B0F16F6A19FF722E7FF48CC84",
+          "before_navigation_owner": true,
+          "navigation_start": 324414.593,
+          "navigation_end": 324414.859,
+          "http_status": 200,
+          "native_owner_after_navigation": true,
+          "proof_end": 324414.953,
+          "own_close_confirmed": true
+        }
+      ],
+      "navigation_overlap_seconds": 0.21899999998277053
+    }
+  ],
+  "qualification": "Native proof ran before final stricter rebind and terminal/teardown/global-attribution hardening. Native owner verification function unchanged; full final source regression is separate. No final-source production deployment claim."
+}

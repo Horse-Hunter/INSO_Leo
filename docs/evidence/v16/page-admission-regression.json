@@ -1,0 +1,25 @@
+{
+  "application_source": "20fda49c4573a0c59917d8ddf009655d220a41a2",
+  "full": {
+    "passed": 2840,
+    "skipped": 1,
+    "seconds": 113.03
+  },
+  "targeted_final": {
+    "passed": 309,
+    "seconds": 13.04
+  },
+  "ruff": "PASS",
+  "diff_check": "PASS",
+  "installed_application_unchanged": "04075bc884c9c2927e677edcbddcb43419833aef",
+  "deployed": false,
+  "native_test_scope": "two thread-local clients, same protected Chrome, exact-target before/after navigation and cleanup only; no source parsing/module actor scheduling or external writes",
+  "initial_failed_full": "2826pass/1fail/1skip: existing marker quarantine regression; fixed by explicit native API, never weakened old write-marker check",
+  "intermediate_fulls": "2834/2836pass each1skip before additional terminal/teardown/global-attribution hardening; not final-source claims",
+  "source_sha256": {
+    "src/research/cdp_pages.py": "e1a78e8c7df6e83fe0f6361e378cc48555e77c81c2918458bbe5a9d8b5e545f3",
+    "src/research/runtime.py": "882a2fab65d2a7eb371713be2c4918bf9255e8e7e383a2724c2fae6d02e90556",
+    "src/launcher/backend.py": "5e0982c15ad7ad37cb56c3eaa2a4787b7df2e6641be7240cd79db46eb8dbf78c",
+    "src/launcher/browser_bootstrap.py": "1c25b762c2e314f47fa56d808c004a013e3edff9694dedbc9db7150cbea12132"
+  }
+}

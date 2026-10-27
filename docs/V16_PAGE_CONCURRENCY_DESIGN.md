@@ -1,6 +1,18 @@
 # V1.6 page concurrency — stage C safety design
 
-Status2026-10-27: **ISOLATED_PAGE_PREREQUISITE / ACTORS_NOT_IMPLEMENTED**.
+Status2026-10-27: **NATIVE_OWNER_POSITIVE_LIVE_PROOF / ACTORS_NOT_IMPLEMENTED**.
+New source20fda49: explicit native_page_owner separates read-only target proof
+from legacy write-marker checks. Injected process-runtime admission fences
+unknown creation/cleanup/ownership across bound/reconnected/fallback clients,
+source result/terminal gates and teardown; no guessed orphan cleanup.
+HQEW/ICnet navigation-before/after ownership now verified in separately
+Owner-authorized safe-stop window, overlaps0.109s/0.219s, own2pages closed perpair,
+original1page retained. Final source full2840PASS1SKIP113.03s; probe/sourcehash
+qualification in page-admission evidence. New source NOT_DEPLOYED. No actor pool,
+order lease/authpacing/fairdispatch or new timelyTP guarantee implied.
+Following earlier paragraphs are historical initial prerequisite status,
+superseded by this paragraph and canonical report/task.
+
 Reviewed04075bc installed under separately authorized window; it excludes this
 new page-factory increment. CEO83bfdfd passed exact-target source prerequisite;
 67be3f7 adds cleanup-fault fail-closed cases, still uninstalled/review-required.

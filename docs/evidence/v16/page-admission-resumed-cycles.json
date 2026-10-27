@@ -1,0 +1,158 @@
+{
+  "cycles": [
+    {
+      "at": "2026-10-27T14:54:06.742000+08:00",
+      "cycle": "cycle_b8c312331bf14dc2853b53faf940dee7",
+      "module": "inquiry",
+      "phase": "begin",
+      "elapsed": 0.0,
+      "due_in": 0.0
+    },
+    {
+      "at": "2026-10-27T14:56:17.223000+08:00",
+      "cycle": "cycle_3f079751c23c495b924c04b6d6157915",
+      "module": "quotation",
+      "phase": "begin",
+      "elapsed": 0.0,
+      "due_in": 0.0
+    },
+    {
+      "at": "2026-10-27T14:56:49.291000+08:00",
+      "cycle": "cycle_3f079751c23c495b924c04b6d6157915",
+      "module": "quotation",
+      "phase": "deferred",
+      "elapsed": 32.078,
+      "due_in": 900.0
+    },
+    {
+      "at": "2026-10-27T14:56:49.517000+08:00",
+      "cycle": "cycle_e5c2893c54f94290ad1c8d4580b8949d",
+      "module": "tp",
+      "phase": "begin",
+      "elapsed": 0.0,
+      "due_in": 0.0
+    },
+    {
+      "at": "2026-10-27T14:57:05.219000+08:00",
+      "cycle": "cycle_e5c2893c54f94290ad1c8d4580b8949d",
+      "module": "tp",
+      "phase": "completed",
+      "elapsed": 15.703,
+      "due_in": 900.0
+    },
+    {
+      "at": "2026-10-27T15:05:57.768000+08:00",
+      "cycle": "cycle_b8c312331bf14dc2853b53faf940dee7",
+      "module": "inquiry",
+      "phase": "completed",
+      "elapsed": 711.016,
+      "due_in": 900.0
+    },
+    {
+      "at": "2026-10-27T15:11:49.311000+08:00",
+      "cycle": "cycle_fa2a974b01ae4b9fbbcceee2cc781e75",
+      "module": "quotation",
+      "phase": "begin",
+      "elapsed": 0.0,
+      "due_in": 0.0
+    },
+    {
+      "at": "2026-10-27T15:19:39.320000+08:00",
+      "cycle": "cycle_fa2a974b01ae4b9fbbcceee2cc781e75",
+      "module": "quotation",
+      "phase": "completed",
+      "elapsed": 470.016,
+      "due_in": 900.0
+    },
+    {
+      "at": "2026-10-27T15:19:39.429000+08:00",
+      "cycle": "cycle_2665b6cfc72c440c8a07c444f7301987",
+      "module": "tp",
+      "phase": "begin",
+      "elapsed": 0.0,
+      "due_in": 0.0
+    },
+    {
+      "at": "2026-10-27T15:19:52.104000+08:00",
+      "cycle": "cycle_2665b6cfc72c440c8a07c444f7301987",
+      "module": "tp",
+      "phase": "completed",
+      "elapsed": 12.672,
+      "due_in": 900.0
+    },
+    {
+      "at": "2026-10-27T15:20:57.778000+08:00",
+      "cycle": "cycle_955f24cf1cf44c5d9c0bed537c74a181",
+      "module": "inquiry",
+      "phase": "begin",
+      "elapsed": 0.0,
+      "due_in": 0.0
+    },
+    {
+      "at": "2026-10-27T15:26:21.432000+08:00",
+      "cycle": "cycle_955f24cf1cf44c5d9c0bed537c74a181",
+      "module": "inquiry",
+      "phase": "completed",
+      "elapsed": 323.656,
+      "due_in": 900.0
+    },
+    {
+      "at": "2026-10-27T15:59:46.287000+08:00",
+      "cycle": "cycle_5c5ffb45c8e64c6f9217bf95a21c8622",
+      "module": "inquiry",
+      "phase": "begin",
+      "elapsed": 0.0,
+      "due_in": 0.0
+    },
+    {
+      "at": "2026-10-27T16:02:35.412000+08:00",
+      "cycle": "cycle_41b5360d502e4a64b8e19afa325331bf",
+      "module": "quotation",
+      "phase": "begin",
+      "elapsed": 0.0,
+      "due_in": 0.0
+    },
+    {
+      "at": "2026-10-27T16:03:20.513000+08:00",
+      "cycle": "cycle_41b5360d502e4a64b8e19afa325331bf",
+      "module": "quotation",
+      "phase": "deferred",
+      "elapsed": 45.094,
+      "due_in": 900.0
+    },
+    {
+      "at": "2026-10-27T16:03:20.819000+08:00",
+      "cycle": "cycle_4c2c74d63ad1425f91b2c169862cef6c",
+      "module": "tp",
+      "phase": "begin",
+      "elapsed": 0.0,
+      "due_in": 0.0
+    },
+    {
+      "at": "2026-10-27T16:03:37.793000+08:00",
+      "cycle": "cycle_4c2c74d63ad1425f91b2c169862cef6c",
+      "module": "tp",
+      "phase": "completed",
+      "elapsed": 16.969,
+      "due_in": 900.0
+    },
+    {
+      "at": "2026-10-27T16:12:24.888000+08:00",
+      "cycle": "cycle_5c5ffb45c8e64c6f9217bf95a21c8622",
+      "module": "inquiry",
+      "phase": "completed",
+      "elapsed": 758.594,
+      "due_in": 900.0
+    }
+  ],
+  "reasons": {
+    "GOOGLE_WEB_READ_BUSY": 10,
+    "GOOGLE_READ_RETRY_EXHAUSTED": 2
+  },
+  "business_results": {
+    "V1.2:SOURCE_CHANGED": 6,
+    "V1.3:SOURCE_IDENTITY_UNRESOLVED": 1,
+    "V1.3:NO_RECENT_QUOTE": 31,
+    "V1.3:PRICE_UNCHANGED": 1
+  }
+}

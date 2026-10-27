@@ -288,8 +288,8 @@ separate deployment proposal, not an automatic consequence of source fixes.
 | B SMTP current UNKNOWN/final mailbox delivery | NOT_VERIFIED final delivery/live UNKNOWN | Current coherent readonly DB0UNKNOWN/PENDING/SENDING; no live UNKNOWN case to exercise |
 | B real restart idempotency | PASS historical preservation | Normal authorized stop/install/restart;108oldcommands,139oldSENT,4TP fullrows unchanged; no historical replay |
 | C concurrency reuse/design and blocker audit | PASS | Independent docs/V16_PAGE_CONCURRENCY_DESIGN.md; preferred bounded same-CDP clients vs broad async conversion |
-| C page concurrency implementation | DEFERRED actors; isolated prerequisite implemented |67be3f7 cleanup fault follow-up; exact target proof native PASS; navigation ownership NOT_VERIFIED |
-| C actual webpage overlap/same-order queue timeline | PASS native navigation overlap only; NOT_VERIFIED business/order exclusion | SameChrome/two own pages overlap0.125/0.532s; full actor arbitration NOT_IMPLEMENTED |
+| C page concurrency implementation | DEFERRED actors; new source20fda49 isolated | Native identity now verified after navigation; full actor integration still NOT_IMPLEMENTED |
+| C actual webpage overlap/same-order queue timeline | PASS native ownership/navigation only; NOT_VERIFIED business/order exclusion | SameChrome/two own pages HQEW0.109s/ICnet0.219s; before/after identity and precise cleanupPASS; full actors not enabled |
 | D strict continuous multi-cycle stability | NOT_VERIFIED | New6min and earlier2x121s intermittent samples; release observed, no proven unattended upper bound |
 | D finite current process counters | PASS finite30min |31samples/1800.063s, avg0.28961%host; handlespeak5646→1004; RSSgrowth remains open |
 | D native semaphore owner/release | PASS | MainPID74176:5196→576semaphores, total5770→1131handles |
@@ -1140,3 +1140,6 @@ Owner asked to click开始运行 after own pages closed because Windowsscreensho
 FrameArrived still timesout/unlabelled controls; no guessed click or process kill.
 
 Final full offline regression of this application increment: **2840PASS/1SKIP113.03s**, scopedRuff/diffPASS. No source change after this run. InstalledEXE not rebuilt or replaced.
+
+Source safety increment committed20fda49c4573a0c59917d8ddf009655d220a41a2.
+Evidence/report follow-up records current proof and qualifications; no new production installation.

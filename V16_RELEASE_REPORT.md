@@ -1,6 +1,56 @@
 # V1.6 unified release and initial production verification
 
-## Current installed state —2026-10-27 15:40 +08
+## Current source safety continuation after CEO59f0628 —2026-10-27
+
+**REVIEW_REQUIRED. Installed04075bc unchanged. New source20fda49c4573a0c59917d8ddf009655d220a41a2 NOT_DEPLOYED.**
+Reused existing factory/facade/composition, backend source-query and module gates,
+WorkflowRuntime.abort_module_resource and canonical teardown. No new dependency,
+Chrome/Profile, daemon, scheduler, SMTP framework or business ledger.
+
+New explicit native_page_owner proves original native target after navigation
+without document JavaScript. Legacy page_owner unchanged, so Google/INSO marker
+loss still quarantines writes. Intermediate full caught an unsafe compatibility
+regression; corrected by separate explicit read-only API, not weakening old test.
+Unknown createTarget outcomes (including Chrome-created/no-response-ID) latch
+uncertainty without guessed close. Injected thread-safe admission spans shared,
+fallback and reattached clients. Cannot rebind/reset to bypass fault; both guards
+invalidated on conflicting bind. No Playwright objects/exception instances shared
+through this guard. Source before/finally and module terminal checks defeat
+translated unavailable/success returns; global runtime fault attribution avoids
+blaming historic order. Unknown-resource teardown detaches only, never legacy
+park/sweep; guards also fence direct park calls. All source changes uninstalled.
+Guard scope is one runtime and all bound clients, not a cross-process orphan
+reconciliation service or permission to enable unbound future actors.
+
+Final full **2840PASS/1SKIP113.03s**, final targeted309PASS13.04s, Ruff/diffPASS.
+Native Owner-authorized safe-stop window: same9222, max2own background tabs,
+independent thread-local clients; HQEW/ICnet actual navigationoverlap0.109s/0.219s.
+EachHTTP200; exacttarget+owner verified beforeANDafter navigation; own exacttarget
+close confirmed, initial1humanpage preserved/final1page, no extraChrome/Profile.
+No source price parsing, login/credential retrieval/Google/INSO/write/purchase/
+testSMTP. Probe precedes only final rebind/terminal/teardown/attribution hardening;
+native proof function unchanged, final-source offline result separate. Evidence
+page-admission-native-owner.json retains actual probe sourcehash, no false exact
+final-source live proof or installed-code claim.
+
+Owner corrected actual control label to开始运行 and confirmed initial restore;
+new true cycles15:59:46inquiry/16:02:35quotation/16:03:20TP; TPfinished16:03:37,
+inquiry16:12:24. Later quotation deferredGOOGLEbusy again; current141SENT, historic
+139SENT/108commands/4TP intact, noPENDING/SENDING/UNKNOWN. Two postinstall runtime
+fault notices; no new TPmail/purchase/write success claimed. Not suppressed.
+Owner subsequently authorized/confirmed this NEW safe-stop browser window. All
+own tabs closed; Windows screenshot stillFrameArrivedtimeout/unlabelled controls.
+Owner asked to click开始运行 to restore existing business; confirmation pending.
+No force-kill, restart or guessed click. Current reviewed EXE stays installed.
+
+Unified task checklist updated; native-identity prerequisite now positive-live
+PASS and shared guard source regressionPASS, pending independentReview. **Actual
+module actors, same-source order leases, siteauth pacing, fair dispatch and TP
+454.210s delay remain open.** Do not announce completeV1.6 or deploy newsource.
+Long-term memory/game/DPI/business success/readback gaps also remain open.
+
+
+## Prior installed-state observation —2026-10-27 15:40 +08 (superseded above)
 
 **REVIEW_REQUIRED / REVIEWED_FIX_INSTALLED / PAGE_PARALLELISM_NOT_READY.**
 Owner separately authorized stop/backup/reviewed install/restore, then confirmed
