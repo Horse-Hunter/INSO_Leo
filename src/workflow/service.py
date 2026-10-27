@@ -31,6 +31,7 @@ from src.sheets.brand_write import (
     write_brand_safely,
 )
 
+from .market_messages import MarketModule
 from .models import WorkflowStatus, WorkItem
 from .store import DEFAULT_RETRY_DELAYS, WorkflowStateStore
 from .v12_store import V12DatabaseError
@@ -307,13 +308,14 @@ class WorkflowRuntime:
                 raise RuntimeError("ORDER_ADMISSIONS_CLOSED")
             self._order_capacity, self._order_closed = capacity, False
 
-    def request_order_lease(self, worksheet, row_position, request_token):
+    def request_order_lease(self, worksheet, row_position, request_token, *, module_id):
         """Queue an original source key; matching snapshots/MPN are not lock keys.
 
         Callers first verify source identity through existing domain contracts.
         This lease cannot authorize Google writes, purchases or mail delivery.
         """
-        if (not isinstance(worksheet, WorksheetIdentity)
+        if (not isinstance(module_id, MarketModule)
+                or not isinstance(worksheet, WorksheetIdentity)
                 or not isinstance(worksheet.spreadsheet, str) or not worksheet.spreadsheet.strip()
                 or not isinstance(worksheet.worksheet, str) or not worksheet.worksheet.strip()
                 or isinstance(row_position, bool) or not isinstance(row_position, int) or row_position < 1
@@ -322,9 +324,11 @@ class WorkflowRuntime:
         key = worksheet, row_position
         with self._module_lock:
             self._check_order_admission()
+            if module_id.value not in self._module_periods:
+                raise ValueError("ORDER_MODULE_NOT_CONFIGURED")
             old = self._order_requests.get(request_token)
             if old is not None:
-                if old != (key, threading.get_ident()):
+                if old != (key, threading.get_ident(), module_id):
                     raise OrderResourceOwnershipError()
                 if key in self._order_active and self._order_active[key].request_token == request_token:
                     raise RuntimeError("ORDER_ALREADY_CLAIMED")
@@ -334,9 +338,10 @@ class WorkflowRuntime:
             # Duplicate-key waiters cannot consume another row's execution slot.
             if key not in self._order_waiters and len(self._order_waiters) >= self._order_capacity:
                 return False
-            if len(self._order_waiters.get(key, ())) >= max(1, len(self._module_periods)):
+            if any(self._order_requests[token][2] is module_id
+                   for token in self._order_waiters.get(key, ())):
                 return False
-            self._order_requests[request_token] = key, threading.get_ident()
+            self._order_requests[request_token] = key, threading.get_ident(), module_id
             self._order_waiters.setdefault(key, deque()).append(request_token)
             return True
 
@@ -352,7 +357,7 @@ class WorkflowRuntime:
             pending = self._order_requests.get(request_token)
             if pending is None:
                 return None
-            key, owner = pending
+            key, owner, _ = pending
             if owner != threading.get_ident():
                 raise OrderResourceOwnershipError()
             active = self._order_active.get(key)
@@ -419,7 +424,7 @@ class WorkflowRuntime:
             pending = self._order_requests.get(request_token)
             if pending is None:
                 return False
-            key, owner = pending
+            key, owner, _ = pending
             if owner != threading.get_ident():
                 raise OrderResourceOwnershipError()
             if key in self._order_active and self._order_active[key].request_token == request_token:
@@ -438,7 +443,7 @@ class WorkflowRuntime:
             active = {lease.request_token for lease in self._order_active.values()}
             for token in tuple(self._order_requests):
                 if token not in active:
-                    key, _ = self._order_requests.pop(token)
+                    key, _, _ = self._order_requests.pop(token)
                     self._order_waiters[key].remove(token)
                     if not self._order_waiters[key]:
                         del self._order_waiters[key]

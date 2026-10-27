@@ -1827,3 +1827,24 @@ or arbitrary production intervention.
 `PREVIOUS_TP_454_210S_DELAY_OPEN`,
 `CURRENT_PRODUCTION_04075BC_UNCHANGED`,
 `V16_REVIEW_REQUIRED`.
+
+
+## CEO393a892 follow-up — actual module-aware source FIFO admission
+
+A terminal lifecycle and B local stop boundary accepted by CEO. Correct the B
+comment/behavior gap before actor use: request_order_lease now REQUIRES explicit
+validated MarketModule from approved immutable contract, verifies it is configured,
+stores it with scheduler owner/source key, rejects same-token module substitution,
+and admits at most one outstanding request per actual module per source row.
+It never infers module from token labels. Repeated inquiry cycles cannot reserve
+TP/quotation's positions; those cycles remain in canonical domain work for later
+retry. Existing FIFO and distinct-source budget retained. This changes an unused
+isolated API; no production caller or feature enabled. Tests updated to provide
+real module argument rather than illustrative token labels.
+
+88PASS10.39s targeted across leases/messages/backend fault tests; Ruff/diffPASS.
+Initial2failures were test loops still passing inquiry instead of loop module;
+corrected fixtures and final88PASS. Prior B full2868/1SKIP belongs to earlier
+source only. Added each module's100repeated cycles vs other modules' admission,
+eventualFIFOclaim and independent-source progress, module forgery/type refusal.
+No actual deadline/worker acknowledgment/business parallelism PASS inferred.
