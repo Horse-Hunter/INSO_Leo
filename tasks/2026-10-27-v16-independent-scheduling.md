@@ -2600,3 +2600,13 @@ canonical selectors and thread transport; clients/senders synthetic. Do not call
 this real business/browser or TP wall-clock PASS. Final exact source full/evidence
 next. Scope: E1/E2/E3/E4 OFFLINE_IMPLEMENTED_REVIEW_REQUIRED; E5 full pending;
 F real page overlap/TP deadline/long-run NOT_VERIFIED. No production changes.
+
+### E5 first full findings and minimal corrections
+
+b35e606 full:2996PASS/2FAIL/1SKIP132.11s, NOT PASS. Restore exact legacy quote
+wait callback for default composition; explicit actor assembly alone uses closed
+retry pump. Original RFQ006 tests unchanged. Recheck shared safety after original
+business callbacks and before TP enqueue, quarantine canonical pending Google
+write outcome, immediately signal existing actor Stop from original Backend.
+87PASS8.23s affected canonical backend/domain/purchase-completion regression.
+Final-source full next; no production/browser/SMTP use, overall REVIEW_REQUIRED.

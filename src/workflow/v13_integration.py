@@ -404,6 +404,7 @@ class QuotationOrderContinuation:
         self.runtime.begin_business_effect(self.lease)
         try:
             result = self.cycle.settle_result(completion.result, self.records)
+            self.runtime.require_business_continuation(self.lease)
         except Exception:
             self.runtime.acknowledge_business_effect(self.lease, BusinessEffectTerminal.UNKNOWN)
             raise

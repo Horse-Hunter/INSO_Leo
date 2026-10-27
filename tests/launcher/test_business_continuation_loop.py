@@ -14,6 +14,7 @@ import pytest
 from src.gui.contracts import RunState
 from src.launcher import backend as launcher
 from src.launcher.market_actors import MarketReadActors
+from src.launcher.purchase_completion import PurchaseCompletionActions
 from src.research.cdp_pages import PageTargetOwnershipError
 from src.research.icnet import IcNetResult
 from src.research.market_contracts import MarketReadMode, MarketReadResult
@@ -23,7 +24,12 @@ from src.research.tp import TpOffer, select_tp_offers
 from src.sheets.pending import query_pending_records
 from src.workflow.service import OrderResourceOwnershipError, WorkflowRuntime
 from src.workflow.tp_research import TpCycle, TpStore
-from src.workflow.v12_contracts import PurchaseDraftResult, PurchaseOutcome
+from src.workflow.v12_contracts import (
+    BusinessState,
+    EventType,
+    PurchaseDraftResult,
+    PurchaseOutcome,
+)
 from src.workflow.v13_integration import V13HoldStore, V13IntegratedCycle
 from src.workflow.v13_quotation import V13QuotationCycle
 from tests.inso.test_v13_quotation_read import quote
@@ -39,12 +45,12 @@ from tests.workflow.test_v12_flow import (
 from tests.workflow.test_v13_quotation import Operations, Quotes, failure
 
 
-@pytest.mark.parametrize('mode', ['complete', 'stop', 'initialization_fault', 'teardown_fault', 'quotation_retry', 'tp_header_fault', 'tp_source_changed', 'inflight_fault', 'inquiry_wait', 'purchase_unknown'])
+@pytest.mark.parametrize('mode', ['complete', 'stop', 'initialization_fault', 'teardown_fault', 'quotation_retry', 'tp_header_fault', 'tp_source_changed', 'inflight_fault', 'inquiry_wait', 'purchase_unknown', 'brand_cleanup_fault', 'mail_guard_fault', 'status_write_pending'])
 def test_actual_three_domain_backend_assembly_without_whole_research_wait(tmp_path, monkeypatch, mode):
     flow, store, ledger, _, _, _, writer, notification_worker = _make_flow(tmp_path,
         facts=ResearchBusinessFacts('货少', Decimal(14), Decimal(2)))
     source_changed = threading.Event()
-    row = FakeSheetsReader().row
+    row = FakeSheetsReader(brand='' if mode == 'brand_cleanup_fault' else 'Brand-X').row
     quote_row = replace(row, row_position=5, cells={**row.cells, 'E': 'MPN5'})
     class Reader:
         def __init__(self):
@@ -62,6 +68,8 @@ def test_actual_three_domain_backend_assembly_without_whole_research_wait(tmp_pa
         reader.rows.append(replace(row, row_position=6, cells={**row.cells, 'E': 'MPN6'}))
     original = next(r for r in query_pending_records(reader, SHEET) if r.row_position == 5)
     store.enqueue(original, now=NOW)
+    flow._set_state(store.inquiry_id_for(original.record_identity), BusinessState.PURCHASE_RECORDED,
+                    EventType.PURCHASE_DATA_SAVED, NOW)
     reader.rows[1] = replace(reader.rows[1], cells={**reader.rows[1].cells, 'A': 'TP_ONLY'})
     reader.rows[2] = replace(quote_row, cells={**quote_row.cells, 'A': '发给采购'})
     holds = V13HoldStore(tmp_path / 'workflow.sqlite3')
@@ -128,14 +136,19 @@ def test_actual_three_domain_backend_assembly_without_whole_research_wait(tmp_pa
     prepare_purchase = writer.prepare
     def purchase(command):
         purchase_at.append(clock.tick)
-        if mode == 'purchase_unknown':
-            ledger.set_purchase_state(command.inquiry_id, command.command_id,
-                PurchaseOutcome.UNKNOWN_WRITE_OUTCOME, at=NOW)
-            return PurchaseDraftResult(command.command_id, PurchaseOutcome.UNKNOWN_WRITE_OUTCOME, NOW)
+        if mode in {'purchase_unknown', 'status_write_pending'}:
+            outcome = PurchaseOutcome.UNKNOWN_WRITE_OUTCOME if mode == 'purchase_unknown' else PurchaseOutcome.SAVED
+            ledger.set_purchase_state(command.inquiry_id, command.command_id, outcome, at=NOW)
+            return PurchaseDraftResult(command.command_id, outcome, NOW)
         return prepare_purchase(command)
     writer.prepare = purchase
     backend._v12_store, backend._store = ledger, store
-    backend._purchase_completion = SimpleNamespace(retry_saved_statuses=lambda **kw: None)
+    def failed_status_writer():
+        raise TimeoutError('synthetic Google status write unavailable')
+    backend._purchase_completion = PurchaseCompletionActions(workflow_store=store, v12_store=ledger,
+        reader=reader, writer_factory=failed_status_writer, clock=lambda: NOW)
+    flow._on_result = backend._complete_inquiry
+    backend._refresh = lambda: None
     backend._idle_login_tick = lambda **kw: None
     def close_owner(**kw):
         backend._inso_session = None
@@ -148,12 +161,26 @@ def test_actual_three_domain_backend_assembly_without_whole_research_wait(tmp_pa
     backend._notify = lambda: None
     backend._cache_workbench = lambda **kw: None
     backend._v13_ledger_ready = False
+    if mode == 'brand_cleanup_fault':
+        def brand_failure(identity, brand):
+            error = PageTargetOwnershipError(())
+            backend._page_admission.invalidate(error)
+            raise error
+        flow._brand_updater = SimpleNamespace(update_brand=brand_failure)
     backend._alert_owner_of_login = lambda **kw: None
     backend._tp = TpCycle(store=tp_store,
         brief=SimpleNamespace(read=lambda _: (brief(row='4', mpn='TEST-TP', price='2 RMB'),)),
         reader=reader, research=service(), outbox=ledger, worker=notification_worker)
     responses = ([failure()] if mode == 'quotation_retry' else []) + [(quote(at=NOW, model='MPN5'),)]
     quotes, operations = Quotes(responses), Operations()
+    if mode == 'mail_guard_fault':
+        from src.workflow import tp_research
+        compose = tp_research.tp_mail
+        def compose_then_resource_fault(*args, **kwargs):
+            mail = compose(*args, **kwargs)
+            backend._page_admission.invalidate(PageTargetOwnershipError(()))
+            return mail
+        monkeypatch.setattr(tp_research, 'tp_mail', compose_then_resource_fault)
     if mode == 'tp_header_fault':
         def bad_header(_spreadsheet):
             raise ValueError('TP_HEADER_INVALID')
@@ -190,20 +217,22 @@ def test_actual_three_domain_backend_assembly_without_whole_research_wait(tmp_pa
     monkeypatch.setattr(launcher, 'utc_now', lambda: NOW + timedelta(seconds=clock.tick))
     monkeypatch.setattr(launcher, 'monotonic', lambda: clock.tick)
     monkeypatch.setattr('src.launcher.business_continuations.monotonic', lambda: clock.tick)
-    if mode in {'initialization_fault', 'teardown_fault', 'inflight_fault', 'purchase_unknown'}:
+    if mode in {'initialization_fault', 'teardown_fault', 'inflight_fault', 'purchase_unknown', 'brand_cleanup_fault', 'mail_guard_fault', 'status_write_pending'}:
         with pytest.raises((OrderResourceOwnershipError, RuntimeError)):
             backend._run_independent_poll(runtime, {'spreadsheet_id': SHEET.spreadsheet}, None,
                 SimpleNamespace(poll_scope=nullcontext), reader, (SHEET,), None)
         assert backend._state is RunState.GLOBAL_STOP
         assert runtime.module_resource_failed
-        if mode == 'purchase_unknown':
+        if mode in {'purchase_unknown', 'brand_cleanup_fault', 'status_write_pending'}:
             from src.workflow.service import _RESEARCH_WORKER_LOCK
             assert runtime.business_resource_counts()['unknown'] == 1
             assert _RESEARCH_WORKER_LOCK.acquire(blocking=False)
             _RESEARCH_WORKER_LOCK.release()
-        if mode == 'inflight_fault':
-            assert not writer.commands
+        if mode in {'inflight_fault', 'brand_cleanup_fault'}:
+            assert not purchase_at and not writer.commands
             assert all(row['state'] != 'MAIL_QUEUED' for row in tp_store.rows())
+        if mode == 'mail_guard_fault':
+            assert tp_store.rows()[0]['state'] == 'FAILED'
         return
     else:
         backend._run_independent_poll(runtime, {'spreadsheet_id': SHEET.spreadsheet}, None,

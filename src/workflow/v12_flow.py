@@ -965,7 +965,15 @@ class InquiryOrderContinuation:
         try:
             self.coordinator._research_results[self.item.inquiry_id] = result
             item = self.worker.finish_due_one(self.item, result, now=self.now)
+            # Legacy brand persistence records some collaborator failures; a
+            # shared ownership fault may never be softened into safe routing.
+            self.runtime.require_business_continuation(self.lease)
             final = self.coordinator.settle_research(item, result, now=self.now)
+            self.runtime.require_business_continuation(self.lease)
+            pending_state = self.coordinator._v12_store.business_state(self.item.inquiry_id) in {
+                BusinessState.STATUS_WRITE_PENDING, BusinessState.SUBMIT_UNCONFIRMED,
+                BusinessState.INTERRUPTED_POSSIBLY_SENT}
+
         except Exception:
             # After the original write-capable route starts, no exception is
             # proof that Save/Google/outbox did not commit. Preserve old ledger.
@@ -973,7 +981,7 @@ class InquiryOrderContinuation:
             self._release_worker()  # domain call ended; durable UNKNOWN + source lease remain
             self._closed = True
             raise
-        unknown = final is not None and final.purchase_outcome in {
+        unknown = pending_state or final is not None and final.purchase_outcome in {
             PurchaseOutcome.UNKNOWN_WRITE_OUTCOME, PurchaseOutcome.SUBMIT_UNCONFIRMED,
             PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED}
         self.runtime.acknowledge_business_effect(self.lease,

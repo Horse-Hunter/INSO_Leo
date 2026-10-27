@@ -734,6 +734,9 @@ class ProductionBackend(GuiBackend):
                 with self._poll_gate:
                     self._drain_due_on_stop.set()
                     self._stop.set()
+                    actors = self._market_actors
+                    if actors is not None:
+                        actors.request_stop()  # thread-safe atomic transport stop, no owner release here
                     self._manual_condition.notify_all()
                 self._notify()
 
@@ -927,7 +930,8 @@ class ProductionBackend(GuiBackend):
                     active_holds = hold_store or holds
                     cycle = V13QuotationCycle(reader=active_reader, store=active_store,
                         operations=self._v13_operations(rc, cfg), clock=utc_now,
-                        wait=self._closed_retry_wait, stop_requested=self._stop.is_set, fx_provider=quotation_fx,
+                        wait=(self._closed_retry_wait if self._continuation_pump is not None else self._stop.wait),
+                        stop_requested=self._stop.is_set, fx_provider=quotation_fx,
                         on_fx_success=lambda: self._site_recovered("汇率网站"),
                         on_query_success=lambda: self._site_recovered("INSO"))
                     def updater():
@@ -1737,7 +1741,8 @@ class ProductionBackend(GuiBackend):
         try:
             return run_inso_query(
                 read_attempt, prepare=prepare_attempt, succeeded=succeeded,
-                reset=self._close_inso_order_tab, wait=self._closed_retry_wait,
+                reset=self._close_inso_order_tab,
+                wait=self._closed_retry_wait if self._continuation_pump is not None else self._stop.wait,
             )
         except V12Fault as exc:
             if exc.reason == "INSO_QUERY_RETRIES_EXHAUSTED" and last_result is not None:
@@ -2336,6 +2341,9 @@ class ProductionBackend(GuiBackend):
             self._drain_due_on_stop.clear()
             with self._poll_gate:
                 self._stop.set()
+                actors = self._market_actors
+                if actors is not None:
+                    actors.request_stop()
             if isinstance(exc, ProductionConfigurationError):
                 statuses = (
                     HealthItem("Google Sheets", "需要配置", "缺少生产数据源配置"),

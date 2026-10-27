@@ -343,7 +343,8 @@ class TpCycle:
         return identify_worksheet_row(worksheet, targets[0])
 
 
-    def complete_order(self, order, key, command, result, *, now, expected_source=None):
+    def complete_order(self, order, key, command, result, *, now, expected_source=None,
+                       before_enqueue=lambda: None):
         """Original owner only. Same source/command/Stop gates before enqueue."""
         if key != task_key(order.spreadsheet, order.sheet, order.row):
             raise TpLocalError("TP_IDENTITY_CHANGED")
@@ -367,6 +368,7 @@ class TpCycle:
         if self.stop_requested():
             self.store.finish(key, "FAILED", now, "TP_STOPPED")
             return
+        before_enqueue()
         self.outbox.enqueue_notification(mail)
         self.store.finish(key, "MAIL_QUEUED", now)
 
@@ -507,7 +509,8 @@ class TpOrderContinuation:
         self._runtime.begin_business_effect(self.lease)
         try:
             self._cycle.complete_order(self.order, self.lease.identity.domain_task_id,
-                self.command, result, now=self.now, expected_source=self.lease.identity.source_record)
+                self.command, result, now=self.now, expected_source=self.lease.identity.source_record,
+                before_enqueue=lambda: self._runtime.require_business_continuation(self.lease))
         except Exception:
             # No blind retry after enqueue: canonical command lookup is the
             # authority. If reconciliation itself fails, retain the source.

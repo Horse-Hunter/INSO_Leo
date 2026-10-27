@@ -1082,3 +1082,28 @@ Production04075bc, runtime/config/Vault/SENT/UNKNOWN/Chrome and70956 old soak
 were NOT accessed, replaced or interrupted. Auth allowlists, ordinary1..6month
 and TP1..12month algorithms, purchase permissions and irreversible gates remain
 original. No packaging/install/test email. Reports ONLY to Owner for forwarding.
+
+## E5 integration regression corrections — exact final source follows
+
+Initial frozen E4b35e606/fe964266 full run:2996PASS/2FAIL/1SKIP132.11s.
+Two unchanged RFQ006 legacy backend tests correctly rejected the changed quote
+wait callback identity. Restored EXACT original stop-event wait for default
+composition; cooperative closed-page pumping is selected only in explicit
+continuation assembly. No test expectation weakened. This failed full is not
+called PASS and is not reassigned to later source.
+
+Source inspection also required rechecking the SAME shared safety latch after
+legacy brand completion/quotation callbacks and immediately before TP immutable
+outbox enqueue. A swallowed/recorded old collaborator failure cannot progress to
+unsafe routing. Google STATUS_WRITE_PENDING after original purchase completion
+counts as unconfirmed business terminal, retaining source quarantine and original
+ledger. Actual original PurchaseCompletionActions/_complete_inquiry are exercised
+in synthetic integrated tests, including unknown purchase/status write, brand
+cleanup failure and pre-enqueue resource fault.13 assembly modes in final tests;
+no real purchase/Google/SMTP action.87PASS8.23s original-backend/completion/domain
+focused after corrections (includes preserved RFQ006 assertions).
+
+Safe Stop/global stop now immediately signal the ALREADY EXISTING thread-safe
+actor stop port; owner-only lease drain remains on poll thread. Does not alter
+accepted actor transport race protocol. No new auth tokens/Owner permissions.
+Final full result and source/tree SHA recorded separately after this commit.
