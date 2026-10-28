@@ -1569,5 +1569,2521 @@
       "cpu_seconds": 88.109375,
       "responding": true
     }
+  },
+  "post_release_passive_observation_20261028": {
+    "state": "BUSINESS_RUNNING / V16_REVIEW_REQUIRED",
+    "review_anchor": "5771c55bbd62f173e2808e5fc22b5d76c35d9f7d",
+    "application_source": "c24d686096b1f6b5157ac1e443167be5662f6b54",
+    "src_tree": "81ab97bbbff5f220e70ae2ad73f8c5ff4e497f8f",
+    "installed_exe_sha256": "C92F48E1380A90A747300CD7BDADFBD410C6A8D8352304C1B4D6DA438C7F28CE",
+    "cutoff": "2026-10-28T06:23:16.952170+00:00",
+    "scope": "Existing sanitized logs, readonly consistent in-memory SQLite snapshots, finite Win32 process counters only; no CDP/Playwright/browser/UI/business/write/config/install/production process control. No new observer daemon. Original owner serial path, optional market actors still disabled.",
+    "timeline": [
+      {
+        "at": "2026-10-28T10:48:54.698000+08:00",
+        "cycle": "cycle_e44d4541815540ae9705a120277a29aa",
+        "module": "inquiry",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": null,
+        "plan_basis": "NO_PRIOR_PLAN_LOG",
+        "delay_seconds": null,
+        "finish_at": "2026-10-28T11:07:04.251000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 1089.547,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T10:50:59.234000+08:00",
+        "cycle": "cycle_595cc26629ae4b73941c8902c0d46788",
+        "module": "quotation",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": null,
+        "plan_basis": "NO_PRIOR_PLAN_LOG",
+        "delay_seconds": null,
+        "finish_at": "2026-10-28T10:58:56.086000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 476.86,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T11:07:04.326000+08:00",
+        "cycle": "cycle_4ec09104633544dbb45814276f29b7ff",
+        "module": "tp",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": null,
+        "plan_basis": "NO_PRIOR_PLAN_LOG",
+        "delay_seconds": null,
+        "finish_at": "2026-10-28T11:07:16.173000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 11.844,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T11:13:56.098000+08:00",
+        "cycle": "cycle_c6f03be419c74b7d9c12defc48c647bc",
+        "module": "quotation",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T11:13:56.086000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 0.012,
+        "finish_at": "2026-10-28T11:22:05.212000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 489.11,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T11:22:05.286000+08:00",
+        "cycle": "cycle_d17d3a3645b84ef683eb206e85413d77",
+        "module": "inquiry",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T11:22:04.251000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 1.035,
+        "finish_at": "2026-10-28T11:27:12.973000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 307.672,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T11:23:52.965000+08:00",
+        "cycle": "cycle_05858b3d74194641aad3fd49ea0d0640",
+        "module": "tp",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T11:22:16.173000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 96.792,
+        "finish_at": "2026-10-28T11:24:01.241000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 8.281,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T11:37:05.227000+08:00",
+        "cycle": "cycle_05286a14497b4c90b770110bd6829c11",
+        "module": "quotation",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T11:37:05.212000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 0.015,
+        "finish_at": "2026-10-28T11:45:20.663000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 495.438,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T11:45:20.736000+08:00",
+        "cycle": "cycle_491dd5841f8946558f672c91acc39faf",
+        "module": "tp",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T11:39:01.241000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 379.495,
+        "finish_at": "2026-10-28T11:45:28.854000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 8.125,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T11:45:28.927000+08:00",
+        "cycle": "cycle_ecb7b5edb1094c3ca58d915ff5b950bc",
+        "module": "inquiry",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T11:42:12.973000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 195.954,
+        "finish_at": "2026-10-28T11:50:40.332000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 311.391,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T12:00:20.681000+08:00",
+        "cycle": "cycle_237526079af84f1db4fbba8d722d10b2",
+        "module": "quotation",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T12:00:20.663000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 0.018,
+        "finish_at": "2026-10-28T12:08:26.176000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 485.485,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T12:08:26.250000+08:00",
+        "cycle": "cycle_d1e4c2b358da48658046f02c428a847a",
+        "module": "tp",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T12:00:28.854000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 477.396,
+        "finish_at": "2026-10-28T12:08:34.458000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 8.219,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T12:08:34.536000+08:00",
+        "cycle": "cycle_86f2e97756764a44b3229c636b48014d",
+        "module": "inquiry",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T12:05:40.332000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 174.204,
+        "finish_at": "2026-10-28T12:13:49.261000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 314.719,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T12:23:26.181000+08:00",
+        "cycle": "cycle_b88ec16fa281460691a4a9ae346e09f7",
+        "module": "quotation",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T12:23:26.176000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 0.005,
+        "finish_at": "2026-10-28T12:31:34.413000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 488.235,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T12:31:34.486000+08:00",
+        "cycle": "cycle_2c0d15b39b53481e99a662750fb5fee3",
+        "module": "tp",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T12:23:34.458000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 480.028,
+        "finish_at": "2026-10-28T12:31:43.416000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 8.938,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T12:31:43.487000+08:00",
+        "cycle": "cycle_34c8211d2826479e810d785f4a1927ea",
+        "module": "inquiry",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T12:28:49.261000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 174.226,
+        "finish_at": "2026-10-28T12:36:58.629000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 315.141,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T12:46:34.432000+08:00",
+        "cycle": "cycle_889545586f2e47ceb13e2df0b9c70954",
+        "module": "quotation",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T12:46:34.413000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 0.019,
+        "finish_at": "2026-10-28T12:54:43.139000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 488.704,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T12:54:43.213000+08:00",
+        "cycle": "cycle_d6a0475b1f6a42e1853bb4be5cc419b9",
+        "module": "tp",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T12:46:43.416000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 479.797,
+        "finish_at": "2026-10-28T12:54:51.395000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 8.172,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T12:54:51.469000+08:00",
+        "cycle": "cycle_844573c90bcf4fe591be30c5a31ee53c",
+        "module": "inquiry",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T12:51:58.629000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 172.84,
+        "finish_at": "2026-10-28T13:00:02.504000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 311.031,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T13:09:43.136000+08:00",
+        "cycle": "cycle_b10b91e7561549c5bf75ab9d7def49eb",
+        "module": "quotation",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T13:09:43.139000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": -0.003,
+        "finish_at": "2026-10-28T13:17:53.992000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 490.859,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T13:17:54.078000+08:00",
+        "cycle": "cycle_82f428964a3d431495a4b1225e4b86fc",
+        "module": "tp",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T13:09:51.395000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 482.683,
+        "finish_at": "2026-10-28T13:18:03.841000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 9.766,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T13:18:03.915000+08:00",
+        "cycle": "cycle_bcfd642530774e008458a7d8ca334c1c",
+        "module": "inquiry",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T13:15:02.504000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 181.411,
+        "finish_at": "2026-10-28T13:23:18.754000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 314.828,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T13:32:54.016000+08:00",
+        "cycle": "cycle_a77dbd0daf724d7a8bdc1375c7fbe4e6",
+        "module": "quotation",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T13:32:53.992000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 0.024,
+        "finish_at": "2026-10-28T13:41:06.890000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 492.875,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T13:41:06.964000+08:00",
+        "cycle": "cycle_2081959d6ce442fab066ba3703414fcb",
+        "module": "tp",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T13:33:03.841000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 483.123,
+        "finish_at": "2026-10-28T13:41:15.851000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 8.89,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T13:41:15.924000+08:00",
+        "cycle": "cycle_8bf9c1774c444783934cfeebb9e5de9c",
+        "module": "inquiry",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T13:38:18.754000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 177.17,
+        "finish_at": "2026-10-28T13:46:30.409000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 314.484,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T13:56:06.884000+08:00",
+        "cycle": "cycle_ce6676c04b5e43889b9178f1c8958c56",
+        "module": "quotation",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T13:56:06.890000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": -0.006,
+        "finish_at": "2026-10-28T14:04:14.118000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 487.234,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T14:04:14.191000+08:00",
+        "cycle": "cycle_0d36b7f6398c418d811e64743b114405",
+        "module": "tp",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T13:56:15.851000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 478.34,
+        "finish_at": "2026-10-28T14:04:22.876000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 8.688,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T14:04:22.948000+08:00",
+        "cycle": "cycle_7d134356e5564b6ebed13e733651b3af",
+        "module": "inquiry",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T14:01:30.409000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 172.539,
+        "finish_at": "2026-10-28T14:09:37.566000+08:00",
+        "finish_phase": "completed",
+        "elapsed_seconds": 314.609,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      },
+      {
+        "at": "2026-10-28T14:19:14.130000+08:00",
+        "cycle": "cycle_9a82e40f7209406bbdb13c3827e10a08",
+        "module": "quotation",
+        "phase": "begin",
+        "elapsed": 0.0,
+        "due_in": 0.0,
+        "planned_at": "2026-10-28T14:19:14.118000+08:00",
+        "plan_basis": "prior actual terminal log due_in_s",
+        "delay_seconds": 0.012,
+        "timing_qualification": "Wall-clock log-derived plan; +/- tens of ms mapping/rounding uncertainty; negative millisecond deltas do not prove early execution."
+      }
+    ],
+    "cycle_summary": {
+      "inquiry": {
+        "begun": 9,
+        "completed": 9,
+        "in_progress_at_cutoff": 0,
+        "next_repeat_start_delay_min_seconds": 1.035,
+        "next_repeat_start_delay_max_seconds": 195.954,
+        "repeat_delay_samples": 8
+      },
+      "quotation": {
+        "begun": 10,
+        "completed": 9,
+        "in_progress_at_cutoff": 1,
+        "next_repeat_start_delay_min_seconds": -0.006,
+        "next_repeat_start_delay_max_seconds": 0.024,
+        "repeat_delay_samples": 9
+      },
+      "tp": {
+        "begun": 9,
+        "completed": 9,
+        "in_progress_at_cutoff": 0,
+        "next_repeat_start_delay_min_seconds": 96.792,
+        "next_repeat_start_delay_max_seconds": 483.123,
+        "repeat_delay_samples": 8
+      }
+    },
+    "deadline_basis": "Prior actual terminal cycle log timestamp plus its due_in_s. Owner Stop/resume boundary resets previous run plans. Initial fresh-run due timestamp not logged, so first-run planned_at is null.",
+    "first_tp_wait": {
+      "seconds": 1089.628,
+      "segments_seconds": {
+        "inquiry_begin_to_first_SOURCE_CHANGED": 124.515,
+        "first_result_to_nested_quotation_begin": 0.021,
+        "nested_quotation_wall": 476.852,
+        "quotation_end_to_inquiry_end": 488.165,
+        "inquiry_end_to_tp_begin": 0.075
+      },
+      "attribution": "First124.515s precedes first recorded row result, not evidence of a120s timer. Original _before_next_row wait(120) yields owner to quotation after closed-row result. Nested quotation runs within that safety-wait scope, so120 cannot be added again to476.852. Remaining488.165s includes second row terminal at10:58:56.179, other owner reads/retries/cleanup; no successful per-stage timing, exact split UNKNOWN. Handoff0.075s is not1089.628s scheduler overhead. Initial plan time not recorded."
+    },
+    "tp_repeat_delays": {
+      "first_repeat": {
+        "due": "2026-10-28T11:22:16.173+08:00",
+        "source_changed_result": "2026-10-28T11:23:52.939+08:00",
+        "start": "2026-10-28T11:23:52.965+08:00",
+        "before_row_terminal_seconds": 96.766,
+        "handoff_seconds": 0.026,
+        "delay_seconds": 96.792,
+        "attribution": "Inquiry owns resource until closed-row result; TP dispatched during subsequent original120s wait, not after shortening it."
+      },
+      "max_observed": {
+        "due": "2026-10-28T13:33:03.841+08:00",
+        "quotation_completed": "2026-10-28T13:41:06.890+08:00",
+        "tp_started": "2026-10-28T13:41:06.964+08:00",
+        "quotation_occupancy_after_due_seconds": 483.049,
+        "handoff_seconds": 0.074,
+        "delay_seconds": 483.123
+      },
+      "verdict": "FAIL for prompt TP deadline execution in observed serial Owner composition. Completed cycles do not establish timeliness or real Actor parallelism."
+    },
+    "google": {
+      "window_counts": {
+        "initial_overlap": {
+          "reasons": {
+            "GOOGLE_WEB_READ_ARTIFACT_LOST": 12,
+            "GOOGLE_READ_RETRY_EXHAUSTED": 2
+          },
+          "steps": {
+            "google-download-read": 12
+          }
+        },
+        "after_owner_resume": {
+          "reasons": {
+            "GOOGLE_WEB_READ_UNAVAILABLE": 1
+          },
+          "steps": {
+            "google-download-read": 1
+          }
+        },
+        "passive_resource_window": {
+          "reasons": {},
+          "steps": {}
+        }
+      },
+      "old_page_budget_count_since_install": 0,
+      "after_resume_faults": [
+        {
+          "at": "2026-10-28T11:06:22.781000+08:00",
+          "reason": "GOOGLE_WEB_READ_UNAVAILABLE",
+          "cause": "TimeoutError"
+        }
+      ],
+      "verdict": "One post-resume READ_UNAVAILABLE transient at11:06:22 recovered. No further classified Google fault or retry exhaustion through cutoff; no permanent fix/no-future-fault claim. Initial probe overlap faults preserved, not relabelled as current natural faults."
+    },
+    "ledger": {
+      "baseline": {
+        "at": "2026-10-28T03:23:31.722489+00:00",
+        "integrity": "ok",
+        "source_read_seconds": 0.0,
+        "method": "mode=ro online backup into memory, no held source transaction; abort on BUSY/LOCKED or 1s budget; analysis on memory snapshot only",
+        "recipients": {
+          "SENT": 149
+        },
+        "tp_states": {
+          "MAIL_QUEUED": 4
+        },
+        "purchase_outcomes": {
+          "AI_RECOGNIZED": 3,
+          "MANUAL_REVIEW": 1,
+          "SAVED": 23,
+          "VALIDATION_FAILED": 3
+        },
+        "protected_counts": {
+          "commands": 118,
+          "sent": 149,
+          "tp": 4
+        }
+      },
+      "final": {
+        "at": "2026-10-28T06:23:23.635804+00:00",
+        "integrity": "ok",
+        "source_read_seconds": 0.01600000000325963,
+        "method": "mode=ro online backup into memory, no held source transaction; abort on BUSY/LOCKED or 1s budget; analysis on memory snapshot only",
+        "recipients": {
+          "SENT": 149
+        },
+        "tp_states": {
+          "MAIL_QUEUED": 4
+        },
+        "purchase_outcomes": {
+          "AI_RECOGNIZED": 3,
+          "MANUAL_REVIEW": 1,
+          "SAVED": 23,
+          "VALIDATION_FAILED": 3
+        },
+        "protected_counts": {
+          "commands": 118,
+          "sent": 149,
+          "tp": 4
+        },
+        "recipient_kind_outcomes": [
+          {
+            "kind": "DUPLICATE_ORDER",
+            "outcome": "SENT",
+            "count": 2
+          },
+          {
+            "kind": "IMPORTANT_ORDER",
+            "outcome": "SENT",
+            "count": 32
+          },
+          {
+            "kind": "PURCHASE_EXCEPTION",
+            "outcome": "SENT",
+            "count": 109
+          },
+          {
+            "kind": "TP_RESEARCH",
+            "outcome": "SENT",
+            "count": 6
+          }
+        ],
+        "baseline_full_rows_preserved": {
+          "commands": true,
+          "sent": true,
+          "tp": true
+        },
+        "new_counts": {
+          "commands": 0,
+          "sent": 0,
+          "tp": 0
+        }
+      },
+      "qualification": "Only consistent mode=ro SQLite backup to memory, abort on BUSY/LOCKED,1sbudget. Short source shared read access, never zero-lock claim; all integrity/group/hash work on memory after source close. No durable production copy/migration or credentials. SENT is SMTP acceptance, not inbox delivery."
+    },
+    "business_event_counts": [
+      {
+        "module": "V1.2",
+        "result": "SOURCE_CHANGED",
+        "log_events": 18
+      },
+      {
+        "module": "V1.3",
+        "result": "SOURCE_IDENTITY_UNRESOLVED",
+        "log_events": 10
+      },
+      {
+        "module": "V1.3",
+        "result": "NO_RECENT_QUOTE",
+        "log_events": 292
+      },
+      {
+        "module": "V1.3",
+        "result": "PRICE_UNCHANGED",
+        "log_events": 9
+      }
+    ],
+    "business_qualification": "Counts are repeated natural result events, not unique orders. No increase in SAVED23 or149SENT; no new externally confirmed procurement/quote/TP email success. Existing protections preserved, no synthetic demand.",
+    "resources_full_native_10min": {
+      "window_start": "2026-10-28T03:25:43.531750+00:00",
+      "window_end": "2026-10-28T03:35:43.524260+00:00",
+      "samples": 21,
+      "seconds": 600.0,
+      "logical_cpus": 16,
+      "max_sample_gap_seconds": 30.015,
+      "roles": {
+        "gui": {
+          "host_cpu_average_percent": 0.2488605561,
+          "host_cpu_interval_max_percent": 0.380859,
+          "distinct_observed_lifetimes": 1,
+          "observed_exits_with_terminal_cpu": 0,
+          "resources": {
+            "rss": {
+              "first": 152096768,
+              "last": 152219648,
+              "min": 149483520,
+              "max": 153640960,
+              "change": 122880,
+              "linear_slope_per_hour": 1138208.4670235002
+            },
+            "private": {
+              "first": 119709696,
+              "last": 120193024,
+              "min": 117444608,
+              "max": 121217024,
+              "change": 483328,
+              "linear_slope_per_hour": -2508011.494852952
+            },
+            "handles": {
+              "first": 5537,
+              "last": 655,
+              "min": 619,
+              "max": 5687,
+              "change": -4882,
+              "linear_slope_per_hour": -26102.779784393653
+            },
+            "thread_count": {
+              "first": 9,
+              "last": 9,
+              "min": 9,
+              "max": 9,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            },
+            "processes": {
+              "first": 1,
+              "last": 1,
+              "min": 1,
+              "max": 1,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            }
+          },
+          "point_samples": [
+            {
+              "at": "2026-10-28T03:25:43.531750+00:00",
+              "processes": 1,
+              "rss": 152096768,
+              "private": 119709696,
+              "handles": 5537,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:26:13.532325+00:00",
+              "processes": 1,
+              "rss": 151990272,
+              "private": 119713792,
+              "handles": 5574,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:26:43.531882+00:00",
+              "processes": 1,
+              "rss": 151330816,
+              "private": 119672832,
+              "handles": 5641,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:27:13.530957+00:00",
+              "processes": 1,
+              "rss": 153640960,
+              "private": 121217024,
+              "handles": 5687,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:27:43.531069+00:00",
+              "processes": 1,
+              "rss": 149823488,
+              "private": 119214080,
+              "handles": 637,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:28:13.528664+00:00",
+              "processes": 1,
+              "rss": 150319104,
+              "private": 119480320,
+              "handles": 619,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:28:43.527543+00:00",
+              "processes": 1,
+              "rss": 150487040,
+              "private": 119480320,
+              "handles": 619,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:29:13.526075+00:00",
+              "processes": 1,
+              "rss": 150515712,
+              "private": 119492608,
+              "handles": 639,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:29:43.525342+00:00",
+              "processes": 1,
+              "rss": 150712320,
+              "private": 119492608,
+              "handles": 643,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:30:13.519697+00:00",
+              "processes": 1,
+              "rss": 150867968,
+              "private": 119840768,
+              "handles": 643,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:30:43.518353+00:00",
+              "processes": 1,
+              "rss": 150851584,
+              "private": 118808576,
+              "handles": 651,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:31:13.531731+00:00",
+              "processes": 1,
+              "rss": 150081536,
+              "private": 118026240,
+              "handles": 645,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:31:43.530372+00:00",
+              "processes": 1,
+              "rss": 151080960,
+              "private": 118943744,
+              "handles": 645,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:32:13.531205+00:00",
+              "processes": 1,
+              "rss": 151113728,
+              "private": 119009280,
+              "handles": 649,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:32:43.530837+00:00",
+              "processes": 1,
+              "rss": 149483520,
+              "private": 117444608,
+              "handles": 649,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:33:13.528734+00:00",
+              "processes": 1,
+              "rss": 150835200,
+              "private": 118571008,
+              "handles": 649,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:33:43.528176+00:00",
+              "processes": 1,
+              "rss": 151814144,
+              "private": 119853056,
+              "handles": 649,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:34:13.527425+00:00",
+              "processes": 1,
+              "rss": 152076288,
+              "private": 119980032,
+              "handles": 682,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:34:43.524375+00:00",
+              "processes": 1,
+              "rss": 152457216,
+              "private": 120197120,
+              "handles": 675,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:35:13.525253+00:00",
+              "processes": 1,
+              "rss": 151519232,
+              "private": 119353344,
+              "handles": 653,
+              "thread_count": 9
+            },
+            {
+              "at": "2026-10-28T03:35:43.524260+00:00",
+              "processes": 1,
+              "rss": 152219648,
+              "private": 120193024,
+              "handles": 655,
+              "thread_count": 9
+            }
+          ]
+        },
+        "chrome": {
+          "host_cpu_average_percent": 0.08138018135,
+          "host_cpu_interval_max_percent": 0.621745,
+          "distinct_observed_lifetimes": 15,
+          "observed_exits_with_terminal_cpu": 0,
+          "resources": {
+            "rss": {
+              "first": 2743939072,
+              "last": 2737364992,
+              "min": 2734145536,
+              "max": 2787602432,
+              "change": -6574080,
+              "linear_slope_per_hour": -120557695.4361934
+            },
+            "private": {
+              "first": 2335109120,
+              "last": 2328047616,
+              "min": 2326245376,
+              "max": 2378760192,
+              "change": -7061504,
+              "linear_slope_per_hour": -121300081.29450661
+            },
+            "handles": {
+              "first": 10617,
+              "last": 10583,
+              "min": 10573,
+              "max": 10628,
+              "change": -34,
+              "linear_slope_per_hour": -246.38848506500344
+            },
+            "thread_count": {
+              "first": 426,
+              "last": 425,
+              "min": 424,
+              "max": 429,
+              "change": -1,
+              "linear_slope_per_hour": -13.402479803376547
+            },
+            "processes": {
+              "first": 15,
+              "last": 15,
+              "min": 15,
+              "max": 15,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            }
+          },
+          "point_samples": [
+            {
+              "at": "2026-10-28T03:25:43.531750+00:00",
+              "processes": 15,
+              "rss": 2743939072,
+              "private": 2335109120,
+              "handles": 10617,
+              "thread_count": 426
+            },
+            {
+              "at": "2026-10-28T03:26:13.532325+00:00",
+              "processes": 15,
+              "rss": 2761818112,
+              "private": 2352812032,
+              "handles": 10625,
+              "thread_count": 426
+            },
+            {
+              "at": "2026-10-28T03:26:43.531882+00:00",
+              "processes": 15,
+              "rss": 2787602432,
+              "private": 2378760192,
+              "handles": 10628,
+              "thread_count": 426
+            },
+            {
+              "at": "2026-10-28T03:27:13.530957+00:00",
+              "processes": 15,
+              "rss": 2739953664,
+              "private": 2332131328,
+              "handles": 10603,
+              "thread_count": 426
+            },
+            {
+              "at": "2026-10-28T03:27:43.531069+00:00",
+              "processes": 15,
+              "rss": 2736549888,
+              "private": 2327478272,
+              "handles": 10599,
+              "thread_count": 429
+            },
+            {
+              "at": "2026-10-28T03:28:13.528664+00:00",
+              "processes": 15,
+              "rss": 2737000448,
+              "private": 2328506368,
+              "handles": 10596,
+              "thread_count": 429
+            },
+            {
+              "at": "2026-10-28T03:28:43.527543+00:00",
+              "processes": 15,
+              "rss": 2736803840,
+              "private": 2328240128,
+              "handles": 10596,
+              "thread_count": 429
+            },
+            {
+              "at": "2026-10-28T03:29:13.526075+00:00",
+              "processes": 15,
+              "rss": 2736820224,
+              "private": 2328104960,
+              "handles": 10596,
+              "thread_count": 426
+            },
+            {
+              "at": "2026-10-28T03:29:43.525342+00:00",
+              "processes": 15,
+              "rss": 2737324032,
+              "private": 2328760320,
+              "handles": 10599,
+              "thread_count": 426
+            },
+            {
+              "at": "2026-10-28T03:30:13.519697+00:00",
+              "processes": 15,
+              "rss": 2737233920,
+              "private": 2328555520,
+              "handles": 10585,
+              "thread_count": 425
+            },
+            {
+              "at": "2026-10-28T03:30:43.518353+00:00",
+              "processes": 15,
+              "rss": 2737336320,
+              "private": 2328649728,
+              "handles": 10590,
+              "thread_count": 426
+            },
+            {
+              "at": "2026-10-28T03:31:13.531731+00:00",
+              "processes": 15,
+              "rss": 2737561600,
+              "private": 2328813568,
+              "handles": 10582,
+              "thread_count": 426
+            },
+            {
+              "at": "2026-10-28T03:31:43.530372+00:00",
+              "processes": 15,
+              "rss": 2737696768,
+              "private": 2328920064,
+              "handles": 10585,
+              "thread_count": 426
+            },
+            {
+              "at": "2026-10-28T03:32:13.531205+00:00",
+              "processes": 15,
+              "rss": 2735689728,
+              "private": 2326568960,
+              "handles": 10585,
+              "thread_count": 426
+            },
+            {
+              "at": "2026-10-28T03:32:43.530837+00:00",
+              "processes": 15,
+              "rss": 2735386624,
+              "private": 2326245376,
+              "handles": 10578,
+              "thread_count": 426
+            },
+            {
+              "at": "2026-10-28T03:33:13.528734+00:00",
+              "processes": 15,
+              "rss": 2734145536,
+              "private": 2326519808,
+              "handles": 10573,
+              "thread_count": 426
+            },
+            {
+              "at": "2026-10-28T03:33:43.528176+00:00",
+              "processes": 15,
+              "rss": 2734194688,
+              "private": 2326552576,
+              "handles": 10574,
+              "thread_count": 426
+            },
+            {
+              "at": "2026-10-28T03:34:13.527425+00:00",
+              "processes": 15,
+              "rss": 2734227456,
+              "private": 2326523904,
+              "handles": 10576,
+              "thread_count": 425
+            },
+            {
+              "at": "2026-10-28T03:34:43.524375+00:00",
+              "processes": 15,
+              "rss": 2736394240,
+              "private": 2326810624,
+              "handles": 10586,
+              "thread_count": 424
+            },
+            {
+              "at": "2026-10-28T03:35:13.525253+00:00",
+              "processes": 15,
+              "rss": 2737184768,
+              "private": 2327769088,
+              "handles": 10590,
+              "thread_count": 425
+            },
+            {
+              "at": "2026-10-28T03:35:43.524260+00:00",
+              "processes": 15,
+              "rss": 2737364992,
+              "private": 2328047616,
+              "handles": 10583,
+              "thread_count": 425
+            }
+          ]
+        },
+        "exit_observer": {
+          "host_cpu_average_percent": 0.0,
+          "host_cpu_interval_max_percent": 0.0,
+          "distinct_observed_lifetimes": 1,
+          "observed_exits_with_terminal_cpu": 0,
+          "resources": {
+            "rss": {
+              "first": 21786624,
+              "last": 21786624,
+              "min": 21786624,
+              "max": 21786624,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            },
+            "private": {
+              "first": 15147008,
+              "last": 15147008,
+              "min": 15147008,
+              "max": 15147008,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            },
+            "handles": {
+              "first": 128,
+              "last": 128,
+              "min": 128,
+              "max": 128,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            },
+            "thread_count": {
+              "first": 1,
+              "last": 1,
+              "min": 1,
+              "max": 1,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            },
+            "processes": {
+              "first": 1,
+              "last": 1,
+              "min": 1,
+              "max": 1,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            }
+          },
+          "point_samples": [
+            {
+              "at": "2026-10-28T03:25:43.531750+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:26:13.532325+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:26:43.531882+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:27:13.530957+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:27:43.531069+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:28:13.528664+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:28:43.527543+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:29:13.526075+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:29:43.525342+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:30:13.519697+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:30:43.518353+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:31:13.531731+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:31:43.530372+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:32:13.531205+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:32:43.530837+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:33:13.528734+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:33:43.528176+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:34:13.527425+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:34:43.524375+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:35:13.525253+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:35:43.524260+00:00",
+              "processes": 1,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "thread_count": 1
+            }
+          ]
+        },
+        "collector": {
+          "host_cpu_average_percent": 0.00309228135,
+          "host_cpu_interval_max_percent": 0.003255,
+          "distinct_observed_lifetimes": 1,
+          "observed_exits_with_terminal_cpu": 0,
+          "resources": {
+            "rss": {
+              "first": 14831616,
+              "last": 15212544,
+              "min": 14831616,
+              "max": 15212544,
+              "change": 380928,
+              "linear_slope_per_hour": 1566484.713062429
+            },
+            "private": {
+              "first": 8450048,
+              "last": 8638464,
+              "min": 8368128,
+              "max": 8638464,
+              "change": 188416,
+              "linear_slope_per_hour": 1233273.7221778487
+            },
+            "handles": {
+              "first": 166,
+              "last": 182,
+              "min": 166,
+              "max": 182,
+              "change": 16,
+              "linear_slope_per_hour": 24.934913799005955
+            },
+            "thread_count": {
+              "first": 4,
+              "last": 2,
+              "min": 1,
+              "max": 4,
+              "change": -2,
+              "linear_slope_per_hour": -6.389598377101589
+            },
+            "processes": {
+              "first": 1,
+              "last": 1,
+              "min": 1,
+              "max": 1,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            }
+          },
+          "point_samples": [
+            {
+              "at": "2026-10-28T03:25:43.531750+00:00",
+              "processes": 1,
+              "rss": 14831616,
+              "private": 8450048,
+              "handles": 166,
+              "thread_count": 4
+            },
+            {
+              "at": "2026-10-28T03:26:13.532325+00:00",
+              "processes": 1,
+              "rss": 15015936,
+              "private": 8470528,
+              "handles": 182,
+              "thread_count": 4
+            },
+            {
+              "at": "2026-10-28T03:26:43.531882+00:00",
+              "processes": 1,
+              "rss": 14970880,
+              "private": 8368128,
+              "handles": 182,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:27:13.530957+00:00",
+              "processes": 1,
+              "rss": 14970880,
+              "private": 8368128,
+              "handles": 182,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:27:43.531069+00:00",
+              "processes": 1,
+              "rss": 14970880,
+              "private": 8368128,
+              "handles": 182,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:28:13.528664+00:00",
+              "processes": 1,
+              "rss": 14970880,
+              "private": 8368128,
+              "handles": 182,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:28:43.527543+00:00",
+              "processes": 1,
+              "rss": 14970880,
+              "private": 8368128,
+              "handles": 182,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:29:13.526075+00:00",
+              "processes": 1,
+              "rss": 14970880,
+              "private": 8368128,
+              "handles": 182,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:29:43.525342+00:00",
+              "processes": 1,
+              "rss": 14974976,
+              "private": 8372224,
+              "handles": 182,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:30:13.519697+00:00",
+              "processes": 1,
+              "rss": 14983168,
+              "private": 8392704,
+              "handles": 182,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:30:43.518353+00:00",
+              "processes": 1,
+              "rss": 15011840,
+              "private": 8425472,
+              "handles": 182,
+              "thread_count": 2
+            },
+            {
+              "at": "2026-10-28T03:31:13.531731+00:00",
+              "processes": 1,
+              "rss": 15011840,
+              "private": 8425472,
+              "handles": 182,
+              "thread_count": 2
+            },
+            {
+              "at": "2026-10-28T03:31:43.530372+00:00",
+              "processes": 1,
+              "rss": 15085568,
+              "private": 8499200,
+              "handles": 182,
+              "thread_count": 2
+            },
+            {
+              "at": "2026-10-28T03:32:13.531205+00:00",
+              "processes": 1,
+              "rss": 15085568,
+              "private": 8499200,
+              "handles": 182,
+              "thread_count": 2
+            },
+            {
+              "at": "2026-10-28T03:32:43.530837+00:00",
+              "processes": 1,
+              "rss": 15077376,
+              "private": 8466432,
+              "handles": 182,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:33:13.528734+00:00",
+              "processes": 1,
+              "rss": 15130624,
+              "private": 8536064,
+              "handles": 182,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:33:43.528176+00:00",
+              "processes": 1,
+              "rss": 15130624,
+              "private": 8536064,
+              "handles": 182,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:34:13.527425+00:00",
+              "processes": 1,
+              "rss": 15130624,
+              "private": 8536064,
+              "handles": 182,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:34:43.524375+00:00",
+              "processes": 1,
+              "rss": 15130624,
+              "private": 8536064,
+              "handles": 182,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:35:13.525253+00:00",
+              "processes": 1,
+              "rss": 15134720,
+              "private": 8536064,
+              "handles": 182,
+              "thread_count": 1
+            },
+            {
+              "at": "2026-10-28T03:35:43.524260+00:00",
+              "processes": 1,
+              "rss": 15212544,
+              "private": 8638464,
+              "handles": 182,
+              "thread_count": 2
+            }
+          ]
+        }
+      },
+      "intervals": [
+        {
+          "at": "2026-10-28T03:26:13.532325+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.286458,
+            "chrome": 0.432943,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:26:43.531882+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.302734,
+            "chrome": 0.397135,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:27:13.530957+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.380859,
+            "chrome": 0.621745,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:27:43.531069+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.276693,
+            "chrome": 0.016276,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:28:13.528664+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.299479,
+            "chrome": 0.019531,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:28:43.527543+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.31901,
+            "chrome": 0.003255,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:29:13.526075+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.192057,
+            "chrome": 0.00651,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:29:43.525342+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.266927,
+            "chrome": 0.016276,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:30:13.519697+00:00",
+          "seconds": 29.985,
+          "host_cpu_percent": {
+            "gui": 0.234492,
+            "chrome": 0.0,
+            "exit_observer": 0.0,
+            "collector": 0.0
+          }
+        },
+        {
+          "at": "2026-10-28T03:30:43.518353+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.253906,
+            "chrome": 0.0,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:31:13.531731+00:00",
+          "seconds": 30.015,
+          "host_cpu_percent": {
+            "gui": 0.214736,
+            "chrome": 0.003254,
+            "exit_observer": 0.0,
+            "collector": 0.003254
+          }
+        },
+        {
+          "at": "2026-10-28T03:31:43.530372+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.214844,
+            "chrome": 0.009766,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:32:13.531205+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.172526,
+            "chrome": 0.016276,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:32:43.530837+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.224609,
+            "chrome": 0.0,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:33:13.528734+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.23112,
+            "chrome": 0.0,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:33:43.528176+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.214844,
+            "chrome": 0.003255,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:34:13.527425+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.23763,
+            "chrome": 0.032552,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:34:43.524375+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.234375,
+            "chrome": 0.035807,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:35:13.525253+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.198568,
+            "chrome": 0.009766,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        },
+        {
+          "at": "2026-10-28T03:35:43.524260+00:00",
+          "seconds": 30.0,
+          "host_cpu_percent": {
+            "gui": 0.221354,
+            "chrome": 0.003255,
+            "exit_observer": 0.0,
+            "collector": 0.003255
+          }
+        }
+      ],
+      "counter_failures": [],
+      "method": "Reuses native_cpu.snapshot(threads=False) and Win32 process enumeration every30s; per-observed-lifetime user+kernel CPU; retained query-only handles capture terminal CPU for observed exited processes; unseen birth+exit between samples not captured. RSS/private/handles/threads are point samples, not absolute peaks. CPU normalized by16logical processors; no foreground control. Collector accounted separately; handles closed on exit.",
+      "raw_first_last_counters": {
+        "first": {
+          "at": "2026-10-28T03:25:43.531750+00:00",
+          "elapsed": 0.015000000013969839,
+          "logical_cpus": 16,
+          "samples": [
+            {
+              "pid": 86788,
+              "wall": 393227.765,
+              "created": 13437628453.50055,
+              "kernel": 68.4375,
+              "user": 61.1875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 152096768,
+              "private": 119709696,
+              "handles": 5537,
+              "gdi": 136,
+              "user_objects": 258,
+              "role": "gui",
+              "thread_count": 9
+            },
+            {
+              "pid": 84332,
+              "wall": 393227.765,
+              "created": 13437628453.647253,
+              "kernel": 0.046875,
+              "user": 0.046875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "gdi": 0,
+              "user_objects": 1,
+              "role": "exit_observer",
+              "thread_count": 1
+            },
+            {
+              "pid": 89092,
+              "wall": 393227.765,
+              "created": 13437631543.440905,
+              "kernel": 0.046875,
+              "user": 0.015625,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 14831616,
+              "private": 8450048,
+              "handles": 166,
+              "gdi": 0,
+              "user_objects": 1,
+              "role": "collector",
+              "thread_count": 4
+            },
+            {
+              "pid": 55680,
+              "wall": 393227.765,
+              "created": 13437334086.974894,
+              "kernel": 2.421875,
+              "user": 4.8125,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 21041152,
+              "private": 10354688,
+              "handles": 199,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 12
+            },
+            {
+              "pid": 54536,
+              "wall": 393227.765,
+              "created": 13437334098.062357,
+              "kernel": 4.421875,
+              "user": 1.15625,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 23793664,
+              "private": 13570048,
+              "handles": 263,
+              "gdi": 0,
+              "user_objects": 1,
+              "role": "chrome",
+              "thread_count": 11
+            },
+            {
+              "pid": 82952,
+              "wall": 393227.765,
+              "created": 13437628903.461966,
+              "kernel": 1.078125,
+              "user": 39.25,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 443764736,
+              "private": 345796608,
+              "handles": 616,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 29
+            },
+            {
+              "pid": 89356,
+              "wall": 393227.765,
+              "created": 13437628470.779627,
+              "kernel": 0.515625,
+              "user": 9.296875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 405868544,
+              "private": 305221632,
+              "handles": 611,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 29
+            },
+            {
+              "pid": 52048,
+              "wall": 393227.765,
+              "created": 13437334089.712502,
+              "kernel": 0.46875,
+              "user": 2.5625,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 90296320,
+              "private": 47046656,
+              "handles": 345,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 27
+            },
+            {
+              "pid": 82832,
+              "wall": 393227.765,
+              "created": 13437630355.521782,
+              "kernel": 0.453125,
+              "user": 9.171875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 379805696,
+              "private": 282869760,
+              "handles": 618,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 29
+            },
+            {
+              "pid": 88400,
+              "wall": 393227.765,
+              "created": 13437630872.8518,
+              "kernel": 0.03125,
+              "user": 0.0,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 39157760,
+              "private": 21430272,
+              "handles": 215,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 13
+            },
+            {
+              "pid": 50196,
+              "wall": 393227.765,
+              "created": 13437334086.952026,
+              "kernel": 270.0,
+              "user": 362.25,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 65740800,
+              "private": 37289984,
+              "handles": 448,
+              "gdi": 0,
+              "user_objects": 3,
+              "role": "chrome",
+              "thread_count": 21
+            },
+            {
+              "pid": 55704,
+              "wall": 393227.765,
+              "created": 13437334086.94568,
+              "kernel": 168.3125,
+              "user": 674.5,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 256360448,
+              "private": 591065088,
+              "handles": 835,
+              "gdi": 8,
+              "user_objects": 11,
+              "role": "chrome",
+              "thread_count": 77
+            },
+            {
+              "pid": 53340,
+              "wall": 393227.765,
+              "created": 13437334098.062502,
+              "kernel": 0.609375,
+              "user": 1.0,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 55062528,
+              "private": 64569344,
+              "handles": 566,
+              "gdi": 0,
+              "user_objects": 2,
+              "role": "chrome",
+              "thread_count": 32
+            },
+            {
+              "pid": 55520,
+              "wall": 393227.765,
+              "created": 13437334086.42164,
+              "kernel": 4.375,
+              "user": 0.421875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 11128832,
+              "private": 7249920,
+              "handles": 249,
+              "gdi": 0,
+              "user_objects": 4,
+              "role": "chrome",
+              "thread_count": 7
+            },
+            {
+              "pid": 89888,
+              "wall": 393227.765,
+              "created": 13437628464.25075,
+              "kernel": 0.171875,
+              "user": 0.875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 77197312,
+              "private": 40222720,
+              "handles": 350,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 27
+            },
+            {
+              "pid": 55340,
+              "wall": 393227.765,
+              "created": 13437334086.3505,
+              "kernel": 974.640625,
+              "user": 2556.796875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 401694720,
+              "private": 231116800,
+              "handles": 4377,
+              "gdi": 110,
+              "user_objects": 95,
+              "role": "chrome",
+              "thread_count": 56
+            },
+            {
+              "pid": 58356,
+              "wall": 393227.765,
+              "created": 13437370399.665075,
+              "kernel": 0.578125,
+              "user": 2.765625,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 106979328,
+              "private": 69058560,
+              "handles": 308,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 27
+            },
+            {
+              "pid": 87800,
+              "wall": 393227.765,
+              "created": 13437630384.906488,
+              "kernel": 0.3125,
+              "user": 5.5,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 366047232,
+              "private": 268247040,
+              "handles": 617,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 29
+            }
+          ],
+          "exited": []
+        },
+        "last": {
+          "at": "2026-10-28T03:35:43.524260+00:00",
+          "elapsed": 600.015000000014,
+          "logical_cpus": 16,
+          "samples": [
+            {
+              "pid": 86788,
+              "wall": 393827.765,
+              "created": 13437628453.50055,
+              "kernel": 79.859375,
+              "user": 73.65625,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 152219648,
+              "private": 120193024,
+              "handles": 655,
+              "gdi": 136,
+              "user_objects": 258,
+              "role": "gui",
+              "thread_count": 9
+            },
+            {
+              "pid": 84332,
+              "wall": 393827.765,
+              "created": 13437628453.647253,
+              "kernel": 0.046875,
+              "user": 0.046875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 21786624,
+              "private": 15147008,
+              "handles": 128,
+              "gdi": 0,
+              "user_objects": 1,
+              "role": "exit_observer",
+              "thread_count": 1
+            },
+            {
+              "pid": 89092,
+              "wall": 393827.765,
+              "created": 13437631543.440905,
+              "kernel": 0.3125,
+              "user": 0.046875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 15212544,
+              "private": 8638464,
+              "handles": 182,
+              "gdi": 0,
+              "user_objects": 1,
+              "role": "collector",
+              "thread_count": 2
+            },
+            {
+              "pid": 55680,
+              "wall": 393827.765,
+              "created": 13437334086.974894,
+              "kernel": 2.421875,
+              "user": 4.8125,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 21045248,
+              "private": 10358784,
+              "handles": 199,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 12
+            },
+            {
+              "pid": 54536,
+              "wall": 393827.765,
+              "created": 13437334098.062357,
+              "kernel": 4.4375,
+              "user": 1.171875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 23793664,
+              "private": 13570048,
+              "handles": 263,
+              "gdi": 0,
+              "user_objects": 1,
+              "role": "chrome",
+              "thread_count": 11
+            },
+            {
+              "pid": 82952,
+              "wall": 393827.765,
+              "created": 13437628903.461966,
+              "kernel": 1.15625,
+              "user": 40.203125,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 439959552,
+              "private": 343052288,
+              "handles": 618,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 29
+            },
+            {
+              "pid": 89356,
+              "wall": 393827.765,
+              "created": 13437628470.779627,
+              "kernel": 0.515625,
+              "user": 9.40625,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 407777280,
+              "private": 307806208,
+              "handles": 608,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 29
+            },
+            {
+              "pid": 52048,
+              "wall": 393827.765,
+              "created": 13437334089.712502,
+              "kernel": 0.46875,
+              "user": 2.5625,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 90296320,
+              "private": 47046656,
+              "handles": 345,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 27
+            },
+            {
+              "pid": 82832,
+              "wall": 393827.765,
+              "created": 13437630355.521782,
+              "kernel": 0.578125,
+              "user": 13.046875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 372670464,
+              "private": 275185664,
+              "handles": 608,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 29
+            },
+            {
+              "pid": 88400,
+              "wall": 393827.765,
+              "created": 13437630872.8518,
+              "kernel": 0.03125,
+              "user": 0.0,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 39329792,
+              "private": 21430272,
+              "handles": 215,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 13
+            },
+            {
+              "pid": 50196,
+              "wall": 393827.765,
+              "created": 13437334086.952026,
+              "kernel": 270.1875,
+              "user": 362.421875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 65884160,
+              "private": 37425152,
+              "handles": 452,
+              "gdi": 0,
+              "user_objects": 3,
+              "role": "chrome",
+              "thread_count": 21
+            },
+            {
+              "pid": 55704,
+              "wall": 393827.765,
+              "created": 13437334086.94568,
+              "kernel": 168.40625,
+              "user": 674.828125,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 255553536,
+              "private": 591433728,
+              "handles": 820,
+              "gdi": 8,
+              "user_objects": 10,
+              "role": "chrome",
+              "thread_count": 77
+            },
+            {
+              "pid": 53340,
+              "wall": 393827.765,
+              "created": 13437334098.062502,
+              "kernel": 0.609375,
+              "user": 1.0,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 55062528,
+              "private": 64569344,
+              "handles": 566,
+              "gdi": 0,
+              "user_objects": 2,
+              "role": "chrome",
+              "thread_count": 32
+            },
+            {
+              "pid": 55520,
+              "wall": 393827.765,
+              "created": 13437334086.42164,
+              "kernel": 4.390625,
+              "user": 0.421875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 11128832,
+              "private": 7249920,
+              "handles": 249,
+              "gdi": 0,
+              "user_objects": 4,
+              "role": "chrome",
+              "thread_count": 7
+            },
+            {
+              "pid": 89888,
+              "wall": 393827.765,
+              "created": 13437628464.25075,
+              "kernel": 0.171875,
+              "user": 0.875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 77246464,
+              "private": 40222720,
+              "handles": 352,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 27
+            },
+            {
+              "pid": 55340,
+              "wall": 393827.765,
+              "created": 13437334086.3505,
+              "kernel": 975.515625,
+              "user": 2557.59375,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 402366464,
+              "private": 230350848,
+              "handles": 4366,
+              "gdi": 110,
+              "user_objects": 94,
+              "role": "chrome",
+              "thread_count": 55
+            },
+            {
+              "pid": 58356,
+              "wall": 393827.765,
+              "created": 13437370399.665075,
+              "kernel": 0.578125,
+              "user": 2.765625,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 107003904,
+              "private": 69062656,
+              "handles": 308,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 27
+            },
+            {
+              "pid": 87800,
+              "wall": 393827.765,
+              "created": 13437630384.906488,
+              "kernel": 0.3125,
+              "user": 5.671875,
+              "foreground": false,
+              "foreground_handle_present": true,
+              "rss": 368246784,
+              "private": 269283328,
+              "handles": 614,
+              "gdi": 0,
+              "user_objects": 0,
+              "role": "chrome",
+              "thread_count": 29
+            }
+          ],
+          "exited": []
+        }
+      },
+      "observed_new_or_exited_lifetimes": 0,
+      "qualification": "15 observed Chrome processes stayed present across all21samples; zero observed churn, NOT proof no very short unseen child. CPU contains user+kernel. Native access permission granted to diagnostic process only; no Chrome changes."
+    },
+    "gui_native_15min": {
+      "window_start": "2026-10-28T03:22:57.936112+00:00",
+      "window_end": "2026-10-28T03:37:57.932983+00:00",
+      "samples": 31,
+      "seconds": 900.0,
+      "logical_cpus": 16,
+      "max_sample_gap_seconds": 30.015,
+      "roles": {
+        "gui": {
+          "host_cpu_average_percent": 0.25358076078333336,
+          "host_cpu_interval_max_percent": 0.400391,
+          "distinct_observed_lifetimes": 1,
+          "observed_exits_with_terminal_cpu": 0,
+          "resources": {
+            "rss": {
+              "first": 151203840,
+              "last": 148893696,
+              "min": 147406848,
+              "max": 152752128,
+              "change": -2310144,
+              "linear_slope_per_hour": -4212416.256652516
+            },
+            "private": {
+              "first": 119431168,
+              "last": 116760576,
+              "min": 115363840,
+              "max": 120643584,
+              "change": -2670592,
+              "linear_slope_per_hour": -5756335.806823005
+            },
+            "handles": {
+              "first": 5387,
+              "last": 1005,
+              "min": 613,
+              "max": 5663,
+              "change": -4382,
+              "linear_slope_per_hour": -22885.470875485687
+            },
+            "thread_count": {
+              "first": 9,
+              "last": 10,
+              "min": 9,
+              "max": 10,
+              "change": 1,
+              "linear_slope_per_hour": 1.4032300595722673
+            },
+            "processes": {
+              "first": 1,
+              "last": 1,
+              "min": 1,
+              "max": 1,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            }
+          }
+        },
+        "exit_observer": {
+          "host_cpu_average_percent": 0.0,
+          "host_cpu_interval_max_percent": 0.0,
+          "distinct_observed_lifetimes": 1,
+          "observed_exits_with_terminal_cpu": 0,
+          "resources": {
+            "rss": {
+              "first": 21786624,
+              "last": 21786624,
+              "min": 21786624,
+              "max": 21786624,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            },
+            "private": {
+              "first": 15147008,
+              "last": 15147008,
+              "min": 15147008,
+              "max": 15147008,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            },
+            "handles": {
+              "first": 128,
+              "last": 128,
+              "min": 128,
+              "max": 128,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            },
+            "thread_count": {
+              "first": 1,
+              "last": 1,
+              "min": 1,
+              "max": 1,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            },
+            "processes": {
+              "first": 1,
+              "last": 1,
+              "min": 1,
+              "max": 1,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            }
+          }
+        },
+        "collector": {
+          "host_cpu_average_percent": 0.0024955418000000003,
+          "host_cpu_interval_max_percent": 0.003255,
+          "distinct_observed_lifetimes": 1,
+          "observed_exits_with_terminal_cpu": 0,
+          "resources": {
+            "rss": {
+              "first": 15036416,
+              "last": 15212544,
+              "min": 15036416,
+              "max": 15224832,
+              "change": 176128,
+              "linear_slope_per_hour": 259237.24243691567
+            },
+            "private": {
+              "first": 8658944,
+              "last": 8617984,
+              "min": 8577024,
+              "max": 8658944,
+              "change": -40960,
+              "linear_slope_per_hour": 35080.647572468675
+            },
+            "handles": {
+              "first": 122,
+              "last": 127,
+              "min": 122,
+              "max": 127,
+              "change": 5,
+              "linear_slope_per_hour": 3.629027379644612
+            },
+            "thread_count": {
+              "first": 4,
+              "last": 1,
+              "min": 1,
+              "max": 4,
+              "change": -3,
+              "linear_slope_per_hour": -1.9838569585115595
+            },
+            "processes": {
+              "first": 1,
+              "last": 1,
+              "min": 1,
+              "max": 1,
+              "change": 0,
+              "linear_slope_per_hour": 0.0
+            }
+          }
+        }
+      },
+      "counter_failures": {
+        "count": 342,
+        "qualification": "Sandbox denied access to most Chrome children. Partial Chrome totals EXCLUDED from whole-Chrome conclusions; GUI valid. Correct full-permission10min window reported separately."
+      },
+      "method": "Reuses native_cpu.snapshot(threads=False) and Win32 process enumeration every30s; per-observed-lifetime user+kernel CPU; retained query-only handles capture terminal CPU for observed exited processes; unseen birth+exit between samples not captured. RSS/private/handles/threads are point samples, not absolute peaks. CPU normalized by16logical processors; no foreground control. Collector accounted separately; handles closed on exit."
+    },
+    "cleanup": {
+      "finite_collectors": {
+        "86204": {
+          "seconds": 900.015,
+          "samples": 31,
+          "exited": true
+        },
+        "89092": {
+          "seconds": 600.015,
+          "samples": 21,
+          "exited": true
+        }
+      },
+      "production_gui": {
+        "pid": 86788,
+        "same_start": "2026-10-28T10:34:13+08:00",
+        "responding": true,
+        "exit_observer_pid": 84332
+      },
+      "owned_temp_retirement": {
+        "state": "REMOVED",
+        "directory": "D:/Program_Leo/INSO_Leo/.tmp/v16-passive-observation-20261028",
+        "retired_bytes": 592083,
+        "guard": "Exact resolved root and file allowlist, no reparse points, both owned collectors absent before removal. Necessary sanitized series/counters captured in this original JSON; no production/rollback/old soak output removed."
+      }
+    },
+    "remaining": {
+      "real_market_actor_parallel": "NOT_ENABLED_NOT_VERIFIED",
+      "tp_timeliness": "OBSERVED_DELAY_FAIL",
+      "long_term_no_leak": "NOT_VERIFIED",
+      "100_and150_system_dpi": "NOT_VERIFIED",
+      "game_impact": "NOT_VERIFIED",
+      "external_new_success": "NO_NEW_CONFIRMED_SUCCESS"
+    },
+    "checks": {
+      "application_source_unchanged": true,
+      "json_and_diff": "PASS",
+      "new_full_offline_test": "NOT_RUN_DOCUMENTATION_ONLY_NO_APPLICATION_CHANGE",
+      "offline_recalculation": "PASS: all native first/last CPU totals, timeline arithmetic, protected hashes and31/21 bounded samples"
+    },
+    "handoff": "Owner forwards CEO; no direct CEO message.",
+    "raw_counter_provenance": {
+      "resources.jsonl": {
+        "sha256": "6fba59aa8b0355a6103fc390832f9cfe4a4bb626df6d8133683bb0db2b9ca2c7",
+        "bytes": 89914
+      },
+      "resources-full.jsonl": {
+        "sha256": "b567ee48e3e24a623d6e19807e61c989546c94e5edee956a217eed9f80f924cd",
+        "bytes": 109000
+      }
+    }
   }
 }

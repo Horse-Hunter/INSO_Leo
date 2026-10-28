@@ -3874,3 +3874,65 @@ installed executable or protected production
 state. No direct access to Windows installation
 is claimed. Status remains `BUSINESS_RUNNING /
 V16_REVIEW_REQUIRED`.
+
+
+## Executor — passive post-release observation (2026-10-28, Owner handoff)
+
+Implements only the passive follow-up authorized after CEO5771c55. No source,
+install, config, business state, UI, Chrome/CDP or old soak changes. Production
+same PID86788 since10:34:13, Responding; exe C92F48E1... unchanged, src tree
+81ab97bbbff5f220e70ae2ad73f8c5ff4e497f8f. Original serial Owner composition;
+optional market Actors remain disabled. BUSINESS_RUNNING / V16_REVIEW_REQUIRED.
+
+Existing sanitized logs through14:23:16 support9completed cycles EACH for inquiry,
+quotation, TP, plus one ongoing quotation. Next real repeated cycles:
+quotation planned11:13:56.086/begin11:13:56.098/end11:22:05.212;
+inquiry planned11:22:04.251/begin11:22:05.286/end11:27:12.973;
+TP planned11:22:16.173/begin11:23:52.965/end11:24:01.241.
+Plans use actual prior terminal due_in_s, reset at explicit Owner resume; first
+run initial plan remains UNKNOWN. Repeated TP lateness96.792..483.123s (8samples)
+is observed FAIL for timeliness, not fixed by a900s configuration or cycle completion.
+Max13:33:03.841due to13:41:06.964begin:483.049s while quotation still active,
+then0.074s handoff. Inquiry repeat delays1.035..195.954s. Millisecond quote deviations
+-0.006..0.024s within wall/monotonic logging uncertainty, no claim of early execution.
+
+First TP1089.628s decomposition:124.515s until first SOURCE_CHANGED +0.021s nested
+quote handoff +476.852s quote wall time +488.165s remaining outer inquiry +0.075s
+TP handoff. Do NOT infer first124.515s is the120s wait: row result comes afterwards.
+Original closed-row120s wait yields Owner; nesting overlaps it, cannot add it again.
+Exact later488.165s stage split UNKNOWN. Next TP started0.026s after11:23:52.939
+SOURCE_CHANGED, showing resource availability at original wait boundary; no wait shortened.
+
+Initial overlap12ARTIFACT_LOST/2RETRY_EXHAUSTED retained separately. Post-resume only
+11:06:22READ_UNAVAILABLE transient recovered; no further classified faults/exhaustion
+through cutoff, old google-busy-page-budget0. No claim of permanent root-cause cure.
+Consistent readonly memory snapshots11:23:31 and14:23:23 integrity ok;118commands,
+149SENT including6TP-SENT,4TP full rows unchanged. No new commands/SENT/TP; no
+PENDING/SENDING/UNKNOWN. SAVED23 unchanged. Repeated outcome events are not unique
+new orders or external success; no synthetic business produced, SMTP acceptance
+not final inbox delivery. Snapshot briefly reads source, not a zero-lock promise;
+all analysis performed after closing source, no held live read transaction.
+
+31 native30s GUI samples900s:0.25358%host, RSS144.20->142.00MiB,
+handles5387->1005 observedmax5663. Sandbox partial Chrome excluded from totals.
+Separate21samples/600s full-permission native window11:25:43..11:35:43:
+GUI0.24886%host, handles5537->655 observedmax5687; Chrome15stable observed processes
+0.08138%host, RSS2616.82->2610.55MiB, private2226.93->2220.20MiB,
+handles10617->10583/max10628, threads424..429. No observed churn, very short unseen
+children still possible. CPU normalized16logical CPUs, user+kernel; collector
+cost separately0.00250%/0.00309%, finite overlapping windows stated, not hidden.
+Both collectors86204/89092 exited naturally; no permanent observer. Resource release
+is not long-term leak PASS. Native per-lifetime first/last counts, intervalCPU and
+point series in original JSON post_release_passive_observation_20261028.
+
+PASS: passive cycle evidence, readonly snapshot integrity/protected receipts,
+bounded resource capture, no production interference. FAIL: actual TP timeliness.
+NOT_VERIFIED: long-term stability, real market Actor parallelism,100%/150% DPI,
+game impact, no new externally confirmed purchase/quote/TP email success.
+Docs/evidence-only checks: JSON/time arithmetic/summary consistency, src tree and
+installed hash, unchanged process start/Responding, owned collectors exited,
+git diff check. Full offline tests not rerun because source unchanged; prior3054/1
+retained for correct prior source. Only canonical report/task/JSON changed.
+Owned scratch retired after sanitized extraction, protected logs/runtime/rollback/
+old soak retained. No CEO message: Owner forwards this unified factual report.
+No new Stop/Start, installation or real browser probe is requested.
