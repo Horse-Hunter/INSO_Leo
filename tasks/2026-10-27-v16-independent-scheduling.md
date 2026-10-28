@@ -4883,3 +4883,30 @@ adds a task-document section only; no changes
 to source, tests, installed executable, original
 release report or JSON evidence. No direct
 Windows machine inspection claimed.
+
+## Owner explicit production release authorization — Option A candidate (2026-10-28)
+
+**Owner decision in CEO chat:** "批准，我看不懂，但我需要进入实际生产环境，准备来新订单了。" This is explicit authorization to proceed with the **specific reviewed Option A candidate** to controlled production replacement **once the existing safety conditions are satisfied**, rather than another build-only or planning cycle. Owner states incoming real orders are imminent; uninterrupted, nonduplicated business processing is the first priority. This entry records authorization and is not a claim that CEO or Executor has already operated the Windows host.
+
+**Exact authorized identity:**
+- CEO release-readiness Review `20e07356ad14423306bb0950af8a1ec17aa1ebc3` accepted the candidate preparation only; Owner's explicit release authorization now supplements it.
+- Application source `b57f467ac2545292d3ee441af974053f8d143179`.
+- Frozen candidate executable SHA256 `DB9463D4D1DBDF716C80C8A48A2E5D6E9CB7EBE4BB4254A0A2CD40BEEA440969`.
+- Candidate full manifest: 2,875 files, SHA256 `9F0EDC437B4A1A303C28F6D528D80F70A0D545A8AC2529D7D5CD6724C3257373`; original BuildOnly staged candidate, no recompile from altered code.
+- Previously installed V1.6 application EXE: `C92F48E1380A90A747300CD7BDADFBD410C6A8D8352304C1B4D6DA438C7F28CE`, to be freshly backed up and validated before any approved replacement.
+
+**Executor authorized scope (same existing Windows process, original release pathway):**
+1. Reconfirm exact candidate program manifests/hashes and that the actual installed program still matches the original reviewed C92F version. Before deciding to stop, assess GUI, current business cycles, pending/new-order arrival, active Google writes, pending/uncertain SMTP/purchase and protected browser pages with the original safe controls. **If there is an active transaction, allow original work to finish; if no safe service window exists because new real orders must be serviced, do NOT rush a cutover. Keep the old approved program servicing business and report `DEFERRED_BUSINESS_CONTINUITY` / `HEALTH_HOLD` as appropriate.**
+2. Only in a verified safe gap, use normal GUI Stop and original graceful drain, and normal tray Exit. Never force-quit original GUI, Chrome9222, orphaned browser profiles or child process; never click Start twice. If page/auth/UNKNOWN/external effect or drain is ambiguous, HOLD without touching binaries and preserve evidence.
+3. After exclusive confirmed shutdown, make a **fresh** consistent protected-state snapshot/evidence under the existing process and a new program-only verified backup of the current C92F installation (2,875 assets, hash/self-check). Previous 745B rollback is an older fallback, not the fresh C92F version. No copying data from older rollback into business state.
+4. Replace only allowlisted application EXE and _internal assets with the already-reviewed build. Never modify `runtime` junction or target, SQLite/WAL, notification/TP immutable ledgers, config, Vault/OAuth, Chrome profile/session, protected/manual tabs or historical orders.
+5. Verify installed EXE/manifest hashes, frozen self-check and GUI single instance; start the *new* program idle safely, then resume the **previously authorized** real business flow once. If actual real new orders appear, process only by the existing intended automatic rules; no synthetic purchase, send, quote, TP, duplicates or replay. Preserve manual safety gates and original Google/INSO auth; do not silently enable market Actors or alter 900s/120s policies.
+6. Observe from existing sanitized logs, not concurrent live CDP/Playwright read probes, whether a naturally occurring quote candidate safely settles and an overdue TP's **first real Brief/source read** occurs before the whole quotation batch ends, and whether quotation resumes. Capture planned/actual timestamps, page/Google fault taxonomy, SMTP durable states and resource observations without privacy leaks. If no real qualifying order appears, mark **NOT_VERIFIED**; do not invent an order or claim a real TP timeliness PASS.
+7. If a new application fault occurs, use original graceful Stop/hold and verified **program-only** rollback only if external effects and replacement safety are reconciled; never roll back SQLite/SMTP/TP data or assume old statuses can be replayed. If safe rollback cannot be proven, HOLD and ask Owner for a genuine safety decision.
+8. Update original `V16_RELEASE_REPORT.md`, this Task and original JSON evidence with installed identities, backup, start/stop, real outcomes, unknowns and cleanup; push full SHA for CEO independent post-release Review. Existing test evidence and source PASS are not replaced by a production PASS claim.
+
+**Approved now:** safe controlled Windows version replacement, running the installed app as already permitted for actual incoming business, and low-interference natural acceptance after cutover.
+
+**NOT approved:** force-stop, duplicate or synthetic transactions, live browser probe overlapping business, manual deletion/adoption of unknown Chrome tabs, unknown-order retry, source redesign, new Actor factory, altered run intervals/120s safety, changed external recipients/rules, destructive data migrations, new browser profile or secret export.
+
+**Permission boundary:** If the running program cannot demonstrably drain in time without risking imminent new orders, Executor is authorized to keep existing production unchanged and report the blocking condition; Owner's permission does **not** turn an unsafe cutover into a mandatory action. Production status is still **previously reported BUSINESS_RUNNING / candidate NOT_DEPLOYED** until new post-execution receipts prove otherwise. CEO documentation commit is approval recording only; no host action executed here.
