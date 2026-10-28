@@ -1,5 +1,60 @@
 # V1.6 unified release and initial production verification
 
+## 已报价七天规则：Owner授权正式上线收据（2026-10-28）
+
+**BUSINESS_RUNNING / V16_REVIEW_REQUIRED；取代下方七天功能NOT_DEPLOYED历史状态。**
+本次授权`da2668d91c784eaa822be7293af59d7983518b97`，Owner对这次原样源码发布免除再次CEO门禁。
+应用源码`63d161cd3ec998d1fbbd3f584ab46797399dce6c`；src树`c1fc44b0bf87f1f6742939a9f33114c325f8405b`；tests树`c36c35b55f4d1ad201baee8f2dd3304f41e52079`。源码/测试未改。
+唯一原发布脚本BuildOnly成功；RELEASE_SCAN_OK、self-check0，117个冻结模块与原源码等价。
+实际安装`D:/Program_Leo/INSO_Leo/dist/INSO_V1.6`，EXE SHA256 **`59F19839597FE49DF62FC40C1C9BF6098513BEAB6C1CB182D2F5A49B8F6AE1A6`**；
+2875文件完整匹配，清单SHA256`e39e75c9b36f0f7f4a1003338affaaf1ba1e7a8d2ff24ac2c69d80930b03ef33`，本地全清单保存在`.tmp/v16-seven-day-release-20261028`。
+原完整离线3140PASS/1SKIP125.63秒、专项345PASS24.50秒绑定同一src/tests树沿用，没有无意义重跑。
+
+Owner正常Stop/托盘Exit，旧PID91980退出码0，时间2026-10-28T13:12:52.198233+00:00。
+备份/替换阶段持有原单实例锁；新鲜DB946旧程序2875文件回滚及self-check通过：
+`D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.6-seven-day-20261028T131547Z\program`。同目录protected-state保存一致性数据库备份、配置和加密Vault；不上传这些文件。
+只替换EXE/_internal；原runtime链接及目标、配置、Vault不变。没有迁移或恢复旧账本。
+替换前后及原idle-self-check0后全部业务表一致；真实空闲GUI渲染且业务/订单线程未启动。
+随后2026-10-28T13:17:04.5136529Z通过原`--start-inquiry`仅启动一次，GUI88228/原观察器77352，原锁存在。
+窗口响应由原空闲自检和系统Responding核验；未操作菜单/托盘、未启动第二实例测试冲突弹窗。
+原三模块开关true/900秒不变，120秒等待不变；单Owner+方案A，不是双Actor真实并行。
+
+### 本次自然日志（上海时间）
+
+| 时间 | 模块 | 阶段 | 耗时秒 |
+| --- | --- | --- | --- |
+| 2026-10-28T21:17:08.586000+08:00 | inquiry | begin | 0.0 |
+| 2026-10-28T21:27:41.146000+08:00 | inquiry | completed | 632.563 |
+| 2026-10-28T21:27:41.349000+08:00 | quotation | begin | 0.0 |
+| 2026-10-28T21:27:59.287000+08:00 | tp | begin | 0.0 |
+| 2026-10-28T21:28:12.327000+08:00 | tp | completed | 13.047 |
+
+观察截止21:28前后，报价整批尚未完成；不能作完整轮次速度对比。询价已完成、TP中途完成并恢复报价。
+一次GOOGLE_WEB_READ_UNAVAILABLE后询价按原流程完成，超时精确根因UNKNOWN，不能称永久修复。
+真实年龄跳过计数：{"QUOTE_AGE_EXPIRED": 4, "QUOTE_AGE_UNVERIFIED": 0}。Google/其他固定reason计数：{"GOOGLE_WEB_READ_UNAVAILABLE": 1}。
+自然固定结果码可证明过滤分支已执行；冻结源码该分支在INSO查询前返回。未另行抓取网页请求，不制造订单/邮件、不连接新的CDP客户端。
+账本只读integrity=ok；历史118条命令、149条SENT全文行保持不变；四个TP任务/六TP-SENT保持。
+当前收件状态{"SENT": 149}；新增通知{}。
+SENT仅SMTP接受，不代表最终邮箱投递；没有历史重发/重置。报价历史来源身份hold保留。
+原生资源61次采样/609.109秒：主程序整机CPU平均0.28112%，RSS114.37～124.83MiB，
+Private85.95～96.72MiB，线程9～18，句柄1054～2203，GDI136/USER258；
+原观察器CPU0%、句柄128。仅主程序和原观察器，未汇总Chrome或把其他进程混入。完整数值在原JSON。
+这些短测不是长期无泄漏/长期稳定PASS；Google下载超时不是本次年龄过滤修复目标，保留真实错误/恢复证据。
+
+### 已知边界与本次补充
+
+年龄依据仍为RFQ_BRIEF询价日/本地不可变入库时间代理，不是真实客户报价发送日；
+旧询价新报价可能保守跳过，晚入库可能不能准确覆盖；总体提速没有可比负载证据。
+Owner询问Google多标签：源码`GoogleSheetsWebService._retained_pages`只在内存保留targetId，
+原Chrome正常页跨程序退出保留；新进程不能接管失去注册的旧页，故多次发布可以累计多组。
+这是源码可证的生命周期缺口；**当前实际页数/每页归属NOT_VERIFIED**，没有连接生产CDP检查或关闭页面。
+不把未知写入/人工页一律清理；跨重启安全复用/退休需要后续单独最小整改，未混入本候选。
+自有标记构建stage已退休（2876文件/268031102字节），本次六个一次性CLI辅助脚本已退休；
+正式安装、新鲜回滚及受保护数据保留。
+当前业务继续运行；真实菜单/托盘本次未操作，长期稳定/DPI/游戏影响及整体V1.6验收仍未关闭。
+`COMPUTER_USE_NOT_USED`：仅原CLI、Git、只读SQLite、脱敏日志及Windows原生计数器；无桌面控制。
+
+
 ## “已报价给客户”七天自动刷新限制 — 离线源码交付（2026-10-28）
 
 **REVIEW_REQUIRED / NOT_DEPLOYED。生产仍是方案A b57f467，未混入本次规则。**

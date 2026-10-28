@@ -5648,5 +5648,384 @@
       ],
       "production_and_rollback_untouched": true
     }
+  },
+  "customer_quoted_seven_day_controlled_release_20261028": {
+    "at": "2026-10-28T13:28:55.501156+00:00",
+    "state": "BUSINESS_RUNNING",
+    "authorization_head": "da2668d91c784eaa822be7293af59d7983518b97",
+    "candidate": {
+      "checked_at": "2026-10-28T11:29:26.416690+00:00",
+      "build_head": "da2668d91c784eaa822be7293af59d7983518b97",
+      "source": "63d161cd3ec998d1fbbd3f584ab46797399dce6c",
+      "src_tree": "c1fc44b0bf87f1f6742939a9f33114c325f8405b",
+      "tests_tree": "c36c35b55f4d1ad201baee8f2dd3304f41e52079",
+      "exe_sha256": "59f19839597fe49df62fc40c1c9bf6098513beab6c1cb182d2f5a49b8f6ae1a6",
+      "old_exe_sha256": "db9463d4d1dbdf716c80c8a48a2e5d6e9cb7ebe4bb4254a0a2cd40beea440969",
+      "assets": 2875,
+      "old_assets": 2875,
+      "manifest_sha256": "e39e75c9b36f0f7f4a1003338affaaf1ba1e7a8d2ff24ac2c69d80930b03ef33",
+      "frozen_code_modules": 117,
+      "frozen_module_checks": {
+        "src.core": true,
+        "src.core._vault_backend": true,
+        "src.core.app_paths": true,
+        "src.core.credential_provider": true,
+        "src.core.mpn": true,
+        "src.core.protected_local_store": true,
+        "src.core.runtime_diagnostics": true,
+        "src.core.site_retry": true,
+        "src.gui": true,
+        "src.gui.app": true,
+        "src.gui.contracts": true,
+        "src.gui.main": true,
+        "src.gui.mock_backend": true,
+        "src.gui.resources": true,
+        "src.gui.smoke": true,
+        "src.gui.state": true,
+        "src.gui.tray": true,
+        "src.gui.workbench": true,
+        "src.inso": true,
+        "src.inso.discovery": true,
+        "src.inso.duplicate_history": true,
+        "src.inso.purchase_writer": true,
+        "src.inso.quotation_read": true,
+        "src.inso.sales_attachment": true,
+        "src.inso.sales_details": true,
+        "src.inso.sales_header": true,
+        "src.inso.session": true,
+        "src.inso.write_safety": true,
+        "src.launcher": true,
+        "src.launcher.backend": true,
+        "src.launcher.browser_bootstrap": true,
+        "src.launcher.business_continuations": true,
+        "src.launcher.diagnostics": true,
+        "src.launcher.google_quote_update": true,
+        "src.launcher.google_web": true,
+        "src.launcher.inso_session": true,
+        "src.launcher.manual_order": true,
+        "src.launcher.market_actors": true,
+        "src.launcher.market_continuation": true,
+        "src.launcher.purchase_completion": true,
+        "src.launcher.sales_header": true,
+        "src.launcher.sales_intent": true,
+        "src.launcher.single_instance": true,
+        "src.launcher.site_login_sweep": true,
+        "src.launcher.tp_composition": true,
+        "src.launcher.v12_composition": true,
+        "src.launcher.v12_gui": true,
+        "src.launcher.v12_phase_a_readonly": true,
+        "src.launcher.v13_integration": true,
+        "src.launcher.v13_quotation": true,
+        "src.launcher.workbench_snapshot": true,
+        "src.order_mail": true,
+        "src.order_mail.contracts": true,
+        "src.order_mail.filled": true,
+        "src.order_mail.inspection": true,
+        "src.order_mail.pi_orders": true,
+        "src.quotation.update_result": true,
+        "src.research": true,
+        "src.research.aggregation": true,
+        "src.research.bom_ai": true,
+        "src.research.cdp_pages": true,
+        "src.research.continuation": true,
+        "src.research.contracts": true,
+        "src.research.credentials": true,
+        "src.research.ecb_fx": true,
+        "src.research.excel_output": true,
+        "src.research.finalize": true,
+        "src.research.findchips": true,
+        "src.research.fx": true,
+        "src.research.hqew": true,
+        "src.research.icnet": true,
+        "src.research.inso_history": true,
+        "src.research.lcsc": true,
+        "src.research.market_contracts": true,
+        "src.research.runtime": true,
+        "src.research.service": true,
+        "src.research.site_login": true,
+        "src.research.source_contracts": true,
+        "src.research.tp": true,
+        "src.sheets": true,
+        "src.sheets.brand_write": true,
+        "src.sheets.google_oauth": true,
+        "src.sheets.google_reader": true,
+        "src.sheets.google_writer": true,
+        "src.sheets.intent_status": true,
+        "src.sheets.pending": true,
+        "src.sheets.purchase_status": true,
+        "src.sheets.quotation_candidates": true,
+        "src.sheets.quotation_input": true,
+        "src.sheets.tp_brief": true,
+        "src.sheets.worksheet_schema": true,
+        "src.workflow": true,
+        "src.workflow.dashboard_counts": true,
+        "src.workflow.inso_query": true,
+        "src.workflow.market_messages": true,
+        "src.workflow.models": true,
+        "src.workflow.order_notifications": true,
+        "src.workflow.purchase_follow_up": true,
+        "src.workflow.quotation_age": true,
+        "src.workflow.service": true,
+        "src.workflow.store": true,
+        "src.workflow.tp_research": true,
+        "src.workflow.v12_contracts": true,
+        "src.workflow.v12_duplicate": true,
+        "src.workflow.v12_evidence": true,
+        "src.workflow.v12_faults": true,
+        "src.workflow.v12_flow": true,
+        "src.workflow.v12_notifications": true,
+        "src.workflow.v12_rules": true,
+        "src.workflow.v12_safety": true,
+        "src.workflow.v12_smtp_transport": true,
+        "src.workflow.v12_store": true,
+        "src.workflow.v13_follow_up_store": true,
+        "src.workflow.v13_integration": true,
+        "src.workflow.v13_price_store": true,
+        "src.workflow.v13_quotation": true,
+        "src.workflow.v13_quote_update": true
+      },
+      "vault_module_bytes_match": true,
+      "candidate_has_no_runtime": true,
+      "original_installed_full_prior_manifest_match": true,
+      "computer_use": "COMPUTER_USE_NOT_USED"
+    },
+    "installed": {
+      "installed_at": "2026-10-28T13:16:26.353700+00:00",
+      "installation": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6",
+      "source": "63d161cd3ec998d1fbbd3f584ab46797399dce6c",
+      "src_tree": "c1fc44b0bf87f1f6742939a9f33114c325f8405b",
+      "tests_tree": "c36c35b55f4d1ad201baee8f2dd3304f41e52079",
+      "exe_sha256": "59f19839597fe49df62fc40c1c9bf6098513beab6c1cb182d2f5a49b8f6ae1a6",
+      "verified_files": 2875,
+      "self_check_exit": 0,
+      "backup": {
+        "backup_root": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-seven-day-20261028T131547Z",
+        "program_rollback": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-seven-day-20261028T131547Z\\program",
+        "database_backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-seven-day-20261028T131547Z\\protected-state\\sqlite\\workflow-v12-pre-migration-20261028T131607377044Z.sqlite3",
+        "old_exe_sha256": "db9463d4d1dbdf716c80c8a48a2e5d6e9cb7ebe4bb4254a0a2cd40beea440969",
+        "verified_files": 2875,
+        "self_check_exit": 0,
+        "db_snapshot_equal": true,
+        "at": "2026-10-28T13:16:07.437315+00:00"
+      },
+      "normal_old_exit": {
+        "run_id": "08ca71429327412b9f9897447e8deed6",
+        "pid": 91980,
+        "observed_at": "2026-10-28T13:12:52.198233+00:00",
+        "exit_code": 0,
+        "exit_code_hex": "0x00000000",
+        "classification": "normal"
+      },
+      "all_business_tables_unchanged": true,
+      "config_vault_junction_unchanged": true,
+      "migration": false,
+      "tp_tasks": 4,
+      "tp_sent": 6,
+      "mail_states": {
+        "SENT": 149
+      },
+      "known_hold_reasons_preserved": {
+        "SOURCE_IDENTITY_UNRESOLVED": 1
+      },
+      "state": "INSTALLED_IDLE",
+      "actor_factory": "None",
+      "computer_use": "COMPUTER_USE_NOT_USED"
+    },
+    "idle_self_check": {
+      "title": "INSO LEO V1.6 — Procurement Automation Control Center",
+      "state": "已停止",
+      "business_thread_started": false,
+      "order_thread_started": false,
+      "order_action": "自动订单录单",
+      "gui_rendered": true,
+      "start_action": "开始运行"
+    },
+    "launch": {
+      "idle_self_check_exit": 0,
+      "idle_all_business_tables_unchanged": true,
+      "start_count": 1,
+      "argument": "--start-inquiry",
+      "started_at": "2026-10-28T13:17:04.5136529Z",
+      "pid": 88228
+    },
+    "single_instance": {
+      "canonical_mutex_exists": true,
+      "conflict_dialog_test": "NOT_VERIFIED",
+      "duplicate_instance_started": false,
+      "method": "OpenMutexW(SYNCHRONIZE) then CloseHandle; no Wait or Release"
+    },
+    "protected": {
+      "configuration_and_encrypted_vault_equal_backup": true,
+      "runtime_junction_unchanged": true,
+      "enabled": {
+        "v16_enabled": true,
+        "v13_enabled": true,
+        "tp_enabled": true
+      },
+      "actor_factory": "None (unchanged reviewed default composition)",
+      "no_profile_operation": true
+    },
+    "ledger": {
+      "integrity": "ok",
+      "historic_command_count": 118,
+      "historic_commands_immutable": true,
+      "historic_sent_count": 149,
+      "historic_sent_full_rows_unchanged": true,
+      "historic_tp_count": 4,
+      "historic_tp_full_rows_unchanged": true,
+      "current_recipients": {
+        "SENT": 149
+      },
+      "current_tp_states": {
+        "MAIL_QUEUED": 4
+      },
+      "new_recipient_kind_outcomes": {},
+      "purchase_outcomes_before": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 23,
+        "VALIDATION_FAILED": 3
+      },
+      "purchase_outcomes_current": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 23,
+        "VALIDATION_FAILED": 3
+      },
+      "qualification": "SMTP SENT means transport acceptance only; no final mailbox receipt. No forced business writes or replays."
+    },
+    "natural_cycles": {
+      "cycles": [
+        {
+          "at": "2026-10-28T21:17:08.586000+08:00",
+          "cycle": "cycle_dbb6997635ab417d851fe7c8a483021e",
+          "module": "inquiry",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T21:27:41.146000+08:00",
+          "cycle": "cycle_dbb6997635ab417d851fe7c8a483021e",
+          "module": "inquiry",
+          "phase": "completed",
+          "elapsed": 632.563,
+          "due_in": 900.0
+        },
+        {
+          "at": "2026-10-28T21:27:41.349000+08:00",
+          "cycle": "cycle_c6d789c57b024552876efede50c4f2c7",
+          "module": "quotation",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T21:27:59.287000+08:00",
+          "cycle": "cycle_81f83d923002456c87f9ed0851f545cc",
+          "module": "tp",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T21:28:12.327000+08:00",
+          "cycle": "cycle_81f83d923002456c87f9ed0851f545cc",
+          "module": "tp",
+          "phase": "completed",
+          "elapsed": 13.047,
+          "due_in": 900.0
+        }
+      ],
+      "reasons": {
+        "GOOGLE_WEB_READ_UNAVAILABLE": 1
+      },
+      "business_results": {
+        "V1.3:SOURCE_IDENTITY_UNRESOLVED": 1,
+        "V1.3:QUOTE_AGE_EXPIRED": 4
+      }
+    },
+    "natural_age_skip_counts": {
+      "QUOTE_AGE_EXPIRED": 4,
+      "QUOTE_AGE_UNVERIFIED": 0
+    },
+    "resources": {
+      "pid": 88228,
+      "watch_pid": 77352,
+      "elapsed": 609.1089999999967,
+      "samples": 61,
+      "logical_cpus": 16,
+      "qualification": "Finite read-only GetProcessTimes/GetThreadTimes on installed live process and its existing observer; menu/tray activity may occur; authorized production business active; excludes Chrome child resource totals.",
+      "app": {
+        "seconds": 608.969000000041,
+        "cpu_host_percent": 0.28111678303819815,
+        "rss_min": 119922688,
+        "rss_max": 130891776,
+        "private_min": 90128384,
+        "private_max": 101421056,
+        "threads_min": 9,
+        "threads_max": 18,
+        "handles_min": 1054,
+        "handles_max": 2203,
+        "gdi_range": [
+          136,
+          136
+        ],
+        "user_range": [
+          258,
+          258
+        ]
+      },
+      "observer": {
+        "seconds": 608.9839999999967,
+        "cpu_host_percent": 0.0,
+        "rss_min": 21786624,
+        "rss_max": 21835776,
+        "private_min": 15134720,
+        "private_max": 15233024,
+        "threads_min": 1,
+        "threads_max": 4,
+        "handles_min": 128,
+        "handles_max": 128,
+        "gdi_range": [
+          0,
+          0
+        ],
+        "user_range": [
+          1,
+          1
+        ]
+      }
+    },
+    "cleanup": {
+      "path": "C:\\Users\\Leo\\.codex\\worktrees\\v16-independent-scheduling\\INSO_Leo\\build\\windows-release-stage-1.6",
+      "bytes": 268031102.0,
+      "installed_program_preserved": true,
+      "files": 2876,
+      "stage_retired": true,
+      "fresh_rollback_preserved": true,
+      "six_owned_cli_helpers_retired": true
+    },
+    "full_regression_inherited": {
+      "source": "63d161cd3ec998d1fbbd3f584ab46797399dce6c",
+      "src_tree": "c1fc44b0bf87f1f6742939a9f33114c325f8405b",
+      "tests_tree": "c36c35b55f4d1ad201baee8f2dd3304f41e52079",
+      "passed": 3140,
+      "skipped": 1,
+      "seconds": 125.63,
+      "rerun": false
+    },
+    "qualification": [
+      "No source/test changes; unchanged reviewed source; original BuildOnly/self-check/scanner reused",
+      "Only original single Owner + independent deadlines + Option A; no double-market Actor",
+      "No exact true customer-send date: RFQ inquiry date or immutable local intake timestamp are proxies",
+      "Natural cycle begin is not completed business or precise first Google-read proof",
+      "Existing native Google timeouts retained; this release does not fix downloads",
+      "Retained Google target registry is process-service memory; restart cannot reuse lost registry and can add pages while old pages remain; live tab inventory NOT_VERIFIED; no cleanup/CDP probe",
+      "No whole-V1.6 PASS, long-term stability/DPI/game effects remain NOT_VERIFIED",
+      "COMPUTER_USE_NOT_USED"
+    ],
+    "observed_google_recovery": "One GOOGLE_WEB_READ_UNAVAILABLE; original inquiry then completed 632.563s, subsequent quotation and TP ran; exact download timeout root cause UNKNOWN",
+    "observation_scope": "Quotation still active at evidence cutoff; not a completed whole-batch speed comparison"
   }
 }

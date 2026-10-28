@@ -5179,3 +5179,17 @@ timeline and evidence-consistency
 Review, written only into this
 canonical task document. No source,
 tests or original evidence modified.
+
+## 七天规则已授权正式发布收据（2026-10-28）
+
+BUSINESS_RUNNING / V16_REVIEW_REQUIRED，Owner授权da2668d；不再是NOT_DEPLOYED。
+实际原样源码`63d161cd3ec998d1fbbd3f584ab46797399dce6c`、src树`c1fc44b0bf87f1f6742939a9f33114c325f8405b`、tests树`c36c35b55f4d1ad201baee8f2dd3304f41e52079`。
+安装EXE`59F19839597FE49DF62FC40C1C9BF6098513BEAB6C1CB182D2F5A49B8F6AE1A6`，2875文件/117冻结模块/self-check/RELEASE_SCAN_OK通过。
+Owner正常停止退出后，单实例独占新鲜备份及程序文件替换；回滚`D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.6-seven-day-20261028T131547Z\program`。
+数据库/配置/Vault/runtime及历史149SENT/四TP/六TP-SENT保持；没有恢复旧数据。
+原idle自检0及全表不变后，原CLI仅启动一次GUI88228/观察器77352；原三模块/单Owner方案A，双Actor未开启。
+本次自然年龄跳过：{"QUOTE_AGE_EXPIRED": 4, "QUOTE_AGE_UNVERIFIED": 0}；真实周期及Google分类/资源区间/全部发布凭据见原V16_RELEASE_REPORT.md顶部和order-resource-regression.json新增customer_quoted_seven_day_controlled_release_20261028。
+当前页数未连接CDP核验；源码确认常驻targetId注册仅内存，重启保留旧Chrome页可能累计多组，未在本版临时修复或清理。
+日期仍为询价/入库代理而非真实客户发送日；缺失自然样本/长期稳定/DPI/游戏影响保留NOT_VERIFIED。
+自有stage2876文件268031102字节已退休，受保护数据/新鲜回滚保留。原完整3140PASS/1SKIP125.63s证据按同一源树沿用。
+COMPUTER_USE_NOT_USED。报告只交Owner，本次未增加CEO门禁，也不宣布整体V1.6 PASS。
