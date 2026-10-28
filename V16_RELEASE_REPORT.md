@@ -68,9 +68,12 @@ V1.4/V1.5程序资产不变。实际业务库由原配置指向 V1.2 runtime/pro
 原生线程有界采样含用户态/内核态差分，但不足定位旧3.264%问题根因。
 **资源异常/波动保持OPEN，不报长期稳定PASS，不用操作焦点/优先级改数字。**
 
-当前最终可核实状态：**INSTALLED / BUSINESS_RUNNING_WITH_GOOGLE_DEFER /
-OWNER_SAFE_STOP_PENDING / RESOURCE_WARNING / V16_REVIEW_REQUIRED**。
-已请求Owner点击安全停止，尚未收到完成确认，不能写成已停止/空闲。
+当前最终可核实状态：**INSTALLED_IDLE / GOOGLE_HEALTH_HOLD /
+RESOURCE_WARNING / V16_REVIEW_REQUIRED**。
+Owner已确认安全停止，原询价轮次09:54:33.381(+08)记录stopped、总耗时716.204s。
+停止后只读核验1context/2pages/1空闲Google-owned，原unsafe/read-failed/refresh-pending
+均false，未新建或关闭页面。原144SENT/4TP完整；当前146SENT另有1条自然故障通知
+PENDING，原队列未清理/未强制发送。停止前的阶段性待确认状态已由此收口凭据替代。
 09:50:12主进程仍Responding，RSS123.93MiB、Private93.6MiB、1426句柄、10线程；
 单次运行与短测不能证明长期稳定。后续现场状态变更需追加新凭据。
 

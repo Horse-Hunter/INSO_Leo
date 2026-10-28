@@ -3375,3 +3375,35 @@ Owned marked staging268020692bytes and compatibility data copy retired after
 boundary/reparse checks. Old rollback/shared runtime/profile/soak unaffected;
 small sanitized release evidence retained in original JSON. Final report Owner
 handoff only. No CEO message, no whole-V1.6 PASS.
+
+
+### Release stop closure and next Owner requirement — 2026-10-28
+
+Owner confirms Safety Stop; original inquiry cycle stopped09:54:33.381+08,
+elapsed716.204s. This supersedes OWNER_SAFE_STOP_PENDING above; installed GUI
+remains idle86248/observer86684. Original144SENT/113commands/4TP unchanged;
+current146SENT plus1PENDING natural runtime-fault notification. Do not flush,
+reset or falsely mark it sent. Read-only original9222 after stop:onecontext/
+twopages/oneGoogle-owned;unsafe/read_failed/refresh_pending false;no page change.
+State INSTALLED_IDLE / GOOGLE_HEALTH_HOLD / RESOURCE_WARNING / REVIEW_REQUIRED.
+
+Owner requests no fixed threeGoogle/oneINSO numeric tab count during scheduling;
+tasks own pages and close them at completion. New source scope: remove only
+Google's count>=3 denial, retain exact page/document/auth/unfinished-operation
+checks, serial protected Owner, resource/order exclusion, pending/UNKNOWN and
+owned cleanup. Isolated source and regression only; no unreviewed install,
+restart/resumption or browser mutation. Normal nested scopes can exceed3;
+original cleanup must close only the originating task's pages. Use existing
+Google action/operation_scope; no new manager/scheduler, no alert-policy edits.
+INSO audit finds no global one-tab counter:unique context/shell and pinned lease
+are authentication/identity rules, not a total-tab count. Do not delete those or
+silently enable parallel INSO writes. Preserve already approved canonical
+Runtime/two-market-actor bound (still inactive in production).
+
+Runtime fixed page-budget evidence and post-stop return to oneGoogle page
+support a lifetime/scope-versus-number mismatch; exact busy-time page ownership
+was not captured and remains UNKNOWN. Prove the count conflict in offline actual
+nested native transport, not by opening production pages or guessing cleanup.
+Deliver next source/evidence independently for Owner→CEO review; do not overwrite
+this installed bb04d92 release. This is a new Owner change, not a self-issued
+amendment of prior CEO source PASS.
