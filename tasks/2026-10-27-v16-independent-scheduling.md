@@ -3607,3 +3607,114 @@ in the CEO source review. Prior native login,
 E4 module parity and ordinary 60s cache scoped
 source passes stay closed; no re-implementation
 requested without contrary real evidence.
+
+
+### Owner-authorized four-surface Windows release — actual execution2026-10-28
+
+New Owner instruction explicitly authorizes c24d686 build/backup/replace/start,
+limited read-only retained-page acceptance, then previously permitted normal
+business. No unreviewed source/Actor enablement or mail-policy change. Remote
+b473888 andsrc81ab97b verified; clean fast-forward, original release script/env.
+Actual installedEXE C92F48E1380A90A747300CD7BDADFBD410C6A8D8352304C1B4D6DA438C7F28CE;
+2875asset equality,7frozen modules match reviewed source; self/idle checks and
+RELEASE_SCAN_OK pass. OldPID86248 Owner normal exit10:32:12+08 code0; mutex free.
+Backup dist/release-backups/INSO_V1.6-retained-20261028T023242Z/program, prior745BEC95
+self-check/hash pass. Only EXE/_internal replaced. Complete ledger/config/Vault/
+runtime junction/V1.4/V1.5 unchanged across install; compatibility copy only,
+production migration unnecessary/notrun. Fresh verified protected-state backup
+retained; never roll old ledger back after actual mail results.
+
+NewGUI86788/observer84332 started10:34:13+08,gui_ready/Responding/unique lock.
+No--start-inquiry argument. Actual business nevertheless began10:34:22; actor of
+that GUI action not independently recorded. Executor failed to recheck actual
+cycle log before starting read-only probe10:35:06. The overlapping probe is NOT
+an isolated PASS; business12ARTIFACT_LOST/2retry-exhausted, probe Error atopen-sheet.
+Original three-page-budget branch absent. Owner requested/confirmed safe stop;
+probe ended, exact own settled targets retired, no human/unknown page cleanup.
+
+After stop10:40:43—10:43:36: repeated limited read-only acceptance with temporary
+new-business-begin guard; no Backend or DB/mailer constructed. Actual4own slots
+plus2originalpages; all identities reused across polls/CDP reconnects, exactly
+settled ownSHAHAB closed/reopened alone, other3unchanged; cache<60s no extra
+source downloads, inputtwice live; real60s expiration refresh and forced fresh
+read despite valid cache pass. Downloads2026=3/SHAHAB=3/Brief=2/input=2 include
+mandatory reads.0Googleerrors; own4probe pages retired, original pages never
+closure targets. This transport proof does not itself prove packaged natural
+business cycle success. Exact artifact-loss causal root staysUNKNOWN; interaction
+is a hypothesis, not an approved source fix. GUI resume requested after pass;
+final production state will be updated from real logs, no guessed resumption.
+
+Original146SENT full rows/116commands/4TP unchanged,6TP-SENT protected. Early
+normal business current149SENT:prior1PENDING legitimately sent plus2new runtime
+fault recipientSENT, not historical resend. SMTP acceptance only, not inbox
+proof. PurchaseSAVED23 unchanged. No synthetic order, Sheetwrite or testsend.
+Resource measurements and distinctions in original report/JSON, no long-term
+PASS. Owned268022721byte marked stage+compatibility copy retired; active install,
+rollback,protected state,Chrome/Profile,old longtest/other trees preserved.
+Source/application unchanged, only original report/task/JSON release evidence.
+
+
+### Four-surface release closure — BUSINESS_RUNNING / REVIEW_REQUIRED
+
+Owner confirmed resume after isolated pass. Actual inquirybegin10:48:54.698+08,
+quotationbegin10:50:59.234, completed10:58:56.086 (476.860s).124.536s before
+nested quotation supports original120s safety window retained. Post-resume
+business:2SOURCE_CHANGED safely blocked; quotation31NO_RECENT_QUOTE,
+1SOURCE_IDENTITY_UNRESOLVED,1PRICE_UNCHANGED. No successful purchase/quote send
+or synthetic external effect invented. At11:06:06+08 inquirycycle completion
+and newTPbegin/complete NOT_VERIFIED. Earlier TPdeferred records and four old
+requirements/sixSENT are not current success. Do not declare TP punctual or
+all three modules accepted merely because configuration enables them.
+
+Post-resume fixed runtimefault/failed-step counts0 through11:06:06; first
+interleaved-window12artifact-loss/2exhaustion remain historical failure evidence,
+not erased. Exact causation not proven; later isolated pass and post-resume lack
+of faults do not prove permanent absence of notifications. Final ledger integrity
+ok, original146SENT/116commands/4TP immutable;149SENT total, prior pending+2new
+fault receipts distinguished. NoUNKNOWN/replay or program/data rollback.
+
+GUI86788/observer84332 remain responding, configured flags/intervals/Vault/junction
+unchanged. Source tree81ab97b, installed2875assets+rollback rechecked. Root9222
+Chrome/process/profile argument checked unique without attaching a new browser
+client. No optional Actors enabled. Natural-business60.51s:GUI0.31473%host/
+125.90MiB RSS/1220handles/10threads; stable14Chromeprocesses0.95548%host/
+2473.76MiB RSS/10380handles, child churn excluded from fullCPU. ObservedGUI
+handles5841→1663→1982; finalRSS143.90MiB/private113.07MiB/9threads. Short
+snapshots only, memory/handles long-term NOT_VERIFIED. Owner-safe-stopped
+133.72s GUI0.00292%host is separate, not business throughput.
+
+Report/evidence only; no source/test changes or redundant full suite. Cleaned
+marked268022721byte stage and own compatibility copy, retained verified program/
+state backup, original protectedChrome/runtime/Vault/history and old longtest.
+FinalBUSINESS_RUNNING / V16_REVIEW_REQUIRED; source/transport installation evidence
+requires Owner/CEO independent review, no wholeV1.6PASS. Owner handoff,
+no direct CEO messaging. No further manual production action requested now.
+
+
+### FINAL superseding cutoff — three actual cycles complete (11:10:42+08)
+
+Supersedes preceding11:06:06 TP/inquiry NOT_VERIFIED cutoff only:
+inquirycompleted11:07:04.251/1089.547s (outercycleidentity unchanged after quote);
+TPbegin11:07:04.326→completed11:07:16.173/11.844s, next due900s.
+Quotationcompletion10:58:56.086/476.860s remains. All3natural cycles executed,
+not Mock/start/config assertions. Four historicalTP/sixSENT immutable, no new
+TP send forced. InitialTPstarted1089.628s after resume: serial resource waiting
+still OPEN, not a900s punctuality pass. Future cycle actual start NOT_VERIFIED.
+
+One late bounded Google download-read TimeoutError11:06:22, classified
+GOOGLE_WEB_READ_UNAVAILABLE; original retry recovered, no post-resume exhaustion
+or added fault receipt. Do NOT claim absolutely0post-resume faults. Prior0was
+true only through11:06:06. Existing149SENT/146historicalSENT/116commands/4TP and
+purchaseSAVED23 remain, noUNKNOWN or historicalresend. First overlapping-window
+12artifact-loss and2exhaustion still documented separately, causal rootUNKNOWN.
+
+At11:10:42GUIResponding/RSS143.27MiB/private112.44MiB/626handles/9threads;
+observed5841→1663→1982→626 supports batch resource release, not long-termPASS.
+Chrome one true root55340 (exclude --type child processes) and9222listener/
+canonicalprofile arguments verified without CDP attachment. Initialroot selector
+also matched renderer args; corrected diagnostic only, no browser changes.
+
+FINAL BUSINESS_RUNNING / V16_REVIEW_REQUIRED. Installed and normal business
+restored, actual4surface/TTL/reopen and actual3cycles evidenced. No new purchase/
+quote/TPsend success invented; source conflicts/no recent price/unchanged price
+not counted as sales. Report only Owner→CEO; no more production clicks needed.

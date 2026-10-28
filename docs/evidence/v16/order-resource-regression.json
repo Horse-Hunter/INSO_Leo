@@ -909,5 +909,665 @@
       "production_rollback_runtime_profile_untouched": true,
       "necessary_prior_health_diagnostics_retained": true
     }
+  },
+  "owner_authorized_retained_windows_release": {
+    "state": "BUSINESS_RUNNING",
+    "ceo_review": "b473888ddd45d19db9de5fb929704f223964c523",
+    "application_source": "c24d686096b1f6b5157ac1e443167be5662f6b54",
+    "src_tree": "81ab97bbbff5f220e70ae2ad73f8c5ff4e497f8f",
+    "source_changes": false,
+    "full_offline": "previous approved3054PASS/1SKIP; not rerun",
+    "installed": {
+      "installed_at": "2026-10-28T02:33:27.655708+00:00",
+      "installation": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6",
+      "source_application": "c24d686096b1f6b5157ac1e443167be5662f6b54",
+      "src_tree": "81ab97bbbff5f220e70ae2ad73f8c5ff4e497f8f",
+      "build_head": "b473888ddd45d19db9de5fb929704f223964c523",
+      "exe_sha256": "c92f48e1380a90a747300cd7bdadfbd410c6a8d8352304c1b4d6da438c7f28ce",
+      "verified_assets": 2875,
+      "rollback": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-retained-20261028T023242Z\\program",
+      "rollback_selfcheck": true,
+      "self_check": true,
+      "idle_self_check": true,
+      "all_business_tables_unchanged": true,
+      "protected_configuration_vault_junction_unchanged": true,
+      "v14_v15_assets_unchanged": true,
+      "migration_on_production": false,
+      "parallel_actors_enabled": false,
+      "state": "INSTALLED_IDLE"
+    },
+    "frozen_code": {
+      "source_application": "c24d686096b1f6b5157ac1e443167be5662f6b54",
+      "src_tree": "81ab97bbbff5f220e70ae2ad73f8c5ff4e497f8f",
+      "build_head": "b473888ddd45d19db9de5fb929704f223964c523",
+      "frozen_reviewed_code": {
+        "src.launcher.google_web": true,
+        "src.launcher.google_quote_update": true,
+        "src.launcher.backend": true,
+        "src.sheets.google_reader": true,
+        "src.sheets.tp_brief": true,
+        "src.workflow.tp_research": true,
+        "src.launcher.business_continuations": true
+      },
+      "exe_sha256": "c92f48e1380a90a747300cd7bdadfbd410c6a8d8352304c1b4d6da438c7f28ce",
+      "real_parallel_actors_enabled": false
+    },
+    "backup": {
+      "backup_root": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-retained-20261028T023242Z",
+      "program_rollback": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-retained-20261028T023242Z\\program",
+      "database_backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-retained-20261028T023242Z\\protected-state\\sqlite\\workflow-v12-pre-migration-20261028T023258377023Z.sqlite3",
+      "candidate_exe_sha256": "c92f48e1380a90a747300cd7bdadfbd410c6a8d8352304c1b4d6da438c7f28ce",
+      "old_exe_sha256": "745bec95f0426673c82ed4ab76ee38dcab442f2922faef124d7b040f947f51ce",
+      "assets": 2875,
+      "compatibility": "PASS_NO_SCHEMA_OR_ROW_CHANGE",
+      "migration_needed": false,
+      "program_backup_hash_verified": true,
+      "protected_state_backup_verified": true
+    },
+    "launch": {
+      "start_inquiry": false,
+      "launcher_pid": 86788,
+      "started_at": "2026-10-28T02:34:13.5072513Z",
+      "mode": "ProductionBackend",
+      "exe_sha256": "C92F48E1380A90A747300CD7BDADFBD410C6A8D8352304C1B4D6DA438C7F28CE"
+    },
+    "runtime": {
+      "instance_lock_held": true,
+      "receipts": [
+        {
+          "pid": 86248,
+          "started_at": "2026-10-28T01:38:36.480604+00:00",
+          "phase": "finished",
+          "exit_reason": "owner_exit",
+          "last_event": "app_finished"
+        },
+        {
+          "pid": 86788,
+          "started_at": "2026-10-28T02:34:13.616571+00:00",
+          "phase": "gui",
+          "exit_reason": null,
+          "last_event": "gui_ready"
+        }
+      ]
+    },
+    "first_readonly_attempt": {
+      "started_at": "2026-10-28T02:35:06.712407+00:00",
+      "state": "HEALTH_HOLD",
+      "phase": "retire-own-settled-probe-pages",
+      "writes": false,
+      "smtp": false,
+      "downloads": {
+        "2026": 2,
+        "SHAHAB": 2,
+        "RFQ_BRIEF": 1,
+        "报价输入": 2
+      },
+      "checks": {
+        "four_slots": true,
+        "cross_poll_target_identity": true,
+        "ordinary_cache_hits_no_download": true,
+        "quotation_input_live_twice": true,
+        "closed_settled_slot_reopened_alone": true,
+        "own_probe_pages_retired": true,
+        "initial_pages_not_targeted_for_closure_by_probe": true
+      },
+      "errors": [
+        {
+          "class": "Error",
+          "reason": "REDACTED_EXCEPTION"
+        }
+      ],
+      "snapshots": [
+        {
+          "phase": "initial",
+          "total_pages": 3,
+          "current_slots": 0,
+          "all_slots_present": true,
+          "active_current_pages": 0
+        },
+        {
+          "phase": "first-poll",
+          "total_pages": 7,
+          "current_slots": 4,
+          "all_slots_present": true,
+          "active_current_pages": 4
+        },
+        {
+          "phase": "second-poll-new-attachment",
+          "total_pages": 6,
+          "current_slots": 4,
+          "all_slots_present": true,
+          "active_current_pages": 4
+        },
+        {
+          "phase": "safe-close-one",
+          "total_pages": 6,
+          "current_slots": 4,
+          "all_slots_present": true,
+          "active_current_pages": 4
+        },
+        {
+          "phase": "safe-close-one",
+          "total_pages": 6,
+          "current_slots": 4,
+          "all_slots_present": true,
+          "active_current_pages": 4
+        },
+        {
+          "phase": "retire-own-settled-probe-pages",
+          "total_pages": 7,
+          "current_slots": 4,
+          "all_slots_present": true,
+          "active_current_pages": 4
+        }
+      ],
+      "classifications": {
+        "inso_step": [
+          "google-open-sheet"
+        ],
+        "runtime_reason": [
+          "GOOGLE_WEB_READ_UNCLASSIFIED"
+        ],
+        "runtime_cause": [
+          "Error"
+        ]
+      },
+      "finished_at": "2026-10-28T02:37:34.025088+00:00",
+      "qualification": "Business and probe overlapped; not a valid isolated PASS. Original page-preservation boolean means no original page selected for closure, not proof against external page changes."
+    },
+    "isolated_readonly": {
+      "started_at": "2026-10-28T02:40:43.752422+00:00",
+      "state": "PASS_READONLY_CANONICAL_TRANSPORT",
+      "phase": "retire-own-settled-probe-pages",
+      "writes": false,
+      "smtp": false,
+      "downloads": {
+        "2026": 3,
+        "SHAHAB": 3,
+        "RFQ_BRIEF": 2,
+        "报价输入": 2
+      },
+      "checks": {
+        "four_slots": true,
+        "cross_poll_target_identity": true,
+        "ordinary_cache_hits_no_download": true,
+        "quotation_input_live_twice": true,
+        "initial_pages_never_targeted": true,
+        "closed_settled_slot_reopened_alone": true,
+        "real_60s_expiry_on_demand": true,
+        "fresh_read_bypasses_valid_cache": true,
+        "cross_reconnect_identity_after_ttl": true,
+        "own_probe_pages_retired": true
+      },
+      "errors": [],
+      "snapshots": [
+        {
+          "phase": "initial",
+          "total_pages": 2,
+          "current_slots": 0,
+          "all_slots_present": true,
+          "active_current_pages": 0
+        },
+        {
+          "phase": "first-poll",
+          "total_pages": 6,
+          "current_slots": 4,
+          "all_slots_present": true,
+          "active_current_pages": 4
+        },
+        {
+          "phase": "second-poll-new-attachment",
+          "total_pages": 6,
+          "current_slots": 4,
+          "all_slots_present": true,
+          "active_current_pages": 4
+        },
+        {
+          "phase": "safe-close-one",
+          "total_pages": 6,
+          "current_slots": 4,
+          "all_slots_present": true,
+          "active_current_pages": 4
+        },
+        {
+          "phase": "safe-close-one",
+          "total_pages": 6,
+          "current_slots": 4,
+          "all_slots_present": true,
+          "active_current_pages": 4
+        },
+        {
+          "phase": "expired-source-read",
+          "total_pages": 6,
+          "current_slots": 4,
+          "all_slots_present": true,
+          "active_current_pages": 4
+        },
+        {
+          "phase": "retire-own-settled-probe-pages",
+          "total_pages": 6,
+          "current_slots": 4,
+          "all_slots_present": true,
+          "active_current_pages": 4
+        }
+      ],
+      "finished_at": "2026-10-28T02:43:36.253888+00:00"
+    },
+    "ledger": {
+      "integrity": "ok",
+      "historic_command_count": 116,
+      "historic_commands_immutable": true,
+      "historic_sent_count": 146,
+      "historic_sent_full_rows_unchanged": true,
+      "historic_tp_count": 4,
+      "historic_tp_full_rows_unchanged": true,
+      "current_recipients": {
+        "SENT": 149
+      },
+      "current_tp_states": {
+        "MAIL_QUEUED": 4
+      },
+      "new_recipient_kind_outcomes": {
+        "PURCHASE_EXCEPTION:SENT": 2
+      },
+      "purchase_outcomes_before": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 23,
+        "VALIDATION_FAILED": 3
+      },
+      "purchase_outcomes_current": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 23,
+        "VALIDATION_FAILED": 3
+      },
+      "qualification": "SMTP SENT means transport acceptance only; no final mailbox receipt. No forced business writes or replays."
+    },
+    "observed_business_cycles": {
+      "cycles": [
+        {
+          "at": "2026-10-28T10:34:22.428000+08:00",
+          "cycle": "cycle_6f21759f800c4f30ba483d3144404d0d",
+          "module": "inquiry",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T10:36:23.687000+08:00",
+          "cycle": "cycle_6f21759f800c4f30ba483d3144404d0d",
+          "module": "inquiry",
+          "phase": "deferred",
+          "elapsed": 121.25,
+          "due_in": 900.0
+        },
+        {
+          "at": "2026-10-28T10:36:23.900000+08:00",
+          "cycle": "cycle_205170f33d7f43a586776c7e581744ad",
+          "module": "quotation",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T10:37:45.290000+08:00",
+          "cycle": "cycle_205170f33d7f43a586776c7e581744ad",
+          "module": "quotation",
+          "phase": "deferred",
+          "elapsed": 81.391,
+          "due_in": 900.0
+        },
+        {
+          "at": "2026-10-28T10:37:45.499000+08:00",
+          "cycle": "cycle_e8927e5245764911a91bad291b47053d",
+          "module": "tp",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T10:38:10.956000+08:00",
+          "cycle": "cycle_e8927e5245764911a91bad291b47053d",
+          "module": "tp",
+          "phase": "deferred",
+          "elapsed": 25.453,
+          "due_in": 900.0
+        }
+      ],
+      "reasons": {
+        "GOOGLE_WEB_READ_ARTIFACT_LOST": 12,
+        "GOOGLE_READ_RETRY_EXHAUSTED": 2
+      },
+      "business_results": {}
+    },
+    "resources_mixed": {
+      "seconds": 60.700625,
+      "groups": {
+        "exit_observer": {
+          "cpu_host_percent": 0.0,
+          "rss_mib_end": 20.7578125,
+          "private_mib_end": 14.4453125,
+          "handles_end": 128,
+          "threads_end": 1,
+          "stable_processes": 1
+        },
+        "canonical_chrome_during_readonly_probe": {
+          "cpu_host_percent": 1.5219417015887402,
+          "rss_mib_end": 2966.47265625,
+          "private_mib_end": 2665.6015625,
+          "handles_end": 11319,
+          "threads_end": 442,
+          "stable_processes": 15
+        },
+        "gui_during_early_business_and_probe": {
+          "cpu_host_percent": 0.29280485167986325,
+          "rss_mib_end": 121.8984375,
+          "private_mib_end": 91.5390625,
+          "handles_end": 1468,
+          "threads_end": 12,
+          "stable_processes": 1
+        }
+      },
+      "qualifier": "INVALID AS PURE IDLE: real normal business began 10:34:22 before sampling; mixed business + concurrent read-only probe; stable Chrome PIDs only",
+      "new_processes": 2
+    },
+    "resources_quiescent": {
+      "seconds": 133.720641,
+      "groups": [
+        {
+          "pid": 86788,
+          "role": "gui",
+          "cpu_host_percent": 0.002921201970606767,
+          "rss_mib_end": 124.359375,
+          "private_mib_end": 95.140625,
+          "handles_end": 1704,
+          "threads_end": 6,
+          "responding": true
+        },
+        {
+          "pid": 84332,
+          "role": "exit_observer",
+          "cpu_host_percent": 0.0,
+          "rss_mib_end": 20.77734375,
+          "private_mib_end": 14.4453125,
+          "handles_end": 128,
+          "threads_end": 1,
+          "responding": true
+        }
+      ],
+      "qualifier": "Owner-confirmed safely stopped GUI; independent read-only Chrome probe during interval, not business throughput or long-term result"
+    },
+    "cleanup": {
+      "installed_and_rollback_retained": true,
+      "runtime_touched": false,
+      "stage_retired": true,
+      "stage_bytes": 268022721.0,
+      "compatibility_copy_retired": true,
+      "small_local_scripts_and_sanitized_diagnostics_retained": "Necessary install/overlap-fault/read-only/source-protection evidence; no TSV/customer screenshots committed"
+    },
+    "business_resumed_after_readonly_pass": {
+      "owner_confirmed": true,
+      "first_actual_begin": "2026-10-28T10:48:54.698+08:00",
+      "module": "inquiry",
+      "after_isolated_probe_clients_exited": true,
+      "first_observation_no_new_google_faults": true,
+      "qualification": "Actual3module cycles completed; TP initial waiting1089.628s is not a punctuality PASS. Historical tasks skipped, no new TP send. No new successful purchase/quote forced.",
+      "quotation_begin": "2026-10-28T10:50:59.234+08:00",
+      "quotation_completed": "2026-10-28T10:58:56.086+08:00",
+      "quotation_elapsed_seconds": 476.86,
+      "safety_wait_observed_seconds_before_nested_quotation": 124.536,
+      "TP_actual_begin": "2026-10-28T11:07:04.326+08:00",
+      "TP_actual_complete": "2026-10-28T11:07:16.173+08:00",
+      "inquiry_complete": "2026-10-28T11:07:04.251+08:00",
+      "inquiry_elapsed_seconds": 1089.547,
+      "TP_elapsed_seconds": 11.844,
+      "initial_TP_begin_seconds_after_run_begin": 1089.628
+    },
+    "parallel_market_actors": "NOT_ENABLED; original Owner with independent module deadlines",
+    "first_attempt_qualification": "Invalid isolation: business began10:34:22 before probe10:35:06; failed, not hidden. Relationship to artifact-loss observed, exact causal root UNKNOWN. Owner confirmed stop; later isolated pass has0Googleerrors.",
+    "protection": "No config/Vault/junction/database restore or cleanup; current146historicalSENT/4TP/6TP-SENT preserved. Prior PENDING sent by actual early normal run, not reset. No testing SMTP or real write.",
+    "remaining": [
+      "actual new purchase/quote/TP send success not manufactured; source/price guard outcomes are not sends",
+      "TP punctuality remains OPEN; first TP waited1089.628s behind serial business",
+      "next900s actual execution not observed; cycle due plan is not actual start",
+      "real market Actor overlap NOT_ENABLED",
+      "complete GUI pointer/tray not repeated due screenshot limitation",
+      "long-term stability, historical high CPU root,100/150%DPI and game impact NOT_VERIFIED"
+    ],
+    "handoff": "Owner forwards; no direct CEO messaging",
+    "resources_after_probe_clients_exited": {
+      "started_at": "2026-10-28T02:48:47.9157166Z",
+      "finished_at": "2026-10-28T02:49:08.1112352Z",
+      "seconds": 20.195519,
+      "groups": {
+        "gui": {
+          "cpu_host_percent": 0.7350021556762171,
+          "rss_mib_end": 124.8125,
+          "private_mib_end": 94.40625,
+          "handles_end": 759,
+          "threads_end": 10,
+          "stable_processes": 1
+        },
+        "exit_observer": {
+          "cpu_host_percent": 0.0,
+          "rss_mib_end": 20.77734375,
+          "private_mib_end": 14.4453125,
+          "handles_end": 128,
+          "threads_end": 1,
+          "stable_processes": 1
+        },
+        "canonical_chrome": {
+          "cpu_host_percent": 1.445826608863085,
+          "rss_mib_end": 1877.3515625,
+          "private_mib_end": 1705.44921875,
+          "handles_end": 9085,
+          "threads_end": 353,
+          "stable_processes": 12
+        }
+      },
+      "new_processes": 1,
+      "qualifier": "All probe clients exited. Crosscheck window with business begin10:48:54+08; no long-term claim, stable PIDs only."
+    },
+    "resources_normal_business": {
+      "started_at": "2026-10-28T02:50:39.0937668Z",
+      "finished_at": "2026-10-28T02:51:39.6001751Z",
+      "seconds": 60.506409,
+      "groups": {
+        "gui": {
+          "cpu_host_percent": 0.3147264738517204,
+          "rss_mib_end": 125.8984375,
+          "private_mib_end": 95.22265625,
+          "handles_end": 1220,
+          "threads_end": 10,
+          "stable_processes": 1
+        },
+        "exit_observer": {
+          "cpu_host_percent": 0.0,
+          "rss_mib_end": 20.77734375,
+          "private_mib_end": 14.4453125,
+          "handles_end": 128,
+          "threads_end": 1,
+          "stable_processes": 1
+        },
+        "canonical_chrome": {
+          "cpu_host_percent": 0.9554772949754794,
+          "rss_mib_end": 2473.7578125,
+          "private_mib_end": 2223.54296875,
+          "handles_end": 10380,
+          "threads_end": 410,
+          "stable_processes": 14
+        }
+      },
+      "new_processes": 1,
+      "qualifier": "Natural business only after probe disconnect. Stable-PID CPU delta excludes exited/new child lifetimes; short test, not idle or long term."
+    },
+    "final_installed_asset_check": {
+      "all_installed_files_match": true,
+      "file_count": 2875,
+      "exe_sha256": "c92f48e1380a90a747300cd7bdadfbd410c6a8d8352304c1b4d6da438c7f28ce",
+      "v14_v15_unchanged": {
+        "1.4": true,
+        "1.5": true
+      },
+      "runtime_junction_preserved": true,
+      "rollback_manifest_still_matches": true
+    },
+    "final_gui_resource": {
+      "main_window": "INSO LEO V1.6 — Procurement Automation Control Center",
+      "private_bytes": 118562816,
+      "threads": 9,
+      "cpu_seconds": 76.21875,
+      "pid": 86788,
+      "rss_bytes": 150892544,
+      "at": "2026-10-28T03:06:06.5514297Z",
+      "handles": 1982,
+      "responding": true
+    },
+    "chrome_process_check": {
+      "canonical_cdp_root_count": 1,
+      "chrome_was_not_started_or_closed_by_checks": true,
+      "listener_verified": true,
+      "root_selector_excludes_renderer_type": true,
+      "canonical_chrome_pid": 55340,
+      "canonical_profile_argument_matches": true
+    },
+    "observed_handles": {
+      "highest_observed_during_batch": 5841,
+      "later_observed_after_quote": 1663,
+      "final_observed": 1982,
+      "qualification": "observed snapshots, not absolute peak; release occurs but long term remains NOT_VERIFIED",
+      "final_after_three_cycles": 626
+    },
+    "pre_tp_cutoff_110606": {
+      "checked_at": "2026-10-28T03:06:06.507257+00:00",
+      "state": "BUSINESS_RUNNING",
+      "cycles": [
+        {
+          "at": "2026-10-28T10:48:54.698000+08:00",
+          "cycle": "cycle_e44d4541815540ae9705a120277a29aa",
+          "module": "inquiry",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T10:50:59.234000+08:00",
+          "cycle": "cycle_595cc26629ae4b73941c8902c0d46788",
+          "module": "quotation",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T10:58:56.086000+08:00",
+          "cycle": "cycle_595cc26629ae4b73941c8902c0d46788",
+          "module": "quotation",
+          "phase": "completed",
+          "elapsed": 476.86,
+          "due_in": 900.0
+        }
+      ],
+      "business_results": {
+        "V1.2:SOURCE_CHANGED": 2,
+        "V1.3:SOURCE_IDENTITY_UNRESOLVED": 1,
+        "V1.3:NO_RECENT_QUOTE": 31,
+        "V1.3:PRICE_UNCHANGED": 1
+      },
+      "post_pass_fault_reasons": {},
+      "post_pass_failure_steps": {},
+      "post_pass_tp_begin_observed": false,
+      "post_pass_tp_completed_observed": false,
+      "configuration_vault_runtime_unchanged": true,
+      "exe_sha256": "c92f48e1380a90a747300cd7bdadfbd410c6a8d8352304c1b4d6da438c7f28ce",
+      "qualification": "Actual resumed inquiry/quotation confirmed. Do not infer TP completion or real web parallelism. No synthetic business or blind retry."
+    },
+    "final_running_check": {
+      "checked_at": "2026-10-28T03:10:42.555460+00:00",
+      "state": "BUSINESS_RUNNING",
+      "cycles": [
+        {
+          "at": "2026-10-28T10:48:54.698000+08:00",
+          "cycle": "cycle_e44d4541815540ae9705a120277a29aa",
+          "module": "inquiry",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T10:50:59.234000+08:00",
+          "cycle": "cycle_595cc26629ae4b73941c8902c0d46788",
+          "module": "quotation",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T10:58:56.086000+08:00",
+          "cycle": "cycle_595cc26629ae4b73941c8902c0d46788",
+          "module": "quotation",
+          "phase": "completed",
+          "elapsed": 476.86,
+          "due_in": 900.0
+        },
+        {
+          "at": "2026-10-28T11:07:04.251000+08:00",
+          "cycle": "cycle_e44d4541815540ae9705a120277a29aa",
+          "module": "inquiry",
+          "phase": "completed",
+          "elapsed": 1089.547,
+          "due_in": 900.0
+        },
+        {
+          "at": "2026-10-28T11:07:04.326000+08:00",
+          "cycle": "cycle_4ec09104633544dbb45814276f29b7ff",
+          "module": "tp",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T11:07:16.173000+08:00",
+          "cycle": "cycle_4ec09104633544dbb45814276f29b7ff",
+          "module": "tp",
+          "phase": "completed",
+          "elapsed": 11.844,
+          "due_in": 900.0
+        }
+      ],
+      "runtime_fault_events": [
+        {
+          "at": "2026-10-28 11:06:22,781",
+          "reason": "GOOGLE_WEB_READ_UNAVAILABLE",
+          "cause": "TimeoutError"
+        }
+      ],
+      "step_events": [
+        {
+          "at": "2026-10-28 11:06:22,780",
+          "step": "google-download-read",
+          "cause": "TimeoutError"
+        }
+      ],
+      "business_results": {
+        "V1.2:SOURCE_CHANGED": 2,
+        "V1.3:SOURCE_IDENTITY_UNRESOLVED": 1,
+        "V1.3:NO_RECENT_QUOTE": 31,
+        "V1.3:PRICE_UNCHANGED": 1
+      },
+      "all_three_natural_cycles_completed": true,
+      "qualification": "Cycle completion != actual new order/quote/TP mail success. One recovered Google timeout; no post-resume exhaustion. No Actor enablement, no permanent health promise."
+    },
+    "final_after_cycles_resource": {
+      "rss_bytes": 150228992,
+      "private_bytes": 117903360,
+      "pid": 86788,
+      "at": "2026-10-28T03:10:42.6628423Z",
+      "threads": 9,
+      "main_window": "INSO LEO V1.6 — Procurement Automation Control Center",
+      "handles": 626,
+      "cpu_seconds": 88.109375,
+      "responding": true
+    }
   }
 }
