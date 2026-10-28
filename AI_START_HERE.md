@@ -4,6 +4,12 @@ This repository is **RFQ-driven**. The Control Room is the task source of truth.
 
 **New window:** read `AGENTS.md`. Follow `docs/PROJECT_BASELINE.md` for same-task artifact cleanup and `docs/REPORTING.md` for the exact seven-heading final chat reply (also required in RFQ `FINAL_REPORT.md`).
 
+## Mandatory Owner ban: Codex Computer Use
+
+**On every task:** Codex/Executor MUST NOT invoke agent Computer Use, desktop UI screenshot/click/type control, or a substitute GUI-control workaround. Use existing CLI/PowerShell/Python, source/test tools, operating-system APIs and approved purpose-built connectors instead. This is a prohibition on **agent** UI operation, not on the already-reviewed application's own browser automation at runtime.
+
+If required operation is possible only by agent Computer Use, stop that action as `BLOCKED / NOT_VERIFIED`, report a safe manual-only step if truly necessary, and never claim it was completed. Final report must say `COMPUTER_USE_NOT_USED`. Applies also to any ongoing authorized V1.6 production release; Owner's permission to deploy does NOT override the Computer Use ban. Full trigger/owner/procedure/evidence/cleanup/CEO enforcement are in `AGENTS.md`. Do not install an alternate GUI driver to evade this rule.
+
 ## For implementation agents: 执行 RFQ-XXX
 
 The Owner may open any implementation-agent session (Codex / Claude / WorkBuddy or equivalent) and say only:
