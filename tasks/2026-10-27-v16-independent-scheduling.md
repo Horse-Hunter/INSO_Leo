@@ -3038,3 +3038,119 @@ Historical04075bc version reference is archived, not newly checked. Old9f soak
 untouched. No notifications suppressed or test mails sent. No new Owner browser
 window/stop requested. Owner forwards original V16_RELEASE_REPORT.md for CEO
 independent Review. Overall V16_REVIEW_REQUIRED; do not self-declare PASS.
+
+## CEO independent Review — shared Google 60s ordinary snapshots (2026-10-28)
+
+**Exact-source review basis:** GitHub branch `codex/v1-6-independent-scheduling`
+at `b04d3cd5bbf412ada939e078a5f07e73f852787b`.
+Its parent is application commit
+`bb04d92f08a0ceca2075a2c17b153f2921803765`;
+the independently retrieved application `src/` tree is
+`d5f270aa8c392e9b374bfdef396d229af2d4e1e6`.
+The delivery commit modifies only report/task/evidence. Independently
+read `src/launcher/google_web.py`, `backend.py`,
+`src/sheets/google_reader.py`, `tp_brief.py`,
+`src/workflow/tp_research.py`, relevant original source/write
+gates, changed tests, exact `V16_RELEASE_REPORT.md`,
+`docs/modules/SHEETS.md` and JSON evidence.
+Executor-submitted test results: cache 36 PASS/1.19s,
+affected combined 463 PASS/20.77s (before two final Brief cases),
+final complete 3040 PASS/1 SKIP/123.99s, Ruff/diff PASS.
+The sole reported skip is Windows symlink availability.
+These are **version-bound executor artifacts, not a CEO Windows test rerun**.
+
+**Scoped CEO verdict: `GOOGLE_SHEET_TTL_CACHE_SOURCE_PASS`.**
+- One existing `GoogleSheetsWebService` owns a six-entry
+  memory-only `OrderedDict`, exact `(spreadsheetId,title)`
+  keys, titles `2026`/`SHAHAB`/`RFQ_BRIEF` only;
+  no `报价输入` cache. `_GOOGLE_GRID_LOCK` guards hits,
+  misses and invalidation, and serialization is compatible
+  with the original one-Owner browser path. Successful
+  completed TSV/headers/gid proof starts monotonic TTL;
+  `0 <= age < 60` is reusable, `age >= 60` triggers
+  on-demand native acquisition; no background timer/thread.
+  The result copy and immutable tuple rows prevent caller
+  mutation from changing the cache. Existing temporary
+  TSV deletion/size/row checks remain.
+- Only explicitly marked discovery routes consume cache:
+  `get_discovery`, `read_discovery_rows`,
+  `read_brief_discovery`, `BriefReader.read_discovery`,
+  normal TP discovery. Existing `get`/`read_rows`,
+  `read_brief`/`BriefReader.read`, TP
+  `_revalidate`, manual TP selection and original
+  source-row/brand/purchase/quotation write gates remain
+  live. Write attempts evict before effects; original
+  mandatory prewrite/header download and native postwrite
+  TSV readback are NOT replaced by snapshots.
+- Cache hits call the injected shared
+  `PageResourceAdmission.require_open` and original
+  immediate-Stop check; never invoke `on_read_success`
+  or advance `live_read_revision`. The original Backend
+  dashboard outage recovery requires evidence of a
+  new live read. Any observed exception (including Busy,
+  invalid protected page, auth, missing/oversize export,
+  schema/gid mismatch, Stop or cancellation) clears
+  the service cache; no stale-on-error fallback.
+  Real-source writes are still authorized solely by
+  the original independent durable identity and readback
+  controls, not by discovery contents.
+- Changed tests include three titles, separate document IDs,
+  59.999/60.000 boundaries, single-flight synthetic
+  concurrency, brief schema, failed download/Busy, live
+  pre/postwrite checks, in-TTL row/MPN/brand/status/qty/
+  Brief target mutation, TP mail refusal, source safety,
+  no fault-healing by hit, and existing integration
+  download-count expectation from four to two.
+
+**What SOURCE_PASS does NOT certify:** (1) User's phrase
+"at most one read per minute across the entire program"
+is **safely narrowed** to ordinary read-only discovery.
+Mandatory live identity checks, prewrite and postwrite
+readbacks still perform additional TSV downloads and
+must remain exempt; source/evidence says this honestly.
+(2) Cache-hit ordinary discovery may be up to60s old,
+with original live pre-effect revalidation mitigating
+wrong-row/duplicate side effects. It does not prove
+Google's protective Busy warning is fixed; historical
+branch is UNKNOWN and current EXE has not been inspected
+or updated. (3) A max-six *entry* LRU is not an independently
+measured low-memory budget: each eligible native TSV has
+an existing32MiB raw-file upper limit, so worst-case
+resident parsed Python rows and transient copies may
+significantly exceed those file bytes. This is a
+**Stage F resource-observation risk, not a current
+source-code acceptance failure**; use representative
+large source data during the separately authorized
+long-term RSS/handles acceptance, and review a byte
+cap only if measured necessary. (4) The concurrency test
+uses synthetic clients, not real cross-thread Playwright.
+(5) Real site/TP 900s timeliness (historic454.210s late),
+full source browser overlap, SMTP delivery, prolonged
+soak, DPI/game impact and actual release installation
+remain NOT VERIFIED/OPEN.
+
+**Release/state boundary:** `GOOGLE_SHEET_TTL_CACHE_SOURCE_PASS`
+closes only the independently inspected cache source
+implementation contract and does not reopen accepted
+native login/E4 fixes or turn V1.6 into a production PASS.
+Overall **`V16_REVIEW_REQUIRED`**; existing installed
+version according to archived evidence remains separate,
+no fresh live-process/EXE assertion. No actual
+production/Chrome9222, Google, config/Vault, SQLite,
+SMTP or sent state was touched by CEO; no altered
+notification policy, no executable released. Executor
+may proceed only to next separately scoped authorized
+acceptance, not self-deploy.
+
+**Evidence/cleanup/review enforcement:** Executor
+owned the above focused and full offline runs, report
+and JSON, and reports retiring ten bounded owned
+scratch dirs after guarded checks. CEO review verified
+Git source/evidence attribution, not runtime logs or
+Windows filesystem cleanup independently. Retain the
+original report and task as canonical records. If later
+large-sheet memory, retained page, stale data effect,
+Busy warning or source identity issues are observed,
+return to **this same task** with exact sanitized
+evidence instead of installing another Google client
+or suppressing alerts.
