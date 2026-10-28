@@ -17,6 +17,14 @@ Start with `AI_START_HERE.md`.
 - Owner is involved only for genuine business decisions, explicit Safety/Write Gate authorization, human security challenges, destructive Git, major architecture, or release/merge decisions.
 - Never persist secrets in Git, logs, fixtures, evidence or reports.
 
+## Codex / Executor: No Computer Use (Owner rule — 2026-10-28)
+
+**Trigger and scope:** Every Codex/Executor task, including development, test, deployment, diagnostics, verification and release, starting with the next tool choice. The Owner explicitly disallows using the agent **Computer Use** capability, including screen-reading/clicking/typing through desktop GUI-control tools, remote desktop operation or visual GUI automation as a substitute for programmatic steps. This does **not** prohibit existing application-owned Chrome/CDP/Playwright code required for normal business runtime; it prohibits the agent's own Computer Use workflow.
+
+**Owner:** Codex/Executor. **Procedure:** (1) Read this rule at startup; (2) execute through existing CLI/PowerShell/Python, Git, source tests, OS/process APIs, purpose-built connectors and established programmatic automation only within the existing permissions; (3) for deployment use original safe application Stop/Exit and documented release procedures, never agent Computer Use; (4) where the necessary interaction cannot be safely achieved without Computer Use, leave the affected step **BLOCKED / NOT_VERIFIED**, explain the specific limitation and do not silently fall back to Computer Use, simulate success, or bypass human authentication; (5) never build a custom desktop control workaround merely to evade this prohibition.
+
+**Source of truth:** This `AGENTS.md`, reiterated in `AI_START_HERE.md`. **Completion evidence:** Each relevant final Executor report explicitly confirms `COMPUTER_USE_NOT_USED`, describes the actual CLI/API method used and any blocked manual-only step. **Cleanup:** Do not install or keep task-created Computer Use helper apps, scripts, captures or temporary probes; retire only task-owned disposable alternatives under normal lifecycle rules, never delete existing protected business/runtime assets. **CEO enforcement:** Any new task using agent Computer Use, without a later explicit Owner reversal, is `CHANGES_REQUESTED` even if its result appears successful.
+
 ## Mandatory Reuse-First Rule
 
 - Existing working capability is the default solution. Reuse it before designing anything new.
