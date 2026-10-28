@@ -5017,3 +5017,165 @@ The separately requested customer-quoted age rule is offline implemented at 63d1
 Canonical requirement and detailed receipt: tasks/2026-10-28-customer-quoted-seven-day-refresh.md; original V16 report/JSON updated. REVIEW_REQUIRED / NOT_DEPLOYED. COMPUTER_USE_NOT_USED. Owner forwards to CEO; no direct send.
 
 Post-resume logfile-only check: inquiry17:38:05-17:48:25; quotation17:48:25-17:56:37; nestedTP17:48:53-17:49:06. One additional GOOGLE_WEB_READ_UNAVAILABLE then recovered; two launch-window timeouts total, cause UNKNOWN. No concurrent browser probe and no current ledger totals inferred. Original report/JSON records exact window.
+
+## CEO independent post-release Review — Option A installed and natural TP lending (2026-10-28)
+
+**Verdict `OPTION_A_CONTROLLED_INSTALL_PASS`,
+`OPTION_A_NATURAL_NESTED_TP_OBSERVED_PASS`;
+overall `BUSINESS_RUNNING / V16_REVIEW_REQUIRED`.**
+The separate newly coded customer-quoted seven-day rule
+is **`SOURCE_PASS / NOT_DEPLOYED`**, reviewed in
+`tasks/2026-10-28-customer-quoted-seven-day-refresh.md`.
+This does not approve Option B Actor overlap, all real TP
+deadline punctuality, new customer orders, Google full health,
+DPI/game acceptance, or seven-day production behavior.
+
+**Independent Git evidence:** Examined exact Executor
+cutover documentation commit
+`408ddb6688e30d8829a5b9a71b43cd17afb494bc`
+and final handoff
+`11d16ae421a5c969a59fa2639ebade1178362709`,
+plus the detailed
+`option_a_controlled_production_release_20261028` object
+within original `docs/evidence/v16/order-resource-regression.json`,
+original leading `V16_RELEASE_REPORT.md` chapters and
+existing previously reviewed source and release manifest.
+The only released application remains CEO source-approved
+`b57f467ac2545292d3ee441af974053f8d143179`,
+`src` tree `eaea701b8c1ccdfe4fde1db36d2fea07e8a39d84`,
+installed EXE SHA256
+`DB9463D4D1DBDF716C80C8A48A2E5D6E9CB7EBE4BB4254A0A2CD40BEEA440969`,
+the exact previously audited candidate, all 2875
+program assets reported matching. Separate newer
+seven-day code/exact src tree
+`63d161cd3ec998d1fbbd3f584ab46797399dce6c` /
+`c1fc44b0bf87f1f6742939a9f33114c325f8405b`
+exists on Git branch only, not frozen or installed.
+
+**Release safety:** Executor receipt reports Owner explicitly
+authorized the specific cutover
+`a6f2de30b55a3a72d02b1f1e03a6ddd15b5ee25f`;
+old GUI PID86788/observation process exited
+normally (0) before the install. A fresh **current
+C92F** 2875-file program-only rollback and
+a protected-state consistent SQLite/config/Vault
+snapshot were verified in
+`D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-option-a-20261028T092044Z/`.
+Program-only executable/_internal changed to
+the preapproved DB9463D4 candidate on
+2026-10-28 09:21:23 UTC;
+runtime junction/target, config and
+protected order/SMTP ledger remained unchanged.
+Reported old/new business table comparison,
+SQLite integrity ok, immutable 118 mail commands,
+historical149 SMTP-SENT recipient rows, four
+old TP tasks and six TP SENT retained; no
+migration, replay or restore of historical data.
+After one new GUI launch and a later
+Owner-assisted graceful stop/normal exit,
+the **same new EXE** was resumed once
+(2026-10-28 09:38:01 UTC; PID91980).
+`COMPUTER_USE_NOT_USED` was reported
+for operations following Owner ban;
+pre-ban screenshot attempts disclosed,
+not silently reclassified as post-ban.
+Current connected Chrome, protected
+profile and default single browser Owner
+were not replaced; two market Actors
+not enabled; inquiry/quotation/TP
+configured900sec each, original120sec
+wait code unchanged.
+
+**Actual operating proof (sanitized logs):**
+On initial new run, quotation began
+17:32:23.955+08, safe V1.3 row result
+17:32:52.529, nested TP begin
+17:32:52.738 / complete17:33:05.014,
+same original quotation cycle produced
+another row result17:33:10.951.
+This confirms *real Owner module re-entry
+and return to the outer quotation*, but
+this first quotation batch was deliberately
+stopped at17:35:36.103 for the safe
+Owner-requested restart and does NOT by
+itself prove full quotation completion.
+On the **resumed** same EXE/PID91980,
+inquiry17:38:05.209→17:48:25.679,
+quotation17:48:25.900→17:56:37.224
+completed, nested TP17:48:53.273→17:49:06.528;
+this is a full natural cycle with
+middle-of-quotation TP and eventual
+outer quotation completion.
+The source does not log exact first
+successful `RFQ_BRIEF`/source read, nor
+exact TP plan time in these passive
+windows; therefore real due→first read
+latency and 900sec start target remain
+`NOT_VERIFIED`. This is **not**
+real dual-Actor parallelism.
+
+**Google/health warning:** Initial observation
+had one `GOOGLE_WEB_READ_UNAVAILABLE`
+during native download/read at17:29:02,
+then inquiry completed and quotation
+proceeded. Resumed instance had a second
+`GOOGLE_WEB_READ_UNAVAILABLE`,
+followed by full inquiry, nested TP
+and quotation completion by17:56:37.
+Two classified occurrences across
+two natural windows; not a permanent
+fix and not a known root cause.
+No invasive live CDP/page probe was
+used after the restriction. Existing
+observed 25 OS samples over~723sec:
+reported GUI host-averageCPU0.29144%,
+GUI RSS79–128MiB, varying GUI handles
+789–3329, Chrome ROOT only sampled
+twice; no conclusion about Chrome
+all-child aggregate, background gaming
+or long-run resource stability. No
+production extra-order, Sheets effect,
+SMTP delivery to mailbox or Google
+write success is shown. The read-only
+ledger snapshot precedes late
+post-resume log observation and must
+NOT be presented as current18:00
+totals.
+
+**CEO next step:** Existing production
+**must remain running; do not Stop,
+Start twice, inject CDP browser probes,
+replay historical mail/orders or
+switch the EXE again**. After source
+review of 7-day rule, permit Codex to
+prepare a **separate offline
+BuildOnly** candidate only, using
+existing frozen scripts and verified
+source SHA, with `--self-check`,
+`RELEASE_SCAN_OK`, complete manifest
+and frozen-code proof. Preserve this
+current healthy program and fresh
+C92F backup. The new executable
+is **NOT** install-authorized; Owner
+will separately approve a controlled
+business-safe window after CEO
+candidate Review. If natural system
+errors recur, use already-generated
+sanitized logs / OS counters only
+for low-interference diagnosis;
+Google repeated read timeout is an
+unresolved resilience issue, not
+a reason to force-stop or to
+misrepresent complete stability.
+
+**Review integrity:** CEO did
+not access Windows runtime,
+run native tests, inspect actual
+EXE bytes, attach production Chrome,
+change runtime config/ledger
+or perform production operations.
+This is an independent Git-source,
+timeline and evidence-consistency
+Review, written only into this
+canonical task document. No source,
+tests or original evidence modified.
