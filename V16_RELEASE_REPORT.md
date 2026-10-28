@@ -1,5 +1,85 @@
 # V1.6 unified release and initial production verification
 
+## 方案A Windows候选发布准备（2026-10-28，未安装）
+
+**CANDIDATE_VERIFIED / NOT_DEPLOYED / V16_REVIEW_REQUIRED。** CEO源码审核
+`a67b9c104f2e295dd2c91dc2b760d0c3b82afb0b` 已同步；本次只构建候选和只读预检。
+应用源码 `b57f467ac2545292d3ee441af974053f8d143179`，src树
+`eaea701b8c1ccdfe4fde1db36d2fea07e8a39d84`，tests树
+`7087294dcca5148f6b792a3be52fc13c102083ea` 完全不变。没有重复完整测试，
+此前3094 PASS /1 SKIP只是源码回归既有证据，不冒充本轮生产验收。
+
+### 候选包和冻结身份
+
+使用唯一 `scripts/build_windows_release.ps1 -Version 1.6 -BuildOnly`，显式复用
+`D:/Program_Leo/INSO_Leo/.worktrees/v1-4-order-mail-inspection/.venv-release/Scripts/python.exe`；
+未新增打包系统或依赖。构建完成退出0，原脚本和额外一次候选 `--self-check` 退出0，
+`RELEASE_SCAN_OK`。自检入口在GUI/Backend/runtime/单实例获取前退出；没有启动候选GUI。
+
+候选保留于：
+`C:/Users/Leo/.codex/worktrees/v16-independent-scheduling/INSO_Leo/build/windows-release-stage-1.6/dist/INSO_V1.6`。
+
+- EXE SHA256：`DB9463D4D1DBDF716C80C8A48A2E5D6E9CB7EBE4BB4254A0A2CD40BEEA440969`。
+- 2875个程序文件逐个计算SHA256；完整清单本地保留
+  `D:/Program_Leo/INSO_Leo/.tmp/v16-option-a-prep/candidate-assets.json`；清单SHA256
+  `9f0edc437b4a1a303c28f6d528d80f70a0d545a8ac2529d7d5cd6724c3257373`。
+- 从实际EXE/PYZ读取116个应用模块，规范化文件名后递归代码对象结构与审核源码
+  optimize=1编译结果全部一致，包括六个方案A改动模块、GUI组合、单实例和业务门禁。
+  仅不采用marshal序列化字节作为相等依据（字符串驻留会改变序列化）；没有忽略代码差异。
+  CredentialVault.psm1代码字节也一致。详见原JSON本轮字段中的逐模块结果。
+- 候选无runtime、生产配置、数据库或Vault数据；原扫描通过。默认组合未接入双Actor，
+  未读取/改变生产开关，未将可选Actor代码存在解释为并行已上线。
+
+### 当前安装、保护及回滚
+
+只读OS检查：GUI PID86788（10:34:13+08启动）及其原有观察子进程84332仍在运行，
+两者Responding=true；并非两个业务实例。命名互斥体仅OpenMutex/CloseHandle验证存在，
+没有获取/释放锁、启动第二GUI或测试冲突。实际完整第二实例拒绝测试留到受控窗口。
+这只能证明进程响应，不证明本轮真实业务成功或无在途事务。
+
+当前安装EXE仍是
+`D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe`，SHA256
+`C92F48E1380A90A747300CD7BDADFBD410C6A8D8352304C1B4D6DA438C7F28CE`。
+2875文件清单与上次安装new-assets收据全部一致。runtime junction仍指向V1.4共享runtime。
+配置、Vault、实际工作账本及Chrome Profile仅核对已知路径存在，不读内容、不查账本、
+不连接浏览器、不触发业务；运行中SENT/UNKNOWN和订单数量本轮为NOT_VERIFIED，不能
+套用旧计数或从进程响应推断安全可替换。
+
+现有程序级回滚：
+`D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-retained-20261028T023242Z/program`。
+2875文件与old-assets收据全匹配；EXE SHA256
+`745BEC95F0426673C82ED4AB76EE38DCAB442F2922FAEF124D7B040F947F51CE`，
+仅执行无业务依赖自检退出0。该较早回滚可用，但**不能替代正式替换前对当前C92F版本的新鲜备份**。
+原备份protected-state没有读取或恢复；不回滚任何生产账本。
+
+### 后续受控替换顺序（本轮未执行）
+
+1. Owner另行明确批准替换窗口后，通过原GUI安全停止并自然排空；核验未完成采购、
+   Google写入、发信及UNKNOWN，不盲目重试。存在结果不明、保护页或无法正常退出即HOLD，
+   不强杀、不清理Chrome或业务状态。
+2. 正常托盘退出并确认原GUI/观察器和单实例占用释放；按原流程在独占条件制作新鲜
+   一致性保护备份，核对不可变命令、历史SENT/UNKNOWN和订单。只在该授权窗口读取必要状态。
+3. 为当前C92F程序创建新鲜程序备份、验证清单/自检；只替换已确认的EXE与_internal，
+   绝不覆盖runtime链接及目标、SQLite/WAL/邮件账本、配置、Vault、Chrome Profile。
+   如中途状态不明保留现场，不把旧数据库恢复来消除不一致。
+4. 新EXE先空闲启动；核对哈希/全程序清单、单实例、GUI、原配置和运行目录。不得偷偷
+   启用方案B、改变900秒或120秒等待。异常时正常停止，恢复程序文件，保留最新账本；
+   对外动作未知不得通过重装或回滚自动重做。
+5. 安全核验后恢复原授权正常业务，采用既有日志观察自然的报价安全收口→TP实际
+   第一次RFQ_BRIEF读取/调研→报价恢复，记录TP计划和实际时间及仍存在的不可中断延迟。
+   不制造订单或测试邮件，无自然候选则明确NOT_VERIFIED。
+6. 不与运行中业务叠加CDP/只读浏览器探针。如未来确需页面验收，另用已明确授权、
+   业务安全停止后的独占窗口；当前仅日志取证，不以begin日志替代实际TP读取。
+
+### 发布前阻断与清理
+
+当前没有候选打包/冻结缺失/扫描阻断。**实际安装仍NOT_AUTHORIZED**；当前程序未退出、
+在途状态及新鲜保护备份尚未核验，均是正式替换窗口必须完成的条件，不代表本轮失败。
+真实TP改善、GUI新版启动、长期资源、DPI/游戏及真实并行仍NOT_VERIFIED。
+原脚本已删除自有PyInstaller work；只保留一个正式BuildOnly候选、必要小型清单和构建日志，
+没有重复冻结/扫描副本。临时检查脚本取证后退休；未清理生产、回滚、未知文件或旧长测。
+本轮只向Owner交付，由Owner转CEO；后续替换须单独批准。
+
 ## 方案A：报价安全收口后让位TP — 隔离源码交付（2026-10-28）
 
 **已实施并完成离线回归，REVIEW_REQUIRED / NOT_DEPLOYED；不是实机准时性PASS。**

@@ -4524,5 +4524,566 @@
       "no_scope_expansion_to_runtime_research_tp_smtp_actor_120s": "PASS",
       "application_not_built_or_deployed": true
     }
+  },
+  "option_a_windows_candidate_preparation_20261028": {
+    "at_utc": "2026-10-28T09:03:36.462564+00:00",
+    "build_head": "a67b9c104f2e295dd2c91dc2b760d0c3b82afb0b",
+    "application_source": "b57f467ac2545292d3ee441af974053f8d143179",
+    "src_tree": "eaea701b8c1ccdfe4fde1db36d2fea07e8a39d84",
+    "tests_tree": "7087294dcca5148f6b792a3be52fc13c102083ea",
+    "assets": {
+      "candidate": {
+        "files": 2875,
+        "manifest_sha256": "9f0edc437b4a1a303c28f6d528d80f70a0d545a8ac2529d7d5cd6724c3257373",
+        "exe_sha256": "db9463d4d1dbdf716c80c8a48a2e5d6e9cb7ebe4bb4254a0a2cd40beea440969"
+      },
+      "installed": {
+        "files": 2875,
+        "manifest_sha256": "1b76ab5baffe9df2410f5ddedf94467dba08a69225d691788e582c0e74cacc02",
+        "exe_sha256": "c92f48e1380a90a747300cd7bdadfbd410c6a8d8352304c1b4d6da438c7f28ce"
+      },
+      "rollback": {
+        "files": 2875,
+        "manifest_sha256": "12a9b6b19aca6564247ed038bdbb66826e8ed58b3d581e2e441ab94e6844601e",
+        "exe_sha256": "745bec95f0426673c82ed4ab76ee38dcab442f2922faef124d7b040f947f51ce"
+      }
+    },
+    "frozen_modules_compared": 116,
+    "frozen_checks": {
+      "src.core": [
+        0,
+        1
+      ],
+      "src.core._vault_backend": [
+        0,
+        1
+      ],
+      "src.core.app_paths": [
+        0,
+        1
+      ],
+      "src.core.credential_provider": [
+        0,
+        1
+      ],
+      "src.core.mpn": [
+        0,
+        1
+      ],
+      "src.core.protected_local_store": [
+        0,
+        1
+      ],
+      "src.core.runtime_diagnostics": [
+        0,
+        1
+      ],
+      "src.core.site_retry": [
+        0,
+        1
+      ],
+      "src.gui": [
+        0,
+        1
+      ],
+      "src.gui.app": [
+        0,
+        1
+      ],
+      "src.gui.contracts": [
+        0,
+        1
+      ],
+      "src.gui.main": [
+        0,
+        1
+      ],
+      "src.gui.mock_backend": [
+        0,
+        1
+      ],
+      "src.gui.resources": [
+        0,
+        1
+      ],
+      "src.gui.smoke": [
+        0,
+        1
+      ],
+      "src.gui.state": [
+        0,
+        1
+      ],
+      "src.gui.tray": [
+        0,
+        1
+      ],
+      "src.gui.workbench": [
+        0,
+        1
+      ],
+      "src.inso": [
+        0,
+        1
+      ],
+      "src.inso.discovery": [
+        0,
+        1
+      ],
+      "src.inso.duplicate_history": [
+        0,
+        1
+      ],
+      "src.inso.purchase_writer": [
+        0,
+        1
+      ],
+      "src.inso.quotation_read": [
+        0,
+        1
+      ],
+      "src.inso.sales_attachment": [
+        0,
+        1
+      ],
+      "src.inso.sales_details": [
+        0,
+        1
+      ],
+      "src.inso.sales_header": [
+        0,
+        1
+      ],
+      "src.inso.session": [
+        0,
+        1
+      ],
+      "src.inso.write_safety": [
+        0,
+        1
+      ],
+      "src.launcher": [
+        0,
+        1
+      ],
+      "src.launcher.backend": [
+        0,
+        1
+      ],
+      "src.launcher.browser_bootstrap": [
+        0,
+        1
+      ],
+      "src.launcher.business_continuations": [
+        0,
+        1
+      ],
+      "src.launcher.diagnostics": [
+        0,
+        1
+      ],
+      "src.launcher.google_quote_update": [
+        0,
+        1
+      ],
+      "src.launcher.google_web": [
+        0,
+        1
+      ],
+      "src.launcher.inso_session": [
+        0,
+        1
+      ],
+      "src.launcher.manual_order": [
+        0,
+        1
+      ],
+      "src.launcher.market_actors": [
+        0,
+        1
+      ],
+      "src.launcher.market_continuation": [
+        0,
+        1
+      ],
+      "src.launcher.purchase_completion": [
+        0,
+        1
+      ],
+      "src.launcher.sales_header": [
+        0,
+        1
+      ],
+      "src.launcher.sales_intent": [
+        0,
+        1
+      ],
+      "src.launcher.single_instance": [
+        0,
+        1
+      ],
+      "src.launcher.site_login_sweep": [
+        0,
+        1
+      ],
+      "src.launcher.tp_composition": [
+        0,
+        1
+      ],
+      "src.launcher.v12_composition": [
+        0,
+        1
+      ],
+      "src.launcher.v12_gui": [
+        0,
+        1
+      ],
+      "src.launcher.v12_phase_a_readonly": [
+        0,
+        1
+      ],
+      "src.launcher.v13_integration": [
+        0,
+        1
+      ],
+      "src.launcher.v13_quotation": [
+        0,
+        1
+      ],
+      "src.launcher.workbench_snapshot": [
+        0,
+        1
+      ],
+      "src.order_mail": [
+        0,
+        1
+      ],
+      "src.order_mail.contracts": [
+        0,
+        1
+      ],
+      "src.order_mail.filled": [
+        0,
+        1
+      ],
+      "src.order_mail.inspection": [
+        0,
+        1
+      ],
+      "src.order_mail.pi_orders": [
+        0,
+        1
+      ],
+      "src.quotation.update_result": [
+        0,
+        1
+      ],
+      "src.research": [
+        0,
+        1
+      ],
+      "src.research.aggregation": [
+        0,
+        1
+      ],
+      "src.research.bom_ai": [
+        0,
+        1
+      ],
+      "src.research.cdp_pages": [
+        0,
+        1
+      ],
+      "src.research.continuation": [
+        0,
+        1
+      ],
+      "src.research.contracts": [
+        0,
+        1
+      ],
+      "src.research.credentials": [
+        0,
+        1
+      ],
+      "src.research.ecb_fx": [
+        0,
+        1
+      ],
+      "src.research.excel_output": [
+        0,
+        1
+      ],
+      "src.research.finalize": [
+        0,
+        1
+      ],
+      "src.research.findchips": [
+        1
+      ],
+      "src.research.fx": [
+        0,
+        1
+      ],
+      "src.research.hqew": [
+        0,
+        1
+      ],
+      "src.research.icnet": [
+        0,
+        1
+      ],
+      "src.research.inso_history": [
+        0,
+        1
+      ],
+      "src.research.lcsc": [
+        0,
+        1
+      ],
+      "src.research.market_contracts": [
+        0,
+        1
+      ],
+      "src.research.runtime": [
+        0,
+        1
+      ],
+      "src.research.service": [
+        0,
+        1
+      ],
+      "src.research.site_login": [
+        0,
+        1
+      ],
+      "src.research.source_contracts": [
+        0,
+        1
+      ],
+      "src.research.tp": [
+        0,
+        1
+      ],
+      "src.sheets": [
+        0,
+        1
+      ],
+      "src.sheets.brand_write": [
+        0,
+        1
+      ],
+      "src.sheets.google_oauth": [
+        0,
+        1
+      ],
+      "src.sheets.google_reader": [
+        0,
+        1
+      ],
+      "src.sheets.google_writer": [
+        0,
+        1
+      ],
+      "src.sheets.intent_status": [
+        0,
+        1
+      ],
+      "src.sheets.pending": [
+        0,
+        1
+      ],
+      "src.sheets.purchase_status": [
+        0,
+        1
+      ],
+      "src.sheets.quotation_candidates": [
+        0,
+        1
+      ],
+      "src.sheets.quotation_input": [
+        0,
+        1
+      ],
+      "src.sheets.tp_brief": [
+        0,
+        1
+      ],
+      "src.sheets.worksheet_schema": [
+        0,
+        1
+      ],
+      "src.workflow": [
+        0,
+        1
+      ],
+      "src.workflow.dashboard_counts": [
+        0,
+        1
+      ],
+      "src.workflow.inso_query": [
+        0,
+        1
+      ],
+      "src.workflow.market_messages": [
+        0,
+        1
+      ],
+      "src.workflow.models": [
+        0,
+        1
+      ],
+      "src.workflow.order_notifications": [
+        0,
+        1
+      ],
+      "src.workflow.purchase_follow_up": [
+        0,
+        1
+      ],
+      "src.workflow.service": [
+        0,
+        1
+      ],
+      "src.workflow.store": [
+        0,
+        1
+      ],
+      "src.workflow.tp_research": [
+        0,
+        1
+      ],
+      "src.workflow.v12_contracts": [
+        0,
+        1
+      ],
+      "src.workflow.v12_duplicate": [
+        0,
+        1
+      ],
+      "src.workflow.v12_evidence": [
+        0,
+        1
+      ],
+      "src.workflow.v12_faults": [
+        0,
+        1
+      ],
+      "src.workflow.v12_flow": [
+        0,
+        1
+      ],
+      "src.workflow.v12_notifications": [
+        0,
+        1
+      ],
+      "src.workflow.v12_rules": [
+        0,
+        1
+      ],
+      "src.workflow.v12_safety": [
+        0,
+        1
+      ],
+      "src.workflow.v12_smtp_transport": [
+        0,
+        1
+      ],
+      "src.workflow.v12_store": [
+        0,
+        1
+      ],
+      "src.workflow.v13_follow_up_store": [
+        0,
+        1
+      ],
+      "src.workflow.v13_integration": [
+        0,
+        1
+      ],
+      "src.workflow.v13_price_store": [
+        0,
+        1
+      ],
+      "src.workflow.v13_quotation": [
+        0,
+        1
+      ],
+      "src.workflow.v13_quote_update": [
+        0,
+        1
+      ]
+    },
+    "candidate_runtime_absent": true,
+    "production_mutex_exists_readonly_open": true,
+    "rollback_full_manifest_match": true,
+    "actual_double_instance_launch_test": "NOT_PERFORMED_PRODUCTION_PROTECTION",
+    "actor_factory": "Default remains None; source/frozen backend identical; production config not read",
+    "production_ledger": "NOT_ACCESSED",
+    "status": "CANDIDATE_VERIFIED / NOT_DEPLOYED / V16_REVIEW_REQUIRED",
+    "self_check_candidate_exit": 0,
+    "self_check_rollback_exit": 0,
+    "release_scan": "RELEASE_SCAN_OK",
+    "build_command": "scripts/build_windows_release.ps1 -Version 1.6 -BuildOnly -PythonExecutable <existing verified release Python>",
+    "release_python": "D:/Program_Leo/INSO_Leo/.worktrees/v1-4-order-mail-inspection/.venv-release/Scripts/python.exe",
+    "candidate_path": "C:\\Users\\Leo\\.codex\\worktrees\\v16-independent-scheduling\\INSO_Leo\\build\\windows-release-stage-1.6\\dist\\INSO_V1.6",
+    "candidate_manifest_path": "D:\\Program_Leo\\INSO_Leo\\.tmp\\v16-option-a-prep\\candidate-assets.json",
+    "program_file_manifest_validation": "2875 candidate files hashed; installed full manifest matches previous new-assets receipt; rollback full manifest matches previous old-assets receipt",
+    "frozen_comparison": "116 nested code objects compared structurally against reviewed source compiled optimize=1 after filename normalization; marshal serialization string-interning differences excluded, no bytecode/constant/control-flow difference. All 116 match optimize=1. CredentialVault.psm1 code bytes also match.",
+    "frozen_modified_modules": [
+      "src.launcher.backend",
+      "src.launcher.v13_quotation",
+      "src.launcher.google_web",
+      "src.launcher.google_quote_update",
+      "src.workflow.v13_quotation",
+      "src.workflow.v13_integration"
+    ],
+    "production_processes": [
+      {
+        "pid": 86788,
+        "role": "GUI",
+        "start_local": "2026-10-28T10:34:13.500548+08:00",
+        "responding": true
+      },
+      {
+        "pid": 84332,
+        "parent": 86788,
+        "role": "existing runtime watcher",
+        "start_local": "2026-10-28T10:34:13.647253+08:00",
+        "responding": true
+      }
+    ],
+    "runtime_junction": {
+      "path": "D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/runtime",
+      "target": "D:/Program_Leo/INSO_Leo/dist/INSO_V1.4/runtime",
+      "unchanged": true
+    },
+    "protected_paths_presence_only": [
+      "D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/runtime/production.json",
+      "D:/Program_Leo/INSO_Leo/dist/INSO_V1.2/runtime/production/workflow.sqlite3",
+      "C:/Users/Leo/AppData/Local/INSO_Leo/credential-vault.json",
+      "D:/Program_Leo/INSO_CDP/chrome-profile"
+    ],
+    "program_rollback_path": "D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-retained-20261028T023242Z/program",
+    "cleanup": {
+      "pyinstaller_work": "ABSENT_REMOVED_BY_CANONICAL_SCRIPT",
+      "candidate": "RETAINED_ONE_FORMAL_BUILDONLY_CANDIDATE_AT_CANONICAL_STAGE",
+      "duplicate_frozen_scan_copies": 0,
+      "local_small_receipts": "RETAINED_MANIFESTS_AND_BUILD_LOG_FOR_FUTURE_REPLACEMENT",
+      "temporary_inspector": "RETIRED_AFTER_RECEIPT_EXTRACTION"
+    },
+    "checks_not_run": [
+      "Full offline regression deliberately not repeated: source/tests unchanged; accepted 3094 PASS / 1 SKIP remains prior receipt only",
+      "Candidate GUI launch/actual second-instance conflict test",
+      "Production configuration values, Vault values, SQLite queries or business/mail-state integrity",
+      "Browser, Google, INSO or SMTP probing",
+      "Real TP first-read timing, quotation continuation and long-term performance"
+    ],
+    "release_blockers": [
+      "Separate explicit Owner controlled-replacement approval is absent by design",
+      "Current instance still running: normal safe-stop/drain/exit and fresh pending/UNKNOWN/SENT/Google-write reconciliation required in future authorized window",
+      "Fresh immediate pre-replacement C92F program backup and protected-state consistency backup required after safe exit; existing 745B rollback is older fallback, not substitute"
+    ],
+    "production_actions": "NONE: no stop/restart/replace/config/ledger/browser/business action; OS metadata and program-only hashes read. No mutex acquisition/release, only OpenMutex/CloseHandle existence query. Existing normal business not interrupted."
   }
 }
