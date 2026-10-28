@@ -5085,5 +5085,444 @@
       "Fresh immediate pre-replacement C92F program backup and protected-state consistency backup required after safe exit; existing 745B rollback is older fallback, not substitute"
     ],
     "production_actions": "NONE: no stop/restart/replace/config/ledger/browser/business action; OS metadata and program-only hashes read. No mutex acquisition/release, only OpenMutex/CloseHandle existence query. Existing normal business not interrupted."
+  },
+  "option_a_controlled_production_release_20261028": {
+    "recorded_at": "2026-10-28T09:38:56.499651+00:00",
+    "final_resume": {
+      "started_at": "2026-10-28T09:38:01.1371609Z",
+      "pid": 91980,
+      "exe_sha256": "DB9463D4D1DBDF716C80C8A48A2E5D6E9CB7EBE4BB4254A0A2CD40BEEA440969",
+      "old_normal_exit": {
+        "run_id": "b3a8b0a73f7e473ebb7b58b1e479536e",
+        "pid": 90204,
+        "observed_at": "2026-10-28T17:37:34.837594+08:00",
+        "exit_code": 0,
+        "exit_code_hex": "0x00000000",
+        "classification": "normal"
+      },
+      "reason": "Owner confirmed safe stop and tray exit; resume existing authorized business using canonical GUI CLI",
+      "start_count_this_process": 1,
+      "computer_use_not_used": true
+    },
+    "computer_use_after_owner_ban": "COMPUTER_USE_NOT_USED; prior pre-ban attempted capture disclosed, no bypass/helper installed",
+    "authorization_commit": "a6f2de30b55a3a72d02b1f1e03a6ddd15b5ee25f",
+    "status": "BUSINESS_RUNNING / V16_REVIEW_REQUIRED",
+    "application_source": "b57f467ac2545292d3ee441af974053f8d143179",
+    "src_tree": "eaea701b8c1ccdfe4fde1db36d2fea07e8a39d84",
+    "tests_tree": "7087294dcca5148f6b792a3be52fc13c102083ea",
+    "installed": {
+      "installed_at": "2026-10-28T09:21:23.764587+00:00",
+      "source": "b57f467ac2545292d3ee441af974053f8d143179",
+      "src_tree": "eaea701b8c1ccdfe4fde1db36d2fea07e8a39d84",
+      "exe_sha256": "db9463d4d1dbdf716c80c8a48a2e5d6e9cb7ebe4bb4254a0a2cd40beea440969",
+      "assets": 2875,
+      "backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-option-a-20261028T092044Z",
+      "self_check": true,
+      "protected_files_junction_unchanged": true,
+      "all_business_tables_unchanged": true,
+      "db_integrity": "ok",
+      "mail_outcomes": {
+        "SENT": 149
+      },
+      "tp_recipients": {
+        "SENT": 6
+      },
+      "tp_tasks": 4,
+      "normal_old_exit": {
+        "run_id": "f7309c5e031747098b289f317101e96c",
+        "pid": 86788,
+        "observed_at": "2026-10-28T09:19:08.399275+00:00",
+        "exit_code": 0,
+        "exit_code_hex": "0x00000000",
+        "classification": "normal"
+      },
+      "migration": false,
+      "actor_factory": "NONE",
+      "state": "INSTALLED_IDLE_NOT_YET_GUI_STARTED"
+    },
+    "fresh_backup": {
+      "backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-option-a-20261028T092044Z",
+      "program": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-option-a-20261028T092044Z\\program",
+      "database_backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-option-a-20261028T092044Z\\protected-state\\sqlite\\workflow-v12-pre-migration-20261028T092103079740Z.sqlite3",
+      "old_exe_sha256": "c92f48e1380a90a747300cd7bdadfbd410c6a8d8352304c1b4d6da438c7f28ce",
+      "old_files": 2875,
+      "verified": true,
+      "at": "2026-10-28T09:21:03.183731+00:00"
+    },
+    "launch": {
+      "started_at": "2026-10-28T09:21:57.6851963Z",
+      "pid": 90204,
+      "exe_sha256": "DB9463D4D1DBDF716C80C8A48A2E5D6E9CB7EBE4BB4254A0A2CD40BEEA440969",
+      "existing_gui_start_switch": "--start-inquiry",
+      "start_count": 1,
+      "idle_check_passed": true,
+      "actor_factory": "NONE"
+    },
+    "idle_gui_check": {
+      "exit": 0,
+      "title": "INSO LEO V1.6 — Procurement Automation Control Center",
+      "business_thread_started": false,
+      "all_business_tables_unchanged": true
+    },
+    "single_instance": "Original lock held across backup/replacement, released before one launch. One GUI90204 plus existing watchdog87740; no competing GUI or live conflict launch.",
+    "config_verification": {
+      "v16_enabled": true,
+      "v13_enabled": true,
+      "tp_enabled": true,
+      "intervals_seconds": {
+        "inquiry": 900,
+        "quotation": 900,
+        "tp": 900
+      },
+      "protected_configuration_and_vault_bytes_unchanged": true,
+      "factory": "None; independent deadlines + serial Owner + Option A safe quotation yield; no dual market Actors",
+      "original_120s_rule": "Unchanged reviewed code, not shortened or live-bypassed"
+    },
+    "ledger_after_restore": {
+      "integrity": "ok",
+      "historic_command_count": 118,
+      "historic_commands_immutable": true,
+      "historic_sent_count": 149,
+      "historic_sent_full_rows_unchanged": true,
+      "historic_tp_count": 4,
+      "historic_tp_full_rows_unchanged": true,
+      "current_recipients": {
+        "SENT": 149
+      },
+      "current_tp_states": {
+        "MAIL_QUEUED": 4
+      },
+      "new_recipient_kind_outcomes": {},
+      "purchase_outcomes_before": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 23,
+        "VALIDATION_FAILED": 3
+      },
+      "purchase_outcomes_current": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 23,
+        "VALIDATION_FAILED": 3
+      },
+      "qualification": "SMTP SENT means transport acceptance only; no final mailbox receipt. No forced business writes or replays."
+    },
+    "natural_cycles": {
+      "cycles": [
+        {
+          "at": "2026-10-28T17:22:01.738000+08:00",
+          "cycle": "cycle_dca42116343346cbb0b8ad77c7926a0d",
+          "module": "inquiry",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T17:32:23.746000+08:00",
+          "cycle": "cycle_dca42116343346cbb0b8ad77c7926a0d",
+          "module": "inquiry",
+          "phase": "completed",
+          "elapsed": 622.016,
+          "due_in": 900.0
+        },
+        {
+          "at": "2026-10-28T17:32:23.955000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "quotation",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T17:32:52.738000+08:00",
+          "cycle": "cycle_20323d9a9f8b48eb997fc06e964c6b3e",
+          "module": "tp",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T17:33:05.014000+08:00",
+          "cycle": "cycle_20323d9a9f8b48eb997fc06e964c6b3e",
+          "module": "tp",
+          "phase": "completed",
+          "elapsed": 12.282,
+          "due_in": 900.0
+        },
+        {
+          "at": "2026-10-28T17:35:36.103000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "quotation",
+          "phase": "stopped",
+          "elapsed": 192.156,
+          "due_in": 900.0
+        },
+        {
+          "at": "2026-10-28T17:38:05.209000+08:00",
+          "cycle": "cycle_0ee01b866adb401ca8c2f49af3681caa",
+          "module": "inquiry",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        }
+      ],
+      "reasons": {
+        "GOOGLE_WEB_READ_UNAVAILABLE": 1
+      },
+      "business_results": {
+        "V1.3:SOURCE_IDENTITY_UNRESOLVED": 1,
+        "V1.3:NO_RECENT_QUOTE": 10
+      },
+      "business_events": [
+        {
+          "at": "2026-10-28T17:32:41.714000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "V1.3",
+          "result": "SOURCE_IDENTITY_UNRESOLVED"
+        },
+        {
+          "at": "2026-10-28T17:32:52.529000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "V1.3",
+          "result": "NO_RECENT_QUOTE"
+        },
+        {
+          "at": "2026-10-28T17:33:10.951000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "V1.3",
+          "result": "NO_RECENT_QUOTE"
+        },
+        {
+          "at": "2026-10-28T17:33:33.687000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "V1.3",
+          "result": "NO_RECENT_QUOTE"
+        },
+        {
+          "at": "2026-10-28T17:33:40.489000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "V1.3",
+          "result": "NO_RECENT_QUOTE"
+        },
+        {
+          "at": "2026-10-28T17:34:23.176000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "V1.3",
+          "result": "NO_RECENT_QUOTE"
+        },
+        {
+          "at": "2026-10-28T17:34:45.417000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "V1.3",
+          "result": "NO_RECENT_QUOTE"
+        },
+        {
+          "at": "2026-10-28T17:34:54.104000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "V1.3",
+          "result": "NO_RECENT_QUOTE"
+        },
+        {
+          "at": "2026-10-28T17:35:07.888000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "V1.3",
+          "result": "NO_RECENT_QUOTE"
+        },
+        {
+          "at": "2026-10-28T17:35:17.594000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "V1.3",
+          "result": "NO_RECENT_QUOTE"
+        },
+        {
+          "at": "2026-10-28T17:35:27.157000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "V1.3",
+          "result": "NO_RECENT_QUOTE"
+        }
+      ]
+    },
+    "module_phases": {
+      "inquiry": [
+        "begin",
+        "completed",
+        "begin"
+      ],
+      "quotation": [
+        "begin",
+        "stopped"
+      ],
+      "tp": [
+        "begin",
+        "completed"
+      ]
+    },
+    "nested_tp_intervals": [
+      {
+        "quotation_begin": "2026-10-28T17:32:23.955000+08:00",
+        "safe_candidate_result_before_tp": {
+          "at": "2026-10-28T17:32:52.529000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "V1.3",
+          "result": "NO_RECENT_QUOTE"
+        },
+        "tp_begin": "2026-10-28T17:32:52.738000+08:00",
+        "tp_completed": "2026-10-28T17:33:05.014000+08:00",
+        "quotation_resumed_result": {
+          "at": "2026-10-28T17:33:10.951000+08:00",
+          "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676",
+          "module": "V1.3",
+          "result": "NO_RECENT_QUOTE"
+        },
+        "quotation_completed": "NOT_YET_OBSERVED",
+        "qualification": "Same quotation cycle result -> nested TP begin/completed -> same quotation cycle next result. Exact first Brief read timestamp is not in existing sanitized log. Do not equate begin with first read."
+      }
+    ],
+    "recovered_google_fault": {
+      "at_local": "2026-10-28T17:29:02.838+08:00",
+      "classification": "GOOGLE_WEB_READ_UNAVAILABLE",
+      "stage": "google-download-read",
+      "cause": "TimeoutError",
+      "recovery_evidence": "Inquiry completed17:32:23.746; quotation and nested TP proceeded. No concurrent probe; not the old page-budget code. Exact download timeout root cause UNKNOWN.",
+      "safety_stop_request": "A manual safe-stop assistance request was sent from a prior not-yet-completed log snapshot; new completion evidence arrived before it was answered. Prompt updated: leave running if not stopped; if already stopped retain window and do not start twice. Final actual status must follow logs/Owner confirmation."
+    },
+    "first_brief_read_timestamp": "NOT_VERIFIED: existing file log does not expose successful read start; no new instrument/browser probe added. Module begin alone is insufficient.",
+    "resources_gui_and_existing_watcher": {
+      "pid": 90204,
+      "watch_pid": 87740,
+      "elapsed": 722.8910000000033,
+      "samples": 25,
+      "logical_cpus": 16,
+      "qualification": "Finite25 native OS samples at30s spacing; GUI and existing watcher separated. No Computer Use/cursor/focus/window manipulation. Chrome root separately sampled twice; no CDP. Not a long-term leak or game acceptance.",
+      "app": {
+        "seconds": 722.7810000000172,
+        "cpu_host_percent": 0.29143617672572325,
+        "rss_min": 83013632,
+        "rss_max": 134221824,
+        "private_min": 61476864,
+        "private_max": 103833600,
+        "threads_min": 6,
+        "threads_max": 11,
+        "handles_min": 789,
+        "handles_max": 3329,
+        "gdi_range": [
+          56,
+          136
+        ],
+        "user_range": [
+          221,
+          258
+        ],
+        "first_last": [
+          {
+            "rss": 83570688,
+            "private": 62652416,
+            "handles": 789,
+            "gdi": 56,
+            "user_objects": 221,
+            "threads": 10
+          },
+          {
+            "rss": 134221824,
+            "private": 103833600,
+            "handles": 3329,
+            "gdi": 136,
+            "user_objects": 258,
+            "threads": 11
+          }
+        ]
+      },
+      "observer": {
+        "seconds": 722.7970000000205,
+        "cpu_host_percent": 0.0,
+        "rss_min": 21762048,
+        "rss_max": 21794816,
+        "private_min": 15155200,
+        "private_max": 15187968,
+        "threads_min": 1,
+        "threads_max": 2,
+        "handles_min": 128,
+        "handles_max": 128,
+        "gdi_range": [
+          0,
+          0
+        ],
+        "user_range": [
+          1,
+          1
+        ],
+        "first_last": [
+          {
+            "rss": 21762048,
+            "private": 15155200,
+            "handles": 128,
+            "gdi": 0,
+            "user_objects": 1,
+            "threads": 1
+          },
+          {
+            "rss": 21782528,
+            "private": 15155200,
+            "handles": 128,
+            "gdi": 0,
+            "user_objects": 1,
+            "threads": 1
+          }
+        ]
+      }
+    },
+    "resources_chrome_root": {
+      "pid": 55340,
+      "same_original_process": true,
+      "seconds_approx": 614.7064292430878,
+      "cpu_host_percent_approx": 0.2559339080668467,
+      "rss_bytes_start_end": [
+        420343808,
+        446406656
+      ],
+      "private_bytes_start_end": [
+        247472128,
+        269484032
+      ],
+      "handles_start_end": [
+        4564,
+        4646
+      ],
+      "threads_start_end": [
+        55,
+        57
+      ],
+      "qualification": "Two OS snapshots of original Chrome ROOT ONLY, not all renderers/network children or a leak trend. Shared Owner browser use cannot be attributed solely to INSO. No Chrome/CDP/page operation."
+    },
+    "cleanup": {
+      "stage_retired": "C:\\Users\\Leo\\.codex\\worktrees\\v16-independent-scheduling\\INSO_Leo\\build\\windows-release-stage-1.6",
+      "files": 2876,
+      "bytes": 268026663.0,
+      "candidate_installed_verified": true,
+      "fresh_rollback_retained": true,
+      "production_runtime_untouched": true
+    },
+    "unchanged_scope": [
+      "runtime junction to V1.4 runtime",
+      "production SQLite schema and all business tables during replacement/idle checks",
+      "config/research config/Vault byte equality",
+      "historic command/SENT/TP rows after resume",
+      "existing Chrome process/profile; no CDP/test client, no tab operation",
+      "V1.4/V1.5 and unknown backup artifacts untouched"
+    ],
+    "tests": "No feature changes or redundant full regression. Previous accepted same-source3094 PASS /1 SKIP retained as prior offline evidence. New actual full asset checks, dependency and idle GUI checks, backup consistency and passive production checks above.",
+    "not_verified": [
+      "Real new purchase/Google write/readback/final SMTP delivery when no qualifying natural operation logged",
+      "Precise TP first actual Brief read and calibrated due-to-first-work improvement",
+      "Actual duplicate GUI conflict dialog (avoided live contention)",
+      "New visual menu/tray actions not exercised; idle render and native Responding verified",
+      "Long-term stability, real100/150% DPI and game frame impact",
+      "Dual market Actor concurrency not enabled"
+    ],
+    "owner_input_preference": {
+      "instruction": "From2026-10-28 do not use Computer Use, move cursor, steal focus or auto-click Windows.",
+      "application": "No Computer Use after Owner instruction; subsequent checks use CLI/logs/native counters. Any necessary future UI action is manual Owner assistance."
+    },
+    "rollback": "No rollback executed. Fresh C92F program-only verified fallback retained. Never restore protected-state snapshot into current ledger or retry unknown external effects."
   }
 }

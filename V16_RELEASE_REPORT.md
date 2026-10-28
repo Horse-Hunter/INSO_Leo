@@ -1,5 +1,95 @@
 # V1.6 unified release and initial production verification
 
+## 方案A已授权受控生产更新（2026-10-28）
+
+**BUSINESS_RUNNING / V16_REVIEW_REQUIRED。** 本次已实际安装及恢复运行，不再是候选准备；
+不代表真实TP准时性或全部V1.6 PASS。Owner正式授权`a6f2de30b55a3a72d02b1f1e03a6ddd15b5ee25f`。
+应用源码`b57f467ac2545292d3ee441af974053f8d143179`；src树`eaea701b8c1ccdfe4fde1db36d2fea07e8a39d84`；tests树
+`7087294dcca5148f6b792a3be52fc13c102083ea`；无源码/规则/配置改动或重新编译。
+
+### 实际替换、备份与数据保护
+
+- 旧GUI86788及观察器正常退出，退出收据2026-10-28T09:19:08.399275Z，code0/normal。
+  Owner协助安全停止/托盘退出；没有强杀任何程序或Chrome。
+- 原单实例锁独占覆盖备份和替换。原C92F版本全新2875文件备份：
+  `D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.6-option-a-20261028T092044Z\program`；全清单匹配及依赖自检通过。
+  原程序EXE为`C92F48E1380A90A747300CD7BDADFBD410C6A8D8352304C1B4D6DA438C7F28CE`。
+- 同目录protected-state保存本轮一致性SQLite备份及原配置/加密Vault；原备份函数校验
+  integrity和全部业务表与原库一致。没有生产迁移，没有恢复旧数据库。
+- 安装时间`2026-10-28T09:21:23.764587+00:00`；只覆盖
+  `D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe`及_internal。
+  实际EXE SHA256：`DB9463D4D1DBDF716C80C8A48A2E5D6E9CB7EBE4BB4254A0A2CD40BEEA440969`。
+  2875项全部匹配已审核候选清单；self-check0。原runtime链接及目标、配置、Vault不变；
+  替换前后以及空闲界面检查后全部业务表一致。历史状态不因升级重置。
+- 原EXE的idle-self-check0：真实空闲界面已渲染，状态已停止，业务/订单线程均未启动；
+  实际生产GUI随后通过原有`--start-inquiry`入口仅启动一次。此开关是原GUI初始化后调用
+  原start门禁，不是新入口或绕过权限，不需要重复点击开始。GUI90204，观察器87740，
+  启动`2026-10-28T09:21:57.6851963Z`，系统确认窗口标题/Responding。未启动第二业务实例，未实测冲突弹窗。
+- 观察期间Owner按旧快照的协助提示安全停止；新日志其后确认先前读取已恢复。
+  报价于17:35:36安全停止，Owner随后正常托盘退出（code0），核验无残留实例后，
+  使用同一EXE原CLI于`2026-10-28T09:38:01.1371609Z`恢复一次，当前主PID`91980`。
+  没有Computer Use、模拟点击或注入控制；不是重复点击开始，也没有重新安装。
+- 原配置v16/v13/TP为true，三个周期900秒；默认factory仍None：独立周期、单Owner、
+  方案A单笔安全收口让位，**不是双市场Actor并行**。120秒安全等待代码不变。
+
+### 自然运行记录及验收边界
+
+以下为新实例启动后的既有脱敏日志，未连接新的CDP/Playwright检查客户端。
+
+| 本地时间(+08) | 模块 | 阶段 | 本轮耗时秒 |
+| --- | --- | --- | --- |
+| 17:22:01.738000 | inquiry | begin | 0.0 |
+| 17:32:23.746000 | inquiry | completed | 622.016 |
+| 17:32:23.955000 | quotation | begin | 0.0 |
+| 17:32:52.738000 | tp | begin | 0.0 |
+| 17:33:05.014000 | tp | completed | 12.282 |
+| 17:35:36.103000 | quotation | stopped | 192.156 |
+| 17:38:05.209000 | inquiry | begin | 0.0 |
+
+报价期间嵌套TP区间：`[{"quotation_begin": "2026-10-28T17:32:23.955000+08:00", "safe_candidate_result_before_tp": {"at": "2026-10-28T17:32:52.529000+08:00", "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676", "module": "V1.3", "result": "NO_RECENT_QUOTE"}, "tp_begin": "2026-10-28T17:32:52.738000+08:00", "tp_completed": "2026-10-28T17:33:05.014000+08:00", "quotation_resumed_result": {"at": "2026-10-28T17:33:10.951000+08:00", "cycle": "cycle_c1ffccf6f9384806b2783d8a09edf676", "module": "V1.3", "result": "NO_RECENT_QUOTE"}, "quotation_completed": "NOT_YET_OBSERVED", "qualification": "Same quotation cycle result -> nested TP begin/completed -> same quotation cycle next result. Exact first Brief read timestamp is not in existing sanitized log. Do not equate begin with first read."}]`。
+新实例Google/运行错误分类统计：`{"GOOGLE_WEB_READ_UNAVAILABLE": 1}`；
+自然业务结果统计：`{"V1.3:SOURCE_IDENTITY_UNRESOLVED": 1, "V1.3:NO_RECENT_QUOTE": 10}`。
+现有文件日志不提供成功Brief读取的精确开始时间，不能将TP begin冒充首次真实读取；
+精确due→首次工作改善仍NOT_VERIFIED。
+本次首次询价17:29:02出现一次google-download-read/TimeoutError，
+`GOOGLE_WEB_READ_UNAVAILABLE`，随后17:32:23询价正常完成；报价及TP读取继续。
+无同期CDP探针，未见原三页数量限制；下载超时根因UNKNOWN，不能称误报或已永久修复。
+17:32:52.529原报价NO_RECENT_QUOTE安全结果→17:32:52.738TP开始→
+17:33:05.014TP完成→17:33:10.951同原报价cycle继续NO_RECENT_QUOTE，
+证明真实嵌套及身份恢复；当时整批报价尚未结束。没有伪造成功采购或SMTP送达。若观察中无满足触发条件的报价安全点/新订单，
+不制造业务补齐证据，不宣称新采购、真实Google写回或新邮件投递成功。
+
+恢复后只读账本核对：118条原邮件命令完整不变，
+149条历史SENT收件记录完整不变，四个原TP任务及六TP-SENT完整保留。
+当前收件状态`{"SENT": 149}`，新增种类状态
+`{}`，采购状态
+`{"AI_RECOGNIZED": 3, "MANUAL_REVIEW": 1, "SAVED": 23, "VALIDATION_FAILED": 3}`。SENT仅表示SMTP接受，不能证明最终到达邮箱。
+原SOURCE_IDENTITY_UNRESOLVED人工处理项、既有待状态写回项保留，不改身份或强制重做。
+
+### 低干扰资源、清理与尚缺证据
+
+复用已有原生计数器脚本，一次有界722.9秒、25个低频样本；
+GUI整机平均CPU 0.29144%，RSS
+79.17～128.00MiB，Private
+58.63～99.02MiB，句柄
+789～3329，线程6～11。
+观察器单独统计于原JSON，不计为第二业务实例。Chrome仅OS原有根进程55340前后计数，
+不访问CDP，详情`{"pid": 55340, "same_original_process": true, "seconds_approx": 614.7064292430878, "cpu_host_percent_approx": 0.2559339080668467, "rss_bytes_start_end": [420343808, 446406656], "private_bytes_start_end": [247472128, 269484032], "handles_start_end": [4564, 4646], "threads_start_end": [55, 57], "qualification": "Two OS snapshots of original Chrome ROOT ONLY, not all renderers/network children or a leak trend. Shared Owner browser use cannot be attributed solely to INSO. No Chrome/CDP/page operation."}`；不能把根进程当全部子进程合计，
+也不能凭短窗口宣称长期无泄漏。
+
+已确认正式安装后退休唯一自有候选stage（2876文件含marker，268026663字节），
+按精确路径/标记/无runtime/无reparse核对；保留实际安装、新鲜C92F回滚和必要小型证据。
+无额外冻结/扫描副本，不清理其他版本、混合备份、生产数据或未知文件。
+无新功能测试需求，没有重复已通过的完整回归。真实新订单成功、精确TP首次读取、
+多轮稳定性、100%/150%DPI、游戏影响仍待自然证据；双Actor仍未启用。
+
+**Owner最新执行偏好：后续禁止Computer Use、移动光标、抢焦点或自动点Windows；**
+必要界面动作请Owner手动协助，其余复用CLI/日志/系统计数器。本轮收到指令后未再调用
+Computer Use：`COMPUTER_USE_NOT_USED`（禁令生效后的执行范围）；禁令前尝试截图均已披露，
+未创建或保留新Computer Use助手/截图，不把原有工具包当作自有文件清理。本段为Owner要求的执行记录，不冒充CEO新源码裁定。
+
+只交Owner转CEO复审；无需再次点击开始，不自动增加测试订单/邮件或重试历史状态。
+
 ## 方案A Windows候选发布准备（2026-10-28，未安装）
 
 **CANDIDATE_VERIFIED / NOT_DEPLOYED / V16_REVIEW_REQUIRED。** CEO源码审核
