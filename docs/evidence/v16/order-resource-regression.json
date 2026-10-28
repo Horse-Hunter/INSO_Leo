@@ -5523,6 +5523,130 @@
       "instruction": "From2026-10-28 do not use Computer Use, move cursor, steal focus or auto-click Windows.",
       "application": "No Computer Use after Owner instruction; subsequent checks use CLI/logs/native counters. Any necessary future UI action is manual Owner assistance."
     },
-    "rollback": "No rollback executed. Fresh C92F program-only verified fallback retained. Never restore protected-state snapshot into current ledger or retry unknown external effects."
+    "rollback": "No rollback executed. Fresh C92F program-only verified fallback retained. Never restore protected-state snapshot into current ledger or retry unknown external effects.",
+    "post_resume_passive_log_check": {
+      "checked_at": "2026-10-28T10:02:02.399960+00:00",
+      "method": "Existing sanitized logfile only; no CDP/GUI/ledger query.",
+      "after_resume_pid": 91980,
+      "inquiry_begin": "2026-10-28T17:38:05.209+08:00",
+      "inquiry_completed": "2026-10-28T17:48:25.679+08:00",
+      "quotation_begin": "2026-10-28T17:48:25.900+08:00",
+      "tp_begin": "2026-10-28T17:48:53.273+08:00",
+      "tp_completed": "2026-10-28T17:49:06.528+08:00",
+      "quotation_completed": "2026-10-28T17:56:37.224+08:00",
+      "google_read_unavailable_after_resume": 1,
+      "interpretation": "A second launch also had one classified read timeout, then inquiry and nested TP plus full quotation completed. Total two read-timeout events across the two launch observation windows; both proceeded to completion. Root cause remains UNKNOWN; not dismissed as false alarm or fixed by Option A.",
+      "first_brief_read_timestamp": "NOT_LOGGED; module entry alone is not first real read",
+      "no_new_purchase_or_smtp_success_claim": "No current ledger read in this late check; prior149SENT audit remains timestamp-scoped to pre-implementation recovery."
+    }
+  },
+  "customer_quoted_seven_day_refresh_20261028": {
+    "recorded_at": "2026-10-28T09:59:10.228373+00:00",
+    "status": "REVIEW_REQUIRED / NOT_DEPLOYED",
+    "application_source": "63d161cd3ec998d1fbbd3f584ab46797399dce6c",
+    "src_tree": "c1fc44b0bf87f1f6742939a9f33114c325f8405b",
+    "tests_tree": "c36c35b55f4d1ad201baee8f2dd3304f41e52079",
+    "implementation_commits": [
+      "f89caf41015b940cbb29165c28bf00f8f7245a6c",
+      "63d161cd3ec998d1fbbd3f584ab46797399dce6c"
+    ],
+    "source_base": "408ddb6688e30d8829a5b9a71b43cd17afb494bc",
+    "modified_files": [
+      "docs/modules/SHEETS.md",
+      "docs/modules/WORKFLOW.md",
+      "src/launcher/backend.py",
+      "src/launcher/google_web.py",
+      "src/sheets/tp_brief.py",
+      "src/workflow/quotation_age.py",
+      "src/workflow/store.py",
+      "src/workflow/v13_integration.py",
+      "src/workflow/v13_quotation.py",
+      "tests/launcher/test_rfq006_backend.py",
+      "tests/workflow/test_customer_quoted_age.py",
+      "tests/workflow/test_rfq006_integration.py",
+      "tests/workflow/test_v13_price_refresh.py",
+      "tests/workflow/test_v13_quotation.py"
+    ],
+    "new_cases": 46,
+    "final_full": {
+      "passed": 3140,
+      "skipped": 1,
+      "seconds": 125.63,
+      "log_sha256": "8febdd56330fa1c10dad9c9eda34aa2e673f5ba8eb481376be2376d2acfb8614",
+      "command": "python -m pytest -q -rs --basetemp=<owned synthetic scratch>/final-full",
+      "skip_detail": [
+        "SKIPPED [1] tests\\workflow\\test_v12_evidence_and_safety.py:56: symlink creation not available in this test environment"
+      ]
+    },
+    "final_focused": {
+      "passed": 345,
+      "seconds": 24.5,
+      "log_sha256": "3d94c9441496f4dfa5f9f6f5ac51eae58b20b7da1b96269ad80c53923135f4e8",
+      "coverage": "age gate, actual Store/SQLite contract, RFQ006 integration, originalGoogle60s cache, TP source binding, safe quotation TP yield, business continuations, manual actions, defaultBackend composition"
+    },
+    "ruff": "PASS_NO_CACHE",
+    "diff_check": "PASS",
+    "test_environment": {
+      "python": "C:/Users/Leo/AppData/Local/Programs/Python/Python312/python.exe",
+      "reused_dependencies": "Existing verified release site-packages via process-local PYTHONPATH; no install",
+      "tcl": "8.6.15",
+      "smtp": "Existing suite-wide real SMTP refusal guard active; no outbound attempts reported"
+    },
+    "earlier_runs": {
+      "f89caf4_full": "3136 PASS /1 SKIP127.02s; intermediate only, superseded after source-row relocation fix",
+      "focused_before_final_fix": "304PASS22.53s; then343PASS24.60s; final345PASS24.50s",
+      "setup_corrections": "Release venv has no pytest: reused known global test Python. Created missing owned scratch parent. Two old fixture cases used intake and quote clocks months apart; adjusted explicit synthetic intake_at for their intended recent/unknown-write scenarios, not assertions or production data."
+    },
+    "date_sources": {
+      "exact_customer_send": "No trustworthy attributable event in audited current schema; not fabricated",
+      "preferred_proxy": "Only existing <60s cached RFQ_BRIEF snapshot, unique canonical sheet+current row+model+quantity+brand and SHAHAB date proof",
+      "fallback_proxy": "Existing same inquiry_id immutable workflow_items.created_at, aware timestamp; schema/INSERT OR IGNORE and lifecycle updates verified offline",
+      "excluded": [
+        "workflow_items.updated_at",
+        "RFQ_BRIEF.updated_at",
+        "supplier quote dates",
+        "scan time",
+        "first noticed customer-quoted status"
+      ],
+      "boundary": "Inclusive rolling168h for aware instant; inclusive Shanghai calendar today-7 for date-only. Future/naive/invalid=>QUOTE_AGE_UNVERIFIED.",
+      "caveat": "Inquiry/intake may precede real customer send, conservatively expiring an older inquiry quoted recently. Historical imports may also have a local intake later than the actual customer quote; this fallback can remain eligible until that local proxy expires. Actual age coverage and runtime savings are not measured in this offline task."
+    },
+    "implementation": {
+      "gate": "Original unique source/status/brand binding THEN date gate THEN original Operations.open. Gate repeats on query retry. Stop checked before result/open.",
+      "manual": "Original Backend source_store manual composition automatic_refresh=False only; realtime permissions and identity/unknown-effect guards unchanged",
+      "skips": "QUOTE_AGE_EXPIRED/QUOTE_AGE_UNVERIFIED no updater/baseline/hold/SMTP/source write; two-key in-memory skip counter. Unbound/ambiguous customer rows retain original no-ID/no-result skip plus diagnostic counter.",
+      "relocation": "Date pointer refers only to current row just validated by canonical relocation, never discovery old position or another occupant",
+      "source_cache": "peek_brief_snapshot and BriefReader.cached_lines never attach/read/download/refresh on miss or expiry. Existing lock/admission/Stop applied; source/live writer gates unchanged.",
+      "tp_reuse": "Extracted original pure source check bind_brief_source reused by unchanged bind_tp_order price and identity contract; no new matching/order ID.",
+      "unchanged": "Other statuses, inquiry/purchase/TP, supplier72h selection,900s scheduling,120s safety wait, runtime leases/Actor limit/SMTP idempotence, GUI customer status"
+    },
+    "production": {
+      "feature_installed": false,
+      "no_build_or_deployment_for_seven_day": true,
+      "unchanged_installed_source": "b57f467ac2545292d3ee441af974053f8d143179",
+      "unchanged_exe_sha256": "DB9463D4D1DBDF716C80C8A48A2E5D6E9CB7EBE4BB4254A0A2CD40BEEA440969",
+      "cutover_evidence_commit": "408ddb6688e30d8829a5b9a71b43cd17afb494bc",
+      "no_production_ledger_or_browser_access_for_implementation": true
+    },
+    "computer_use": "COMPUTER_USE_NOT_USED",
+    "handoff": "Owner forwards source and unified report to CEO. New installation requires accepted source and separate Owner release authorization. No direct CEO send.",
+    "cleanup": {
+      "scratch_directories_retired": 8,
+      "files_retired": 15415,
+      "bytes_retired": 635609959.0,
+      "small_test_logs_and_summary_retained": true,
+      "owned_temporary_helpers_retired": [
+        "v16-option-a-running-check.py",
+        "v16-option-a-replace.py",
+        "v16-option-a-live-resources.py",
+        "v16-option-a-read-cycles.py",
+        "v16-option-a-check-ledger.py",
+        "v16-option-a-finalize.py",
+        "v16-seven-day-edit.py",
+        "v16-seven-day-tests.py",
+        "v16-seven-day-finalize.py"
+      ],
+      "production_and_rollback_untouched": true
+    }
   }
 }

@@ -5008,3 +5008,12 @@ Computer Use：`COMPUTER_USE_NOT_USED`（禁令生效后的执行范围）；禁
 未创建或保留新Computer Use助手/截图，不把原有工具包当作自有文件清理。本段为Owner要求的执行记录，不冒充CEO新源码裁定。
 
 只交Owner转CEO复审；无需再次点击开始，不自动增加测试订单/邮件或重试历史状态。
+
+
+## Executor separate seven-day follow-up — source only (2026-10-28)
+
+Option A controlled deployment remains frozen at b57f467 / EXE DB9463D4; receipt408ddb6688e30d8829a5b9a71b43cd17afb494bc.
+The separately requested customer-quoted age rule is offline implemented at 63d161cd3ec998d1fbbd3f584ab46797399dce6c; src c1fc44b0bf87f1f6742939a9f33114c325f8405b; tests c36c35b55f4d1ad201baee8f2dd3304f41e52079. Final345 focused PASS; 3140 PASS/1SKIP full 125.63s; Ruff/diff PASS. No install/build/production or browser access for the follow-up.
+Canonical requirement and detailed receipt: tasks/2026-10-28-customer-quoted-seven-day-refresh.md; original V16 report/JSON updated. REVIEW_REQUIRED / NOT_DEPLOYED. COMPUTER_USE_NOT_USED. Owner forwards to CEO; no direct send.
+
+Post-resume logfile-only check: inquiry17:38:05-17:48:25; quotation17:48:25-17:56:37; nestedTP17:48:53-17:49:06. One additional GOOGLE_WEB_READ_UNAVAILABLE then recovered; two launch-window timeouts total, cause UNKNOWN. No concurrent browser probe and no current ledger totals inferred. Original report/JSON records exact window.

@@ -1,6 +1,6 @@
 # Owner change — stop INSO quote-refresh for customer-quoted orders older than one week
 
-status: REQUIREMENT_RECORDED / NOT_IMPLEMENTED / NOT_DEPLOYED
+status: REVIEW_REQUIRED / OFFLINE_IMPLEMENTED / NOT_DEPLOYED
 owner: CEO requirement; Codex Executor implementation after the currently authorized Option A production cutover is safely completed or deferred
 created: 2026-10-28 (Asia/Shanghai)
 source: Owner's latest explicit request and follow-up acceptance of existing internal DB / RFQ_BRIEF timestamps
@@ -52,4 +52,52 @@ is immutable; do not quietly add this feature during that release and do not can
 
 ## Implementation status
 
-This task records the requirement and agreed practical timestamp strategy; **no new program code or production executable has been changed here**. Original approved Option A controlled release retains its own SHA and scope.
+Requirement-recording paragraph superseded by the offline implementation receipt below. Production executable still unchanged; original Option A controlled release retains its own SHA and scope.
+
+## “已报价给客户”七天自动刷新限制 — 离线源码交付（2026-10-28）
+
+**REVIEW_REQUIRED / NOT_DEPLOYED。生产仍是方案A b57f467，未混入本次规则。**
+独立源码提交：`63d161cd3ec998d1fbbd3f584ab46797399dce6c`；src树`c1fc44b0bf87f1f6742939a9f33114c325f8405b`；tests树`c36c35b55f4d1ad201baee8f2dd3304f41e52079`。
+主实现`f89caf41015b940cbb29165c28bf00f8f7245a6c`，当前来源行绑定修正为上述最终提交。
+此前实际发布证据提交`408ddb6688e30d8829a5b9a71b43cd17afb494bc`单独保留。
+
+复用审计：原报价candidate/execute_candidate/settle_result、WorkflowStateStore、
+已验证Brief身份字段与60秒快照、原ManualRetryHolds及Backend组合均复用。
+现有事件/表未提供可归属的真实客户报价发送时刻，不新增伪造事件/字段。
+只对当前原行状态为“已报价给客户”的自动INSO查询启用：先通过原唯一inquiry/source
+身份和状态核验，再按日期判定，随后才可能打开INSO页。优先使用已有有效缓存中
+唯一匹配**当前已核验行**的RFQ_BRIEF.rfq_date；缺少合适缓存/匹配则使用同一ID原
+created_at。两个都是询价/入库代理，**不是真实客户报价日**，可能保守排除旧询价新报价。
+历史导入的本地时间也可能晚于真实客户报价，因此不能保证等同真实客户报价满7天；
+实际日期覆盖率/提速幅度未读取生产数据测量。
+不使用updated_at、供应商报价时间或扫描/首次发现时间。无可靠身份/日期保守跳过，
+保留固定脱敏诊断计数；不新建ID/账本/定时器/依赖，也不为优化额外下载Brief。
+
+边界：时间戳按真实滚动168小时、日期按上海today-7自然日，恰好7天含边界；
+未来、无时区、坏日期为QUOTE_AGE_UNVERIFIED，过期为QUOTE_AGE_EXPIRED。
+跳过时不打开/请求INSO、不更新报价输入/价格基线、不建hold或通知，不写来源状态。
+“发给采购”“采购已报价”、TP、询价、供应商72小时选价和人工主动处理不受此过滤。
+原权限、Stop、来源租约、双Actor上限（生产仍未启用）、120秒等待及SENT/UNKNOWN不变。
+纯Brief来源校验从原TP绑定提取复用，TP业务语义和价格逻辑不变；报价后的无副作用
+跳过仍可作为原方案A的安全收口点，不清除之前未知写入的阻断。
+
+实际文件：7个src文件（原Backend/WebService、Sheets Brief、Workflow Store、
+原V13报价/集成及一个纯日期策略文件），5个测试文件、2个原模块接口文档。
+唯一新增公共窄接口为原服务只读peek/BriefReader缓存解析、原Store的入库时间读取、
+纯Brief来源绑定；不跨线程共享Page或调用新的浏览器客户端。
+
+最终专项：**345 PASS / 24.50秒**；新增46项，含旧行换占用者/当前行移动、Brief歧义、
+上海跨UTC日、未来/空/错误日期、实际SQLite不可变created_at、跳过无SQL/SMTP/Google
+副作用、默认Backend接线和人工/Stop。最终完整离线：**3140 PASS / 1 SKIP，125.63秒**。
+跳过原因沿用Windows当前权限无法创建symlink；没有跳过业务保护。
+Ruff/diff PASS，真实SMTP守卫无外发尝试。中间版本3136 PASS不充当本次最终证据。
+
+`COMPUTER_USE_NOT_USED`。本功能实现/测试没有读取生产账本、连接Chrome/CDP/Google/
+INSO/SMTP，没有构建/安装或修改正在运行的EXE、配置、Vault。当前生产程序哈希仍
+`DB9463D4D1DBDF716C80C8A48A2E5D6E9CB7EBE4BB4254A0A2CD40BEEA440969`。
+真实加速幅度、客户发送日准确性和新规则生产行为仍NOT_VERIFIED；先交Owner转CEO
+独立源码复审，通过后另行批准发布。生产实际让位与Google短暂超时恢复见下方原发布记录。
+
+本轮离线临时工作清理：8个自有测试目录、15415文件、635609959字节已退休；
+保留必要小型测试输出和摘要。9个本轮CLI检查/发布/测试辅助脚本已退休，
+原生产、共享runtime、账本、Vault、Chrome及新鲜程序回滚保持不变。
