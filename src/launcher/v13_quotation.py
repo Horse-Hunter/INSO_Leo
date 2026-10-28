@@ -50,6 +50,9 @@ def settle_quotation_operations():
         operation.reset()  # Existing exact-owned-tab cleanup, never a guessed page.
         if operation._session is not None:
             raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_OPERATION_NOT_CLOSED")
+    # Retire verified closed controllers too: TP recovery may replace the
+    # client handle, and the next quotation must not borrow a stale controller.
+    operations.clear()
     return True
 
 

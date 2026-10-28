@@ -101,3 +101,20 @@ def test_checkpoint_uses_original_global_lock_and_refuses_foreign_scope(tmp_path
         assert not finished.wait(.05)
     thread.join(2)
     assert not thread.is_alive() and verdict == [False]
+
+
+def test_closed_controller_is_not_rebound_after_tp_client_recovery():
+    from src.launcher.browser_bootstrap import BrowserHandle
+    handle, _ = browser_fixture.__wrapped__()
+    with quotation_operation_scope():
+        old = quotation_operations(browser_handle=handle, login=_Login())
+        page = old.open('first').operation_page().page
+        old.close()
+        assert settle_quotation_operations() and page.closed
+        replacement = BrowserHandle(owned=False, browser=handle.browser, playwright=handle.playwright)
+        current = quotation_operations(browser_handle=replacement, login=_Login())
+        assert current is not old
+        next_page = current.open('resumed').operation_page().page
+        current.close()
+        assert next_page is not page
+    assert next_page.closed and replacement.browser.connected
