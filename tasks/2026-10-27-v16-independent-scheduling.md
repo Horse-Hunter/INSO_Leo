@@ -4747,3 +4747,139 @@ database/mail state remain untouched.
 原脚本已删除自有PyInstaller work；只保留一个正式BuildOnly候选、必要小型清单和构建日志，
 没有重复冻结/扫描副本。临时检查脚本取证后退休；未清理生产、回滚、未知文件或旧长测。
 本轮只向Owner交付，由Owner转CEO；后续替换须单独批准。
+
+## CEO independent candidate/release-readiness Review — Option A Windows (2026-10-28)
+
+**Review chain and exact identity.** Independently fetched remote branch HEAD
+`7a43e12aaa2d216224168a42635c6a424dc20cd9`, direct
+report/task/JSON-only child of prior CEO SOURCE_PASS
+`a67b9c104f2e295dd2c91dc2b760d0c3b82afb0b`. Actual changed files:
+`V16_RELEASE_REPORT.md`, this original task, and
+`docs/evidence/v16/order-resource-regression.json` only.
+Verified `src/` tree
+`eaea701b8c1ccdfe4fde1db36d2fea07e8a39d84`
+and `tests/` tree
+`7087294dcca5148f6b792a3be52fc13c102083ea`
+unchanged; exact previously-reviewed application source
+`b57f467ac2545292d3ee441af974053f8d143179`.
+CEO read all new report and
+`option_a_windows_candidate_preparation_20261028` JSON receipt,
+original existing `scripts/build_windows_release.ps1`,
+`docs/WINDOWS_RELEASE.md`, `docs/PROJECT_BASELINE.md`
+and previous source acceptance. No additional implementation was
+introduced by this delivery.
+
+**Scoped verdict:
+`OPTION_A_WINDOWS_CANDIDATE_PREPARATION_PASS`.
+Overall `CANDIDATE_VERIFIED / NOT_DEPLOYED /
+V16_REVIEW_REQUIRED`.** Candidate was reported built by original
+`scripts/build_windows_release.ps1 -Version 1.6 -BuildOnly`
+with existing verified release Python. Native build and candidate
+`--self-check` exited0, canonical scan
+`RELEASE_SCAN_OK`, no GUI/Backend/production start triggered.
+Reported candidate at
+`C:/Users/Leo/.codex/worktrees/v16-independent-scheduling/INSO_Leo/build/windows-release-stage-1.6/dist/INSO_V1.6`.
+Candidate executable SHA256
+`DB9463D4D1DBDF716C80C8A48A2E5D6E9CB7EBE4BB4254A0A2CD40BEEA440969`;
+candidate manifest includes2875 hash-checked program files,
+manifest SHA256
+`9F0EDC437B4A1A303C28F6D528D80F70A0D545A8AC2529D7D5CD6724C3257373`.
+Reported independent frozen PYZ/code-object comparison of
+all116 application modules with optimized reviewed source and
+Vault module bytes: PASS, six amended Option A modules included.
+CEO independently confirmed receipts have corresponding
+canonical module identities, but the complete signed source
+hash/manifest and EXE bytes exist on Executor Windows machine;
+CEO has NOT independently re-hashed that local EXE, walked
+installed assets, reproduced the native freeze or run self-check.
+Do not misstate these as direct CEO live checks.
+
+**Old installation and protected state.** Executor's
+OS-only preflight reported original GUI PID86788 and existing
+watcher PID84332 still alive/responding, old named mutex
+existing via read-only OpenMutex/CloseHandle, no competing
+launch/lock acquisition. Existing deployed EXE hash remains
+`C92F48E1380A90A747300CD7BDADFBD410C6A8D8352304C1B4D6DA438C7F28CE`
+with2875 original installed assets matching prior new-assets
+receipt. The runtime junction remains to
+`INSO_V1.4/runtime`; config, DB, Vault and original Chrome
+profile existence was verified only, with no value/status read.
+The previously retained program-only rollback has
+2875 verified assets and EXE SHA
+`745BEC95F0426673C82ED4AB76EE38DCAB442F2922FAEF124D7B040F947F51CE`,
+self-check0. **It is an older build and is NOT a fresh
+rollback of the currently installed C92F binary.**
+Do NOT restore any legacy or fresh backup database as
+a means to overwrite current immutable order/mail history.
+Current live production PENDING/UNKNOWN, Google write
+settlement, SMTP queue, business readiness and real TP
+timeliness were **NOT ACCESSED / NOT VERIFIED**;
+GUI Responding is not evidence of a safely drainable
+or already completed transaction.
+
+**Scope and outstanding constraints.** Documentation/frozen
+preflight only. Prior new-source3094 PASS/1SKIP applies
+to same reviewed source; no new full tests this round.
+Candidate program has no bundled protected runtime/ledger/
+Vault and does not select optional two-market-Actor
+factory. Existing canonical release script stages only,
+does not overwrite known live release on a BuildOnly call.
+One marked formal BuildOnly candidate and small
+manifests/build logs retained, PyInstaller disposable work
+retired. No actual installation, live Chrome/CDP,
+Google/INSO, UI start/stop, business sends or test
+orders. Real Option A TP-first-work improvement,
+long-term stability, DPI/game effects and parallel
+market actors remain NOT_VERIFIED.
+
+**CEO controlled-release decision:**
+This review APPROVES THE RELEASE CANDIDATE AS READY
+FOR A SEPARATELY OWNER-AUTHORIZED CONTROLLED
+REPLACEMENT; it is **NOT** approval to begin
+stopping/restarting production or installing
+new code now. No automatic release follows this
+CEO review or an instruction pasted without an
+explicit Owner release decision. Once Owner
+expressly authorizes a controlled window, Executor
+must (1) reconfirm exact reviewed candidate EXE
+SHA/assets and unchanged live installed C92F;
+(2) use original GUI Stop, allow safe drain and
+regular Exit, hold if unknown effect/protected tab/
+unsafe pending work; never force kill Chrome/GUI
+or clear unknown/immutable statuses; (3) obtain
+fresh consistent protected-state evidence/backup
+and a fresh program-only hash-verified rollback
+of current C92F installed version AFTER safe exit
+in exclusive replacement scope; do not conflate
+old745B rollback with current C92F backup;
+(4) replace only existing EXE and _internal
+approved program files, never runtime link/
+target, SQLite/WAL/mail history, Vault, config,
+OAuth/profile; (5) verify deployed files,
+single-instance, GUI idle/self-check then
+resume only existing authorized normal business;
+(6) compare natural TP due vs FIRST genuine
+Brief/source read, quote safe close, quote
+resumption and original baseline, and track
+known waits/Google errors without concurrent
+new CDP/browser probes or synthetic transactions;
+(7) preserve truthful status
+`INSTALLED_IDLE / BUSINESS_RUNNING / HEALTH_HOLD /
+BLOCKED`, with CEO post-release review before
+claiming actual improvement or V1.6 complete.
+
+**Operational next action:** Owner decides when/whether
+to authorize this specific candidate installation
+and its controlled window. In the absence of that
+express authorization, current source-proven C92F
+production stays unchanged and the prepared
+candidate is retained. If Owner has not approved,
+Executor only prepares an authorization-gated
+checklist/receipt; no process action. No extra
+build or redundant long report required.
+
+**CEO modification scope:** This independent review
+adds a task-document section only; no changes
+to source, tests, installed executable, original
+release report or JSON evidence. No direct
+Windows machine inspection claimed.
