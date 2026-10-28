@@ -1,4 +1,4 @@
-"""Three worksheet slots and the actual hidden-dialog predicate, fully offline."""
+"""Owned worksheet slots and the actual hidden-dialog predicate, fully offline."""
 import json
 import subprocess
 
@@ -55,16 +55,23 @@ def test_protected_slot_does_not_spawn_replacement_tabs(web):
     assert not old.closed and not original.closed
 
 
-def test_no_fourth_program_google_tab_even_with_prior_orphans(web):
+def test_prior_orphans_do_not_block_or_get_adopted_by_retained_slot(web):
     service, browser, _, original = web
     context = browser.contexts[0]
     for _ in range(3):
         old = context.new_page()
         old.owner_name = 'INSO_OWNER_TAB:google-operation'
         old.url = 'https://docs.google.com/spreadsheets/d/test/edit#gid=0'
-    with service.poll_scope(), pytest.raises(TimeoutError, match='GOOGLE_WEB_READ_UNAVAILABLE'):
+    prior = tuple(context.pages)
+    service._retained_pages = {}
+    with service.poll_scope():
         service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
-    assert len(context.pages) == 4 and not original.closed
+    owned = context.pages[-1]
+    assert owned not in prior and not owned.closed
+    with service.poll_scope():
+        service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
+    assert len(context.pages) == 5 and not original.closed
+    assert all(not page.closed and not page.clicks for page in prior)
 
 
 @pytest.mark.parametrize('expires_auth', [False, True])
