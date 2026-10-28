@@ -3,7 +3,7 @@ from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 
 from src.inso.session import SecurityViolation
-from src.research.cdp_pages import mark_owned_page
+from src.research.cdp_pages import PageTargetOwnershipError, mark_owned_page, page_owner
 from src.workflow.v12_faults import FaultScope, V12Fault
 
 from .inso_session import (
@@ -11,6 +11,7 @@ from .inso_session import (
     InsoSessionGuard,
     InsoSessionOutcome,
     attach_inso_research_session,
+    authenticated_inso_shell_available,
 )
 
 _POLL_OPERATIONS = ContextVar("poll_quotation_operations", default=None)
@@ -28,6 +29,28 @@ def quotation_operation_scope():
             for operation in operations:
                 operation._retain = False
                 closing.callback(operation.close)
+
+
+def settle_quotation_operations():
+    """Confirm/release only this original Owner's closed quotation operations."""
+    operations = _POLL_OPERATIONS.get()
+    if operations is None:
+        return False
+    for operation in operations:
+        if operation._protected or operation._session is not None and not operation._released:
+            return False
+        if operation._session is not None:
+            page = operation._session.operation_access().operation_page().page
+            if page_owner(page) != "quotation-operation":
+                operation.preserve()
+                raise PageTargetOwnershipError((ValueError("QUOTATION_OWNER_UNCONFIRMED"),))
+            if not authenticated_inso_shell_available(operation._handle.browser):
+                operation.preserve()  # Observation only; no login or credential action.
+                return False
+        operation.reset()  # Existing exact-owned-tab cleanup, never a guessed page.
+        if operation._session is not None:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_OPERATION_NOT_CLOSED")
+    return True
 
 
 def quotation_operations(*, browser_handle, login):

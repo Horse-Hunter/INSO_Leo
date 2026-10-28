@@ -201,9 +201,9 @@ class V13QuotationCycle:
         except (EcbFxError, OSError):
             raise V12Fault(FaultScope.GLOBAL_STOP, "V13_FX_UNAVAILABLE") from None
 
-    def run(self, worksheet: WorksheetIdentity, *, skip=lambda _: False, on_result=lambda result: result) -> tuple[V13QuotationResult, ...]:
+    def run(self, worksheet: WorksheetIdentity, *, skip=lambda _: False, on_result=lambda result: result, after_closed_candidate=None) -> tuple[V13QuotationResult, ...]:
         try:
-            return self._run(worksheet, skip=skip, on_result=on_result)
+            return self._run(worksheet, skip=skip, on_result=on_result, after_closed_candidate=after_closed_candidate)
         except (V12Fault, V13Stopped):
             raise
         except Exception:  # noqa: BLE001 - includes close/result adapter contract failures
@@ -212,13 +212,18 @@ class V13QuotationCycle:
     def read_candidates(self, worksheet):
         return read_v13_candidates(self._reader, worksheet, self._store, discovery=True)
 
-    def _run(self, worksheet, *, skip, on_result):
+    def _run(self, worksheet, *, skip, on_result, after_closed_candidate=None):
         results = []
         for candidate in self.read_candidates(worksheet):
             if self._stop():
                 raise V13Stopped("STOP_REQUESTED")
             if not skip(candidate):
-                results.append(self.execute_candidate(candidate, worksheet, on_result=on_result))
+                result = self.execute_candidate(candidate, worksheet, on_result=on_result)
+                results.append(result)
+                # Original query close AND on_result settlement completed first.
+                # The integrated caller still certifies terminal/effect safety.
+                if after_closed_candidate is not None:
+                    after_closed_candidate(result)
         return tuple(results)
 
     def execute_candidate(self, candidate, worksheet, *, on_result=lambda result: result):

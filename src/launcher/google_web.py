@@ -27,7 +27,11 @@ from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
 
 from .browser_bootstrap import BrowserHandle
 from .diagnostics import log_step
-from .google_quote_update import GoogleQuotationUpdateActions, google_operation_scope
+from .google_quote_update import (
+    GoogleQuotationUpdateActions,
+    google_operation_scope,
+    google_operations_idle,
+)
 
 _GOOGLE_GRID_LOCK = threading.RLock()
 _TITLES = ("2026", "SHAHAB", "报价输入")
@@ -183,6 +187,14 @@ class GoogleSheetsWebService:
                 lifetime.enter_context(google_operation_scope(
                     retained=self._retained_pages, lock=_GOOGLE_GRID_LOCK))
             yield handle
+
+    def operations_idle(self):
+        """Optional original-Owner checkpoint under the unchanged global lock."""
+        with _GOOGLE_GRID_LOCK:
+            self._read_guard()
+            if self._stop_requested() or self._poll_handle.get() is None:
+                return False
+            return google_operations_idle()
 
     def spreadsheets(self):
         return self

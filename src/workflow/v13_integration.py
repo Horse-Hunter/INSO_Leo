@@ -270,12 +270,29 @@ class V13IntegratedCycle:
 
         return observed_records, blocked_ids, blocked_locations
 
-    def run(self, worksheet):
+    def run(self, worksheet, *, after_closed_candidate=None):
         observed_records, blocked_ids, blocked_locations = self.prepare_run(worksheet)
+        safe = True
+        def closed(result):
+            nonlocal safe
+            # A returned unmodified QUOTE_FOUND can mean input Busy, not settlement.
+            # Once an effect is uncertain, no later row may erase that barrier.
+            safe &= (result.outcome in {
+                QuotationOutcome.NO_RECENT_QUOTE, QuotationOutcome.BASELINE_RECORDED,
+                QuotationOutcome.PRICE_UNCHANGED, QuotationOutcome.UPDATED_INSERTED,
+                QuotationOutcome.UPDATED_ALREADY_EXISTS,
+            } or result.outcome is QuotationOutcome.ROW_FAILED and result.row_error_reason in {
+                RowErrorReason.SOURCE_IDENTITY_UNRESOLVED, RowErrorReason.SOURCE_IDENTITY_AMBIGUOUS,
+                RowErrorReason.SOURCE_MPN_UNAVAILABLE, RowErrorReason.SOURCE_CHANGED,
+                RowErrorReason.QUOTE_PRICE_UNCOMPARABLE,
+            })
+            if safe and not self.stop():
+                after_closed_candidate(result)
+        options = {} if after_closed_candidate is None else {'after_closed_candidate': closed}
         return self.cycle.run(worksheet,
             skip=lambda candidate: candidate.inquiry_id in blocked_ids
                 or candidate.source_row_position in blocked_locations,
-            on_result=lambda result: self.settle_result(result, observed_records))
+            on_result=lambda result: self.settle_result(result, observed_records), **options)
 
     def begin_continuation(self, candidate, identity, runtime, observed_records):
         from src.sheets.pending import identify_worksheet_row

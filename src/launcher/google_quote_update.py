@@ -10,7 +10,12 @@ from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 from src.inso.quotation_read import QUOTATION_COLUMNS
-from src.research.cdp_pages import mark_owned_page, new_background_page, page_owner
+from src.research.cdp_pages import (
+    PageTargetOwnershipError,
+    mark_owned_page,
+    new_background_page,
+    page_owner,
+)
 from src.sheets.quotation_input import (
     GoogleQuotationInput,
     QuotationInputBusy,
@@ -115,6 +120,36 @@ def google_operation_scope(*, retained=None, lock=None):
                     cleanup._poll_entry = None
                     cleanup._location = SimpleNamespace(url=entry["page"].url)
                     closing.callback(cleanup.close)
+
+
+def google_operations_idle():
+    """Re-prove existing retained surfaces at a same-Owner lending boundary.
+
+    Does not create/close a managed page or change admission/settlement policy.
+    Existing close rechecks unsafe DOM; a quarantined surface never certifies idle.
+    """
+    scope = _POLL_GOOGLE_PAGES.get()
+    if scope is None or scope[1] is None:
+        return False
+    pages, retained = scope
+    if any(protected for _, protected, _ in retained.values()):
+        return False
+    for key, entry in tuple(pages.items()):
+        page, actions = entry['page'], entry['actions']
+        if entry['protected'] or page.is_closed():
+            return False
+        expected = retained.get(key)
+        actions._page, actions._poll_entry = page, entry
+        try:
+            actions._guard()  # Authentication failure propagates, not idle=False.
+            if (expected is None or _google_target_id(page) != expected[0]
+                    or page_owner(page) != 'google-operation'):
+                raise PageTargetOwnershipError((ValueError('GOOGLE_TAB_IDENTITY_UNCONFIRMED'),))
+        finally:
+            actions.close()  # Canonical ownership/unsafe-DOM guard, retain four pages.
+        if entry['protected']:
+            return False
+    return True
 
 
 def _google_target_id(page):

@@ -146,7 +146,11 @@ from .v13_integration import (
     quotation_gui,
     quotation_location,
 )
-from .v13_quotation import quotation_operation_scope, quotation_operations
+from .v13_quotation import (
+    quotation_operation_scope,
+    quotation_operations,
+    settle_quotation_operations,
+)
 
 log = logging.getLogger(__name__)
 
@@ -965,6 +969,10 @@ class ProductionBackend(GuiBackend):
                         source_reader=source_reader, hold_store=hold_store)
                     for recovery in range(4):
                         try:
+                            if (self._market_actor_factory is None and self._module_execute is not None
+                                    and self._module_contexts[-1:] == ["quotation"]):
+                                return integrated.run(worksheet,
+                                    after_closed_candidate=self._yield_quotation_to_tp)
                             return integrated.run(worksheet)
                         except V12Fault as exc:
                             if exc.reason != "CDP_SESSION_UNAVAILABLE" or recovery == 3:
@@ -1221,6 +1229,63 @@ class ProductionBackend(GuiBackend):
         finally:
             self._module_execute = None
             self._module_runtime = None
+
+    def _yield_quotation_to_tp(self, _result):
+        """Lend only a confirmed closed scheduled quotation boundary; never preempt."""
+        runtime = self._module_runtime
+        if (runtime is None or self._market_actor_factory is not None
+                or self._module_execute is None or self._manual_write_service is None
+                or self._module_contexts[-1:] != ["quotation"]
+                or self._state not in {RunState.RUNNING, RunState.QUOTATION_RUNNING}
+                or self._stop.is_set() or self._module_pause_requested is not None
+                or self._manual_busy or self._manual_request is not None or self._poll_idle.is_set()
+                or self._inso_session is not None or self._active_inso_inquiry is not None
+                or self._keepalive_protected_targets or self._site_manual_wait):
+            return
+        plan = runtime.module_plans().get("tp")
+        if plan is None or plan[1] or plan[2] or plan[0] > monotonic():
+            return
+        self._page_admission.require_open()
+        # Module release never releases a source lease. Conservatively decline
+        # lending while ANY existing source transaction/request remains active.
+        counts = runtime.order_resource_counts()
+        if counts['active'] or counts['waiting']:
+            return
+        if not settle_quotation_operations() or not self._manual_write_service().operations_idle():
+            return
+        self._page_admission.require_open()
+        if self._stop.is_set() or self._module_pause_requested is not None:
+            return
+        prior = self._observation.modules['quotation']
+        self._observation.wait('quotation', '报价已安全收口，执行到期TP')
+        runtime.yield_module_resource('quotation')
+        try:
+            with self._poll_gate:
+                module = (None if self._stop.is_set() else
+                          runtime.claim_due_module(exclude=('quotation', 'inquiry')))
+            if module is not None:
+                if self._stop.is_set():
+                    runtime.complete_module(module)
+                else:
+                    self._run_independent_job(module)
+            self._page_admission.require_open()
+        except V13Stopped:
+            if not self._stop.is_set():
+                runtime.abort_module_resource()
+            raise
+        except BaseException:
+            # Escaping shared/unknown faults cannot resurrect outer ownership.
+            runtime.abort_module_resource()
+            self._state = RunState.GLOBAL_STOP
+            self._stop.set()
+            raise
+        finally:
+            if not runtime.module_resource_failed:
+                runtime.resume_module_resource('quotation')
+                if self._manual_reader is not None:
+                    self._manual_reader.clear_discovery_snapshot()
+                self._observation.stage('quotation', prior.stage, site=prior.site,
+                                        order_ref=prior.order_ref)
 
     def _run_independent_job(self, module, *, started=None):
         # Sync browser ownership is fixed to this thread. Only closed-row waits
