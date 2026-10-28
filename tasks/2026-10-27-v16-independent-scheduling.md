@@ -4188,3 +4188,214 @@ Owner decision after CEO design review: approve A code/offline scope OR B existi
 assembly/safety-completion scope. No deployment, program stop, protected browser
 window or installation is included; separate express authorization needed later.
 No direct CEO message. Owner forwards original unified report/task/JSON and SHA.
+
+## CEO independent TP scheduling DESIGN Review and next source-only scope — 2026-10-28
+
+**Independent review basis:** exact GitHub branch HEAD
+`220818da2aa5d367d6f8122c66c8f9b514840538`, direct
+child of prior CEO Review
+`a176ed894bb18735f99dfa80fd1a3a21efdfd1b1`.
+Verified only the original `V16_RELEASE_REPORT.md`,
+`docs/evidence/v16/order-resource-regression.json`, and this
+canonical Task changed in Executor's design delivery.
+`src/` tree
+`81ab97bbbff5f220e70ae2ad73f8c5ff4e497f8f`,
+`tests/` tree
+`da5a5985fcb84035aaa1c106f1676112bde1fd3b`
+and application `c24d686096b1f6b5157ac1e443167be5662f6b54`
+unchanged. Directly read actual source:
+`src/workflow/service.py` module claims/yield/resume,
+`src/launcher/backend.py` default actor factory,
+independent loop/scoped jobs/closed-row wait/quotation
+composition, `src/workflow/v13_quotation.py` candidate
+query and callback, `src/workflow/v13_integration.py`
+settlement and combined-quotation loop,
+`src/workflow/v12_flow.py` row wait,
+`src/workflow/inso_query.py` bounded retries,
+`src/launcher/business_continuations.py` optional
+Owner/Actor tick path, and default
+`src/gui/main.py` entry. No CEO contact with live
+Windows GUI, Chrome/CDP, SQLite, SMTP, config or
+real sheets. Prior reported BUSINESS_RUNNING is
+a **historical latest Executor observation**, not a
+new independently measured live state.
+
+**Verdict `TP_QUEUE_ROOT_CAUSE_DESIGN_PASS`,
+`TP_CLOSED_CANDIDATE_SCOPED_PLAN_APPROVED` for
+the next isolated source/offline stage ONLY; overall
+`V16_REVIEW_REQUIRED`,
+`TP_TIMELINESS_OBSERVED_FAIL`.**
+- Runtime's `claim_due_module` chooses the
+  earliest eligible deadline only while
+  `_module_resource` is free. In current
+  GUI default composition, `market_actor_factory=None`,
+  and `_run_independent_poll` invokes a whole
+  synchronous module job. `CombinedCycle.run_quotation`
+  calls quotation across worksheets; existing
+  `V13QuotationCycle._run` loops candidates without
+  inter-candidate admission. This is an actual
+  long-duration Owner-busy scheduling barrier,
+  not evidence that the deadline clock spent
+  483 seconds computing.
+- Real prior log case96.792s =96.766s
+  active inquiry before SOURCE_CHANGED+0.026s
+  handoff. Case483.123s =483.049s
+  quotation occupancy+0.074s handoff.
+  No per-stage breakdown of INSO/FX/Google
+  within the quotation interval exists. Do
+  not recast either as solely Google lock
+  delay, the full120s wait or deadlocked timer.
+  The three embedded pure `WorkflowRuntime`
+  synthetic baselines reproduce source
+  admission under supplied time values and
+  earliest-due ordering, but do **not**
+  execute new remedy, domain transactions,
+  real CDP or business effects. They were
+  Executor-run; CEO inspected source and
+  captured script/result, not independently
+  rerun a Windows test suite.
+- Original inquiry `_wait_between_rows`
+  yields the Owner during a real monotonic120s
+  wait, with nested `_run_independent_job`.
+  This is an existing reuse model for a
+  candidate-safe release, **not permission**
+  to yield inside an active quotation effect.
+  Existing `google_operation_scope`/retained
+  native tabs, quotation operation scopes and
+  domain source leases must be explicitly
+  validated as settled at the new boundary.
+- Optional `business_continuations` and
+  bounded market actors exist, but normal
+  GUI does not compose them. Real async
+  market overlap is different from a
+  cooperative Owner yield. Worker capacity
+  of two or a50ms tick cannot ensure a
+  900s hard deadline while mandatory Owner
+  steps and same-row/site exclusions remain.
+
+**CEO chooses Option A as the next minimum
+change surface. Explicitly defer Option B
+factory wiring/Actor enablement.**
+Implementation may edit the original
+`src/workflow/v13_quotation.py`,
+`src/workflow/v13_integration.py` and
+`src/launcher/backend.py` plus the least
+necessary targeted test files and existing
+canonical report/Task/JSON. Existing
+public/manual callers remain default-off;
+normal quotation code routes must never
+borrow the Owner outside the v16 independent
+scheduled original business context.
+No second scheduler, new page/browser
+manager, new config flag, changed
+`WorkflowRuntime` due calculation,
+TP/Google/FX/SMTP policy or reimplemented
+domain adapter.
+
+**Nonnegotiable implementation gates:**
+1. A callback after a candidate is **not
+   automatically safe** merely because
+   `execute_candidate` returned. Prove
+   `on_result/settle_result`, any Google
+   write/readback, alert/persistent status,
+   protected INSO order tabs, page ownership
+   and pending transaction all reached
+   an authorized terminal; reject
+   UNKNOWN/ambiguous write, failed cleanup,
+   auth challenge or unsafe DOM. Do not
+   synthesize settlement from a Python
+   function returning or from an early
+   `begin` log.
+2. Reuse
+   `yield_module_resource("quotation")` /
+   `claim_due_module(exclude=("quotation","inquiry"))`
+   /original `_run_independent_job("tp")` /
+   `resume_module_resource("quotation")`
+   only on the original browser-owner
+   thread and with original Stop/poll gate,
+   page admission and nested
+   `_module_contexts` controls.
+   Check TP due and not already running,
+   and avoid recursive quotation/inquiry
+   dispatch or accidental manual entry.
+   Restore enclosing cycle identity,
+   module pause/error state, GUI stage,
+   discovery snapshot, and resource ownership.
+   On GLOBAL_STOP/uncertain cleanup do not
+   blindly resume or swallow the nested
+   fault; preserve original fail-closed
+   terminal semantics.
+3. Do not interpret module yield as
+   releasing a business source-row lease.
+   Preserve FIFO source order, fresh
+   pre-effect checks, `SENT/UNKNOWN`
+   idempotency, mail/outbox status, Stop
+   and original120s minimum. Do not
+   interleave two active effects for the
+   same source/order. If the existing
+   full-order lease cannot legally
+   coexist with yielding, **HOLD and
+   escalate** rather than weaken the
+   lock or transaction.
+4. Because original TP `run` is itself
+   a potentially long synchronous
+   module, direct TP admission can
+   delay the resumed quotation. Evidence
+   of benefit must include both TP
+   reduced queue wait and quotations
+   retaining bounded *observed*
+   progress, not a fabricated guaranteed
+   worst-case delay. A single
+   long candidate, INSO retries and
+   unconfirmed writing remain valid
+   blocking exceptions. A single safe
+   yield does **not** certify all V1.6
+   genuine two-market-Actor parallel
+   requirements.
+5. Add focused actual integration tests
+   (not just synthetic clock/runtime):
+   TP due mid-multi-candidate quotation,
+   inter-candidate closed state,
+   same-row lease hold/conflict, multiple
+   due modules, nested context/pause
+   restoration, in-flight write and
+   uncertain readback denial, stop,
+   resource-close fault, original120s
+   wait and no duplicate command/SENT.
+   Verify the first *real TP source/Brief
+   step* occurs earlier at the safe
+   admission point, not just its
+   `begin` timestamp. Include a
+   countercase where long single
+   candidate cannot be preempted and
+   explicitly label deadline NOT
+   GUARANTEED. Run affected quotation/
+   inquiry/TP/Google/Runtime regression
+   and full offline suite against exact
+   new application SHA and src/test
+   trees. Prefer 3-file minimum but
+   correctness outranks arbitrary
+   file-count limits.
+
+**Stop/go decision:** CEO authorizes an
+isolated code/test implementation of
+A; it is **not** approved for installation,
+factory injection, real Chrome/CDP probe,
+SMTP, sheet edits, production
+Stop/Start/restart, data migration,
+test purchase/TP send or altering
+protected config/ledger. If a correct
+safe point cannot be proved without
+weaker source leases or losing
+original browser ownership, return
+`OPTION_A_BLOCKED` with exact source
+counterexample and a constrained B
+proposal; do not force the A patch.
+If implemented, return exact source
+commit/tree/test reports and original
+unified report for CEO code audit
+prior to any separate Owner-controlled
+release. Production remains the
+existing BUSINESS_RUNNING installation
+so far as previously reported,
+`V16_REVIEW_REQUIRED`.
