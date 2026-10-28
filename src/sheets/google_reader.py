@@ -86,7 +86,16 @@ class GoogleSheetsRowReader:
         if self._discovery.get() is not None:
             self._discovery.set({})
 
+    @property
+    def live_read_revision(self):
+        value = getattr(self._service, "live_read_revision", None)
+        return value if type(value) is int else None
+
     def read_discovery_rows(self, worksheet):
+        # The shared transport owns TTL and invalidation across cycles/modules.
+        # Never let the legacy per-cycle snapshot outlive that verified cache.
+        if callable(getattr(self._service, "get_discovery", None)):
+            return self._read_rows(worksheet, discovery=True)
         cache = self._discovery.get()
         if cache is None:
             return self.read_rows(worksheet)
@@ -98,10 +107,15 @@ class GoogleSheetsRowReader:
         self,
         worksheet: WorksheetIdentity,
     ) -> tuple[WorksheetRow, ...]:
+        return self._read_rows(worksheet, discovery=False)
+
+    def _read_rows(self, worksheet, *, discovery):
         read_range = _a1_range(worksheet.worksheet, self._first_row)
         try:
+            resource = self._service.spreadsheets().values()
+            get = resource.get_discovery if discovery else resource.get
             response = execute_google_read(
-                lambda: self._service.spreadsheets().values().get(
+                lambda: get(
                     spreadsheetId=worksheet.spreadsheet,
                     range=read_range, majorDimension="ROWS",
                     valueRenderOption="UNFORMATTED_VALUE",

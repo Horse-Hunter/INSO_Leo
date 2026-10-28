@@ -260,7 +260,8 @@ class TpCycle:
 
     def read_orders(self, spreadsheet, *, manual_key=None):
         self._continuation_sources = {}
-        lines = self.brief.read(spreadsheet)
+        read_brief = self.brief.read if manual_key is not None else getattr(self.brief, "read_discovery", self.brief.read)
+        lines = read_brief(spreadsheet)
         # Normalize physical anchors before counting; "010" and "10" are identical.
         counts = Counter()
         for line in lines:
@@ -287,7 +288,9 @@ class TpCycle:
                     raise TpLocalError("TP_TASK_BUSY_OR_DELIVERY_UNCONFIRMED")
                 source = source_worksheet(spreadsheet, line)
                 if source not in snapshots:
-                    snapshots[source] = tuple(self.reader.read_rows(source))
+                    read = (self.reader.read_rows if manual_key is not None else
+                            getattr(self.reader, "read_discovery_rows", self.reader.read_rows))
+                    snapshots[source] = tuple(read(source))
                 order = bind_tp_order(line, spreadsheet, snapshots[source])
                 target = next(row for row in snapshots[source] if row.row_position == order.row)
                 self._continuation_sources[key] = order, identify_worksheet_row(source, target)

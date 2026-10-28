@@ -769,7 +769,9 @@ class ProductionBackend(GuiBackend):
                 raise RuntimeError("Research credential readiness requires manual handling")
             web_service = build_google_web_service(
                 rc.cdp.cdp_url, provider=lambda: self._google_playwright_provider(rc, cfg),
-                on_read_success=lambda: self._site_recovered("Google Sheets"))
+                on_read_success=lambda: self._site_recovered("Google Sheets"),
+                read_guard=self._page_admission.require_open,
+                stop_requested=self._immediate_stop_requested)
             reader = GoogleSheetsRowReader(web_service, retry_wait=self._stop.wait)
             worksheets = tuple(
                 WorksheetIdentity(cfg["spreadsheet_id"], title)
@@ -1662,9 +1664,11 @@ class ProductionBackend(GuiBackend):
         self._refresh()
 
     def _refresh_dashboard_counts(self, reader, worksheets, *, episodes, now):
+        live_before = getattr(reader, "live_read_revision", None)
         counts = read_dashboard_counts(reader, worksheets, store=self._store,
                                        episodes=episodes, now=now)
-        self._site_recovered("Google Sheets")
+        if live_before is None or reader.live_read_revision != live_before:
+            self._site_recovered("Google Sheets")
         with self._lock:
             self._dashboard_counts = counts
         self._notify()

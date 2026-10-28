@@ -82,8 +82,15 @@ class BriefReader:
     def __init__(self, service, *, retry_wait=lambda _seconds: False):
         self.service, self.retry_wait = service, retry_wait
 
+    def read_discovery(self, spreadsheet):
+        return self._read(spreadsheet, discovery=True)
+
     def read(self, spreadsheet):
-        response = execute_google_read(lambda: self.service.read_brief(spreadsheet),
+        return self._read(spreadsheet, discovery=False)
+
+    def _read(self, spreadsheet, *, discovery):
+        read = getattr(self.service, "read_brief_discovery", self.service.read_brief) if discovery else self.service.read_brief
+        response = execute_google_read(lambda: read(spreadsheet),
                                        retry_wait=self.retry_wait)
         rows = response.get("values", []) if isinstance(response, Mapping) else None
         if (not isinstance(rows, (list, tuple)) or not rows

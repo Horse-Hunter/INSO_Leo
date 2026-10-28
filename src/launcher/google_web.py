@@ -10,11 +10,13 @@ import io
 import logging
 import re
 import threading
+from collections import OrderedDict
 from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
+from time import monotonic
 from urllib.parse import parse_qs, urlsplit
 
 from src.research.cdp_pages import shared_playwright_factory
@@ -130,9 +132,14 @@ def _source_values(rows, title, first, start, last, end):
 
 class GoogleSheetsWebService:
     """One thread-safe transport injected into existing readers and writers."""
-    def __init__(self, session, *, actions_factory=GoogleQuotationUpdateActions, on_read_success=lambda: None):
+    def __init__(self, session, *, actions_factory=GoogleQuotationUpdateActions, on_read_success=lambda: None,
+                 timer=monotonic, read_guard=lambda: None, stop_requested=lambda: False):
         self._session, self._actions_factory = session, actions_factory
         self._on_read_success = on_read_success
+        self._timer, self._read_guard, self._stop_requested = timer, read_guard, stop_requested
+        # One bounded process-service cache; no pages, files or caller-mutable rows.
+        self._snapshots = OrderedDict()
+        self._live_read_revision = 0
         self._poll_handle = ContextVar("google_web_poll_handle", default=None)
 
     @contextmanager
@@ -178,6 +185,18 @@ class GoogleSheetsWebService:
             return result
         return _Request(read)
 
+    @property
+    def live_read_revision(self):
+        return self._live_read_revision
+
+    def get_discovery(self, **kwargs):
+        """Explicit ordinary discovery only; get() remains mandatory live I/O."""
+        return _Request(lambda: self._execute(kwargs, write=False, discovery=True))
+
+    def read_brief_discovery(self, spreadsheet):
+        return self._execute({"spreadsheetId": spreadsheet}, write=False,
+                             brief_read=True, discovery=True)
+
     def update(self, **kwargs):
         return _Request(lambda: self._execute(kwargs, write=True))
 
@@ -185,7 +204,85 @@ class GoogleSheetsWebService:
         """Dedicated exact-sheet read. No range/get/update whitelist is extended."""
         return self._execute({"spreadsheetId": spreadsheet}, write=False, brief_read=True)
 
-    def _execute(self, options, *, write, brief_read=False):
+    def _execute(self, options, *, write, brief_read=False, discovery=False):
+        # Reuse the canonical UI lock for hit/miss/write invalidation and single
+        # flight. No UI objects cross threads and no TTL sleep/timer is introduced.
+        with _GOOGLE_GRID_LOCK:
+            try:
+                self._read_guard()
+                if self._stop_requested():
+                    from src.workflow.v13_quotation import V13Stopped
+                    raise V13Stopped()
+                spreadsheet = options.get("spreadsheetId")
+                if not isinstance(spreadsheet, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", spreadsheet):
+                    raise ValueError("GOOGLE_SPREADSHEET_UNCONFIRMED")
+                geometry = (("RFQ_BRIEF", 1, 1, 17, None) if brief_read else
+                            _range(options["range"]) if "range" in options else None)
+                key = (spreadsheet, geometry[0]) if geometry else None
+                if write and key:
+                    self._snapshots.pop(key, None)  # Before ANY attempted effect.
+                if not discovery:
+                    # A mandatory live check must invalidate old discoveries even
+                    # when it fails. It never consumes or certifies cached data.
+                    if key:
+                        self._snapshots.pop(key, None)
+                    # Mandatory checks still perform native I/O. Their complete
+                    # verified download may seed ordinary discovery afterwards.
+                    seed = (not write and geometry is not None and
+                            geometry[0] in {"2026", "SHAHAB", "RFQ_BRIEF"} and (brief_read or geometry[3] <= 7))
+                    request = dict(options)
+                    if seed and not brief_read:
+                        request["range"] = f"'{geometry[0]}'!A1:G"
+                    result = self._execute_live(request, write=write, brief_read=brief_read)
+                    if not write:
+                        self._read_guard()
+                        if self._stop_requested():
+                            from src.workflow.v13_quotation import V13Stopped
+                            raise V13Stopped()
+                        self._live_read_revision += 1
+                    if seed:
+                        self._remember(key, result["values"])
+                        _, first, start, last, end = geometry
+                        return {"values": [list(row[first-1:last]) for row in result["values"][start-1:end]]}
+                    return result
+                if (write or geometry is None or geometry[0] not in {"2026", "SHAHAB", "RFQ_BRIEF"}
+                        or (not brief_read and geometry[3] > 7)):
+                    raise ValueError("GOOGLE_DISCOVERY_UNCONFIRMED")
+                entry = self._snapshots.get(key)
+                if entry is None or not 0 <= self._timer() - entry[0] < 60.0:
+                    self._snapshots.pop(key, None)
+                    request = dict(options)
+                    if not brief_read:
+                        request["range"] = f"'{geometry[0]}'!A1:G"
+                    result = self._execute_live(request, write=False, brief_read=brief_read)
+                    self._read_guard()
+                    if self._stop_requested():
+                        from src.workflow.v13_quotation import V13Stopped
+                        raise V13Stopped()
+                    # Native download and header/worksheet/gid validation have
+                    # completed; TTL starts now, never at navigation start.
+                    values = tuple(tuple(row) for row in result["values"])
+                    entry = self._remember(key, values)
+                    self._live_read_revision += 1
+                    self._on_read_success()  # Real acquisition ONLY, never a hit.
+                self._snapshots.move_to_end(key)
+                _, first, start, last, end = geometry
+                return {"values": [list(row[first-1:last]) for row in entry[1][start-1:end]]}
+            except BaseException:
+                # Includes Stop/cancellation, metadata/auth/Busy/schema failures.
+                # A session fault cannot be hidden behind another sheet's cache.
+                self._snapshots.clear()
+                raise
+
+    def _remember(self, key, rows):
+        entry = (self._timer(), tuple(tuple(row) for row in rows))
+        self._snapshots[key] = entry
+        self._snapshots.move_to_end(key)
+        if len(self._snapshots) > 6:
+            self._snapshots.popitem(last=False)
+        return entry
+
+    def _execute_live(self, options, *, write, brief_read=False):
         if brief_read and write:
             raise ValueError("GOOGLE_WRITE_UNCONFIRMED")
         spreadsheet = options.get("spreadsheetId")
@@ -408,7 +505,8 @@ class GoogleSheetsWebService:
 
 
 def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, browser_handle=None,
-                             on_read_success=lambda: None):
+                             on_read_success=lambda: None, read_guard=lambda: None,
+                             stop_requested=lambda: False):
     """Reuse the existing shared Playwright provider; attach only, never launch/login."""
     if cdp_url.rstrip("/") != "http://127.0.0.1:9222":
         raise ValueError("CANONICAL_CDP_REQUIRED")
@@ -428,4 +526,5 @@ def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, 
                 raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")
             yield BrowserHandle(owned=False, browser=browser)
 
-    return GoogleSheetsWebService(session, on_read_success=on_read_success)
+    return GoogleSheetsWebService(session, on_read_success=on_read_success,
+                                  read_guard=read_guard, stop_requested=stop_requested)

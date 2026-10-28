@@ -855,7 +855,7 @@ def test_many_query_only_candidates_share_one_export_per_sheet_stage(web):
         assert counts.awaiting_quotation == 24
         combined.run(reader, worksheets, now=NOW)
     assert len(results) == 24 and all(r.outcome.value == 'NO_RECENT_QUOTE' for r in results)
-    assert sum(len(p.downloads) for p in browser.contexts[0].pages[1:]) == 4
+    assert sum(len(p.downloads) for p in browser.contexts[0].pages[1:]) == 2  # shared60s snapshot survives stage boundary
 
 
 @pytest.mark.parametrize('title,position,model,qty,column', [
@@ -898,9 +898,12 @@ def test_quotation_discovery_sees_inquiry_changes_in_both_sheets(web):
     def inquiry(r, ws, **_):
         assert len(query_pending_records(r, ws, discovery=True)) == 1
         if ws.worksheet == '2026':
-            rows['2026'][1][0] = '发给采购'
+            target = "'2026'!A2"
         else:
-            rows['SHAHAB'][2][1] = '发给采购'
+            target = "'SHAHAB'!B3"
+        # Model the real canonical write, which invalidates the shared snapshot.
+        service.update(spreadsheetId='test', range=target, valueInputOption='RAW',
+                       body={'values': [['发给采购']]}).execute()
     quotations = []
     combined = CombinedCycle(SimpleNamespace(begin_poll_cycle=lambda: None, poll_and_process=inquiry),
         lambda ws: quotations.extend(query_quotation_candidates(reader, ws, discovery=True)),

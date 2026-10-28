@@ -1,5 +1,41 @@
 # Sheets 模块
 
+## V1.6 ordinary Google snapshot contract (2026-10-28, uninstalled / REVIEW_REQUIRED)
+
+The ONE existing `GoogleSheetsWebService` owns a memory-only LRU (max6 verified
+entries) keyed by exact `(spreadsheetId,title)` for2026/SHAHAB/RFQ_BRIEF. No
+cache for报价输入, browser objects, TSV files, credentials or ledger. Verified
+complete native acquisition starts monotonic TTL; age<60s reuses, age>=60s
+refreshes on demand under existing `_GOOGLE_GRID_LOCK` (single-flight). No timer,
+TTL sleep, new browser/client/worker. Return copies cannot mutate stored rows.
+Existing32MiB/100000-row export limits and strict native header/gid proof apply.
+
+`get_discovery` + `GoogleSheetsRowReader.read_discovery_rows` and
+`read_brief_discovery` + `BriefReader.read_discovery` are ordinary-only routes.
+Shared service TTL supersedes old per-cycle snapshots for this transport; other
+readers retain original behavior. `get`, `read_rows`, `read_brief`,
+`BriefReader.read`, TP `_revalidate`, original source/write gates and native
+prewrite/postwrite readback ALWAYS perform live I/O. A complete successful live
+source read may seed discovery with its verified result, but never consumes a
+snapshot. Manual TP selection stays fresh. Normal TP discovery uses cached
+Brief/source; canonical original target/source checks still run before enqueue.
+
+Any attempted write evicts its sheet BEFORE effects; no optimistic result is
+cached. After confirmed write, native readback remains sole authority and the
+ordinary cache remains invalid until a later complete read. Any read/schema/
+metadata/Busy/auth/ownership/Stop/cancellation failure clears all service
+snapshots; no stale fallback. Shared admission and original immediate-Stop guard
+run even on hits. Hits do not call live-success recovery; dashboard recovery
+uses a native-success revision, so reading cached counts cannot clear an outage.
+No changes to credentials, Busy checks, retries, mail/dedup policy, SENT/UNKNOWN,
+120s wait, source leases or two-market-actor limit.
+
+Count ordinary acquisitions separately from safety downloads: repeated ordinary
+queries within TTL need one download; a source write still needs its original
+prewrite and postwrite downloads, and source guards independently read live.
+This is NOT an absolute60s cap on safety reads and NOT a proven Google notice fix.
+No installation/production/browser validation is authorized by this task.
+
 ## V1.5 TP source contract (offline implementation, REVIEW_REQUIRED)
 
 Owner 2026-10-25 confirms 2026/SHAHAB source positions do not shift by insertion.
