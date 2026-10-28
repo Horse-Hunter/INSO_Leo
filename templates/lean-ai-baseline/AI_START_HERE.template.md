@@ -4,6 +4,10 @@ This project is RFQ-driven.
 
 **New window:** read `AGENTS.md`. Retire task-owned disposable artifacts per `docs/PROJECT_BASELINE.md`; apply `docs/REPORTING.md` seven headings in final chat and RFQ `FINAL_REPORT.md`.
 
+## Owner ban: Codex Computer Use
+
+From task start, the Executor must not invoke agent Computer Use or visual desktop screenshot/click/type UI automation. Prefer approved CLI/PowerShell/Python, operating-system APIs, Git, tests and purpose-built connectors; existing application runtime browser automation remains subject to its own normal safety contract and is not this banned agent capability. If no safe programmatic path exists, mark the specific action `BLOCKED / NOT_VERIFIED` and leave it undone, without creating a GUI-control workaround. The final report confirms `COMPUTER_USE_NOT_USED`. This ban persists through approved releases unless Owner explicitly reverses it; see `AGENTS.md` for owner, full workflow, evidence, cleanup and CEO enforcement.
+
 ## 执行 RFQ-XXX
 
 Owner may open any implementation agent (Codex / Claude / WorkBuddy or equivalent) and say only `执行 RFQ-XXX`.
