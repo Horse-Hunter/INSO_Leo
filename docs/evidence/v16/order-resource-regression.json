@@ -177,5 +177,102 @@
       "tests/workflow/test_business_continuation.py"
     ],
     "overall": "REVIEW_REQUIRED; Owner forwards combined report; no direct CEO messaging"
+  },
+  "e4_original_cycle_hooks_remediation": {
+    "review_base": "85b24f09f1a912345d78a640dbc666d0cc0d28d1",
+    "application_commit": "bfa835b7eda1c71ddf4f4d7f383f2f4d2b7a2234",
+    "src_tree": "d5024ea81060ef4285d8bf7d7453a2a305f1b71d",
+    "scope": "E4_OWNER_POLL_PARITY_CHANGES_REQUESTED only; direct login SOURCE_PASS closed",
+    "application_files": [
+      "src/launcher/business_continuations.py"
+    ],
+    "test_files": [
+      "tests/launcher/test_business_continuation_loop.py"
+    ],
+    "source_delta": {
+      "insertions": 7,
+      "deletions": 0
+    },
+    "reused_backend_methods": [
+      "_check_site_recovery",
+      "_refresh_dashboard_counts",
+      "_begin_poll_projection"
+    ],
+    "cadence": "original-owner cycle generator entry inside existing context/scope before claims; counts inquiry+quotation, projection inquiry; no per-tick read",
+    "integration_cases_added": [
+      "cycle_parity",
+      "recovery_verified",
+      "recovery_unverified"
+    ],
+    "assertions": [
+      "canonical three dashboard counts (1,1,1) to (0,0,0)",
+      "projection clears complete previous round including real callback IDs",
+      "helper calls equal corresponding module cycles not ticks",
+      "no repeated purchase/quotation update/TP command",
+      "original owner thread, no open protected operation",
+      "manual INSO gate rejects unverified and resumes V12 only on original verified result; outage not falsely cleared"
+    ],
+    "focused": {
+      "passed": 173,
+      "seconds": 20.81,
+      "paths": [
+        "tests/launcher/test_business_continuation_loop.py",
+        "tests/launcher/test_site_outage_recovery.py",
+        "tests/workflow/test_dashboard_counts.py",
+        "tests/launcher/test_continuation_safety_ui.py",
+        "tests/launcher/test_v16_nested_context.py",
+        "tests/launcher/test_market_actors.py",
+        "tests/workflow/test_business_continuation.py",
+        "tests/launcher/test_market_owner_recovery.py"
+      ]
+    },
+    "full": {
+      "command": "python -m pytest -q -rs --tb=short --basetemp=<owned isolated directory>",
+      "passed": 3004,
+      "skipped": 1,
+      "failed": 0,
+      "seconds": 128.29,
+      "skip_reason": "tests/workflow/test_v12_evidence_and_safety.py:56: symlink creation not available in this test environment",
+      "source_frozen_through_full_run": true
+    },
+    "checks": {
+      "scoped_ruff": "PASS",
+      "git_diff_check": "PASS"
+    },
+    "initial_test_finding": "new projection assertion omitted actual domain callback IDs; changed assertion to whole observed prior projection, no application weakening or legacy test removal",
+    "production_access": false,
+    "browser_access": false,
+    "real_smtp_or_business_writes": false,
+    "actor_assembly_default": "OFF; production TP configuration not accessed",
+    "unchanged": [
+      "WorkflowRuntime/source transaction leases",
+      "two market actor limit",
+      "SITE_AUTH_RECOVERY_REASONS",
+      "Stop protocol",
+      "Public Contract",
+      "120-second wait",
+      "durable SENT/UNKNOWN and external write gates"
+    ],
+    "cleanup": {
+      "completed_owned_scratch_dirs_retired": 4,
+      "absolute_boundary_and_reparse_checks": "PASS",
+      "protected_dirs_touched": false
+    },
+    "new_google_notice_report": {
+      "status": "UNKNOWN cause / NOT_FIXED in production",
+      "fresh_production_evidence_collected": false,
+      "production_version_reference": "archived04075bc, not freshly checked",
+      "diagnostic_source": "0d77be23 uninstalled per archived delivery",
+      "mail_policy_changed": false,
+      "minimum_proposal": "separately authorized sanitized diagnostic installation/window, cause-specific repair then review transient wording/incident dedup; retain real safety/UNKNOWN notices"
+    },
+    "remaining": [
+      "real parsed web overlap",
+      "actual TP lateness454.210s",
+      "long-term stability",
+      "system DPI/game impact",
+      "production installation"
+    ],
+    "overall": "REVIEW_REQUIRED; report to Owner for CEO handoff, no direct CEO messaging"
   }
 }

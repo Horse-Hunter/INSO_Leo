@@ -2756,3 +2756,61 @@ delivery evidence, GUI100%/150%DPI, long-term RSS/handles and
 Chrome/game impact still need separate authorized Stage F/soak
 acceptance. A synthetic test or submitted pass count cannot close
 these gates.
+
+
+## Executor E4 owner poll parity remediation — 2026-10-28 / Owner handoff only
+
+Based on formal remote review85b24f09f1a912345d78a640dbc666d0cc0d28d1,
+fast-forwarded without overwriting source. Native login SOURCE_PASS remains
+closed; no auth set/Stop/Public Contract redesign. E4 pending CEO re-review.
+
+Source `bfa835b7eda1c71ddf4f4d7f383f2f4d2b7a2234`; src tree `d5024ea81060ef4285d8bf7d7453a2a305f1b71d`.
+Only7 source lines restore original Backend `_check_site_recovery(rc,cfg)`,
+`_refresh_dashboard_counts` for inquiry/quotation, and `_begin_poll_projection`
+for inquiry. These run once when the original-owner cycle generator starts,
+inside existing context/scope before domain claims, never per50ms tick.
+No second stats/recovery mechanism, no new worker/timer, no production changes.
+
+Tests: same actual Backend/Runtime/three domain ports, synthetic clients and
+isolated SQLite/outbox. Existing13 cases retained, new3 cases cover two-plus
+cycles with canonical get_status counts(1,1,1)→(0,0,0), exact per-cycle call
+counts, stale projection clearing, no repeated business writes/TP command,
+verified/unverified original manual-INso recovery and V12 resume/outage safety.
+Actual owner-thread and no-open-protected-operation assertions retained.
+First new projection assertion omitted IDs produced by real completion callback;
+corrected to compare its whole observed set, without removing original cases.
+
+173PASS20.81s focused across loop, site outage recovery, dashboard, safety/UI,
+nested context, actors, business leases and owner recovery. Exact source full:
+3004PASS/1SKIP128.29s. Skip tests/workflow/test_v12_evidence_and_safety.py:56,
+symlink creation unavailable; no permission change. Scoped Ruff/diffPASS.
+Four completed owned test scratch dirs retired after boundary/reparse checks.
+Only report/task/JSON follow-up changes after tested source; same src hash.
+
+| Requirement | Executor evidence status |
+| --- | --- |
+| E4 original dashboard refresh | PASS offline; canonical counts update, no per-tick reads |
+| E4 inquiry cycle projection reset | PASS offline; prior round fully clears |
+| E4 original safe site recovery | PASS offline; original verification gate preserved |
+| Prior source leases/two Actor cap/auth/120s/Stop/idempotency | PASS affected/full offline; mechanisms unchanged |
+| Final source full suite | PASS offline3004/1SKIP128.29s |
+| Google newly reported notices | NOT_VERIFIED / UNKNOWN cause; NOT_FIXED in production |
+| Real overlap/TP454.210s lateness/long-term stability | NOT_VERIFIED / OPEN; no synthetic closure |
+| Installation / production / live browser | DEFERRED; not authorized/executed this round |
+
+Owner again reports Google unavailable mails hours earlier. No new live logs,
+receipt, process hash or browser accessed, therefore not proof of a false alarm
+or fresh duplicate command. Existing archived evidence shows busy protection
+before TSV download and per-cycle notification dedup; successive failed cycles
+can each notify. Manual opening does not satisfy automation ownership/settlement.
+Archived production baseline04075bc and uninstalled diagnostic0d77be23 are NOT
+a fresh live-version check. This E4 patch does NOT fix the current notifications;
+no mute/guard/retry change made. Minimum proposed follow-up: separately authorized
+installation/diagnostic window for reviewed sanitized branch labels, then narrow
+cause repair and review of transient-read wording/incident dedup. Preserve
+serious safety/UNKNOWN/manual notifications; no speculative suppression.
+
+Overall REVIEW_REQUIRED. New optional assembly still default OFF, not a claim
+that existing production TP is OFF. Production/runtime/config/Vault/Chrome/
+SENT/UNKNOWN/old soak untouched. Owner forwards updated V16_RELEASE_REPORT.md;
+Executor must not send to CEO. No new Owner action or production stop requested.
