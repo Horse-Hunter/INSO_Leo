@@ -3479,3 +3479,131 @@ Installed app remains bb04d92; last Owner confirmation safely stopped with GUI
 retained. Full actual release/rollback history above remains valid and separate.
 REVIEW_REQUIRED; Owner forwards original unified report and JSON, no direct CEO
 message or whole-V1.6 PASS. No immediate Owner operation required while reviewed.
+
+## CEO independent source Review — four retained Google sheet surfaces (2026-10-28)
+
+**Independently read from remote:** `codex/v1-6-independent-scheduling`
+HEAD `943e155d63efc0dcfe54ca57dabfe9209f5a8fa7`,
+docs-only child of test-alignment commit
+`8b18b47cee22be95517b160a23b51db82504623a`.
+Application commit
+`c24d686096b1f6b5157ac1e443167be5662f6b54`,
+exact Git `src/` tree
+`81ab97bbbff5f220e70ae2ad73f8c5ff4e497f8f`.
+Source files changed only
+`src/launcher/google_quote_update.py` and
+`src/launcher/google_web.py`. Inspected both complete
+changed sources, actual original
+`src/research/cdp_pages.py` native page proof/owner
+boundary, changed Google transport/pool tests, release report,
+canonical task and original JSON. Executor reports final
+3054 PASS/1 SKIP/123.76s (unsupported symlink environment),
+371 scoped PASS, Ruff and diff checks PASS. **Tests were
+executed by Executor, not independently rerun by CEO on Windows.**
+
+**Scoped decision: `FOUR_GOOGLE_RETAINED_SURFACES_SOURCE_PASS`.**
+- Production `build_google_web_service` explicitly opts in
+  `retain_pages=True`. Existing
+  `GoogleSheetsWebService` keeps a single process-local
+  registry of native target IDs and boolean
+  protected/reopenable state, keyed by exact
+  document scheme/host/path plus sheet title. Four title
+  keys `2026`, `SHAHAB`, `RFQ_BRIEF`,
+  `报价输入` have independent slots; no global count>=3
+  denial remains. There is no new browser context/profile,
+  periodic page refresh, scheduler or new credential path.
+- The outer `google_operation_scope` borrows current-client
+  Page objects only inside its scope, writes back native
+  identity/flags under the unchanged global Google lock,
+  and keeps settled pages open between polls.
+  `poll_scope` reuses an existing Owner-nested scope/client.
+  Reattachment uses exact native
+  `Target.getTargetInfo.targetId` from the current
+  Playwright attachment, never automatically adopts
+  unrelated/manual/prior-process pages, and rechecks
+  original document, auth, window-name owner and
+  `_UNSAFE_POLL_PAGE` before reuse.
+- A missing exact known settled target is recreated
+  on next **native demand**, not by an in-window
+  cached read. An absent protected
+  uncertain-write target returns the original
+  settlement fail-closed fault and does not replay
+  a write. Existing read-failed retirement still requires
+  a verified safe surface. Mandatory live source,
+  write precheck/readback, 60s ordinary
+  2026/SHAHAB/Brief snapshots, Stop and source-order
+  guards remain in place. No claim that ordinary
+  TTL reads are an absolute all-download rate cap.
+- New native synthetic tests cover four title slots,
+  repeated polls, nested module/same-page reuse,
+  original global lock serial admission, exact-owner
+  isolation, settled accidental-close demand reopen,
+  missing uncertain-write fail-closed, protected/auth/
+  document/ownership/unsafe prohibition, failed-read
+  recovery and Stop. The one prior
+  `test_no_fourth_program_google_tab_even_with_prior_orphans`
+  expectation was deliberately replaced with evidence
+  that old orphan pages are not adopted, while four
+  current-process slots may coexist. No test result
+  equates to a real CDP/browser deployment.
+
+**Open deployment/runtime observations, not source PASS:**
+1. The installed prior frozen V1.6 application
+   `bb04d92f08a0ceca2075a2c17b153f2921803765`
+   actually entered Google health HOLD after a documented
+   `google-busy-page-budget` branch; this newer
+   `c24d686...` repair is **not installed**.
+   Actual native four-tab usage and elimination of that
+   branch in the installed package have not been verified.
+   Its original live fault receipts and one pending
+   runtime-fault notification remain durable: never
+   clear, reset, replay or rename them to create a
+   clean release result.
+2. Old-process owned pages are intentionally *not*
+   automatically adopted or closed by a new process.
+   Multiple process restarts with an unchanged protected
+   Chrome profile therefore **can accumulate orphan
+   Google tabs** even though the current-process registry
+   itself is bounded to the four titles. This is a
+   true resource/lifecycle acceptance risk, not proof
+   of a current source safety breach; distinguish
+   protected/manual/unfinished prior pages before any
+   cleanup. Do not invent a global tab kill, close
+   human pages or increase a tab cap as a workaround.
+3. Exact native target-id reattachment and window.name
+   identity across multiple live CDP reconnects,
+   actual source UI availability/Google Busy,
+   RSS/handles/Chrome background impact and real
+   TP due-to-start time (historic454.210s lateness)
+   are **NOT VERIFIED**. Two optional market-read
+   Actors remain default uncomposed in ordinary
+   production Backend, so real parallel market reads
+   are not established by this change.
+
+**Disposition:** accept this specified four-sheet
+source contract as `SOURCE_PASS`; overall
+`V16_REVIEW_REQUIRED`. This source review does **not**
+extend the earlier Owner V1.6 release approval to
+an untested replacement `c24d686...`, or
+authorize using the known unhealthy prior release
+as an uncontrolled browser experiment.
+The latest Owner task expressly says *isolated source
+and offline regression only, no installation/restart/
+resumption*. Further installation or live four-page
+acceptance requires a separately defined Owner
+authorization plus normal/verified quiescence,
+original build/hash/backup/rollback, limited
+read-only live verification and post-install
+readiness and resource evidence. Do not open
+live arbitrary tabs, click Google writes,
+force-terminate Chrome, or discard protected pages.
+
+**Scope / process:** CEO appended Review to the same
+canonical V1.6 task document only. No application,
+test, evidence/report, installed program,
+production browser/config/Vault/SQLite/SMTP,
+credential or durable business state was modified
+in the CEO source review. Prior native login,
+E4 module parity and ordinary 60s cache scoped
+source passes stay closed; no re-implementation
+requested without contrary real evidence.
