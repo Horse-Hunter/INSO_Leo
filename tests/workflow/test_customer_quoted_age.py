@@ -83,7 +83,7 @@ def brief(day='2026-09-30', **changes):
 def test_unique_cached_brief_precedes_intake_and_does_not_require_target_price():
     ws=replace(WS,worksheet='2026');i=item(2)
     candidate=V13Candidate(i.inquiry_id,replace(i.record_identity,worksheet=ws),'MPN',2,'已报价给客户')
-    value,kind=quotation_age_date(candidate,[source(2,'已报价给客户')],[brief()],lambda:pytest.fail('fallback'))
+    value,kind=quotation_age_date(candidate,source(2,'已报价给客户'),[brief()],lambda:pytest.fail('fallback'))
     assert value == date(2026,9,30) and kind == 'RFQ_DATE_PROXY'
 
 
@@ -92,14 +92,14 @@ def test_unique_cached_brief_precedes_intake_and_does_not_require_target_price()
 def test_ambiguous_or_conflicting_brief_never_selects_an_arbitrary_date(lines):
     i=item(2);ws=replace(WS,worksheet='2026')
     candidate=V13Candidate(i.inquiry_id,replace(i.record_identity,worksheet=ws),'MPN',2,'已报价给客户')
-    assert quotation_age_date(candidate,[source(2,'已报价给客户')],lines,lambda:NOW) == (NOW,'LOCAL_INTAKE_PROXY')
+    assert quotation_age_date(candidate,source(2,'已报价给客户'),lines,lambda:NOW) == (NOW,'LOCAL_INTAKE_PROXY')
 
 
 @pytest.mark.parametrize('day', ['invalid','2026-10-08'])
 def test_bad_selected_brief_date_is_unverified_not_recent_fallback(day):
     i=item(2);ws=replace(WS,worksheet='2026')
     candidate=V13Candidate(i.inquiry_id,replace(i.record_identity,worksheet=ws),'MPN',2,'已报价给客户')
-    value,_=quotation_age_date(candidate,[source(2,'已报价给客户')],[brief(day)],lambda:NOW)
+    value,_=quotation_age_date(candidate,source(2,'已报价给客户'),[brief(day)],lambda:NOW)
     assert age_reason(value,NOW) == 'QUOTE_AGE_UNVERIFIED'
 
 
@@ -202,3 +202,33 @@ def test_cache_peek_preserves_shared_safety_admission():
     svc=GoogleSheetsWebService(lambda:pytest.fail('session'),read_guard=guard)
     with pytest.raises(V12Fault) as exc:BriefReader(svc).cached_lines('fake')
     assert exc.value.reason=='CDP_PAGE_OWNERSHIP_UNCONFIRMED'
+
+
+@pytest.mark.parametrize('include_current', [False,True])
+def test_relocated_record_never_takes_date_of_occupant_at_old_position(include_current):
+    service,ops,quotes,_=cycle([],sources=[source(2,'已报价给客户')])
+    ws=replace(WS,worksheet='2026')
+    service._store.items[0].record_identity=replace(service._store.items[0].record_identity,worksheet=ws)
+    calls=[0]
+    def read(_):
+        calls[0]+=1
+        return ([source(2,'已报价给客户')] if calls[0]==1 else
+                [source(2,'已报价给客户',model='OTHER'),source(3,'已报价给客户')])
+    service._reader.read_rows=read
+    service._store.inquiry_intake_at=lambda _:NOW-timedelta(days=8)
+    lines=[brief('2026-10-06',mpn='OTHER')]
+    if include_current:lines.append(brief('2026-09-29',sheet_row='3'))
+    service._brief_snapshot=lambda _:lines
+    result,=service.run(ws)
+    assert result.outcome is QuotationOutcome.QUOTE_AGE_EXPIRED
+    assert service.quote_age_date_source==('RFQ_DATE_PROXY' if include_current else 'LOCAL_INTAKE_PROXY')
+    assert not ops.events and not quotes.calls
+
+
+@pytest.mark.parametrize('bound', [False,True])
+def test_unbound_or_ambiguous_customer_identity_has_only_sanitized_counter(bound):
+    service,ops,quotes,_=cycle([],sources=[source(2,'已报价给客户')],
+                               items=[item(2),item(2)] if bound else [])
+    assert service.run(WS)==()
+    assert service.quote_age_skips=={'QUOTE_AGE_EXPIRED':0,'QUOTE_AGE_UNVERIFIED':1}
+    assert not ops.events and not quotes.calls

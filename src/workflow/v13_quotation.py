@@ -143,7 +143,7 @@ def _source_bindings(items, worksheet, source_rows):
 
 def read_v13_candidates(
     reader: WorksheetRowReader, worksheet: WorksheetIdentity, store: ExistingInquiryStore,
-    *, discovery=False,
+    *, discovery=False, on_unverified_customer=lambda: None,
 ) -> tuple[V13Candidate | V13QuotationResult, ...]:
     """Ordered candidate-or-row-error; later bad rows cannot abort the batch."""
     source_rows = _read_source_rows(reader, worksheet, discovery=discovery)
@@ -172,6 +172,8 @@ def read_v13_candidates(
         # Historical/unbound quoted rows must not create IDs or a mailbox flood.
         # Initial sent-to-procurement rows retain their reviewed failure handling.
         if record.status != "发给采购" and item is None:
+            if record.status == "已报价给客户":
+                on_unverified_customer()  # No ID, hold, notification or INSO query.
             continue
         if reason is not None:
             result.append(V13QuotationResult(
@@ -220,7 +222,11 @@ class V13QuotationCycle:
             raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE") from None
 
     def read_candidates(self, worksheet):
-        return read_v13_candidates(self._reader, worksheet, self._store, discovery=True)
+        def unverified():
+            if self._automatic_refresh:
+                self.quote_age_skips["QUOTE_AGE_UNVERIFIED"] += 1
+        return read_v13_candidates(self._reader, worksheet, self._store, discovery=True,
+                                   on_unverified_customer=unverified)
 
     def _run(self, worksheet, *, skip, on_result, after_closed_candidate=None):
         results = []
@@ -293,7 +299,7 @@ class V13QuotationCycle:
                     except Exception as exc:
                         raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from exc
                 value, self.quote_age_date_source = quotation_age_date(
-                    candidate, fresh_rows, self._brief_snapshot(worksheet), intake)
+                    candidate, row, self._brief_snapshot(worksheet), intake)
                 if self._stop():
                     raise V13Stopped("STOP_REQUESTED")
                 reason = age_reason(value, self._clock())

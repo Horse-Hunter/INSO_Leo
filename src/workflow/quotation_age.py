@@ -25,7 +25,7 @@ def age_reason(value, now):
     return None if eligible else "QUOTE_AGE_EXPIRED"
 
 
-def quotation_age_date(candidate, rows, brief_lines, intake_at):
+def quotation_age_date(candidate, current_row, brief_lines, intake_at):
     """Only a unique canonical source binding can use a cached Brief inquiry day.
 
     No exact customer-send timestamp exists in the current event schema.
@@ -33,10 +33,10 @@ def quotation_age_date(candidate, rows, brief_lines, intake_at):
     """
     matches = [line for line in brief_lines
                if line.get("sheet") == candidate.record_identity.worksheet.worksheet
-               and line.get("sheet_row") == str(candidate.source_row_position)]
+               and line.get("sheet_row") == str(current_row.row_position)]
     if len(matches) == 1:
         try:
-            bind_brief_source(matches[0], rows)
+            bind_brief_source(matches[0], (current_row,))
         except ValueError:
             pass  # Not a verified Brief identity: only the exact local ID may fall back.
         else:
