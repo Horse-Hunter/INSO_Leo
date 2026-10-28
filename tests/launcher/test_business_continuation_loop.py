@@ -45,7 +45,7 @@ from tests.workflow.test_v12_flow import (
 from tests.workflow.test_v13_quotation import Operations, Quotes, failure
 
 
-@pytest.mark.parametrize('mode', ['complete', 'stop', 'initialization_fault', 'teardown_fault', 'quotation_retry', 'tp_header_fault', 'tp_source_changed', 'inflight_fault', 'inquiry_wait', 'purchase_unknown', 'brand_cleanup_fault', 'mail_guard_fault', 'status_write_pending'])
+@pytest.mark.parametrize('mode', ['complete', 'stop', 'initialization_fault', 'teardown_fault', 'quotation_retry', 'tp_header_fault', 'tp_source_changed', 'inflight_fault', 'inquiry_wait', 'purchase_unknown', 'brand_cleanup_fault', 'mail_guard_fault', 'status_write_pending', 'cycle_parity', 'recovery_verified', 'recovery_unverified'])
 def test_actual_three_domain_backend_assembly_without_whole_research_wait(tmp_path, monkeypatch, mode):
     flow, store, ledger, _, _, _, writer, notification_worker = _make_flow(tmp_path,
         facts=ResearchBusinessFacts('货少', Decimal(14), Decimal(2)))
@@ -159,6 +159,44 @@ def test_actual_three_domain_backend_assembly_without_whole_research_wait(tmp_pa
         owner_prepared.append((backend._active_inso_inquiry, backend._cycle_id))
     backend._ensure_research_ready = prepare_owner
     backend._notify = lambda: None
+    parity = mode == 'cycle_parity'
+    reset_states, count_states, recovery_checks = [], [], []
+    owner_thread = threading.get_ident()
+    original_reset = backend._begin_poll_projection
+    original_counts = backend._refresh_dashboard_counts
+    original_recovery = backend._check_site_recovery
+    def reset_projection():
+        assert threading.get_ident() == owner_thread and operations.active is None
+        before = (set(backend._poll_inquiries), set(backend._poll_quotation_completed))
+        original_reset()
+        assert not backend._poll_inquiries and not backend._poll_quotation_completed
+        reset_states.append(before)
+    def counts(*args, **kwargs):
+        assert threading.get_ident() == owner_thread and operations.active is None
+        original_counts(*args, **kwargs)
+        status = backend.get_status()
+        count_states.append((backend._module_contexts[-1], status.new_orders,
+                             status.awaiting_quotation, status.overdue_quotation))
+    def recovery(*args):
+        assert threading.get_ident() == owner_thread and operations.active is None
+        recovery_checks.append(backend._module_contexts[-1])
+        original_recovery(*args)
+    backend._begin_poll_projection = reset_projection
+    backend._refresh_dashboard_counts = counts
+    backend._check_site_recovery = recovery
+    if parity:
+        backend._poll_inquiries.add('stale-previous-cycle')
+        backend._poll_quotation_completed.add('stale-previous-cycle')
+    if mode.startswith('recovery_'):
+        backend._site_manual_wait.add('INSO')
+        backend._site_outages.update({'INSO': 0, 'IC.net': 0})
+        backend._combined = SimpleNamespace(v12_paused=True)
+        backend._state = RunState.QUOTATION_RUNNING
+        def verified(browser):
+            assert threading.get_ident() == owner_thread
+            assert not writer.commands and not updates and not tp_prepared
+            return mode == 'recovery_verified'
+        monkeypatch.setattr('src.launcher.inso_session.authenticated_inso_shell_available', verified)
     backend._cache_workbench = lambda **kw: None
     backend._v13_ledger_ready = False
     if mode == 'brand_cleanup_fault':
@@ -207,20 +245,50 @@ def test_actual_three_domain_backend_assembly_without_whole_research_wait(tmp_pa
         runtime._module_due['tp'] = 150
     backend._observation.timer = lambda: clock.tick
     backend._observation.clock = lambda: NOW + timedelta(seconds=clock.tick)
+    episodes = None
+    if parity:
+        from src.workflow.v13_follow_up_store import V13PurchaseFollowUpStore
+        episodes = V13PurchaseFollowUpStore(tmp_path / 'workflow.sqlite3')
+        episodes.migrate()
+        episodes.record_confirmed(store.inquiry_id_for(original.record_identity),
+                                  confirmed_at=NOW - timedelta(days=10))
     cycles = []
     backend._log_module_cycle = lambda module, phase, seconds: cycles.append(
         (module, phase, backend._cycle_id, clock.tick))
+    waits, first_projection = [], []
     def end_wait(seconds):
+        waits.append(seconds)
+        if parity and len(waits) < 4:
+            if len(waits) == 1:
+                assert count_states[:2] == [('inquiry', 1, 1, 1), ('quotation', 1, 1, 1)]
+                # Normal projection API records this round; next inquiry must
+                # clear it, not accumulate it with the prior round.
+                backend._seen('completed-first-cycle')
+                backend._poll_quotation_completed.add('completed-first-cycle')
+                first_projection.append((set(backend._poll_inquiries), set(backend._poll_quotation_completed)))
+                reader.rows = [replace(r, cells={**r.cells, 'A': '成交'}) for r in reader.rows]
+            clock.tick += seconds
+            return False
         backend._stop.set()
         return True
     backend._wait_between_polls = end_wait
     monkeypatch.setattr(launcher, 'utc_now', lambda: NOW + timedelta(seconds=clock.tick))
     monkeypatch.setattr(launcher, 'monotonic', lambda: clock.tick)
     monkeypatch.setattr('src.launcher.business_continuations.monotonic', lambda: clock.tick)
+    if mode == 'recovery_unverified':
+        with pytest.raises(launcher.InsoAuthenticationError, match='MANUAL_VERIFICATION_REQUIRED'):
+            backend._run_independent_poll(runtime, {'spreadsheet_id': SHEET.spreadsheet}, None,
+                SimpleNamespace(poll_scope=nullcontext), reader, (SHEET,), episodes)
+        assert 'INSO' in backend._site_manual_wait and 'INSO' in backend._site_outages
+        assert backend._combined.v12_paused
+        assert not writer.commands and not updates and not tp_store.rows() and not count_states
+        assert recovery_checks == ['inquiry']
+        assert runtime.business_resource_counts()['active'] == 0
+        return
     if mode in {'initialization_fault', 'teardown_fault', 'inflight_fault', 'purchase_unknown', 'brand_cleanup_fault', 'mail_guard_fault', 'status_write_pending'}:
         with pytest.raises((OrderResourceOwnershipError, RuntimeError)):
             backend._run_independent_poll(runtime, {'spreadsheet_id': SHEET.spreadsheet}, None,
-                SimpleNamespace(poll_scope=nullcontext), reader, (SHEET,), None)
+                SimpleNamespace(poll_scope=nullcontext), reader, (SHEET,), episodes)
         assert backend._state is RunState.GLOBAL_STOP
         assert runtime.module_resource_failed
         if mode in {'purchase_unknown', 'brand_cleanup_fault', 'status_write_pending'}:
@@ -236,9 +304,32 @@ def test_actual_three_domain_backend_assembly_without_whole_research_wait(tmp_pa
         return
     else:
         backend._run_independent_poll(runtime, {'spreadsheet_id': SHEET.spreadsheet}, None,
-            SimpleNamespace(poll_scope=nullcontext), reader, (SHEET,), None)
+            SimpleNamespace(poll_scope=nullcontext), reader, (SHEET,), episodes)
+    if parity:
+        # Repeated due waits may finish modules at different instants. Verify
+        # per-cycle hooks, not per-tick counts or a second statistics system.
+        starts = [m for m, phase, _, _ in cycles if phase == 'begin']
+        assert starts.count('inquiry') >= 2
+        assert len(reset_states) == starts.count('inquiry')
+        assert reset_states[0] == ({'stale-previous-cycle'}, {'stale-previous-cycle'})
+        assert reset_states[1] == first_projection[0]
+        assert 'stale-previous-cycle' not in reset_states[1][0]
+        assert len(count_states) == starts.count('inquiry') + starts.count('quotation')
+        assert sorted(recovery_checks) == sorted(starts)
+        assert all(state[1:] == (0, 0, 0) for state in count_states[2:])
+        status = backend.get_status()
+        assert (status.new_orders, status.awaiting_quotation, status.overdue_quotation) == (0, 0, 0)
+        assert not backend._poll_inquiries and not backend._poll_quotation_completed
+        assert len(writer.commands) == len(updates) == len(tp_store.rows()) == 1
+        assert backend._market_actors is None and runtime.business_resource_counts()['active'] == 0
+        return
     assert len({cycle for _, phase, cycle, _ in cycles if phase == 'begin'}) == 3
-    if mode in {'complete', 'quotation_retry', 'tp_header_fault', 'tp_source_changed', 'inquiry_wait'}:
+    if mode == 'recovery_verified':
+        assert recovery_checks == ['inquiry', 'quotation', 'tp']
+        assert 'INSO' not in backend._site_manual_wait
+        assert 'INSO' in backend._site_outages  # Only business proof clears outage.
+        assert not backend._combined.v12_paused and backend._state is RunState.RUNNING
+    if mode in {'complete', 'quotation_retry', 'tp_header_fault', 'tp_source_changed', 'inquiry_wait', 'recovery_verified'}:
         assert {module for module, phase, _, _ in cycles if phase == 'completed'} == {'inquiry', 'quotation', 'tp'}
         assert writer.commands and updates
         assert owner_prepared and all(key and cycle for key, cycle in owner_prepared)

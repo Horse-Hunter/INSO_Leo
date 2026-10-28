@@ -83,6 +83,13 @@ def run_business_continuations(backend, runtime, cfg, rc, web, reader, worksheet
              backend._module_pause_requested) = parent
 
     def orders(module):
+        # Once per original-owner module cycle, inside context()/scope(), before
+        # any domain claim. Never repeat Sheets reads in the 50ms dispatch tick.
+        backend._check_site_recovery(rc, cfg)
+        if module in {'inquiry', 'quotation'}:
+            backend._refresh_dashboard_counts(reader, worksheets, episodes=episodes, now=utc_now())
+        if module == 'inquiry':
+            backend._begin_poll_projection()
         waiting = actors.deferred_auth_sources
         if waiting and actors.quiescent:
             backend._close_inso_order_tab()
