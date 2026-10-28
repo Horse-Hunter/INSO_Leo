@@ -274,5 +274,154 @@
       "production installation"
     ],
     "overall": "REVIEW_REQUIRED; report to Owner for CEO handoff, no direct CEO messaging"
+  },
+  "google_sheet_ttl_cache": {
+    "review_base": "161e5113f5c299739afc4f6443ed656b160a34f0",
+    "status": "GOOGLE_SHEET_TTL_CACHE_REVIEW_REQUIRED / V16_REVIEW_REQUIRED",
+    "application_commit": "bb04d92f08a0ceca2075a2c17b153f2921803765",
+    "src_tree": "d5f270aa8c392e9b374bfdef396d229af2d4e1e6",
+    "source_files": [
+      "src/launcher/google_web.py",
+      "src/launcher/backend.py",
+      "src/sheets/google_reader.py",
+      "src/sheets/tp_brief.py",
+      "src/workflow/tp_research.py"
+    ],
+    "test_files": [
+      "tests/launcher/test_google_snapshot_cache.py",
+      "tests/launcher/test_google_web.py"
+    ],
+    "module_contract": "docs/modules/SHEETS.md",
+    "cache": {
+      "owner": "existing one GoogleSheetsWebService shared by Backend modules",
+      "key": [
+        "spreadsheetId",
+        "exact title"
+      ],
+      "members": [
+        "2026",
+        "SHAHAB",
+        "RFQ_BRIEF"
+      ],
+      "max_entries": 6,
+      "storage": "memory-only immutable rows + copy responses, LRU eviction",
+      "ttl_seconds": 60.0,
+      "ttl_start": "successful complete validated native acquisition and cleanup",
+      "hit": "0 <= monotonic age <60.0",
+      "miss": "age>=60 demand refresh, no timer",
+      "single_flight": "existing _GOOGLE_GRID_LOCK; own thread UI acquisition, no page shared",
+      "excluded": [
+        "报价输入",
+        "credentials",
+        "pages",
+        "disk cache",
+        "new client/thread/timer",
+        "cross-service/profile reuse"
+      ]
+    },
+    "live_exceptions": [
+      "get/read_rows",
+      "read_brief/BriefReader.read",
+      "original TP _revalidate before enqueue",
+      "manual TP source selection",
+      "purchase/brand/quotation current-source gates",
+      "original write precheck/header and postwrite actual TSV readback"
+    ],
+    "failure_and_write_rules": [
+      "invalidate affected sheet before attempted write",
+      "no optimistic write/readback-as-cache return",
+      "clear all snapshots on any observed read/schema/gid/Busy/auth/protection/Stop/cancel/metadata fault",
+      "no stale fallback",
+      "hit checks shared admission and original immediate Stop",
+      "hit does not invoke read-success recovery or advance live revision"
+    ],
+    "metrics_synthetic_native_ui": {
+      "cross_stage_24_query_rows_two_sheets": {
+        "ordinary_downloads_before": 4,
+        "ordinary_downloads_after": 2
+      },
+      "four_concurrent_same_sheet": {
+        "ordinary_downloads": 1
+      },
+      "ttl_at_0_and_59_999": {
+        "ordinary_downloads": 1
+      },
+      "ttl_at_60_000": {
+        "cumulative_ordinary_downloads": 2
+      },
+      "write_case": {
+        "ordinary_prewarm": 1,
+        "mandatory_prewrite": 1,
+        "mandatory_postwrite": 1,
+        "ordinary_post_invalidation": 1
+      },
+      "purchase_guard_case": {
+        "ordinary_discovery": 1,
+        "mandatory_fresh_check": 1
+      },
+      "absolute_protected_read_cap_claim": false
+    },
+    "focused_combined": {
+      "passed": 463,
+      "seconds": 20.77,
+      "attribution": "before two final additional Brief schema test cases; application source same",
+      "paths": [
+        "tests/launcher/test_google_snapshot_cache.py",
+        "tests/launcher/test_google_web.py",
+        "tests/sheets",
+        "tests/workflow/test_tp_research.py",
+        "tests/launcher/test_site_outage_recovery.py",
+        "tests/launcher/test_business_continuation_loop.py",
+        "tests/launcher/test_market_actors.py",
+        "tests/workflow/test_business_continuation.py"
+      ]
+    },
+    "final_cache_focused": {
+      "passed": 36,
+      "seconds": 1.19
+    },
+    "final_full": {
+      "command": "python -m pytest -q -rs --tb=short --basetemp=<owned isolated directory>",
+      "passed": 3040,
+      "skipped": 1,
+      "failed": 0,
+      "seconds": 123.99,
+      "skip": "tests/workflow/test_v12_evidence_and_safety.py:56: symlink creation not available in this test environment",
+      "python": "3.12.10",
+      "source_frozen": true
+    },
+    "checks": {
+      "scoped_ruff": "PASS",
+      "diff_check": "PASS"
+    },
+    "initial_findings": "compatibility first10FAIL/197PASS: retain original live-read seeding and live success recovery, align old stage-count and native-write tests with explicit TTL; original retry/mail assertions retained. New fixture import/manual-allowed state/status-contract assumptions corrected, no new business policy.",
+    "preserved": [
+      "E4_OWNER_POLL_PARITY_SOURCE_PASS",
+      "native login SOURCE_PASS",
+      "SITE_AUTH_RECOVERY_REASONS",
+      "original Busy/auth/TSV guards and bounded retries",
+      "source-row business lease",
+      "two market actor maximum",
+      "120s wait",
+      "Stop and SENT/UNKNOWN gates",
+      "mail notification policy"
+    ],
+    "real_business_browser_production_access": false,
+    "installed": false,
+    "google_warning_remediation": "UNKNOWN / NOT_VERIFIED; cache not deployed, no notification policy change",
+    "cleanup": {
+      "completed_owned_scratch_dirs_retired": 10,
+      "boundary_reparse_checks": "PASS",
+      "production_old_soak_touched": false
+    },
+    "remaining": [
+      "real read pressure evidence",
+      "exact Busy protection branch",
+      "Stage F parsed page overlap",
+      "actual TP lateness454.210s",
+      "long-term stability",
+      "system DPI/game impact"
+    ],
+    "handoff": "Owner forwards updated original report; Executor sends no CEO message"
   }
 }

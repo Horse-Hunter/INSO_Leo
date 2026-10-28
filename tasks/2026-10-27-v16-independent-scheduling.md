@@ -2969,3 +2969,72 @@ remains separate from this **`GOOGLE_SHEET_TTL_CACHE_REVIEW_REQUIRED`**.
 `04075bc` unchanged to knowledge of archived evidence (no
 independent fresh production check), historical TP lateness
 454.210s OPEN, Stage F NOT AUTHORIZED/NOT_RUN.
+
+
+## Executor Google60s snapshot delivery — 2026-10-28 / isolated / not installed
+
+Fetched exact remote review161e5113f5c299739afc4f6443ed656b160a34f0.
+E4_OWNER_POLL_PARITY_SOURCE_PASS and native login SOURCE_PASS remain closed.
+Only new GOOGLE_SHEET_TTL_CACHE_REVIEW_REQUIRED addressed; same E architecture.
+
+Application `bb04d92f08a0ceca2075a2c17b153f2921803765`; src tree `d5f270aa8c392e9b374bfdef396d229af2d4e1e6`.
+Five source files: launcher/google_web.py (ONE bounded verified snapshot cache,
+original native transport); launcher/backend.py (bind original admission/Stop,
+canonical live revision for outage recovery); sheets/google_reader.py and
+sheets/tp_brief.py (explicit discovery/live routes); workflow/tp_research.py
+(ordinary discovery reuses snapshot, manual and original revalidation live).
+Two test files and original docs/modules/SHEETS.md contract; original report and
+this task/JSON hold evidence, no duplicate system or completion report.
+
+Memory-only max6 LRU entries per existing shared Backend service, exact
+(spreadsheetId,title), titles2026/SHAHAB/RFQ_BRIEF only. A:G and A:Q original
+schemas unchanged;报价输入excluded. Successful full validated native acquisition
+finishes before monotonic TTL starts: age<60 hit, age>=60 demand miss. Same
+canonical grid lock coalesces simultaneous ordinary requests; no timer/thread/
+TTL sleep, no Playwright sharing. Copy results prevent poisoning. Old per-cycle
+reader snapshot cannot extend service TTL. No cross-profile/service lifecycle
+reuse; same process Backend modules use ONE existing service.
+
+Mandatory get/read_rows/read_brief/BriefReader.read, owner TP _revalidate and
+manual TP selection always native. Complete successful fresh source reads may
+seed discovery; never consume it. Attempted writes invalidate before effects;
+original prewrite/header and postwrite TSV proof retained; no optimistic cache
+seeding from write return. Failure including schema/gid/missing/oversize/Busy/
+auth/protection/Stop/cancellation clears all snapshots, never stale-fallback.
+Shared admission/Stop checked on hits. Cache hits do not invoke recovery or
+advance live revision; canonical dashboard cannot clear an outage from a hit.
+No retry or notification policy change; SENT/UNKNOWN/leases/Actor bound unchanged.
+
+Metrics (synthetic native UI, separately counted):24 query-only rows/two sheets
+cross-stage2ordinary downloads (old4);4same-sheet concurrent requests1ordinary
+acquisition;0/59.999s1download,60.000s2downloads. Write example1ordinary prewarm
++2mandatory prewrite/readback+1ordinary post-invalidation=4. A purchase guard has
+1ordinary+1mandatory fresh; never advertise an absolute60s protected-read cap.
+
+463PASS20.77s affected combined suite before final2Brief schema cases; final
+cache suite36PASS1.19s. Exact final application full3040PASS/1SKIP123.99s.
+Skip tests/workflow/test_v12_evidence_and_safety.py:56: symlink unavailable.
+Ruff/diffPASS. Full src frozen; followup docs only. Initial compatibility10FAIL/
+197PASS exposed recovery revision/live-seeding and old cache test expectations;
+fixed source and modeled real write invalidation without weakening original
+retry/mail-count assertions. New fixture import/manual-state/status assumptions
+corrected to canonical contracts; no new TP business rule.10completed owned
+scratch dirs retired after process exit and boundary/reparse checks.
+
+| Requirement | Executor status / evidence boundary |
+| --- | --- |
+| Shared independent60s cache / demand refresh / single-flight | PASS offline36cache cases + full suite |
+| Fresh purchase/quotation/TP and native write readback | PASS offline; original gates execute, no cached permission |
+| MPN/status/brand/qty/row/Brief target edits inside TTL | PASS offline; original corresponding action gates reject conflict |
+| Cache hit cannot heal known fault / auth or Stop bypass | PASS offline; original shared admission, no hit success callback |
+| Original Busy/protected page/retry/SMTP UNKNOWN/Stop/lease/Actor regressions | PASS offline full3040/1SKIP |
+| Actual production download reduction / Busy warning cause | NOT_VERIFIED / UNKNOWN, NOT a warning-fix claim |
+| Install / browser / production operation | DEFERRED, no authorization and none executed |
+| Stage F overlap / actual TP timing / long-term stability | NOT_VERIFIED / OPEN |
+
+No live Chrome/Google/SQLite/config/Vault/SMTP or current EXE inspection/change.
+Only isolated synthetic SQLite/migrations and fake clients/senders used in tests.
+Historical04075bc version reference is archived, not newly checked. Old9f soak
+untouched. No notifications suppressed or test mails sent. No new Owner browser
+window/stop requested. Owner forwards original V16_RELEASE_REPORT.md for CEO
+independent Review. Overall V16_REVIEW_REQUIRED; do not self-declare PASS.
