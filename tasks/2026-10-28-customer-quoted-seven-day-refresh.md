@@ -101,3 +101,135 @@ INSO/SMTP，没有构建/安装或修改正在运行的EXE、配置、Vault。�
 本轮离线临时工作清理：8个自有测试目录、15415文件、635609959字节已退休；
 保留必要小型测试输出和摘要。9个本轮CLI检查/发布/测试辅助脚本已退休，
 原生产、共享runtime、账本、Vault、Chrome及新鲜程序回滚保持不变。
+
+## CEO independent SOURCE Review — customer-quoted 7-day restriction (2026-10-28)
+
+**Review verdict: `CUSTOMER_QUOTED_7DAY_SOURCE_PASS` for a separate isolated Windows build candidate; `NOT_DEPLOYED`, no live 7-day acceptance and no permission to alter current running production.**
+
+**Exact review evidence.** Remotely verified final delivery
+`11d16ae421a5c969a59fa2639ebade1178362709` is one
+documentation/evidence child of the final code SHA
+`63d161cd3ec998d1fbbd3f584ab46797399dce6c`.
+Final source tree `c1fc44b0bf87f1f6742939a9f33114c325f8405b`,
+tests tree `c36c35b55f4d1ad201baee8f2dd3304f41e52079`;
+actual code commits `f89caf41015b940cbb29165c28bf00f8f7245a6c`
+and the source-row relocation fix `63d161cd3ec998d1fbbd3f584ab46797399dce6c`.
+Original source-only implementation changed seven src paths:
+`src/launcher/backend.py`, `src/launcher/google_web.py`,
+`src/sheets/tp_brief.py`, `src/workflow/quotation_age.py` (new),
+`src/workflow/store.py`, `src/workflow/v13_integration.py`
+and `src/workflow/v13_quotation.py`. Read each changed interface and
+the 234-line new `tests/workflow/test_customer_quoted_age.py`,
+targeted unchanged `run_inso_query` and `settle_result`, plus
+current GitHub production report and JSON receipt. This review has no
+read access to actual installed Windows EXE bytes or live browser state.
+
+**Findings:**
+1. The authoritative current row/status/unique original inquiry identity
+   is revalidated in `V13QuotationCycle._execute_candidate`
+   before its `automatic_refresh` / exact `已报价给客户` age
+   gate. Current verified physical row, not stale discovery row,
+   is used when matching the preexisting Brief snapshot.
+   If date is expired/unverified, `_QuotationAgeSkip` exits
+   the ordinary original `run_inso_query` operation *before*
+   `_operations.open`; `settle_result` bypasses updater
+   for the new non-QUOTE_FOUND outcomes and retains ordinary
+   GUI observation. No INSO tab/query/retry, supplier price
+   baseline, hold, SMTP notification or source write is created
+   by that skip. The original candidate loop and safe
+   Option A TP yield still receive a returned terminal
+   no-effect result. Existing sticky unknown write barrier
+   is not reset by that new outcome.
+2. Only original scheduled/automatic refresh has the gate:
+   launcher composition uses `automatic_refresh=source_store is None`;
+   manual custom source_store leaves its existing explicit
+   authorization and realtime validations alone.
+   Other status `发给采购`, `采购已报价`, TP
+   and supplier inclusive rolling72h price-selection logic
+   are unchanged; original module clock/Stop/120s
+   and existing single Owner remain intact.
+3. Date policy uses existing verified fresh (<60s) cached
+   `RFQ_BRIEF` only, with original source sheet/current
+   physical row/exact model/quantity/brand and SHAHAB
+   inquiry-date proof via the existing TP binder.
+   It never creates a second client/reader/download on
+   cache miss. If no unambiguous valid cached match,
+   falls back to same `inquiry_id` immutable SQLite
+   `workflow_items.created_at` (aware timestamp only).
+   Selected malformed/future Brief is
+   `QUOTE_AGE_UNVERIFIED`, not guessed from a later
+   local clock. The inclusive168h-aware vs inclusive
+   Shanghai-calendar-day cutoff is explicitly tested.
+   Unbound/ambiguous older customer rows already
+   lacked an original safe inquiry ID; remain
+   unqueried with only fixed diagnostic counter.
+4. Crucial semantic limitation: neither
+   `RFQ_BRIEF.rfq_date` nor local immutable intake
+   is the confirmed time of customer quote issuance.
+   Brief inquiry date often precedes the actual
+   customer quote and can exclude a more-recently
+   quoted older inquiry; an imported late local
+   intake could keep an actually old customer quote
+   in scope. This matches Owner's explicit
+   existing-data convenience tradeoff but must
+   never be called a strict true customer-send
+   seven-day SLA. Do not mislabel a quoted item
+   as eligible just because INSO has a recent
+   supplier quote.
+5. Executor's receipts: **345 targeted PASS** in
+   24.50s, **3140 full PASS / 1 SKIP** in125.63s,
+   Ruff/diff check PASS and no reported real
+   SMTP attempts; the SKIP is the known
+   Windows symlink creation case, not omitted
+   quotation safety. Tested immutable SQLite
+   `created_at`, current-row relocation/old-row
+   occupant, unique vs ambiguous Brief, invalid/future,
+   Stop, date crossing, no INSO tab, no DB/SMTP
+   writes for skip, manual exclusion, other statuses,
+   originalBackend wiring and Option A integration.
+   CEO inspected the source/test construction,
+   exact recorded test counts/hashes, but has
+   **not rerun** the Executor's native Windows
+   tests or verified raw local test logs.
+
+**Residual constraints:** Proof is offline only.
+Actual 7-day coverage, numbers of skipped rows,
+amount of saved INSO time, GUI behavior of the
+new frozen EXE, production mail/outbox effects
+and exact customer-send date are NOT_VERIFIED.
+On malformed existing Brief cache schema,
+the existing shared read safety behavior may
+stop rather than manufacture an age; preserve
+current fail-closed policy. Do not add extra
+browser probes to collect timestamps.
+Prohibit silent changes to the currently
+running Option A frozen executable
+`DB9463D4D1DBDF716C80C8A48A2E5D6E9CB7EBE4BB4254A0A2CD40BEEA440969`.
+
+**CEO next action:** Approve ONLY reuse of the
+original canonical `-Version 1.6 -BuildOnly`
+pipeline for a separate candidate,
+same unchanged code SHA/tree, frozen
+module/executable manifest, `--self-check`
+and `RELEASE_SCAN_OK`. Retain current
+business program undisturbed: **no Stop,
+Exit, Start, live CDP/Sheets/INSO/SMTP
+probe, software installation or actual
+release switch** without Owner's later
+specific approval for this new version.
+If future Owner authorizes a window,
+repeat original safe drain, immutable
+data check, fresh current-version
+program backup, protected-state backup,
+program-only swap and natural acceptance
+without synthetic orders. Any missing
+qualifying customer-quoted case remains
+live NOT_VERIFIED. Root AGENTS prohibition
+of Codex agent Computer Use applies:
+`COMPUTER_USE_NOT_USED` in every delivery.
+
+**Record scope:** CEO appends this Review
+to the original seven-day task only.
+This verdict is source PASS, not overall
+V1.6 release closure or new production
+installation approval.
