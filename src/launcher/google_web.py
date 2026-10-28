@@ -133,20 +133,30 @@ def _source_values(rows, title, first, start, last, end):
 class GoogleSheetsWebService:
     """One thread-safe transport injected into existing readers and writers."""
     def __init__(self, session, *, actions_factory=GoogleQuotationUpdateActions, on_read_success=lambda: None,
-                 timer=monotonic, read_guard=lambda: None, stop_requested=lambda: False):
+                 timer=monotonic, read_guard=lambda: None, stop_requested=lambda: False,
+                 retain_pages=False):
         self._session, self._actions_factory = session, actions_factory
         self._on_read_success = on_read_success
         self._timer, self._read_guard, self._stop_requested = timer, read_guard, stop_requested
         # One bounded process-service cache; no pages, files or caller-mutable rows.
         self._snapshots = OrderedDict()
         self._live_read_revision = 0
+        self._retained_pages = {} if retain_pages else None
         self._poll_handle = ContextVar("google_web_poll_handle", default=None)
 
     @contextmanager
     def poll_scope(self):
-        # One client lifetime, same thread as native UI calls. No page crosses polls.
+        # One client lifetime, same thread as native UI calls. Only target IDs
+        # cross polls; attached Page objects are always resolved on this client.
         # Acquire lazily INSIDE the existing reader/writer error/retry boundary.
-        with ExitStack() as lifetime, google_operation_scope():
+        if self._poll_handle.get() is not None:
+            # Same original Owner, nested module: borrow the same per-title pool
+            # rather than duplicate tabs/clients. Each native operation remains
+            # serialized by _GOOGLE_GRID_LOCK and re-proves its protected surface.
+            yield
+            return
+        with ExitStack() as lifetime, google_operation_scope(
+                retained=self._retained_pages, lock=_GOOGLE_GRID_LOCK):
             token = self._poll_handle.set({"handle": None, "lifetime": lifetime})
             try:
                 yield
@@ -169,6 +179,9 @@ class GoogleSheetsWebService:
                 if _temporary_web_read_failure(exc):
                     raise TimeoutError("GOOGLE_WEB_SESSION_UNAVAILABLE") from exc
                 raise
+            if state is None and self._retained_pages is not None:
+                lifetime.enter_context(google_operation_scope(
+                    retained=self._retained_pages, lock=_GOOGLE_GRID_LOCK))
             yield handle
 
     def spreadsheets(self):
@@ -302,7 +315,7 @@ class GoogleSheetsWebService:
                 if write and geometry[0] == "报价输入":
                     actions.ensure_refresh_input_idle()
                 page = actions.open_sheet(select_worksheet=True,
-                                          worksheet=geometry[0] if geometry and not brief_read else "2026")
+                                          worksheet=geometry[0] if geometry else "2026")
                 stage = "google-sheet-ready"
                 page.locator("#t-name-box").wait_for(state="visible", timeout=30000)
                 # Reuse the verified onOpen readiness signal. Selecting SHAHAB
@@ -527,4 +540,4 @@ def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, 
             yield BrowserHandle(owned=False, browser=browser)
 
     return GoogleSheetsWebService(session, on_read_success=on_read_success,
-                                  read_guard=read_guard, stop_requested=stop_requested)
+                                  read_guard=read_guard, stop_requested=stop_requested, retain_pages=True)

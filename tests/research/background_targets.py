@@ -36,7 +36,7 @@ class BackgroundSession:
                 return None
             raise AssertionError("unexpected synthetic evaluation")
         page.evaluate = evaluate
-        return {"targetId": "synthetic-target"}
+        return {"targetId": str(id(page))}
 
     def detach(self):
         pass
@@ -45,7 +45,7 @@ class BackgroundSession:
 def attach_background_protocol(context, browser=None):
     context.expect_event = lambda *_, **__: PendingPage(context)
     context.new_cdp_session = lambda page: SimpleNamespace(
-        send=lambda _: {"targetInfo": {"targetId": "synthetic-target"}}, detach=lambda: None)
+        send=lambda _: {"targetInfo": {"targetId": str(id(page))}}, detach=lambda: None)
     context.browser = browser or SimpleNamespace()
     context.browser.new_browser_cdp_session = lambda: BackgroundSession(context)
     return context.browser

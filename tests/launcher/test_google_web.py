@@ -1227,3 +1227,219 @@ def test_only_successful_reads_signal_site_recovery_not_failed_reads_or_writes(w
     monkeypatch.setattr(service, '_download', download)
     assert service.get(spreadsheetId='test', range="'2026'!A1:G").execute()['values']
     assert recovered == [True]
+
+
+
+def test_native_nested_module_scope_can_read_with_three_live_parent_surfaces(web):
+    service, browser, _rows, human = web
+    reader = GoogleSheetsRowReader(service, retry_wait=lambda _: True)
+    with service.poll_scope(), reader.discovery_scope():
+        for title in ('2026', 'SHAHAB'):
+            reader.read_discovery_rows(WorksheetIdentity('test', title))
+        service.get(spreadsheetId='test', range="'报价输入'!A1:N1").execute()
+        parents = tuple(p for p in browser.contexts[0].pages if p is not human and not p.closed)
+        assert len(parents) == 3
+        with service.poll_scope(), reader.discovery_scope():
+            fresh = reader.read_rows(WorksheetIdentity('test', '2026'))
+            assert fresh[1].cells['E'] == '000123'  # Native live check, not cache.
+            children = [p for p in browser.contexts[0].pages if p not in parents and p is not human]
+            assert children == []  # Borrow the already verified2026 slot.
+        assert all(not p.closed for p in parents)
+    assert all(p.closed for p in parents) and not human.closed
+
+
+
+def test_four_exact_sheet_slots_reused_across_nested_modules(web, monkeypatch):
+    from src.sheets.tp_brief import BRIEF_HEADERS, BriefReader
+    service, browser, rows, human = web
+    monkeypatch.setitem(TITLES, 'RFQ_BRIEF', 31)
+    rows['RFQ_BRIEF'] = [list(BRIEF_HEADERS)]
+    reader = GoogleSheetsRowReader(service)
+    brief = BriefReader(service)
+    def read_all_live():
+        reader.read_rows(WorksheetIdentity('test', '2026'))
+        reader.read_rows(WorksheetIdentity('test', 'SHAHAB'))
+        brief.read('test')
+        service.get(spreadsheetId='test', range="'报价输入'!A1:N1").execute()
+    with service.poll_scope():
+        read_all_live()
+        slots = tuple(p for p in browser.contexts[0].pages if p is not human)
+        assert len(slots) == 4
+        for _module in range(3):
+            with service.poll_scope():
+                read_all_live()
+            assert tuple(p for p in browser.contexts[0].pages if p is not human) == slots
+            assert all(not p.closed for p in slots)
+    assert all(p.closed for p in slots) and not human.closed
+
+
+def test_four_sheets_real_transport_reads_queue_under_original_grid_lock(web, monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    from src.sheets.tp_brief import BRIEF_HEADERS
+    service, browser, rows, _human = web
+    monkeypatch.setitem(TITLES, 'RFQ_BRIEF', 31)
+    rows['RFQ_BRIEF'] = [list(BRIEF_HEADERS)]
+    barrier = threading.Barrier(4)
+    entered = threading.Event()
+    release = threading.Event()
+    counter_lock = threading.Lock()
+    active, peak = [0], [0]
+    native = service._download
+    def observed_download(*args):
+        with counter_lock:
+            active[0] += 1
+            peak[0] = max(peak[0], active[0])
+            is_first = not entered.is_set()
+            if is_first:
+                entered.set()
+        try:
+            if is_first:
+                assert release.wait(5)
+            return native(*args)
+        finally:
+            with counter_lock:
+                active[0] -= 1
+    monkeypatch.setattr(service, '_download', observed_download)
+    def read(title):
+        barrier.wait(timeout=5)
+        if title == 'RFQ_BRIEF':
+            return service.read_brief('test')
+        return service.get(spreadsheetId='test', range=f"'{title}'!A1:G1").execute()
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(read, title) for title in ('2026', 'SHAHAB', 'RFQ_BRIEF', '报价输入')]
+        assert entered.wait(5)
+        assert peak[0] == 1
+        release.set()
+        assert all(isinstance(f.result(timeout=10), dict) for f in futures)
+    assert peak[0] == 1 and active[0] == 0
+    assert all(page.closed for page in browser.contexts[0].pages[1:])
+
+
+@pytest.mark.parametrize('scoped', [False, True])
+def test_retained_four_tabs_survive_polls_and_reopen_only_closed_target(web, monkeypatch, scoped):
+    from src.sheets.tp_brief import BRIEF_HEADERS
+    service, browser, rows, original = web
+    service._retained_pages = {}
+    monkeypatch.setitem(TITLES, 'RFQ_BRIEF', 31)
+    rows['RFQ_BRIEF'] = [list(BRIEF_HEADERS)]
+
+    def read_all():
+        with service.poll_scope() if scoped else nullcontext():
+            for title in ('2026', 'SHAHAB', 'RFQ_BRIEF', '报价输入'):
+                if title == 'RFQ_BRIEF':
+                    service.read_brief('test')
+                else:
+                    service.get(spreadsheetId='test', range=f"'{title}'!A1:G1").execute()
+
+    read_all()
+    pages = browser.contexts[0].pages[1:]
+    assert len(pages) == 4 and all(not p.closed for p in pages)
+    assert all(isinstance(target, str) and isinstance(protected, bool)
+               for target, protected, _ in service._retained_pages.values())
+    for _ in range(4):
+        read_all()
+    assert browser.contexts[0].pages[1:] == pages
+    pages[1].close()  # Owner accidentally closes exactly SHAHAB.
+    read_all()
+    assert len(browser.contexts[0].pages) == 6
+    assert browser.contexts[0].pages[-1].title == 'SHAHAB'
+    assert all(not p.closed for p in (pages[0], pages[2], pages[3], original))
+    assert sum(not p.closed for p in browser.contexts[0].pages[1:]) == 4
+
+
+@pytest.mark.parametrize('problem', ['auth', 'document', 'ownership', 'pending'])
+def test_retained_target_revalidated_without_replacing_protected_page(web, problem):
+    service, browser, _, original = web
+    from src.sheets.quotation_input import QuotationInputBusy
+    service._retained_pages = {}
+    with service.poll_scope():
+        service.get(spreadsheetId='test', range="'2026'!A1:G1").execute()
+    page = browser.contexts[0].pages[-1]
+    if problem == 'auth':
+        page.login_markers.add('登录')
+    elif problem == 'document':
+        page.url = 'https://docs.google.com/spreadsheets/d/other/edit#gid=0'
+    elif problem == 'ownership':
+        page.owner_name = ''
+    else:
+        page.refresh_pending = True
+    with service.poll_scope(), pytest.raises((V12Fault, QuotationInputBusy, TimeoutError)):
+
+        service.get(spreadsheetId='test', range="'2026'!A1:G1").execute()
+    assert not page.closed and not original.closed
+    assert len(browser.contexts[0].pages) == 2  # No blind replacement or takeover.
+
+
+def test_retained_unknown_write_closed_target_never_reopens_or_replays(web):
+    service, browser, _, original = web
+    service._retained_pages = {}
+    with service.poll_scope():
+        service.get(spreadsheetId='test', range="'2026'!A1:G1").execute()
+        page = browser.contexts[0].pages[-1]
+        page.save_fails = True
+        with pytest.raises(QuotationInputUnavailable):
+            service.update(spreadsheetId='test', range="'2026'!F2",
+                           valueInputOption='RAW', body={'values': [['TEST']]}).execute()
+        page.close()
+    assert next(iter(service._retained_pages.values()))[1] is True
+    with service.poll_scope(), pytest.raises(V12Fault, match='SETTLEMENT_UNCONFIRMED'):
+        service.get(spreadsheetId='test', range="'2026'!A1:G1").execute()
+    assert len(browser.contexts[0].pages) == 2 and not original.closed
+
+
+def test_retained_safe_failed_read_recovers_without_accumulating_tabs(web):
+    service, browser, _, _ = web
+    service._retained_pages = {}
+    create = browser.contexts[0].new_page
+    first = []
+    def once():
+        page = create()
+        if not first:
+            page.menu_failure = True
+            first.append(page)
+        return page
+    browser.contexts[0].new_page = once
+    with service.poll_scope():
+        result = GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', '2026'))
+    assert result and first[0].closed
+    assert sum(not p.closed for p in browser.contexts[0].pages[1:]) == 1
+
+
+def test_retained_cache_hit_does_not_reopen_closed_page_until_live_read_due(web):
+    service, browser, _, _ = web
+    service._retained_pages = {}
+    now = [0.0]
+    service._timer = lambda: now[0]
+    with service.poll_scope():
+        expected = service.get_discovery(spreadsheetId='test', range="'2026'!A1:G").execute()
+    page = browser.contexts[0].pages[-1]
+    page.close()
+    now[0] = 59.99
+    with service.poll_scope():
+        assert service.get_discovery(spreadsheetId='test', range="'2026'!A1:G").execute() == expected
+    assert len(browser.contexts[0].pages) == 2
+    now[0] = 60.0
+    with service.poll_scope():
+        assert service.get_discovery(spreadsheetId='test', range="'2026'!A1:G").execute() == expected
+    assert len(browser.contexts[0].pages) == 3 and not browser.contexts[0].pages[-1].closed
+
+
+def test_retained_stop_blocks_reopening_and_native_identity_failure_stops(web):
+    service, browser, _, _ = web
+    service._retained_pages = {}
+    with service.poll_scope():
+        service.get(spreadsheetId='test', range="'2026'!A1:G1").execute()
+    page = browser.contexts[0].pages[-1]
+    page.close()
+    service._stop_requested = lambda: True
+    from src.workflow.v13_quotation import V13Stopped
+    with service.poll_scope(), pytest.raises(V13Stopped):
+        service.get(spreadsheetId='test', range="'2026'!A1:G1").execute()
+    assert len(browser.contexts[0].pages) == 2
+    service._stop_requested = lambda: False
+    browser.contexts[0].new_cdp_session = lambda p: (_ for _ in ()).throw(RuntimeError('synthetic proof loss'))
+    with service.poll_scope(), pytest.raises(V12Fault, match='IDENTITY_UNCONFIRMED'):
+        service.get(spreadsheetId='test', range="'2026'!A1:G1").execute()
+    assert len(browser.contexts[0].pages) == 2

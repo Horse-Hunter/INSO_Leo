@@ -3407,3 +3407,43 @@ nested native transport, not by opening production pages or guessing cleanup.
 Deliver next source/evidence independently for Owner→CEO review; do not overwrite
 this installed bb04d92 release. This is a new Owner change, not a self-issued
 amendment of prior CEO source PASS.
+
+
+### Owner clarified Google resource design (supersedes half-hour idea)
+
+No30minute refresh or keepalive timer requested. Ordinary2026/SHAHAB/RFQ_BRIEF
+retain reviewed60s memory reuse;报价输入is live write/readback and not cached.
+Original mandatory source/prewrite/postwrite fresh verification exceptions remain;
+no absolute60s cap or cached authorization. Keep one active Google native read/
+write transaction globally via existing GRID_LOCK/one original Owner; four known
+sheet keys share the existing page pool. Nested same-Owner module scopes borrow
+that pool/client instead of creating another per-module pool. Existing protected
+entry/auth/document/settlement/Stop/source-lease gates remain. Pages release to
+pool after action; final owning scope closes only its own settled pages, never
+manual/protected/unknown pages. No second scheduler/page manager/lock system,
+no fixed total-page denial and no ad-hoc login. No new production install/resume.
+
+Two offline witnesses on installed-source logic fail exactly at old3-page budget:
+actual native nested transport with3live parent surfaces cannot perform fourth
+live query;7independent scoped actions also denied. After isolated minimum change,
+native nested module reuses existing sheet page, avoiding duplication.160affected
+checksPASS3.25s including existing protected/unsafe failures and60s cache tests.
+Add four-distinct-sheet pool reuse and original-lock queue tests, then final full.
+INSO unchanged:multiple views permitted with exact preferred verified shell;
+ambiguity without preferred identity still fails. Do not remove authentication
+uniqueness or permit simultaneous INSO business writers.
+
+
+### Owner refinement — retain four Google surfaces (2026-10-28)
+
+Supersedes the preceding close-at-poll-exit plan: Owner explicitly requests
+2026/SHAHAB/RFQ_BRIEF/报价输入 remain open between polls and recreate accidentally
+closed settled surfaces on next demand. No half-hour timer. Implement only in
+the existing pool/transport: retain native target IDs and safety flags, never
+Playwright objects across attachments; rebind exact targets and recheck existing
+marker/document/auth/unsafe guards before use. No adoption of arbitrary human or
+previous-process tabs. Closed unresolved-write surfaces stay blocked, not replayed.
+Ordinary source TTL remains60s; input and all mandatory checks remain live.
+Use original global grid lock/original Owner; no additional scheduler or browser.
+Isolated source/offline regression only; installed bb04d92 remains untouched and
+Owner-confirmed stopped. No notification-policy changes or test SMTP.

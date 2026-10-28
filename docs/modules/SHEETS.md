@@ -1,5 +1,30 @@
 # Sheets 模块
 
+## Owner four-surface lifetime amendment (2026-10-28, isolated / REVIEW_REQUIRED)
+
+Canonical build_google_web_service retains one existing pool slot per exact
+(document,2026/SHAHAB/RFQ_BRIEF/报价输入) between operations/polls. No periodic
+reload/keepalive. Only native target IDs and protection/reopenable flags survive
+attachments; current-client pages are resolved by exact native identity, then
+original marker/document/auth/unsafe guards run. Nested original-Owner module
+scopes borrow the current pool/client. Existing global GRID lock and original
+Owner serialize Google transactions; no new scheduler, worker or browser.
+
+A missing settled target is recreated on next native demand, not on a cached hit.
+A missing protected/unconfirmed-write target stays blocked; no blind replay.
+Settled failed READ recovery remains separate from uncertain writes. Existing
+manual/foreign/unknown pages are never adopted or closed. Across process restart
+the registry is absent: previous-process review pages are not automatically
+claimed. Thus four slots are not a global browser-tab cap. Existing script owner
+exclusivity, source leases,120s wait and SENT/UNKNOWN rules remain. Direct legacy
+action scopes keep scoped cleanup; production transport enables retained mode.
+
+The count>=3 denial is removed, not authentication or pending-operation guards.
+RFQ_BRIEF gets its own slot through its existing dedicated read-only route; generic
+metadata/range/write allowlists remain unchanged. The60s ordinary snapshot and
+mandatory live verification/write-readback exceptions below remain unchanged.
+No notification-policy change. Offline only until independent review/deployment.
+
 ## V1.6 ordinary Google snapshot contract (2026-10-28, uninstalled / REVIEW_REQUIRED)
 
 The ONE existing `GoogleSheetsWebService` owns a memory-only LRU (max6 verified

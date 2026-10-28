@@ -523,7 +523,7 @@ def test_initial_update_click_timeout_is_preserved_and_never_reclicked(monkeypat
 
 
 
-@pytest.mark.parametrize('branch', ['protected', 'unsafe', 'budget'])
+@pytest.mark.parametrize('branch', ['protected', 'unsafe'])
 def test_busy_branch_observation_preserves_original_rejection_and_owned_pages(branch, caplog):
     from src.launcher.google_quote_update import (
         _POLL_GOOGLE_PAGES,
@@ -535,7 +535,7 @@ def test_busy_branch_observation_preserves_original_rejection_and_owned_pages(br
     with google_operation_scope():
         page = actions.open_sheet(select_worksheet=True, worksheet='2026')
         actions.close()
-        pool = _POLL_GOOGLE_PAGES.get()
+        pool, _ = _POLL_GOOGLE_PAGES.get()
         entry = next(iter(pool.values()))
         if branch == 'protected':
             entry['protected'] = True
@@ -543,15 +543,6 @@ def test_busy_branch_observation_preserves_original_rejection_and_owned_pages(br
         elif branch == 'unsafe':
             page.popup = 'synthetic pending dialog'
             expected = 'google-busy-pooled-unsafe'
-        else:
-            # Full ownership budget, not a cleanup permission.
-            pool.clear()
-            for _ in range(2):
-                extra = Page(browser.contexts[0])
-                extra.url = page.url
-                extra.owner_name = 'INSO_OWNER_TAB:google-operation'
-                browser.contexts[0].pages.append(extra)
-            expected = 'google-busy-page-budget'
         before = tuple(browser.contexts[0].pages)
         second = GoogleQuotationUpdateActions(browser_handle=actions._handle, location=location())
         with pytest.raises(QuotationInputBusy, match='GOOGLE_QUOTATION_INPUT_BUSY'):
@@ -562,3 +553,40 @@ def test_busy_branch_observation_preserves_original_rejection_and_owned_pages(br
         # No page/URL/dialog content is carried in the diagnostic extras.
         assert all(getattr(record, 'inso_cause', None) is None for record in caplog.records
                    if getattr(record, 'inso_step', None) == expected)
+
+
+
+def test_nested_task_scopes_may_exceed_three_and_close_only_their_own_pages():
+    from contextlib import ExitStack
+
+    from src.launcher.google_quote_update import google_operation_scope
+    root, browser = adapter()
+    human = browser.contexts[0].pages[0]
+    opened = []
+    with ExitStack() as scopes:
+        for _module in range(7):
+            scopes.enter_context(google_operation_scope())
+            current = GoogleQuotationUpdateActions(browser_handle=root._handle, location=location())
+            page = current.open_sheet(select_worksheet=True, worksheet='2026')
+            opened.append(page)
+            current.close()  # The active task scope still owns this page.
+            assert all(not p.closed for p in opened) and not human.closed
+    assert all(p.closed for p in opened) and not human.closed
+
+
+def test_repeated_nested_scope_completion_does_not_accumulate_pages():
+    from src.launcher.google_quote_update import google_operation_scope
+    root, browser = adapter()
+    human = browser.contexts[0].pages[0]
+    with google_operation_scope():
+        outer = root.open_sheet(select_worksheet=True, worksheet='2026')
+        root.close()
+        for _cycle in range(30):
+            with google_operation_scope():
+                inner = GoogleQuotationUpdateActions(browser_handle=root._handle, location=location())
+                child = inner.open_sheet(select_worksheet=True, worksheet='2026')
+                inner.close()
+                assert not outer.closed and not child.closed
+            assert child.closed and not outer.closed
+            assert sum(not p.closed for p in browser.contexts[0].pages) == 2
+    assert outer.closed and not human.closed

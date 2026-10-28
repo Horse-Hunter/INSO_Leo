@@ -4,7 +4,7 @@ Named button or Owner-verified sole visible drawing. Configured geometry/gid is 
 this module never discovers credentials, launches a browser, or calls Script URLs.
 """
 import re
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, contextmanager, nullcontext
 from contextvars import ContextVar
 from types import SimpleNamespace
 from urllib.parse import urlsplit
@@ -80,16 +80,30 @@ _UNSAFE_POLL_PAGE = """() => window.__insoRefreshPending === true ||
 
 
 @contextmanager
-def google_operation_scope():
-    """Retain only this thread's owned surfaces until this poll exits."""
+def google_operation_scope(*, retained=None, lock=None):
+    """Borrow current-client pages; optional retained registry holds IDs only."""
     pages = {}
-    token = _POLL_GOOGLE_PAGES.set(pages)
+    token = _POLL_GOOGLE_PAGES.set((pages, retained))
     try:
         yield
     finally:
         _POLL_GOOGLE_PAGES.reset(token)
-        with ExitStack() as closing:
-            for entry in pages.values():
+        with (lock if lock is not None else nullcontext()), ExitStack() as closing:
+            for key, entry in pages.items():
+                if retained is not None:
+                    if entry["page"].is_closed():
+                        if entry["protected"] and not entry.get("reopenable", False):
+                            previous = retained.get(key)
+                            if previous is not None:
+                                retained[key] = (previous[0], True, False)
+                        else:
+                            retained.pop(key, None)
+                        continue
+                    cleanup = entry["actions"]
+                    cleanup._page, cleanup._poll_entry = entry["page"], entry
+                    cleanup.close()  # Recheck settlement; never close retained tabs.
+                    _retain_google_entry(key, entry, retained)
+                    continue
                 if not entry["protected"]:
                     cleanup = entry["actions"]
                     cleanup._page = entry["page"]
@@ -101,6 +115,29 @@ def google_operation_scope():
                     cleanup._poll_entry = None
                     cleanup._location = SimpleNamespace(url=entry["page"].url)
                     closing.callback(cleanup.close)
+
+
+def _google_target_id(page):
+    """Use native identity across attachments; never retain a Playwright object."""
+    session = None
+    try:
+        session = page.context.new_cdp_session(page)
+        target = session.send("Target.getTargetInfo")["targetInfo"]["targetId"]
+        if not isinstance(target, str) or not target:
+            raise ValueError("MISSING_TARGET_ID")
+        return target
+    except Exception as exc:
+        raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED") from exc
+    finally:
+        if session is not None:
+            session.detach()
+
+
+def _retain_google_entry(key, entry, retained):
+    target_id = _google_target_id(entry["page"])
+    previous = retained.get(key)
+    protected = entry["protected"] or bool(previous and previous[0] == target_id and previous[1])
+    retained[key] = (target_id, protected, entry.get("reopenable", False))
 
 
 class GoogleQuotationUpdateActions:
@@ -219,14 +256,33 @@ class GoogleQuotationUpdateActions:
             recovery._guard()
             if not old.evaluate(_UNSAFE_POLL_PAGE):
                 recovery.close()
-        pool = _POLL_GOOGLE_PAGES.get()
+        scope = _POLL_GOOGLE_PAGES.get()
+        pool, retained = scope if scope is not None else (None, None)
         target = urlsplit(self._location.url)
         document_key = (target.scheme, target.hostname, target.path)
-        if worksheet not in {"2026", "SHAHAB", "报价输入"}:
+        if worksheet not in {"2026", "SHAHAB", "RFQ_BRIEF", "报价输入"}:
             raise ValueError("GOOGLE_SHEET_UNCONFIRMED")
         key = (*document_key, worksheet)
         entry = pool.get(key) if pool is not None else None
+        if entry is None and retained is not None and key in retained:
+            target_id, protected, reopenable = retained[key]
+            matches = [page for page in browser.contexts[0].pages
+                       if not page.is_closed() and _google_target_id(page) == target_id]
+            if len(matches) > 1:
+                raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
+            if matches:
+                entry = {"page": matches[0], "actions": self, "protected": protected,
+                         "reopenable": reopenable}
+                pool[key] = entry
+            else:
+                # An exactly known target disappeared (Owner closed it). Reopen
+                # only this sheet on demand; never adopt another visible page.
+                if protected and not reopenable:
+                    raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+                del retained[key]
         if entry is not None and entry["page"].is_closed():
+            if retained is not None and entry["protected"] and not entry.get("reopenable", False):
+                raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
             del pool[key]
             entry = None
         if entry is not None and entry["protected"]:
@@ -268,14 +324,9 @@ class GoogleQuotationUpdateActions:
                     self._attempt(lambda: self._page.goto(expected.url, wait_until="domcontentloaded", timeout=self._timeout))
                 self._guard()
                 return self._page
-        owned_pages = sum(
-            not page.is_closed() and page_owner(page) == "google-operation"
-            and (urlsplit(page.url).scheme, urlsplit(page.url).hostname, urlsplit(page.url).path) == document_key
-            for page in browser.contexts[0].pages
-        )
-        if owned_pages >= 3:
-            log_step("google-busy-page-budget")
-            raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
+        # Page count is not transaction safety. Independent/nested task scopes
+        # may coexist; exact ownership/protected-entry/settlement gates above
+        # still apply, and each originating scope retires only its own pages.
         try:
             self._page = new_background_page(browser, browser.contexts[0], timeout_ms=self._timeout,
                                              owner="google-operation")
@@ -287,6 +338,8 @@ class GoogleQuotationUpdateActions:
         if pool is not None:
             self._poll_entry = {"page": self._page, "actions": self, "protected": False}
             pool[key] = self._poll_entry
+            if retained is not None:
+                _retain_google_entry(key, self._poll_entry, retained)
         return self._page
 
     def _ready_control(self):
@@ -410,12 +463,20 @@ class GoogleQuotationUpdateActions:
             return
         self._poll_entry["protected"] = True
         self._poll_entry["actions"] = self
+        failed_entry = self._poll_entry
         self._poll_entry = None
         try:
             # Ordinary read failures can be closed; unresolved work stays visible.
             self._protected |= bool(self._page.evaluate(_UNSAFE_POLL_PAGE))
         except Exception:  # noqa: BLE001 - uncertain old surface is retained
             self._protected = True
+        failed_entry["reopenable"] = read_only and not self._protected and not self._script_pending
+        scope = _POLL_GOOGLE_PAGES.get()
+        if scope is not None and scope[1] is not None and not failed_entry["page"].is_closed():
+            for key, entry in scope[0].items():
+                if entry is failed_entry:
+                    _retain_google_entry(key, entry, scope[1])
+                    break
 
     def close(self):
         if self._poll_entry is not None:
@@ -440,6 +501,12 @@ class GoogleQuotationUpdateActions:
                 finally:
                     self._location = expected
             entry["actions"] = self
+            scope = _POLL_GOOGLE_PAGES.get()
+            if scope is not None and scope[1] is not None and not entry["page"].is_closed():
+                for key, candidate in scope[0].items():
+                    if candidate is entry:
+                        _retain_google_entry(key, entry, scope[1])
+                        break
             self._page = None
             return
         if self._price_refresh and self._script_pending:
