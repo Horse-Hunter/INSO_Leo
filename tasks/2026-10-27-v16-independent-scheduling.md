@@ -3154,3 +3154,149 @@ Busy warning or source identity issues are observed,
 return to **this same task** with exact sanitized
 evidence instead of installing another Google client
 or suppressing alerts.
+
+## Owner-authorized V1.6 Windows build, controlled replacement and run — 2026-10-28
+
+**Authorization / responsible role.** Owner explicitly instructed the
+CEO to issue the command to package V1.6, overwrite the existing running
+program, and run it. This approves the **release mechanics and controlled
+resumption of previously authorized normal operations only**, not a
+declaration of zero bugs, a waiver of original business safety gates, or
+new synthetic customer actions. Executor/Codex owns local Windows
+inspection, build, installation and evidence; CEO owns independent
+post-delivery review. No new production data, browser-profile or
+credential access was executed by the CEO.
+
+**Frozen review inputs.** Application code commit
+`bb04d92f08a0ceca2075a2c17b153f2921803765`,
+`src/` tree
+`d5f270aa8c392e9b374bfdef396d229af2d4e1e6`.
+CEO source-review commit
+`5754f53317f063fac0ccf9fde0cc7f4d85880b85`
+only updates review docs. GitHub HEAD and changes must be checked
+again before Executor builds; no build from unknown dirty/unreviewed
+app source, force clean/reset or silent source edits. Executor's last
+source-bound full offline run reports 3040PASS/1SKIP, not a CEO live
+test. The existing historical production installation
+`04075bc`/PID is NOT a current process check.
+
+**Critical feature reality check.** `src/launcher/backend.py`
+sets `independent` true by default when a frozen binary is named
+`INSO_V1.6` unless explicit `v16_enabled:false`, scheduling
+inquiry, quotation and TP on independent module deadlines.
+However the new optional `run_business_continuations` **with up
+to two parallel market-read Actors is only reached when
+`_market_actor_factory is not None`**. The normal
+`ProductionBackend()` constructor defaults its actor factory
+to `None`; a vanilla V1.6 package remains the legacy one-browser
+Owner execution path with independent *deadlines*, NOT proven
+actual parallel market research. Do not claim full V1.6 parallel
+feature deployment, silently turn on the optional actor path,
+or bypass review. If full parallel Actors are a required install
+acceptance criterion, STOP before replacement and report this
+blocker to Owner for an independent application-source
+integration/review. Otherwise the already reviewed cycle/cache
+source can be deployed with this precise limitation documented.
+Historical real TP lateness454.210s, Google Busy notices,
+Stage F actual overlap, long-term resource and DPI/game remain
+open; source PASS is not live PASS.
+
+**Executor ordered release procedure (original canonical paths only):**
+1. Read `AGENTS.md`, `AI_START_HERE.md`,
+   `docs/PROJECT_BASELINE.md`, `docs/WINDOWS_RELEASE.md`,
+   `docs/SAFETY.md`, this task and the exact
+   `V16_RELEASE_REPORT.md`. Inspect local Git HEAD/status,
+   source tree, actual installed EXE/hash, PID/mutex,
+   shortcuts, runtime junction/target and any live outstanding
+   request/transaction/mail/UNKNOWN state read-only. Keep all
+   secrets and sensitive rows out of evidence. Resolve true
+   installed location/version rather than guessing from
+   `docs/evidence/v16/reviewed-launch.json`.
+2. Build a candidate using the existing
+   `scripts/build_windows_release.ps1 -Version 1.6
+   -BuildOnly -PythonExecutable <verified existing release Python>`
+   and existing canonical PyInstaller spec, preserving environment.
+   The script already performs Tcl/Tk dependency self-check,
+   frozen `--self-check`, release artifact scan and controlled
+   stage cleanup. Verify `RELEASE_SCAN_OK`, EXE SHA256,
+   staged manifest and the exact source inputs; no different
+   browser/client/build pipeline or new dependency without need.
+3. **Pre-replacement quiescence:** request the old program's
+   ordinary GUI Stop/Exit and wait for its real mutex/process
+   release and protected business operations to settle.
+   No force terminate, lock bypass, kill Chrome, close manual/
+   protected pages, cancel a non-final order, replay
+   SENT/UNKNOWN or reset pending SMTP/purchase status.
+   If an incomplete, ambiguous or protected operation is
+   observed, HOLD replacement and surface specific sanitized
+   status; no guessing safe. Before writes, preserve exact
+   path/manifest of runtime-linked production SQLite,
+   outbox/notification state, local configuration and Vault
+   and copy **only required program assets** to a verified,
+   non-reparse rollback directory. Never copy/overwrite/traverse
+   the runtime junction/target, account data or Chrome profile.
+4. Use candidate from the canonical marked BuildOnly stage;
+   replace only the known EXE and necessary frozen `_internal`
+   program assets in the intended V1.6 installation directory,
+   with hash-verified rollback and no cross-version partial
+   mixture. The script's normal non-BuildOnly mode explicitly
+   refuses an existing directory and must NOT be worked around
+   by deleting that directory. If the discovered target does
+   not match the expected canonical program layout, HOLD.
+   Preserve the previous usable release and a deterministic
+   rollback path. Verify *all* installed frozen asset hashes,
+   protected state/junction target metadata unchanged, and
+   installed `--self-check` plus idle GUI readiness.
+5. After safe quiescence, start **one** installed GUI instance,
+   verify responding window and original single-instance mutex.
+   Compare the old and new real process identities, the
+   installed EXE SHA256 and actual frozen version. Do not
+   manufacture customer orders, click procurement or send
+   live diagnostic mail. Resume **only already authorized**
+   normal business operations through the original GUI
+   `开始运行` control after reconciling unconfirmed durable
+   state, protected manual pages and preserved original
+   configuration. Do not alter `tp_enabled`, recipients,
+   other writes, `v16_enabled` or activate optional market
+   Actors without approved source integration. If safety
+   cannot be proven, stop at idle or hold without changing
+   ambiguous business state; report rather than claiming
+   successful business resumption.
+6. Validate quick no-side-effect launch/health/Google
+   read diagnostics, normal module-cycle scheduling,
+   current dashboard freshness and first naturally
+   authorized reads where available. No invented actual
+   overlap/TP timeliness, no forced real order/mail to
+   make an acceptance sample. Leave Google Busy branch
+   UNKNOWN unless directly sanitized evidence identifies
+   it. For release faults, use normal graceful exit,
+   preserve current durable runtime, restore only compatible
+   frozen program assets and recheck mutex/idle GUI; no
+   DB rollback or rewriting SENT/UNKNOWN. Do not auto
+   roll back if source/ledger schema changed without
+   compatibility proof.
+7. Update this task and the existing
+   `V16_RELEASE_REPORT.md` plus original JSON evidence
+   with actual before/after process, source SHA,
+   stage/install EXE hashes, manifest, preserved runtime
+   checks, actual GUI/mutex/resume state, outstanding risks,
+   rollback path, cleanup receipts and accurate
+   `INSTALLED_IDLE` versus `BUSINESS_RUNNING` result.
+   Retire only owned disposable test/staging copies during
+   this task; keep a verified rollback. Commit/push the
+   evidence as a child of this authorization. Status remains
+   `V16_REVIEW_REQUIRED` for CEO independent
+   post-install review. No success before a real verified
+   process/window/operation receipt.
+
+**Stop/go decision:** Owner's instruction authorizes a
+controlled install/run, **not an unsafe blind overwrite**.
+Source gate: exact reviewed app code. Business gate: no
+in-flight ambiguous external effect and valid ledger state.
+Feature gate: explicitly disclose absence of installed
+optional parallel Actor composition; HOLD if the Owner
+requested full Actor concurrency as a non-negotiable
+criterion. Evidence gate: original signed/hashed program
+assets and durable rollback, live install hash and
+single responsive GUI. Do not silently label "all features
+complete" or "zero bugs" without Stage F proof.
