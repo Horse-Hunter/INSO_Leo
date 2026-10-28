@@ -934,12 +934,16 @@ class ProductionBackend(GuiBackend):
                     active_reader = source_reader or reader
                     active_store = source_store or self._store
                     active_holds = hold_store or holds
+                    from src.sheets.tp_brief import BriefReader
+                    cached_brief = BriefReader(web_service)
                     cycle = V13QuotationCycle(reader=active_reader, store=active_store,
                         operations=self._v13_operations(rc, cfg), clock=utc_now,
                         wait=(self._closed_retry_wait if self._continuation_pump is not None else self._stop.wait),
                         stop_requested=self._stop.is_set, fx_provider=quotation_fx,
                         on_fx_success=lambda: self._site_recovered("汇率网站"),
-                        on_query_success=lambda: self._site_recovered("INSO"))
+                        on_query_success=lambda: self._site_recovered("INSO"),
+                        automatic_refresh=source_store is None,
+                        brief_snapshot=lambda ws: cached_brief.cached_lines(ws.spreadsheet))
                     def updater():
                         handle = self._v13_browser(rc, cfg)
                         try:
@@ -1482,7 +1486,7 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             inquiry = result.inquiry_id or key
             self._poll_inquiries.add(inquiry)
-            if result.outcome.value in {"NO_RECENT_QUOTE", "ROW_FAILED", "UPDATED_INSERTED", "UPDATED_ALREADY_EXISTS", "BASELINE_RECORDED", "PRICE_UNCHANGED"}:
+            if result.outcome.value in {"NO_RECENT_QUOTE", "ROW_FAILED", "UPDATED_INSERTED", "UPDATED_ALREADY_EXISTS", "BASELINE_RECORDED", "PRICE_UNCHANGED", "QUOTE_AGE_EXPIRED", "QUOTE_AGE_UNVERIFIED"}:
                 self._poll_quotation_completed.add(inquiry)
         if dto is not None:
             with self._lock:

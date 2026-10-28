@@ -140,10 +140,11 @@ def test_refresh_candidate_keeps_original_internal_identity_and_status(status):
 
 @pytest.mark.parametrize('status', ['采购已报价', '已报价给客户'])
 def test_refresh_hold_not_settled_by_unchanged_quoted_status(tmp_path, status):
+    from tests.inso.test_v13_quotation_read import NOW as quote_now
     from tests.inso.test_v13_quotation_read import quote
     from tests.workflow.test_rfq006_integration import fixture
     from tests.workflow.test_v13_quotation import WS, source
-    _, _, sheets, holds, _, quotes, make, _ = fixture(tmp_path, [(quote(),)])
+    _, _, sheets, holds, _, quotes, make, _ = fixture(tmp_path, [(quote(),)], intake_at=quote_now)
     sheets.rows = [source(2,status)]
     make(lambda r: replace(r,outcome=QuotationOutcome.ROW_FAILED,
         row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED)).run(WS)
@@ -304,7 +305,8 @@ def test_uncertain_refresh_does_not_block_following_order(tmp_path):
     _,store,sheets,holds,ledger,_,make,_=fixture(tmp_path,[(first,),(second,)])
     sheets.rows=[source(3,'未发',model='SECOND')]
     record,=query_pending_records(sheets,WS)
-    store.enqueue(record,now=NOW)
+    from tests.inso.test_v13_quotation_read import NOW as quote_now
+    store.enqueue(record,now=quote_now)
     sheets.rows=[source(2,'采购已报价'),source(3,'已报价给客户',model='SECOND')]
     prices=ProcurementPriceStore(store.database_path)
     prices.migrate()

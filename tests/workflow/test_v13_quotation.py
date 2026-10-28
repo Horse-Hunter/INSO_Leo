@@ -50,6 +50,8 @@ def item(position, model="MPN", **kwargs):
 class Store:
     def __init__(self, items):
         self.items = items
+    def inquiry_intake_at(self, inquiry_id):
+        return NOW  # Synthetic existing inquiry has a known recent immutable intake.
     def all_items(self):
         return self.items
     def get_by_inquiry_id(self, inquiry_id):

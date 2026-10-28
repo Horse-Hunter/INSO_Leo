@@ -88,10 +88,20 @@ class BriefReader:
     def read(self, spreadsheet):
         return self._read(spreadsheet, discovery=False)
 
+    def cached_lines(self, spreadsheet):
+        """Use only an already acquired, unexpired snapshot; no read fallback."""
+        peek = getattr(self.service, "peek_brief_snapshot", None)
+        response = peek(spreadsheet) if callable(peek) else None
+        return () if response is None else self._lines(response)
+
     def _read(self, spreadsheet, *, discovery):
         read = getattr(self.service, "read_brief_discovery", self.service.read_brief) if discovery else self.service.read_brief
         response = execute_google_read(lambda: read(spreadsheet),
                                        retry_wait=self.retry_wait)
+        return self._lines(response)
+
+    @staticmethod
+    def _lines(response):
         rows = response.get("values", []) if isinstance(response, Mapping) else None
         if (not isinstance(rows, (list, tuple)) or not rows
                 or not isinstance(rows[0], (list, tuple)) or tuple(rows[0]) != BRIEF_HEADERS):
@@ -105,7 +115,7 @@ class BriefReader:
         return tuple(result)
 
 
-def bind_tp_order(line, spreadsheet, source_rows):
+def bind_brief_source(line, source_rows):
     """Fixed physical anchor plus key corroboration; no global MPN guessing."""
     sheet, pointer = line.get("sheet"), line.get("sheet_row")
     if sheet not in {"2026", "SHAHAB"} or not pointer.isdecimal() or int(pointer) < 1:
@@ -134,6 +144,17 @@ def bind_tp_order(line, spreadsheet, source_rows):
             raise ValueError("TP_SOURCE_DATE_UNCONFIRMED")
         if day(row.get("A")) != day(line.get("rfq_date")):
             raise ValueError("TP_SOURCE_DATE_CONFLICT")
+    return candidates[0]
+
+
+def bind_tp_order(line, spreadsheet, source_rows):
+    """Reuse canonical source proof before the unchanged TP price contract."""
+    source = bind_brief_source(line, source_rows)
+    sheet, pointer = line.get("sheet"), line.get("sheet_row")
+    schema = worksheet_schema(sheet)
+    row = source.cells
+    quantity = quantity_value(line.get("qty"))
+    source_brand = usable_brand(row.get(schema.brand_column))
     target = parse_target_price(line.get("target_price"))
     if target is None:
         raise ValueError("TP_PRICE_EMPTY")

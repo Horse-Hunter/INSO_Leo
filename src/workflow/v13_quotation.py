@@ -39,6 +39,8 @@ class QuotationOutcome(StrEnum):
     QUOTE_FOUND = "QUOTE_FOUND"
     NO_RECENT_QUOTE = "NO_RECENT_QUOTE"
     ROW_FAILED = "ROW_FAILED"
+    QUOTE_AGE_EXPIRED = "QUOTE_AGE_EXPIRED"
+    QUOTE_AGE_UNVERIFIED = "QUOTE_AGE_UNVERIFIED"
 
 
 class RowErrorReason(StrEnum):
@@ -56,6 +58,11 @@ class RowErrorReason(StrEnum):
 class V13SourceRowError(Exception):
     def __init__(self, reason: RowErrorReason):
         super().__init__(reason.value)
+        self.reason = reason
+
+
+class _QuotationAgeSkip(Exception):
+    def __init__(self, reason):
         self.reason = reason
 
 
@@ -181,13 +188,16 @@ class V13QuotationCycle:
     def __init__(self, *, reader: WorksheetRowReader, store: ExistingInquiryStore,
                  operations: QuotationOperations, clock: Callable[[], datetime],
                  wait: Callable[[int], bool], stop_requested: Callable[[], bool] = lambda: False,
-                 quote_reader: InsoQuotationReader | None = None, fx_provider=None, on_fx_success=lambda: None, on_query_success=lambda: None):
+                 quote_reader: InsoQuotationReader | None = None, fx_provider=None, on_fx_success=lambda: None, on_query_success=lambda: None, automatic_refresh=True, brief_snapshot=lambda worksheet: ()):
         self._reader, self._store, self._operations = reader, store, operations
         self._clock, self._wait, self._stop = clock, wait, stop_requested
         self._quotes = quote_reader or InsoQuotationReader()
         self._fx = fx_provider
         self._on_fx_success = on_fx_success
         self._on_query_success = on_query_success
+        self._automatic_refresh, self._brief_snapshot = automatic_refresh, brief_snapshot
+        self.quote_age_skips = {"QUOTE_AGE_EXPIRED": 0, "QUOTE_AGE_UNVERIFIED": 0}
+        self.quote_age_date_source = None
 
     def currency_rate(self, currency):
         if self._fx is None:
@@ -274,6 +284,24 @@ class V13QuotationCycle:
                 raise V13SourceRowError(RowErrorReason.SOURCE_IDENTITY_AMBIGUOUS)
             if bound[0].inquiry_id != candidate.inquiry_id:
                 raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
+            if self._automatic_refresh and candidate.source_status == "已报价给客户":
+                from .quotation_age import age_reason, quotation_age_date
+                def intake():
+                    read = getattr(self._store, "inquiry_intake_at", None)
+                    try:
+                        return read(candidate.inquiry_id) if callable(read) else None
+                    except Exception as exc:
+                        raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from exc
+                value, self.quote_age_date_source = quotation_age_date(
+                    candidate, fresh_rows, self._brief_snapshot(worksheet), intake)
+                if self._stop():
+                    raise V13Stopped("STOP_REQUESTED")
+                reason = age_reason(value, self._clock())
+                if reason is not None:
+                    self.quote_age_skips[reason] += 1  # Two fixed bounded diagnostic keys.
+                    raise _QuotationAgeSkip(reason)
+            if self._stop():
+                raise V13Stopped("STOP_REQUESTED")
             access = self._operations.open(candidate.inquiry_id)
             try:
                 rows = self._quotes.read(access, candidate.queried_mpn)
@@ -299,6 +327,12 @@ class V13QuotationCycle:
                 reset=getattr(self._operations, "reset", self._operations.close), wait=self._wait,
                 stop_fault=lambda: V13Stopped("STOP_REQUESTED"),
             )
+        except _QuotationAgeSkip as exc:
+            # No INSO open/query/reset, updater, baseline, hold or SMTP for this skip.
+            return on_result(V13QuotationResult(
+                candidate.inquiry_id, candidate.record_identity, candidate.queried_mpn,
+                QuotationOutcome(exc.reason), None, source_worksheet=worksheet,
+                source_row_position=candidate.source_row_position, source_status=candidate.source_status))
         except V13SourceRowError as exc:
             self._operations.close()
             return on_result(V13QuotationResult(

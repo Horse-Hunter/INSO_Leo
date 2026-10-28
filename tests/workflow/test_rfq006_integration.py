@@ -91,12 +91,12 @@ def test_combined_fault_scope_and_no_repeat_v12(scope):
         assert events == ["V12", "pause", "V13", "V13"]
 
 
-def fixture(tmp_path, responses):
+def fixture(tmp_path, responses, *, intake_at=None):
     db = tmp_path / "workflow.sqlite3"
     store = WorkflowStateStore(db)
     sheets = Sheets([source(2, "未发")])
     for record in query_pending_records(sheets, WS):
-        store.enqueue(record, now=NOW)
+        store.enqueue(record, now=intake_at or NOW)
     migrate_v12(db, tmp_path / "backups", quiesce=__import__("contextlib").nullcontext)
     holds = V13HoldStore(db)
     holds.migrate()

@@ -208,3 +208,15 @@ Loss of the owned TSV path during path/stat/read becomes a transient read;
 already-missing download cleanup is idempotent. Other FileNotFoundError sources
 remain unknown/security stops, and loss AFTER a write remains uncertain with no
 automatic write retry. Evidence: tasks/2026-10-19-purchase-status-web-repair.md.
+
+
+## Optional Brief date hint (2026-10-28; source-only)
+
+`GoogleSheetsWebService.peek_brief_snapshot(spreadsheet)` and
+`BriefReader.cached_lines(spreadsheet)` only copy an existing <60s snapshot,
+under the existing lock/admission/Stop gates. Missing/expired returns no hint,
+never attach/download/read fallback, refresh callback or write certification.
+`bind_brief_source` extracts the original fixed-row/model/quantity/brand and
+SHAHAB date proof from bind_tp_order, reused unchanged by TP. Quotation checks
+unique Brief pointer and original unique inquiry/source binding first; duplicate
+or conflicting Brief cannot select an arbitrary date. No second join/ID/cache.

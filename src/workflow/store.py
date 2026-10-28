@@ -480,6 +480,20 @@ class WorkflowStateStore:
             raise KeyError(inquiry_id)
         return _row_to_item(row)
 
+    def inquiry_intake_at(self, inquiry_id: str) -> datetime | None:
+        """Immutable local intake proxy, NOT customer quotation-send time."""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT created_at FROM workflow_items WHERE inquiry_id = ?", (inquiry_id,)
+            ).fetchone()
+        if row is None or not isinstance(row[0], str):
+            return None
+        try:
+            value = datetime.fromisoformat(row[0])
+            return value if value.tzinfo is not None else None
+        except ValueError:
+            return None
+
     def all_items(self) -> tuple[WorkItem, ...]:
         with self._connect() as connection:
             rows = connection.execute(

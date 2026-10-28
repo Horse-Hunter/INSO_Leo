@@ -108,6 +108,8 @@ def test_canonical_poll_combines_empty_purchase_quotation_and_interruptible_900s
     quotation_waits = []
 
     def checked_cycle(**kwargs):
+        assert kwargs["automatic_refresh"] is True
+        assert kwargs["brief_snapshot"](SimpleNamespace(spreadsheet="synthetic")) == ()
         # Retry wait stays the original event, never the purchase display wrapper.
         assert kwargs["wait"] == backend._stop.wait
         assert kwargs["wait"] != backend._wait_between_rows

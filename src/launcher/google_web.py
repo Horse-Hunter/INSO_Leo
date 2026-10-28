@@ -218,6 +218,18 @@ class GoogleSheetsWebService:
         """Explicit ordinary discovery only; get() remains mandatory live I/O."""
         return _Request(lambda: self._execute(kwargs, write=False, discovery=True))
 
+    def peek_brief_snapshot(self, spreadsheet):
+        """Optional ordinary-read hint only. Never attaches, refreshes or downloads."""
+        with _GOOGLE_GRID_LOCK:
+            self._read_guard()
+            if self._stop_requested():
+                from src.workflow.v13_quotation import V13Stopped
+                raise V13Stopped()
+            entry = self._snapshots.get((spreadsheet, "RFQ_BRIEF"))
+            if entry is None or not 0 <= self._timer() - entry[0] < 60.0:
+                return None
+            return {"values": [list(row) for row in entry[1]]}
+
     def read_brief_discovery(self, spreadsheet):
         return self._execute({"spreadsheetId": spreadsheet}, write=False,
                              brief_read=True, discovery=True)

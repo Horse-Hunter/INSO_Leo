@@ -278,6 +278,7 @@ class V13IntegratedCycle:
             # A returned unmodified QUOTE_FOUND can mean input Busy, not settlement.
             # Once an effect is uncertain, no later row may erase that barrier.
             safe &= (result.outcome in {
+                QuotationOutcome.QUOTE_AGE_EXPIRED, QuotationOutcome.QUOTE_AGE_UNVERIFIED,
                 QuotationOutcome.NO_RECENT_QUOTE, QuotationOutcome.BASELINE_RECORDED,
                 QuotationOutcome.PRICE_UNCHANGED, QuotationOutcome.UPDATED_INSERTED,
                 QuotationOutcome.UPDATED_ALREADY_EXISTS,

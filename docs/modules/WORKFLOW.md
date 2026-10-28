@@ -235,3 +235,20 @@ from the existing selector; conversion/72h/payload rules are unchanged.
 Initial status advancement remains required; later source status must stay exact
 and a skip popup cannot prove overwrite. Counts/follow-up remain sent-only.
 See tasks/2026-10-18-quotation-price-refresh.md for evidence and live UNKNOWNs.
+
+
+## Customer-quoted automatic refresh age (2026-10-28; source-only)
+
+`WorkflowStateStore.inquiry_intake_at(inquiry_id)` returns the existing immutable
+created_at only for that exact ID (timezone-aware, or None). No schema/migration.
+The audited event set has no customer-send timestamp. `quotation_age` therefore
+uses an already-cached uniquely source-bound Brief rfq_date inquiry-day proxy,
+otherwise this intake-time proxy; neither is a true customer-send date.
+V13QuotationCycle checks only automatic 已报价给客户, after original source/status/
+uniqueness checks and before Operations.open. Inclusive Shanghai calendar7-day
+or rolling168h cutoff; future/invalid/missing date returns QUOTE_AGE_UNVERIFIED.
+Expired returns QUOTE_AGE_EXPIRED. Fixed skip counters/result codes only, no
+hold/mail/updater/price baseline. Safe no-effect results retain Option A closed
+boundary. Explicit original manual composition disables only this age filter;
+all realtime permissions/identity/SENT/UNKNOWN/Stop gates still run.
+发给采购/采购已报价/TP and supplier72h selection are unchanged. Not deployed.
