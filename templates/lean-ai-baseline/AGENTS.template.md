@@ -16,6 +16,14 @@ Start with `AI_START_HERE.md`.
 - Owner is involved only for true business/Safety/human-verification/destructive-Git/major-architecture/release decisions.
 - Never persist secrets.
 
+## Mandatory Codex / Executor ban on Computer Use
+
+**Trigger:** Every Codex/Executor task and tool selection. **Owner:** Executor. **Rule:** Do not invoke agent Computer Use, desktop screenshot/click/type UI control, or a custom GUI automation substitute to evade it. Continue to permit existing product/browser runtime automation implemented in application code under the ordinary reviewed safety rules; that is not agent Computer Use.
+
+**Ordered alternative:** Read this rule at task start; use existing CLI/PowerShell/Python, OS/process APIs, Git, tests or approved purpose-built connectors to perform authorized work. If a required operation cannot be performed without the banned agent UI capability, stop the step as `BLOCKED / NOT_VERIFIED`, report the exact manual-only dependency and do not fake completion or silently switch tools. A release/production authorization never overrides this ban.
+
+**Source of truth:** The copied project `AGENTS.md` plus `AI_START_HERE.md`. **Completion evidence:** final Executor report says `COMPUTER_USE_NOT_USED` and records the real programmatic method or blocked step. **Cleanup:** do not retain new task-owned Computer Use helpers/screenshots; clean owned disposable attempts by normal safe lifecycle rules, preserving protected files/runtime. **CEO Review enforcement:** any agent Computer Use invocation is `CHANGES_REQUESTED` without a newer explicit Owner exception.
+
 ## Mandatory Reuse-First Rule
 
 - Existing working capability is the default solution; inspect and reuse it before designing new code.
