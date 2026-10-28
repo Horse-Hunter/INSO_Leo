@@ -3718,3 +3718,159 @@ FINAL BUSINESS_RUNNING / V16_REVIEW_REQUIRED. Installed and normal business
 restored, actual4surface/TTL/reopen and actual3cycles evidenced. No new purchase/
 quote/TPsend success invented; source conflicts/no recent price/unchanged price
 not counted as sales. Report only Owner→CEO; no more production clicks needed.
+
+## CEO independent post-install Review — retained four-tab V1.6 (2026-10-28)
+
+**Review basis and provenance.** Independently fetched the actual remote HEAD
+`68e215549773a5d127f6c717e10c439f5b117f6b`, a report/JSON/task-only
+child of previously reviewed `b473888ddd45d19db9de5fb929704f223964c523`.
+Read the latest full first section of `V16_RELEASE_REPORT.md`, this task's
+actual release and superseding final cutoff, the complete
+`owner_authorized_retained_windows_release` evidence object in the
+existing `docs/evidence/v16/order-resource-regression.json`, and the exact
+remote commit/tree comparison. Application source remained commit
+`c24d686096b1f6b5157ac1e443167be5662f6b54`, Git
+`src/` tree `81ab97bbbff5f220e70ae2ad73f8c5ff4e497f8f`;
+tests tree remains `da5a5985fcb84035aaa1c106f1676112bde1fd3b`.
+No production machine, Windows process, browser, filesystem, log stream,
+registry or runtime database was directly accessed by CEO. All OS/Chrome/
+transaction and test outcomes below are **Executor-originated evidence
+independently checked for coherence/attribution**, not a second CEO live run.
+
+**Scoped verdict: `V16_RETAINED_WINDOWS_RELEASE_RECEIPT_PASS` and
+`V16_FOUR_TAB_READONLY_LIVE_PASS` (reported native isolated run).**
+Installation is reported as the exact reviewed program at
+`D:\Program_Leo\INSO_Leo\dist\INSO_V1.6`, using the original
+`build_windows_release.ps1 -Version 1.6 -BuildOnly`, with
+`RELEASE_SCAN_OK`, executable SHA-256
+`C92F48E1380A90A747300CD7BDADFBD410C6A8D8352304C1B4D6DA438C7F28CE`,
+and all 2,875 installed assets hash-verified. Old PID86248 exited normally
+before replacement with cross-version mutex released; new PID86788
+GUI-ready/Responding, original single-instance mutex held; initial launch
+did not pass `--start-inquiry`. Previously installed EXE
+`745BEC95F0426673C82ED4AB76EE38DCAB442F2922FAEF124D7B040F947F51CE`
+retained and rollback self-check passed in
+`D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.6-retained-20261028T023242Z\program`.
+Only EXE and _internal were replaced; protected config/Vault/runtime junction
+and previous V1.4/V1.5 releases checked unchanged; SQLite migration verified
+only on an isolated copy, no production database rollback.
+History protection is not mere counts: original 146 SENT rows, 116
+commands and 4 TP tasks compared immutable, 6 prior TP-SENT protected.
+New aggregate 149 SENT includes 1 previously PENDING original notification
+legitimately sent by existing worker and 2 new runtime-fault notifications;
+`SENT` is SMTP transport acceptance, never final inbox delivery.
+Purchase SAVED total still23 and no new actual purchase, quotation send
+or TP mail success is evidenced.
+
+**Critical release observation.** The first claimed read-only acceptance
+at10:35:06+08 was **not isolated** because natural business had already
+begun at10:34:22. Its period logged12
+`GOOGLE_WEB_READ_ARTIFACT_LOST`, two read-retry exhaustion
+receipts, and an unclassified native open-sheet error. CEO rejects this
+first attempted probe as an isolated PASS; cause attribution beyond
+observed concurrency is UNKNOWN. Owner performed safe Stop; second
+isolated native transport read-only verification ran
+10:40:43–10:43:36+08 against original9222 with no Backend,
+DB or SMTP initialization. It reported four exact owned slots with
+two original pages untouched, repeated same native target
+identities across poll scopes and CDP connections, safe manual
+closure/reopen of only the settled SHAHAB slot, <60s ordinary
+cache hits, actual60s expiry, and fresh mandatory2026 read
+despite a warm cache. Downloads2026=3/SHAHAB=3/RFQ_BRIEF=2/
+报价输入=2 include mandatory reads; not an absolute one TSV/minute
+claim. Isolated second run logged0 errors, retired only its own
+settled probe tabs. No Google write/readback or actual
+external notification was manufactured.
+
+**Independent post-resume timeline from provided real logs:**
+after all probe clients exited, Owner confirmed normal original GUI
+resumption. Inquiry began10:48:54.698 and completed11:07:04.251
+(1089.547s); quotation began10:50:59.234 and completed10:58:56.086
+(476.860s); TP began11:07:04.326 and completed11:07:16.173
+(11.844s). All three natural cycle boundary receipts exist; they
+DO NOT prove any new successful business procurement/quotation/TP
+send. Observed inquiry→quotation gap124.536s is consistent with
+preserved120s safety wait. First TP begin occurred1089.628s
+after resumption, so **900s start timeliness NOT PASS**.
+Actual two market-read Actors are NOT ENABLED:
+`market_actor_factory=None`, existing browser Owner
+and independently scheduled module deadlines only.
+Existing read-only business results2 SOURCE_CHANGED,
+31 NO_RECENT_QUOTE,1 PRICE_UNCHANGED and1
+SOURCE_IDENTITY_UNRESOLVED reflect original safety/empty-result
+conditions, not an order/send success. An actual
+11:06:22 Google download TimeoutError was classified
+`GOOGLE_WEB_READ_UNAVAILABLE` and recovered under
+original bounded retry. Thus no new *post-resume retry exhaustion*
+is supported, but **not** zero transient post-resume
+Google faults and **not** permanent Google remediation.
+
+**Resource observations and limits.** Frozen/full offline
+3054PASS/1SKIP belong to the **previous exact application
+source**, not rerun during this release. Short natural running
+60.51s GUI averaged reported0.31473% of 16-core host, ending
+RSS125.90MiB/1220 handles; canonical Chrome stable processes
+reported0.95548% host and2473.76MiB RSS, excluding
+spawned/exited child CPU lifetimes. GUI later reached
+143.27MiB RSS and626 handles at11:10:42 after actual cycles.
+Observed handle sample high5841 then fell1663→1982→626;
+not a measured absolute peak nor long-term proof.
+The browser's background game/DPI impact, 100%/150% DPI,
+long-term RAM/handle stability and historical high CPU
+causal root remain unverified.
+
+**CEO operational decision: `INSTALLED_AND_BUSINESS_RUNNING_RECEIPT_PASS`;
+overall `V16_REVIEW_REQUIRED`.** Do **not** send
+another Start click, restart/repackage, reopen four
+tabs, attach a new Playwright observer concurrently with
+natural business, or run read-only CDP downloads for
+repeat acceptance. Original first-probe collision is
+concrete evidence that "read-only" browser activity
+can disrupt an active workflow. Keep current run
+unchanged, original source/notification/write/TP
+configuration, outstanding durable mail statuses,
+protected pages and rollback. No live source edit,
+new browser actor activation, forced synthetic purchase,
+test quotation, real SMTP, ledger state rewrite or
+manual cleanup. If an actual safety fault/ambiguous
+external effect appears, retain the original fail-closed/
+Owner Stop/manual resolution procedures; do not infer
+`SENT` means inbox-delivered.
+
+**Next scope — passive, non-invasive follow-up.**
+Executor must verify current state from existing sanitized
+local logs, read-only SQLite *on a consistent snapshot*
+without creating locks or changing state, and OS
+per-process performance counters (no CDP attach or
+browser target interaction). Extract next naturally
+occurring900-second plans and actual
+`begin/deferred/completed` per module with planned
+time vs actual start, and the exact reason/source for
+any delay; never fabricate deadlines from a nominal
+interval alone. Observe bounded continuous period under
+Owner scheduling without intrusive UI/probe and collect
+Chrome-root child churn/CPU accounting, GUI/Chrome RSS,
+private bytes/handles/threads, screenshot-free GUI
+responsiveness where safe, Google error classification
+and sanitized 229 notification receipt differences.
+Separate first overlapping-probe failures from
+post-resume transient faults; retain old health-HOLD
+and new release evidence. Any request to deploy
+parallel market-read Actors, change the 120s wait or
+modify scheduling/notification behavior is a distinct
+source implementation and review requiring Owner
+scope approval, not an automatic consequence of this
+release report. Return with exact times, cycle IDs,
+sample windows, evidence files, cleanup and
+what remains open, update only the canonical report/task/
+JSON; no new report system or unnecessary background
+observer. CEO reviews the factual progress without
+claiming overall V1.6 PASS.
+
+**Review scope integrity.** This entry is CEO-owned
+review documentation only; no modifications to
+`src/`, `tests/`, existing evidence JSON/report,
+installed executable or protected production
+state. No direct access to Windows installation
+is claimed. Status remains `BUSINESS_RUNNING /
+V16_REVIEW_REQUIRED`.
