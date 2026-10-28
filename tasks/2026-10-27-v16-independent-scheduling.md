@@ -3447,3 +3447,35 @@ Ordinary source TTL remains60s; input and all mandatory checks remain live.
 Use original global grid lock/original Owner; no additional scheduler or browser.
 Isolated source/offline regression only; installed bb04d92 remains untouched and
 Owner-confirmed stopped. No notification-policy changes or test SMTP.
+
+
+### Retained Google surfaces — final offline delivery (2026-10-28)
+
+Application c24d686096b1f6b5157ac1e443167be5662f6b54; final test-only alignment
+8b18b47cee22be95517b160a23b51db82504623a; src tree unchanged
+81ab97bbbff5f220e70ae2ad73f8c5ff4e497f8f. Reused original action scope,
+native target proof, global grid lock and original Owner. Persistent registry
+contains only target IDs/protection flags; legacy scoped callers retain cleanup.
+First native demand creates a slot; subsequent polls reattach exact targets.
+Only settled missing slots reopen; unknown-write closure stays GLOBAL_STOP.
+Four-title native transport queue and repeated nested reuse pass offline; normal
+source cache stays60s with mandatory live safety exceptions. No half-hour timer,
+no second browser/page manager, no auth/INSO/SENT/UNKNOWN policy weakening.
+
+Focused371PASS17.49s. First full3053PASS/1FAIL/1SKIP125.05s: sole failure was old
+explicit no-fourth-tab assertion, superseded by Owner requirement. Updated test
+proves prior orphan pages remain untouched and are not claimed;13PASS0.62s.
+Final full at8b18b47:3054PASS/1SKIP123.76s, unchanged src; skipped original Windows
+symlink capability test only. Changed-file Ruff/diff checksPASS. Ten exact owned
+temporary synthetic test dirs retired after termination/path/reparse checks.
+
+PASS (offline): four retained slots, closed-settled reopen, cache expiry/hit,
+original-lock serialization, pending-write no replay, Stop/no reopen, auth,
+ownership and native target failure isolation. NOT_VERIFIED: real retained
+browser pages/reconnect/reopen; alert behavior after a future installation;
+resource performance, real market parallelism/TP timeliness/long-term stability.
+No production,9222,SQLite/config/Vault/SMTP/install access in this source task.
+Installed app remains bb04d92; last Owner confirmation safely stopped with GUI
+retained. Full actual release/rollback history above remains valid and separate.
+REVIEW_REQUIRED; Owner forwards original unified report and JSON, no direct CEO
+message or whole-V1.6 PASS. No immediate Owner operation required while reviewed.

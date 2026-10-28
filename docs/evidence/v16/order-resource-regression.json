@@ -822,5 +822,92 @@
         }
       ]
     }
+  },
+  "owner_four_google_surfaces": {
+    "status": "OFFLINE_SOURCE_IMPLEMENTED_REVIEW_REQUIRED_NOT_DEPLOYED",
+    "application_source_sha": "c24d686096b1f6b5157ac1e443167be5662f6b54",
+    "final_verification_commit": "8b18b47cee22be95517b160a23b51db82504623a",
+    "src_tree_sha": "81ab97bbbff5f220e70ae2ad73f8c5ff4e497f8f",
+    "reused": [
+      "canonical Google action scope and native target identity",
+      "existing Google global grid lock and original business Owner",
+      "reviewed 60s discovery cache",
+      "original auth/document/unsafe and failed-read recovery gates"
+    ],
+    "behavior": {
+      "known_slots": [
+        "2026",
+        "SHAHAB",
+        "RFQ_BRIEF",
+        "报价输入"
+      ],
+      "retained_across_polls": true,
+      "registry": "native targetId + protected/reopenable booleans only; no Playwright objects",
+      "reopen": "missing settled target on native demand only",
+      "unknown_write_closed": "GLOBAL_STOP; no replacement or replay",
+      "prior_process_or_human_pages": "not adopted, not closed",
+      "periodic_refresh": false,
+      "ordinary_source_ttl_seconds": 60,
+      "quotation_input_cache": false,
+      "safety_reads_and_write_readback": "LIVE unchanged",
+      "new_schedulers_or_browser_managers": false,
+      "numeric_three_tab_denial": "removed",
+      "INSO_identity_protection": "unchanged; no numeric global one-tab cap existed"
+    },
+    "baseline_witnesses": {
+      "old_source_new_tests_failed": 2,
+      "reason": "fixed third-page numeric denial; actual nested native path"
+    },
+    "focused": {
+      "passed": 371,
+      "seconds": 17.49,
+      "scope": "Google cache/transport/actions, CDP identity, original INSO, continuation, Actors, source leases and outage recovery"
+    },
+    "obsolete_contract": {
+      "initial_full_passed": 3053,
+      "failed": 1,
+      "skipped": 1,
+      "seconds": 125.05,
+      "failure": "old test explicitly required no fourth tab; superseded by Owner new requirement",
+      "replacement_passed": 13,
+      "replacement_seconds": 0.62,
+      "application_source_changed_for_replacement": false
+    },
+    "final_full": {
+      "passed": 3054,
+      "skipped": 1,
+      "seconds": 123.76,
+      "skip": "Windows symlink creation unavailable: tests/workflow/test_v12_evidence_and_safety.py:56",
+      "source_tree_rechecked_unchanged": true,
+      "scope": "complete offline suite at 8b18b47"
+    },
+    "production": {
+      "touched": false,
+      "browser_accessed": false,
+      "installed": false,
+      "notifications_changed": false,
+      "current_installed_source": "bb04d92f08a0ceca2075a2c17b153f2921803765",
+      "last_confirmed_owner_state": "safely stopped; GUI retained",
+      "real_four_surface_reuse": "NOT_VERIFIED",
+      "Google_alerts_fixed_in_running_exe": "NOT_CLAIMED"
+    },
+    "remaining": [
+      "independent source review",
+      "separately authorized deployment and live retained-page verification",
+      "historical CPU high values UNKNOWN",
+      "real market Actor overlap and TP timeliness not closed",
+      "long-term stability NOT_VERIFIED"
+    ],
+    "handoff": "Owner forwards original unified report to CEO; no direct CEO message",
+    "checks": [
+      "changed-file Ruff PASS",
+      "git diff --check PASS"
+    ],
+    "cleanup": {
+      "owned_disposable_test_directories_retired": 10,
+      "absolute_path_and_reparse_checked": true,
+      "production_rollback_runtime_profile_untouched": true,
+      "necessary_prior_health_diagnostics_retained": true
+    }
   }
 }
