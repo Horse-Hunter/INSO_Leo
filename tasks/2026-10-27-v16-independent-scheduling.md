@@ -4114,3 +4114,77 @@ production implementation authorization:**
   guaranteed under the single-Owner transport
   and what its unavoidable constraints are.
   Keep `BUSINESS_RUNNING/V16_REVIEW_REQUIRED`.
+
+
+## Executor — TP queue mechanism and minimum remedy proposal (2026-10-28)
+
+Source-only response to CEO a176ed894bb18735f99dfa80fd1a3a21efdfd1b1.
+No production/runtime/SQLite/process/CDP/Google access this round, no source,
+config/install/Actor activation or business changes. Prior accepted production
+BUSINESS_RUNNING carried forward, not newly observed. V16_REVIEW_REQUIRED;
+TP remains OBSERVED_FAIL. Earlier passive receipt PASS is not reopened.
+
+Audited actual GUI default->ProductionBackend(factory=None)->independent poll
+->Runtime.claim_due_module->synchronous module execution. Runtime earliest-due
+selection is correct; it cannot dispatch while module_resource holds Owner.
+Quote CombinedCycle.run_quotation->V13IntegratedCycle.run->V13QuotationCycle._run
+loops all candidates with no normal closed-candidate module-yield callback.
+INSO query,FX,on_result settlement/Google/notification finish before whole cycle
+returns. Inquiry closed-row120s wait DOES yield and nest, while default quote
+INSO retry120s wait does not pump other modules. Google RLock scopes native
+operations/cache single-flight/settlement, not the whole poll. No evidence that
+483s is CPU scheduling overhead or solely Google-lock contention.
+
+96.792s =96.766s until inquiry SOURCE_CHANGED +0.026s handoff. Max483.123s
+=483.049s overlapping active quotation +0.074s handoff. Exact successful
+substage split and first1089s outer tail remain UNKNOWN. Do not double-count120s.
+
+Options in canonical report/JSON:
+A recommended minimal isolated first repair: optional confirmed-after-candidate
+callback in workflow/v13_quotation.py and v13_integration.py, composed by original
+launcher/backend.py using existing yield/claim/exclude/resume and nested context.
+Only TP eligible at proved closed row, no recursive all-module scheduler, no
+manual idle opening, no yield across unconfirmed Google/effects/protected page.
+Default callers unchanged, original runtime/price/TP/outbox/Google policies
+unchanged. Source business lease NEVER released merely on module yield; if
+cannot prove existing exclusion/effect terminal, do not lend. Cuts whole-batch
+barrier, not a hard deadline or full independent-operation PASS. Whole TP.run
+can still delay quotation; bidirectional fine-grained fairness is B scope.
+B reuse implemented business_continuations/OwnerMarketResearch/MarketReadActors
+and domain begin/complete ports; explicitly reviewed default entry composition
+not a config flip. Original ordinary worker sources IC.net/HQEW; TP additionally
+Findchips/LCSC; BOM/INSO and all Google/effects/FX remain Owner. Max2thread-local
+clients, same-site/IC throttle and canonical full source leases maintained.
+Owner read_owner/complete, discovery, auth recovery, Google and FX can still
+block ticks.50ms loop is not worst-case latency; several synchronous steps can
+run per tick. Actual read overlap/timeliness remain unverified. Exactly2actors
+not logically required to remove batch barrier, but real read-overlap goal needs
+reviewed isolated read integration plus live evidence, not just independent due.
+
+Proposed implementation must retain Stop/terminal/late-result/GLOBAL_STOP and
+nested pause/identity/GUI, full source FIFO through effects, original fresh reads,
+120smonotonic minimum,Google lock,SENT/UNKNOWN immutable commands, Owner auth,
+thread/page limits. Unknown writes cannot be preempted or retried for deadlines.
+No hard900s SLA without known upper bounds for safe steps and queued resources.
+
+3 pure canonical WorkflowRuntime synthetic arbitration baselines PASS (0.773s
+capture):483.123s serialized quote hold;96.792s inquiry release;earliest due is
+not fixed TP priority. Handoff times are inputs from reviewed logs, not fresh
+live measurement. Embedded exact runnable script/result/hash in original JSON
+`tp_delay_mechanism_design_20261028`, no Backend/SQLite/browser/effect execution.
+These are baseline-only, not new business integration regression or cure proof;
+full suite not rerun because application/tests unchanged. Source path/function
+anchors and hashes15files recorded. JSON/AST/timing/source/diff checks PASS; owned33066byte scratch retired.
+
+Future acceptance: long multi-candidate quote plus due TP at proved safe point,
+long individual query/retries/unknown-write refusal, Stop/race/lease/late-fault/
+identity/120s/fairness/no-duplicate regression; Actor source/slot/auth/FX/oversize
+results and bounded drain. Separately authorized real window must measure due,
+admission,FIRST real Brief/source/worker work,Owner completion/effect, not early
+begin log only. Real request overlap +same-row exclusion +site pacing required;
+no test orders or historical mail replays to manufacture PASS.
+
+Owner decision after CEO design review: approve A code/offline scope OR B existing
+assembly/safety-completion scope. No deployment, program stop, protected browser
+window or installation is included; separate express authorization needed later.
+No direct CEO message. Owner forwards original unified report/task/JSON and SHA.

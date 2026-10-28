@@ -4085,5 +4085,246 @@
         "bytes": 109000
       }
     }
+  },
+  "tp_delay_mechanism_design_20261028": {
+    "state": "DESIGN_ONLY / REVIEW_REQUIRED / TP_OBSERVED_FAIL",
+    "ceo_review": "a176ed894bb18735f99dfa80fd1a3a21efdfd1b1",
+    "application_source": "c24d686096b1f6b5157ac1e443167be5662f6b54",
+    "src_tree": "81ab97bbbff5f220e70ae2ad73f8c5ff4e497f8f",
+    "production": "Previous accepted BUSINESS_RUNNING state carried forward, not re-observed or changed this round. No runtime/OS/Chrome/CDP/Google/SQLite/SMTP access.",
+    "reuse_audit": {
+      "canonical_runtime": "Earliest due and single fixed Owner; callbacks only inquiry closed-row wait in current composition",
+      "canonical_domains": "V13IntegratedCycle/V13QuotationCycle and TpCycle remain original effects/identity/outbox owners",
+      "existing_actor_path": "Full optional business_continuations path already implemented in source; default GUI does not inject factory, not just a hidden actor_enabled config",
+      "no_reimplementation": "No new scheduler, browser manager, transport, ledger, source adapter or auth set"
+    },
+    "source_references": {
+      "default_composition": [
+        "src/gui/main.py:172",
+        "src/launcher/backend.py:532",
+        "src/launcher/backend.py:1165"
+      ],
+      "deadline_and_owner": [
+        "src/workflow/service.py:864",
+        "src/workflow/service.py:888",
+        "src/workflow/service.py:906",
+        "src/launcher/backend.py:1203"
+      ],
+      "quote_whole_batch": [
+        "src/workflow/v13_integration.py:487",
+        "src/workflow/v13_integration.py:273",
+        "src/workflow/v13_quotation.py:215",
+        "src/workflow/v13_quotation.py:235"
+      ],
+      "safe_120s": [
+        "src/workflow/v12_flow.py:195",
+        "src/launcher/backend.py:2669",
+        "src/workflow/inso_query.py:16",
+        "src/launcher/backend.py:935"
+      ],
+      "google_lock": [
+        "src/launcher/google_web.py:220",
+        "src/launcher/google_quote_update.py:83"
+      ],
+      "optional_continuations": [
+        "src/launcher/business_continuations.py:51",
+        "src/launcher/business_continuations.py:199",
+        "src/launcher/business_continuations.py:274",
+        "src/launcher/market_continuation.py:50"
+      ],
+      "complete_transaction": [
+        "src/workflow/service.py:572",
+        "src/workflow/service.py:647",
+        "src/workflow/service.py:666",
+        "src/workflow/tp_research.py:349",
+        "src/workflow/v13_integration.py:388"
+      ]
+    },
+    "source_sha256": {
+      "src/launcher/backend.py": "fa1ba744b783ca4d6516759f30d43a55f3cee897f798888120678995b8d973fc",
+      "src/launcher/business_continuations.py": "f6110682781bdd183b4e4fc2fec44c1499209f5449bdf08e0f7e19e807ccb3c8",
+      "src/launcher/market_actors.py": "f5c6066262cbfae7d5228702f0fd74a090dbbf75f3b6918d6a4ecd9fac932eac",
+      "src/launcher/market_continuation.py": "a46dead1eb384593fa97a06676ed77b33bd6315cb1dce32655564f351c6b3190",
+      "src/launcher/tp_composition.py": "460b12d8882e7b5f438628db6c0391ae2fc21ecf104914d17aed850521c96cb5",
+      "src/workflow/service.py": "2bb30aacf6778a093f3d6f82048652b589b32e2e9e218ac98ca0e6b9602d365c",
+      "src/workflow/tp_research.py": "cd9c008ee1d486b311f0300ee22ce634eb211524302ff5d9c55c554f30306c66",
+      "src/workflow/v13_integration.py": "aa98d5fdad677b45e69ca42b39545a5df085813bcea8b07086f14d716d4568cc",
+      "src/workflow/v13_quotation.py": "7c77af2b7770b71186a05f629e7142149837e24b2fa04db2a36bf22970ac1f0b",
+      "src/workflow/v12_flow.py": "5b2b70a5117667b762474f12230e806ca553d754ff7c35fb71bc0b26948d7aec",
+      "src/workflow/inso_query.py": "cbee42baf6e0c553ec65c8b6a1396cd43df079d6eadc1c66b6f8fda75a77061e",
+      "src/launcher/google_web.py": "2eeb6879343fd844f3a61125f80d24b20e60ed33f37b4f96b86c5eaf9ba7fc7e",
+      "src/launcher/google_quote_update.py": "b05916f894cbfbbb5623506757518f3b0a7fe217f71d18d8e1a0c5807ea2c16f",
+      "src/research/continuation.py": "8d33752c0260ae8b306e19b6e1eb44c6219259a37678f7a3bf99b6539c8e9eaa",
+      "src/gui/main.py": "3bea42fc6dca0fde74b17c2687dd9277a15bd154ce3fbf1b1a48f36f876fd01a"
+    },
+    "findings": {
+      "96_792": {
+        "due": "11:22:16.173",
+        "inquiry_row_terminal": "11:23:52.939",
+        "tp_begin": "11:23:52.965",
+        "owner_occupied_after_due_seconds": 96.766,
+        "handoff_seconds": 0.026,
+        "classification": "Current inquiry work before closed-row safe release; TP starts in following original120s wait, not96s timer overhead."
+      },
+      "483_123": {
+        "quote_begin": "13:32:54.016",
+        "tp_due": "13:33:03.841",
+        "quote_end": "13:41:06.890",
+        "tp_begin": "13:41:06.964",
+        "quote_owner_overlap_seconds": 483.049,
+        "handoff_seconds": 0.074,
+        "classification": "Synchronous quote whole-batch barrier; no normal inter-candidate module claim."
+      },
+      "unproven": "Exact intra-candidate INSO/Google/FX/retry split and first1089.628s outer488.165s tail remain UNKNOWN. No evidence that whole late interval is Google lock contention or scheduler CPU overhead.",
+      "google": "Global RLock per native/cache/settlement operation, not whole poll-scope lock. Serialized native I/O can occupy Owner, but no distinct lock-wait timing in existing evidence.",
+      "deadline": "Completion+period, not fixed wall-clock cadence and not finish-by900s. Correct deadline calculation cannot preempt synchronous browser/effect work."
+    },
+    "options": [
+      {
+        "id": "A",
+        "recommendation": "Minimum isolated first repair proposal, not full independent-parallel acceptance",
+        "scope": "Optional confirmed closed-candidate callback in original quotation cycle/integration, original backend scoped TP-only yield/claim/run/resume. Defaults preserve old callers.",
+        "proposed_files": {
+          "src/workflow/v13_quotation.py": "Optional after_closed_candidate on run/_run, after execute_candidate and on_result fully return",
+          "src/workflow/v13_integration.py": "Forward callback and certify settled result; unconfirmed external effects are not safe boundary",
+          "src/launcher/backend.py": "Compose callback with original Stop/poll gate/context/admission, TP-only eligible claim, restore outer state and clear discovery snapshot"
+        },
+        "no_initial_changes": [
+          "WorkflowRuntime scheduling algorithm",
+          "Research price/date/FX rules",
+          "TP identities/outbox/SMTP",
+          "Google lock/TTL/fresh reads",
+          "GUI pages",
+          "Actor factory"
+        ],
+        "benefit": "Replaces whole normal quote-batch obstruction by remaining current safe candidate/settlement wait where a confirmed boundary exists.",
+        "limits": "Not preemptive: single owner query/retry/FX/unknown Google write/source conflicts remain. Existing TP.run itself is a whole cycle and may delay quotation. Not a fairness or hard900s guarantee; no arbitrary order-count cap.",
+        "guard": "Never release a business source lease on module yield. External transaction must reach confirmed terminal before lending; unknown/protected effects forbid callback. If requires weakening any source-lease boundary, reject A and move to approved E path scope."
+      },
+      {
+        "id": "B",
+        "recommendation": "Required additional accepted capability if aiming for real market-read overlap, reuse implemented E rather than rebuild",
+        "scope": "Reviewed GUI factory composition selecting existing business_continuations and1..2fixed MarketReadActors; verify and minimally fill cooperative safe Owner boundaries and telemetry.",
+        "existing": [
+          "same WorkflowRuntime full business source lease and FIFO",
+          "immutable result/terminal/global faults",
+          "per-thread Playwright and shared Chrome/admission",
+          "same-site exclusion/IC pacing",
+          "Owner FX and original domain continuation",
+          "SITE_DEFER Owner recovery",
+          "Stop enqueue/finally races"
+        ],
+        "source_split": {
+          "ordinary_actor": [
+            "IC.net",
+            "HQEW"
+          ],
+          "tp_actor": [
+            "IC.net",
+            "Findchips",
+            "HQEW",
+            "LCSC"
+          ],
+          "owner": [
+            "BOM",
+            "INSO",
+            "ordinary non-whitelisted sources",
+            "all Google",
+            "FX",
+            "persistent effects"
+          ]
+        },
+        "additional_work": [
+          "explicit reviewed production entry composition, not a v16/tp flag flip",
+          "prove safe nonblocking boundaries and bounded fairness, preserve original authorization",
+          "due/admitted/first actual work/worker/owner/effect telemetry",
+          "synthetic safety and final full regression then separately authorized real overlap/timing/Stop validation"
+        ],
+        "limits": "Actor query waits decouple, but synchronous order discovery/recovery, read_owner/complete, Owner INSO/BOM/FX and Google transactions still block tick. Tick can step multiple active modules; delay bound is not simply50ms or one step. Same-source FIFO, site pacing, max2slots still queue. Long uninterruptible write must finish/hold, not preempt."
+      }
+    ],
+    "must_be_exactly_two_actors": false,
+    "parallel_requirement": "A removes batch obstruction without actors. A controlled market actor plus Owner can overlap permissible stages; max2 is approved resource capacity, not a proof of timely TP. Full original webpage-parallel goal needs real integration and live acceptance; independent timers are insufficient.",
+    "preserve": [
+      "one canonical runtime and source FIFO, no priority bypass of same row",
+      "Google global lock,60sdiscovery versus mandatory fresh validation/readback",
+      "120smonotonic safety minimum including overlapping borrowed work",
+      "original poll_gate/poll_idle/manual permission persistence",
+      "nested cycle/cache/stage/pause context",
+      "SENT immutability,UNKNOWN no blind retry",
+      "GLOBAL_STOP before result/effect,late result rejected",
+      "terminal ack before lease release,no force-kill",
+      "Owner-only auth recovery and protected INSO/BOM",
+      "two actor maximum,same-site pacing,one TP FX snapshot"
+    ],
+    "future_offline_tests": [
+      "TP due amid multi-candidate quote at first proved closed boundary",
+      "one long candidate and3x120sretry no false deadline PASS",
+      "unconfirmed Google effects no yielding",
+      "same/different source FIFO and lease retention through fresh/effects",
+      "Stop commit/enqueue/worker-finally/late result/global fault",
+      "outer pause/cycle/cache/GUI identity restored",
+      "120sminimum unchanged after nested work",
+      "large TP fairness without limiting total orders",
+      "actor capacity/site pacing/auth recovery/large result safe defer/no duplicate effects"
+    ],
+    "future_live_acceptance": {
+      "authorization": "Separate safe browser testing window, then separately reviewed release authorization. No live probe now.",
+      "trace": [
+        "prior logged due",
+        "module admitted",
+        "first real Brief/source read",
+        "actor first request/read terminal",
+        "owner resumed",
+        "effect confirmed or UNKNOWN"
+      ],
+      "criteria": "Long quote/different-row TP gets first real work at proved safe opportunity, not merely early begin log. Show real read-request overlap with correct original parsers, same-row exclusion and native page/slot limits; retain categorized unavoidable waiting. No new business demand or historical mail replay.",
+      "hard_sla": "No hard900s guarantee without established safe-step/queue upper bounds; no invented max lateness threshold."
+    },
+    "baseline": {
+      "script": "\"\"\"Offline arbitration baseline only. No Backend, SQLite, browser or business I/O.\"\"\"\nimport json\nfrom types import SimpleNamespace\nfrom src.workflow.service import WorkflowRuntime\n\ndef seed(first, tp_due):\n    clock = SimpleNamespace(t=-900.0)\n    run = WorkflowRuntime(None, None, ())\n    run.configure_modules({first: 900, 'tp': 900}, timer=lambda: clock.t)\n    assert run.claim_due_module() == first\n    run.complete_module(first)  # prior first-module due is0\n    assert run.claim_due_module() == 'tp'\n    clock.t = tp_due - 900\n    run.complete_module('tp')\n    clock.t = 0\n    assert run.claim_due_module() == first\n    return run, clock\n\nrun, clock = seed('quotation', 9.825)\nclock.t = 9.825\nassert run.claim_due_module() is None  # TP due, quotation still holds Owner\nclock.t = 492.874\nassert run.claim_due_module() is None\nrun.complete_module('quotation')\nclock.t = 492.948\nassert run.claim_due_module() == 'tp'\nassert abs((clock.t - 9.825) - 483.123) < 1e-9\nrun.complete_module('tp')\nquote = {'case': 'quoted whole-cycle occupancy', 'due': 9.825, 'owner_released': 492.874,\n         'tp_start': 492.948, 'delay': 483.123, 'remaining_occupancy': 483.049, 'handoff': 0.074}\n\nrun, clock = seed('inquiry', 10.887)\nclock.t = 10.887\nassert run.claim_due_module() is None\nclock.t = 107.653  # closed-row SOURCE_CHANGED, not an invented timer\nrun.yield_module_resource('inquiry')\nclock.t = 107.679\nassert run.claim_due_module(exclude=('inquiry',)) == 'tp'\nassert abs((clock.t - 10.887) - 96.792) < 1e-9\nclock.t = 115.955\nrun.complete_module('tp')\nrun.resume_module_resource('inquiry')\nrun.complete_module('inquiry')\ninq = {'case': 'inquiry closed-row release', 'due': 10.887, 'owner_released': 107.653,\n       'tp_start': 107.679, 'delay': 96.792, 'remaining_occupancy': 96.766, 'handoff': 0.026}\n\nclock = SimpleNamespace(t=-900.0)\nrun = WorkflowRuntime(None, None, ())\nrun.configure_modules({'quotation': 900, 'tp': 900}, timer=lambda: clock.t)\nassert run.claim_due_module() == 'quotation'\nrun.complete_module('quotation')\nassert run.claim_due_module() == 'tp'\nclock.t = -899\nrun.complete_module('tp')\nclock.t = 5\nassert run.claim_due_module() == 'quotation'  # earliest due, no implicit TP priority\nrun.complete_module('quotation')\nassert run.claim_due_module() == 'tp'\nrun.complete_module('tp')\nprint(json.dumps({'passed_scenarios': 3, 'cases': [quote, inq], 'third_case': 'earliest-due selection retains quotation ahead of later-due TP',\n 'qualification': 'Real canonical runtime arbitration with synthetic clock. Handoffs supplied from prior reviewed logs, not measured wall time. No domain execution or new real-timeliness PASS.120s and authentication/lease/effect guards not exercised by this narrow baseline.'}, indent=2))\n",
+      "result": {
+        "passed_scenarios": 3,
+        "cases": [
+          {
+            "case": "quoted whole-cycle occupancy",
+            "due": 9.825,
+            "owner_released": 492.874,
+            "tp_start": 492.948,
+            "delay": 483.123,
+            "remaining_occupancy": 483.049,
+            "handoff": 0.074
+          },
+          {
+            "case": "inquiry closed-row release",
+            "due": 10.887,
+            "owner_released": 107.653,
+            "tp_start": 107.679,
+            "delay": 96.792,
+            "remaining_occupancy": 96.766,
+            "handoff": 0.026
+          }
+        ],
+        "third_case": "earliest-due selection retains quotation ahead of later-due TP",
+        "qualification": "Real canonical runtime arbitration with synthetic clock. Handoffs supplied from prior reviewed logs, not measured wall time. No domain execution or new real-timeliness PASS.120s and authentication/lease/effect guards not exercised by this narrow baseline."
+      },
+      "seconds": 0.773013,
+      "script_sha256": "b3aafdb337cf130721a663c6450ebd3dffa5d7cf2e4ede2eee3fcafefd455677",
+      "scope": "3 arbitration scenarios only; no changed business implementation, no browser/SQLite/effects and no assertion proposed cure works live."
+    },
+    "checks": {
+      "src_and_tests_unchanged": true,
+      "baseline_scenarios": 3,
+      "full_regression": "NOT_RUN_NO_APPLICATION_CHANGE",
+      "json_and_diff": "PASS",
+      "source_and_AST": "PASS:15source hashes, src tree, default actor factoryNone, no module-yield call in normal quotation candidate loop"
+    },
+    "owner_approval_boundary": "Choose A isolated closed-row callback repair OR B existing-continuation entry integration/safety completion; code/offline only. Owner forwards CEO source review before any separately authorized install/browser test. No production action approval requested now.",
+    "cleanup": {
+      "state": "REMOVED",
+      "owned_directory": "D:/Program_Leo/INSO_Leo/.tmp/v16-tp-delay-design-20261028",
+      "retired_bytes": 33066,
+      "guard": "Resolved exact root/file allowlist, no reparse points or unknown entries; embedded baseline/evidence preserved in this canonical JSON. No production or previous task scratch touched."
+    }
   }
 }

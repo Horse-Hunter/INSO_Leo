@@ -1,5 +1,156 @@
 # V1.6 unified release and initial production verification
 
+## TP排队延迟：源码归因与最小整改提案 — 2026-10-28（仅设计）
+
+**依据CEO a176ed894bb18735f99dfa80fd1a3a21efdfd1b1；本轮不改业务、不部署。**
+本章节只提交后续实施建议，不表示已消除TP延迟。生产沿用此前确认的
+BUSINESS_RUNNING / V16_REVIEW_REQUIRED；本轮没有再次读取生产日志、进程、
+配置、数据库或Chrome，更没有启停、安装、发信或页面实验。
+分析应用仍为c24d686096b1f6b5157ac1e443167be5662f6b54，src树
+81ab97bbbff5f220e70ae2ad73f8c5ff4e497f8f。
+以下精确函数/行号用于Executor及CEO技术复审；不是新开发完成声明。
+
+### A. 实际执行机制与延迟归因
+
+| 实际调用/资源 | 源码依据 | 当前行为与结论 |
+| --- | --- | --- |
+| 正式GUI组装 | src/gui/main.py:172；backend.py:532、1165 | 默认ProductionBackend不注入market_actor_factory；v16_enabled只选择独立截止时间，不启用Actor |
+| 到期选取 | workflow/service.py:864、888、906 | 同一个Runtime按最早due选择；module_resource被持有时直接返回None；完成后以完成时刻+本模块周期计算下一次due，无TP固定最高优先级 |
+| 同步整轮执行 | backend.py:1170—1223 | _run_independent_job调用execute，直到整个模块返回才再次claim_due_module；外层poll_gate/poll_idle仍用于原人工操作门禁 |
+| 报价整批 | v13_integration.py:487→backend.py:963→V13IntegratedCycle.run:273→v13_quotation.py:215 | 依次处理两个来源表及全部候选；候选内部execute_candidate:224做INSO查询、FX、返回on_result；settle_result:306可执行原Google写回及通知。当前正常候选之间没有模块调度回调 |
+| 询价安全释放点 | v12_flow.py:195；backend.py:2669 | 闭行后原120秒等待使用单调截止时间，yield inquiry资源并同步运行另一到期模块；它不是让整个系统一律停120秒，也不是采购/写入中断点 |
+| INSO读取失败等待 | workflow/inso_query.py:16；backend.py:935、2648 | 首次+3次重试，每次失败先reset/close再等120秒；当前默认报价wait=self._stop.wait，并不派发TP。只有已装配continuation_pump时走合作式等待 |
+| TP实际工作 | tp_composition.py:8→tp_research.py:412、427 | 整轮发现→独立task_key/claim→同步execute_tp→complete_order:349鲜检→原不可变outbox；不是仅取得模块begin就完成调研 |
+| Google独占 | google_web.py:148、220；google_quote_update.py:83 | 全程序_GOOGLE_GRID_LOCK为每次实际操作/缓存single-flight及收口提供排他；poll_scope不是把整轮quote都锁在此RLock内。原Owner同步阻塞与Google锁等待不是同一指标 |
+
+```text
+GUI默认组装 → 一个WorkflowRuntime → 原Owner claim最早到期模块
+  ├─ 报价：全部来源/候选 → 单笔INSO/FX/Google结算 → 整轮返回 → 才能再次选TP
+  ├─ 询价：当前行处理 → 闭行120秒等待【可借出Owner】→ 返回询价
+  └─ TP：Brief/来源核验 → Research → 发信前鲜检 → 原队列
+可选分支（当前未注入）：同一个Runtime → business_continuations.tick
+  → 原Owner单步/收口；最多两个market Actor只读 → 不可变结果回原Owner
+```
+
+**96.792秒案例。** 计划11:22:16.173；询价至11:23:52.939记录SOURCE_CHANGED，
+TP在11:23:52.965开始。96.766秒在当前询价闭行结果之前，0.026秒为之后交接。
+TP借用的是后续120秒等待里的安全机会，不能把96.792秒全部归因于120秒等待，
+更不能通过删除等待“修复”。当前行的详细读取/计算/鲜检时间分摊仍UNKNOWN。
+
+**483.123秒案例。** 报价13:32:54.016开始，TP13:33:03.841到期；报价至
+13:41:06.890返回，TP13:41:06.964开始。483.049秒与报价占用重叠，交接0.074秒。
+源码整批不让出的行为与日志一致；这是可执行机会被串行占用，不是已证明的
+483秒时钟/调度计算故障。不能把整个483.049秒说成Google锁竞争或120秒等待。
+报价占用可包含候选查询、原INSO失败重试、FX、结算/通知等；该轮没有逐成功阶段
+时长，哪个子阶段占多少仍UNKNOWN。四张常驻页和60秒普通读缓存减少重复读取，
+不改变同线程Owner独占，鲜检/写入读回也不能改为缓存以追求准时。
+
+### B. 两种可行方案与推荐
+
+| 比较项 | A：原Owner闭行安全点借出给到期TP（推荐最小第一步） | B：接入既有业务Continuation及有界Actor |
+| --- | --- | --- |
+| 最小切分 | 报价一笔完整查询、业务结算/通知完成且归属/写入已确认后，再检查到期TP | 原Owner发现/核验→业务来源租约→只读请求→Actor结果→Owner鲜检/FX/外部动作→确认终态释放 |
+| 复用 | 现有claim_due_module(exclude)、yield/resume、_run_independent_job上下文、原TP.run；不建新调度器 | 原business_continuations.run_business_continuations、OwnerMarketResearch、MarketReadActors和三个领域begin_continuation，不重新开发E主体 |
+| 消除什么 | 减少“整批报价结束才能轮到TP”的累计排队 | 进一步让允许的市场读等待与其他模块调研重叠；报价按单笔Owner步骤而非整批独占 |
+| 仍会等什么 | 当前单笔INSO/FX、原重试、Google写入结算、来源冲突；TP整轮本身也可能反过来长占Owner | 原Owner单步、同站/IC.net节流、同来源行FIFO、Google锁、BOM/INSO、认证/未知结果；两个Actor饱和仍排队 |
+| 准时承诺 | 不能保证900秒一到即开始，更不能保证一轮900秒内完成 | 同样不是硬实时；0.05秒只是空闲循环等待，不能当最坏延迟上限 |
+| 风险/开发面 | 较小的闭行回调与受限借用；必须证明物理页面已安全释放，并防递归/饥饿 | 已有离线能力可复用，但需正式入口组装、完整停止/恢复/真实网页重叠及准时验收；不得只开两个线程 |
+
+**推荐A作为可独立审核的最小修复；不把A称为V1.6独立并行需求完成。**
+应先证明正常报价批次存在可确认的闭行边界，不预估“能降到几秒”。
+若Owner要求直接完成真正只读重叠，则下一阶段选择B并复用已存在E路径，
+无需先制造另一个Actor框架，也无需为过程完整性重复开发A/B/C旧组件。
+两者是可选实施范围，不能未经授权把A顺带扩成B。
+
+A建议实际变更（**接口名为拟议，不是已实现**）：
+1. src/workflow/v13_quotation.py：给run/_run增加可选after_closed_candidate回调，
+   默认空实现；只在execute_candidate及其on_result返回、原操作关闭、完整结算后调用。
+   不在查询中、Google脚本等待中或仅得到价格尚未结算时回调。
+2. src/workflow/v13_integration.py：V13IntegratedCycle.run传递该回调并确认
+   settle_result已收口；SOURCE_STATUS_NOT_UPDATED、UPDATE_RESULT_UNCONFIRMED、
+   QUOTE_INPUT_READBACK_MISMATCH等未知写入不得当作安全让出证明。
+3. src/launcher/backend.py：组装该回调；复用原poll_gate、共享准入、上下文栈及
+   Runtime.yield/claim/resume，只在闭行证明有效、未Stop/暂停、TP已到期时借用。
+   该安全点限定可选TP，非全局永久TP最高优先级；不清除外层暂停，不打开人工空闲。
+   返回后清理原发现快照，恢复外层身份，后续外部动作继续原鲜检。
+4. 初步不改WorkflowRuntime算法、TP价格/邮件、Google锁或GUI结构。
+   若需把“已关闭的INSO失败重试120秒”等待也接为让出点，应作为A的独立增量，
+   复用同一安全派发能力并保持原截止时间，不添加第二套等待/调度。
+
+A的公平性限制必须保留：一次机会执行现有TP.run可能耗完整TP批次，不能以此宣称
+三模块均有有界延迟；不人为限制处理订单总量。双向细粒度公平调度属于B中已存在的
+领域接续，不能靠递归执行所有模块来替代。遇来源冲突不可跳过FIFO抢占同一行；
+若A实现会需要绕过现有事务租约/闭锁，则中止该设计并升级为B范围，不能删锁实现。
+
+### C. 现有Actor能力、缺少的接线与剩余开发
+
+- 已实现但生产未选中：backend.py:1167以显式market_actor_factory选择
+  business_continuations；GUI默认组装未提供此工厂，当前也没有“打开Actor”的配置项。
+  改v16_enabled、TP开关或900秒配置都不能完成此接线。
+- 已实现：business_continuations.py:199/274逐步推进任务及收取结果，
+  inquiry/TP经OwnerMarketResearch.advance提交，不同步等整批Research；报价
+  QuotationOrderContinuation.read_owner:369与complete:388分开，仍在原Owner执行。
+- 已实现：MarketReadActors(workers=1..2)，每线程自己的同步Playwright客户端，
+  复用同一个Chrome、精确自有页面；同站请求保守串行，共享IC.net节流/认证准入。
+  ResearchContinuation.market_query对普通询价目前只放行IC.net/HQEW；TP允许
+  IC.net/Findchips/HQEW/LCSC。BOM、INSO及普通询价其他现有Owner来源不随意外移。
+  FX和原规则仍由Owner接续，TP单次汇率快照不拆成Worker独立换算。
+- 已实现：WorkflowRuntime完整业务来源行租约从查询前保持至Owner外部动作终态，
+  市场读终态不自动释放业务租约；同一订单跨模块FIFO，GLOBAL_STOP先于成功结果。
+- 需要后续审查/开发：正式GUI入口以原可注入工厂选择既有组合；确认安全点闭行证明、
+  Stop/恢复/未知写入收口、截止时间/实际首次工作日志、有界公平性及认证恢复。
+  不新建开关或第二调度器以绕开审核。必要的最小接口改动独立提交。
+- 不能只接线后声称解决：tick虽然非阻塞收市场结果，但orders(module)的发现/恢复、
+  单次run.work.read_owner、complete、INSO/BOM、FX或Google鲜检/写入仍为同步调用；
+  它们在执行时阻止下一tick。活动模块逐个step，每轮可执行不止一个同步Owner步骤，
+  所以最坏等待还可能是多个步骤及队列之和，而不只是一个步骤/50毫秒。
+
+**是否必须恰好双Actor？不是。** A可在没有Actor时消除整批屏障；真正市场读重叠
+可以由受控单Actor与原Owner协作实现，双Actor增加不同网站读的重叠能力。
+要满足原先允许安全网页并行的目标，需要正式接入并验收既有隔离读取路径或等价
+受审能力；单纯独立定时器不够。即使两个Actor正式接入，INSO/Google/同来源行
+仍必须排他，长时间不可中断外部写入不能承诺TP硬准时。严格零延迟与这些安全
+约束不兼容，不能为了“900秒准时”强行中断或重试未知业务。
+
+### 安全保持、后续验证及授权范围
+
+- Stop/人工：检查在借出、派发、应用结果及副作用前；沿用poll_gate/_poll_idle及
+  can_order_action实时持久权限。活跃/未知任务排空前不开放人工，不用Stop假定未执行。
+  恢复外层cycle、阶段、暂停与缓存身份；内层故障不能被旧订单吸收或抹掉。
+- 资源：原Google全局锁、受保护INSO及页面所有权不变；Google结算未确认禁止让出；
+  不关闭人工保护页，不跨线程传Page/Browser/Backend闭包；同一来源租约不交叉释放。
+- 时间：120秒以原单调截止时间为下限；借用TP不能使原采购提前，也不在恢复后重复计时。
+- 幂等：查询后外部动作前鲜检，SENT不重发、UNKNOWN不猜测重试；完整业务事务排他
+  与不可变命令继续原实现，Actor终态不等于外部交易确认。
+- 认证/故障：SITE_DEFER只通过原Owner核验恢复；Worker不取新凭据、不处理验证码；
+  共享资源故障闭锁并GLOBAL_STOP，迟到/错轮结果拒绝，退出超时不强制释放活跃租约。
+
+后续合成验收（不是本轮已跑）：长报价多候选中TP到期，闭行后首个合法机会派发；
+单候选长读取与3次120秒重试仍不虚报准时；写入/读回未知期间拒绝插入；来源行同/异、
+Stop与提交/终态竞态、GLOBAL_STOP先于成功、迟到结果、内外身份/GUI计时、原120秒
+下限、候选快照失效后鲜检；大量TP时其他模块不饿死。B另验证最多2Actor、同站节流、
+认证延期/核验恢复、单TP汇率快照、结果过大安全延期、线程/页面有界释放和原规则等价。
+真正实现后才跑受影响专项及最终完整离线回归，不能用本轮纯计时断言替代。
+
+真实验收须另获安全窗口，先隔离只读再经授权上线；分别记录due、模块准入、首个实际
+Brief/来源读、Actor开始/结束、Owner接续、外部终态，不能仅提前写begin掩盖排队。
+用长报价与独立行TP证明首次工作确实提前，并用真实页面请求时间线证明允许的读阶段
+重叠；同来源行/同站冲突必须安全排队，明确报告原因与时长。无合格新TP不制造订单，
+外部副作用依据既定规则核对结果，不试发历史邮件。无安全步骤时间上界，不承诺硬SLA。
+
+本轮必要离线基线：仅用真实WorkflowRuntime+合成时钟，3个场景通过，复现
+483.123秒Owner占用、96.792秒闭行借出以及最早到期并非TP固定优先。
+精确脚本/结果嵌入原JSON `tp_delay_mechanism_design_20261028`，可从仓库重跑；
+交接时间取自此前受审日志，是输入而非新实测。未初始化Backend/SQLite/浏览器，
+未验证新方案，也未重跑无新增价值的全量测试。src/tests均不变，临时脚本退休。
+
+**需Owner批准的下一步边界：** 选择A的隔离闭行回调整改，或B的既有接续正式组装及
+安全补齐；只授权源码/离线回归。完成后仍由Owner转CEO源码复审。生产停止、真实浏览器
+窗口、配置或安装替换均不包含在本方案中，必须另行明确授权。本轮不请求Owner现在
+停止程序，也不自行实施任何方案。整体仍REVIEW_REQUIRED，TP准时性仍OBSERVED_FAIL。
+
+
+
 ## 正式发布后被动运行观察 — 2026-10-28
 
 **结论：保持 BUSINESS_RUNNING / V16_REVIEW_REQUIRED。未重启、安装或改动业务。**
