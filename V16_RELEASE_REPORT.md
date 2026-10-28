@@ -1,5 +1,113 @@
 # V1.6 unified release and initial production verification
 
+## 方案A：报价安全收口后让位TP — 隔离源码交付（2026-10-28）
+
+**已实施并完成离线回归，REVIEW_REQUIRED / NOT_DEPLOYED；不是实机准时性PASS。**
+依据CEO `5f8ecfc35c5f5078f63bad6fb3600b77bcdf00a9`，只实施A，未接入方案B。
+没有停止/重启/安装生产，没有连接Chrome/CDP、读取生产配置/账本、操作真实Google
+或SMTP。生产状态沿用此前已确认BUSINESS_RUNNING，非本轮重新观察；已安装应用仍
+为此前c24d686版本，本轮开发树源码不等于生产EXE。
+
+### 冻结版本和实际文件
+
+最终应用源码提交：`b57f467ac2545292d3ee441af974053f8d143179`。
+src树：`eaea701b8c1ccdfe4fde1db36d2fea07e8a39d84`。
+tests树：`7087294dcca5148f6b792a3be52fc13c102083ea`。
+增量代码提交：c243f6d9ee3c2a0c948653fae4e0802ab1461038（主实现）、
+f0afd717c892c840c4775a17b799190fdf612ee9（跨来源不确定状态阻断）、
+b57f467ac2545292d3ee441af974053f8d143179（退休已关闭报价控制器）。
+最终证据提交仅更新原报告、原任务、原JSON，不改变上述树。
+
+| 文件/接口 | 实际变化 |
+| --- | --- |
+| src/workflow/v13_quotation.py — run/_run(after_closed_candidate=None) | 默认关闭；仅execute_candidate及on_result完整返回后回调，不插入单笔查询/写入内部 |
+| src/workflow/v13_integration.py — run同名可选参数 | 原settle_result/hold/通知持久化/observe结束后，白名单确认安全终态才转交；QUOTE_FOUND/Busy未结算及写入失败、读回不符、结果不明均阻断；本次处理范围一旦不确定，后续安全行不能清掉该阻断 |
+| src/launcher/backend.py — 原run_quotation组装及_yield_quotation_to_tp | 仅原v16独立周期、原Owner报价上下文、无Actor工厂时接线；通过原yield/claim(exclude inquiry/quotation)/_run_independent_job/resume借用已到期TP；无新调度器或优先级算法 |
+| src/launcher/v13_quotation.py — settle_quotation_operations | 对原保留操作重新证明native页面归属、使用现有只读认证观察；原reset关闭已逻辑释放的自有页并验证物理关闭，人工验证页保持保护；退休已关闭控制器，避免TP恢复客户端后报价误借旧句柄 |
+| src/launcher/google_quote_update.py — google_operations_idle | 对当前原Owner页池重跑原文档/登录/native target/owner/unsafe-DOM及close保护检查；不关闭四个常驻Google页，不创建新客户端或新页面池 |
+| src/launcher/google_web.py — operations_idle | 上述检查封装在原_GOOGLE_GRID_LOCK和原read_guard/Stop/poll-scope内，拒绝非Owner范围，不改变缓存/原锁语义 |
+| tests/launcher/test_tp_safe_quotation_yield.py | 实际Backend独立循环→CombinedCycle→原报价读取/结算→原TpCycle/持久队列/假SMTP的隔离集成；含默认关闭对照 |
+| tests/launcher/test_safe_yield_surfaces.py | 现有native页模拟器验证认证/归属/未知DOM/真实自有页关闭/旧控制器释放/原Google锁排他 |
+
+优先的三个业务文件之外增加三个已有Launcher文件的**窄安全检查接口**是必要的：
+原Google close可仅标记保护而正常返回，报价close在保留范围内可只逻辑释放；仅凭
+Python函数返回无法满足CEO要求。复用了原检查/关闭，不新建页面管理器，未更改
+Google/INSO业务策略。Runtime、TP/Research/价格/FX、120秒等待、来源租约、SMTP及
+Actor工厂原实现均未修改；未改旧测试预期，两个新增测试文件共40项参数化场景。
+
+### 实际让位边界与保护
+
+1. 回调前先完成单笔原查询关闭、结算、必要原写入/读回、待处理记录、通知命令持久化
+   和结果观察。白名单不把未结算QUOTE_FOUND当作成功。任何上游异常都不能进入回调。
+2. Backend再确认TP确已到期、未运行/暂停，原Stop/人工请求/暂停/保护页面状态允许；
+   现有来源租约若有任何active或waiting请求即保守拒绝，不释放或跨越原FIFO。
+3. 不只依赖当前表的局部结果：读取原V13HoldStore.active，任何持久未确认写入/读回/
+   结果/来源状态记录均阻断让位，下一来源表或新Integrated范围不能抹掉它。
+4. 重新核验保留报价页后按原exact-owned cleanup物理释放，再在原Google全局锁下
+   核验页池。认证异常、native归属丢失、清理失败不获得让位许可；未确认DOM保护
+   不能解释为空闲。保护页不被清理，四个常驻Google页继续保留。
+5. 复用Runtime原Owner资源借出和TP限定claim；Stop在门禁内及预留后再次检查。
+   不递归调度询价/报价，不打开人工idle。TP真实来源读仍由原TpCycle执行，未用提前
+   begin日志伪装调研。TP结束后恢复原上下文/GUI阶段、来源发现快照和报价资源。
+6. 正常Stop仅恢复必要外层资源以完成原收口，不启动下一报价；逃出的共享/未知故障
+   关闭原Runtime资源准入、GLOBAL_STOP，不盲目恢复外层。内层本地暂停沿用原分类。
+   外层cycle/缓存/暂停保持原嵌套恢复机制，SENT/UNKNOWN和不可变命令继续原规则。
+
+### 离线改善证据与限制
+
+同一实际领域调用链、相同两个报价候选（每笔合成10秒）、TP于第5秒到期，
+比较默认关闭与启用让位：
+
+| 实际测试记录 | 默认关闭 | 安全让位 |
+| --- | --- | --- |
+| 首次真正进入TP Brief/source读取 | 第20秒 | 第10秒 |
+| TP等待计划的偏差 | 15秒 | 5秒 |
+| 第二笔报价开始 | 第10秒 | 第17秒 |
+| 报价整轮完成 | 第20秒 | 第27秒 |
+
+原TP在该测试耗时7秒，所以借用会延后报价；两候选均收口、每个独立合成TP只产生
+原命令的两条假SMTP收据，未多发。单笔查询改为合成600秒时，TP仍等至600秒，
+不会抢占；此反例明确不保证900秒硬实时。上述是**真实业务代码+合成外部数据端口**
+的离线时间线，不是生产网页计时，也不是睡眠两个线程或单纯Runtime计时证明。
+
+长单笔INSO/FX、原重试、未确认写入、来源租约冲突、认证/页面故障，以及原TP整个
+同步轮次，仍可能形成等待。未改变原最早到期选择/完成后周期计算；不是TP永久最高
+优先级，不限制业务订单总量，不实现真正市场网页并行。生产96.792—483.123秒的
+延迟是否改善，必须待源码审核及另行受控发布后实测，当前仍NOT_VERIFIED。
+
+### 最终版本测试与证据
+
+- 最终受影响专项：**537 PASS，33.22秒**。
+- 最终完整离线回归：**3094 PASS / 1 SKIP，125.11秒**。
+- 两个新增文件：**40 PASS，4.11秒**，同最终src/tests内容。
+- 唯一SKIP另行确认：test_existing_path_rejects_symlink_escape_when_supported，
+  当前Windows测试环境无法创建符号链接；原权限无关的路径安全测试仍运行。
+- Ruff（六源码/两测试）、git diff --check通过。复用原Windows Python3.12.10及
+  已有发布环境时区/包路径，无安装依赖。套件SMTP禁发守卫未报告真实连接尝试。
+- 原120秒行间安全下限、旧嵌套上下文/暂停、手动权限、报价/TP/Google/缓存、Runtime
+  及采购原回归均包含在最终537专项与完整套件。没有以此前3项计时基线替代集成。
+
+测试覆盖：多候选中途到期；首个合法点真实读取TP；确认写入先收口；长单笔不抢占；
+持久未知记录跨范围阻断；同来源active/waiting不借出且原租约可按原Owner释放；
+多模块到期只借TP/未到期不借；Stop在检查/预留/内层时拒绝或排空；内层本地暂停、
+GLOBAL_STOP、认证和清理故障；外层身份/缓存/GUI耗时恢复；SENT/UNKNOWN历史命令
+不重做；原Google锁和页面保护；恢复客户端后不复用旧报价控制器。
+所有账本和发信结果均为隔离合成数据，不声称核验了生产最新收据或外部业务结果。
+
+中间结果按真实版本保留：c243f6d全量3091/1SKIP130.69秒、f0afd71全量3093/
+1SKIP125.57秒均非最终版本；后续有安全修正/新增用例，最终重新全量。初次普通
+Python缺少tzdata造成2项收集错误，复用现有时区后解决；早期夹具误模拟Busy、
+确认状态及清理后的既有SENT等导致8失败，另有持久hold观察计数预期1失败，均在
+最终版本修正并完整重跑，没有弱化产品门禁或旧测试。
+原JSON `tp_safe_quotation_lending_20261028`绑定源码/src/tests、命令、覆盖及日志散列。
+本轮自有临时测试账本、导出和脚本取证后退休；生产、回滚、原长测及其他输出不清理。
+
+下一步唯一Owner动作：转交CEO对上述新源码独立复审。**没有打包/安装授权，没有
+真实浏览器安全窗口或Actor启用授权；本次不请求Owner停止当前业务。**
+整体仍V16_REVIEW_REQUIRED；离线通过不等于V1.6全部PASS。
+
+
+
 ## TP排队延迟：源码归因与最小整改提案 — 2026-10-28（仅设计）
 
 **依据CEO a176ed894bb18735f99dfa80fd1a3a21efdfd1b1；本轮不改业务、不部署。**
@@ -1811,3 +1919,5 @@ Safe Stop/global stop now immediately signal the ALREADY EXISTING thread-safe
 actor stop port; owner-only lease drain remains on poll thread. Does not alter
 accepted actor transport race protocol. No new auth tokens/Owner permissions.
 Final full result and source/tree SHA recorded separately after this commit.
+
+本轮清理收据：精确自有临时根 `.tmp/v16-safe-yield` 已退休，29794个文件、1261196911字节；无重解析点/越界路径，保留原安装、回滚、生产状态及旧长测。

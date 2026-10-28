@@ -4399,3 +4399,89 @@ release. Production remains the
 existing BUSINESS_RUNNING installation
 so far as previously reported,
 `V16_REVIEW_REQUIRED`.
+
+
+## Executor — Option A source delivery / offline regression (2026-10-28)
+
+Authorized by CEO5f8ecfc35c5f5078f63bad6fb3600b77bcdf00a9. Implemented onlyA;
+B/deployment/browser experiments explicitly deferred. Final application source:
+**b57f467ac2545292d3ee441af974053f8d143179**; src tree
+**eaea701b8c1ccdfe4fde1db36d2fea07e8a39d84**; tests tree
+**7087294dcca5148f6b792a3be52fc13c102083ea**.
+Code commits c243f6d9ee3c2a0c948653fae4e0802ab1461038,
+f0afd717c892c840c4775a17b799190fdf612ee9, b57f467...; delivery evidence commit
+contains only original report/task/JSON, preserving those exact tested trees.
+
+Reuse audit: Runtime due/yield/claim/resume and nested _run_independent_job,
+original V13 query/updater/hold/notification, TpCycle/outbox/worker, original
+page owner/auth/close/GRID lock are reused. No alternate scheduler/state/Chrome.
+V13QuotationCycle.run/_run(after_closed_candidate=None) defaults off. Integrated
+run certifies full original settlement/hold/notify/observe and safe result;
+Busy/unsettled QUOTE_FOUND or write/readback/result/status uncertainty blocks
+future callbacks in that scope. Backend consults ORIGINAL active durable holds
+too, so next worksheet/new integration scope cannot reset unknown-effect safety.
+Only independent scheduled original-owner quotation (factoryNone) wires callback.
+Due,notrunning/notpausedTP only; exclude inquiry+quotation; original poll gate,
+Stop/manual/outer-pause/page admission/keepalive protections remain. Any canonical
+source active OR pending request refuses lending; no lease/FIFO release or new IDs.
+Original manual/default callers and optional Actor path remain unconnected.
+
+Six source files (three business files plus minimum three EXISTING Launcher safety
+ports): backend.py, workflow/v13_quotation.py, workflow/v13_integration.py;
+launcher/v13_quotation.py::settle_quotation_operations re-proves owner/auth before
+existing reset physically closes only known-own released operation and clears
+verified closed controllers (no stale client afterTP recovery);
+launcher/google_quote_update.py::google_operations_idle reuses auth/native target/
+owner/unsafe-DOM/close guards without closing four retained pages;
+launcher/google_web.py::operations_idle wraps checkpoint in ORIGINAL_GRID_LOCK,
+read_guard/Stop/owner poll scope. Additional ports are necessary because original
+close may silently protect a page or logically release it; function return alone
+is not safety proof. No new page manager, lock, login or credential policy.
+
+Escape/shared faults abort canonical runtime/GLOBAL_STOP and forbid unsafe resume;
+normalStop drains/cancels via original semantics. LocalTPpause preserves original
+classification. Outer cycle/last poll/cache/pause/stage/owner restored if safe,
+discovery snapshot cleared; idle/manual permissions not opened. Unknown effects
+stay blocked; no Actor changes, original120s waits/fresh reads/TTL/FX/rules/SENT/
+UNKNOWN/SMTP preserved. Running production NOT accessed/stopped/modified/installed;
+previous BUSINESS_RUNNING receipt carried forward only, not a fresh observation.
+
+Final exact source regression:
+- 537 affected PASS33.22s (quotation/inquiry120s/TP/Google/cache/Runtime/nesting/manual).
+- 3094 full PASS /1SKIP125.11s; new two files40PASS4.11s.
+- Skip confirmed: existing evidence symlink-escape case cannot create symlink in
+  this Windows environment; no skipped business safety case substituted asPASS.
+- Ruff all6source/2tests and git diff --check PASS, no dependency installation.
+  Reused existing release tzdata/site-packages via command-local environment.
+- Suite SMTP floor reported no real send attempt; all persisted data/SMTP here
+  synthetic and isolated, not production success.
+
+Actual offline original-domain paired paths: two10squote candidates,TPdue5;
+default-off first real TP Brief read20(queue15), new first read10(queue5),
+second quotation read17 and quote end27 versus old end20. TP7s cost explicitly
+included; both candidates complete, no fictitious bounded worst-case promise.
+Single600squery is not preempted:TPreal read remains600. Do not use an early begin
+log, old3runtime baseline scenarios or actual production late cases as cure PASS.
+Tests cover confirmed updater click/readback beforeTP, Busy/unknown/readback/status
+holds through later candidate/new integration scope, sameTPsource lease or pending
+FIFO unchanged, onlyTP due admission, Stop before/at reservation/withinTP, local
+pause/global fault/cleanup/auth, context/cache/GUI timing, SENT/UNKNOWN nonreplay,
+Google original lock, protected native pages and replacement-client controller.
+
+Intermediate full c243f6d3091/1SKIP130.69s and f0afd713093/1SKIP125.57s NOT final;
+later genuine source/test refinements reran full. Initial timezone collection and
+new fixture/observation assertions corrected without weakening old tests. Final
+source/tree/counts/log hashes/commands/limits stored in original JSON
+`tp_safe_quotation_lending_20261028`, original report new leading chapter.
+
+Still NOT_VERIFIED: real Google/INSO checkpoint+TP queue improvement after install,
+actual web parallelism (B off), longterm/DPI/game effects. One long candidate,
+120squery retries,protected writes/source conflicts or entire synchronousTPcycle
+can still delay work; no hard900s guarantee or total-order limit introduced.
+Owner forwards code+report for independent CEO source review. No production
+Stop/Start/repackaging, browser test window or release authorization requested.
+Status **OPTION_A_IMPLEMENTED_OFFLINE / REVIEW_REQUIRED / NOT_DEPLOYED**;
+V1.6 overall remainsREVIEW_REQUIRED. Owned temporary test outputs retired after
+sanitized extraction; production/rollback/old soak/other worktrees preserved.
+
+本轮清理收据：精确自有临时根 `.tmp/v16-safe-yield` 已退休，29794个文件、1261196911字节；无重解析点/越界路径，保留原安装、回滚、生产状态及旧长测。
