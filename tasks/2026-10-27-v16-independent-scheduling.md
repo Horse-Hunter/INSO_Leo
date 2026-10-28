@@ -3936,3 +3936,181 @@ retained for correct prior source. Only canonical report/task/JSON changed.
 Owned scratch retired after sanitized extraction, protected logs/runtime/rollback/
 old soak retained. No CEO message: Owner forwards this unified factual report.
 No new Stop/Start, installation or real browser probe is requested.
+
+## CEO independent Review — passive post-release observation (2026-10-28)
+
+**Verified GitHub provenance.** Remote branch HEAD
+`f46c4503f24a8dadf428d771a8530e23b0d8c2a0` is a
+one-commit documentation-only child of the last independent
+post-install CEO Review
+`5771c55bbd62f173e2808e5fc22b5d76c35d9f7d`.
+Exactly three delivery files changed:
+`V16_RELEASE_REPORT.md`,
+`tasks/2026-10-27-v16-independent-scheduling.md`,
+`docs/evidence/v16/order-resource-regression.json`.
+Independently compared Git `src/` tree
+`81ab97bbbff5f220e70ae2ad73f8c5ff4e497f8f`
+and `tests/` tree
+`da5a5985fcb84035aaa1c106f1676112bde1fd3b`:
+both unchanged. Original application commit
+`c24d686096b1f6b5157ac1e443167be5662f6b54`
+and reported installed EXE SHA256
+`C92F48E1380A90A747300CD7BDADFBD410C6A8D8352304C1B4D6DA438C7F28CE`
+match prior release evidence. CEO directly read latest unified
+report, task appendix and complete new JSON
+`post_release_passive_observation_20261028`.
+Windows OS, production Chrome/CDP, Vault, SQLite and GUI
+were NOT independently accessed by CEO; actual local process/
+ledger/resource outcomes below are Executor-reported native
+evidence checked for internal consistency, not a second live test.
+
+**Scoped verdict:
+`V16_POST_RELEASE_PASSIVE_OBSERVATION_PASS`.
+`TP_TIMELINESS_OBSERVED_FAIL`.
+Overall remains `BUSINESS_RUNNING / V16_REVIEW_REQUIRED`.**
+
+1. **Natural cycles:** Recomputed each logged begin/due
+   and end/begin duration in the 28-entry timeline:
+   inquiry 9 begun/9 completed; quotation10 begun/
+   9 completed/1 still in progress at the 14:23:16+08
+   cutoff; TP9 begun/9 completed.
+   Eight subsequent inquiry delays1.035–195.954s;
+   eight TP delays96.792–483.123s; nine subsequent
+   quotation timing differences-0.006–+0.024s (tens of
+   milliseconds are clock-map/log precision, not
+   real early start). All available reported deadline
+   differences and episode elapsed times matched
+   recomputation within the stated wall-clock uncertainty.
+   Recurrence plans are from the **prior actual terminal
+   `due_in_s`**, with first cycle after Owner Stop/resume
+   `planned_at=null`; never infer the initial
+   TP1089.628s as lateness against an unrecorded due.
+2. **TP proven contention:** strongest naturally
+   observed case TP due13:33:03.841+08, quotation
+   completed13:41:06.890, TP began13:41:06.964.
+   483.123s late =483.049s overlapping quotation
+   ownership +0.074s handoff. First repeat late96.792s
+   at the original inquiry closed-row boundary,
+   handoff0.026s. These provide direct evidence of
+   serial resource admission, NOT proof of a
+   broken clock or 483s of runtime dispatch overhead.
+   FirstTP1089.628s after start decomposes
+   124.515+0.021+476.852+488.165+0.075s (sum
+   independently recomputed); do not double-count
+   the original120s closed-row safety wait embedded
+   in nested quotation. The 488.165s outer tail is
+   insufficiently broken down and remains UNKNOWN.
+   This **FAIL** is substantive; a configured independent
+   900s deadline does not guarantee actual timely
+   start under one protected browser Owner.
+3. **Google and durable state:** Old initial acceptance
+   probe overlap12 ARTIFACT_LOST/2 RETRY_EXHAUSTED
+   events remain segregated. After safe Owner resume,
+   one 11:06:22 native `GOOGLE_WEB_READ_UNAVAILABLE`
+   TimeoutError recovered; no further classified
+   Google fault, old page-budget rejection,
+   retry exhaustion or associated new failure mail
+   through the stated cutoff. This is bounded
+   evidence, not a permanent root-cause fix.
+   Two read-only consistent in-memory SQLite backups
+   at11:23:31/14:23:23 reported integrity OK and
+   full-row historical invariance:118 commands,
+   149 SMTP-SENT recipient records,4TP tasks
+   (including6 historical TP-SENT). No PENDING/
+   SENDING/UNKNOWN, no new commands/SENT/TP or
+   purchase SAVED change (23). Result-event counts
+   are *repeated log events* not unique orders.
+   `SENT` is SMTP accepted, never inbox-delivered.
+   Snapshot source access is finite (last~0.016s)
+   and can acquire a brief read lock, not zero-lock.
+4. **Resource attribution:** A 900s/31-sample native GUI
+   window averaged0.25358% host CPU, GUI handles
+   5387→1005 (observed range613..5663).
+   Most Chrome child counters there were denied;
+   that window's partial Chrome totals are properly
+   excluded. A separate full-access600s/21-sample
+   native window reported GUI0.24886% and Chrome
+   root +14 children0.08138% host CPU
+   (16-logical-CPU-normalized), GUI handles5537→655
+   and Chrome handles10617→10583.
+   GUI RSS145.05→145.17MiB; Chrome
+   RSS2616.82→2610.55MiB; sampled15 Chrome
+   lifetimes all observed alive in that 10min
+   window. Two collectors' finite lifetimes and
+   low, separately accounted CPU are reported;
+   short ephemeral children could still escape
+   30s polling. A handles decline during a bounded
+   window does NOT prove long-term no leakage,
+   100%/150% DPI or game impact. Sampled process
+   counts are not an absolute maximum.
+5. **Review limitations:** No new frozen rebuild/
+   offline tests needed for documentation-only
+   observation. Existing3054PASS/1SKIP belongs to
+   reviewed source, not newly executed this round.
+   Report includes no production app/config/credential/
+   browser intervention or test orders; no CEO
+   verification of machine state beyond remote
+   evidence. No real dual market-read Actors
+   (`market_actor_factory=None`) are installed;
+   no external new procurement/quote/TP send
+   verified. Distinguish these nonacceptances
+   from the healthy low-interference observation.
+
+**Operational disposition:** Keep existing production
+V1.6 GUI running with original safe Owner and all
+current runtime/ledger/rollback protections; no
+Stop/Start, retest CDP/Playwright probes, script clicks,
+test mail/orders, or repackage/reinstall as part
+of CEO Review. A new passive run of the same 10-minute
+sampling loop alone cannot turn the documented
+TP start deadline FAIL into PASS.
+
+**Next Executor scope — source-only timing
+diagnosis and minimally safe remedy proposal, NOT
+production implementation authorization:**
+- Read `AGENTS.md`, original V1.6 Task,
+  `src/launcher/backend.py` including
+  `_run_independent_poll`,
+  `src/launcher/business_continuations.py`,
+  `src/launcher/market_actors.py`,
+  `WorkflowRuntime.claim_due_module/complete_module`,
+  TP `build_tp_cycle`/`TpCycle` and the
+  `_before_next_row` original120s wait.
+  Diagram actual owner/resource/lock/lease, callbacks,
+  CLI/runtime composition and module timeline
+  (quoted evidence with precise stage boundaries).
+- Distinguish a correct serialized executor
+  causing TP deadline misses from actual scheduler
+  bugs. Propose **at least two viable bounded
+  choices** (e.g., cooperative original-Owner
+  safe-point admission for due TP, and separate
+  read-only actor scope plus protected Owner
+  transaction boundary), including whether either
+  can materially meet900s while quotation remains
+  a long, nonpreemptible operation. Do not promise
+  hard deadline without a provable place to yield.
+  Preserve 120s safety interlocks,
+  same-source/row lease, `SENT/UNKNOWN`,
+  Google global lock and mandatory live reads,
+  shared CDP page ownership/auth, original
+  actor concurrency max2, Stop/manual safety,
+  and no duplicate external effect.
+- Deliver a source-only design matrix and
+  reproducible synthetic *baseline* timing tests
+  if strictly useful, reproducing the logged
+  96.792s and483.123s style contention, without
+  modifying production behavior or pretending
+  a synthetic clock is a live acceptance.
+  Prefer design + tests in original task
+  and evidence, minimal files. No new
+  scheduler/browser manager, actor enablement,
+  config change or packaging now. A proposed
+  actual production code fix is **separately
+  gated** on Owner approval and CEO source review.
+- Update only the original
+  `V16_RELEASE_REPORT.md`/Task/JSON if new
+  evidence/design is material. Explicitly
+  report whether TP on-time execution can be
+  guaranteed under the single-Owner transport
+  and what its unavoidable constraints are.
+  Keep `BUSINESS_RUNNING/V16_REVIEW_REQUIRED`.
