@@ -1251,6 +1251,13 @@ class ProductionBackend(GuiBackend):
         counts = runtime.order_resource_counts()
         if counts['active'] or counts['waiting']:
             return
+        # One quote cycle spans multiple worksheets. A later clean worksheet
+        # cannot erase an earlier durable uncertain-effect barrier.
+        if self._manual_quote is None or any(row[3] in {
+                'QUOTE_INPUT_WRITE_FAILED', 'QUOTE_INPUT_READBACK_MISMATCH',
+                'UPDATE_RESULT_UNCONFIRMED', 'SOURCE_STATUS_NOT_UPDATED',
+        } for row in self._manual_quote[1].active()):
+            return
         if not settle_quotation_operations() or not self._manual_write_service().operations_idle():
             return
         self._page_admission.require_open()

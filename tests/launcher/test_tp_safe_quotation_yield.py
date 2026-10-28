@@ -54,6 +54,7 @@ def assembly(tmp_path, monkeypatch, *, mode='normal', duration=10):
     reader.clear_discovery_snapshot = lambda: cleared.append(clock.tick)
     backend._manual_reader = reader
     backend._store, backend._v12_store = store, ledger
+    backend._manual_quote = (None, holds)
     integrated = make()
     integrated.stop = backend._stop.is_set
     integrated.cycle._stop = backend._stop.is_set
@@ -102,7 +103,7 @@ def assembly(tmp_path, monkeypatch, *, mode='normal', duration=10):
         elif reason == 'SOURCE_STATUS_NOT_UPDATED':
             actions.source.after = ['发给采购'] * 50
         integrated.updater_factory = lambda: updater
-        quotes.responses = iter([(quote(),), ()])
+        quotes.responses = iter([(quote(),), (), ()])
     tp, _, _, transport, tpdb = tp_fixture(tmp_path / 'tp')
     backend._tp = tp
     tp.stop_requested = backend._stop.is_set
@@ -145,7 +146,10 @@ def assembly(tmp_path, monkeypatch, *, mode='normal', duration=10):
         if mode == 'same_source':
             lease = runtime.try_claim_order_lease('outer')
     def run_quote(_):
-        result = integrated.run(WS, after_closed_candidate=backend._yield_quotation_to_tp)
+        result = (integrated.run(WS) if mode == 'no_lending' else
+                  integrated.run(WS, after_closed_candidate=backend._yield_quotation_to_tp))
+        if mode.endswith(':cross_scope'):
+            result += make().run(WS, after_closed_candidate=backend._yield_quotation_to_tp)
         if mode in {'same_source', 'waiting_source', 'outer_pause', 'unsafe_google', 'all_due'} or mode.startswith('uncertain'):
             backend._stop.set()  # End harness without a later ordinary top-level TP poll.
         return result
@@ -301,3 +305,29 @@ def test_stop_after_reservation_before_run_has_no_tp_source_step(tmp_path, monke
         a.run()
     assert not any(e[0] == 'brief' for e in a.events)
     assert not a.runtime.module_plans()['tp'][1]
+
+
+def test_durable_unknown_barrier_survives_new_integrated_scope(tmp_path, monkeypatch):
+    a = assembly(tmp_path, monkeypatch, mode='uncertain:SOURCE_STATUS_NOT_UPDATED:cross_scope')
+    a.run()
+    assert len(a.observed) == 4  # persisted hold observation plus a clean next-scope candidate
+    assert a.observed[-1][0].outcome is QuotationOutcome.NO_RECENT_QUOTE
+    assert a.holds.active()
+    assert not any(e[0] == 'brief' for e in a.events)
+    assert not a.tp.research.calls and not a.transport.calls
+
+
+def test_paired_actual_domain_paths_reduce_tp_queue_and_bound_observed_quote_progress(tmp_path, monkeypatch):
+    new = assembly(tmp_path / 'new', monkeypatch)
+    new.run()
+    old = assembly(tmp_path / 'default_off', monkeypatch, mode='no_lending')
+    old.run()
+    first_new = next(e[1] for e in new.events if e[0] == 'brief')
+    first_old = next(e[1] for e in old.events if e[0] == 'brief')
+    assert (first_new, first_old) == (10, 20)
+    assert (first_new - 5, first_old - 5) == (5, 15)  # TP due mid-first query.
+    assert new.events[3][:2] == ('quote_read', 17)
+    assert new.backend._observation.modules['quotation'].cycle_elapsed_seconds == 27
+    assert old.backend._observation.modules['quotation'].cycle_elapsed_seconds == 20
+    assert len(new.observed) == len(old.observed) == 2
+    assert len(new.transport.calls) == len(old.transport.calls) == 2
