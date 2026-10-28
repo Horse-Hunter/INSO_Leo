@@ -2648,3 +2648,111 @@ new actor default-OFF as a change to existing production TP authorization/config
 Next Owner action: forward the ONE combined report to CEO source review. Future
 real browser/production acceptance needs its own explicit safe window; no current
 production stop requested. Overall V1.6 REVIEW_REQUIRED, not a self-issued PASS.
+
+## CEO independent review — unified direct login + Stage E offline delivery (2026-10-28)
+
+**Review source identity.** Remote branch HEAD at prewrite check:
+`8a271b9b66b53d3e89e6d10270653d151d0ce095` (docs-only child of
+application `3547c4162d0b5c0308c84ae8a7feba23a39f6a70`).
+Independently fetched Git tree `src/` =
+`5ce508705c7e4099d41ae5c9456eaf19a80e427b`, which equals the
+report/JSON claim. Executor-submitted final3001PASS/1SKIP120.81s,
+targeted87PASS8.23s, Ruff/diffPASS are correctly attributed to that
+exact application source; **not rerun by CEO on Windows**. JSON is
+self-reported test evidence, not independent live Chrome, production,
+SMTP, SQLite or real Google evidence.
+
+**Verdicts (precise and non-overlapping):**
+- `DIRECT_SITE_LOGIN_ERROR_SOURCE_PASS`. The change
+  `68e1a2d2aa2b289c1fd38da33686851ff90bec7d` uses the actual
+  `SiteLoginError.reason_code` ONLY on typed canonical instances in
+  `src/launcher/market_actors.py::_fault`, retaining exact
+  `SITE_AUTH_RECOVERY_REASONS`; the native raised exception tests cover
+  manual verification, session stale/unverified, OTP, security and
+  market login readiness plus non-auth negatives, initialization
+  GLOBAL_STOP, no worker login. Prior narrowly scoped CEO finding
+  CLOSED (source-level only).
+- `E1/E2/E3_SOURCE_FOUNDATION_REVIEWED`: actual original V12/V13/TP
+  continuation ports, unchanged per-module original domain write
+  guards, single WorkflowRuntime source-row exclusion across query and
+  owner effects, bounded actor transport, exact receipt/cycle identities
+  and owner-only recovery are visible in the committed source and
+  synthetic domain regression. No real successful business claim.
+- **`E4_OWNER_POLL_PARITY_CHANGES_REQUESTED`** on the new optional
+  `src/launcher/business_continuations.py` owner loop. This is
+  source-provable functional parity loss, not a test count mismatch.
+  `E5_EXECUTOR_OFFLINE_EVIDENCE_ATTRIBUTED` does not close this gap.
+  Overall V1.6 `REVIEW_REQUIRED`, production unchanged/uninstalled.
+
+**Required fix 1 — canonical dashboard counts omitted (confirmed).**
+`ProductionBackend.start()` initializes/resets `_dashboard_counts=None`.
+Only `ProductionBackend._refresh_dashboard_counts` sets that field.
+The original independent loop calls it when inquiry/quotation cycles
+start (`src/launcher/backend.py` around lines1175-1179), whereas the
+new optional owner path branches to `run_business_continuations`
+(around lines1163-1167) and has **no call** to the method.
+`Backend` workbench snapshot reads this field to populate
+`new_orders`, `awaiting_quotation`, `overdue_quotation`
+(around lines2639-2641), so those displayed values remain None in
+a newly started optional assembly despite its active domain cycles.
+`_cache_workbench` cannot replace the missing canonical count read.
+
+**Required fix 2 — cycle projection never reset (confirmed).**
+Old independent inquiry entry calls `_begin_poll_projection`; this
+clears `_poll_inquiries` and `_poll_quotation_completed` at each
+new original inquiry poll. New E owner loop does not call it anywhere.
+Without a per-cycle reset, these sets aggregate prior cycles and
+misrepresent the current round in summary counts. Reuse the original
+backend projection reset at the correct inquiry boundary; do not
+clear after observing a cycle or while a protected operation is active.
+
+**Required fix 3 — prior site recovery entry lost (confirmed).**
+Old independent loop enters `_check_site_recovery(rc, cfg)`
+before each module. The new optional loop does not.
+`_check_site_recovery` is the original owner path which checks the
+manual INSO verification gate (`_site_manual_wait`), safely
+confirms `authenticated_inso_shell_available`, clears that wait
+only on actual success and handles existing V12 paused-state
+recovery/Browser CDP containment. New actor
+`recover_sites_on_owner` only covers its separate deferred
+IC.net/Findchips/HQEW/LCSC market sources; it does **not**
+replace this original INSO/manual recovery function. Reinstate
+the old gate on a safe original-owner boundary before eligible
+work, preserving its exact safety semantics; do not auto-confirm
+login, touch credentials from worker, close human pages, or add a
+second recovery mechanism.
+
+**Executor smallest change/test contract (same task, no re-architecture):**
+1. Reuse those **three existing Backend methods**, preserving
+   original module cadence and ownership. Add their missing
+   invocation at safe owner module/cycle boundaries of the existing
+   optional E loop; avoid polling heavy Sheets counts on every
+   50ms tick, while a protected operation is open, or as another
+   worker's action. Preserve current actor Stop, FIFO and source
+   lease behavior. No parallel dashboard counter implementation.
+2. Add deterministic isolated integration tests using an actual
+   `ProductionBackend` optional assembly with controlled module
+   dates and canonical snapshot: assert populated/updating
+   `new_orders/awaiting_quotation/overdue_quotation`, accurate
+   current-cycle projection reset across two inquiry cycles, and
+   no repeated extra writes. Assert owner INSO manual wait remains
+   blocked when session remains unverified and is cleared ONLY on
+   canonical verified success; retain original site-outage and
+   V12 resume behavior. Use no real browser/Google/SMTP/purchase.
+3. Run narrow affected regressions plus exact new-source full
+   offline suite. Record full SHA, `src/` tree and skipped test
+   reason in original report, task and evidence JSON. No use
+   of old3001 as a PASS for modified source. Scope Ruff/diff.
+4. Keep approved single runtime, two worker clients, original
+   Chrome9222/profile, Backend credential/Google/INSO/SMTP/
+   SENT-UNKNOWN gates, 120s closed-row wait, default OFF and
+   approved prior P1/A/B/C/D unchanged. No actual install,
+   production access or Stage F browser use.
+
+**Open beyond this change:** Real safe-window browser overlapping
+parsed reads, full same-order transactions, observed TP
+due-to-start delay (historical454.210s FAIL/open), recipient
+delivery evidence, GUI100%/150%DPI, long-term RSS/handles and
+Chrome/game impact still need separate authorized Stage F/soak
+acceptance. A synthetic test or submitted pass count cannot close
+these gates.
