@@ -4485,3 +4485,182 @@ V1.6 overall remainsREVIEW_REQUIRED. Owned temporary test outputs retired after
 sanitized extraction; production/rollback/old soak/other worktrees preserved.
 
 本轮清理收据：精确自有临时根 `.tmp/v16-safe-yield` 已退休，29794个文件、1261196911字节；无重解析点/越界路径，保留原安装、回滚、生产状态及旧长测。
+
+## CEO independent SOURCE Review — Option A quote-boundary TP lending (2026-10-28)
+
+**Review verdict: `OPTION_A_TP_SAFE_YIELD_SOURCE_PASS`; overall
+`V16_REVIEW_REQUIRED / NOT_DEPLOYED`.** The reviewed source is
+`b57f467ac2545292d3ee441af974053f8d143179`, the
+delivery/evidence HEAD is
+`859c13f154f98dbd7edf813390bc8a25c3f28c98`,
+the exact source tree
+`eaea701b8c1ccdfe4fde1db36d2fea07e8a39d84`
+and tests tree
+`7087294dcca5148f6b792a3be52fc13c102083ea`.
+Verified the remote HEAD is a four-commit descendant of
+CEO design authorization
+`5f8ecfc35c5f5078f63bad6fb3600b77bcdf00a9`:
+three application/test commits
+`c243f6d9ee3c2a0c948653fae4e0802ab1461038`,
+`f0afd717c892c840c4775a17b799190fdf612ee9`,
+`b57f467ac2545292d3ee441af974053f8d143179`
+and a last report/task/JSON-only commit. Remote Git tree matches
+the delivered frozen src/tests trees; no unrelated production
+installation was included. The application source diff touches
+six existing paths, plus two new focused regression test files:
+`src/workflow/v13_quotation.py`,
+`src/workflow/v13_integration.py`,
+`src/launcher/backend.py`,
+`src/launcher/v13_quotation.py`,
+`src/launcher/google_quote_update.py`,
+`src/launcher/google_web.py`;
+`tests/launcher/test_tp_safe_quotation_yield.py` and
+`tests/launcher/test_safe_yield_surfaces.py`.
+Additional three Launcher ports are narrowly justified by existing
+logical-vs-physical INSO tab release and original retained-Google
+native target/auth/unsafe DOM guards. No new scheduler,
+browser/profile/CDP owner, persisted authority, market Actor
+wiring, SMTP/outbox or extra module runtime has been introduced.
+
+**Source findings (independently inspected exact current source):**
+- `V13QuotationCycle._run` now calls the optional
+  `after_closed_candidate` only after
+  `execute_candidate` (including its original
+  `on_result`) returns. Default/manual/Actor
+  callers do not gain callbacks. The integrated
+  caller gates on a conservative result whitelist
+  and sticky per-integrated-scope uncertainty.
+  The Backend also rechecks original persisted
+  active V13 hold reasons, so new worksheet/integrated
+  scopes cannot reset a prior unconfirmed effect.
+  Unknown `QUOTE_FOUND`, write/readback mismatch
+  and unsafe source status do not authorize TP.
+- Backend wires this only for current scheduled
+  quotation running under the original serial
+  `_module_execute` with
+  `market_actor_factory=None`. It checks
+  actual TP due/not running/not paused,
+  original Stop/pause/manual/GUI admission,
+  protected active INSO and shared site resources,
+  global source lease active/waiting counts and
+  original durable V13 uncertain holds before
+  lending. The same Owner thread uses
+  existing `yield_module_resource`,
+  `claim_due_module(exclude=("quotation","inquiry"))`,
+  nested `_run_independent_job`, and
+  `resume_module_resource`. No fixed TP
+  priority or new due-time algorithm.
+  Nested cycle/outer pause/last-poll context
+  is restored by the existing wrapper; original
+  discovery cache is cleared on safe resume.
+  Escaping unknown/shared fault aborts the
+  canonical Runtime and sets GLOBAL_STOP
+  rather than blindly resuming; Stop preserves
+  original stop terminal behavior.
+- `settle_quotation_operations` requires
+  no active/protected INSO tab, verifies original
+  owned page and read-only authenticated shell,
+  uses exact-owned `reset` physical close and
+  rejects unclosed state. It clears verified
+  old controllers so future `quotation_operations`
+  calls acquire the correct BrowserHandle after
+  a nested TP reconnect. Actual quotation cycle
+  uses a per-candidate `SharedOperations`
+  proxy that reobtains the current controller
+  for each `open`, so clearing the pool does
+  not by itself strand a direct old handle.
+  `google_operations_idle` checks existing
+  retained-page protected flags, original
+  CDP target ID/owner, authentication and
+  unsafe-DOM cleanup under the original GRID
+  lock and polling/Stop guard; it neither
+  closes the four retained pages nor starts
+  another Playwright client. Existing source
+  business lease, pre-write live source checks
+  and mail idempotency remain unchanged.
+- The newly added 333-line integrated regression
+  exercises actual normal Backend poll ->
+  CombinedCycle -> quotation integration ->
+  TP domain, isolated SQLite/outbox and fake
+  SMTP using synthetic external ports. The
+  120-line native-guard tests exercise mock
+  existing page behaviors (protected/pending/
+  auth/ownership/close failure and lock).
+  Default-off vs enabled paired case:
+  two synthetic10s quotation candidates,
+  TP due at5s; first actual TP Brief read
+  moves20s ->10s; quote end20s ->27s because
+  TP itself takes7s. Single600s query is
+  deliberately not preempted. Tests also
+  cover identical source active/waiting lease,
+  durable unknown cross-scope barrier, Stop,
+  local TP pause, shared/global failures,
+  nested context preservation, SENT/UNKNOWN
+  non-replay, real updater before callback
+  and old-controller retirement. No test
+  claims real Google/INSO CDP or SMTP delivery.
+
+**Evidence limits and outstanding gates:**
+Executor attached source-bound synthetic test
+receipts: new40 PASS (4.11s), focused537 PASS
+(33.22s), full3094 PASS /1 SKIP (125.11s),
+Ruff and diff check PASS. The single skipped
+Windows symlink-creation-dependent test is
+identified, not counted as a PASS. These
+receipts were inspected against the correct
+Git SHA/tree in the original report/JSON,
+but the CEO has **not** independently
+executed the Windows test harness, attached
+live Chrome, performed production I/O or
+verified build EXE bytes. No real TP timing,
+same-source live-page admission, normal
+quotation continuation across a true
+native CDP session recovery, long-term
+resource, DPI/game impact or double market
+Actor read overlap is established.
+No hard900s start guarantee is asserted:
+long indivisible INSO query/retries,
+protected write/unknown effect, source
+lease conflict and a whole TP job may
+still block. The earlier live96.792s–
+483.123s TP delay **remains an observed
+old-release failure**, not reclassified
+as fixed by synthetic tests.
+
+**CEO decision:** Scoped SOURCE_PASS. No
+code-change blocker was identified during
+independent GitHub audit. Proceed to the
+**existing canonical Windows build-only
+candidate + non-invasive release preflight**
+as the next Executor action, provided the
+Owner supplies this instruction; retain
+current production EXE and all data/Chrome.
+This SOURCE_PASS does **NOT** authorize
+stopping/replacing/restarting the old
+`BUSINESS_RUNNING` instance, real
+browser/Google/INSO probing, sending test
+mail/orders, enabling Option B Actors,
+changing schedule/config or interpreting
+simulated timing as live PASS. First
+verify the build-only candidate
+`--self-check`, `RELEASE_SCAN_OK`,
+release asset manifest and candidate
+source/frozen module/tree traceability;
+confirm program-only rollback, installed
+old EXE exact hash and protected runtime
+in a read-only preflight. Return evidence
+and a concise controlled-rollout plan
+for an **explicit separate Owner approval**
+before any production replacement.
+Avoid additional ceremonies or repeated
+full suite without changed source.
+Use original unified V16 report/Task/JSON,
+not another report mechanism. No direct
+CEO access to Windows is claimed.
+
+**Review scope integrity:** CEO appended
+only this review to the canonical V1.6
+task on the existing branch. Application,
+tests, existing report/JSON, installed
+program, protected Chrome/profile/Vault/
+database/mail state remain untouched.
