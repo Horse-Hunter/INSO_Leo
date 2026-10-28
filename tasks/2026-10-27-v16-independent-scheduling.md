@@ -2814,3 +2814,158 @@ Overall REVIEW_REQUIRED. New optional assembly still default OFF, not a claim
 that existing production TP is OFF. Production/runtime/config/Vault/Chrome/
 SENT/UNKNOWN/old soak untouched. Owner forwards updated V16_RELEASE_REPORT.md;
 Executor must not send to CEO. No new Owner action or production stop requested.
+
+## CEO independent scoped Review — E4 parity + Owner 60-second Google snapshot requirement (2026-10-28)
+
+**Verified review base:** remote `codex/v1-6-independent-scheduling`
+HEAD `af23afb2f36c32037e37602105da5448d887d993` is a docs-only
+child of tested application commit
+`bfa835b7eda1c71ddf4f4d7f383f2f4d2b7a2234`. The Git `src/`
+tree is `d5024ea81060ef4285d8bf7d7453a2a305f1b71d`.
+Executor evidence (not independently rerun on Windows) states 173
+targeted PASS/20.81s, full 3004 PASS/1 SKIP/128.29s, Ruff/diff PASS;
+the sole skip cites unsupported symlink creation.
+
+**Scoped verdict: `E4_OWNER_POLL_PARITY_SOURCE_PASS`.** Only seven
+application-source lines were added to
+`src/launcher/business_continuations.py::orders`, reusing the exact
+Backend `_check_site_recovery(rc,cfg)`,
+`_refresh_dashboard_counts(...)` (inquiry+quotation) and
+`_begin_poll_projection()` (inquiry). They run at the lazy generator's
+one-time per-module-cycle entry in the existing Owner context/scope,
+not at every 50ms dispatch tick. New original-Backend offline
+integration tests assert counts changed1/1/1→0/0/0, full prior-cycle
+projection cleared, original INSO manual verify guard and verified
+recovery, no repeated purchase/quotation/TP effects. The prior three
+`E4_OWNER_POLL_PARITY_CHANGES_REQUESTED` findings are CLOSED for
+the inspected source. No source change authorizes production install,
+live parallel, real TP900s timing or Chrome performance. Overall
+`V16_REVIEW_REQUIRED`; archived Google Busy branch UNKNOWN.
+
+### Owner's new business requirement — common Google worksheet snapshots, not a warning-suppression fix
+
+**Trigger / intent.** The Owner now requests a *program-wide shared*
+60-second reuse window for the **2026**, **SHAHAB**, and **Brief**
+Google worksheet contents so each separate order/module need not
+download the same TSV attachment again. The canonical actual Brief
+title is **`RFQ_BRIEF`**, read by `BriefReader` via
+`GoogleSheetsWebService.read_brief`; `2026`/`SHAHAB` are read by
+`GoogleSheetsRowReader` via `GoogleSheetsWebService.get`.
+`报价输入` is a separate protected write/readback surface,
+**not an approved cache member**.
+
+**Source-read findings relevant to safety.**
+- `src/launcher/google_web.py::_execute` opens and verifies the same
+  protected Google UI tab/gid and downloads temporary TSV through
+  `_download`. The file is deleted; no second OAuth/API/export URL,
+  browser/Profile, or credential path should be introduced.
+- A single `GoogleSheetsWebService` is already shared by the
+  original Backend for Google reads/writes/TP; extend that canonical
+  service rather than build a second service/timer/scheduler.
+  Existing `_GOOGLE_GRID_LOCK` serializes UI operations and
+  `GoogleSheetsRowReader.discovery_scope` has a **per-cycle**
+  discovery snapshot, which is insufficient for Owner's
+  *cross-cycle/cross-module* 60s reuse.
+- Crucially, `GoogleSheetsRowReader.read_rows` explicitly documents
+  that it **ALWAYS re-reads** for source safety. Original
+  `write_brand_safely`, `current_purchase_status`,
+  `write_purchase_status_safely`, quotation settlement and
+  `TpCycle._revalidate` require exact current source identity/status.
+  Protected `google_web._execute(write=True)` also performs its
+  prewrite header check and **postwrite TSV readback**.
+  Blindly replacing those reads with a 60s snapshot would weaken
+  existing authorization/identity/proof against duplicate writes.
+- A firm wall-clock prohibition of **all** protected reads (including
+  prewrite/readback) for 60 seconds conflicts with these existing
+  safety guarantees, especially the two TSV checks within one write
+  transaction. CEO does **not** approve weakening readback, claiming
+  cached content as newly live, or suppressing Busy/auth/UNKNOWN
+  notices to meet a numerical rate. The safe minimum scope below
+  applies to *ordinary read-only snapshot acquisition*; write
+  verification remains mandatory, separately accounted. A literal
+  hard cap including protected readback requires a separately reviewed
+  schedule/settlement design and is **not implemented/approved** here.
+
+**CEO-approved minimum implementation contract for Executor (new isolated source task, NOT Stage F):**
+1. **Owner and single source of truth:** the existing
+   `GoogleSheetsWebService` owns one bounded, memory-only verified
+   tabular snapshot per **(spreadsheetId, exact title)** among
+   `2026`, `SHAHAB`, `RFQ_BRIEF`, shared by the module reads in
+   this Backend process. A single controlled monotonic clock starts
+   each sheet's TTL on **successful complete validated acquisition**;
+   `age < 60.0s` may reuse data for ordinary read-only discovery;
+   `age >= 60.0s` permits one coalesced new acquisition on demand
+   (not a timer/poller). Each sheet has independent expiry; no
+   cross-spreadsheet/profile/branch mixing. No persisted TSV/SQLite,
+   disk cache, credentials, personally identifying source details in
+   logs or evidence.
+2. **Read contracts:** introduce an explicit cache-eligible
+   *read-only discovery* route while leaving mandatory original
+   `read_rows`, `BriefReader.read` where used for domain
+   revalidation, and write/readback contracts demonstrably live and
+   unchanged. If TP discovery uses cached Brief, the later Brief
+   and exact 2026/SHAHAB source identity/target must still be
+   verified by the original fresh Owner gates before durable
+   `MAIL_QUEUED`. A cache hit must not fabricate an authenticated
+   Google session success, clear a current outage, or bypass any
+   shared resource safety latch. Use copies/immutable data to
+   prevent caller mutation poisoning.
+3. **Protected changes/failures:** any attempted/uncertain local
+   Google write affecting a cached title invalidates its snapshot
+   before effects; after a confirmed write only the actual
+   original readback is authoritative. Schema/worksheet/gid
+   mismatches, missing/too-large TSV, expired TTL, an auth/Busy/
+   protection fault, cancellation or Stop never return stale
+   contents as success. Do not cache failed/partial/ambiguous
+   results, and keep original bounded retries, manual protection,
+   target-tab ownership and original fault/notification/UNKNOWN
+   semantics. Explicitly document safe critical-read exceptions
+   separately from ordinary 60s hits/misses.
+4. **Bounded acquisition:** concurrent module requests for the
+   same title and same process must share an existing in-flight
+   ordinary refresh (single-flight) under the canonical ownership
+   and UI locking policy. Never hold a market Actor worker,
+   protected INSO operation, SQLite transaction or the Runtime
+   source-row lease solely while sleeping for a cache timer.
+   No new background thread, Playwright client or timer.
+5. **Acceptance tests and evidence:** synthetic clock at
+   0/59.999/60.000s; three independent sheet keys plus different
+   spreadsheet IDs; same-sheet cross-module/next-cycle reuse and
+   concurrency (one ordinary TSV download), mutation isolation,
+   schema and malformed export rejection, failed/Busy/auth/
+   protected-page invalidation, Stop, and expiry no-stale-fallback.
+   Revalidate actual unchanged prewrite/postwrite/readback paths:
+   change MPN/status/brand/row/Brief target inside 60s and assert
+   no purchase, quotation update, TP mail or duplicate send on
+   stale data. Verify old `GoogleSheetsRowReader.read_rows`
+   still reads fresh where it is a mandatory guard and `RFQ_BRIEF`
+   discovery/revalidation are correctly distinguished. Include
+   ordinary download counts versus mandatory verification downloads
+   as separate metrics, and a test proving cache hits **do not**
+   repair or silence an already protected Google read failure.
+   Rerun original Google Busy/TSV/protected page, Google write,
+   V12/V13/TP domain, actor and full offline regressions; bind
+   results to exact new app SHA + `src/` tree.
+6. **Safety/deployment status:** new feature defaults uninstalled
+   pending CEO Review. Do not touch live Chrome9222, manual tabs,
+   production config/Vault/SQLite/SMTP or existing EXE. A reduced
+   download count may *reduce* read pressure but is NOT proven to
+   solve the existing Google Busy notices (historical protection
+   branch unknown and `0d77be23` diagnostic not installed).
+   No production diagnostic, alert suppression, release, restart or
+   browser test is authorized by this Task Spec.
+
+**Review enforcement / evidence owner:** Executor owns the minimal
+reused-source change, focused and full offline tests, original
+`V16_RELEASE_REPORT.md` and `docs/evidence/v16/order-resource-regression.json`
+updates and same-task retirement of owned temporary test material;
+CEO independently reviews exact source/diff/tests and checks
+protected-write parity. Do not declare a whole-program absolute
+TSV read cap or Google-warning remediation PASS when mandatory
+safety readbacks remain exceptions. Stage E4 scoped PASS above
+remains separate from this **`GOOGLE_SHEET_TTL_CACHE_REVIEW_REQUIRED`**.
+
+**Overall:** `V16_REVIEW_REQUIRED`, existing installed
+`04075bc` unchanged to knowledge of archived evidence (no
+independent fresh production check), historical TP lateness
+454.210s OPEN, Stage F NOT AUTHORIZED/NOT_RUN.
