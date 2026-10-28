@@ -3300,3 +3300,78 @@ criterion. Evidence gate: original signed/hashed program
 assets and durable rollback, live install hash and
 single responsive GUI. Do not silently label "all features
 complete" or "zero bugs" without Stage F proof.
+
+
+## Executor controlled Windows publication — 2026-10-28 / health HOLD, not live PASS
+
+Release authorized by1507972e722b72341381a782c5fc18411c3ea74d; exact reviewed
+appbb04d92f08a0ceca2075a2c17b153f2921803765, srcd5f270aa8c392e9b374bfdef396d229af2d4e1e6.
+No app source/config/recipient/Actor activation edits. Original Windows BuildOnly
+with verified v1-4-order-mail-inspection .venv-release (Tcl8.6.15, PyInstaller6.16.0),
+frozen self-check/RELEASE_SCAN_OK PASS. Frozen six relevant modules compare equal
+to reviewed compile objects. Final installed EXE745BEC95F0426673C82ED4AB76EE38DCAB442F2922FAEF124D7B040F947F51CE,
+2875assets full manifest match, D:/Program_Leo/INSO_Leo/dist/INSO_V1.6.
+
+Old85528 normal exit09:29:31+08/code0 verified; no live INSO/version mutex at
+preflight, no forced termination. Existing shared9222 read-only page check:
+one context/two pages, one google-operation page, native unsafe predicate false,
+no other owned page/error. No navigation/newpage/cleanup/profile/change. Program
+backup and configuration/encryptedVault/verifiedSQLite backup under
+D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-cache-20261028T013533Z;
+rollback/program696E732B...self-check PASS. Copy-only migrations no schema/data
+delta; no production migration or DB restore. Asset-only exclusive mutex replace,
+no runtime traversal; runtime junction stillV1.4/runtime. All business tables,
+config/Vault and V1.4/V1.5 assets unchanged through installed idle self-check.
+Original4TP/6TP-SENT/113commands/144SENT preserved. Historical holds
+(17INTERRUPTED_UNSENT,2STATUS_WRITE_PENDING) not reset or treated as new purchase.
+
+New GUI86248/observer86684 starts09:38:36+08, titleV1.6, Responding/gui_ready,
+mutex held. No autoStart flag at first launch. Tool screenshot times out and CTk
+buttons have no accessibility text; Owner explicitly confirms Start click.
+Natural inquiry begins09:42:37; quotation begins09:44:43 then deferred09:45:03
+(20.188s,due900);TP begins09:45:03 then deferred09:45:24(20.203s,due900).
+Actual independent module deadlines, original serial browser Owner; no injected
+market_actor_factory so no real parallel actors deployed. Do not claim TP timing
+or StageF done. Original120s waits retained, no forced order/mail actions.
+
+New fixed diagnostic evidence:10google-busy-page-budget labels,10READ_BUSY,
+2GOOGLE_READ_RETRY_EXHAUSTED. This identifies the live protection BRANCH, not which
+pages caused the accumulation. No read pressure/cache hit-rate or warning-fix
+PASS.2SOURCE_CHANGED original safety blocks; no new successful purchase/quote/TP
+mail proof. Historical144SENT/113immutable commands/4TP unchanged;current146SENT
+includes2newPURCHASE_EXCEPTION runtime-fault notifications, no PENDING/SENDING/
+UNKNOWN in read audit. SMTP accepted != final delivery. Config/Vault unchanged.
+
+Resource native counters16CPUs:43.41s idle3.35449%host/98.8MiB RSS/531handles;
+observer0%host/20.75MiB/128handles. After normalEsc72.98s mixed owner-resume
+1.68741%host; then57.36s business1.56123%host/121.39MiB RSS/90.89MiB private/
+1057handles/12threads. Native thread user/kernel deltas retained, incomplete
+thread-lifetime coverage; old high CPU root UNKNOWN, no code change or performance
+PASS.09:50:12Responding/RSS123.93/private93.6/1426handles/10threads. No priority,
+power/display or focus manipulation to manufacture a benchmark.
+
+| Release item | Actual result |
+| --- | --- |
+| Build/frozen scan/exact source/assets | PASS actual Windows |
+| Backup/rollback self-check/copy-only compatibility | PASS actual; restore program only if needed, never old ledger |
+| Controlled overwrite/new idle GUI/mutex | PASS actual |
+| Owner normal business resumption | PASS START RECEIPTS ONLY; not complete successful business |
+| Google business health | FAIL google-busy-page-budget; quotation+TP deferred |
+| Real parallel market Actors | NOT_ENABLED, intentionally |
+| Historical data/receipts protection | PASS read-only before/after;2new normal fault receipts distinguished |
+| CPU/long term stability/complete menu+tray | WARNING / NOT_VERIFIED; no unearned PASS |
+| Safe stop after health failure | REQUESTED_FROM_OWNER, CONFIRMATION_PENDING |
+| Overall | INSTALLED / BUSINESS_RUNNING_WITH_GOOGLE_DEFER / OWNER_SAFE_STOP_PENDING / V16_REVIEW_REQUIRED |
+
+No startup exception/frozen defect, so no arbitrary rollback of working program
+or durable state to pretend Google health. Retain verified rollback; if rollback
+needed: normal exit→restore ONLY program assets→current compatible runtime;
+never reset or replay SENT/UNKNOWN. Do not clean protected pages/raise page budget/
+change auth/retry/notification policies. No production browser experiments while
+normal work active. Minimum next scope is a separate quiescent ownership/page
+lifecycle diagnosis and resource review, not automatic source changes.
+
+Owned marked staging268020692bytes and compatibility data copy retired after
+boundary/reparse checks. Old rollback/shared runtime/profile/soak unaffected;
+small sanitized release evidence retained in original JSON. Final report Owner
+handoff only. No CEO message, no whole-V1.6 PASS.

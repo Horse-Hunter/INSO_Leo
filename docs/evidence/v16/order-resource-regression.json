@@ -423,5 +423,366 @@
       "system DPI/game impact"
     ],
     "handoff": "Owner forwards updated original report; Executor sends no CEO message"
+  },
+  "owner_authorized_windows_cache_release": {
+    "installed_at": "2026-10-28T01:38:01.325195+00:00",
+    "installation": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6",
+    "source_application": "bb04d92f08a0ceca2075a2c17b153f2921803765",
+    "src_tree": "d5f270aa8c392e9b374bfdef396d229af2d4e1e6",
+    "build_head": "1507972e722b72341381a782c5fc18411c3ea74d",
+    "exe_sha256": "745bec95f0426673c82ed4ab76ee38dcab442f2922faef124d7b040f947f51ce",
+    "verified_assets": 2875,
+    "rollback": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-cache-20261028T013533Z\\program",
+    "rollback_selfcheck": true,
+    "self_check": true,
+    "idle_self_check": true,
+    "all_business_tables_unchanged": true,
+    "protected_configuration_vault_junction_unchanged": true,
+    "v14_v15_assets_unchanged": true,
+    "migration_on_production": false,
+    "parallel_actors_enabled": false,
+    "state": "INSTALLED_IDLE",
+    "owner_resumption_confirmed": true,
+    "old_normal_exit": {
+      "pid": 85528,
+      "at": "2026-10-28T01:29:31.304612+00:00",
+      "exit_code": 0
+    },
+    "gui_pid": 86248,
+    "observer_pid": 86684,
+    "responsive_gui": true,
+    "single_instance_mutex_held_by_app": true,
+    "live_config_flags": {
+      "v16_enabled": true,
+      "v13_enabled": true,
+      "tp_enabled": true,
+      "module_intervals_seconds": {
+        "inquiry": 900,
+        "quotation": 900,
+        "tp": 900
+      }
+    },
+    "runtime_target": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.4\\runtime",
+    "original_tp_tasks": 4,
+    "original_tp_sent": 6,
+    "before_recipients": {
+      "SENT": 144
+    },
+    "program_replacement_only": true,
+    "source_file_changes": false,
+    "safe_stop_requested_after_health_fault": true,
+    "safe_stop_confirmed": false,
+    "actual_google_health": "FAIL_PAGE_BUDGET",
+    "actual_parallel_actors_enabled": false,
+    "actual_path": "legacy original browser owner + independent module deadlines, optional Actors not composed",
+    "business_resume": "Owner clicked Start, real inquiry/quotation/TP begin receipts observed; quotation and TP deferred",
+    "final_state": "INSTALLED / BUSINESS_RUNNING_WITH_GOOGLE_DEFER / OWNER_SAFE_STOP_PENDING / RESOURCE_WARNING / V16_REVIEW_REQUIRED",
+    "production_healthy_pass": false,
+    "rollback_executed": false,
+    "rollback_rule": "normal exit and restore program assets only against CURRENT compatible ledger; never restore old database or reset/replay SENT/UNKNOWN",
+    "before_ledger_counts": {
+      "purchase_outcomes": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 23,
+        "VALIDATION_FAILED": 3
+      },
+      "business_states": {
+        "DUPLICATE_STOPPED": 1,
+        "HUMAN_COMPLETED": 1,
+        "INTERRUPTED_UNSENT": 17,
+        "INVALID_INPUT_SKIPPED": 1,
+        "PURCHASE_EXCEPTION": 2,
+        "PURCHASE_RECORDED": 21,
+        "RESEARCH_FAILED": 1,
+        "SOURCE_CHANGED": 2,
+        "STATUS_WRITE_PENDING": 2
+      },
+      "workflow_statuses": {
+        "COMPLETED": 26,
+        "FAILED": 1,
+        "MANUAL_REVIEW": 21
+      },
+      "recipient_outcomes": {
+        "SENT": 144
+      },
+      "tp_states": {
+        "MAIL_QUEUED": 4
+      },
+      "tp_sent_recipients": 6
+    },
+    "prepared": {
+      "backup_root": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-cache-20261028T013533Z",
+      "program_rollback": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-cache-20261028T013533Z\\program",
+      "database_backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-cache-20261028T013533Z\\protected-state\\sqlite\\workflow-v12-pre-migration-20261028T013549635522Z.sqlite3",
+      "candidate_exe_sha256": "745bec95f0426673c82ed4ab76ee38dcab442f2922faef124d7b040f947f51ce",
+      "old_exe_sha256": "696e732b3b697ebdae6267118959d11c8c87be4a2b76dafd7f17c2ea7127189a",
+      "assets": 2875,
+      "compatibility": "PASS_NO_SCHEMA_OR_ROW_CHANGE",
+      "migration_needed": false,
+      "program_backup_hash_verified": true,
+      "protected_state_backup_verified": true
+    },
+    "fixed_busy_labels": {
+      "google-busy-page-budget": 10
+    },
+    "natural_cycles": {
+      "cycles": [
+        {
+          "at": "2026-10-28T09:42:37.180000+08:00",
+          "cycle": "cycle_601888b17f9140e69b78a99ee0e0d33b",
+          "module": "inquiry",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T09:44:43.454000+08:00",
+          "cycle": "cycle_8830f8910d1043a5a9a3a172051d323b",
+          "module": "quotation",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T09:45:03.645000+08:00",
+          "cycle": "cycle_8830f8910d1043a5a9a3a172051d323b",
+          "module": "quotation",
+          "phase": "deferred",
+          "elapsed": 20.188,
+          "due_in": 900.0
+        },
+        {
+          "at": "2026-10-28T09:45:03.963000+08:00",
+          "cycle": "cycle_ad5aea43878247dcae5db81a6b31964d",
+          "module": "tp",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-28T09:45:24.176000+08:00",
+          "cycle": "cycle_ad5aea43878247dcae5db81a6b31964d",
+          "module": "tp",
+          "phase": "deferred",
+          "elapsed": 20.203,
+          "due_in": 900.0
+        }
+      ],
+      "reasons": {
+        "GOOGLE_WEB_READ_BUSY": 10,
+        "GOOGLE_READ_RETRY_EXHAUSTED": 2
+      },
+      "business_results": {
+        "V1.2:SOURCE_CHANGED": 2
+      }
+    },
+    "live_ledger": {
+      "integrity": "ok",
+      "historic_command_count": 113,
+      "historic_commands_immutable": true,
+      "historic_sent_count": 144,
+      "historic_sent_full_rows_unchanged": true,
+      "historic_tp_count": 4,
+      "historic_tp_full_rows_unchanged": true,
+      "current_recipients": {
+        "SENT": 146
+      },
+      "current_tp_states": {
+        "MAIL_QUEUED": 4
+      },
+      "new_recipient_kind_outcomes": {
+        "PURCHASE_EXCEPTION:SENT": 2
+      },
+      "purchase_outcomes_before": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 23,
+        "VALIDATION_FAILED": 3
+      },
+      "purchase_outcomes_current": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 23,
+        "VALIDATION_FAILED": 3
+      },
+      "qualification": "SMTP SENT means transport acceptance only; no final mailbox receipt. No forced business writes or replays."
+    },
+    "resources": {
+      "idle": {
+        "samples": [
+          {
+            "threads": 8,
+            "private_mib": 71.97,
+            "host_cpu_percent": 3.35449,
+            "pid": 86248,
+            "duration_seconds": 43.41,
+            "rss_mib": 98.8,
+            "responding": true,
+            "handles": 531
+          },
+          {
+            "threads": 1,
+            "private_mib": 14.48,
+            "host_cpu_percent": 0.0,
+            "pid": 86684,
+            "duration_seconds": 43.42,
+            "rss_mib": 20.75,
+            "responding": true,
+            "handles": 128
+          }
+        ],
+        "logical_cpus": 16
+      },
+      "post_escape_mixed": {
+        "mode": "post-Escape; includes Owner resumption, not pure idle",
+        "samples": [
+          {
+            "pid": 86248,
+            "responding": true,
+            "duration_seconds": 72.98,
+            "threads": 11,
+            "rss_mib": 117.5,
+            "private_mib": 88.0,
+            "host_cpu_percent": 1.68741,
+            "handles": 861
+          },
+          {
+            "pid": 86684,
+            "responding": true,
+            "duration_seconds": 72.99,
+            "threads": 1,
+            "rss_mib": 20.75,
+            "private_mib": 14.48,
+            "host_cpu_percent": 0.0,
+            "handles": 128
+          }
+        ],
+        "logical_cpus": 16
+      },
+      "business_with_thread_deltas": {
+        "thread_count": 12,
+        "private_mib": 90.89,
+        "rss_mib": 121.39,
+        "duration_seconds": 57.36,
+        "responding": true,
+        "host_cpu_percent": 1.56123,
+        "handles": 1057,
+        "pid": 86248,
+        "thread_deltas": [
+          {
+            "id": 88952,
+            "user_s": 3.359375,
+            "kernel_s": 8.453125
+          },
+          {
+            "id": 79588,
+            "user_s": 0.0,
+            "kernel_s": 0.0
+          },
+          {
+            "id": 84968,
+            "user_s": 0.0,
+            "kernel_s": 0.0
+          },
+          {
+            "id": 82904,
+            "user_s": 0.0,
+            "kernel_s": 0.0
+          },
+          {
+            "id": 83548,
+            "user_s": 0.0,
+            "kernel_s": 0.0
+          },
+          {
+            "id": 81464,
+            "user_s": 0.71875,
+            "kernel_s": 0.625
+          },
+          {
+            "id": 83236,
+            "user_s": 0.171875,
+            "kernel_s": 0.515625
+          },
+          {
+            "id": 88716,
+            "user_s": 0.25,
+            "kernel_s": 0.25
+          },
+          {
+            "id": 80140,
+            "user_s": 0.0,
+            "kernel_s": 0.0
+          },
+          {
+            "id": 79964,
+            "user_s": 0.0,
+            "kernel_s": 0.0
+          },
+          {
+            "id": 79624,
+            "user_s": 0.0,
+            "kernel_s": 0.0
+          }
+        ]
+      },
+      "root_cause": "UNKNOWN; short samples not long-term PASS"
+    },
+    "frozen_code": {
+      "source_commit": "bb04d92f08a0ceca2075a2c17b153f2921803765",
+      "src_tree": "d5f270aa8c392e9b374bfdef396d229af2d4e1e6",
+      "frozen_code_matches_reviewed": {
+        "src.launcher.google_web": true,
+        "src.launcher.backend": true,
+        "src.sheets.google_reader": true,
+        "src.sheets.tp_brief": true,
+        "src.workflow.tp_research": true,
+        "src.launcher.business_continuations": true
+      },
+      "normal_composition": "ProductionBackend market_actor_factory=None; independent deadlines enabled by frozen1.6 unless explicit false",
+      "parallel_actors_enabled": false
+    },
+    "cleanup": {
+      "stage_bytes_retired": 268020692.0,
+      "stage_retired": true,
+      "runtime_touched": false,
+      "rollback_retained": true,
+      "compatibility_copy_retired": true,
+      "local_small_diagnostics_retained": "Necessary for health-HOLD/safe-stop follow-up; no TSV or copied compatibility database retained. Program/state rollback backup retained separately."
+    },
+    "page_preflight": {
+      "connected": true,
+      "contexts": 1,
+      "pages": 2,
+      "google_owned": 1,
+      "other_owned": 0,
+      "unsafe_google_owned": 0,
+      "errors": [],
+      "navigation": false,
+      "page_mutation": false,
+      "closed_pages": 0
+    },
+    "build_checks": {
+      "canonical_script": "scripts/build_windows_release.ps1 -Version 1.6 -BuildOnly",
+      "python": "existing .worktrees/v1-4-order-mail-inspection/.venv-release/Scripts/python.exe",
+      "tcl": "8.6.15",
+      "pyinstaller": "6.16.0",
+      "RELEASE_SCAN_OK": true,
+      "frozen_selfcheck": true,
+      "installed_idle_selfcheck": true,
+      "source_modified": false
+    },
+    "open": [
+      "safe stop confirmation pending",
+      "Google page-budget cause/page ownership lifecycle",
+      "real website business success",
+      "CPU high-value cause",
+      "Stage F real market Actor overlap",
+      "actual TP timeliness",
+      "long-term stability/DPI/game"
+    ],
+    "handoff": "Owner forwards original report; no direct CEO message",
+    "source_startup_health": "Frozen self/idle checks and live GUI/mutex PASS; actual Google health FAIL. No claim of complete production acceptance."
   }
 }

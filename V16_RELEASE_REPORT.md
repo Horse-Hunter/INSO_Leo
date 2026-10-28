@@ -1,6 +1,86 @@
 # V1.6 unified release and initial production verification
 
-## 最新交付：Google 三子表共享 60 秒快照 / 2026-10-28
+## 最新现场：Owner 授权 Windows 发布 / 2026-10-28（健康验收未通过）
+
+**已安装并真实启动；V16_REVIEW_REQUIRED。生产健康不作 PASS。**
+Owner 授权基线 `1507972e722b72341381a782c5fc18411c3ea74d`，
+应用 `bb04d92f08a0ceca2075a2c17b153f2921803765`，
+src 树 `d5f270aa8c392e9b374bfdef396d229af2d4e1e6`。
+本轮不改应用源码、配置或通知策略，原离线3040/1SKIP仅归属该源码。
+
+### 实际构建、替换与启动
+
+- 原唯一 `build_windows_release.ps1 -Version 1.6 -BuildOnly`，
+  复用 `.worktrees/v1-4-order-mail-inspection/.venv-release/Scripts/python.exe`，
+  Tcl8.6.15 / PyInstaller6.16.0；冻结自检及 RELEASE_SCAN_OK 通过。
+- 候选与安装 EXE SHA256：
+  `745BEC95F0426673C82ED4AB76EE38DCAB442F2922FAEF124D7B040F947F51CE`。
+  2875 个程序资产全部匹配；冻结的缓存、Backend、Reader、TP及可选接续模块
+  代码逐一与已审核源码编译对象匹配。没有临时开启 Actor。
+- 安装路径：`D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe`。
+  2026-10-28 09:38:01(+08)完成替换；安装自检和空闲界面自检通过。
+- 旧程序实际 PID85528 已在09:29:31(+08)正常退出 code0，现场无旧实例、锁空闲，
+  非本轮强杀。新 GUI PID86248，观察器86684，09:38:36开始，标题明确 V1.6，
+  原命名互斥锁被持有，窗口 Responding、诊断 gui_ready。Windows截图通道超时，
+  自定义按钮无可识别文字，故本次不冒充完整菜单/托盘指针验收。
+- Owner 确认点击“开始运行”；09:42:37询价 begin，09:44:43报价 begin，
+  09:45:03报价 deferred/900s；09:45:03 TP begin，09:45:24 TP deferred/900s。
+  这是真实配置业务恢复，不是 Mock、只读探针或仅 GUI 启动。
+- 当前实际路径：`v16_enabled/v13_enabled/tp_enabled=true`、三个900s周期，
+  原同步浏览器 Owner + 独立模块截止时间；主构造未注入 market_actor_factory，
+  **双市场 Actor 未启用、真实网页并行未上线**，历史454.210s迟到问题仍 OPEN。
+
+### 账本与回滚保护
+
+回滚目录：`D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-cache-20261028T013533Z/program`。
+原 EXE `696E732B3B697EBDAE6267118959D11C8C87BE4A2B76DAFD7F17C2EA7127189A`，
+全部旧资产哈希核对、回滚程序自检通过。新鲜备份只复制指定配置、加密 Vault
+及 SQLite 验证备份，不遍历 runtime/Profile。兼容性只在副本验证，原迁移返回无需升级，
+副本与原库全部表摘要一致；**生产未执行迁移/还原/清理**。
+
+安装独占原互斥锁，只替换 EXE/_internal；runtime junction 仍指向
+`D:/Program_Leo/INSO_Leo/dist/INSO_V1.4/runtime`，配置/Vault哈希不变，
+V1.4/V1.5程序资产不变。实际业务库由原配置指向 V1.2 runtime/production；不猜路径。
+安装与空闲启动前后全表一致，原四TP/六TP-SENT、113条不可变命令及144条SENT保留。
+历史17条 INTERRUPTED_UNSENT、2条STATUS_WRITE_PENDING仍为原持久化人工/状态保护，
+没有重置、重购或伪造来源；未发现 UNKNOWN/SENDING/RESEARCHING 在途阻断。
+
+恢复后只读核验：完整性ok，原命令/144条SENT/4TP全行不变；收件结果146 SENT，
+新增2条PURCHASE_EXCEPTION类型的运行故障通知，非测试邮件，SMTP接受不等于投递。
+采购结果SAVED仍23，无新采购成功凭据；来源变化拦截2次，未把它写成成功业务。
+不恢复旧数据库，否则可能丢掉恢复后的新收据。需要回滚时只正常退出后恢复程序，
+保留当前账本和所有新旧SENT/UNKNOWN；本次未执行程序回滚，因启动/自检正常，
+现场问题属受原保护拦截的Google业务读取，不靠换回同样有该保护的旧程序消除现场。
+
+### 现场阻断与实际性能
+
+本次已直接取得固定脱敏分支 `google-busy-page-budget` 共10次，报价和TP各耗尽
+原5次读取后延期。**只能证明操作页预算保护触发**，不能断定哪几个保留页、
+为何累计至上限，不能声称全部Google不可访问或缓存已修复告警。
+启动前只读连接原9222：1context/2pages，1个Google-owned页，原只读安全判定
+无正在脚本/可见对话框/未保存，未新建或关闭页面；恢复后未与业务争用Chrome检查。
+未清保护页、绕过页数上限、放宽重试或关通知。Owner已被告知需要安全停止保留现场。
+
+资源实测（16逻辑CPU，主程序与观察器分开）：空闲43.41s主程序3.35449%host CPU、
+98.8MiB RSS/71.97MiB Private/531句柄；观察器0%host/20.75MiB/128句柄。
+正常Esc后72.98s含Owner恢复的混合区间1.68741%host；随后57.36s业务区间
+1.56123%host、121.39MiB RSS/90.89MiB Private/1057句柄/12线程，仍Responding。
+原生线程有界采样含用户态/内核态差分，但不足定位旧3.264%问题根因。
+**资源异常/波动保持OPEN，不报长期稳定PASS，不用操作焦点/优先级改数字。**
+
+当前最终可核实状态：**INSTALLED / BUSINESS_RUNNING_WITH_GOOGLE_DEFER /
+OWNER_SAFE_STOP_PENDING / RESOURCE_WARNING / V16_REVIEW_REQUIRED**。
+已请求Owner点击安全停止，尚未收到完成确认，不能写成已停止/空闲。
+09:50:12主进程仍Responding，RSS123.93MiB、Private93.6MiB、1426句柄、10线程；
+单次运行与短测不能证明长期稳定。后续现场状态变更需追加新凭据。
+
+本轮自有BuildOnly stage和兼容性数据副本已在标记、绝对路径和无重解析点检查后退休，
+stage回收268020692字节；保留新鲜程序/配置/加密Vault/账本备份，不删除旧回滚或共享数据。
+本地小型脱敏诊断因健康HOLD/停止待确认而保留，无原始TSV或兼容数据库副本。
+下一步最小范围：在停止确认后独立审查page-budget页面归属/生命周期与资源证据；
+不得为“上线成功”删除保护、改源码或发测试通知。本报告由Owner转CEO，执行方不自行发送。
+
+## 历史源码交付：Google 三子表共享 60 秒快照 / 2026-10-28
 
 **GOOGLE_SHEET_TTL_CACHE_REVIEW_REQUIRED / V16_REVIEW_REQUIRED。**
 已拉取核对正式审核 `161e5113f5c299739afc4f6443ed656b160a34f0`。
