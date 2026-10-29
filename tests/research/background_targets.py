@@ -22,6 +22,11 @@ class BackgroundSession:
         self.context = context
 
     def send(self, command, params):
+        if command == "Target.getTargetInfo":
+            matches = [p for p in self.context.pages
+                       if str(id(p)) == params["targetId"] and not p.is_closed()]
+            assert len(matches) == 1, "unknown synthetic native target"
+            return {"targetInfo": {"targetId": params["targetId"], "type": "page"}}
         assert command == "Target.createTarget" and params["background"] is True
         page = self.context.new_page()  # Synthetic target-created event/fixture factory.
         page.url = params["url"]

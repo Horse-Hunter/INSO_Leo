@@ -153,19 +153,47 @@ def google_operations_idle():
 
 
 def _google_target_id(page):
-    """Use native identity across attachments; never retain a Playwright object."""
+    """Prove native identity; factory leases use explicit browser target queries.
+
+    The factory already binds this exact Page to a native target. Re-attaching
+    another per-page CDP session is unnecessary and can race a document/process
+    transition. Browser-scoped Target.getTargetInfo with that exact ID keeps
+    proof independent of the transient page session; document/owner/write
+    settlement guards remain mandatory at their original callers.
+    """
     session = None
+    step = "google-target-session"
     try:
-        session = page.context.new_cdp_session(page)
-        target = session.send("Target.getTargetInfo")["targetInfo"]["targetId"]
+        if page.is_closed():
+            raise ValueError("GOOGLE_TARGET_CLOSED")
+        lease = getattr(page, "_inso_native_page_owner", None)
+        if lease is not None:
+            expected, _owner, context, browser = lease
+            if context is not page.context or not isinstance(expected, str) or not expected:
+                raise ValueError("GOOGLE_NATIVE_LEASE_INVALID")
+            session = browser.new_browser_cdp_session()
+            step = "google-target-explicit-proof"
+            info = session.send("Target.getTargetInfo", {"targetId": expected})["targetInfo"]
+            target = info["targetId"]
+            if target != expected or info.get("type") != "page":
+                raise ValueError("GOOGLE_NATIVE_TARGET_MISMATCH")
+        else:
+            session = page.context.new_cdp_session(page)
+            step = "google-target-page-proof"
+            target = session.send("Target.getTargetInfo")["targetInfo"]["targetId"]
         if not isinstance(target, str) or not target:
             raise ValueError("MISSING_TARGET_ID")
         return target
     except Exception as exc:
+        log_step(step, cause=exc)
         raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED") from exc
     finally:
         if session is not None:
-            session.detach()
+            try:
+                session.detach()
+            except Exception as exc:
+                log_step("google-target-proof-detach", cause=exc)
+                raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED") from exc
 
 
 def _retain_google_entry(key, entry, retained):
