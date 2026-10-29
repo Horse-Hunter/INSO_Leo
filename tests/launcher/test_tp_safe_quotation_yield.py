@@ -137,7 +137,7 @@ def assembly(tmp_path, monkeypatch, *, mode='normal', duration=10):
     monkeypatch.setattr(backend, '_close_inso_order_tab', cleanup)
     monkeypatch.setattr(backend, '_wait_between_polls', lambda _: True)
     monkeypatch.setattr(launcher, 'settle_quotation_operations', lambda: not ops.protected and ops.active is None)
-    backend._manual_write_service = lambda: SimpleNamespace(operations_idle=lambda: mode != 'unsafe_google')
+    backend._manual_write_service = lambda: SimpleNamespace(operations_idle=lambda: mode != 'unsafe_google', suspend_idle_poll=nullcontext)
     lease = None
     if mode in {'same_source', 'waiting_source'}:
         runtime.configure_order_leases(2)
@@ -257,7 +257,7 @@ def test_stop_during_native_guard_cancels_before_tp_claim(tmp_path, monkeypatch)
     def stop():
         a.backend._stop.set()
         return True
-    a.backend._manual_write_service = lambda: SimpleNamespace(operations_idle=stop)
+    a.backend._manual_write_service = lambda: SimpleNamespace(operations_idle=stop, suspend_idle_poll=nullcontext)
     with pytest.raises(V13Stopped):
         a.run()
     assert not a.tp.research.calls and not a.transport.calls

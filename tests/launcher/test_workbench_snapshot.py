@@ -233,3 +233,26 @@ def test_projection_selects_newest_before_cap_without_per_order_sql(tmp_path):
     backend._view_intake_times = {key: item.created_at for key, item in items.items()}
     backend._cache_workbench(force=True, items={})
     assert backend.get_workbench_snapshot().orders == rows
+
+
+@pytest.mark.parametrize("label", [V12BusinessLabel.PROCESSING, V12BusinessLabel.INTERRUPTED_UNSENT])
+def test_intake_without_research_is_visible_without_invented_prices(tmp_path, monkeypatch, label):
+    from types import SimpleNamespace
+    backend = ProductionBackend(root=tmp_path)
+    now = datetime(2026, 10, 30, tzinfo=UTC)
+    item = SimpleNamespace(mpn="NEW-DEMO", brand="TEST", resolved_brand=None,
+                           quantity=12, created_at=now, record_identity=None)
+    monkeypatch.setattr(backend, "get_v12_order_state", lambda key: V12OrderStateDTO(key, label, None))
+    backend._cache_workbench(force=True, items={"new": item})
+    snap = backend.get_workbench_snapshot()
+    assert len(snap.orders) == 1 and snap.total_orders == 1
+    order = snap.orders[0]
+    assert order.inquiry_id == "new" and order.model == "NEW-DEMO" and order.quantity == 12
+    assert order.received_at == now and not order.sources
+    assert order.min_reference_price is None and order.total_price is None
+    assert snap.order_states[0].business_label is label
+    assert order.status is (OrderStatus.ERROR if label is V12BusinessLabel.INTERRUPTED_UNSENT else OrderStatus.PENDING)
+    prior = Order("new", "NEW-DEMO", "TEST", 12, "货少", None, None, OrderStatus.COMPLETED)
+    backend._results = [prior]
+    backend._cache_workbench(force=True, items={"new": item})
+    assert backend.get_workbench_snapshot().orders[0].stock_label == "货少"

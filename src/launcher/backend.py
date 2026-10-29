@@ -1272,15 +1272,18 @@ class ProductionBackend(GuiBackend):
         self._observation.wait('quotation', '报价已安全收口，执行到期TP')
         runtime.yield_module_resource('quotation')
         try:
-            with self._poll_gate:
-                module = (None if self._stop.is_set() else
-                          runtime.claim_due_module(exclude=('quotation', 'inquiry')))
-            if module is not None:
-                if self._stop.is_set():
-                    runtime.complete_module(module)
-                else:
-                    self._run_independent_job(module)
-            self._page_admission.require_open()
+            # A completed quote may lend the Owner, not its live Google Page
+            # wrappers. TP/session recovery can replace the shared CDP client.
+            with self._manual_write_service().suspend_idle_poll():
+                with self._poll_gate:
+                    module = (None if self._stop.is_set() else
+                              runtime.claim_due_module(exclude=('quotation', 'inquiry')))
+                if module is not None:
+                    if self._stop.is_set():
+                        runtime.complete_module(module)
+                    else:
+                        self._run_independent_job(module)
+                self._page_admission.require_open()
         except V13Stopped:
             if not self._stop.is_set():
                 runtime.abort_module_resource()
@@ -3230,6 +3233,15 @@ class ProductionBackend(GuiBackend):
             merged.update({o.inquiry_id: o for o in tp_display_orders(self._tp)})
             for order in self._history:
                 merged.setdefault(order.inquiry_id, order)
+            # Intake precedes Research output. Show canonical queued/interrupted
+            # records too; absence of prices is not absence of an order.
+            for key, item in items.items():
+                if key in merged or not isinstance(getattr(item, "mpn", None), str):
+                    continue
+                brand = getattr(item, "resolved_brand", None) or getattr(item, "brand", None)
+                merged[key] = Order(key, item.mpn, brand if isinstance(brand, str) else None,
+                    _integer(getattr(item, "quantity", None), 0), "待验证", None, None,
+                    OrderStatus.PENDING, remark="等待处理；尚无调研结果", run_id=self._run_id or "")
             # Reuse the already-loaded immutable intake field: no per-row SQL.
             for key, order in tuple(merged.items()):
                 received = (getattr(items.get(key), "created_at", None)

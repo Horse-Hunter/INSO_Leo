@@ -159,13 +159,36 @@ class GoogleSheetsWebService:
             # serialized by _GOOGLE_GRID_LOCK and re-proves its protected surface.
             yield
             return
-        with ExitStack() as lifetime, google_operation_scope(
-                retained=self._retained_pages, lock=_GOOGLE_GRID_LOCK):
-            token = self._poll_handle.set({"handle": None, "lifetime": lifetime})
+        with ExitStack() as lifetime, ExitStack() as pages:
+            pages.enter_context(google_operation_scope(
+                retained=self._retained_pages, lock=_GOOGLE_GRID_LOCK))
+            token = self._poll_handle.set({"handle": None, "lifetime": lifetime, "pages": pages})
             try:
                 yield
             finally:
                 self._poll_handle.reset(token)
+
+    @contextmanager
+    def suspend_idle_poll(self):
+        """End proven-settled Page borrows before a nested module can replace CDP.
+
+        Keep only the existing retained native IDs. The nested module receives
+        its own normal scope; resumed quotation lazily resolves those exact IDs
+        on the current original Owner client. No unsafe surface is discarded.
+        """
+        state = self._poll_handle.get()
+        if state is None or not self.operations_idle():
+            raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_OPERATION_NOT_CLOSED")
+        state["pages"].close()  # Re-prove ownership/settlement while client is live.
+        state["lifetime"].close()
+        state["handle"] = None
+        token = self._poll_handle.set(None)
+        try:
+            yield
+        finally:
+            self._poll_handle.reset(token)
+            state["pages"].enter_context(google_operation_scope(
+                retained=self._retained_pages, lock=_GOOGLE_GRID_LOCK))
 
     @contextmanager
     def _operation_session(self):
