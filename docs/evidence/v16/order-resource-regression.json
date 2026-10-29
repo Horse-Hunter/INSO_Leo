@@ -6245,5 +6245,420 @@
       "Cross-restart Google page accumulation remains the previously recorded separate issue"
     ],
     "computer_use": "COMPUTER_USE_NOT_USED"
+  },
+  "google_identity_handoff_repair_20261030": {
+    "status": "HEALTH_HOLD / INSTALLED_IDLE / V16_REVIEW_REQUIRED",
+    "source": "779459ae21c91228ad55a33aba2e0b246ebff287",
+    "src_tree": "bfb2a7f39245f9484704db2bbf90a45695599765",
+    "tests_tree": "41c2711b887330a1d983144c684cd9793c6df3af",
+    "full_regression": {
+      "passed": 3168,
+      "skipped": 1,
+      "seconds": 124.41
+    },
+    "focused_passed": 72,
+    "ruff": "PASS",
+    "diff_check": "PASS",
+    "installed": {
+      "installed_at": "2026-10-29T16:57:03.810300+00:00",
+      "installation": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6",
+      "source_application": "779459ae21c91228ad55a33aba2e0b246ebff287",
+      "src_tree": "bfb2a7f39245f9484704db2bbf90a45695599765",
+      "build_head": "779459ae21c91228ad55a33aba2e0b246ebff287",
+      "exe_sha256": "fefcc435e791b58c45cc76dbf762867074a9aa2eae967a6fe30d58de68b93c4e",
+      "verified_assets": 2875,
+      "rollback": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-google-handoff-20261029T165612Z\\program",
+      "rollback_selfcheck": true,
+      "self_check": true,
+      "idle_self_check": true,
+      "all_business_tables_unchanged": true,
+      "protected_configuration_vault_junction_unchanged": true,
+      "v14_v15_assets_unchanged": true,
+      "migration_on_production": false,
+      "parallel_actors_enabled": false,
+      "state": "INSTALLED_IDLE"
+    },
+    "verified_frozen_modules": 117,
+    "prior_failed_validation": {
+      "source": "8b84d232c1f99b330abeccbffd51de9718ffb115",
+      "result": "SAFETY_HOLD",
+      "step": "google-target-session",
+      "manual_request_count": 0,
+      "shutdown": "NORMAL",
+      "first_transient_protocol_cause": "UNKNOWN"
+    },
+    "live_order": "one canonical pre-submit interrupted order, no direct reset; original durable manual retry gate only",
+    "live_result": {
+      "started_at": "2026-10-29T16:57:20.599802+00:00",
+      "operator_pid": 133424,
+      "source": "779459ae21c91228ad55a33aba2e0b246ebff287",
+      "kind": "one-shot original Backend public API operator session",
+      "manual_request_count": 0,
+      "result": "SAFETY_HOLD",
+      "computer_use": "COMPUTER_USE_NOT_USED",
+      "label": "INTERRUPTED_UNSENT",
+      "closed_at": "2026-10-29T17:09:32.969081+00:00",
+      "original_backend_shutdown_completed": true
+    },
+    "force_kill_used": false,
+    "computer_use": "COMPUTER_USE_NOT_USED",
+    "actor_parallelism_enabled": false,
+    "live_cycles": {
+      "cycles": [
+        {
+          "at": "2026-10-30T00:57:22.739000+08:00",
+          "cycle": "cycle_3b387d04a27d4cc69a1234459c965e9b",
+          "module": "inquiry",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-30T01:08:56.530000+08:00",
+          "cycle": "cycle_3b387d04a27d4cc69a1234459c965e9b",
+          "module": "inquiry",
+          "phase": "completed",
+          "elapsed": 693.797,
+          "due_in": 900.0
+        },
+        {
+          "at": "2026-10-30T01:08:56.730000+08:00",
+          "cycle": "cycle_930fe05f5aae47bd95f7a48560c261cf",
+          "module": "quotation",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-30T01:09:14.737000+08:00",
+          "cycle": "cycle_21ad82a3f9e24ac48b0496d03b6b1b80",
+          "module": "tp",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        },
+        {
+          "at": "2026-10-30T01:09:27.379000+08:00",
+          "cycle": "cycle_21ad82a3f9e24ac48b0496d03b6b1b80",
+          "module": "tp",
+          "phase": "completed",
+          "elapsed": 12.641,
+          "due_in": 900.0
+        },
+        {
+          "at": "2026-10-30T01:09:30.800000+08:00",
+          "cycle": "cycle_930fe05f5aae47bd95f7a48560c261cf",
+          "module": "quotation",
+          "phase": "failed",
+          "elapsed": 34.078,
+          "due_in": 900.0
+        }
+      ],
+      "reasons": {
+        "GOOGLE_WEB_READ_UNAVAILABLE": 2,
+        "INSO_AUTHENTICATION_REQUIRED": 1
+      },
+      "business_results": {
+        "V1.3:SOURCE_IDENTITY_UNRESOLVED": 1,
+        "V1.3:QUOTE_AGE_EXPIRED": 4
+      }
+    },
+    "auth_readonly": {
+      "credential_available": true,
+      "credential_failure_class": null,
+      "inso_pages": [
+        {
+          "sample": 1,
+          "login_page": true,
+          "human_verification": true,
+          "verified_shell": false,
+          "owned": false
+        }
+      ],
+      "errors": [],
+      "navigation": false,
+      "submit_credentials": false,
+      "closed_pages": 0
+    },
+    "manual_challenge_confirmation": [
+      {
+        "sample": 1,
+        "sms_block_count": 1,
+        "sms_block_visible": true,
+        "other_manual_verification_marker": true
+      }
+    ],
+    "historic_state_protection": {
+      "integrity": "ok",
+      "historic_command_count": 124,
+      "historic_commands_immutable": true,
+      "historic_sent_count": 154,
+      "historic_sent_full_rows_unchanged": true,
+      "historic_tp_count": 4,
+      "historic_tp_full_rows_unchanged": true,
+      "current_recipients": {
+        "OPERATIONAL_PENDING": 1,
+        "SENT": 155
+      },
+      "current_tp_states": {
+        "MAIL_QUEUED": 4
+      },
+      "new_recipient_kind_outcomes": {
+        "PURCHASE_EXCEPTION:OPERATIONAL_PENDING": 1
+      },
+      "purchase_outcomes_before": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 23,
+        "VALIDATION_FAILED": 3
+      },
+      "purchase_outcomes_current": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 23,
+        "VALIDATION_FAILED": 3
+      },
+      "qualification": "SMTP SENT means transport acceptance only; no final mailbox receipt. No forced business writes or replays."
+    },
+    "gui": {
+      "pid": 109068,
+      "started_at": "2026-10-29T17:12:30.0856186Z",
+      "arguments": [],
+      "state": "INSTALLED_IDLE_HEALTH_HOLD",
+      "reason": "Existing INSO login page requires manual verification; do not start automatic business"
+    },
+    "gui_single_instance_held": true,
+    "gui_ready": true,
+    "source_api_resource_short_test": {
+      "pid": 133424,
+      "watch_pid": 134976,
+      "elapsed": 361.89099999994505,
+      "samples": 13,
+      "logical_cpus": 16,
+      "qualification": "Finite 6-minute native counter samples: source-equivalent original Backend session and protected Chrome parent only. Not GUI EXE/tray verification; excludes Chrome renderer child totals; not long-term stability.",
+      "app": {
+        "seconds": 361.75,
+        "cpu_host_percent": 0.17736048721492742,
+        "rss_min": 69857280,
+        "rss_max": 74633216,
+        "private_min": 54661120,
+        "private_max": 59604992,
+        "threads_min": 5,
+        "threads_max": 6,
+        "handles_min": 1042,
+        "handles_max": 1747,
+        "gdi_range": [
+          0,
+          0
+        ],
+        "user_range": [
+          1,
+          1
+        ]
+      },
+      "chrome_parent": {
+        "seconds": 361.76500000001397,
+        "cpu_host_percent": 0.1198550854836657,
+        "rss_min": 343867392,
+        "rss_max": 346873856,
+        "private_min": 211648512,
+        "private_max": 214519808,
+        "threads_min": 50,
+        "threads_max": 52,
+        "handles_min": 2377,
+        "handles_max": 2417,
+        "gdi_range": [
+          105,
+          105
+        ],
+        "user_range": [
+          90,
+          92
+        ]
+      }
+    },
+    "installed_gui_resource_short_test": {
+      "pid": 109068,
+      "watch_pid": 121936,
+      "elapsed": 61.81200000003446,
+      "samples": 13,
+      "logical_cpus": 16,
+      "qualification": "Finite 60-second installed GUI idle HOLD and original observer counters. No business, menu/tray control or Chrome probe; not long-term stability.",
+      "app": {
+        "seconds": 61.67099999997299,
+        "cpu_host_percent": 0.004750510774920599,
+        "rss_min": 102043648,
+        "rss_max": 102051840,
+        "private_min": 74448896,
+        "private_max": 74481664,
+        "threads_min": 9,
+        "threads_max": 10,
+        "handles_min": 520,
+        "handles_max": 524,
+        "gdi_range": [
+          136,
+          136
+        ],
+        "user_range": [
+          258,
+          258
+        ]
+      },
+      "observer": {
+        "seconds": 61.68799999996554,
+        "cpu_host_percent": 0.0,
+        "rss_min": 21757952,
+        "rss_max": 21757952,
+        "private_min": 15159296,
+        "private_max": 15159296,
+        "threads_min": 1,
+        "threads_max": 1,
+        "handles_min": 128,
+        "handles_max": 128,
+        "gdi_range": [
+          0,
+          0
+        ],
+        "user_range": [
+          1,
+          1
+        ]
+      }
+    },
+    "cleanup_tests": [
+      {
+        "path": "v16-google-identity-fix-20261030/focused",
+        "status": "RETIRED_OWNED_DISPOSABLE",
+        "files": 128,
+        "bytes": 5152480
+      },
+      {
+        "path": "v16-google-identity-fix-20261030/full",
+        "status": "RETIRED_OWNED_DISPOSABLE",
+        "files": 5419,
+        "bytes": 216616533
+      },
+      {
+        "path": "v16-google-identity-fix-20261030/compatibility",
+        "status": "RETIRED_OWNED_DISPOSABLE",
+        "files": 1,
+        "bytes": 839680
+      },
+      {
+        "path": "v16-google-identity-fix-20261030/handoff-tests",
+        "status": "RETIRED_OWNED_DISPOSABLE",
+        "files": 476,
+        "bytes": 21790720
+      },
+      {
+        "path": "v16-google-identity-fix-20261030/handoff-focused",
+        "status": "RETIRED_OWNED_DISPOSABLE",
+        "files": 476,
+        "bytes": 21790720
+      },
+      {
+        "path": "v16-google-identity-fix-20261030/handoff-full",
+        "status": "RETIRED_OWNED_DISPOSABLE",
+        "files": 5436,
+        "bytes": 217396957
+      },
+      {
+        "path": "v16-google-handoff-release-20261030/compatibility",
+        "status": "RETIRED_OWNED_DISPOSABLE",
+        "files": 1,
+        "bytes": 839680
+      }
+    ],
+    "cleanup_final": [
+      {
+        "kind": "verified_owned_release_stage",
+        "files": 2876,
+        "bytes": 268034183,
+        "retired": true
+      },
+      {
+        "kind": "completed_one_shot_helper",
+        "name": "v16-google-handoff-release-20261030/check_frozen.py",
+        "retired": true
+      },
+      {
+        "kind": "completed_one_shot_helper",
+        "name": "v16-google-handoff-release-20261030/check_ledger.py",
+        "retired": true
+      },
+      {
+        "kind": "completed_one_shot_helper",
+        "name": "v16-google-handoff-release-20261030/gui_resources.py",
+        "retired": true
+      },
+      {
+        "kind": "completed_one_shot_helper",
+        "name": "v16-google-handoff-release-20261030/live_resources.py",
+        "retired": true
+      },
+      {
+        "kind": "completed_one_shot_helper",
+        "name": "v16-google-handoff-release-20261030/page_check_after_stop.py",
+        "retired": true
+      },
+      {
+        "kind": "completed_one_shot_helper",
+        "name": "v16-google-handoff-release-20261030/preflight.py",
+        "retired": true
+      },
+      {
+        "kind": "completed_one_shot_helper",
+        "name": "v16-google-handoff-release-20261030/prepare.py",
+        "retired": true
+      },
+      {
+        "kind": "completed_one_shot_helper",
+        "name": "v16-google-handoff-release-20261030/read_cycles.py",
+        "retired": true
+      },
+      {
+        "kind": "completed_one_shot_helper",
+        "name": "v16-google-handoff-release-20261030/replace.py",
+        "retired": true
+      },
+      {
+        "kind": "completed_one_shot_helper",
+        "name": "v16-google-handoff-release-20261030/run_current_order.py",
+        "retired": true
+      },
+      {
+        "kind": "completed_one_shot_helper",
+        "name": "v16-google-identity-fix-20261030/preflight.py",
+        "retired": true
+      },
+      {
+        "kind": "completed_one_shot_helper",
+        "name": "v16-google-identity-fix-20261030/prepare.py",
+        "retired": true
+      },
+      {
+        "kind": "completed_one_shot_helper",
+        "name": "v16-google-identity-fix-20261030/replace.py",
+        "retired": true
+      },
+      {
+        "kind": "completed_one_shot_helper",
+        "name": "v16-google-identity-fix-20261030/run_current_order.py",
+        "retired": true
+      }
+    ],
+    "remaining": {
+      "google_download_timeouts": "2 natural transient failures recovered; first inquiry693.797s, slow exact protocol branch UNKNOWN; not declared fully fixed",
+      "handoff": "nested TP12.641s completed, no GOOGLE_TAB_IDENTITY_UNCONFIRMED in this run; subsequent actual INSO auth challenge safely blocked quote",
+      "new_order": "visible, INTERRUPTED_UNSENT, manual retry0, no new purchase; must not call full-chain success",
+      "authentication": "one existing INSO login page, exactly one #YZM actually visible; no credentials submitted by diagnosis, no OTP bypass",
+      "queued_alert": "one new PURCHASE_EXCEPTION:OPERATIONAL_PENDING from stopped auth flow, immutable command retained; not actual new purchase; will be handled only by original queue on authorized resume",
+      "long_term": "NOT_VERIFIED",
+      "all_v16": "REVIEW_REQUIRED; no all-bugs-fixed claim"
+    },
+    "log_hashes": {
+      "build.log": "9981b0ed53369cbed75882c03fe70422ff3b57d507b0079c08df0c652f78d87d",
+      "frozen-code.json": "abf6ca9b0847cfbb44155a3394ab27e96aa6b17026716b54611b41ada00a4de0"
+    }
   }
 }

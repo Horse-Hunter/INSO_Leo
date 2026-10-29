@@ -1,5 +1,34 @@
 # V1.6 unified release and initial production verification
 
+## 2026-10-30 Google身份交接修复：已安装，真实认证阻断
+
+**HEALTH_HOLD / INSTALLED_IDLE / V16_REVIEW_REQUIRED。不是BUSINESS_RUNNING，不宣称全部bug解决或新单完成。**
+Owner已授权无人值守修复/验证/原流程覆盖/正常业务，安全确认后可将强杀INSO作为正常退出不可用的最后手段；本轮两次原Backend均正常收口，**强杀0，COMPUTER_USE_NOT_USED**，Chrome/Profile/人工页始终保留。报告只交Owner，不联系CEO。
+
+### 已安装源码及验证
+- 应用`779459ae21c91228ad55a33aba2e0b246ebff287`；src`bfb2a7f39245f9484704db2bbf90a45695599765`；tests`41c2711b887330a1d983144c684cd9793c6df3af`。
+- 安装`D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe`；SHA256 **`FEFCC435E791B58C45CC76DBF762867074A9AA2EAE967A6FE30D58DE68B93C4E`**。
+- 完整离线3168PASS/1SKIP124.41s；专项72PASS；Ruff/diffPASS；原唯一发布脚本/RELEASE_SCAN_OK、117冻结模块逐一一致、2875资产、原self/idle检查通过。唯一SKIP仍按原环境条件，不冒充通过。
+- 新鲜546533程序回滚：`D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-google-handoff-20261029T165612Z/program`，程序清单/self-check及业务状态备份通过。兼容性仅副本验证，无生产迁移；安装前后全表/配置/Vault/runtime及V1.4/V1.5程序不变。
+
+### 实际修复及失败证据
+8b84前次实测并未成功：询价625s、TP12.8s后，报价恢复时在google-target-session报错，原Backend正常退出，人工重跑0。最早瞬态协议原因UNKNOWN，未凭browser_ui数量猜测。
+原报价Google poll持有活Page/客户端借用，内层TP或INSO认证/会话恢复能替换或停止该客户端；外层再做清理会掩盖原始错误。离线已用原quotation→TP路径复现旧客户端清理失败。最小修复仅在原单笔报价安全收口、租约及原Google idle通过后，结束活Page借用，保留精确nativeID；TP用独立原scope；返回按当前原Owner客户端重新解析。未知写入/身份/auth/Stop/120s等待/SENT门禁保持。另补任务中心入库记录在Research未完成前的展示，价格为空、实际权限来自原账本、不伪造成功。
+
+### 真实复验与当前阻断
+以原Backend公开API、原单实例锁、与冻结版等价源码运行一次性操作；不是第二套业务框架，也不冒充GUI EXE真实运行收据。01:08:56询价完成693.797s；01:09:14报价在原安全点让位TP；TP01:09:27完成12.641s，随后报价恢复，**此次未再出现GOOGLE_TAB_IDENTITY_UNCONFIRMED**。报价01:09:30因INSO_AUTHENTICATION_REQUIRED安全失败，01:09:32正常shutdown；原新单已可见，仍INTERRUPTED_UNSENT，原公开重跑请求0，新增采购0。没有用SQL重置订单或触碰未知结果。
+业务退出后仅只读原页面/Provider确认：凭据可用，现有INSO登录页1个、已验证业务列表0；`#YZM`恰好1个且真实可见，原人工验证标记也为真。不是仅凭登录错误猜测需要短信；未填写/提交任何验证码、未重新登录、未关闭原页。人工认证无法无人值守绕过。原源码在认证异常时可断开共享客户端，这也说明旧Google交接错误可能掩盖实际认证失败；最初瞬态故障仍不能唯一归因。
+本轮Google原生下载仍有2次GOOGLE_WEB_READ_UNAVAILABLE后恢复，首次询价693.797s的全部协议耗时尚未定位；**不得把交接修复说成Google全部故障已消失**。
+
+### 最终现场和账本
+正式EXE01:12:30仅空闲启动一次，GUI109068/原观察器121936，原gui_ready与单实例持有确认；不传--start-inquiry，不自动登录、不再启动业务。桌面最新版快捷方式仍指向此安装，原V1.4入口保留。等待Owner完成原INSO短信/人工验证后，再恢复原授权业务；无需重新批准普通业务。
+历史124不可变命令、154既有SENT完整行、4TP及6TP-SENT不变；SENT总数155（原待发送故障通知自然发送），新增采购/SAVED计数未增加，无UNKNOWN/SENDING。当前另有1条PURCHASE_EXCEPTION:OPERATIONAL_PENDING故障通知，来自此次认证暂停，并不证明新采购；不可变命令原样保留、不删除/重写/手工重发，恢复时原队列可能发送。SMTP接受不等于邮箱投递。
+
+### 资源及清理
+源码等价会话6分钟13样本：整机CPU0.17736%，RSS66.62–71.18MiB，Private52.13–56.84MiB，句柄1042–1747；Chrome父进程0.11986%，不含renderer合计，不能当GUI或长期无泄漏证明。
+最终正式GUI空闲61.67秒13样本：整机CPU0.00475%，RSS97.32–97.32MiB，Private71.0MiB左右，句柄520–524，线程9–10，GDI136/USER258稳定；仅短测，不冒充十分钟/24小时、真实托盘/DPI/游戏验收。双Actor仍不开启。
+7个自有测试/兼容副本已退休；本轮有标记stage2876文件268034183字节及14个一次性操作/检查脚本已退休，保留小型证据与新鲜回滚，不留第二生产路径。原观察心跳暂停，避免遇到人工认证仍反复重启/发信。详见原JSON键google_identity_handoff_repair_20261030。
+
 ## 任务中心新订单优先：Owner授权发布（2026-10-29）
 
 **BUSINESS_RUNNING。** Owner要求完成验证后直接打包覆盖运行；本次不新增CEO发布门禁，也不宣布整个V1.6 PASS。
