@@ -596,3 +596,39 @@ def test_non_numeric_quantity_stops_the_item_without_burning_retries(
     # a deterministic data problem would fail the same way again.
     assert item.attempt_count == 1
     assert research.inputs == []
+
+
+def test_display_intake_is_immutable_through_claim_and_restart(tmp_path):
+    from src.launcher.v12_gui import read_startup_interruptions
+    from src.workflow.v12_store import migrate_v12
+    db = tmp_path / "workflow.sqlite3"
+    store = WorkflowStateStore(db)
+    enqueue_one(store)
+    original = store.all_items()[0]
+    assert original.created_at == NOW
+    later = NOW + timedelta(days=2)
+    assert store.claim_due(now=later).created_at == NOW
+    assert WorkflowStateStore(db).all_items()[0].created_at == NOW
+    from contextlib import nullcontext
+    migrate_v12(db, tmp_path / "backup", quiesce=nullcontext, clock=lambda: later)
+    received = {}
+    baseline = read_startup_interruptions(db)
+    before = db.read_bytes()
+    assert read_startup_interruptions(db, intake_times=received) == baseline
+    assert received == {original.inquiry_id: NOW}
+    assert db.read_bytes() == before
+
+
+@pytest.mark.parametrize("raw", ["bad", "", "2026-10-29T00:00:00"])
+def test_unknown_display_intake_does_not_change_business_item_reads(tmp_path, raw):
+    import sqlite3
+    db = tmp_path / "workflow.sqlite3"
+    store = WorkflowStateStore(db)
+    enqueue_one(store)
+    original = store.all_items()[0]
+    with sqlite3.connect(db) as connection:
+        connection.execute("UPDATE workflow_items SET created_at=?", (raw,))
+    restored = store.all_items()[0]
+    assert restored.created_at is None
+    assert restored.inquiry_id == original.inquiry_id and restored.status is original.status
+    assert store.inquiry_intake_at(restored.inquiry_id) is None

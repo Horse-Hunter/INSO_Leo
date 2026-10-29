@@ -486,13 +486,7 @@ class WorkflowStateStore:
             row = connection.execute(
                 "SELECT created_at FROM workflow_items WHERE inquiry_id = ?", (inquiry_id,)
             ).fetchone()
-        if row is None or not isinstance(row[0], str):
-            return None
-        try:
-            value = datetime.fromisoformat(row[0])
-            return value if value.tzinfo is not None else None
-        except ValueError:
-            return None
+        return None if row is None else _intake_time(row[0])
 
     def all_items(self) -> tuple[WorkItem, ...]:
         with self._connect() as connection:
@@ -589,6 +583,7 @@ def _row_to_item(row: sqlite3.Row) -> WorkItem:
         resolved_brand=row["resolved_brand"],
         brand_update_status=row["brand_update_status"],
         last_error=row["last_error"],
+        created_at=_intake_time(row["created_at"]),
     )
 
 
@@ -604,3 +599,14 @@ def _time_to_text(value: datetime | None) -> str | None:
 
 def _text_to_time(value: str | None) -> datetime | None:
     return None if value is None else datetime.fromisoformat(value)
+
+
+def _intake_time(value: object) -> datetime | None:
+    """Unknown historical display/age dates must not break canonical item reads."""
+    if not isinstance(value, str):
+        return None
+    try:
+        stamp = datetime.fromisoformat(value)
+        return stamp if stamp.tzinfo is not None else None
+    except ValueError:
+        return None

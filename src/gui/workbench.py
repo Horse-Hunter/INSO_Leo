@@ -13,6 +13,7 @@ import customtkinter as ctk
 from src.core.app_paths import application_name
 
 from .contracts import OrderStatus, RunState
+from .state import newest_orders
 
 BG, NAV, CARD, LINE = "#141b23", "#10161e", "#1c2733", "#2b3949"
 TEXT, MUTED, BLUE = "#e7edf4", "#9baabd", "#557fae"
@@ -617,7 +618,7 @@ class WorkbenchView:
         self.render_orders()
 
     def set_orders(self, orders, states=None):
-        orders = tuple(orders[:1000])
+        orders = newest_orders(orders)[:1000]
         states = states or {}
         if (orders, states) == (self.orders, self.states):
             return
@@ -654,6 +655,8 @@ class WorkbenchView:
         key = getattr(self, "sort_key", None)
         if key:
             selected = sort_orders(selected, key, reverse=self.sort_desc)
+        else:
+            selected = newest_orders(selected)
         pages = max(1, (len(selected) + self.page_size - 1) // self.page_size)
         self.page_index = min(self.page_index, pages - 1)
         visible = selected[

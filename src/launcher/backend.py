@@ -38,7 +38,7 @@ from src.gui.contracts import (
     V12ReasonCode,
     WorkbenchSnapshot,
 )
-from src.gui.state import utc_now
+from src.gui.state import newest_orders, utc_now
 from src.inso.duplicate_history import InsoDuplicateHistoryReader
 from src.inso.purchase_writer import InsoPurchaseWriter, PlaywrightParentProductFields
 from src.inso.session import SecurityViolation
@@ -597,6 +597,7 @@ class ProductionBackend(GuiBackend):
         self._dashboard_counts = None
         self._results = ()
         self._history = ()
+        self._view_intake_times = {}
         self._history_fingerprint = None
         self._startup_interruptions = {}
         self._store = None
@@ -656,7 +657,7 @@ class ProductionBackend(GuiBackend):
                 try:
                     startup_cfg = json.loads(self.production_path.read_text(encoding="utf-8"))
                     path = resolve_app_path(Path(startup_cfg.get("sqlite_path", "runtime/production/workflow.sqlite3")), root=self.root)
-                    self._startup_interruptions = read_startup_interruptions(path)
+                    self._startup_interruptions = read_startup_interruptions(path, intake_times=self._view_intake_times)
                     known = {o.inquiry_id for o in self._history}
                     self._history += tuple(Order(iid, model or "", brand, _integer(quantity, 0),
                         "待验证", None, None, OrderStatus.ERROR, (), "", "", None, None)
@@ -3229,8 +3230,15 @@ class ProductionBackend(GuiBackend):
             merged.update({o.inquiry_id: o for o in tp_display_orders(self._tp)})
             for order in self._history:
                 merged.setdefault(order.inquiry_id, order)
+            # Reuse the already-loaded immutable intake field: no per-row SQL.
+            for key, order in tuple(merged.items()):
+                received = (getattr(items.get(key), "created_at", None)
+                            or self._view_intake_times.get(key))
+                if received is not None:
+                    merged[key] = replace(order, received_at=received)
             orders, states = [], []
-            for key, order in tuple(merged.items())[:1000]:
+            for order in newest_orders(merged.values())[:1000]:
+                key = order.inquiry_id
                 if key in self._source_overrides:
                     order = replace(order, **self._source_overrides[key])
                 item = items.get(key)

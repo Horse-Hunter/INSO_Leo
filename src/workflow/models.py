@@ -34,3 +34,4 @@ class WorkItem:
     resolved_brand: str | None
     brand_update_status: str | None
     last_error: str | None
+    created_at: datetime | None = None  # immutable local intake time, display only

@@ -252,3 +252,14 @@ hold/mail/updater/price baseline. Safe no-effect results retain Option A closed
 boundary. Explicit original manual composition disables only this age filter;
 all realtime permissions/identity/SENT/UNKNOWN/Stop gates still run.
 发给采购/采购已报价/TP and supplier72h selection are unchanged. Not deployed.
+
+
+## Task-center display intake (2026-10-29)
+WorkItem.created_at adds an optional immutable read-only intake projection from
+an already existing column on canonical all_items/get/claim reads. No schema,
+migration, new query, or business scheduling order. Unknown/malformed/naive
+historical intake uses the same None policy as inquiry_intake_at; item reads
+must retain previous business behavior. GUI Order.received_at is display only.
+Idle startup read_startup_interruptions may collect the same dates through an
+optional intake_times map in its existing query, without changing returned
+interruption DTOs, authorization, quarantine or making writes.

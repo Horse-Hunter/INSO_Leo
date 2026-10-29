@@ -1,6 +1,7 @@
 """Translate persisted Workflow V1.2 state into the GUI's public DTOs."""
 import json
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 from src.gui.contracts import (
@@ -22,7 +23,7 @@ from src.workflow.v12_contracts import (
 from src.workflow.v12_store import V12Store
 
 
-def read_startup_interruptions(database_path: Path) -> dict:
+def read_startup_interruptions(database_path: Path, *, intake_times=None) -> dict:
     """Idle startup projection, strictly read-only; quarantine writes wait for Start."""
     if not database_path.is_file():
         return {}
@@ -32,7 +33,7 @@ def read_startup_interruptions(database_path: Path) -> dict:
             return {}  # Existing V1 DB is migrated only through the normal Start boundary.
         execution_types = tuple(event.value for event in EXECUTION_EVENT_TYPES)
         placeholders = ",".join("?" for _ in execution_types)
-        rows = connection.execute("SELECT w.inquiry_id,w.mpn_json,w.brand_json,w.quantity_json,w.last_error,"
+        rows = connection.execute("SELECT w.inquiry_id,w.created_at,w.mpn_json,w.brand_json,w.quantity_json,w.last_error,"
             "w.status,w.attempt_count,EXISTS(SELECT 1 FROM workflow_v12_events x "
             f"WHERE x.inquiry_id=w.inquiry_id AND x.event_type IN ({placeholders})) AS executed,"
             "s.business_state,p.outcome,EXISTS(SELECT 1 FROM workflow_v12_events e "
@@ -41,6 +42,13 @@ def read_startup_interruptions(database_path: Path) -> dict:
             "LEFT JOIN workflow_v12_purchase_state p USING(inquiry_id)", execution_types).fetchall()
     result = {}
     for row in rows:
+        if intake_times is not None:
+            try:
+                received = datetime.fromisoformat(row["created_at"])
+                if received.tzinfo is not None:
+                    intake_times[row["inquiry_id"]] = received
+            except (ValueError, TypeError):
+                pass  # Display fallback only; never invent an intake timestamp.
         current = BusinessState(row["business_state"]) if row["business_state"] else None
         state = interrupted_business_state(current,
             PurchaseOutcome(row["outcome"]) if row["outcome"] else None, bool(row["armed"]),

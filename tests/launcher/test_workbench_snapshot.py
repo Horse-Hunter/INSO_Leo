@@ -214,3 +214,22 @@ def test_ordinary_unknown_notification_is_excluded_from_completed_filter(
     )
     assert orders[0].status is OrderStatus.ERROR
     assert not select_orders(orders, status="已完成")
+
+
+def test_projection_selects_newest_before_cap_without_per_order_sql(tmp_path):
+    from types import SimpleNamespace
+    backend = ProductionBackend(root=tmp_path)
+    now = datetime(2026, 10, 29, tzinfo=UTC)
+    backend._history = tuple(
+        Order(str(i), "DEMO", None, 1, "待验证", None, None, OrderStatus.PENDING)
+        for i in range(1005)
+    )
+    items = {str(i): SimpleNamespace(created_at=now+timedelta(seconds=i)) for i in range(1005)}
+    backend._cache_workbench(force=True, items=items)
+    rows = backend.get_workbench_snapshot().orders
+    assert len(rows) == 1000 and rows[0].inquiry_id == "1004" and rows[-1].inquiry_id == "5"
+    assert rows[0].received_at == items["1004"].created_at
+    # Idle startup uses the same immutable read-only date cache, no worker/store.
+    backend._view_intake_times = {key: item.created_at for key, item in items.items()}
+    backend._cache_workbench(force=True, items={})
+    assert backend.get_workbench_snapshot().orders == rows

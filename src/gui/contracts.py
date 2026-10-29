@@ -274,6 +274,7 @@ class Order:
     delivery_status: str | None = None
     modules: tuple[str, ...] = ()
     tp_task_id: str | None = None  # display association, never execution authority
+    received_at: datetime | None = None  # original local intake, never last processing time
 
 
 @dataclass(frozen=True, slots=True)
