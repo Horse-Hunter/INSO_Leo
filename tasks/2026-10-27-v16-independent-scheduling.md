@@ -5193,3 +5193,7 @@ Owner正常停止退出后，单实例独占新鲜备份及程序文件替换；
 日期仍为询价/入库代理而非真实客户发送日；缺失自然样本/长期稳定/DPI/游戏影响保留NOT_VERIFIED。
 自有stage2876文件268031102字节已退休，受保护数据/新鲜回滚保留。原完整3140PASS/1SKIP125.63s证据按同一源树沿用。
 COMPUTER_USE_NOT_USED。报告只交Owner，本次未增加CEO门禁，也不宣布整体V1.6 PASS。
+
+## Task-center newest-first Owner-authorized production update (2026-10-29)
+
+Source `13ace48ad13ec43ea8b46698e3829af6620499b2`, src `554906930b1b88ec424be534ca903137d8e22e67`, tests `b1f586a710c1aece7c95812f238bfe708118d574`. Final3149PASS/1SKIP128.26s, focused88PASS, Ruff/diffPASS. Original pipeline/117frozen/2875assets/scanner/self+idle checkPASS. Actual EXE `00AD692EE9EB15969E0489D6D9D92CD30EE5492DC38E7DD159D48FEA1BEE3C79`, original install path; fresh59F rollback `D:\Program_Leo\INSO_Leo\dist\release-backups\INSO_V1.6-task-center-sort-20261029T070809Z\program`. Owner normal exit88228; new94416/96656 original CLI started once, BUSINESS_RUNNING. All tables unchanged at install/idle; historic121commands/152SENT/fourTP/sixTP-SENT preserved. Presentation-only immutable-intake descending with legacy/unknown fallback; same original startup/all_items queries, no business/schema changes. Full details in existing V16_RELEASE_REPORT.md/current task and original JSON task_center_newest_first_20261029. COMPUTER_USE_NOT_USED. WholeV1.6 risks remain; no doubleActor or live browser experiment.

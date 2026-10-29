@@ -6027,5 +6027,223 @@
     ],
     "observed_google_recovery": "One GOOGLE_WEB_READ_UNAVAILABLE; original inquiry then completed 632.563s, subsequent quotation and TP ran; exact download timeout root cause UNKNOWN",
     "observation_scope": "Quotation still active at evidence cutoff; not a completed whole-batch speed comparison"
+  },
+  "task_center_newest_first_20261029": {
+    "at": "2026-10-29T07:13:16.549947+00:00",
+    "status": "BUSINESS_RUNNING",
+    "source": "13ace48ad13ec43ea8b46698e3829af6620499b2",
+    "src_tree": "554906930b1b88ec424be534ca903137d8e22e67",
+    "tests_tree": "b1f586a710c1aece7c95812f238bfe708118d574",
+    "verified_candidate": {
+      "source": "13ace48ad13ec43ea8b46698e3829af6620499b2",
+      "src_tree": "554906930b1b88ec424be534ca903137d8e22e67",
+      "tests_tree": "b1f586a710c1aece7c95812f238bfe708118d574",
+      "exe_sha256": "00ad692ee9eb15969e0489d6d9d92cd30ee5492dc38e7dd159d48fea1bee3c79",
+      "old_exe_sha256": "59f19839597fe49df62fc40c1c9bf6098513beab6c1cb182d2f5a49b8f6ae1a6",
+      "assets": 2875,
+      "frozen_modules": 117,
+      "manifest_sha256": "1a421e036f1c1986efded9642b3e5b02587cee6a52aeeb9227f8937716b9c24e",
+      "self_check": 0,
+      "release_scan": "RELEASE_SCAN_OK",
+      "at": "2026-10-29T07:07:49.039239+00:00"
+    },
+    "installation": {
+      "installed_at": "2026-10-29T07:08:47.683474+00:00",
+      "installation": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6",
+      "verified": {
+        "source": "13ace48ad13ec43ea8b46698e3829af6620499b2",
+        "src_tree": "554906930b1b88ec424be534ca903137d8e22e67",
+        "tests_tree": "b1f586a710c1aece7c95812f238bfe708118d574",
+        "exe_sha256": "00ad692ee9eb15969e0489d6d9d92cd30ee5492dc38e7dd159d48fea1bee3c79",
+        "old_exe_sha256": "59f19839597fe49df62fc40c1c9bf6098513beab6c1cb182d2f5a49b8f6ae1a6",
+        "assets": 2875,
+        "frozen_modules": 117,
+        "manifest_sha256": "1a421e036f1c1986efded9642b3e5b02587cee6a52aeeb9227f8937716b9c24e",
+        "self_check": 0,
+        "release_scan": "RELEASE_SCAN_OK",
+        "at": "2026-10-29T07:07:49.039239+00:00"
+      },
+      "backup": {
+        "backup_root": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-task-center-sort-20261029T070809Z",
+        "program_rollback": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-task-center-sort-20261029T070809Z\\program",
+        "database_backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-task-center-sort-20261029T070809Z\\protected-state\\sqlite\\workflow-v12-pre-migration-20261029T070827266148Z.sqlite3",
+        "verified_files": 2875,
+        "self_check": 0,
+        "at": "2026-10-29T07:08:27.350734+00:00"
+      },
+      "normal_old_exit": {
+        "run_id": "8787655052ff4d3b972ff32127bd6d6e",
+        "pid": 88228,
+        "observed_at": "2026-10-29T07:02:55.501063+00:00",
+        "exit_code": 0,
+        "exit_code_hex": "0x00000000",
+        "classification": "normal"
+      },
+      "all_business_tables_unchanged": true,
+      "config_vault_junction_unchanged": true,
+      "migration": false,
+      "tp_tasks": 4,
+      "tp_sent": 6,
+      "mail_states": {
+        "SENT": 152
+      },
+      "state": "INSTALLED_IDLE",
+      "idle_self_check": 0,
+      "computer_use": "COMPUTER_USE_NOT_USED"
+    },
+    "launch": {
+      "argument": "--start-inquiry",
+      "pid": 94416,
+      "started_at": "2026-10-29T07:09:03.3976885Z",
+      "start_count": 1
+    },
+    "canonical_mutex_present": true,
+    "duplicate_launch": false,
+    "process_status": [
+      {
+        "Id": 94416,
+        "Responding": true,
+        "HandleCount": 945,
+        "WorkingSet64": 122200064,
+        "PrivateMemorySize64": 92160000
+      },
+      {
+        "Id": 96656,
+        "Responding": true,
+        "HandleCount": 128,
+        "WorkingSet64": 21766144,
+        "PrivateMemorySize64": 15147008
+      }
+    ],
+    "ledger": {
+      "integrity": "ok",
+      "historic_command_count": 121,
+      "historic_commands_immutable": true,
+      "historic_sent_count": 152,
+      "historic_sent_full_rows_unchanged": true,
+      "historic_tp_count": 4,
+      "historic_tp_full_rows_unchanged": true,
+      "current_recipients": {
+        "SENT": 152
+      },
+      "current_tp_states": {
+        "MAIL_QUEUED": 4
+      },
+      "new_recipient_kind_outcomes": {},
+      "purchase_outcomes_before": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 23,
+        "VALIDATION_FAILED": 3
+      },
+      "purchase_outcomes_current": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 23,
+        "VALIDATION_FAILED": 3
+      },
+      "qualification": "SMTP SENT means transport acceptance only; no final mailbox receipt. No forced business writes or replays."
+    },
+    "cycles": {
+      "cycles": [
+        {
+          "at": "2026-10-29T15:09:07.544000+08:00",
+          "cycle": "cycle_0817f5e15991446a8239f2d06a053317",
+          "module": "inquiry",
+          "phase": "begin",
+          "elapsed": 0.0,
+          "due_in": 0.0
+        }
+      ],
+      "reasons": {},
+      "business_results": {}
+    },
+    "resources": {
+      "pid": 94416,
+      "watch_pid": 96656,
+      "elapsed": 121.81300000002375,
+      "samples": 13,
+      "logical_cpus": 16,
+      "qualification": "Finite read-only GetProcessTimes/GetThreadTimes on installed live process and its existing observer; menu/tray activity may occur; authorized production business active; excludes Chrome child resource totals.",
+      "app": {
+        "seconds": 121.65700000000652,
+        "cpu_host_percent": 0.2729240816393485,
+        "rss_min": 119971840,
+        "rss_max": 122724352,
+        "private_min": 90173440,
+        "private_max": 94208000,
+        "threads_min": 12,
+        "threads_max": 18,
+        "handles_min": 841,
+        "handles_max": 1058,
+        "gdi_range": [
+          136,
+          136
+        ],
+        "user_range": [
+          258,
+          258
+        ]
+      },
+      "observer": {
+        "seconds": 121.68699999997625,
+        "cpu_host_percent": 0.0,
+        "rss_min": 21766144,
+        "rss_max": 21815296,
+        "private_min": 15147008,
+        "private_max": 15245312,
+        "threads_min": 1,
+        "threads_max": 4,
+        "handles_min": 128,
+        "handles_max": 128,
+        "gdi_range": [
+          0,
+          0
+        ],
+        "user_range": [
+          1,
+          1
+        ]
+      }
+    },
+    "cleanup": {
+      "files": 2876,
+      "stage_retired": true,
+      "bytes": 268032365.0,
+      "program_and_rollback_preserved": true,
+      "test_roots_retired": [
+        "pytest",
+        "focused-final",
+        "corrected",
+        "full",
+        "full-final"
+      ],
+      "four_temporary_release_helpers_retired": true
+    },
+    "tests": {
+      "focused_passed": 88,
+      "full_passed": 3149,
+      "full_skipped": 1,
+      "full_seconds": 128.26,
+      "ruff": "PASS",
+      "diff_check": "PASS",
+      "first_full": {
+        "passed": 3145,
+        "failed": 1,
+        "skipped": 1,
+        "seconds": 128.52,
+        "fixed": "Malformed historical created_at must remain unknown, not break canonical item read; original seven-day guard preserved"
+      }
+    },
+    "sort_rule": "original immutable local intake DESC; legacy processed fallback after known intake, no dates last; stable identity tie break; merge/sort BEFORE1000cap; manual heading sort preserved",
+    "boundary": "display only; no schema/migration/per-row SQL/new backend/scheduler; idle read-only startup query reuses original intake metadata; original scheduling/auth/SENT/UNKNOWN rules unchanged",
+    "not_verified": [
+      "Actual visible menu/pointing automation not used",
+      "Exact upstream business inquiry chronology for rows without immutable intake",
+      "Whole-batch/live business completion after this short startup window",
+      "Long-term stability/DPI/game impact",
+      "Cross-restart Google page accumulation remains the previously recorded separate issue"
+    ],
+    "computer_use": "COMPUTER_USE_NOT_USED"
   }
 }
