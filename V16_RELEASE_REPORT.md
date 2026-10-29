@@ -1,5 +1,27 @@
 # V1.6 unified release and initial production verification
 
+## 2026-10-30 07:50 Owner认证恢复后：只读跟进进行中
+
+**OWNER_RESUMED / BUSINESS_RUNNING / NATURAL_CYCLE_OBSERVING，尚无本轮三模块全部完成或本单采购成功凭据。** Owner已确认完成认证并点击开始运行；原GUI109068/观察器121936仍在，EXE仍FEFCC435...，未重新启动/安装/修改生产。07:50:54询价begin；截至07:54:30日志只有本轮开始，无新增固定故障代码。前节HEALTH_HOLD为凌晨历史现场，不能覆盖当前Owner恢复事实；登录后的实际INSO查询恢复仍待自然业务证明。
+
+已用只读一致性快照逐项核对异常通知，不输出正文/客户/地址：
+
+| 发送时间（上海） | 已记录原因 | 本轮结论 |
+|---|---|---|
+| 10-29 11:25:47 | GOOGLE_WAITING_RECOVERY | Google暂时读取恢复等待；不能说是INSO导致 |
+| 10-29 11:26:37 | INSO_OPERATION_NOT_CLOSED | INSO页面未确认安全收口的旧事件；当前未独立复现/关闭 |
+| 10-30 00:06:04 | GOOGLE_TAB_IDENTITY_UNCONFIRMED | 10-29 15:20:50创建，后续启动才发送；非新启动时首次发生 |
+| 10-30 00:30:59 | GOOGLE_TAB_IDENTITY_UNCONFIRMED | 00:09:08故障通知延迟发送 |
+| 10-30 00:57:22 | GOOGLE_TAB_IDENTITY_UNCONFIRMED | 00:42:52故障通知延迟发送 |
+| 10-30 07:50:54 | INSO_AUTHENTICATION_REQUIRED | 01:09:31创建，今早恢复后发出；不能误说认证后又失败 |
+
+因此并非全部INSO故障。Google原客户端/报价TP交接和新单显示修复已安装，凌晨最新实测TP返回未再触发该身份故障；但Google原生下载超时精确根因仍UNKNOWN，未宣布所有bug修好。SENT156，无UNKNOWN/SENDING/待发；旧154SENT完整行及124命令不变，4TP保留。本次只读，无测试邮件、采购或浏览器检查。
+
+目标新单仍MANUAL_REVIEW/attempt0/INTERRUPTED_UNSENT，不会因再次开始运行自动重试。这是原防重复门禁，不能直接SQL重置。当前GUI无安全外部重跑API且禁止ComputerUse；Owner可在原自然倒计时中对该新单选择原右键“重跑采购流程”一次，原实时身份/发送/采购门禁仍强制验证。不能在当前GUI业务运行时另启Backend替代操作。
+
+原线程心跳已恢复为5分钟低干扰只读跟进；正常无变化静默，仅真实新故障、订单终态或首轮完整收口才报告。仍不接额外CDP、不改周期/配置、不启双Actor、不制造写入。后续结果继续追加此报告/原JSON键owner_authenticated_resume_watch_20261030，仅交Owner，不联系CEO。COMPUTER_USE_NOT_USED。
+
+
 ## 2026-10-30 Google身份交接修复：已安装，真实认证阻断
 
 **HEALTH_HOLD / INSTALLED_IDLE / V16_REVIEW_REQUIRED。不是BUSINESS_RUNNING，不宣称全部bug解决或新单完成。**
