@@ -48,6 +48,8 @@ of business HEAD7a5728388fc14cd685521d520e23fbfa19536988. Independent PASS is re
 in control-room/RFQ-014/CEO_REVIEW.md (review commit3eee69a; status commitc023b60).
 | RFQ-015 | Authorized V1.4 Windows release | DEPLOYED | `codex/v1-4-order-mail-inspection` | Owner authorized | `control-room/RFQ-015/TASK_SPEC.md` |
 
-| RFQ-016 | V1.6 production trust: source status, order age gates, false-alert elimination | REVIEW_REQUIRED | `codex/v1-6-independent-scheduling` | REQUIRED | `control-room/RFQ-016/TASK_SPEC.md` |
+| RFQ-016 | V1.6 production trust: source status, order age gates, false-alert elimination | CHANGES_REQUESTED / NOT_DEPLOYED | `codex/v1-6-independent-scheduling` | REQUIRED | `control-room/RFQ-016/TASK_SPEC.md` |
 
 RFQ-016 is a new Owner/CEO production-correctness requirement after the unpushed local installation report `7574516f...`. The verified remote SHA at spec start was `f8f2c321...`; never infer installed source from branch. Code implementation and offline regression are authorized; *no automatic production deployment or external test email* until separate review/release authorization. Preserve current real orders and protected UNKNOWN write outcomes. No agent Computer Use.
+
+CEO source review of `77a3e83` (documentation commit `adcff10`) identified three gating gaps: unknown quote price-baseline commit before a durable hold after a no-op alert enqueue, stale-source-backed persistent stop mail, and missing event applicability for delayed important-order mail. Details and exact corrective regression expectations in `control-room/RFQ-016/TASK_SPEC.md`. RFQ016 remains SOURCE_NOT_APPROVED / NOT_DEPLOYED; no release authorization.
