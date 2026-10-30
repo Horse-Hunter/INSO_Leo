@@ -175,3 +175,45 @@ back to the Google order or original workflow history. Quantity remains unknown,
 no technical1 appears as customer quantity or fabricated total. No TP algorithm or
 original ordinary Research/purchase branding path changes. Exact final SHA and
 whole-suite rerun follow this last source delta.
+
+
+## Final source receipt —2026-10-31
+
+Source `5ca59a34c796909ae432d38d787de199d9b60404`; src tree `b7ca20fcb34204b62bd6a98f5a0663946de8831d`; tests tree `4bb53b7387ff273fe91a223430cdce1701059afe`.
+Final complete offline suite:3329PASS/1SKIP,184.34s console
+(184.277s JUnit). 106RFQ016-associated cases PASS. The sole skip
+is Windows symlink creation unavailable; no unrelated tests were disabled.
+JUnit SHA256 `421a69a7d2aeb574fa2e70986db10fae592704178e6bc986ef1db20f9588d942`. All src/tests Ruff and diff
+checks PASS. CLI/API only: COMPUTER_USE_NOT_USED. No installation/build/restart/
+kill/CDP attach/real IMAP/real SMTP/credential/config/business-history modification.
+A complete result-before-enqueue crash was additionally injected on this final
+source: durable READY existed with0outbox commands; original work loop repaired
+it, delivered once through injected actual QQSMTPTransport, then a second restart
+sent nothing. Supplemental receipt retained compactly in TEST_REPORT.json.
+
+A previous24h composition run on295fa44 exercised actual canonical page-lease
+logic with fake CDP, fake IMAP and injected original SMTP:721polls,720distinct
+requests,720reports,4338target creations with18safe replacements, max1live owned
+target,0remaining owned targets,2human/main pages preserved,0thread growth,
+0technical false-alert commands, no real network or original history changes.
+Only report-brand metadata changed after that run; final full suite also reran
+its720-poll persisted queue simulation. No live physical-browser claim is made.
+
+A/B/C are implemented and tested; previous Executor source review blockers are
+addressed for CEO independent re-review, not marked CEO-approved. The detailed
+mail/IMAP child task is separately REVIEW_REQUIRED; none is declared production-
+accepted. Existing browser profile, runtime DB, Vault and running EXE remain
+protected. Same active worktree reused; no new worktree/handoff/dependency/runtime
+helper or persistent external watcher created. Other dirty/unique worktrees were
+not reset, staged or removed; worktree prune is inapplicable because none removed.
+Cleanup and final push receipt follow below.
+
+
+5ca59a34c796909ae432d38d787de199d9b60404 full suite passed3329/1skip184.34s.
+Final date-provenance audit reproduced4failures/3passes2.40s: local intake fallback
+was labelled as original inquiry date in three open-order business-mail cases,
+and an aware UTC20:30intake displayed the previous date rather than Shanghai.
+Propagate the existing LOCAL_INTAKE_APPROXIMATION label into business/catalog
+report metadata and format aware inquiry timestamps by Shanghai calendar day.
+This changes report labels only, not admission dates, source histories or trading
+selection. New red→green regression plus exact final whole suite required.

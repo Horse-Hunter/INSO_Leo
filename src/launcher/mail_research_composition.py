@@ -102,7 +102,7 @@ def prepare_business_report(backend, command, now):
     current = backend._current_mail_source(command.inquiry_id, now, manual=proof.get("manual") is True)
     if current is None:
         return None
-    item, row, _, _, day = current
+    item, row, _, date_origin, day = current
     schema = worksheet_schema(item.record_identity.worksheet.worksheet)
     try:
         quantity = int(item.quantity)
@@ -113,7 +113,8 @@ def prepare_business_report(backend, command, now):
     customer = schema.fixed_customer_name or row.cells.get(schema.customer_name_column) if schema.customer_name_column else schema.fixed_customer_name
     order = DetailedOrder(item.mpn, item.resolved_brand or item.brand or None, quantity,
                           customer, str(day), item.record_identity.worksheet.worksheet, row.row_position,
-                          spreadsheet=item.record_identity.worksheet.spreadsheet)
+                          spreadsheet=item.record_identity.worksheet.spreadsheet,
+                          date_source="本地订单日期（近似）" if date_origin == "LOCAL_INTAKE_APPROXIMATION" else None)
     cached = service.cached_report(order, now)
     if cached is not None:
         return append_report(command, cached)

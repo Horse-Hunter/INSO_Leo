@@ -3,7 +3,7 @@ from .source_contracts import money_text
 
 
 def render_market_report(order, result, *, target=True, context=()):
-    from datetime import timedelta, timezone
+    from datetime import datetime, timedelta, timezone
     from html import escape
 
     from .detailed import distinct_two
@@ -57,7 +57,13 @@ def render_market_report(order, result, *, target=True, context=()):
         identity.append(f"品牌：{order.brand}")
     identity.append(f"数量：{order.quantity:,}" if order.quantity is not None else "询价数量：未匹配，不计算订单总价")
     if getattr(order, "rfq_date", None):
-        identity.append(f"{getattr(order, 'date_source', None) or '原询价日期'}：{order.rfq_date.split('T')[0].split(' ')[0]}")
+        try:
+            rfq_time = datetime.fromisoformat(order.rfq_date)
+            rfq_day = (rfq_time.astimezone(timezone(timedelta(hours=8))) if rfq_time.tzinfo else rfq_time).date().isoformat()
+        except ValueError:
+            # Preserve explicit calendar-only source formatting; no guessed time.
+            rfq_day = order.rfq_date.split('T')[0].split(' ')[0]
+        identity.append(f"{getattr(order, 'date_source', None) or '原询价日期'}：{rfq_day}")
     if getattr(order, "sheet", None):
         identity.append(f"订单：{order.sheet} 第{order.row}行")
     identity.extend(context)

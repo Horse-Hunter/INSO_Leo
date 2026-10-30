@@ -292,6 +292,7 @@ def test_important_mail_actual_backend_async_six_sources_and_closed_suppression(
         html = smtp.message.get_body(preferencelist=("html",)).get_content()
         assert all(name in html for name in ("IC.net", "Findchips", "华强", "立创", "正能量", "INSO"))
         assert "高于 TP" not in html and "低于 TP" not in html
+        assert "本地订单日期（近似）" in html
     with service.store.connect() as db:
         assert tuple(db.execute("SELECT * FROM workflow_items").fetchall()) == before
     backend.shutdown()

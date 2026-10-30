@@ -3093,7 +3093,7 @@ class ProductionBackend(GuiBackend):
                 identity = identify_worksheet_row(worksheet, row)
                 matched = by_location.get((row.row_position, row.cells.get(schema.model_column), row.cells.get(schema.quantity_column), row.cells.get(schema.brand_column)), ())
                 bound_identity = matched[0].record_identity if len(matched) == 1 else identity
-                day, _ = source_date(bound_identity, row, by_row.get(row.row_position, ()), lambda matched=matched: matched[0].created_at if len(matched) == 1 else None)
+                day, date_origin = source_date(bound_identity, row, by_row.get(row.row_position, ()), lambda matched=matched: matched[0].created_at if len(matched) == 1 else None)
                 parsed = inquiry_day(day)
                 if parsed is None:
                     stamp = None
@@ -3116,7 +3116,8 @@ class ProductionBackend(GuiBackend):
                     continue
                 customer = schema.fixed_customer_name or row.cells.get(schema.customer_name_column)
                 order = DetailedOrder(row.cells[schema.model_column], row.cells.get(schema.brand_column) or None,
-                    quantity, customer, str(day) if day else None, worksheet.worksheet, row.row_position, spreadsheet=worksheet.spreadsheet)
+                    quantity, customer, str(day) if day else None, worksheet.worksheet, row.row_position, spreadsheet=worksheet.spreadsheet,
+                    date_source="本地订单日期（近似）" if date_origin == "LOCAL_INTAKE_APPROXIMATION" else None)
                 entries.append((str(identity), order, stamp))
             except (TypeError, ValueError, KeyError):
                 continue
