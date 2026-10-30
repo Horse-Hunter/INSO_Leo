@@ -7770,5 +7770,44 @@
         "created_at": "2026-10-30T01:41:51.220838+00:00"
       }
     ]
+  },
+  "owner_two_mail_diagnosis_20261030": {
+    "checked_at": "2026-10-30T03:49:55.365970+00:00",
+    "sample": "new-order-1",
+    "messages": [
+      {
+        "created_at": "2026-10-30T03:38:28.999008+00:00",
+        "reason": "QUOTATION_MODEL_DIFFERENCE",
+        "command_count": 1,
+        "recipient_count": 2,
+        "attempts_each": 1,
+        "smtp": "SENT"
+      },
+      {
+        "created_at": "2026-10-30T03:40:56.984436+00:00",
+        "reason": "UPDATE_RESULT_UNCONFIRMED",
+        "command_count": 1,
+        "recipient_count": 1,
+        "attempts_each": 1,
+        "smtp": "SENT"
+      }
+    ],
+    "same_order": true,
+    "historical_resend_observed": false,
+    "target_hold": {
+      "active": true,
+      "reason": "UPDATE_RESULT_UNCONFIRMED"
+    },
+    "purchase_attempt": 1,
+    "purchase_work_status": "COMPLETED",
+    "quotation_cycle_completed_at_shanghai": "2026-10-30T11:40:57.187+08:00",
+    "ledger_integrity": "ok",
+    "sent_recipient_total": 160,
+    "root_cause": "UNKNOWN",
+    "external_quote_update_success": "NOT_VERIFIED",
+    "new_google_read_outage_notification": false,
+    "browser_connected": false,
+    "production_modified": false,
+    "computer_use": "COMPUTER_USE_NOT_USED"
   }
 }
