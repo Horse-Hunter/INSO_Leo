@@ -17,9 +17,9 @@ from tests.workflow.test_v13_quotation import WS, cycle, item, source
 
 @pytest.mark.parametrize('value,expected', [
     (NOW, None), (NOW-timedelta(days=6), None), (NOW-timedelta(days=7), None),
-    (NOW-timedelta(days=7, microseconds=1), 'QUOTE_AGE_EXPIRED'),
+    (NOW-timedelta(days=7, microseconds=1), None),
     (NOW-timedelta(days=8), 'QUOTE_AGE_EXPIRED'),
-    (NOW+timedelta(microseconds=1), 'QUOTE_AGE_UNVERIFIED'),
+    (NOW+timedelta(days=1), 'QUOTE_AGE_UNVERIFIED'),
     (NOW.replace(tzinfo=None), 'QUOTE_AGE_UNVERIFIED'),
     (None, 'QUOTE_AGE_UNVERIFIED'), ('invalid', 'QUOTE_AGE_UNVERIFIED'),
     (date(2026, 9, 30), None), (date(2026, 9, 29), 'QUOTE_AGE_EXPIRED'),
@@ -50,11 +50,10 @@ def test_real_query_loop_skips_before_tab_query_retry_and_side_effect(age, expec
 
 @pytest.mark.parametrize('status', ['发给采购', '采购已报价'])
 def test_other_statuses_never_use_age_or_brief(status):
-    service, ops, quotes, _ = cycle([()], sources=[source(2,status)])
-    service._store.inquiry_intake_at = lambda _: pytest.fail('age lookup for unaffected status')
-    service._brief_snapshot = lambda _: pytest.fail('Brief lookup for unaffected status')
-    assert service.run(WS)[0].outcome is QuotationOutcome.NO_RECENT_QUOTE
-    assert len(quotes.calls) == 1 and len(ops.events) == 2
+    service, ops, quotes, _ = cycle([], sources=[source(2,status)])
+    service._store.inquiry_intake_at = lambda _: NOW-timedelta(days=8)
+    assert service.run(WS)[0].outcome is QuotationOutcome.QUOTE_AGE_EXPIRED
+    assert not quotes.calls and not ops.events
 
 
 def test_explicit_manual_scope_keeps_existing_authorization_path():
@@ -69,7 +68,7 @@ def test_clock_crosses_cutoff_before_execute_not_discovery():
     service, ops, quotes, _ = cycle([], sources=[source(2,'已报价给客户')])
     candidate, = service.read_candidates(WS)
     service._store.inquiry_intake_at = lambda _: NOW-timedelta(days=7)
-    service._clock = lambda: NOW+timedelta(microseconds=1)
+    service._clock = lambda: NOW+timedelta(days=1)
     assert service.execute_candidate(candidate,WS).outcome is QuotationOutcome.QUOTE_AGE_EXPIRED
     assert not ops.events and not quotes.calls
 
@@ -84,7 +83,7 @@ def test_unique_cached_brief_precedes_intake_and_does_not_require_target_price()
     ws=replace(WS,worksheet='2026');i=item(2)
     candidate=V13Candidate(i.inquiry_id,replace(i.record_identity,worksheet=ws),'MPN',2,'已报价给客户')
     value,kind=quotation_age_date(candidate,source(2,'已报价给客户'),[brief()],lambda:pytest.fail('fallback'))
-    assert value == date(2026,9,30) and kind == 'RFQ_DATE_PROXY'
+    assert value == date(2026,9,30) and kind == 'RFQ_DATE'
 
 
 @pytest.mark.parametrize('lines', [[brief(),brief('2026-10-06')], [brief(mpn='OTHER')],
@@ -92,7 +91,9 @@ def test_unique_cached_brief_precedes_intake_and_does_not_require_target_price()
 def test_ambiguous_or_conflicting_brief_never_selects_an_arbitrary_date(lines):
     i=item(2);ws=replace(WS,worksheet='2026')
     candidate=V13Candidate(i.inquiry_id,replace(i.record_identity,worksheet=ws),'MPN',2,'已报价给客户')
-    assert quotation_age_date(candidate,source(2,'已报价给客户'),lines,lambda:NOW) == (NOW,'LOCAL_INTAKE_PROXY')
+    same_anchor = [line for line in lines if line.get("sheet") == "2026" and line.get("sheet_row") == "2"]
+    expected = (None, "SOURCE_DATE_CONFLICT") if same_anchor else (NOW, "LOCAL_INTAKE_APPROXIMATION")
+    assert quotation_age_date(candidate,source(2,'已报价给客户'),lines,lambda:NOW) == expected
 
 
 @pytest.mark.parametrize('day', ['invalid','2026-10-08'])
@@ -182,7 +183,7 @@ def test_actual_bound_brief_proxy_gate_overrides_recent_local_intake(day,expecte
     service._reader.read_rows=lambda _: [source(2,'已报价给客户')]
     service._brief_snapshot=lambda _: [brief(day)]
     result,=service.run(ws)
-    assert result.outcome.value==expected and service.quote_age_date_source=='RFQ_DATE_PROXY'
+    assert result.outcome.value==expected and service.quote_age_date_source=='RFQ_DATE'
     assert not ops.events and not quotes.calls
 
 
@@ -221,7 +222,7 @@ def test_relocated_record_never_takes_date_of_occupant_at_old_position(include_c
     service._brief_snapshot=lambda _:lines
     result,=service.run(ws)
     assert result.outcome is QuotationOutcome.QUOTE_AGE_EXPIRED
-    assert service.quote_age_date_source==('RFQ_DATE_PROXY' if include_current else 'LOCAL_INTAKE_PROXY')
+    assert service.quote_age_date_source==('RFQ_DATE' if include_current else 'LOCAL_INTAKE_APPROXIMATION')
     assert not ops.events and not quotes.calls
 
 

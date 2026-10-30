@@ -20,11 +20,7 @@ def test_runtime_mail_human_text_not_internal_codes_and_owner_only(reason):
     mailbox=Mailbox()
     notify_runtime_fault(mailbox,'synthetic-run',reason,at=NOW)
     notify_runtime_fault(mailbox,'synthetic-run',reason,at=NOW)
-    command=next(iter(mailbox.commands.values()))
-    assert len(mailbox.commands)==1 and [r.address for r in command.recipients]==['linan229@qq.com']
-    assert reason not in command.text_body and 'synthetic-run' not in command.text_body
-    assert '情况：' in command.text_body and '处理：' in command.text_body
-    assert '不要直接重发采购单' in command.text_body
+    assert mailbox.commands == {}  # RFQ-016: no verified current business/evidence.
 
 
 @pytest.mark.parametrize('reason',['SOURCE_STATUS_NOT_UPDATED','UPDATE_RESULT_UNCONFIRMED','ROW_NOT_IDENTIFIED'])
@@ -32,10 +28,7 @@ def test_quote_mail_keeps_location_and_uncertainty_without_internal_id(reason):
     mailbox=Mailbox()
     result=SimpleNamespace(row_error_reason=SimpleNamespace(value=reason),inquiry_id='synthetic-id',queried_mpn='TEST-MODEL',source_worksheet=SimpleNamespace(worksheet='示例表'),source_row_position=12)
     notify_quotation(mailbox,result,'key',1,at=NOW)
-    command=next(iter(mailbox.commands.values()))
-    assert all(value in command.text_body for value in ['TEST-MODEL','示例表','行号12','情况：','处理：'])
-    assert 'synthetic-id' not in command.text_body and reason not in command.text_body
-    if reason=='UPDATE_RESULT_UNCONFIRMED': assert '无法确认' in command.text_body
+    assert mailbox.commands == {}  # RFQ-016: no verified current business/evidence.
 
 
 def test_stop_reminder_has_specific_safe_site_and_no_raw_details():
@@ -49,13 +42,7 @@ def test_stop_reminder_has_specific_safe_site_and_no_raw_details():
 def test_google_read_fault_mail_identifies_boundary_and_does_not_guess_auth():
     mailbox = Mailbox()
     notify_runtime_fault(mailbox, "test-run", "SHEETS_READ_UNAVAILABLE", at=NOW)
-    command = next(iter(mailbox.commands.values()))
-    assert command.inquiry_id is None
-    assert "Google表格读取失败" in command.subject
-    assert "Google表格读取失败" in command.text_body
-    assert "尚不能确定是网络还是授权" in command.text_body
-    assert "重新开始询价" in command.text_body
-    assert "SHEETS_READ_UNAVAILABLE" not in command.text_body
+    assert mailbox.commands == {}  # RFQ-016: no verified current business/evidence.
 
 
 def test_unbound_quote_mail_is_a_source_identity_problem_not_missing_supplier_price():
@@ -64,13 +51,7 @@ def test_unbound_quote_mail_is_a_source_identity_problem_not_missing_supplier_pr
         inquiry_id=None, queried_mpn="TEST-MODEL", source_worksheet=SimpleNamespace(worksheet="示例表"),
         source_row_position=12)
     notify_quotation(mailbox, result, "key", 1, at=NOW)
-    command = next(iter(mailbox.commands.values()))
-    assert "原订单匹配失败" in command.subject
-    assert "原订单安全匹配" in command.text_body
-    assert "未执行报价更新" in command.text_body
-    assert "其他订单继续" in command.text_body
-    assert "数量及品牌" in command.text_body
-    assert "采购已报价" not in command.text_body
+    assert mailbox.commands == {}  # RFQ-016: no verified current business/evidence.
 
 
 def test_safe_runtime_log_contains_closed_reason_class_only():
@@ -94,12 +75,7 @@ def test_google_retry_alert_promises_next_normal_poll_not_manual_restart():
     mailbox = Mailbox()
     notify_runtime_fault(mailbox, "failed-cycle", "GOOGLE_READ_RETRY_EXHAUSTED", at=NOW)
     notify_runtime_fault(mailbox, "failed-cycle", "GOOGLE_READ_RETRY_EXHAUSTED", at=NOW)
-    command = next(iter(mailbox.commands.values()))
-    assert len(mailbox.commands) == 1
-    assert command.inquiry_id is None
-    assert [r.address for r in command.recipients] == ["linan229@qq.com"]
-    assert "连续5次" in command.text_body and "15分钟后自动再试" in command.text_body
-    assert "无需手动重启" in command.text_body and "程序已停止" not in command.text_body
+    assert mailbox.commands == {}  # RFQ-016: no verified current business/evidence.
 
 
 
@@ -108,12 +84,7 @@ def test_website_waiting_notice_does_not_claim_the_program_stopped(site):
     mailbox = Mailbox()
     for _ in range(2):
         notify_runtime_fault(mailbox, 'synthetic-outage', site + '_WAITING_RECOVERY', at=NOW)
-    command = next(iter(mailbox.commands.values()))
-    assert len(mailbox.commands) == 1
-    assert '等待恢复' in command.subject and '程序仍在运行' in command.text_body
-    assert '已停止' not in command.subject + command.text_body
-    assert '15分钟' in command.text_body and '不会自动重复' in command.text_body
-    assert [r.address for r in command.recipients] == ['linan229@qq.com']
+    assert mailbox.commands == {}  # RFQ-016: no verified current business/evidence.
 
 
 

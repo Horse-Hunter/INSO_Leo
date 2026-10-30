@@ -64,9 +64,11 @@ class GoogleSheetsRowReader:
         *,
         first_row: int = 1,
         retry_wait=None,
+        on_observation=lambda worksheet, rows, failed: None,
     ) -> None:
         if first_row < 1:
             raise ValueError("first_row must be a positive Google Sheet row number")
+        self._on_observation = on_observation
         self._service = service
         self._first_row = first_row
         self._retry_wait = retry_wait or (lambda _seconds: False)
@@ -129,11 +131,14 @@ class GoogleSheetsRowReader:
                 cache[worksheet] = tuple(
                     WorksheetRow(row.row_position, MappingProxyType(dict(row.cells))) for row in rows
                 )
+            self._on_observation(worksheet, rows, False)
             return rows
         except GoogleSheetsReadError:
+            self._on_observation(worksheet, (), True)
             self._invalidate_discovery(worksheet)
             raise
         except Exception as exc:
+            self._on_observation(worksheet, (), True)
             self._invalidate_discovery(worksheet)
             raise GoogleSheetsReadError(
                 f"Unable to read worksheet {worksheet.worksheet!r}"

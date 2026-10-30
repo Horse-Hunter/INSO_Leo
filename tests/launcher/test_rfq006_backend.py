@@ -190,11 +190,8 @@ def test_website_issue_uses_durable_229_alert_dedup_and_preserves_scope(tmp_path
     V12NotificationWorker(ledger, transport).run_due(now=NOW)
     with sqlite3.connect(db) as c:
         commands = c.execute("SELECT subject,text_body FROM workflow_v12_notification_commands").fetchall()
-        assert len(commands) == 1
-        assert ResearchSource[site].value in commands[0][1] and iid not in commands[0][1] and "MPN" in commands[0][1]
-        assert "请人工检查网站登录/可用性" in commands[0][1]
-        assert "password" not in commands[0][1] and "private" not in commands[0][1]
-        assert c.execute("SELECT address FROM workflow_v12_notification_recipients").fetchall() == [("linan229@qq.com",)]
+        assert commands == []
+        assert c.execute("SELECT address FROM workflow_v12_notification_recipients").fetchall() == []
     if expected_scope is None:
         assert backend._state is RunState.RUNNING and not backend._stop.is_set()
     assert len(store.all_items()) == 1

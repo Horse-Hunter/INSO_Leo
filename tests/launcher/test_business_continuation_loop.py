@@ -146,7 +146,7 @@ def test_actual_three_domain_backend_assembly_without_whole_research_wait(tmp_pa
     def failed_status_writer():
         raise TimeoutError('synthetic Google status write unavailable')
     backend._purchase_completion = PurchaseCompletionActions(workflow_store=store, v12_store=ledger,
-        reader=reader, writer_factory=failed_status_writer, clock=lambda: NOW)
+        reader=reader, writer_factory=failed_status_writer, clock=lambda: NOW, automatic_admission=lambda iid,at: True)
     flow._on_result = backend._complete_inquiry
     backend._refresh = lambda: None
     backend._idle_login_tick = lambda **kw: None

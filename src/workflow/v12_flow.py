@@ -147,6 +147,8 @@ class V12WorkflowCoordinator:
         inquiry_ids: frozenset[str] | None = None,
         row_wait: Callable[[float], bool] | None = None,
         brand_updater: BrandUpdater | None = None,
+        brief_snapshot=lambda worksheet: (),
+        clock=None,
     ) -> None:
         self._workflow_store = workflow_store
         self._v12_store = v12_store
@@ -161,6 +163,10 @@ class V12WorkflowCoordinator:
         self._inquiry_ids = inquiry_ids
         self._row_wait = row_wait or (lambda _seconds: False)
         self._brand_updater = brand_updater
+        self._clock = clock
+        self._brief_snapshot = brief_snapshot
+        self._manual_age_id = None
+        self.admission_skips = {}
         self._row_closed = False
         self.pending_rows_seen = 0
         self._records: dict[str, PendingSheetRecord] = {}
@@ -190,7 +196,11 @@ class V12WorkflowCoordinator:
         self._duplicate_results.pop(inquiry_id, None)
         self._current_reader = reader
         self.begin_poll_cycle()
-        return self.process_pending((record,), now=now)
+        self._manual_age_id = inquiry_id
+        try:
+            return self.process_pending((record,), now=now)
+        finally:
+            self._manual_age_id = None
 
     def _before_next_row(self) -> bool:
         if self._row_closed and self._row_wait(120):
@@ -264,9 +274,60 @@ class V12WorkflowCoordinator:
             normalized.append(record)
         return tuple(normalized)
 
+    def _guarded_brand_updater(self, now):
+        if self._brand_updater is None:
+            return None
+        coordinator = self
+        class AdmittedBrandUpdater:
+            def update_brand(self, identity, brand):
+                iid = coordinator._workflow_store.inquiry_id_for(identity)
+                record = coordinator._records.get(iid) or coordinator._pending_record(iid)
+                if not coordinator._record_admitted(record, now, fresh=True):
+                    raise SheetRecordConflict("automatic source admission excluded")
+                return coordinator._brand_updater.update_brand(identity, brand)
+        return AdmittedBrandUpdater()
+
+    def _record_admitted(self, record, now, *, fresh=False):
+        from src.sheets import WorksheetRow
+        from src.sheets.worksheet_schema import worksheet_schema
+
+        from .automatic_admission import admit
+        now = self._clock() if self._clock else now
+        identity = record.record_identity
+        iid = self._workflow_store.inquiry_id_for(identity)
+        try:
+            item = self._workflow_store.get_by_inquiry_id(iid)
+            intake = item.created_at
+            from .v13_quotation import expected_source_brand
+            identity = replace(identity, identifying_snapshot=replace(
+                identity.identifying_snapshot, brand=expected_source_brand(item)))
+        except KeyError:
+            intake = None  # Never mint today's date for an undated historical row.
+        schema = worksheet_schema(identity.worksheet.worksheet)
+        if self._current_reader is not None:
+            rows = tuple(self._current_reader.read_rows(identity.worksheet))
+            matches = [r for r in rows if r.row_position == record.row_position]
+            if len(matches) != 1:
+                self.admission_skips[iid] = "SOURCE_IDENTITY_UNVERIFIED"
+                return False
+            row = matches[0]
+        else:
+            if fresh:
+                self.admission_skips[iid] = "SOURCE_IDENTITY_UNVERIFIED"
+                return False
+            row = WorksheetRow(record.row_position, {
+                schema.status_column: record.status, schema.model_column: record.model,
+                schema.brand_column: record.brand, schema.quantity_column: record.quantity})
+        result = admit(identity, row, self._brief_snapshot(identity.worksheet), lambda: intake,
+                       now=now, module="inquiry", manual=iid == self._manual_age_id)
+        if not result.allowed:
+            self.admission_skips[iid] = result.reason
+        return result.allowed
+
     def prepare_pending(
         self, records: tuple[PendingSheetRecord, ...], *, now: datetime
     ):
+        records = tuple(r for r in records if self._record_admitted(r, now))
         enqueued: list[PendingSheetRecord] = []
         if self._inquiry_ids is not None:
             records = tuple(record for record in records
@@ -343,7 +404,7 @@ class V12WorkflowCoordinator:
         records, held, by_row = self.prepare_pending(records, now=now)
         wrapped_research = _DuplicateThenResearch(self, now)
         worker = WorkflowWorker(
-            self._workflow_store, wrapped_research, brand_updater=self._brand_updater
+            self._workflow_store, wrapped_research, brand_updater=self._guarded_brand_updater(now)
         )
         results: list[V12FlowResult] = []
         # The durable queue is the only bound on this drain. Bounding it to the
@@ -386,6 +447,10 @@ class V12WorkflowCoordinator:
                 continue
             if not self._before_next_row():
                 break
+            record = self._records.get(selected)
+            if record is None or not self._record_admitted(record, now, fresh=True):
+                remaining.remove(selected)
+                continue
             item = worker.process_due_one(now=now, inquiry_ids=frozenset({selected}))
             if item is None:
                 break
@@ -413,6 +478,8 @@ class V12WorkflowCoordinator:
             try:
                 if not self._before_next_row():
                     break
+                if not self._record_admitted(record, now, fresh=True):
+                    continue
                 confirmed = self._duplicate_checker.check(
                     item.inquiry_id, item.mpn, int(item.quantity), at=now
                 )
@@ -431,6 +498,9 @@ class V12WorkflowCoordinator:
 
     def settle_research(self, item, research_result, *, now):
         inquiry_id = item.inquiry_id
+        record = self._records.get(inquiry_id) or self._pending_record(inquiry_id)
+        if not self._record_admitted(record, now, fresh=True):
+            return self._result(inquiry_id, waiting_reason="AUTOMATIC_ADMISSION_EXCLUDED")
         if item.status.value in {"RETRY_WAIT", "RESEARCHING", "QUEUED"}:
             if research_result is not None and research_result.status is ResearchStatus.RETRYABLE_FAILURE:
                 self._notify_a_if_nonduplicate(inquiry_id, research_result, now)
@@ -457,6 +527,9 @@ class V12WorkflowCoordinator:
         if (type(identity) is not MarketTaskIdentity or identity.module is not MarketModule.INQUIRY
                 or identity.domain_task_id != inquiry_id or identity.source_record != record.record_identity):
             raise ValueError("INQUIRY_CONTINUATION_IDENTITY_INVALID")
+        self._current_reader = reader
+        if not self._record_admitted(record, now, fresh=True):
+            return None
         if not self._before_next_row():
             return None
         fresh = [r for r in query_pending_records(reader, record.record_identity.worksheet)
@@ -473,7 +546,7 @@ class V12WorkflowCoordinator:
             if inquiry_id in held:
                 work.cancel()
                 return None
-            worker = WorkflowWorker(self._workflow_store, self._research, brand_updater=self._brand_updater)
+            worker = WorkflowWorker(self._workflow_store, self._research, brand_updater=self._guarded_brand_updater(now))
             work.worker = worker
             work.item = worker.begin_due_one(now=now, inquiry_ids=frozenset({inquiry_id}))
             if work.item is None:
@@ -591,6 +664,9 @@ class V12WorkflowCoordinator:
     def _route_after_research(
         self, inquiry_id: str, research_result: ResearchResult, now: datetime
     ) -> V12FlowResult:
+        record = self._records.get(inquiry_id) or self._pending_record(inquiry_id)
+        if not self._record_admitted(record, now, fresh=True):
+            return self._result(inquiry_id, waiting_reason="AUTOMATIC_ADMISSION_EXCLUDED")
         try:
             previous_purchase = self._v12_store.purchase_state(inquiry_id)
         except KeyError:
@@ -696,6 +772,8 @@ class V12WorkflowCoordinator:
             purchaser=purchase_decision.purchaser.value,
             ai_input=build_ai_input(mpn, brand.strip(), quantity),
         )
+        if not self._record_admitted(record, now, fresh=True):
+            return self._result(inquiry_id, waiting_reason="AUTOMATIC_ADMISSION_EXCLUDED")
         self._set_state(inquiry_id, BusinessState.PURCHASE_DRAFT_PENDING, EventType.PURCHASE_DRAFT_STARTED, now)
         self._set_state(inquiry_id, BusinessState.PURCHASE_DRAFTING, EventType.PURCHASE_DRAFT_STARTED, now)
         self._v12_store.set_purchase_state(
@@ -956,6 +1034,9 @@ class InquiryOrderContinuation:
         if self.coordinator._stop_requested():
             self.cancel()
             raise V12Fault(FaultScope.V12_PAUSE, "STOP_REQUESTED")
+        if not self.coordinator._record_admitted(fresh[0], self.now, fresh=True):
+            self.cancel()
+            return None
         execution = completion.result
         result = execution.result
         review = getattr(self.coordinator._research, "review_result", None)

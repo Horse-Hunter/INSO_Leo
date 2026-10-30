@@ -10,7 +10,7 @@ from src.sheets import (
     WorksheetIdentity,
     WorksheetRow,
 )
-from src.workflow.v12_contracts import BusinessState, NotificationKind, PurchaseOutcome
+from src.workflow.v12_contracts import BusinessState, PurchaseOutcome
 
 NOW = datetime(2026, 10, 6, tzinfo=UTC)
 
@@ -53,7 +53,7 @@ def actions(outcome, *, writer_fails=False):
             self.records.append((inquiry_id, confirmed_at))
     episodes = Episodes()
     handler = PurchaseCompletionActions(workflow_store=SimpleNamespace(get_by_inquiry_id=lambda _i:item),
-        v12_store=state, reader=sheet, writer_factory=lambda:sheet, follow_up_store=episodes)
+        v12_store=state, reader=sheet, writer_factory=lambda:sheet, follow_up_store=episodes, automatic_admission=lambda iid,at: True)
     return handler, sheet, state
 
 
@@ -81,14 +81,8 @@ def test_failure_only_notifies_owner_once_and_never_writes(outcome):
     handler, sheet, state = actions(outcome)
     handler.process(flow(outcome), at=NOW)
     handler.process(flow(outcome), at=NOW)
-    assert sheet.calls == 0 and len(state.commands) == 1
-    cmd = next(iter(state.commands.values()))
-    assert cmd.kind is NotificationKind.PURCHASE_EXCEPTION
-    assert [r.address for r in cmd.recipients] == ["linan229@qq.com"]
-    assert "TEST-MPN" in cmd.text_body and "synthetic-inquiry" not in cmd.text_body
-    assert "原行号4" in cmd.text_body and "原因代码" not in cmd.text_body
-    if outcome is not PurchaseOutcome.VALIDATION_FAILED:
-        assert "可能已经发送" in cmd.text_body and "禁止直接重跑" in cmd.text_body
+    assert sheet.calls == 0 and len(state.commands) == 0
+    assert state.commands == {}
 
 
 def test_sheet_failure_preserves_saved_and_sends_safe_specific_mail():
@@ -96,9 +90,7 @@ def test_sheet_failure_preserves_saved_and_sends_safe_specific_mail():
     assert handler.process(flow(PurchaseOutcome.SAVED), at=NOW) is True
     assert state.state is BusinessState.STATUS_WRITE_PENDING
     assert state.outcome is PurchaseOutcome.SAVED and sheet.calls == 1
-    body = next(iter(state.commands.values())).text_body
-    assert "表格状态写回未能确认" in body and "保持原状态" in body and "RuntimeError" not in body
-    assert "sensitive-provider-message" not in body
+    assert state.commands == {}
 
 
 def test_saved_status_recovery_never_reenters_purchase_and_stops_after_success():
@@ -111,7 +103,7 @@ def test_saved_status_recovery_never_reenters_purchase_and_stops_after_success()
     handler.retry_saved_statuses(at=NOW)
     handler.retry_saved_statuses(at=NOW)
     assert sheet.calls == 1 and state.outcome is PurchaseOutcome.SAVED
-    assert len(state.commands) == 1
+    assert len(state.commands) == 0
 
 
 def test_research_exception_mail_does_not_claim_a_purchase_submission():
@@ -121,8 +113,7 @@ def test_research_exception_mail_does_not_claim_a_purchase_submission():
     result.waiting_reason = "RESEARCH_RETRY_WAIT"
     handler.process(result, at=NOW)
     assert sheet.calls == 0
-    body = next(iter(state.commands.values())).text_body
-    assert "调研异常" in body and "未完成采购提交" in body
+    assert state.commands == {}
 
 
 def test_no_price_exception_mail_explains_five_sources_and_is_idempotent():
@@ -134,13 +125,8 @@ def test_no_price_exception_mail_explains_five_sources_and_is_idempotent():
     result.business_state = BusinessState.RESEARCH_FAILED
     handler.process(result, at=NOW)
     handler.process(result, at=NOW)
-    assert sheet.calls == 0 and len(state.commands) == 1
-    command = next(iter(state.commands.values()))
-    assert command.subject == "【INSO】询价处理异常：TEST-MPN"
-    assert "五个价格来源均无报价" in command.text_body
-    assert "未进入采购提交" in command.text_body
-    assert "不等于型号一定填错" in command.text_body
-    assert [r.address for r in command.recipients] == ["linan229@qq.com", "shawn@inso-hk.com"]
+    assert sheet.calls == 0 and len(state.commands) == 0
+    assert state.commands == {}
 
 
 @pytest.mark.parametrize("phase,reason", [
@@ -149,11 +135,9 @@ def test_no_price_exception_mail_explains_five_sources_and_is_idempotent():
     ("SHEETS_WRITE_BACK", "GoogleSheetsReadError"),
 ])
 def test_only_all_no_result_research_exception_adds_shawn(phase, reason):
-    handler, sheet, state = actions(PurchaseOutcome.PRE_SAVE_READY)
+    handler, _sheet, state = actions(PurchaseOutcome.PRE_SAVE_READY)
     handler.notify("synthetic-inquiry", phase, reason, at=NOW)
-    command = next(iter(state.commands.values()))
-    assert [r.address for r in command.recipients] == ["linan229@qq.com"]
-    assert not command.command_id.endswith(":recipients-v2") and sheet.calls == 0
+    assert state.commands == {}
 
 
 def test_status_write_records_actual_confirmation_timestamp_once():
@@ -270,10 +254,8 @@ def test_ambiguous_quoted_rows_still_fail_closed_and_alert():
     quoted(handler, sheet, state)
     sheet.rows.append(WorksheetRow(5, dict(sheet.rows[0].cells)))
     handler.retry_saved_statuses(at=NOW)
-    assert state.state is BusinessState.STATUS_WRITE_PENDING and len(state.commands) == 1
-    body = next(iter(state.commands.values())).text_body
-    assert "保持原状态" in body and "多个候选" in body and "SheetRecordConflict" not in body
-    assert sheet.calls == 0
+    assert state.state is BusinessState.STATUS_WRITE_PENDING and len(state.commands) == 0
+    assert state.commands == {}
 
 
 def test_unknown_submit_pending_never_resolves_by_sheet_status_alone():

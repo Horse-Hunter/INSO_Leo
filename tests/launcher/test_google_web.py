@@ -636,9 +636,7 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
         assert len(calls) == (5 if failure_mode == 'timeout_then_busy' else
                               10 if failure_mode == 'metadata_timeout' else 9)
         assert backend.get_health().overall == '正常'
-        assert len(_RecordingTransport.sent) == 1
-        assert _RecordingTransport.sent[0][1].address == 'linan229@qq.com'
-        assert '15分钟后重试' in _RecordingTransport.sent[0][2]
+        assert len(_RecordingTransport.sent) == 0
         assert backend._store.all_items() == ()
         assert not original_page.closed
         assert all(p.closed for p in browser.contexts[0].pages[1:])
@@ -837,7 +835,7 @@ def test_many_query_only_candidates_share_one_export_per_sheet_stage(web):
         for index in range(12):
             model = f'TEST-{ws.worksheet}-{index}'
             cells = (['发给采购', '', 'B', '', model, 'BRAND', '2'] if ws.worksheet == '2026'
-                     else ['', '发给采购', '1', model, 'BRAND', '2', 'PCS'])
+                     else [NOW.date().isoformat(), '发给采购', '1', model, 'BRAND', '2', 'PCS'])
             rows[ws.worksheet].append(cells)
             importance = 'B' if ws.worksheet == '2026' else None
             identity = SheetRecordIdentity(ws, len(rows[ws.worksheet]),

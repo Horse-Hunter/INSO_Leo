@@ -231,7 +231,7 @@ def test_quote_rerun_changed_fields_binds_only_selected_original_row(tmp_path, m
         assert source_store.get_by_inquiry_id(inquiry).mpn == "FIXED"
         result = V13QuotationCycle(reader=source_reader, store=source_store,
             operations=Operations(), clock=lambda: NOW, wait=lambda _: False,
-            quote_reader=quotes).run(worksheet)
+            quote_reader=quotes, automatic_refresh=False).run(worksheet)
         outcomes.extend(result)
         return result
     backend._manual_quote = runner, holds

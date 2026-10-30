@@ -102,7 +102,7 @@ def test_row_closure_requires_every_notification_recipient_sent(tmp_path):
     assert store.notifications_settled(INQUIRY)
     store.enqueue_notification(NotificationCommand(
         command_id="synthetic-mail", inquiry_id=INQUIRY,
-        kind=NotificationKind.PURCHASE_EXCEPTION,
+        kind=NotificationKind.IMPORTANT_ORDER,
         recipients=(NotificationRecipient("test", "test@example.invalid"),),
         subject="test", text_body="test", html_body=None, created_at=NOW,
     ))

@@ -46,7 +46,8 @@ def purchase_episode_overdue(episode, now: datetime) -> bool:
 
 class PurchaseFollowUp:
     """Observe all current candidates, including durable quotation holds; no CDP/write."""
-    def __init__(self, *, reader, workflow_store, v12_store, clock, episodes=None):
+    def __init__(self, *, reader, workflow_store, v12_store, clock, episodes=None, brief_snapshot=lambda worksheet: ()):
+        self._brief_snapshot = brief_snapshot
         self.reader, self.workflow_store = reader, workflow_store
         self.v12_store, self.clock = v12_store, clock
         self.episodes = episodes or V13PurchaseFollowUpStore(v12_store.database_path)
@@ -58,6 +59,17 @@ class PurchaseFollowUp:
         for candidate in candidates:
             if not isinstance(candidate, V13Candidate) or candidate.source_status != "发给采购":
                 continue  # Never guess which local timestamp an ambiguous row belongs to.
+            from src.sheets.quotation_candidates import relocate_quotation_source
+
+            from .automatic_admission import age_reason, source_date
+            from .v13_quotation import expected_source_brand
+            item = self.workflow_store.get_by_inquiry_id(candidate.inquiry_id)
+            rows = tuple(self.reader.read_rows(worksheet))
+            row = relocate_quotation_source(item.record_identity, rows, expected_brand=expected_source_brand(item))
+            day, origin = source_date(item.record_identity, row, self._brief_snapshot(worksheet),
+                                       lambda inquiry_id=candidate.inquiry_id: self.workflow_store.inquiry_intake_at(inquiry_id))
+            if age_reason(day, now):
+                continue
             episode = self.episodes.latest(candidate.inquiry_id)
             if episode is None:
                 continue  # Historical rows remain untimed.
@@ -78,9 +90,15 @@ class PurchaseFollowUp:
                 f"发给采购时间：{episode.confirmed_at.astimezone(WORK_ZONE).strftime('%m-%d %H:%M（北京时间）')}\n"
                 "无需重发采购单。"
             )
+            import json
+            proof = {"incident_key": command_id, "module": "quotation", "category": "business_confirmed",
+                         "reason_code": "PURCHASE_FOLLOW_UP_REQUIRED", "original_event": episode.episode_id,
+                         "inquiry_day": str(day), "date_source": origin, "verified_at": now.isoformat(),
+                         "active": True, "current_business": True, "verified": True, "needs_owner": True,
+                         "action": "请人工跟进采购报价；不要重发采购", "uncertainty": "采购后续报价尚未收到"}
             self.v12_store.enqueue_notification(NotificationCommand(
                 command_id, candidate.inquiry_id, NotificationKind.PURCHASE_EXCEPTION,
-                RECIPIENTS, "【INSO】采购报价待跟进", body, None, now,
+                RECIPIENTS, "【INSO】采购报价待跟进", body, None, now, 2, json.dumps(proof, sort_keys=True),
             ))
             enqueued += 1
         return enqueued

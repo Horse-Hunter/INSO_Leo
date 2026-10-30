@@ -520,11 +520,14 @@ def compose_v12_production(
     inquiry_ids=None,
     row_wait=None,
     brand_updater=None,
+    brief_snapshot=lambda worksheet: (),
+    clock=None,
+    notification_review=None,
 ) -> V12ProductionComposition:
     """Build the real seams only when every required adapter is explicit."""
 
     notification_worker = V12NotificationWorker(
-        v12_store, adapters.notification_transport
+        v12_store, adapters.notification_transport, review_current=notification_review
     )
     coordinator = V12WorkflowCoordinator(
         workflow_store,
@@ -539,7 +542,7 @@ def compose_v12_production(
         on_result=on_result,
         inquiry_ids=inquiry_ids,
         row_wait=row_wait,
-        brand_updater=brand_updater,
+        brand_updater=brand_updater, brief_snapshot=brief_snapshot, clock=clock,
     )
     return V12ProductionComposition(
         coordinator,

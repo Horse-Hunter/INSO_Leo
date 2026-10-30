@@ -58,6 +58,7 @@ class NotificationKind(StrEnum):
 
 
 class DeliveryOutcome(StrEnum):
+    SUPPRESSED = "SUPPRESSED"
     PENDING = "PENDING"
     SENDING = "SENDING"
     SENT = "SENT"
@@ -269,6 +270,7 @@ class NotificationCommand:
     html_body: str | None
     created_at: datetime
     payload_version: int = 1
+    review: str | None = None
 
     def __post_init__(self) -> None:
         if self.created_at.tzinfo is None:

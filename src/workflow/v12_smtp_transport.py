@@ -18,6 +18,7 @@ import smtplib
 import ssl
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from email.message import EmailMessage
 from typing import Protocol
 
@@ -99,7 +100,9 @@ class QQSMTPTransport:
         config: QQSMTPConfig,
         credentials: CredentialProvider | None = None,
         smtp_factory: _SMTPFactory | None = None,
+        clock=None,
     ) -> None:
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._config = config
         self._credentials = credentials
         self._smtp_factory = smtp_factory or smtplib.SMTP_SSL
@@ -109,6 +112,10 @@ class QQSMTPTransport:
         command: NotificationCommand,
         recipient: NotificationRecipient,
     ) -> NotificationTransportResult:
+        if command.kind.value == "PURCHASE_EXCEPTION":
+            from .notification_review import review_reason
+            if review_reason(command, self._clock()) is not None:
+                return _PERMANENT
         if not self._config.sender_address:
             # Configuration error: no retry can fix a missing sender.
             return _PERMANENT
@@ -151,25 +158,8 @@ class QQSMTPTransport:
         as a ``NotificationCommand`` it is not.
         """
 
-        if not self._config.sender_address:
-            return _PERMANENT
-        message = EmailMessage()
-        message["From"] = self._config.sender_address
-        message["To"] = recipient.address
-        message["Subject"] = subject
-        message.set_content(text_body)
-        try:
-            client = self._connect()
-        except ssl.SSLCertVerificationError:
-            return _PERMANENT
-        except _PRE_SEND_NETWORK_ERRORS:
-            return _RETRYABLE
-        except Exception:  # noqa: BLE001 - malformed command is a configuration error
-            return _UNKNOWN
-        try:
-            return self._deliver(client, message)
-        finally:
-            _close(client)
+        # RFQ-016: bypassing the durable evidence and recipient ledger is forbidden.
+        return _PERMANENT
 
     # -- internals ---------------------------------------------------------
 

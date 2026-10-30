@@ -138,8 +138,8 @@ def test_unique_click_receipt_is_required_for_unconfirmed_status(tmp_path):
 def test_unconfirmed_submission_attempts_status_and_owner_command_only():
     handler, sheet, vs = actions(PurchaseOutcome.SUBMIT_UNCONFIRMED)
     assert handler.process(completion_result(PurchaseOutcome.SUBMIT_UNCONFIRMED), at=NOW)
-    assert sheet.calls == 1 and len(vs.commands) == 1
-    assert [r.address for r in next(iter(vs.commands.values())).recipients] == ["linan229@qq.com"]
+    assert sheet.calls == 1 and len(vs.commands) == 0
+    assert vs.commands == {}
     vs.submit_click_proven = lambda _i: False
     with pytest.raises(ValueError):
         handler.process(completion_result(PurchaseOutcome.SUBMIT_UNCONFIRMED), at=NOW)
@@ -261,7 +261,7 @@ def test_other_research_sources_continue_after_timeout_and_challenge(tmp_path, m
         output=SimpleNamespace(upsert=lambda *_a, **_k: None), source_observer=backend._observe_source_failure)
     result = service.execute(ResearchInput("synthetic", "ABC", "Brand", 2, "A"))
     assert result.status is ResearchStatus.PARTIAL_SUCCESS
-    assert calls == other_sources and len(mails) == 2
+    assert calls == other_sources and len(mails) == 0
     assert backend.get_status().state is RunState.RUNNING
     backend.shutdown()
 
@@ -299,7 +299,7 @@ def test_single_row_source_conflict_cannot_purchase_and_next_order_continues(tmp
     f._current_reader = SimpleNamespace(read_rows=lambda _s: [WorksheetRow(3, {**reader.row.cells, "G": 99}),
         WorksheetRow(4, {**reader.row.cells, "E": "OTHER"})])
     result = f.process_pending((first, second), now=NOW)
-    assert result[0].business_state is BusinessState.SOURCE_CHANGED
+    assert len(result) == 1 and f.admission_skips  # Changed row excluded before creating work.
     assert len(writer.commands) == 1 and writer.commands[0].mpn == "OTHER"
 
 
@@ -322,7 +322,7 @@ def test_unconfirmed_click_and_status_failure_do_not_block_next_order(tmp_path, 
         index = next(i for i, r in enumerate(sheet_rows) if r.row_position == position)
         sheet_rows[index] = WorksheetRow(position, {**sheet_rows[index].cells, "A": "发给采购"})
     sheet = SimpleNamespace(read_rows=lambda _s: tuple(sheet_rows), write_purchase_status=write)
-    handler = PurchaseCompletionActions(workflow_store=ws, v12_store=vs, reader=sheet, writer_factory=lambda: sheet)
+    handler = PurchaseCompletionActions(workflow_store=ws, v12_store=vs, reader=sheet, writer_factory=lambda: sheet, automatic_admission=lambda iid,at: True)
     f._on_result = lambda result: handler.process(result, at=NOW)
     clicks = []
     def prepare(command):

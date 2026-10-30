@@ -104,7 +104,7 @@ def assembly(tmp_path, monkeypatch, *, mode='normal', duration=10):
             actions.source.after = ['发给采购'] * 50
         integrated.updater_factory = lambda: updater
         quotes.responses = iter([(quote(),), (), ()])
-    tp, _, _, transport, tpdb = tp_fixture(tmp_path / 'tp')
+    tp, _, _, transport, tpdb = tp_fixture(tmp_path / 'tp', day=NOW.date())
     backend._tp = tp
     tp.stop_requested = backend._stop.is_set
     old_brief = tp.brief.read

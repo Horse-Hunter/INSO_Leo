@@ -190,16 +190,16 @@ def test_unconfirmed_update_only_polls_source_without_rewriting_or_reclicking(fi
     src.after = ["发给采购"]*3 + ["采购已报价"]
     actions.popups = [first_popup, EXISTS]
     result = updater.update_one(found())
-    assert result.outcome is QuotationOutcome.UPDATED_ALREADY_EXISTS
+    assert result.row_error_reason is RowErrorReason.UPDATE_RESULT_UNCONFIRMED and result.effect_uncertain
     assert actions.opened == actions.closed == actions.clicks == 1
-    assert len(io.writes) == 1 and io.reads == 2 and waits == [1.0] * 3
+    assert len(io.writes) == 1 and io.reads == 2 and waits == []
 
 
 def test_popup_missing_but_prior_script_status_closed_prevents_second_click():
     updater, _, io, actions, waits = service()
     actions.popups = [None]
     result = updater.update_one(found())
-    assert result.outcome is QuotationOutcome.UPDATED_ALREADY_EXISTS
+    assert result.row_error_reason is RowErrorReason.UPDATE_RESULT_UNCONFIRMED and result.effect_uncertain
     assert actions.clicks == actions.opened == actions.closed == 1 and len(io.writes) == 1 and waits == []
 
 
@@ -210,7 +210,7 @@ def test_unconfirmed_update_exhausts_read_only_checks_without_any_second_write()
     result = updater.update_one(found())
     assert result.row_error_reason is RowErrorReason.UPDATE_RESULT_UNCONFIRMED
     assert actions.opened == actions.closed == actions.clicks == 1
-    assert len(io.writes) == 1 and io.reads == 2 and waits == [1.0] * 30
+    assert len(io.writes) == 1 and io.reads == 2 and waits == []
 
 
 def test_confirmed_popup_only_polls_source_and_never_resubmits():
@@ -319,7 +319,7 @@ def test_retry_source_conflict_is_row_only_with_no_second_input_or_click():
     actions.popups = [None]
     src.after = [V13SourceRowError(RowErrorReason.SOURCE_CHANGED)]
     result = updater.update_one(found())
-    assert result.row_error_reason is RowErrorReason.SOURCE_CHANGED
+    assert result.row_error_reason is RowErrorReason.UPDATE_RESULT_UNCONFIRMED and result.effect_uncertain
     assert actions.clicks == 1 and len(io.writes) == 1 and waits == []
 
 
@@ -572,7 +572,7 @@ def test_raw_source_model_changes_never_submit_stale_b(change_phase):
         actions.popups = [None]
         src.after = ["发给采购"]
     result = updater.update_one(found(model="WGI210IT"))
-    assert result.row_error_reason is RowErrorReason.SOURCE_CHANGED
+    assert result.row_error_reason is (RowErrorReason.UPDATE_RESULT_UNCONFIRMED if change_phase == "retry" else RowErrorReason.SOURCE_CHANGED)
     assert actions.clicks == (1 if change_phase == "retry" else 0)
     assert len(io.writes) == (0 if change_phase == "before_write" else 1)
 

@@ -1,0 +1,112 @@
+{
+  "scope": "SOURCE_ONLY_NOT_DEPLOYED",
+  "requirement_sha": "be46555471cb78786437d04bf61210a3d384a74e",
+  "preserved_commit": "7574516f18c8ee3225b5039f2eb4aeabd0045bbc",
+  "full_regression": {
+    "cases": 3273,
+    "passed": 3272,
+    "failed": 0,
+    "skipped": [
+      {
+        "suite": "tests.workflow.test_v12_evidence_and_safety",
+        "test": "test_existing_path_rejects_symlink_escape_when_supported",
+        "reason": "symlink creation not available in this test environment"
+      }
+    ],
+    "duration_seconds": 129.68
+  },
+  "rfq016_cases": 49,
+  "rfq016_case_names": [
+    "test_recoverable_google_warning_never_reaches_smtp",
+    "test_month_old_durable_queue_does_not_research",
+    "test_three_completed_cycles_across_restarts_send_exactly_once_through_smtp",
+    "test_false_samples_have_zero_actual_smtp_attempts[changes0]",
+    "test_false_samples_have_zero_actual_smtp_attempts[changes1]",
+    "test_false_samples_have_zero_actual_smtp_attempts[changes2]",
+    "test_false_samples_have_zero_actual_smtp_attempts[changes3]",
+    "test_false_samples_have_zero_actual_smtp_attempts[changes4]",
+    "test_false_samples_have_zero_actual_smtp_attempts[changes5]",
+    "test_false_samples_have_zero_actual_smtp_attempts[changes6]",
+    "test_false_samples_have_zero_actual_smtp_attempts[changes7]",
+    "test_recovery_between_enqueue_and_send_suppresses_without_erasing_sent_unknown",
+    "test_verified_unknown_or_manual_login_immediate_one_mail[unknown_write-UPDATE_RESULT_UNCONFIRMED]",
+    "test_verified_unknown_or_manual_login_immediate_one_mail[manual_login-MANUAL_VERIFICATION_REQUIRED]",
+    "test_old_pending_legacy_faults_do_not_reach_smtp_and_sent_unknown_stay_intact",
+    "test_current_legal_business_mail_still_reaches_fake_smtp[IMPORTANT_ORDER]",
+    "test_current_legal_business_mail_still_reaches_fake_smtp[TP_RESEARCH]",
+    "test_calendar_month_boundaries_are_shared[tp-2026-03-31-2026-02-28-True]",
+    "test_calendar_month_boundaries_are_shared[tp-2026-03-31-2026-02-27-False]",
+    "test_calendar_month_boundaries_are_shared[tp-2024-03-31-2024-02-29-True]",
+    "test_calendar_month_boundaries_are_shared[tp-2024-03-31-2024-02-28-False]",
+    "test_calendar_month_boundaries_are_shared[tp-2026-01-31-2025-12-31-True]",
+    "test_calendar_month_boundaries_are_shared[tp-2026-10-30-2026-10-31-False]",
+    "test_calendar_month_boundaries_are_shared[future_personalized_requirement-2026-03-31-2026-02-28-True]",
+    "test_calendar_month_boundaries_are_shared[future_personalized_requirement-2026-03-31-2026-02-27-False]",
+    "test_calendar_month_boundaries_are_shared[future_personalized_requirement-2024-03-31-2024-02-29-True]",
+    "test_calendar_month_boundaries_are_shared[future_personalized_requirement-2024-03-31-2024-02-28-False]",
+    "test_calendar_month_boundaries_are_shared[future_personalized_requirement-2026-01-31-2025-12-31-True]",
+    "test_calendar_month_boundaries_are_shared[future_personalized_requirement-2026-10-30-2026-10-31-False]",
+    "test_all_automatic_quote_statuses_expire_before_inso[\\u53d1\\u7ed9\\u91c7\\u8d2d]",
+    "test_all_automatic_quote_statuses_expire_before_inso[\\u91c7\\u8d2d\\u5df2\\u62a5\\u4ef7]",
+    "test_all_automatic_quote_statuses_expire_before_inso[\\u5df2\\u62a5\\u4ef7\\u7ed9\\u5ba2\\u6237]",
+    "test_owner_single_quote_age_exemption_retains_current_status_gate[\\u53d1\\u7ed9\\u91c7\\u8d2d]",
+    "test_owner_single_quote_age_exemption_retains_current_status_gate[\\u91c7\\u8d2d\\u5df2\\u62a5\\u4ef7]",
+    "test_owner_single_quote_age_exemption_retains_current_status_gate[\\u5df2\\u62a5\\u4ef7\\u7ed9\\u5ba2\\u6237]",
+    "test_recent_non_pending_inquiry_never_reenters_automatic_research[\\u5df2\\u62a5\\u4ef7\\u7ed9\\u5ba2\\u6237]",
+    "test_recent_non_pending_inquiry_never_reenters_automatic_research[\\u53d1\\u7ed9\\u91c7\\u8d2d]",
+    "test_recent_non_pending_inquiry_never_reenters_automatic_research[\\u91c7\\u8d2d\\u5df2\\u62a5\\u4ef7]",
+    "test_source_projection_fresh_customer_status_keeps_purchase_history_and_unknown",
+    "test_tp_old_persisted_pending_failed_and_manual_age_exemption",
+    "test_actual_production_manual_login_producer_to_final_smtp_review_once",
+    "test_actual_production_persistent_read_block_counts_cycles_not_restarts",
+    "test_native_quote_unknown_mail_and_latest_source_status_do_not_clear_hold",
+    "test_preclick_quote_timeout_is_not_a_verified_unknown_write_email",
+    "test_explicit_manual_quote_does_not_bypass_unknown_write_protection",
+    "test_legacy_same_incident_delivery_is_not_replayed_with_new_key[SENT]",
+    "test_legacy_same_incident_delivery_is_not_replayed_with_new_key[UNKNOWN]",
+    "test_completed_source_status_cannot_qualify_an_old_queue_as_current_read_block",
+    "test_temporarily_unavailable_final_review_defers_legal_business_mail"
+  ],
+  "red_evidence": {
+    "cases": 2,
+    "failed_as_expected": 2,
+    "cause": "recoverable Google warning reached fake transport and31-day-old durable inquiry reached Research"
+  },
+  "fake_smtp": {
+    "false_stale_recovered_expired_unverified_attempts": 0,
+    "same_qualified_incident_max_sends": 1,
+    "real_smtp_connections": 0,
+    "transport": "QQSMTPTransport with injected ScriptedSMTP and FakeCredentials"
+  },
+  "checks": {
+    "ruff_src_tests": "PASS",
+    "git_diff_check": "PASS",
+    "preserved_commit_ancestor": "PASS",
+    "requirement_commit_ancestor": "PASS"
+  },
+  "production": {
+    "deployed": false,
+    "computer_use": "COMPUTER_USE_NOT_USED",
+    "new_cdp_connections": 0,
+    "external_writes": 0,
+    "unknown_effects_resolved": 0,
+    "live_business_verification": "NOT_VERIFIED"
+  },
+  "runtime": {
+    "python": "3.12.10",
+    "dependency_policy": "existing release libraries reused; no install"
+  },
+  "full_log_sha256": "e4d715b8e872aa828e6ebd166c16d5ee516c6182fe8afe155b1839c0397f328e",
+  "cleanup_retained": [
+    "rfq016-debug",
+    "rfq016-full2",
+    "rfq016-green1",
+    "rfq016-red"
+  ],
+  "cleanup_limitation": "specific pytest sandbox directories access denied; ACLs/locks/reparse targets not changed",
+  "normal_mail_review_red": {
+    "failed_as_expected": 1,
+    "seconds": 0.86,
+    "verified_repair": "temporary final-review unavailability defers, then current legal business mail reaches fake SMTP"
+  }
+}

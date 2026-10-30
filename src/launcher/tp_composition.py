@@ -12,7 +12,8 @@ def build_tp_cycle(*, path, web, reader, research, outbox, worker, now, prepare,
     store.migrate()
     outbox.recover_abandoned_notification_attempts(at=now)
     store.recover(now)
-    return TpCycle(store=store, brief=BriefReader(web, retry_wait=retry_wait),
+    from datetime import UTC, datetime
+    return TpCycle(clock=lambda: datetime.now(UTC), store=store, brief=BriefReader(web, retry_wait=retry_wait),
                    reader=reader, research=research, outbox=outbox, worker=worker,
                    prepare=prepare, stop_requested=stop_requested)
 

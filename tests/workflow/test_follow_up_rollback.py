@@ -68,7 +68,8 @@ def confirmed_status_fixture(tmp_path):
         sheet.row = WorksheetRow(row, {**sheet.row.cells, "A": "发给采购"})
     sheet.write_purchase_status = write
     action = PurchaseCompletionActions(workflow_store=store, v12_store=ledger,
-        reader=sheet, writer_factory=lambda: sheet, clock=lambda: start, follow_up_store=episodes)
+        reader=sheet, writer_factory=lambda: sheet, clock=lambda: start, follow_up_store=episodes,
+        automatic_admission=lambda iid,at: True)
     saved = replace(result, purchase_outcome=PurchaseOutcome.SAVED, business_state=BusinessState.PURCHASE_RECORDED)
     return store, ledger, episodes, sheet, action, saved, calls, start
 

@@ -102,6 +102,7 @@ class V13QuotationResult:
     source_worksheet: WorksheetIdentity | None = None
     source_row_position: int | None = None
     source_status: str = "发给采购"
+    effect_uncertain: bool = False
 
 
 def _read_source_rows(reader, worksheet, *, discovery=False):
@@ -242,6 +243,19 @@ class V13QuotationCycle:
                     after_closed_candidate(result)
         return tuple(results)
 
+    def recheck_automatic_age(self, result):
+        """Same policy immediately before a continuation or external update."""
+        if not self._automatic_refresh or result.record_identity is None or result.inquiry_id is None:
+            return None
+        from .automatic_admission import age_reason, source_date
+        item = self._store.get_by_inquiry_id(result.inquiry_id)
+        worksheet = result.record_identity.worksheet
+        rows = _read_source_rows(self._reader, worksheet)
+        row = relocate_quotation_source(item.record_identity, rows, expected_brand=_expected_brand(item))
+        value, _ = source_date(item.record_identity, row, self._brief_snapshot(worksheet),
+                               lambda: self._store.inquiry_intake_at(result.inquiry_id))
+        return age_reason(value, self._clock())
+
     def execute_candidate(self, candidate, worksheet, *, on_result=lambda result: result):
         """One original protected query; page closes before owner continuation."""
         if self._stop():
@@ -290,7 +304,7 @@ class V13QuotationCycle:
                 raise V13SourceRowError(RowErrorReason.SOURCE_IDENTITY_AMBIGUOUS)
             if bound[0].inquiry_id != candidate.inquiry_id:
                 raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
-            if self._automatic_refresh and candidate.source_status == "已报价给客户":
+            if self._automatic_refresh:
                 from .quotation_age import age_reason, quotation_age_date
                 def intake():
                     read = getattr(self._store, "inquiry_intake_at", None)

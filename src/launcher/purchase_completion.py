@@ -29,7 +29,9 @@ OWNER = NotificationRecipient("owner", "linan229@qq.com")
 
 
 class PurchaseCompletionActions:
-    def __init__(self, *, workflow_store, v12_store, reader, writer_factory, clock=None, follow_up_store=None):
+    def __init__(self, *, workflow_store, v12_store, reader, writer_factory, clock=None, follow_up_store=None, mail_evidence=None, automatic_admission=lambda inquiry_id, at: False):
+        self._automatic_admission = automatic_admission
+        self._mail_evidence = mail_evidence
         self.workflow_store = workflow_store
         self.v12_store = v12_store
         self.reader = reader
@@ -66,6 +68,8 @@ class PurchaseCompletionActions:
         }
 
     def _write_back(self, item, *, at):
+        if not self._automatic_admission(item.inquiry_id, at):
+            return True  # local exclusion; never a new failure or mail
         if item.inquiry_id in self._settled_status_ids:
             return True
         try:
@@ -90,6 +94,8 @@ class PurchaseCompletionActions:
 
     def retry_saved_statuses(self, *, at):
         for item in self.workflow_store.all_items():
+            if not self._automatic_admission(item.inquiry_id, at):
+                continue
             if item.inquiry_id in self._settled_status_ids:
                 continue
             pending = self.v12_store.business_state(item.inquiry_id) is BusinessState.STATUS_WRITE_PENDING
@@ -135,43 +141,20 @@ class PurchaseCompletionActions:
             PurchaseOutcome.UNKNOWN_WRITE_OUTCOME, PurchaseOutcome.MANUAL_REVIEW,
             PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED,
         }
-        explanation = {
-            "SHEETS_WRITE_BACK": "采购已处理，但表格状态写回未能确认。请核对对应行；若已是‘发给采购’或‘采购已报价’，保持原状态。只有确认仍为‘未发’且采购已发送时，才修正为‘发给采购’。不要重发采购单。",
-            "RESEARCH": "调研异常，未完成采购提交。",
-            "DUPLICATE_CHECK": "重复询价查询无法确认，采购提交未继续。",
-            "SESSION": "本单网站登录尚未确认，已保留待处理；程序等待恢复，不会因此重发采购。",
-            "FAULT": "运行故障已停止对应模块。请按具体情况处理；不要重发历史采购单。",
-            "PURCHASE": ("提交结果无法确认，可能已经发送。请查看 INSO，禁止直接重跑。"
-                         if uncertain else "采购录单或校验失败，未完成采购提交。"),
-        }[phase]
-        reason_text = {
-            "NO_MATCHING_PRODUCT": "五个价格来源均无报价，未进入采购提交。请核对型号；无报价不等于型号一定填错。",
-            "CONTROL_NOT_FOUND": "采购页面控件或 AI 结果未就绪，未能继续录单。",
-            "AI_RECOGNITION_MISMATCH": "AI 录单的型号、品牌或数量与询价不符。",
-            "RECONCILIATION_UNREADABLE": "无法读取并确认 INSO 询价记录。",
-            "SAVE_OUTCOME_UNKNOWN": "提交后的记录未能确认，禁止直接重发。",
-            "DUPLICATE_LOOKUP_UNAVAILABLE": "七天重复询价历史查询不可用。",
-            "GoogleSheetsAuthorizationError": "Google 写入授权不可用，请检查原授权；程序不会重复弹出授权。",
-            "SheetRecordConflict": "源表型号、数量、品牌或状态与原询价不一致，或有多个候选；已阻止写错行。",
-            "GoogleSheetsReadError": "Google 表格重新读取或写回确认失败。",
-            "GoogleSheetsWriteError": "Google 表格状态更新失败。",
-            "WORKFLOW_LEDGER_UNAVAILABLE": "询价数据库或关键状态不可用，全部共享业务已停止。",
-            "GOOGLE_SHEETS_UNAVAILABLE": "Google 表格读取或授权尚未确认，请查看程序的等待恢复提示。",
-            "CDP_RECONNECT_EXHAUSTED": "原Chrome连接暂未恢复，程序等待原连接，不会重发采购。",
-            "INSO_QUERY_RETRIES_EXHAUSTED": "INSO 查询多次未成功，程序等待恢复；不能把查询失败当作无记录。",
-            "INSO_AUTHENTICATION_REQUIRED": "请在原Chrome完成INSO登录或人工验证；程序保留验证页并等待恢复，不会重发采购。",
-            "IC_NET_UNAVAILABLE": "IC.net 不可用，采购模块已暂停；请在固定 Chrome 检查登录或验证页面。",
-            "V12_INTERNAL_FAILURE": "采购模块内部处理异常，模块已暂停。请查看询价详情与安全日志。",
-            "INVALID_INPUT_SKIPPED": "该行型号、品牌、数量或关键格式不合法，已跳过；请修正源表格。",
-            "SOURCE_CHANGED": "源询价的关键内容已被修改，本单终止且不会覆盖人工修改。",
-        }.get(reason)
-        body = (f"型号：{item.mpn}\n"
-                f"品牌：{item.resolved_brand or item.brand}\n数量：{item.quantity}\n"
-                f"位置：{item.record_identity.worksheet.worksheet}，原行号{item.record_identity.row_position}（定位参考）\n"
-                f"情况：{explanation}" + (f"\n说明：{reason_text}" if reason_text else ""))
-        self.v12_store.enqueue_notification(NotificationCommand(
-            command_id=command_id,
-            inquiry_id=inquiry_id, kind=NotificationKind.PURCHASE_EXCEPTION,
-            recipients=recipients, subject=f"【INSO】询价处理异常：{item.mpn}",
-            text_body=body, html_body=None, created_at=at,
-        ))
+        # Technical errors stay in the local state/alerts. Only a durable unknown
+        # external effect can justify this immediate actionable notification.
+        if not uncertain or self._mail_evidence is None:
+            return
+        import json
+        reason = "SAVE_OUTCOME_UNKNOWN"
+        command_id = f"purchase-unknown:{inquiry_id}"
+        proof = self._mail_evidence(inquiry_id, reason, at=at,
+                                    event=command_id, module="inquiry")
+        if proof is None:
+            return
+        command = NotificationCommand(command_id, inquiry_id, NotificationKind.PURCHASE_EXCEPTION,
+            recipients, f"【需要处理】采购写入待人工核对：{item.mpn}",
+            f"型号：{item.mpn}\n情况：写入结果待人工核实，原订单被保护不会自动重做。\n"
+            "请核对原INSO记录，尚不能认定本次发送成功或失败；禁止直接重发。",
+            None, at, 2, json.dumps(proof, sort_keys=True))
+        self.v12_store.observe_incident(command, proof, occurrence=proof["original_event"])

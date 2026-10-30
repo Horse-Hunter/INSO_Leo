@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import datetime
 from threading import Lock, get_ident
 from typing import Protocol
@@ -54,7 +55,8 @@ class FakeNotificationTransport:
 class V12NotificationWorker:
     """Claim/deliver one recipient at a time; delivery never controls purchase."""
 
-    def __init__(self, store: V12Store, transport: NotificationTransport) -> None:
+    def __init__(self, store: V12Store, transport: NotificationTransport, *, review_current=None) -> None:
+        self._review_current = review_current
         self._store = store
         self._transport = transport
         self._dispatch_lock = Lock()
@@ -81,6 +83,30 @@ class V12NotificationWorker:
         sent_attempts = 0
         for command in commands:
             for recipient in command.recipients:
+                from .notification_review import review_reason
+                command = replace(command, review=self._store.notification_review(command.command_id))
+                prior_reason = ("INCIDENT_ALREADY_NOTIFIED" if self._store.previous_incident_delivery_protected(command.review)
+                                else review_reason(command, now))
+                reason = prior_reason if prior_reason not in {None, "EVIDENCE_STALE"} else None
+                if reason is None and self._review_current is not None:
+                    try:
+                        reason = self._review_current(command, now)
+                        if reason is None and command.review:
+                            import json
+                            proof = json.loads(command.review)
+                            proof["verified_at"] = now.isoformat()
+                            command = replace(command, review=json.dumps(proof, sort_keys=True))
+                            self._store.refresh_notification_review(command.command_id, command.review)
+                    except Exception:  # noqa: BLE001 - an unavailable review never permits sending
+                        reason = "CURRENT_REVIEW_PENDING"
+                if reason is None:
+                    reason = review_reason(command, now)
+                if reason == "CURRENT_REVIEW_PENDING":
+                    self._store.defer_notification_review(command.command_id, recipient.recipient_id)
+                    continue
+                if reason is not None:
+                    self._store.suppress_notification(command.command_id, recipient.recipient_id, reason, at=now)
+                    continue
                 try:
                     result = self._transport.send_one(command, recipient)
                     if not isinstance(result, NotificationTransportResult):

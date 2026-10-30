@@ -86,6 +86,8 @@ class ManualRetryHolds:
                     raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
             if matched:
                 self.matched_old.append(row)
+        if any(row[3] == "UPDATE_RESULT_UNCONFIRMED" for row in self.matched_old):
+            raise ValueError("报价写入结果待人工核对，原保护保留；不能通过单笔重跑来确认或覆盖未知写入。")
         self.matched_old_keys = {row[0] for row in self.matched_old}
 
     def active(self):
@@ -120,6 +122,8 @@ class ManualRetryHolds:
             # every old barrier and let the existing manual ValueError path
             # report a rejected attempt without upgrading it to shared failure.
             raise ValueError("报价输入页仍忙或上次操作待确认，本次未提交；原订单保护保留，请勿反复重跑。")
+        if result.row_error_reason is not None and result.row_error_reason.value == "UPDATE_RESULT_UNCONFIRMED":
+            raise ValueError("报价写入结果待人工核对，已保留保护；本次尚不能确认成功或失败。")
         if result.outcome is QuotationOutcome.ROW_FAILED:
             active = {row[0]: row for row in self.holds.active()}
             current = self.new_hold_keys & active.keys()

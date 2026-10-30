@@ -112,6 +112,10 @@ def migrate_v12(
             version = int(inspect_connection.execute("PRAGMA user_version").fetchone()[0])
             if version == V12_SCHEMA_VERSION:
                 _verify_v12_schema(inspect_connection)
+                columns = {r[1] for r in inspect_connection.execute("PRAGMA table_info(workflow_v12_notification_commands)")}
+                if "review_json" not in columns:
+                    create_verified_backup(path, backup_dir / "rfq016-upgrade", clock=lambda: observed_at)
+                _migrate_notification_review(inspect_connection)
                 return None
             if version != 0:
                 raise V12SchemaMismatch("database version is inconsistent")
@@ -515,16 +519,20 @@ class V12Store:
             raise ValueError("notification requires at least one recipient")
         if command.created_at.tzinfo is None:
             raise ValueError("notification timestamp must be timezone-aware")
+        from .notification_review import review_reason
+        suppression = review_reason(command, command.created_at)
         event = WorkflowEvent(
             _new_id("evt"), command.inquiry_id,
             EventType.NOTIFICATION_COMMAND_CREATED,
             command.created_at, "workflow",
         )
         with _transaction(self.database_path) as connection:
+            if _legacy_notice_protected(connection, command.review):
+                suppression = "INCIDENT_ALREADY_NOTIFIED"
             cursor = connection.execute(
                 "INSERT OR IGNORE INTO workflow_v12_notification_commands "
                 "(command_id, inquiry_id, kind, subject, text_body, html_body, "
-                "created_at, payload_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "created_at, payload_version, review_json, suppression_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     command.command_id,
                     command.inquiry_id,
@@ -533,7 +541,7 @@ class V12Store:
                     command.text_body,
                     command.html_body,
                     _time_text(command.created_at),
-                    command.payload_version,
+                    command.payload_version, command.review, suppression,
                 ),
             )
             inserted = cursor.rowcount == 1
@@ -580,7 +588,7 @@ class V12Store:
                         "(command_id, recipient_id, address, outcome, attempt_count) "
                         "VALUES (?, ?, ?, ?, 0)",
                         (command.command_id, recipient.recipient_id, recipient.address,
-                            "OPERATIONAL_PENDING" if command.inquiry_id is None else "PENDING"),
+                            "SUPPRESSED" if suppression else "OPERATIONAL_PENDING" if command.inquiry_id is None else "PENDING"),
                     )
                 else:
                     prior = connection.execute(
@@ -605,7 +613,7 @@ class V12Store:
             rows = connection.execute(
                 "SELECT r.command_id, r.recipient_id, r.address, c.inquiry_id, "
                 "c.kind, c.subject, c.text_body, c.html_body, c.created_at, "
-                "c.payload_version, r.attempt_count "
+                "c.payload_version, c.review_json, r.attempt_count "
                 "FROM workflow_v12_notification_recipients r "
                 "JOIN workflow_v12_notification_commands c USING(command_id) "
                 "WHERE r.outcome IN ('PENDING', 'RETRYABLE_FAILURE', 'OPERATIONAL_PENDING', 'OPERATIONAL_RETRYABLE_FAILURE') "
@@ -635,10 +643,141 @@ class V12Store:
                         row["command_id"], row["inquiry_id"],
                         NotificationKind(row["kind"]), tuple(recipients),
                         row["subject"], row["text_body"], row["html_body"],
-                        _parse_time(row["created_at"]), row["payload_version"],
+                        _parse_time(row["created_at"]), row["payload_version"], row["review_json"],
                     )
                 )
         return tuple(claimed)
+
+    def suppress_notification(self, command_id, recipient_id, reason, *, at):
+        """Stop only unsent claims; SENT and UNKNOWN are immutable protections."""
+        with _transaction(self.database_path) as db:
+            changed = db.execute(
+                "UPDATE workflow_v12_notification_recipients SET outcome='SUPPRESSED', next_attempt_at=NULL "
+                "WHERE command_id=? AND recipient_id=? AND outcome IN ('SENDING','OPERATIONAL_SENDING')",
+                (command_id, recipient_id)).rowcount
+            if changed:
+                db.execute("UPDATE workflow_v12_notification_commands SET suppression_reason=? WHERE command_id=?",
+                           (reason, command_id))
+
+    def quotation_unknown_ids(self):
+        with _connect(self.database_path) as db:
+            tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "workflow_v13_holds" not in tables:
+                return frozenset()
+            return frozenset(r[0] for r in db.execute("SELECT hold_key FROM workflow_v13_holds "
+                "WHERE active=1 AND reason='UPDATE_RESULT_UNCONFIRMED'"))
+
+    def quotation_event_active(self, inquiry_id, event, reason):
+        with _connect(self.database_path) as db:
+            tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "workflow_v13_holds" not in tables:
+                return False
+            for row in db.execute("SELECT hold_key,episode,result_json FROM workflow_v13_holds WHERE active=1 AND reason=?", (reason,)):
+                if f"{row[0]}:{row[1]}" == event and json.loads(row[2]).get("inquiry_id") == inquiry_id:
+                    return True
+        return False
+
+    def unknown_write_active(self, inquiry_id, event):
+        with _connect(self.database_path) as db:
+            purchase = db.execute("SELECT outcome FROM workflow_v12_purchase_state WHERE inquiry_id=?", (inquiry_id,)).fetchone()
+            if purchase and purchase[0] in {"SUBMIT_UNCONFIRMED", "UNKNOWN_WRITE_OUTCOME", "READ_ONLY_RECONCILIATION_REQUIRED"}:
+                return True
+            tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "workflow_v13_holds" not in tables:
+                return False
+            for row in db.execute("SELECT hold_key,episode,result_json FROM workflow_v13_holds WHERE active=1 AND reason='UPDATE_RESULT_UNCONFIRMED'"):
+                payload = json.loads(row[2])
+                marker = payload.get("quotation")
+                if (f"{row[0]}:{row[1]}" == event and payload.get("inquiry_id") == inquiry_id
+                        and isinstance(marker, dict) and marker.get("effect_uncertain") is True):
+                    return True
+        return False
+
+    def defer_notification_review(self, command_id, recipient_id):
+        with _transaction(self.database_path) as db:
+            db.execute("UPDATE workflow_v12_notification_recipients SET outcome=CASE WHEN outcome='OPERATIONAL_SENDING' "
+                       "THEN 'OPERATIONAL_PENDING' ELSE 'PENDING' END, attempt_count=attempt_count-1 "
+                       "WHERE command_id=? AND recipient_id=? AND outcome IN ('SENDING','OPERATIONAL_SENDING')",
+                       (command_id, recipient_id))
+            db.execute("UPDATE workflow_v12_notification_commands SET suppression_reason='CURRENT_REVIEW_PENDING' WHERE command_id=?", (command_id,))
+
+    def refresh_notification_review(self, command_id, proof):
+        with _transaction(self.database_path) as db:
+            db.execute("UPDATE workflow_v12_notification_commands SET review_json=? WHERE command_id=?",
+                       (proof, command_id))
+
+    def previous_incident_delivery_protected(self, review):
+        with _connect(self.database_path) as db:
+            return _legacy_notice_protected(db, review)
+
+    def notification_review(self, command_id):
+        with _connect(self.database_path) as db:
+            row = db.execute("SELECT review_json FROM workflow_v12_notification_commands WHERE command_id=?",
+                             (command_id,)).fetchone()
+        return row[0] if row else None
+
+    def active_incident_evidence(self, incident_key):
+        from hashlib import sha256
+        prefix = "incident:" + sha256(incident_key.encode()).hexdigest()
+        with _connect(self.database_path) as db:
+            row = db.execute("SELECT review_json FROM workflow_v12_notification_commands WHERE command_id LIKE ? "
+                             "ORDER BY rowid DESC LIMIT 1", (prefix+":%",)).fetchone()
+        proof = json.loads(row[0]) if row and row[0] else None
+        return proof if proof and proof.get("active") else None
+
+    def observe_incident(self, command, proof, *, occurrence):
+        """Reuse the outbox as durable incident identity, including restarts.
+
+        Unqualified observations are SUPPRESSED locally. Only exact completed
+        cycles count; a poll/retry timestamp never becomes the incident identity.
+        """
+        from dataclasses import replace
+        from hashlib import sha256
+
+        from .notification_review import review_reason
+        prefix = "incident:" + sha256(proof["incident_key"].encode()).hexdigest()
+        with _connect(self.database_path) as db:
+            prior = db.execute("SELECT command_id,review_json FROM workflow_v12_notification_commands "
+                               "WHERE command_id LIKE ? ORDER BY rowid DESC LIMIT 1", (prefix+":%",)).fetchone()
+        previous = json.loads(prior[1]) if prior and prior[1] else {}
+        active = bool(prior) and not previous.get("recovered_at")
+        episode = int(prior[0].rsplit(":", 1)[1]) if prior else 0
+        if prior and not active:
+            episode += 1
+        command_id = prior[0] if active else f"{prefix}:{episode}"
+        cycles = previous.get("cycles", []) if active else []
+        if occurrence not in cycles:
+            cycles = (cycles+[occurrence])[-3:]
+        proof = {**proof, "cycles": cycles, "completed_cycles": len(cycles)}
+        reviewed = replace(command, command_id=command_id, review=json.dumps(proof, sort_keys=True), payload_version=2)
+        if not active:
+            self.enqueue_notification(reviewed)
+        with _transaction(self.database_path) as db:
+            db.execute("UPDATE workflow_v12_notification_commands SET review_json=? WHERE command_id=?",
+                       (reviewed.review, command_id))
+            reason = ("INCIDENT_ALREADY_NOTIFIED" if _legacy_notice_protected(db, reviewed.review)
+                      else review_reason(reviewed, command.created_at))
+            db.execute("UPDATE workflow_v12_notification_commands SET suppression_reason=? WHERE command_id=?",
+                       (reason, command_id))
+            if reason == "INCIDENT_ALREADY_NOTIFIED":
+                db.execute("UPDATE workflow_v12_notification_recipients SET outcome='SUPPRESSED' "
+                           "WHERE command_id=? AND outcome IN ('PENDING','OPERATIONAL_PENDING')", (command_id,))
+            if reason is None:
+                db.execute("UPDATE workflow_v12_notification_recipients SET outcome=CASE WHEN ? IS NULL "
+                           "THEN 'OPERATIONAL_PENDING' ELSE 'PENDING' END WHERE command_id=? AND outcome='SUPPRESSED'",
+                           (command.inquiry_id, command_id))
+        return command_id
+
+    def resolve_incidents(self, module, *, at):
+        with _transaction(self.database_path) as db:
+            rows = db.execute("SELECT command_id,review_json FROM workflow_v12_notification_commands "
+                              "WHERE command_id LIKE 'incident:%'").fetchall()
+            for command_id, payload in rows:
+                proof = json.loads(payload or "null")
+                if proof and proof.get("module") == module and proof.get("active"):
+                    proof.update(active=False, recovered_at=_time_text(at))
+                    db.execute("UPDATE workflow_v12_notification_commands SET review_json=? WHERE command_id=?",
+                               (json.dumps(proof, sort_keys=True), command_id))
 
     def record_notification_result(
         self,
@@ -692,6 +831,8 @@ class V12Store:
                     recipient_id,
                 ),
             )
+            if persisted_outcome is DeliveryOutcome.SENT:
+                connection.execute("UPDATE workflow_v12_notification_commands SET suppression_reason=NULL WHERE command_id=?", (command_id,))
             inquiry_id = row["inquiry_id"]
             event_type = (
                 EventType.NOTIFICATION_DELIVERY_SUCCEEDED
@@ -1172,7 +1313,7 @@ class V12Store:
             return connection.execute(
                 "SELECT 1 FROM workflow_v12_notification_recipients r "
                 "JOIN workflow_v12_notification_commands c USING(command_id) "
-                "WHERE c.inquiry_id=? AND r.outcome != 'SENT' LIMIT 1",
+                "WHERE c.inquiry_id=? AND r.outcome NOT IN ('SENT','SUPPRESSED') LIMIT 1",
                 (inquiry_id,),
             ).fetchone() is None
 
@@ -1309,7 +1450,7 @@ def _create_v12_schema(connection: sqlite3.Connection) -> None:
             command_id TEXT PRIMARY KEY,
             inquiry_id TEXT NOT NULL REFERENCES workflow_items(inquiry_id) ON DELETE RESTRICT,
             kind TEXT NOT NULL, subject TEXT NOT NULL, text_body TEXT NOT NULL,
-            html_body TEXT, created_at TEXT NOT NULL, payload_version INTEGER NOT NULL)""",
+            html_body TEXT, created_at TEXT NOT NULL, payload_version INTEGER NOT NULL, review_json TEXT, suppression_reason TEXT)""",
         """CREATE TABLE workflow_v12_notification_recipients (
             command_id TEXT NOT NULL REFERENCES workflow_v12_notification_commands(command_id) ON DELETE RESTRICT,
             recipient_id TEXT NOT NULL, address TEXT NOT NULL, outcome TEXT NOT NULL,
@@ -1326,6 +1467,31 @@ def _create_v12_schema(connection: sqlite3.Connection) -> None:
     ]
     for statement in ddl:
         connection.execute(statement)
+
+
+def _legacy_notice_protected(connection, review):
+    try:
+        proof = json.loads(review) if review else {}
+    except (TypeError, ValueError):
+        return True
+    if not isinstance(proof, dict):
+        return True
+    aliases = proof.get("legacy_commands", ())
+    if not aliases:
+        return False
+    if not isinstance(aliases, (list, tuple)) or len(aliases) > 8 or any(not isinstance(x, str) for x in aliases):
+        return True  # malformed alias evidence never permits sending
+    placeholders = ",".join("?" for _ in aliases)
+    return connection.execute("SELECT 1 FROM workflow_v12_notification_recipients WHERE command_id IN ("
+        + placeholders + ") AND outcome IN ('SENT','UNKNOWN','SENDING','OPERATIONAL_SENDING') LIMIT 1", tuple(aliases)).fetchone() is not None
+
+
+def _migrate_notification_review(connection):
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(workflow_v12_notification_commands)")}
+    for column in ("review_json", "suppression_reason"):
+        if column not in columns:
+            connection.execute(f"ALTER TABLE workflow_v12_notification_commands ADD COLUMN {column} TEXT")
+    connection.commit()
 
 
 def _verify_v1_baseline(connection: sqlite3.Connection) -> None:

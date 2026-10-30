@@ -1,3 +1,5 @@
+from tests.inso.test_v13_quotation_read import NOW
+
 """Synthetic combined acceptance; no live I/O, credentials or business writes."""
 
 import sqlite3
@@ -30,7 +32,7 @@ from src.workflow.v13_quotation import (
     V13QuotationResult,
 )
 from tests.workflow.test_rfq003_resilience import rows
-from tests.workflow.test_v12_flow import NOW, _make_flow
+from tests.workflow.test_v12_flow import _make_flow
 from tests.workflow.test_v13_quotation import WS, Operations, Quotes, Sheets, source
 
 
@@ -100,6 +102,9 @@ def fixture(tmp_path, responses, *, intake_at=None):
     migrate_v12(db, tmp_path / "backups", quiesce=__import__("contextlib").nullcontext)
     holds = V13HoldStore(db)
     holds.migrate()
+    with sqlite3.connect(db) as connection:
+        from tests.inso.test_v13_quotation_read import NOW as source_day
+        connection.execute("UPDATE workflow_items SET created_at=?", (source_day.isoformat(),))
     ledger = V12Store(db)
     sheets.rows = [source(2)]
     quotes = Quotes(responses)
@@ -122,7 +127,11 @@ def fixture(tmp_path, responses, *, intake_at=None):
             holds=holds,
             cycle=cycle,
             updater_factory=lambda: SimpleNamespace(update_one=update),
-            notify=lambda r, k, e: notify_quotation(ledger, r, k, e, at=NOW),
+            notify=lambda r, k, e: notify_quotation(ledger, r, k, e, at=NOW,
+                evidence=__import__("tests.workflow.test_rfq016_regressions", fromlist=["proof"]).proof(
+                    now=NOW, category="business_confirmed" if r.row_error_reason.value == "SOURCE_STATUS_NOT_UPDATED" else "unknown_write",
+                    reason_code=r.row_error_reason.value,
+                    inquiry_id=r.inquiry_id, incident_key=f"quotation:{k}:{e}", original_event=f"{k}:{e}")),
             observe=lambda r, k: observed.append((r, k)),
         )
 
@@ -151,7 +160,8 @@ def test_explicit_failure_hold_restart_skip_mail_and_owner_completion(tmp_path, 
         tmp_path, [(quote(),)]
     )
     fail = lambda r: replace(
-        r, outcome=QuotationOutcome.ROW_FAILED, row_error_reason=reason
+        r, outcome=QuotationOutcome.ROW_FAILED, row_error_reason=reason,
+        effect_uncertain=reason is RowErrorReason.UPDATE_RESULT_UNCONFIRMED
     )
     make(fail).run(WS)
     V13HoldStore(
@@ -164,15 +174,15 @@ def test_explicit_failure_hold_restart_skip_mail_and_owner_completion(tmp_path, 
             c.execute(
                 "SELECT count(*) FROM workflow_v12_notification_commands"
             ).fetchone()[0]
-            == 1
+            == int(reason in {RowErrorReason.UPDATE_RESULT_UNCONFIRMED, RowErrorReason.SOURCE_STATUS_NOT_UPDATED})
         )
         assert c.execute("PRAGMA foreign_key_check").fetchall() == []
     sheets.rows = [source(2, "采购已报价")]
     make().run(WS)
-    assert (
-        holds.active() == ()
-        and observed[-1][0].outcome is QuotationOutcome.UPDATED_ALREADY_EXISTS
-    )
+    if reason is RowErrorReason.UPDATE_RESULT_UNCONFIRMED:
+        assert len(holds.active()) == 1  # Human status change is not external-write proof.
+    else:
+        assert holds.active() == () and observed[-1][0].outcome is QuotationOutcome.UPDATED_ALREADY_EXISTS
     assert len(quotes.calls) == 1
     migrate_v12(
         db, tmp_path / "backups", quiesce=__import__("contextlib").nullcontext
@@ -207,19 +217,9 @@ def test_unresolved_no_fake_inquiry_and_notification_pending(tmp_path):
     )
     V12NotificationWorker(ledger, transport).run_due(now=NOW)
     with sqlite3.connect(db) as c:
-        assert (
-            c.execute(
-                "SELECT inquiry_id FROM workflow_v12_notification_commands"
-            ).fetchone()[0]
-            is None
-        )
-        assert (
-            c.execute(
-                "SELECT outcome FROM workflow_v12_notification_recipients"
-            ).fetchone()[0]
-            == "OPERATIONAL_RETRYABLE_FAILURE"
-        )
+        assert c.execute("SELECT count(*) FROM workflow_v12_notification_commands").fetchone()[0] == 0
         assert c.execute("PRAGMA foreign_key_check").fetchall() == []
+    assert transport.calls == []  # No original order => no verified external write.
 
 
 def test_reason_change_new_notification_episode(tmp_path):
@@ -248,7 +248,7 @@ def test_reason_change_new_notification_episode(tmp_path):
             c.execute(
                 "SELECT count(*) FROM workflow_v12_notification_commands"
             ).fetchone()[0]
-            == 2
+            == 0
         )
 
 
@@ -418,7 +418,8 @@ def test_upgrade_preserves_existing_v12_notification_recipients_and_events(tmp_p
         assert c.execute("PRAGMA foreign_key_check").fetchall() == []
         assert c.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     commands = ledger.claim_due_notifications(now=NOW)
-    assert len(commands) == 1 and commands[0].inquiry_id == inquiry
+    assert commands == ()
+    assert ledger.recipient_results("legacy-mail")[0].outcome.value == "SUPPRESSED"
 
 
 def test_restart_repairs_crash_between_hold_commit_and_notification_enqueue(tmp_path):
@@ -431,7 +432,7 @@ def test_restart_repairs_crash_between_hold_commit_and_notification_enqueue(tmp_
         lambda r: replace(
             r,
             outcome=QuotationOutcome.ROW_FAILED,
-            row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED,
+            row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED, effect_uncertain=True,
         )
     )
 
@@ -498,7 +499,7 @@ def test_hold_mutation_uses_original_position_only_as_human_status_anchor(tmp_pa
     db, store, sheets, holds, _ledger, quotes, make, observed = fixture(tmp_path, [(quote(),)])
     if not bound:
         sheets.rows = [source(9, model="")]
-    fail = lambda r: replace(r, outcome=QuotationOutcome.ROW_FAILED, row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED)
+    fail = lambda r: replace(r, outcome=QuotationOutcome.ROW_FAILED, row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED, effect_uncertain=True)
     make(fail).run(WS)
     before = len(quotes.calls)
     position = 2 if bound else 9
@@ -507,11 +508,11 @@ def test_hold_mutation_uses_original_position_only_as_human_status_anchor(tmp_pa
     make().run(WS)
     assert len(quotes.calls) == before
     assert len(store.all_items()) == 1
-    assert bool(holds.active()) == (status != "采购已报价")
-    if status == "采购已报价":
+    assert bool(holds.active()) == (bound or status != "采购已报价")
+    if status == "采购已报价" and not bound:
         assert observed[-1][0].outcome is QuotationOutcome.UPDATED_ALREADY_EXISTS
     with sqlite3.connect(db) as c:
-        assert c.execute("SELECT count(*) FROM workflow_v12_notification_commands").fetchone()[0] == 1
+        assert c.execute("SELECT count(*) FROM workflow_v12_notification_commands").fetchone()[0] == int(bound)
 
 
 def test_deleted_held_row_retains_hold_and_unrelated_bound_row_continues(tmp_path):
@@ -601,8 +602,10 @@ def test_model_difference_mail_reuses_durable_outbox_two_recipients_restart_and_
     with sqlite3.connect(db) as c:
         inquiry = c.execute("SELECT inquiry_id FROM workflow_items").fetchone()[0]
     result = replace(result, inquiry_id=inquiry, quotation=quote(model="MPN suffix"))
-    notify_quotation_model_difference(ledger, result, "MPN", at=NOW)
-    notify_quotation_model_difference(V12Store(db), replace(result, source_row_position=20), "MPN", at=NOW)
+    from tests.workflow.test_rfq016_regressions import proof
+    evidence = proof(now=NOW, category="business_confirmed", reason_code="MODEL_DIFFERENCE_CONFIRMED", inquiry_id=inquiry)
+    notify_quotation_model_difference(ledger, result, "MPN", at=NOW, evidence=evidence)
+    notify_quotation_model_difference(V12Store(db), replace(result, source_row_position=20), "MPN", at=NOW, evidence=evidence)
     with sqlite3.connect(db) as c:
         assert c.execute("SELECT count(*) FROM workflow_v12_notification_commands").fetchone()[0] == 1
         assert c.execute("SELECT address FROM workflow_v12_notification_recipients ORDER BY recipient_id").fetchall() == [("shawn@inso-hk.com",), ("linan229@qq.com",)]
@@ -612,13 +615,14 @@ def test_model_difference_mail_reuses_durable_outbox_two_recipients_restart_and_
         assert "报价更新尚未确认" in body
     transport = FakeNotificationTransport({"owner": (DeliveryOutcome.SENT,), "ops": (DeliveryOutcome.RETRYABLE_FAILURE, DeliveryOutcome.SENT)})
     V12NotificationWorker(ledger, transport).run_due(now=NOW)
-    notify_quotation_model_difference(V12Store(db), result, "MPN", at=NOW)
-    V12NotificationWorker(V12Store(db), transport).run_due(now=NOW + __import__('datetime').timedelta(minutes=30))
+    notify_quotation_model_difference(V12Store(db), result, "MPN", at=NOW, evidence=evidence)
+    V12NotificationWorker(V12Store(db), transport, review_current=lambda command, at: None).run_due(
+        now=NOW + __import__('datetime').timedelta(minutes=30))
     assert [recipient for _command, recipient in transport.calls].count("owner") == 1
     assert [recipient for _command, recipient in transport.calls].count("ops") == 2
     with sqlite3.connect(db) as c:
         assert c.execute("SELECT DISTINCT outcome FROM workflow_v12_notification_recipients").fetchall() == [("SENT",)]
         assert c.execute("PRAGMA foreign_key_check").fetchall() == []
-    notify_quotation_model_difference(ledger, replace(result, quotation=quote(model="MPN")), "MPN", at=NOW)
+    notify_quotation_model_difference(ledger, replace(result, quotation=quote(model="MPN")), "MPN", at=NOW, evidence=evidence)
     with sqlite3.connect(db) as c:
         assert c.execute("SELECT count(*) FROM workflow_v12_notification_commands").fetchone()[0] == 1

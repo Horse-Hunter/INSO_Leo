@@ -234,6 +234,9 @@ class V12OrderStateDTO:
     active_alerts: tuple[OrderAlertDTO, ...] = ()
     event_history: tuple[WorkflowEventDTO, ...] = ()
     waiting_label: str | None = None
+    source_status: str | None = None
+    source_verified_at: datetime | None = None
+    source_fresh: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.business_label, V12BusinessLabel):

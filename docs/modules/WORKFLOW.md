@@ -239,6 +239,8 @@ See tasks/2026-10-18-quotation-price-refresh.md for evidence and live UNKNOWNs.
 
 ## Customer-quoted automatic refresh age (2026-10-28; source-only)
 
+Historical policy, superseded by RFQ-016 below.
+
 `WorkflowStateStore.inquiry_intake_at(inquiry_id)` returns the existing immutable
 created_at only for that exact ID (timezone-aware, or None). No schema/migration.
 The audited event set has no customer-send timestamp. `quotation_age` therefore
@@ -263,3 +265,14 @@ must retain previous business behavior. GUI Order.received_at is display only.
 Idle startup read_startup_interruptions may collect the same dates through an
 optional intake_times map in its existing query, without changing returned
 interruption DTOs, authorization, quarantine or making writes.
+
+
+## RFQ-016 source-only implementation (2026-10-30)
+
+The common automatic_admission contract owns Shanghai calendar7d and previous-calendar-month gates, exact source binding, trustworthy RFQ date and explicit LOCAL_INTAKE_APPROXIMATION fallback. Missing/conflicting/invalid/future dates exclude automatic work locally; brand writes, existing queues/retry/continuations, quotation effects, TP claims/recovery and reminders use the same policy. Owner single-order scope is bounded to that one original invocation and does not revive automatic retries or unknown effects.
+
+Existing outbox adds review_json/suppression_reason through the existing quiesced migration with verified backup. SUPPRESSED is a known non-send outcome, not SENT/UNKNOWN or a transport failure. Generation and dispatch both review evidence; original SMTP transport is reused, direct operational SMTP bypass is closed. Stable incident keys use fixed module/reason/original event, bounded cycle evidence and actual successful recovery; original SENT/UNKNOWN delivery is immutable, including exact legacy command aliases. No new queue/table/timer/client.
+
+Native quotation effect uncertainty is distinct from pre-click failure. Hold JSON stores only a bounded effect proof marker in its previously discarded quotation slot, retaining legacy-reader compatibility; never raw prices. Sheet status alone and manual rerun cannot settle UNKNOWN. Source observations update GUI DTO current-status/freshness alongside immutable procurement history and active protections, without additional source reads or writes.
+
+Source tests are not deployment evidence. RFQ-016 remains NOT_DEPLOYED until separately authorized release and business verification.

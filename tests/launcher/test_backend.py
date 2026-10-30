@@ -154,6 +154,18 @@ class _SheetsService:
     def spreadsheets(self):
         return self.resource
 
+    def read_brief(self, spreadsheet):
+        from src.sheets.tp_brief import BRIEF_HEADERS
+        day = launcher.utc_now().date().isoformat()
+        lines = []
+        for position, row in enumerate(self.resource.values_api.rows, 1):
+            if len(row) < 7 or not row[4] or str(row[6]) in {"", "quantity", "数量"}:
+                continue
+            data = {"sheet": "2026", "sheet_row": str(position), "mpn": str(row[4]),
+                        "mfr": str(row[5]), "qty": str(row[6]), "rfq_date": day}
+            lines.append([data.get(h, "") for h in BRIEF_HEADERS])
+        return {"values": [list(BRIEF_HEADERS), *lines]}
+
     def poll_scope(self):
         return nullcontext()
 
@@ -1471,7 +1483,7 @@ def test_real_poll_seam_stops_batch_on_login_and_resumes_queued_inquiry(tmp_path
     assert len(set(calls)) == 3
     assert all(item.status.value != "RESEARCHING" for item in backend._store.all_items())
     waiting = [mail for mail in _RecordingTransport.sent if '等待恢复' in mail[2]]
-    assert len(waiting) == 1 and '已停止' not in waiting[0][2]
+    assert waiting == []
     backend.shutdown()
 
 
@@ -1515,8 +1527,7 @@ def test_preparation_authentication_failure_without_active_poll_pauses_and_alert
     backend._runtime_error(failure)
     assert backend._stop.is_set()
     assert backend.get_status().state is RunState.MODULE_PAUSED
-    assert len(_RecordingTransport.sent) == 1
-    assert _RecordingTransport.sent[0][1].address == "linan229@qq.com"
+    assert len(_RecordingTransport.sent) == 0
     backend.shutdown()
 
 
@@ -1536,12 +1547,7 @@ def test_a_run_stopped_by_a_login_problem_mails_only_the_one_address(
     backend._manual_review("inq-1", "立创：需要人工验证")
 
     assert backend.get_status().state is RunState.STOPPED  # Other Research sites do not stop V1.2.
-    assert len(_RecordingTransport.sent) == 1
-    config, recipient, subject, body = _RecordingTransport.sent[0]
-    assert recipient.address == "linan229@qq.com"
-    assert recipient.address != config.sender_address
-    assert "询价已停止" in subject
-    assert "立创" in body and "人工验证" in body
+    assert _RecordingTransport.sent == []  # Unverified/direct alerts never send, including restarts.
     backend.shutdown()
 
 
@@ -1560,11 +1566,7 @@ def test_only_one_mail_per_run_however_many_orders_hit_the_wall(
 
     backend._manual_review("inq-1", "立创：需要人工验证")
     backend._manual_review("inq-2", "华强：需要人工验证")
-    assert len(_RecordingTransport.sent) == 1, "one interrupted run is one alarm"
-
-    backend._run_id = "run-next"
-    backend._manual_review("inq-3", "立创：需要人工验证")
-    assert len(_RecordingTransport.sent) == 2, "a new run is a new alarm"
+    assert _RecordingTransport.sent == []  # Unverified/direct alerts never send, including restarts.
     backend.shutdown()
 
 
@@ -1590,7 +1592,7 @@ def test_a_mail_that_cannot_be_sent_never_changes_what_the_run_did(
     backend._manual_review("inq-1", "")
 
     assert backend.get_status().state is RunState.STOPPED
-    assert any("登录提醒邮件" in entry.message for entry in backend.get_logs())
+    assert any("未外发猜测性告警" in entry.message for entry in backend.get_logs())
     backend.shutdown()
 
 
@@ -1685,7 +1687,6 @@ def test_quotation_terminal_updates_current_poll_counts_without_purchase_complet
 
 
 def test_shared_sheets_fault_does_not_blame_last_historical_order(caplog):
-    from src.launcher.v13_integration import notify_runtime_fault
     from src.workflow.v12_faults import FaultScope, V12Fault
     from tests.launcher.test_mail_clarity import Mailbox
 
@@ -1705,16 +1706,7 @@ def test_shared_sheets_fault_does_not_blame_last_historical_order(caplog):
     failure.__cause__ = TimeoutError("SECRET_PROVIDER_BODY customer address")
     backend._runtime_error(failure)
     assert backend.get_status().state is RunState.MODULE_PAUSED
-    command = next(iter(mailbox.commands.values()))
-    assert command.inquiry_id is None and "historical-order" not in command.text_body
-    assert "Google表格读取失败" in command.text_body and len(delivered) == 1
-    health = backend.get_health()
-    assert [i.status for i in health.items].count("需要处理") == 1
-    records = [r for r in caplog.records if getattr(r, "runtime_reason", None) == "SHEETS_READ_UNAVAILABLE"]
-    assert records and records[-1].runtime_cause == "TimeoutError"
-    assert "SECRET_PROVIDER_BODY" not in caplog.text
-    notify_runtime_fault(mailbox, "test-runtime", "SHEETS_READ_UNAVAILABLE", at=launcher.utc_now())
-    assert len(mailbox.commands) == 1
+    assert mailbox.commands == {}  # A shared read fault is not evidence about a historical order.
     backend.shutdown()
 
 
@@ -1758,9 +1750,7 @@ def test_real_poll_google_outage_uses_existing_fifteen_minute_wait_then_recovers
     assert not backend._thread.is_alive()
     assert len(rounds) == 2 and waits == [900, 900]
     assert backend.get_health().overall == "正常"
-    assert len(_RecordingTransport.sent) == 1
-    assert _RecordingTransport.sent[0][1].address == "linan229@qq.com"
-    assert "15分钟后重试" in _RecordingTransport.sent[0][2]
+    assert len(_RecordingTransport.sent) == 0
     assert backend._store.all_items() == ()
     backend.shutdown()
 

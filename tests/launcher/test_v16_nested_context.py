@@ -59,7 +59,7 @@ def test_real_nested_closure_restores_context_and_durable_guards(
     qdb, _, _, _, _, _, integrated, _ = quote_fixture(tmp_path / "quote", [()])
     quote_service = integrated()
     quote_service.observe = backend._observe_quotation
-    tp, _, _, transport, tpdb = tp_fixture(tmp_path / "tp")
+    tp, _, _, transport, tpdb = tp_fixture(tmp_path / "tp", day=NOW.date())
     backend._tp = tp
     entered, completed, outer_identity = [], [], []
     pending = V12Fault(FaultScope.V12_PAUSE, "OUTER_PENDING_PAUSE")

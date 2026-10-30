@@ -93,6 +93,8 @@ class TpStore:
         for pending in ("UNKNOWN", "SENDING", "PENDING", "RETRYABLE_FAILURE"):
             if pending in outcomes:
                 return pending
+        if "SUPPRESSED" in outcomes:
+            return "SUPPRESSED"
         if outcomes <= {"SENT", "PERMANENT_FAILURE"}:
             return "PERMANENT_FAILURE" if "PERMANENT_FAILURE" in outcomes else "SENT"
         return "UNKNOWN"
@@ -100,9 +102,12 @@ class TpStore:
     def manual_allowed(self, key):
         row = self.get(key)
         return row["state"] in {"MAIL_QUEUED", "FAILED"} and self.delivery(key) in {
-            None, "SENT", "PERMANENT_FAILURE"}
+            None, "SENT", "PERMANENT_FAILURE", "SUPPRESSED"}
 
     def claim(self, key, order, now, *, manual=False):
+        from .automatic_admission import age_reason
+        if not manual and age_reason(order.rfq_date, now, module="tp"):
+            return None
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT * FROM workflow_requirements WHERE task_id=?", (key,)).fetchone()
@@ -138,6 +143,9 @@ class TpStore:
             rows = db.execute("SELECT * FROM workflow_requirements WHERE state='RESEARCHING'"
                               + (" AND task_id=?" if key else ""), (key,) if key else ()).fetchall()
             for row in rows:
+                from .automatic_admission import age_reason
+                if age_reason(load_order(row["order_json"]).rfq_date, now, module="tp"):
+                    continue
                 command = db.execute("SELECT 1 FROM workflow_v12_notification_commands WHERE command_id=?",
                                      (row["command_id"],)).fetchone()
                 db.execute("UPDATE workflow_requirements SET state=?,updated_at=? WHERE task_id=?",
@@ -245,9 +253,10 @@ def tp_mail(order, result, command_id, now):
 class TpCycle:
     """Runs exclusively on the existing poll/manual thread; DB claim is final guard."""
     def __init__(self, *, store, brief, reader, research, outbox, worker,
-                 prepare=lambda _key: None, stop_requested=lambda: False):
+                 prepare=lambda _key: None, stop_requested=lambda: False, clock=None):
         self.store, self.brief, self.reader = store, brief, reader
         self.research, self.outbox, self.worker = research, outbox, worker
+        self.clock = clock
         self.prepare, self.stop_requested = prepare, stop_requested
         self.issues = {}
         self._continuation_sources = {}
@@ -258,7 +267,11 @@ class TpCycle:
             raise ValueError("TP_SOURCE_UNMATCHED")
         return task_key(spreadsheet, line.get("sheet"), int(pointer))
 
-    def read_orders(self, spreadsheet, *, manual_key=None):
+    def read_orders(self, spreadsheet, *, manual_key=None, now=None):
+        from datetime import UTC, datetime
+
+        from .automatic_admission import age_reason
+        now = self.clock() if self.clock else now or datetime.now(UTC)
         self._continuation_sources = {}
         read_brief = self.brief.read if manual_key is not None else getattr(self.brief, "read_discovery", self.brief.read)
         lines = read_brief(spreadsheet)
@@ -293,6 +306,9 @@ class TpCycle:
                     snapshots[source] = tuple(read(source))
                 order = bind_tp_order(line, spreadsheet, snapshots[source])
                 target = next(row for row in snapshots[source] if row.row_position == order.row)
+                if manual_key is None and age_reason(order.rfq_date, now, module="tp"):
+                    self.issues[key] = "TP_AGE_EXCLUDED"
+                    continue
                 self._continuation_sources[key] = order, identify_worksheet_row(source, target)
                 orders.append(order)
             except ValueError as exc:
@@ -313,7 +329,7 @@ class TpCycle:
         """Same positive TP-only isolation at asynchronous cycle discovery."""
         self.issues = {}
         try:
-            return self.read_orders(spreadsheet)
+            return self.read_orders(spreadsheet, now=now)
         except ValueError as error:
             reason = tp_local_failure_reason(error)
             if not reason:
@@ -347,8 +363,9 @@ class TpCycle:
 
 
     def complete_order(self, order, key, command, result, *, now, expected_source=None,
-                       before_enqueue=lambda: None):
+                       before_enqueue=lambda: None, manual=False):
         """Original owner only. Same source/command/Stop gates before enqueue."""
+        now = self.clock() if self.clock else now
         if key != task_key(order.spreadsheet, order.sheet, order.row):
             raise TpLocalError("TP_IDENTITY_CHANGED")
         state = self.store.get(key)
@@ -358,11 +375,19 @@ class TpCycle:
         if self.stop_requested():
             self.store.finish(key, "FAILED", now, "TP_STOPPED")
             return
+        from .automatic_admission import age_reason
+        if not manual and age_reason(order.rfq_date, now, module="tp"):
+            self.issues[key] = "TP_AGE_EXCLUDED"
+            self.store.finish(key, "EXCLUDED", now, "TP_AGE_EXCLUDED")
+            return
         current = self._revalidate(order)
         if expected_source is not None and current != expected_source:
             raise TpLocalError("TP_SOURCE_CHANGED")
         try:
             mail = tp_mail(order, result, command, now)
+            if manual:
+                from dataclasses import replace
+                mail = replace(mail, review=json.dumps({"manual": True, "owner_request": command}))
         except (ValueError, TypeError, AttributeError, KeyError, ArithmeticError, RuntimeError) as exc:
             if type(exc).__module__ not in {"builtins", "decimal"}:
                 raise
@@ -382,11 +407,15 @@ class TpCycle:
         owner/market ports and returns to this same durable business finish.
         """
         from .market_messages import MarketModule, MarketTaskIdentity
+        now = self.clock() if self.clock else now
         key = task_key(order.spreadsheet, order.sheet, order.row)
         if (type(identity) is not MarketTaskIdentity or identity.module is not MarketModule.TP
                 or identity.domain_task_id != key):
             raise ValueError("TP_CONTINUATION_IDENTITY_INVALID")
         if self.stop_requested():
+            return None
+        from .automatic_admission import age_reason
+        if not manual and age_reason(order.rfq_date, now, module="tp"):
             return None
         if self._revalidate(order) != identity.source_record:
             raise TpLocalError("TP_SOURCE_CHANGED")
@@ -394,6 +423,7 @@ class TpCycle:
         if lease is None:
             return None
         work = TpOrderContinuation(self, runtime, lease, order, now)
+        work.manual = manual
         try:
             self.store.register(order, now)
             command = self.store.claim(key, order, now, manual=manual)
@@ -425,7 +455,7 @@ class TpCycle:
         self.store.record_issues(self.issues, now)
 
     def _run(self, spreadsheet, *, now, manual_key=None):
-        orders = self.read_orders(spreadsheet, manual_key=manual_key)
+        orders = self.read_orders(spreadsheet, manual_key=manual_key, now=now)
         found = False
         for order in orders:
             if self.stop_requested():
@@ -433,7 +463,13 @@ class TpCycle:
             key = task_key(order.spreadsheet, order.sheet, order.row)
             if manual_key is not None and manual_key != key:
                 continue
-            self.store.register(order, now)
+            from .automatic_admission import age_reason
+            current_now = self.clock() if self.clock else now
+            if manual_key is None and age_reason(order.rfq_date, current_now, module="tp"):
+                self.issues[key] = "TP_AGE_EXCLUDED"
+                continue
+            self._revalidate(order)
+            self.store.register(order, current_now)
             found = True
             try:
                 command = self.store.claim(key, order, now, manual=manual_key is not None)
@@ -459,7 +495,7 @@ class TpCycle:
                             or exc.__cause__ is not None or exc.__context__ is not None):
                         raise
                     raise _TpDataError("TP_RESEARCH_DATA_INVALID") from None
-                self.complete_order(order, key, command, result, now=now)
+                self.complete_order(order, key, command, result, now=now, manual=manual_key is not None)
             except Exception as exc:
                 # An enqueue may have committed before a crash/error. Inspect its
                 # immutable key before making read-only research eligible again.
@@ -513,7 +549,8 @@ class TpOrderContinuation:
         try:
             self._cycle.complete_order(self.order, self.lease.identity.domain_task_id,
                 self.command, result, now=self.now, expected_source=self.lease.identity.source_record,
-                before_enqueue=lambda: self._runtime.require_business_continuation(self.lease))
+                before_enqueue=lambda: self._runtime.require_business_continuation(self.lease),
+                manual=getattr(self, "manual", False))
         except Exception:
             # No blind retry after enqueue: canonical command lookup is the
             # authority. If reconciliation itself fails, retain the source.

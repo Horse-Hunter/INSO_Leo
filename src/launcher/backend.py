@@ -80,7 +80,7 @@ from src.workflow.inso_query import run_inso_query
 from src.workflow.purchase_follow_up import PurchaseFollowUp
 from src.workflow.service import OrderResourceOwnershipError
 from src.workflow.v12_contracts import (
-    DeliveryOutcome,
+    DeliveryOutcome,  # noqa: F401 - compatibility injection seam
     EventType,
     NotificationCommand,
     NotificationKind,
@@ -91,7 +91,10 @@ from src.workflow.v12_contracts import (
 )
 from src.workflow.v12_duplicate import InsoDuplicateHistoryChecker
 from src.workflow.v12_faults import FaultScope, V12Fault
-from src.workflow.v12_smtp_transport import QQSMTPConfig, QQSMTPTransport
+from src.workflow.v12_smtp_transport import (  # noqa: F401 - legacy injection seam
+    QQSMTPConfig,
+    QQSMTPTransport,
+)
 from src.workflow.v12_store import (
     V12_SCHEMA_VERSION,
     V12DatabaseError,
@@ -567,6 +570,9 @@ class ProductionBackend(GuiBackend):
         self._module_failures = {}
         self._module_pause_requested = None
         self._module_contexts = []
+        from .source_status import SourceStatusProjection
+        self._source_projection = SourceStatusProjection()
+        self._quotation_unknown_ids = frozenset()
         self._source_overrides = {}
         self._v13_states = {}
         self._v13_unbound = {}
@@ -777,7 +783,8 @@ class ProductionBackend(GuiBackend):
                 on_read_success=lambda: self._site_recovered("Google Sheets"),
                 read_guard=self._page_admission.require_open,
                 stop_requested=self._immediate_stop_requested)
-            reader = GoogleSheetsRowReader(web_service, retry_wait=self._stop.wait)
+            reader = GoogleSheetsRowReader(web_service, retry_wait=self._stop.wait,
+                                          on_observation=self._observe_source_rows)
             worksheets = tuple(
                 WorksheetIdentity(cfg["spreadsheet_id"], title)
                 for title in cfg["worksheet_titles"]
@@ -809,6 +816,9 @@ class ProductionBackend(GuiBackend):
             write_service = web_service
 
             self._manual_reader = reader
+            from src.sheets.tp_brief import BriefReader
+            admission_brief = BriefReader(web_service, retry_wait=self._stop.wait)
+            self._mail_brief = admission_brief
 
             def get_write_service():
                 return write_service
@@ -824,6 +834,9 @@ class ProductionBackend(GuiBackend):
             self._purchase_completion = PurchaseCompletionActions(
                 workflow_store=self._store, v12_store=self._v12_store,
                 reader=reader, writer_factory=get_status_writer, follow_up_store=follow_up_store,
+                mail_evidence=self._fault_evidence,
+                automatic_admission=lambda iid, at: getattr(self, "_owner_single_order", None) == iid
+                    or self._current_mail_source(iid, at, module="inquiry") is not None,
             )
             # RFQ-003: historical unfinished rows are quarantined below before
             # workers start. Never release an old claim for automatic replay.
@@ -902,6 +915,8 @@ class ProductionBackend(GuiBackend):
                     inquiry_ids=self._inquiry_scope,
                     row_wait=self._wait_between_rows,
                     brand_updater=AutomaticBrandUpdater(),
+                    brief_snapshot=lambda ws: self._inquiry_brief_snapshot(admission_brief, ws),
+                    clock=utc_now, notification_review=self._review_current_mail,
                 )
                 self._v12_composition.coordinator.initialize_run_state(now=utc_now())
             else:
@@ -958,13 +973,14 @@ class ProductionBackend(GuiBackend):
                             notify_refresh_uncertain=lambda result, old, new: notify_refresh_uncertain(
                                 self._v12_store, result, old, new, at=utc_now()),
                             wait=self._stop.wait, stop_requested=self._immediate_stop_requested,
-                            notify_model_difference=lambda result, model: notify_quotation_model_difference(
-                                self._v12_store, result, model, at=utc_now()))
+                            notify_model_difference=lambda result, model: self._notify_model_difference(
+                                result, model, at=utc_now()))
                     integrated = V13IntegratedCycle(reader=active_reader, store=active_store,
                         holds=active_holds, cycle=cycle, updater_factory=updater,
                         follow_up=PurchaseFollowUp(reader=active_reader, workflow_store=active_store,
-                            v12_store=self._v12_store, clock=utc_now, episodes=follow_up_store).run,
-                        notify=lambda result,key,episode: notify_quotation(self._v12_store,
+                            v12_store=self._v12_store, clock=utc_now, episodes=follow_up_store,
+                            brief_snapshot=lambda ws: admission_brief.cached_lines(ws.spreadsheet)).run,
+                        notify=lambda result,key,episode: self._notify_quotation(
                             result,key,episode,at=utc_now()), observe=self._observe_quotation,
                         stop_requested=self._stop.is_set)
                     return integrated
@@ -1454,7 +1470,7 @@ class ProductionBackend(GuiBackend):
             if inquiry not in self._manual_inquiries:
                 self._record_fault_alert(inquiry,"FAULT",fault.reason)
         else:
-            notify_runtime_fault(self._v12_store,self._run_id or "run",fault.reason,at=utc_now())
+            self._notify_runtime_fault(self._run_id or "run",fault.reason,at=utc_now())
         self._append_log("WARNING", "采购模块暂停，报价模块继续；请检查采购网站或订单。")
         self._notify()
 
@@ -1512,6 +1528,8 @@ class ProductionBackend(GuiBackend):
 
     def _observe_quotation(self, result, key):
         self._invalidate_order_view(key)
+        if result.row_error_reason is not None and result.row_error_reason.value == "UPDATE_RESULT_UNCONFIRMED":
+            self._quotation_unknown_ids = self._quotation_unknown_ids | {result.inquiry_id or key}
         dto = quotation_gui(result,key)
         with self._lock:
             inquiry = result.inquiry_id or key
@@ -1532,7 +1550,7 @@ class ProductionBackend(GuiBackend):
             "business_module":"V1.3","inquiry_id":result.inquiry_id,"stage":"quotation",
             "reason":result.row_error_reason.value if result.row_error_reason else result.outcome.value})
         if result.row_error_reason is not None and result.row_error_reason.value == "SOURCE_STATUS_NOT_UPDATED":
-            self._append_log("WARNING", "报价脚本已成功，30秒内表格状态未更新；已安排229异常提醒，请人工核对。")
+            self._append_log("WARNING", "报价脚本已成功，30秒内表格状态未更新；请查看订单详情，原保护继续保留。")
         self._refresh()
         self._notify()
 
@@ -1553,7 +1571,13 @@ class ProductionBackend(GuiBackend):
                 if action == "purchase":
                     return (self._state is RunState.RUNNING and self._v12_store is not None
                         and self._v12_store.manual_purchase_retry_allowed(inquiry_id))
-                return action == "edit" or (action == "quotation" and self._manual_quote is not None)
+                if action == "quotation" and self._manual_quote is not None:
+                    try:
+                        ManualRetryHolds(self._manual_quote[1], inquiry_id, self._store.get_by_inquiry_id(inquiry_id).record_identity)
+                    except ValueError:
+                        return False
+                    return True
+                return action == "edit"
             except (KeyError, sqlite3.Error, V12DatabaseError):
                 return False
 
@@ -1680,6 +1704,14 @@ class ProductionBackend(GuiBackend):
                 session=replace(self._view_snapshot.session, next_poll_at=planned))
 
     def _execute_order_action(self, request):
+        previous = getattr(self, "_owner_single_order", None)
+        self._owner_single_order = request[1]
+        try:
+            return self._execute_order_action_impl(request)
+        finally:
+            self._owner_single_order = previous
+
+    def _execute_order_action_impl(self, request):
         request_id, inquiry, action, field, value = request
         success, message = False, "操作未执行。"
         try:
@@ -2314,6 +2346,8 @@ class ProductionBackend(GuiBackend):
         return SaveReconciliationTarget(item.mpn, brand, item.quantity)
 
     def _site_recovered(self, site):
+        if self._v12_store is not None and callable(getattr(self._v12_store, "resolve_incidents", None)):
+            self._v12_store.resolve_incidents(site, at=utc_now())
         with self._lock:
             self._site_outages.pop(site, None)
             self._site_manual_wait.discard(site)
@@ -2377,7 +2411,7 @@ class ProductionBackend(GuiBackend):
         log.warning("Website recovery deferred", extra={
             "runtime_reason": reason, "runtime_cause": type(exc).__name__})
         if notify and self._v13_ledger_ready:
-            notify_runtime_fault(self._v12_store, f"{self._run_id or 'run'}:{site}:{since}", reason, at=utc_now())
+            self._notify_runtime_fault( f"{self._run_id or 'run'}:{site}:{since}", reason, at=utc_now())
         elif notify:
             self._alert_owner_of_login(stop_reason=f"{site}等待恢复；程序未停止")
         self._notify()
@@ -2404,7 +2438,7 @@ class ProductionBackend(GuiBackend):
             "runtime_cause": type(cause.__cause__).__name__,
         })
         if self._v13_ledger_ready:
-            notify_runtime_fault(self._v12_store, self._cycle_id or self._run_id or "run",
+            self._notify_runtime_fault( self._cycle_id or self._run_id or "run",
                 "GOOGLE_READ_RETRY_EXHAUSTED", at=utc_now())
         else:
             self._alert_owner_of_login(stop_reason="Google表格等待恢复；程序未停止")
@@ -2532,7 +2566,7 @@ class ProductionBackend(GuiBackend):
             self._record_fault_alert(fault_inquiry, "FAULT", reason)
         if (shared_fault or fault_inquiry is None) and self._v13_ledger_ready:
             try:
-                notify_runtime_fault(self._v12_store,self._run_id or "run",reason,at=utc_now())
+                self._notify_runtime_fault(self._run_id or "run",reason,at=utc_now())
                 self._v12_composition.coordinator.run_notifications(now=utc_now())
             except (sqlite3.Error,V12DatabaseError):
                 self._alert_owner_of_login(stop_reason=reason)
@@ -2585,57 +2619,16 @@ class ProductionBackend(GuiBackend):
                    if not self._stop.is_set() else f"{site}验证待处理；本次运行已按用户要求停止。")
         self._append_log("WARNING", message)
         if notify:
+            if site == "INSO" and site in self._site_manual_wait:
+                self._notify_runtime_fault(self._cycle_id or "manual-login", "INSO_AUTHENTICATION_REQUIRED", at=utc_now())
             if self._purchase_completion is not None:
                 self._record_fault_alert(inquiry_id, "SESSION", reason)
             else:
                 self._alert_owner_of_login(stop_reason=f"{site}等待恢复；程序未停止", inquiry_id=inquiry_id)
 
     def _alert_owner_of_login(self, *, stop_reason: str, inquiry_id: str | None = None) -> None:
-        """Mail the one address that repairs sessions, at most once per run.
-
-        Owner rule (2026-10-01): only ``linan229@qq.com``. The message never
-        carries page text or a credential -- the site verdicts the run already
-        rendered are the whole payload, plus what to do about them. Delivery is
-        best effort: a mail that cannot be sent must never change what the run
-        did or leave the operator waiting.
-        """
-
-        with self._lock:
-            run_id = self._run_id or ""
-            if self._login_alert_run_id == run_id:
-                return
-            self._login_alert_run_id = run_id
-        try:
-            transport = QQSMTPTransport(
-                config=QQSMTPConfig(sender_address=_LOGIN_ALERT_SENDER)
-            )
-            waiting = bool(self._site_outages) and self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}
-            body = ("网站必要业务操作暂未成功，程序仍在运行，15分钟后检查恢复。\n"
-                    "如需人工验证，请在原Chrome完成；不会自动重复提交采购。"
-                    if waiting else _login_alert_body(stop_reason))
-            if inquiry_id is not None and self._store is not None:
-                item = self._store.get_by_inquiry_id(inquiry_id)
-                body += (f"\n型号：{item.mpn}\n"
-                         f"品牌：{item.resolved_brand or item.brand}\n数量：{item.quantity}\n"
-                         "请核对本单处理状态，勿直接重发采购单。")
-            result = transport.send_operator_alert(
-                recipient=NotificationRecipient("owner", _LOGIN_ALERT_RECIPIENT),
-                subject="【INSO】网站等待恢复" if waiting else "【INSO】询价已停止",
-                text_body=body,
-            )
-        except Exception as exc:  # noqa: BLE001 - fail closed at runtime boundary
-            log.warning("the login alert could not be delivered (%s)", type(exc).__name__)
-            self._append_log("ERROR", "登录提醒邮件发送失败；请检查邮件配置与网络")
-            return
-        if result.outcome is DeliveryOutcome.SENT:
-            self._append_log(
-                "WARNING", f"已发送登录提醒邮件至 {_LOGIN_ALERT_RECIPIENT}"
-            )
-        else:
-            self._append_log(
-                "ERROR",
-                "登录提醒邮件未能送达；请检查邮件配置与网络",
-            )
+        # No direct send_operator_alert bypass; unverified diagnostics stay local.
+        self._append_log("WARNING", "业务需要核实；请查看原程序提示。尚无可靠邮件证据，未外发猜测性告警。")
 
     def _refresh(self):
         if not self._store:
@@ -2841,16 +2834,227 @@ class ProductionBackend(GuiBackend):
             return tuple(replace(order, **self._source_overrides[order.inquiry_id])
                 if order.inquiry_id in self._source_overrides else order for order in self._history) + tp_display_orders(self._tp)
 
-    def get_v12_order_state(self, inquiry_id):
-        if inquiry_id in self._v13_states:
-            return self._v13_states[inquiry_id]
-        if self._v12_store is None:
-            preview = self._startup_interruptions.get(inquiry_id)
-            return preview[0] if preview else None
+    def _inquiry_brief_snapshot(self, brief, worksheet):
+        from src.sheets.google_reader import GoogleSheetsReadUnavailable
+        from src.sheets.tp_brief import TpLocalError
         try:
-            return read_v12_order_state(self._v12_store, inquiry_id)
+            return brief.read_discovery(worksheet.spreadsheet)
+        except (GoogleSheetsReadUnavailable, TpLocalError):
+            # Optional order-date evidence is unavailable. Only an already-bound
+            # immutable intake may supply an explicitly approximate fallback.
+            log.warning("Inquiry date source unavailable; exact existing intake fallback only")
+            return ()
+
+    def _current_mail_source(self, inquiry_id, now, *, module="quotation", manual=False, persistent=False):
+        from src.sheets.worksheet_schema import worksheet_schema
+        from src.workflow.automatic_admission import age_reason, source_date
+        if self._store is None or inquiry_id is None:
+            return None
+        try:
+            item = self._store.get_by_inquiry_id(inquiry_id)
         except KeyError:
             return None
+        observed = (self._source_projection.last_success if persistent else self._source_projection.rows).get(item.record_identity.worksheet)
+        if observed is None or (not persistent and not timedelta(0) <= now-observed[1] <= timedelta(minutes=15)):
+            return None
+        rows = observed[0]
+        schema = worksheet_schema(item.record_identity.worksheet.worksheet)
+        matches = [r for r in rows if r.row_position == item.record_identity.row_position
+                   and r.cells.get(schema.model_column) == item.mpn
+                   and r.cells.get(schema.quantity_column) == item.quantity
+                   and r.cells.get(schema.brand_column) == (item.resolved_brand or item.brand)]
+        if len(matches) != 1:
+            return None
+        row = matches[0]
+        if row.cells.get(schema.status_column) not in {"未发", "发给采购", "采购已报价", "已报价给客户"}:
+            return None
+        # Cached Brief was obtained through the original source owner only.
+        brief = getattr(self, "_mail_brief", None)
+        lines = brief.cached_lines(item.record_identity.worksheet.spreadsheet) if brief else ()
+        value, origin = source_date(item.record_identity, row, lines, lambda: item.created_at)
+        if not manual and age_reason(value, now, module=module):
+            return None
+        return item, row, observed[1], origin, value
+
+    def _fault_evidence(self, inquiry_id, reason, *, at, event, module="inquiry", manual=False):
+        manual = manual or getattr(self, "_owner_single_order", None) == inquiry_id
+        from src.workflow.automatic_admission import binding_key
+        business_module = module if module in {"inquiry", "quotation", "tp"} else "inquiry"
+        current = self._current_mail_source(inquiry_id, at, module=business_module, manual=manual)
+        if current is None:
+            return None
+        category = "business_confirmed" if reason in {"MODEL_DIFFERENCE_CONFIRMED", "SOURCE_STATUS_NOT_UPDATED"} else "unknown_write" if reason in {"UPDATE_RESULT_UNCONFIRMED", "SAVE_OUTCOME_UNKNOWN", "UNKNOWN_WRITE_OUTCOME"} else "manual_login"
+        if category == "manual_login" and reason not in {"INSO_AUTHENTICATION_REQUIRED", "MANUAL_VERIFICATION_REQUIRED", "CREDENTIAL_REJECTED", "SHEETS_AUTH_UNAVAILABLE"}:
+            return None
+        return {"incident_key": f"{module}:{inquiry_id}:{reason}:{event}", "category": category,
+                    "inquiry_id": inquiry_id, "module": module, "reason_code": reason, "active": True,
+                    "source_binding": binding_key(current[0].record_identity),
+                    "current_business": True, "needs_owner": True, "verified": True,
+                    "verified_at": at.isoformat(), "original_event": event, "manual": manual,
+                    "last_success": current[2].isoformat(), "date_source": current[3],
+                    "inquiry_day": str(current[4]), "business_module": business_module,
+                    "action": ("写入待人工核实，原订单被保护不会自动重做；请在原页面核对。" if category == "unknown_write"
+                            else "请在原Chrome完成已确认的登录或人工验证；不要重发采购。"),
+                    "uncertainty": "外部写入结果尚未确认" if category == "unknown_write" else "登录完成后的业务结果尚未核实"}
+
+    def _notify_runtime_fault(self, key, reason, *, at):
+        from src.sheets.worksheet_schema import worksheet_schema
+        from src.workflow.automatic_admission import age_reason, binding_key
+        inquiry = self._active_inso_inquiry
+        manual_login = reason == "INSO_AUTHENTICATION_REQUIRED" and "INSO" in self._site_manual_wait
+        sites = {"GOOGLE": "Google Sheets", "INSO": "INSO", "IC_NET": "IC.net", "FX": "汇率网站", "BROWSER": "Browser/CDP"}
+        site = next((value for code, value in sites.items() if reason.startswith(code+"_")), None)
+        if reason == "GOOGLE_READ_RETRY_EXHAUSTED":
+            site = "Google Sheets"
+        proof = None
+        if manual_login:
+            proof = self._fault_evidence(inquiry, reason, at=at, event="native-manual-login", module="INSO")
+        elif site and (reason.endswith(("WAITING_RECOVERY", "OUTAGE_THREE_HOURS")) or reason == "GOOGLE_READ_RETRY_EXHAUSTED"):
+            incident_key = f"program-blocked:{site}"
+            # Only a previously bound active task can establish affected business.
+            # Read failures are not evidence that Google as a whole is unavailable.
+            candidates = [i for i in self._store.all_items() if i.status.value in {"QUEUED", "RETRY_WAIT", "RESEARCHING"}] if self._store else []
+            for item in candidates:
+                current = self._current_mail_source(item.inquiry_id, at, module="inquiry", persistent=True)
+                if current is not None and current[1].cells.get(worksheet_schema(item.record_identity.worksheet.worksheet).status_column) == "未发":
+                    proof = {"incident_key": incident_key, "inquiry_id": item.inquiry_id,
+                        "category": "persistent_stop", "module": site, "business_module": "inquiry",
+                        "source_binding": binding_key(item.record_identity),
+                        "inquiry_day": str(current[4]), "reason_code": "PROGRAM_OPERATION_BLOCKED",
+                        "original_event": incident_key, "last_success": current[2].isoformat(),
+                        "current_business": True, "verified": True, "uncertainty": "当前来源状态未能重新读取；无法据此判断Google整站可用性",
+                        "action": "请检查原程序的读取/授权提示，并核对受保护订单；不要重发采购。"}
+                    break
+            if proof is None and self._v12_store is not None:
+                previous = self._v12_store.active_incident_evidence(incident_key)
+                if previous and self._store:
+                    try:
+                        item = self._store.get_by_inquiry_id(previous["inquiry_id"])
+                    except KeyError:
+                        item = None
+                    if item and previous.get("source_binding") == binding_key(item.record_identity) and item.status.value in {"QUEUED", "RETRY_WAIT", "RESEARCHING"} and not age_reason(previous.get("inquiry_day"), at, module="inquiry"):
+                        proof = previous
+            if proof is not None:
+                proof.update(active=True, verified_at=at.isoformat(), retries_exhausted=True,
+                             needs_owner=reason.endswith("OUTAGE_THREE_HOURS"))
+        notify_runtime_fault(self._v12_store, key, reason, at=at, evidence=proof,
+                             occurrence=self._cycle_id or key)
+
+    def _notify_model_difference(self, result, source_model, *, at):
+        proof = self._fault_evidence(result.inquiry_id, "MODEL_DIFFERENCE_CONFIRMED", at=at,
+                                     event="model-difference", module="quotation")
+        notify_quotation_model_difference(self._v12_store, result, source_model, at=at, evidence=proof)
+
+    def _notify_quotation(self, result, key, episode, *, at):
+        reason = result.row_error_reason.value if result.row_error_reason else None
+        proof = self._fault_evidence(result.inquiry_id, reason, at=at,
+                    event=f"{key}:{episode}", module="quotation") if reason in {
+                    "UPDATE_RESULT_UNCONFIRMED", "SOURCE_STATUS_NOT_UPDATED"} else None
+        if proof is not None:
+            proof["legacy_commands"] = [f"v13:{key}:{episode}:{reason}"]
+        notify_quotation(self._v12_store, result, key, episode, at=at, evidence=proof)
+
+    def _review_current_mail(self, command, now):
+        import json
+        allowed = {"linan229@qq.com", "shawn@inso-hk.com"}
+        if self._v12_adapters is not None:
+            allowed.update(r.address.strip().casefold() for r in self._v12_adapters.recipients)
+        if any(r.address.strip().casefold() not in allowed for r in command.recipients):
+            return "RECIPIENT_NOT_CONFIGURED"
+        if command.kind is NotificationKind.TP_RESEARCH:
+            from src.workflow.automatic_admission import age_reason
+            from src.workflow.tp_research import load_order
+            if self._tp is None:
+                return "CURRENT_REVIEW_PENDING"
+            matches = [r for r in self._tp.store.rows() if r["command_id"] == command.command_id]
+            if len(matches) != 1:
+                return "SOURCE_IDENTITY_UNVERIFIED"
+            order = load_order(matches[0]["order_json"])
+            proof = json.loads(command.review) if command.review else {}
+            manual = proof.get("manual") is True and proof.get("owner_request") == command.command_id
+            if not manual and age_reason(order.rfq_date, now, module="tp"):
+                return "ORDER_AGE_EXCLUDED"
+            from src.sheets import WorksheetIdentity
+            from src.sheets.tp_brief import bind_tp_order
+            source = WorksheetIdentity(order.spreadsheet, order.sheet)
+            snapshot = self._source_projection.rows.get(source)
+            if snapshot is None or not timedelta(0) <= now-snapshot[1] <= timedelta(minutes=15):
+                return "CURRENT_REVIEW_PENDING"
+            lines = [line for line in self._tp.brief.cached_lines(order.spreadsheet)
+                     if line.get("sheet") == order.sheet and line.get("sheet_row").isdecimal()
+                     and int(line.get("sheet_row")) == order.row]
+            if len(lines) != 1:
+                return "CURRENT_REVIEW_PENDING" if not lines else "TP_SOURCE_AMBIGUOUS"
+            return None if bind_tp_order(lines[0], order.spreadsheet, snapshot[0]) == order else "TP_SOURCE_CHANGED"
+        proof = json.loads(command.review) if command.review else {}
+        module = proof.get("business_module", proof.get("module", "quotation"))
+        if proof.get("category") == "persistent_stop":
+            item = self._store.get_by_inquiry_id(command.inquiry_id)
+            from src.workflow.automatic_admission import age_reason, binding_key
+            if (proof.get("source_binding") != binding_key(item.record_identity)
+                    or item.status.value not in {"QUEUED", "RETRY_WAIT", "RESEARCHING"}
+                    or proof["module"] not in self._site_outages
+                    or age_reason(proof.get("inquiry_day"), now, module="inquiry")):
+                return "EVENT_NOT_CURRENT"
+            return None
+        current = self._current_mail_source(command.inquiry_id, now, module=module, manual=proof.get("manual") is True)
+        if current is None:
+            return "CURRENT_REVIEW_PENDING"
+        if command.kind is NotificationKind.PURCHASE_EXCEPTION:
+            if proof.get("reason_code") in {"PURCHASE_FOLLOW_UP_REQUIRED", "SOURCE_STATUS_NOT_UPDATED"}:
+                from src.sheets.worksheet_schema import worksheet_schema
+                if current[1].cells.get(worksheet_schema(current[0].record_identity.worksheet.worksheet).status_column) != "发给采购":
+                    return "EVENT_RECOVERED"
+            if proof.get("reason_code") == "SOURCE_STATUS_NOT_UPDATED" and not self._v12_store.quotation_event_active(
+                    command.inquiry_id, proof["original_event"], "SOURCE_STATUS_NOT_UPDATED"):
+                return "EVENT_RECOVERED"
+            if proof.get("category") == "unknown_write":
+                if not self._v12_store.unknown_write_active(command.inquiry_id, proof["original_event"]):
+                    return "EVENT_RECOVERED"
+            elif proof.get("category") == "manual_login" and "INSO" not in self._site_manual_wait:
+                return "EVENT_RECOVERED"
+        return None
+
+    def _observe_source_rows(self, worksheet, rows, failed):
+        try:
+            items = self._store.all_items() if self._store else ()
+            self._source_projection.observe(worksheet, rows, items, at=utc_now(), failed=failed)
+            if self._v12_store is not None:
+                self._quotation_unknown_ids = self._v12_store.quotation_unknown_ids()
+            for item in items:
+                if item.record_identity.worksheet == worksheet:
+                    self._invalidate_order_view(item.inquiry_id)
+            self._view_last_refresh = 0
+        except Exception:  # noqa: BLE001 - observation never controls business execution
+            log.warning("Source observation unavailable; display remains unverified")
+
+    def get_v12_order_state(self, inquiry_id):
+        dto = self._v13_states.get(inquiry_id)
+        if dto is None:
+            if self._v12_store is None:
+                preview = self._startup_interruptions.get(inquiry_id)
+                dto = preview[0] if preview else None
+            else:
+                try:
+                    dto = read_v12_order_state(self._v12_store, inquiry_id)
+                except KeyError:
+                    return None
+        # Quotation observation may not erase durable alerts or unknown writes.
+        if dto is not None and self._v12_store is not None:
+            try:
+                durable = read_v12_order_state(self._v12_store, inquiry_id)
+                dto = replace(dto, active_alerts=durable.active_alerts,
+                              latest_active_alert=durable.latest_active_alert,
+                              event_history=durable.event_history,
+                              waiting_label=(dto.waiting_label or dto.business_label.value)
+                              + ("；原写入待核对，不会自动重做" if durable.business_label.value in {
+                                  "处理中断（可能已发送，请先核对）", "已发采购（待确认）", "采购已处理，表格状态待人工更新"} else ""))
+            except KeyError:
+                pass
+        if dto is not None and inquiry_id in self._quotation_unknown_ids:
+            dto = replace(dto, waiting_label=(dto.waiting_label or dto.business_label.value)
+                          + "；原报价写入待人工核对，不会自动重做")
+        return self._source_projection.project(dto, now=utc_now()) if dto is not None else None
 
     def _idle_login_tick(self, *, now):
         """Optional maintenance at the serial poll boundary; never a business fault."""

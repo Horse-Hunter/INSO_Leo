@@ -102,9 +102,7 @@ def test_actual_poll_thread_survives_site_fault_and_reaches_next_poll(tmp_path, 
         backend.start()
         backend._thread.join(10)
         assert not backend._thread.is_alive() and len(polls) == 2 and waits == [900, 900]
-        assert len(_RecordingTransport.sent) == 1
-        assert '已停止' not in _RecordingTransport.sent[0][2]
-        assert '等待恢复' in _RecordingTransport.sent[0][2]
+        assert len(_RecordingTransport.sent) == 0
         assert backend._store.all_items() == ()
     finally:
         backend.shutdown()
@@ -183,8 +181,7 @@ def test_actual_poller_observes_twelve_waits_before_three_hour_global_stop(tmp_p
         assert not backend._thread.is_alive()
         assert polls == [900 * i for i in range(13)] and waits == [900] * 12
         assert backend._state is RunState.GLOBAL_STOP and backend._stop.is_set()
-        assert len(_RecordingTransport.sent) == 2
-        assert sum('连续三小时' in mail[2] for mail in _RecordingTransport.sent) == 1
+        assert len(_RecordingTransport.sent) == 0
         assert backend._store.all_items() == ()
     finally:
         backend.shutdown()

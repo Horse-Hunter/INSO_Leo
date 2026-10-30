@@ -272,7 +272,7 @@ class V13QuotationUpdater:
                     return self._unconfirmed_initial(result)
                 except V12Fault as exc:
                     if exc.reason == "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED":
-                        return self._failed(result, RowErrorReason.UPDATE_RESULT_UNCONFIRMED)
+                        return replace(self._failed(result, RowErrorReason.UPDATE_RESULT_UNCONFIRMED), effect_uncertain=True)
                     raise
                 except UpdateAttemptUnconfirmed:
                     continue
@@ -291,27 +291,16 @@ class V13QuotationUpdater:
             raise V12Fault(FaultScope.GLOBAL_STOP, exc.reason) from None
 
     def _unconfirmed_initial(self, result):
-        """Only fresh source status may settle a possibly delivered click."""
-        try:
-            final = self._verify_status(result, UpdatePopupOutcome.ALREADY_EXISTS,
-                                        expected_model=result.record_identity.identifying_snapshot.model)
-        except (sqlite3.Error, V12DatabaseError, V13Stopped):
-            raise
-        except V12Fault as exc:
-            if exc.reason == "WORKFLOW_LEDGER_UNAVAILABLE":
-                raise
-            return self._failed(result, RowErrorReason.UPDATE_RESULT_UNCONFIRMED)
-        except V13SourceRowError as exc:
-            return self._failed(result, exc.reason)
-        if final.row_error_reason is RowErrorReason.SOURCE_STATUS_NOT_UPDATED:
-            return self._failed(result, RowErrorReason.UPDATE_RESULT_UNCONFIRMED)
-        return final
+        """A Sheet status can be edited by a human; it is not click-outcome proof."""
+        return replace(result, outcome=QuotationOutcome.ROW_FAILED,
+                       row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED,
+                       effect_uncertain=True)
 
     def _uncertain_refresh(self, result, old, new):
         # Enqueue first, so advancing the comparison baseline cannot lose the notice.
         # The existing outbox deduplicates the inquiry + old/new price transition.
         uncertain = replace(result, outcome=QuotationOutcome.BASELINE_RECORDED,
-                            row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED)
+                            row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED, effect_uncertain=True)
         self._notify_refresh_uncertain(uncertain, old, new)
         self._prices.record(result.inquiry_id, new)
         return uncertain

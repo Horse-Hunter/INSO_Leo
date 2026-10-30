@@ -136,7 +136,7 @@ def test_tp_site_failure_uses_nullable_outbox_not_fake_v14_inquiry(tmp_path):
         SourceEvidence(ResearchSource.HQEW, "TEST-ABC", None, SourceOutcome.SOURCE_UNAVAILABLE,
                        NOW, fields=(EvidenceField("failure_code", "SOURCE_UNAVAILABLE"),)))
     backend._observe_source_failure("tp_synthetic", result)
-    assert cycle.outbox.claim_due_notifications(now=launcher.utc_now())
+    assert not cycle.outbox.claim_due_notifications(now=launcher.utc_now())
 
 
 def test_native_brief_schema_fault_local_but_source_schema_remains_shared(web, monkeypatch):

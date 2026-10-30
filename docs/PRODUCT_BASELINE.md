@@ -1,3 +1,9 @@
+# RFQ-016 current Owner policy — 2026-10-30 (SOURCE ONLY / NOT DEPLOYED)
+
+Source: control-room/RFQ-016/TASK_SPEC.md at be46555471cb78786437d04bf61210a3d384a74e. This supersedes the narrower October28 customer-quoted-only age rule. Automatic inquiry and all permitted automatic quotation states use Shanghai calendar inquiry day >= today minus7 days, inclusive; inquiry also needs current source status exactly 未发. Automatic TP and future personalized requirements use one calendar month, inclusive with month-end clamping. Explicit Owner single-order work exempts age only; identity, current permission, Stop, SENT/UNKNOWN and external-effect protection still apply.
+
+Unverified/recovered/expired technical warnings must send zero mail; an evidence-verified actionable ongoing incident sends at most once across restart. Current source status is a read-only observation independent from procurement history and unknown-write holds. A human status edit is never proof that a previous uncertain program write succeeded. These source changes do not establish production acceptance.
+
 # 产品基线
 
 ## Owner clarification — complete search model (2026-10-25)

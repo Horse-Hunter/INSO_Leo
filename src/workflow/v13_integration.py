@@ -51,7 +51,8 @@ class V13HoldStore:
                     db.execute("""CREATE TABLE workflow_v13_notification_upgrade (
                         command_id TEXT PRIMARY KEY, inquiry_id TEXT REFERENCES workflow_items(inquiry_id) ON DELETE RESTRICT,
                         kind TEXT NOT NULL, subject TEXT NOT NULL, text_body TEXT NOT NULL,
-                        html_body TEXT, created_at TEXT NOT NULL, payload_version INTEGER NOT NULL)""")
+                        html_body TEXT, created_at TEXT NOT NULL, payload_version INTEGER NOT NULL,
+                        review_json TEXT, suppression_reason TEXT)""")
                     db.execute(
                         "INSERT INTO workflow_v13_notification_upgrade SELECT * FROM workflow_v12_notification_commands"
                     )
@@ -97,9 +98,12 @@ class V13HoldStore:
     def hold(self, result, observed):
         identity = json.dumps(asdict(observed), ensure_ascii=False, sort_keys=True)
         key = result.inquiry_id or "unresolved:" + sha256(identity.encode()).hexdigest()
-        payload = json.dumps(
-            asdict(replace(result, quotation=None)), ensure_ascii=False
-        )
+        data = asdict(replace(result, quotation=None))
+        effect_uncertain = data.pop("effect_uncertain", False)
+        # Compatibility: older readers already discard quotation on held rows.
+        # Persist only a bounded native-effect proof marker here, never prices.
+        data["quotation"] = {"effect_uncertain": True} if effect_uncertain else None
+        payload = json.dumps(data, ensure_ascii=False)
         reason = result.row_error_reason.value
         try:
             with sqlite3.connect(self.path) as db:
@@ -126,7 +130,7 @@ class V13HoldStore:
         try:
             with sqlite3.connect(self.path) as db:
                 db.execute(
-                    "UPDATE workflow_v13_holds SET active=0 WHERE hold_key=?", (key,)
+                    "UPDATE workflow_v13_holds SET active=0 WHERE hold_key=? AND reason != 'UPDATE_RESULT_UNCONFIRMED'", (key,)
                 )
         except sqlite3.Error:
             raise V12Fault(
@@ -137,7 +141,7 @@ class V13HoldStore:
         """Atomically settle selected old barriers after an explicit manual attempt."""
         try:
             with sqlite3.connect(self.path) as db:
-                db.executemany("UPDATE workflow_v13_holds SET active=0 WHERE hold_key=?",
+                db.executemany("UPDATE workflow_v13_holds SET active=0 WHERE hold_key=? AND reason != 'UPDATE_RESULT_UNCONFIRMED'",
                     ((key,) for key in keys))
         except sqlite3.Error:
             raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
@@ -160,6 +164,7 @@ def restore_result(payload):
         data["source_worksheet"] = WorksheetIdentity(**data["source_worksheet"])
     data["outcome"] = QuotationOutcome(data["outcome"])
     data["row_error_reason"] = RowErrorReason(data["row_error_reason"])
+    data["effect_uncertain"] = isinstance(data.get("quotation"), dict) and data["quotation"].get("effect_uncertain") is True
     data["quotation"] = (
         None  # Hold stores operational outcome, never raw quotation payload.
     )
@@ -246,6 +251,7 @@ class V13IntegratedCycle:
             if (
                 located.cells.get(worksheet_schema(worksheet.worksheet).status_column)
                 == "采购已报价" and result.source_status == "发给采购"
+                and result.row_error_reason is not RowErrorReason.UPDATE_RESULT_UNCONFIRMED
             ):
                 self.holds.close(key)
                 # Do not re-query a just-settled initial hold in this same pass.
@@ -316,6 +322,8 @@ class V13IntegratedCycle:
         if (len(current) != 1 or current[0] != candidate or len(rows) != 1
                 or identify_worksheet_row(worksheet, rows[0]) != identity.source_record):
             raise V13SourceRowError(RowErrorReason.SOURCE_CHANGED)
+        if self.cycle.recheck_automatic_age(candidate):
+            return None
         lease = runtime.claim_business_continuation(identity)
         if lease is None:
             return None
@@ -324,6 +332,12 @@ class V13IntegratedCycle:
     def settle_result(self, result, observed_records):
         if self.stop():
             raise V13Stopped("STOP_REQUESTED")
+        if result.outcome is QuotationOutcome.QUOTE_FOUND:
+            reason = self.cycle.recheck_automatic_age(result)
+            if reason is not None:
+                final = replace(result, outcome=QuotationOutcome(reason), quotation=None)
+                self.observe(final, final.inquiry_id)
+                return final
         try:
             final = (
                 self.updater_factory().update_one(result)
@@ -343,7 +357,7 @@ class V13IntegratedCycle:
         except Exception:  # noqa: BLE001 - shared read boundary or isolated row adapter
             raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE") from None
         key = final.inquiry_id
-        if final.outcome is QuotationOutcome.ROW_FAILED:
+        if final.outcome is QuotationOutcome.ROW_FAILED or final.row_error_reason is RowErrorReason.UPDATE_RESULT_UNCONFIRMED:
             record = next(
                 (
                     r

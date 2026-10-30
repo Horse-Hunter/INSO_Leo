@@ -28,7 +28,7 @@ def test_simple_old_enum_safe_notification_and_per_recipient_retry(tmp_path):
     service.worker.run_due(now=NOW)
     service.enqueue(command)
     service.worker.run_due(now=NOW + timedelta(minutes=1))
-    assert [who for _,who in fake.calls] == ['owner','owner']
+    assert fake.calls == []  # Unverified sales exceptions are locally suppressed.
     assert [(r.recipient_id,r.address) for r in command.recipients]==[('owner','linan229@qq.com')]
     with sqlite3.connect(service.store.database_path) as db:
         assert db.execute('select status from workflow_items').fetchone()[0] == 'MANUAL_REVIEW'
@@ -60,9 +60,9 @@ def test_legacy_dual_recipient_queue_never_dispatches_shawn(tmp_path):
     service.enqueue(legacy)
     service.worker.run_due(now=NOW)
     service.worker.run_due(now=NOW+timedelta(minutes=15))
-    assert [who for _,who in fake.calls]==['owner']
+    assert fake.calls == []
     with sqlite3.connect(service.store.database_path) as db:
         rows=db.execute('select recipient_id,outcome from workflow_v12_notification_recipients order by recipient_id').fetchall()
-        assert rows==[('owner','SENT'),('shawn','PERMANENT_FAILURE')]
+        assert rows==[('owner','SUPPRESSED'),('shawn','SUPPRESSED')]
         assert db.execute('select count(*) from workflow_v12_notification_commands').fetchone()[0]==1
     service.close()

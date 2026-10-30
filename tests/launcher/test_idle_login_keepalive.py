@@ -86,11 +86,7 @@ def test_failure_durable_owner_only_alert_without_business_hold_or_popup(tmp_pat
     backend._idle_login_tick(now=NOW + timedelta(minutes=15))
     backend._idle_login_tick(now=NOW + timedelta(minutes=30))
     commands = store.claim_due_notifications(now=NOW + timedelta(minutes=31))
-    assert len(commands) == 1
-    command = commands[0]
-    assert command.inquiry_id is None
-    assert [r.address for r in command.recipients] == ["linan229@qq.com"]
-    assert "TEST_SITE" in command.text_body and "secret" not in command.text_body
+    assert commands == ()
     assert backend._state is RunState.RUNNING and not backend._stop.is_set()
     assert backend.get_login_all_report() is None and len(calls) == 1
 
@@ -190,7 +186,7 @@ def test_invalid_maintenance_result_is_only_operational_warning(tmp_path, monkey
     backend._idle_login_tick(now=NOW + timedelta(minutes=15))
     backend._idle_login_tick(now=NOW + timedelta(minutes=30))
     assert backend._state is RunState.RUNNING and not backend._stop.is_set()
-    assert len(store.claim_due_notifications(now=NOW + timedelta(minutes=31))) == 1
+    assert len(store.claim_due_notifications(now=NOW + timedelta(minutes=31))) == 0
 
 
 class ProtectedPage:

@@ -37,7 +37,7 @@ def setup_hold(tmp_path, monkeypatch, *, unbound=False):
         observed = replace(observed, identifying_snapshot=replace(observed.identifying_snapshot, model=""))
     old = V13QuotationResult(None if unbound else inquiry, None if unbound else observed,
         "", QuotationOutcome.ROW_FAILED, None,
-        RowErrorReason.SOURCE_MPN_UNAVAILABLE if unbound else RowErrorReason.UPDATE_RESULT_UNCONFIRMED,
+        RowErrorReason.SOURCE_MPN_UNAVAILABLE if unbound else RowErrorReason.QUOTE_INPUT_WRITE_FAILED,
         source_worksheet=SHEET, source_row_position=3)
     key, _ = holds.hold(old, observed)
     return backend, store, source, inquiry, record, holds, key
@@ -45,7 +45,7 @@ def setup_hold(tmp_path, monkeypatch, *, unbound=False):
 
 def make_cycle(reader, store, holds, quotes, *, outcome=QuotationOutcome.NO_RECENT_QUOTE):
     cycle = V13QuotationCycle(reader=reader, store=store, operations=Operations(),
-        clock=lambda: QUOTE_NOW, wait=lambda _: False, quote_reader=quotes)
+        clock=lambda: QUOTE_NOW, wait=lambda _: False, automatic_refresh=False, quote_reader=quotes)
     def update(result):
         return replace(result, outcome=outcome,
             row_error_reason=RowErrorReason.QUOTE_INPUT_WRITE_FAILED if outcome is QuotationOutcome.ROW_FAILED else None)
@@ -129,7 +129,7 @@ def test_refailure_persists_current_bound_hold_before_superseding_unresolved(tmp
     backend._execute_order_action(("r", inquiry, "quotation", None, None))
     current, = holds.active()
     assert current[0] == inquiry and current[3] == RowErrorReason.QUOTE_INPUT_WRITE_FAILED.value
-    assert current[4] == (1 if unbound else 2)
+    assert current[4] == 1
     if unbound:
         with sqlite3.connect(holds.path) as db:
             assert db.execute("SELECT active FROM workflow_v13_holds WHERE hold_key=?", (old_key,)).fetchone() == (0,)
@@ -224,7 +224,7 @@ def test_stop_during_manual_invocation_preserves_old_hold_even_with_returned_res
 def test_final_close_database_fault_rolls_back_all_matching_old_holds(tmp_path, monkeypatch):
     backend, _, _, inquiry, record, holds, _ = setup_hold(tmp_path, monkeypatch, unbound=True)
     bound = V13QuotationResult(inquiry, record.record_identity, "OLD", QuotationOutcome.ROW_FAILED,
-        None, RowErrorReason.UPDATE_RESULT_UNCONFIRMED, source_worksheet=SHEET, source_row_position=3)
+        None, RowErrorReason.QUOTE_INPUT_WRITE_FAILED, source_worksheet=SHEET, source_row_position=3)
     holds.hold(bound, record.record_identity)
     before = holds.active()
     result = replace(bound, outcome=QuotationOutcome.NO_RECENT_QUOTE, row_error_reason=None)

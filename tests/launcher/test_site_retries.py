@@ -153,10 +153,7 @@ def test_inso_authorization_preserves_page_and_schedules_recovery_without_global
     assert backend._state is RunState.RUNNING and not backend._stop.is_set()
     assert backend._next_poll_at is not None and 'INSO' in backend._site_outages
     assert 'synthetic' in backend._manual_inquiries
-    assert len(outbox.commands) == 1
-    command = next(iter(outbox.commands.values()))
-    assert '需要登录或人工验证' in command.text_body
-    assert command.command_id.endswith(':AUTHENTICATION_REQUIRED')
+    assert not outbox.commands  # No bound current business in this synthetic session sample.
     backend.shutdown()
 
 
@@ -199,10 +196,7 @@ def test_inso_authenticated_reads_observe_only_after_retry_exhaustion(code, reco
         with pytest.raises(V12Fault, match='INSO_QUERY_RETRIES_EXHAUSTED') as failure:
             backend._run_inso_query('synthetic', operation, prepare)
         assert failure.value.scope is FaultScope.GLOBAL_STOP
-        assert len(outbox.commands) == 1 and len(resets) == 4
-        command = next(iter(outbox.commands.values()))
-        assert not command.command_id.endswith(':AUTHENTICATION_REQUIRED')
-        assert '需要登录或人工验证' not in command.text_body
+        assert not outbox.commands and len(resets) == 4  # A recoverable query is local-only.
     attempts = recover_at or 4
     assert len(calls) == attempts and waits == [120] * (attempts - 1)
     assert len(prepares) == attempts - 1 and not backend._manual_inquiries

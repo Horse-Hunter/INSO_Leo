@@ -38,7 +38,7 @@ class Research:
         return TpResearchResult(results, q, None, "货少", Decimal(14), Decimal(100), Decimal(7))
 
 
-def build(tmp_path, outcomes=(DeliveryOutcome.SENT,)):
+def build(tmp_path, outcomes=(DeliveryOutcome.SENT,), *, day=None):
     path = tmp_path / "synthetic.sqlite3"
     WorkflowStateStore(path)
     migrate_v12(path, tmp_path / "backups", quiesce=lambda: nullcontext())
@@ -48,6 +48,11 @@ def build(tmp_path, outcomes=(DeliveryOutcome.SENT,)):
     transport = FakeNotificationTransport({"owner": outcomes, "ops": outcomes})
     worker = V12NotificationWorker(outbox, transport)
     lines = [brief()]
+    if day is not None:
+        from src.sheets.tp_brief import BRIEF_HEADERS, BriefLine
+        data = {h: lines[0].get(h) for h in BRIEF_HEADERS}
+        data["rfq_date"] = day.isoformat()
+        lines = [BriefLine(2, tuple(data[h] for h in BRIEF_HEADERS))]
     reader = SimpleNamespace(rows=[source()], read_rows=lambda _: tuple(reader.rows))
     research = Research()
     cycle = TpCycle(store=store, brief=SimpleNamespace(read=lambda _: tuple(lines)),
@@ -230,7 +235,7 @@ def test_four_orders_batch_sources_and_completed_poll_reads_no_sources(tmp_path,
     cycle.brief.read = counted_brief
     cycle.run("synthetic", now=NOW)
     # One snapshot per sheet + four fresh target-only final checks (was20).
-    assert counts == Counter(sheets) + Counter({s: 1 for s in sheets}) + Counter(brief=5)
+    assert counts == Counter(sheets) + Counter(sheets) + Counter({s: 1 for s in sheets}) + Counter(brief=9)
     assert len(transport.calls) == 8
     counts.clear()
     cycle.run("synthetic", now=NOW + timedelta(minutes=15))
@@ -239,7 +244,7 @@ def test_four_orders_batch_sources_and_completed_poll_reads_no_sources(tmp_path,
     counts.clear()
     cycle.run("synthetic", now=NOW + timedelta(minutes=30),
               manual_key=task_key("synthetic", "2026", 10))
-    assert counts == {"brief": 2, "2026": 2}
+    assert counts == {"brief": 3, "2026": 3}
 
 
 @pytest.mark.parametrize("change", ["qty", "mpn", "price", "duplicate", "removed"])

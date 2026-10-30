@@ -197,28 +197,18 @@ def test_10_to_8_uncertain_then_8_skips_then_6_updates_with_real_store_outbox_an
     assert first.outcome is QuotationOutcome.BASELINE_RECORDED and first.row_error_reason
     assert '不确定' in quotation_gui(first,inquiry).waiting_label
     assert '已更新' not in quotation_gui(first,inquiry).waiting_label
-    assert prices.get(inquiry) == Decimal(8) and actions.clicks == 1 and not holds.active()
-    second, = make(updater.update_one).run(WS)
-    assert second.outcome is QuotationOutcome.PRICE_UNCHANGED and actions.clicks == 1
-    higher, = make(updater.update_one).run(WS)
-    assert higher.outcome is QuotationOutcome.PRICE_UNCHANGED and actions.clicks == 1
+    assert prices.get(inquiry) == Decimal(8) and actions.clicks == 1 and len(holds.active()) == 1
+    before = holds.active()
     actions.popups = ['未知结果' if six_uncertain else POPUP]
-    third, = make(updater.update_one).run(WS)
-    assert third.outcome is (QuotationOutcome.BASELINE_RECORDED if six_uncertain else QuotationOutcome.UPDATED_INSERTED)
-    assert prices.get(inquiry) == Decimal(6) and actions.clicks == 2 and not holds.active()
-    fourth, = make(updater.update_one).run(WS)
-    assert fourth.outcome is QuotationOutcome.PRICE_UNCHANGED and actions.clicks == 2
-    # Re-delivering the same callback, including equivalent Decimal formatting,
-    # must use the real mailbox's existing dedup contract.
+    for _ in range(4):
+        assert make(updater.update_one).run(WS) == ()
+    assert actions.clicks == 1 and prices.get(inquiry) == Decimal(8)
+    assert holds.active() == before  # No lower-price blind retry or hold removal.
     notify_refresh_uncertain(ledger, first, Decimal('10.00'), Decimal('8.000'), at=NOW)
     with sqlite3.connect(db) as connection:
         commands = connection.execute('SELECT subject,text_body FROM workflow_v12_notification_commands').fetchall()
-        recipients = connection.execute('SELECT address FROM workflow_v12_notification_recipients').fetchall()
-    assert len(commands) == 1 + int(six_uncertain)
-    assert {address for address, in recipients} == {'linan229@qq.com'}
-    assert all('Google写入结果不确定' in body and '请人工核对' in body for _,body in commands)
-    assert '原采购价：10元' in commands[0][1] and '新采购价：8元' in commands[0][1]
-    assert not holds.active()
+    assert len(commands) == 1 and '待人工核实' in commands[0][1]
+
 
 
 @pytest.mark.parametrize('stage', ['preclick', 'click_dispatch', 'result_read', 'settlement'])
@@ -319,4 +309,4 @@ def test_uncertain_refresh_does_not_block_following_order(tmp_path):
         notify_refresh_uncertain=lambda r,old,new:notify_refresh_uncertain(ledger,r,old,new,at=NOW))
     results=make(updater.update_one).run(WS)
     assert [r.outcome for r in results]==[QuotationOutcome.BASELINE_RECORDED,QuotationOutcome.UPDATED_INSERTED]
-    assert actions.clicks==2 and not holds.active()
+    assert actions.clicks==2 and len(holds.active()) == 1

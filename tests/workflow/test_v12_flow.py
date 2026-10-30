@@ -107,6 +107,51 @@ class MutableFacts:
         return self.facts
 
 
+def current_dated_source(coordinator):
+    """Legacy flow fixtures now supply explicit synthetic source-date evidence.
+
+    The real admission policy still runs; no production gate is monkeypatched.
+    Tests covering unknown/old dates replace _brief_snapshot explicitly.
+    """
+    from types import SimpleNamespace
+
+    from src.sheets.tp_brief import BRIEF_HEADERS, BriefLine
+    from src.sheets.worksheet_schema import worksheet_schema
+    original = coordinator._record_admitted
+    observed = [None, NOW]
+    def source_row(record):
+        schema = worksheet_schema(record.record_identity.worksheet.worksheet)
+        snap = record.record_identity.identifying_snapshot
+        cells = {schema.status_column: record.status, schema.model_column: snap.model,
+                 schema.brand_column: snap.brand, schema.quantity_column: snap.quantity}
+        if schema.importance_column:
+            cells[schema.importance_column] = snap.importance_raw
+        if record.record_identity.worksheet.worksheet.casefold() == "shahab":
+            cells["A"] = observed[1].date().isoformat()
+        return WorksheetRow(record.row_position, cells)
+    def brief(worksheet):
+        record = observed[0]
+        if record is None:
+            return ()
+        snap = record.record_identity.identifying_snapshot
+        data = {"sheet": worksheet.worksheet, "sheet_row": str(record.row_position),
+                    "mpn": str(snap.model or ""), "mfr": str(snap.brand or ""),
+                    "qty": str(snap.quantity or ""), "rfq_date": observed[1].date().isoformat()}
+        return (BriefLine(2, tuple(data.get(h, "") for h in BRIEF_HEADERS)),)
+    coordinator._brief_snapshot = brief
+    def check(record, now, *, fresh=False):
+        observed[:] = record, now
+        reader = coordinator._current_reader
+        if reader is None:
+            coordinator._current_reader = SimpleNamespace(read_rows=lambda _: (source_row(record),))
+        try:
+            return original(record, now, fresh=fresh)
+        finally:
+            coordinator._current_reader = reader
+    coordinator._record_admitted = check
+    return coordinator
+
+
 def _make_flow(
     tmp_path: Path,
     *,
@@ -141,6 +186,7 @@ def _make_flow(
         notification_worker,
         (NotificationRecipient("synthetic-recipient", "fake@example.invalid"),),
     )
+    current_dated_source(coordinator)
     return coordinator, workflow_store, v12_store, research, checker, provider, writer, notification_worker
 
 
@@ -334,6 +380,7 @@ def test_duplicate_unavailable_still_researches_then_waits_for_confirmation(tmp_
         _notify,
         (NotificationRecipient("synthetic-recipient", "fake@example.invalid"),),
     )
+    current_dated_source(restarted)
     resumed = restarted.confirm_duplicate_and_route(
         pending.inquiry_id, confirmed, now=NOW + timedelta(minutes=1)
     )
@@ -355,6 +402,7 @@ def test_completed_research_duplicate_lookup_recovers_on_normal_poll(tmp_path: P
         workflow, store, research, checker, facts, writer, notify,
         (NotificationRecipient("synthetic-recipient", "fake@example.invalid"),),
     )
+    current_dated_source(restarted)
     result = restarted.poll_and_process(
         FakeSheetsReader(), SHEET, now=NOW + timedelta(minutes=15)
     )[0]
@@ -478,7 +526,7 @@ def test_notification_resolves_the_row_without_this_polls_sheet_snapshot(
 
 
 def test_row_with_non_numeric_quantity_is_skipped_with_a_reason(tmp_path: Path) -> None:
-    flow, workflow_store, store, research, checker, _facts, writer, _notifications = _make_flow(
+    flow, workflow_store, _store, research, checker, _facts, writer, _notifications = _make_flow(
         tmp_path,
         facts=ResearchBusinessFacts("货足", Decimal(60001), Decimal("2.00")),
     )
@@ -490,29 +538,13 @@ def test_row_with_non_numeric_quantity_is_skipped_with_a_reason(tmp_path: Path) 
     assert checker.calls == []
     assert writer.commands == []
 
-    assert len(results) == 1
-    inquiry_id = results[0].inquiry_id
-    assert results[0].business_state is BusinessState.INVALID_INPUT_SKIPPED
-    assert results[0].waiting_reason == "INVALID_QUANTITY_SKIPPED"
-
-    # The reason is recorded where the operator can see it.
-    assert store.order_summary(inquiry_id).business_label.value == "已跳过（数据异常）"
-    alerts = store.active_alerts(inquiry_id)
-    assert [alert.alert_type.value for alert in alerts] == ["DATA_QUALITY"]
-    assert alerts[0].reason_code is ReasonCode.INQUIRY_QUANTITY_INVALID
-    assert [event.event_type.value for event in store.event_history(inquiry_id)] == [
-        "DATA_QUALITY_INVALID_QUANTITY"
-    ]
-
-    # And the row is held out of the queue, so it can never be claimed.
-    item = workflow_store.get_by_inquiry_id(inquiry_id)
-    assert item.status is WorkflowStatus.MANUAL_REVIEW
-    assert item.last_error == "INVALID_QUANTITY_INPUT"
-    assert workflow_store.claim_due(now=NOW + timedelta(minutes=15)) is None
+    assert results == ()
+    assert workflow_store.all_items() == ()
+    assert flow.admission_skips  # local-only explanation, no queue/mail
 
 
 def test_a_held_back_row_records_its_reason_once(tmp_path: Path) -> None:
-    flow, _workflow_store, store, _research, _checker, _facts, _writer, _notifications = _make_flow(
+    flow, _workflow_store, _store, _research, _checker, _facts, _writer, _notifications = _make_flow(
         tmp_path
     )
 
@@ -520,9 +552,9 @@ def test_a_held_back_row_records_its_reason_once(tmp_path: Path) -> None:
     flow.poll_and_process(FakeSheetsReader(quantity="Qty"), SHEET, now=NOW + timedelta(minutes=15))
     flow.poll_and_process(FakeSheetsReader(quantity="Qty"), SHEET, now=NOW + timedelta(minutes=30))
 
-    inquiry_id = first[0].inquiry_id
-    assert len(store.event_history(inquiry_id)) == 1
-    assert len(store.active_alerts(inquiry_id)) == 1
+    assert first == ()
+    assert _workflow_store.all_items() == ()
+    assert flow.admission_skips
 
 
 def test_corrected_worksheet_row_resumes_the_normal_flow(tmp_path: Path) -> None:
@@ -532,13 +564,14 @@ def test_corrected_worksheet_row_resumes_the_normal_flow(tmp_path: Path) -> None
     )
 
     held = flow.poll_and_process(FakeSheetsReader(quantity="Qty"), SHEET, now=NOW)
-    inquiry_id = held[0].inquiry_id
+    assert held == () and _workflow_store.all_items() == ()
     assert research.inputs == []
 
     results = flow.poll_and_process(
         FakeSheetsReader(quantity=7), SHEET, now=NOW + timedelta(minutes=15)
     )
 
+    inquiry_id = results[0].inquiry_id
     assert [(item.inquiry_id, item.quantity) for item in research.inputs] == [(inquiry_id, 7)]
     assert results[0].business_state is BusinessState.PURCHASE_DRAFTING
     assert results[0].purchase_outcome.value == "AI_RECOGNIZED"
@@ -766,6 +799,7 @@ def test_persisted_shahab_a_resumes_with_new_rule_after_restart(tmp_path, total,
     writer = FakePurchaseDraftWriter(completed_at=NOW)
     restarted = V12WorkflowCoordinator(ws, store, FakeResearch(), FakeDuplicateChecker(),
         provider, writer, worker, (NotificationRecipient("synthetic-recipient", "fake@example.invalid"),))
+    current_dated_source(restarted)
     result = restarted.confirm_duplicate_and_route(pending.inquiry_id,
         _confirmed_duplicate(pending.inquiry_id, at=NOW, repeated=False), now=NOW)
     assert result.inquiry_id == pending.inquiry_id
