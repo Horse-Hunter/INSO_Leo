@@ -630,7 +630,7 @@ def build_v13_quotation_updater(*, service, source_reader, store, browser_handle
                                 location: QuotationInputLocation, wait, stop_requested=lambda: False,
                                 notify_model_difference=lambda _r, _m: None,
                                 price_store=None, currency_rate=None,
-                                notify_refresh_uncertain=lambda _r, _old, _new: None):
+                                notify_refresh_uncertain=lambda _r, _old, _new: None, persist_uncertain=None):
     """Domain input contract supplied by the canonical Google web transport.
 
     RFQ-006 owns production scheduling/wiring. This factory performs no I/O.
@@ -642,5 +642,5 @@ def build_v13_quotation_updater(*, service, source_reader, store, browser_handle
         wait=wait, stop_requested=stop_requested,
         notify_model_difference=notify_model_difference,
         price_store=price_store, currency_rate=currency_rate,
-        notify_refresh_uncertain=notify_refresh_uncertain,
+        notify_refresh_uncertain=notify_refresh_uncertain, persist_uncertain=persist_uncertain,
     )

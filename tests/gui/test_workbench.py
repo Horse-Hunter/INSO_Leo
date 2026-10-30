@@ -257,6 +257,9 @@ def _check_cached_tk_workbench(monkeypatch):
 
 
 def _check_detail_contention(app, backend, selected):
+    # Earlier assertions build several un-timed detail trees. Drain their idle
+    # redraw backlog before measuring this single lock-contended detail update.
+    app._root.update()
     import sqlite3
     import tempfile
     from contextlib import closing
@@ -289,11 +292,16 @@ def _check_detail_contention(app, backend, selected):
                 entered.set()
                 release.wait(10)
 
+        backend.order_action_hint = real.order_action_hint
+        backend.can_order_action = real.can_order_action
+        # Warm the native widget/layout transition to these display-only hints.
+        # The timed render below has a different model and still rebuilds detail
+        # while SQL is locked; both the1s bound and forbidden slow-call check stay.
+        app._view.render_detail(replace(selected, model="WARMUP"))
+        app._root.update()
         worker = Thread(target=busy_database)
         worker.start()
         assert entered.wait(2)
-        backend.order_action_hint = real.order_action_hint
-        backend.can_order_action = real.can_order_action
         try:
             for mode in ("SQL_LOCK", "DELAYED_PERMISSION"):
                 queried = []

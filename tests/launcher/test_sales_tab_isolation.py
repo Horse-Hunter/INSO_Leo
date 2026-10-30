@@ -32,7 +32,7 @@ def test_owned_marker_survives_another_client_and_parking():
     context = SimpleNamespace(pages=[blank, sales, inquiry])
     browser = SimpleNamespace(contexts=[context], is_connected=lambda: True)
     park_shared_cdp(browser)
-    assert inquiry.closed and not sales.closed and not blank.closed
+    assert not inquiry.closed and not sales.closed and not blank.closed
 
 
 def test_pending_creation_marker_protected_before_window_name_is_set():

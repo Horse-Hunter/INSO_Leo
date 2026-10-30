@@ -288,7 +288,7 @@ def test_actual_production_persistent_read_block_counts_cycles_not_restarts(tmp_
         backend._notify_runtime_fault(f"run-{index}", "GOOGLE_READ_RETRY_EXHAUSTED" if index < 2 else "GOOGLE_OUTAGE_THREE_HOURS", at=now)
         worker, smtp = real_fake_smtp(ledger, now=now, review_current=backend._review_current_mail)
         worker.run_due(now=now)
-        assert smtp.send_attempts == int(index == 2)
+        assert smtp.send_attempts == 0
     backend.shutdown()
 
 

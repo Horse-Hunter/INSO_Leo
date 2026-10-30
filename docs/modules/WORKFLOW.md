@@ -276,3 +276,51 @@ Existing outbox adds review_json/suppression_reason through the existing quiesce
 Native quotation effect uncertainty is distinct from pre-click failure. Hold JSON stores only a bounded effect proof marker in its previously discarded quotation slot, retaining legacy-reader compatibility; never raw prices. Sheet status alone and manual rerun cannot settle UNKNOWN. Source observations update GUI DTO current-status/freshness alongside immutable procurement history and active protections, without additional source reads or writes.
 
 Source tests are not deployment evidence. RFQ-016 remains NOT_DEPLOYED until separately authorized release and business verification.
+
+
+### RFQ-016 CEO remediation and detailed-mail subtask (NOT_DEPLOYED)
+
+Unknown quote attempts now commit a write-ahead barrier in the original hold
+before the native click. The same newly admitted attempt may close it only after
+positive native completion. Ordinary close/manual retry cannot clear an old
+UNKNOWN. Unknown-result hold persistence precedes notice and price baseline;
+missing mail credentials/evidence cannot remove protection. Baseline policy stays
+unchanged for production; an unwired standalone updater conservatively retains
+the old baseline. Crash-after-intent-before-click may therefore require manual
+verification even if the click never occurred; safety takes precedence over blind
+retry. No raw quotation data is added to the hold.
+
+Persistent order alerts require a fresh current source snapshot at enqueue AND
+SMTP. Prior incident proof/last_success cannot certify an unreadable current row.
+Important/duplicate notices reject completed customer states before sending.
+Purchase follow-up additionally checks the exact original episode, current
+`发给采购` and the unchanged strict three-working-hour rule.
+
+The new process-lifetime mail service polls read-only229 IMAP every120seconds,
+independently of business Start/Stop/Pause/manual operations. One receiver and one
+research/delivery worker are bounded; active capacity64 includes reports awaiting
+SMTP. First mailbox epoch establishes UIDNEXT baseline; changed UIDVALIDITY
+establishes another baseline, preserving previously accepted task/outbox records.
+Identity uses account+UIDVALIDITY+UID; Message-ID is ancillary. Same-model distinct
+UIDs remain distinct requests. Strict standard sender and decoded subject matching
+ignore bodies/attachments. Matching uses full normalized MPN equality and unique
+latest verified dates; ties/conflicts degrade to unit-price-only research.
+
+`workflow_mail_cursor` and `workflow_mail_research` are additive in the existing
+DB, backed up before creation, with scoped transactions. Ordinary business and
+mail-only dispatch/recovery use disjoint claims in the same V12 outbox/worker/SMTP.
+No recovery loop can mark the other live sender abandoned. Results commit before
+enqueue; restart repairs that gap; SENT/UNKNOWN never replay. Terminal deliveries
+leave active scans. Actual resource ownership uncertainty persists a local block
+across restart; no automatic global reset or unknown-target cleanup is permitted.
+Temporary transport/closed-page errors stay local. Confirmed IMAP auth intervention
+requires three completed native auth failures; verified resource protection and
+SMTP UNKNOWN need accurate immediate owner action, deduplicated by the original
+incident ledger. Report delivery uncertainty is one unresolved service incident,
+not a fresh owner alert per report. Shawn gets reports only;229 gets technical
+intervention notices only. Missing Vault configuration is a local instruction.
+
+All-source acquisition outage fails IMAP tasks after three attempts without an
+empty success report. A still-valid important/follow-up business notice can retain
+its original purpose with explicit six-source unavailable content after bounded
+recovery; it never claims that the market has no offers or invents values.

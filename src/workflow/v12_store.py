@@ -602,7 +602,7 @@ class V12Store:
                 _insert_event(connection, event)
 
     def claim_due_notifications(
-        self, *, now: datetime, limit: int = 16
+        self, *, now: datetime, limit: int = 16, scope: str = "all"
     ) -> tuple[NotificationCommand, ...]:
         """Atomically claim each recipient independently for one fake send pass."""
 
@@ -618,8 +618,12 @@ class V12Store:
                 "JOIN workflow_v12_notification_commands c USING(command_id) "
                 "WHERE r.outcome IN ('PENDING', 'RETRYABLE_FAILURE', 'OPERATIONAL_PENDING', 'OPERATIONAL_RETRYABLE_FAILURE') "
                 "AND (r.next_attempt_at IS NULL OR r.next_attempt_at <= ?) "
+                "AND (?='all' OR (?='mail' AND (c.command_id LIKE 'mail-research:%' OR "
+                "(coalesce(CASE WHEN json_valid(c.review_json) THEN json_extract(c.review_json,'$.module') END,'')='mail_research'))) "
+                "OR (?='business' AND c.command_id NOT LIKE 'mail-research:%' AND "
+                "NOT (coalesce(CASE WHEN json_valid(c.review_json) THEN json_extract(c.review_json,'$.module') END,'')='mail_research'))) "
                 "ORDER BY r.next_attempt_at, r.command_id, r.recipient_id LIMIT ?",
-                (_time_text(now), limit),
+                (_time_text(now), scope, scope, scope, limit),
             ).fetchall()
             grouped: dict[str, tuple[sqlite3.Row, list[NotificationRecipient]]] = {}
             for row in rows:
@@ -768,13 +772,13 @@ class V12Store:
                            (command.inquiry_id, command_id))
         return command_id
 
-    def resolve_incidents(self, module, *, at):
+    def resolve_incidents(self, module, *, at, reason_code=None):
         with _transaction(self.database_path) as db:
             rows = db.execute("SELECT command_id,review_json FROM workflow_v12_notification_commands "
                               "WHERE command_id LIKE 'incident:%'").fetchall()
             for command_id, payload in rows:
                 proof = json.loads(payload or "null")
-                if proof and proof.get("module") == module and proof.get("active"):
+                if proof and proof.get("module") == module and proof.get("active") and (reason_code is None or proof.get("reason_code") == reason_code):
                     proof.update(active=False, recovered_at=_time_text(at))
                     db.execute("UPDATE workflow_v12_notification_commands SET review_json=? WHERE command_id=?",
                                (json.dumps(proof, sort_keys=True), command_id))
@@ -885,13 +889,19 @@ class V12Store:
             )
         return result
 
-    def recover_abandoned_notification_attempts(self, *, at: datetime) -> int:
+    def recover_abandoned_notification_attempts(self, *, at: datetime, scope="all") -> int:
         """A crash during send is UNKNOWN and is never auto-queued again."""
 
         with _transaction(self.database_path) as connection:
             rows = connection.execute(
-                "SELECT command_id, recipient_id FROM workflow_v12_notification_recipients "
-                "WHERE outcome IN ('SENDING','OPERATIONAL_SENDING')"
+                "SELECT r.command_id, r.recipient_id FROM workflow_v12_notification_recipients r "
+                "JOIN workflow_v12_notification_commands c USING(command_id) "
+                "WHERE r.outcome IN ('SENDING','OPERATIONAL_SENDING') "
+                "AND (?='all' OR (?='mail' AND (c.command_id LIKE 'mail-research:%' OR "
+                "(coalesce(CASE WHEN json_valid(c.review_json) THEN json_extract(c.review_json,'$.module') END,'')='mail_research'))) "
+                "OR (?='business' AND c.command_id NOT LIKE 'mail-research:%' AND "
+                "NOT (coalesce(CASE WHEN json_valid(c.review_json) THEN json_extract(c.review_json,'$.module') END,'')='mail_research')))",
+                (scope, scope, scope)
             ).fetchall()
             for row in rows:
                 connection.execute(

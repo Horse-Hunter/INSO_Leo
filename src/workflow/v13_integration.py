@@ -95,7 +95,7 @@ class V13HoldStore:
                 FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE"
             ) from None
 
-    def hold(self, result, observed):
+    def hold(self, result, observed, *, dispatch=False):
         identity = json.dumps(asdict(observed), ensure_ascii=False, sort_keys=True)
         key = result.inquiry_id or "unresolved:" + sha256(identity.encode()).hexdigest()
         data = asdict(replace(result, quotation=None))
@@ -107,10 +107,13 @@ class V13HoldStore:
         reason = result.row_error_reason.value
         try:
             with sqlite3.connect(self.path) as db:
+                db.execute("BEGIN IMMEDIATE")
                 previous = db.execute(
                     "SELECT reason,episode,active FROM workflow_v13_holds WHERE hold_key=?",
                     (key,),
                 ).fetchone()
+                if dispatch and previous and previous[0] == "UPDATE_RESULT_UNCONFIRMED" and previous[2]:
+                    raise V12Fault(FaultScope.GLOBAL_STOP, "UNKNOWN_QUOTATION_PROTECTED")
                 episode = (
                     (previous[1] + int(previous[0] != reason or not previous[2]))
                     if previous
@@ -125,6 +128,23 @@ class V13HoldStore:
             raise V12Fault(
                 FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE"
             ) from None
+
+    def begin_dispatch(self, result, observed_identity):
+        """Write-ahead barrier: if it cannot commit, no native update is clicked."""
+        return self.hold(result, observed_identity, dispatch=True)
+
+    def confirm_dispatch(self, token, outcome):
+        """Only the same newly admitted attempt's positively verified native result."""
+        if outcome not in {QuotationOutcome.UPDATED_INSERTED, QuotationOutcome.UPDATED_ALREADY_EXISTS}:
+            raise ValueError("NATIVE_CONFIRMATION_REQUIRED")
+        key, episode = token
+        try:
+            with sqlite3.connect(self.path) as db:
+                changed = db.execute("UPDATE workflow_v13_holds SET active=0 WHERE hold_key=? AND episode=? AND active=1 AND reason='UPDATE_RESULT_UNCONFIRMED'", (key, episode)).rowcount
+                if changed != 1:
+                    raise V12Fault(FaultScope.GLOBAL_STOP, "QUOTATION_DISPATCH_PROTECTION_CHANGED")
+        except sqlite3.Error:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
 
     def close(self, key):
         try:
@@ -339,11 +359,19 @@ class V13IntegratedCycle:
                 self.observe(final, final.inquiry_id)
                 return final
         try:
-            final = (
-                self.updater_factory().update_one(result)
-                if result.outcome is QuotationOutcome.QUOTE_FOUND
-                else result
-            )
+            if result.outcome is QuotationOutcome.QUOTE_FOUND:
+                updater = self.updater_factory()
+                if hasattr(updater, "bind_uncertain_guard"):
+                    record = next((r for r in observed_records if r.row_position == result.source_row_position), None)
+                    identity = record.record_identity if record else result.record_identity
+                    if identity is None:
+                        raise V12Fault(FaultScope.GLOBAL_STOP, "HOLD_IDENTITY_UNAVAILABLE")
+                    updater.bind_uncertain_guard(lambda pending: self.holds.hold(replace(pending, quotation=None), identity))
+                    updater.bind_dispatch_guard(lambda pending: self.holds.begin_dispatch(pending, identity),
+                                                self.holds.confirm_dispatch)
+                final = updater.update_one(result)
+            else:
+                final = result
             if not isinstance(final, V13QuotationResult):
                 raise TypeError("invalid updater result contract")
         except V13SourceRowError as exc:

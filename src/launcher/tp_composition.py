@@ -6,16 +6,16 @@ from src.workflow.v13_integration import V13HoldStore
 
 
 def build_tp_cycle(*, path, web, reader, research, outbox, worker, now, prepare,
-                   stop_requested, retry_wait):
+                   stop_requested, retry_wait, report_observer=None):
     V13HoldStore(path).migrate()  # existing nullable-inquiry outbox upgrade
     store = TpStore(path)
     store.migrate()
-    outbox.recover_abandoned_notification_attempts(at=now)
+    outbox.recover_abandoned_notification_attempts(at=now, scope="business")
     store.recover(now)
     from datetime import UTC, datetime
     return TpCycle(clock=lambda: datetime.now(UTC), store=store, brief=BriefReader(web, retry_wait=retry_wait),
                    reader=reader, research=research, outbox=outbox, worker=worker,
-                   prepare=prepare, stop_requested=stop_requested)
+                   prepare=prepare, stop_requested=stop_requested, report_observer=report_observer)
 
 
 def tp_display_orders(cycle):

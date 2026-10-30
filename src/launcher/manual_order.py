@@ -100,6 +100,16 @@ class ManualRetryHolds:
         self.new_hold_keys.add(key)
         return key, episode
 
+    def begin_dispatch(self, result, identity):
+        token = self.holds.begin_dispatch(result, identity)
+        self.new_hold_keys.add(token[0])
+        return token
+
+    def confirm_dispatch(self, token, outcome):
+        if token[0] not in self.new_hold_keys:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "QUOTATION_DISPATCH_PROTECTION_CHANGED")
+        return self.holds.confirm_dispatch(token, outcome)
+
     def close(self, key):
         if key in self.new_hold_keys and key not in self.matched_old_keys:
             return self.holds.close(key)

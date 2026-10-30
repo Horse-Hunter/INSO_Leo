@@ -57,3 +57,91 @@ Final completion audit found and reproduced one normal-mail lifecycle concern: a
 Original objective and latest Owner steering rechecked twice against implementation, native fake-SMTP evidence, complete regression, Git ancestry, pending production operations and cleanup. Authorized source work is complete and ready for CEO independent review. Pending: CEO source verdict and any separately authorized release/live business acceptance. No installation/restart/real messages or follow-on business task is scheduled or implied.
 
 Verified source/test commit: `77a3e83f499d91242fe8012570f939b09d8c25a0`. Delivery target: `origin/codex/v1-6-independent-scheduling`. Final report and source SHA metadata are documentation-only additions after this source commit.
+
+## 2026-10-30 CEO remediation + Owner detailed-mail extension (IN_PROGRESS)
+
+Fetched and fast-forwarded 6c1ba7f; 7574516 and 77a3e83 remain ancestors. Existing worktree reused; root dirty main and other worktrees untouched. No live CDP/SMTP/production writes. Prior REVIEW_REQUIRED superseded by CEO CHANGES_REQUESTED. New extension tracked in tasks/2026-10-30-mail-research-upgrade.md.
+
+A/B/C red evidence: 4 FAILED in1.26s: missing hold-before-price; stale-source alert SMTP1; completed important SMTP1 and duplicate SMTP1. First green:53 PASS3.47s. Production wiring now commits native hold before baseline; missing persistence capability keeps old baseline and delegates hold to canonical settlement. Notification availability does not authorize price advance. Fresh rows only for current incidents; previous incident proof cannot refresh an unknown source. Important/duplicate business event disallows already quoted statuses at dispatch.
+
+Reuse inspected: ResearchContinuation/TpFx/select_tp_offers/collect_tp_offers; TP report; order_mail IMAP Vault; PageResourceAdmission/market_read_pages/ResearchMarketSession; existing V12 worker/outbox/SMTP and follow-up clock. New independent mailbox lifecycle is expressly authorized; existing TP workflow identity cannot represent email UID without forging an order, so minimum new request/cursor persistence is needed in the same DB. No second SMTP implementation.
+
+
+### 2026-10-31 implementation audit (full final run pending)
+
+All activity remains SOURCE/OFFLINE ONLY. Re-read EXE SHA256 still
+B51C7F66E41A6C3F6266FF772E9EEF8AEB161F986D2705B97320D67CE62B283B;
+no installed file, config, Vault, live database, process, Chrome or SMTP changed.
+7574516 remains an ancestor; active worktree/dirty root/other worktrees preserved.
+No agent CDP or Computer Use, no package/dependency installation.
+
+Additional red evidence: unknown persistence BEFORE commit after dispatched native
+click left no hold (1failed/4passed1.81s). Original native hold now commits before
+dispatch; exact newly admitted token + native success may finish it. Five injected
+crashes (before/after unknown hold, notification, before/after baseline) restart
+original integrated cycle without another click, lose no UNKNOWN, send at most1.
+No blind close/clear capability is exposed for historical UNKNOWN. Direct helper
+without durable guard retains baseline; production always binds the native guard.
+
+Page reuse audit found park_shared_cdp closing unmarked human/read targets. New
+red regression failed1/0.92s. Parking now creates/retains a blank without global
+sweeping; each creator retires its own exact target. Only corresponding old cleanup
+expectations changed. Fake native CDP proves replacement under closure (max3 tries),
+no foreign-page adoption/closure, local child admission isolation. Uncertain
+creation/ownership persists a local block across restart, preventing accumulation.
+It requires deliberate approved reconciliation, not restart-as-proof-of-recovery.
+
+Shared detailed algorithm physically moved once to research/detailed.py; tp.py
+exports compatibility only. Shared HTML moved once to research/report.py. Original
+TP reports/target decisions retain compatibility. Optional TP report observer and
+bounded fresh cache do not alter TP results. Standard inquiry business criteria,
+3working-hour follow-up, purchaser/customer quote selection and baseline rules
+are unchanged except the required crash protection. Extra market collection runs
+only in the independent bounded worker, never synchronous purchase writes.
+
+Runtime composition starts before business buttons and shuts down only on app
+exit. Same configured DB/9222, Core credentials and native adapters. Startup joins
+local loader, performs the original backed-up migration once before workers; main
+Start verifies/reuses it rather than falsely asserting quiescence over live SMTP.
+Receiver120second clock continues during research, business stop/pause/manual
+priority waits. Reports awaited by SMTP count toward capacity64; complete states
+exit indexed scans.24h/720poll fake-clock case verifies bounded live work and
+separate per-UID identity. Tables are the minimum capability gap: existing TP rows
+encode Google target-price orders and cannot represent UID identity without
+forging an order. No second SMTP implementation or standalone monitor was added.
+
+Final dispatch review runs before content preparation, then the original transport
+review. SQL scopes use CASE/coalesce to preserve legacy NULL/malformed review
+compatibility. End-to-end Backend + existing actual QQSMTPTransport + injected
+ScriptedSMTP tests verify both business reports, closed-event suppression and
+Shawn-only IMAP report delivery. No real SMTP/Vault/IMAP/Google/CDP was contacted.
+
+First full run:3297passed/3failed/1skipped134.65s. Two failures were old TP missing-
+source layout compatibility; fixed without changing target algorithm. One was
+cached Tk timing1003ms versus1000ms (later standalone1021ms); standalone rerun
+passed after diagnostic instrumentation, which was removed. No threshold or
+product GUI behavior was relaxed. Final clean whole-suite rerun remains required.
+Targeted final preflight:44passed/1deselected4.68s (24hcase separately already33
+suite passed51.77s before final scan/cap refinements); Ruff all src/tests PASS.
+
+
+Second full run:3318passed/1failed/1skipped183.79s; only original Tk timing
+(1036.87ms) failed. Profiling then proved0.971s was Tk update/event processing,
+including scrollbar/layout/selection callbacks from earlier untimed renders;
+actual detail render0.102s and no durable permission/SQL calls. Test fixture now
+drains prior native events and warms its display-only hint transition BEFORE
+locking/timing a different detail model. Original <1000ms and no-slow-call
+assertions remain. No product GUI code or response threshold was changed.
+Measured lock/slow-permission updates150.460/151.048ms after isolation. All
+profiling/diagnostic instrumentation removed. One final whole-suite rerun follows.
+
+Additional bounded-lifecycle checks: pending SMTP counts toward request capacity;
+terminal report states leave indexed scans; one unresolved report-delivery
+incident alerts Owner once across distinct UNKNOWN reports; original outbox
+SENT/UNKNOWN history is immutable. A runtime-owned native resource quarantine
+persists across restart, with IMAP still receiving into bounded capacity. It is
+not auto-cleared as proof that browser ownership recovered. Shared-parent resource
+waits are deferred locally rather than poisoning main admission or opening targets.
+Read-only catalog updates index original source identities/Brief rows instead of
+performing quadratic matches on critical source callbacks. Optional catalog/cache
+errors cannot prevent original source freshness/UNKNOWN projection updates.

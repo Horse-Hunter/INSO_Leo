@@ -20,7 +20,6 @@ from src.research.cdp_pages import (
     PageResourceAdmission,
     PageTargetCleanupError,
     new_background_page,
-    page_owner,
 )
 
 
@@ -47,14 +46,10 @@ def park_shared_cdp(browser) -> None:
     blank = next((p for p in pages if not p.is_closed() and p.url == "about:blank"), None)
     if blank is None:
         blank = new_background_page(browser, context, timeout_ms=10000)  # Keep a live tab before cleanup.
-    protected = tuple(p for p in pages if not p.is_closed() and page_owner(p) is not None)
-    for page in pages:
-        # Recheck immediately before closing: another worker may have just reserved it.
-        if page is not blank and not page.is_closed() and page not in protected and page_owner(page) is None:
-            page.close()
-    remaining = tuple(p for p in context.pages if not p.is_closed())
-    if (blank not in remaining or blank.url != "about:blank"
-            or any(p is not blank and page_owner(p) is None for p in remaining)):
+    # A missing/lost window.name is not permission to close a target. Site
+    # navigation may clear markers; only each creator's exact native lease may
+    # retire that target. Parking is deliberately not a context-wide sweep.
+    if blank.is_closed() or blank.url != "about:blank":
         raise BrowserBootstrapError("CDP_TAB_CLEANUP_UNCONFIRMED")
 
 

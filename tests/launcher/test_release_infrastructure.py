@@ -63,11 +63,11 @@ def test_dedicated_cdp_parks_one_blank_before_closing_business_tabs(urls):
     from tests.research.background_targets import attach_background_protocol
     attach_background_protocol(browser.contexts[0], browser)
     park_shared_cdp(browser)
-    assert len(pages) == 1 and pages[0].url == "about:blank"
+    assert any(p.url == "about:blank" for p in pages) and len(pages) == max(1, len(urls) + int("about:blank" not in urls))
     if urls and "about:blank" not in urls:
         assert calls[0] == "blank"
     park_shared_cdp(browser)
-    assert len(pages) == 1
+    assert len(pages) == max(1, len(urls) + int("about:blank" not in urls))
 
 
 def test_dedicated_tab_cleanup_refuses_ambiguous_context():

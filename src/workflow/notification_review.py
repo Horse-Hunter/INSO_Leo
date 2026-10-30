@@ -25,6 +25,12 @@ def review_reason(command, now):
             return "REASON_UNVERIFIED"
         category = proof.get("category")
         from .automatic_admission import age_reason
+        if category == "service_stop":
+            if (proof.get("module") != "mail_research" or proof.get("account") != "linan229@qq.com"
+                    or proof.get("reason_code") not in {"IMAP_AUTH_REQUIRED", "REPORT_DELIVERY_UNKNOWN", "CDP_RESOURCE_UNCONFIRMED"}
+                    or proof.get("completed_cycles", 0) < 3 and proof.get("reason_code") not in {"REPORT_DELIVERY_UNKNOWN", "CDP_RESOURCE_UNCONFIRMED"}):
+                return "SERVICE_INTERVENTION_UNVERIFIED"
+            return None
         if not proof.get("manual") and age_reason(proof.get("inquiry_day"), now, module=proof.get("business_module", "quotation")):
             return "ORDER_AGE_EXCLUDED"
         if category == "persistent_stop":

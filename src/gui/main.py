@@ -171,6 +171,8 @@ def main(*, guard_factory=None, backend_factory=None, diagnostics=None) -> int:
             if args.mock
             else backend_factory() if backend_factory else ProductionBackend(defer_local_view=True)
         )
+        if not args.mock and hasattr(backend, "start_process_services"):
+            backend.start_process_services()
         app = (InsoDashboardApp(backend) if diagnostics is None
                else InsoDashboardApp(backend, diagnostics=diagnostics))
         if diagnostics is not None:

@@ -37,6 +37,10 @@ class PageTargetOwnershipError(PageTargetCleanupError):
     reason = "CDP_PAGE_OWNERSHIP_UNCONFIRMED"
 
 
+class ReadOnlyPageClosed(RuntimeError):
+    """Only the scoped read may retry; never an uncertain write or global reset."""
+
+
 class PageResourceAdmission:
     """One injected, fail-closed admission shared by attached clients.
 
@@ -44,7 +48,8 @@ class PageResourceAdmission:
     cannot clear uncertainty. Reconciliation requires a new reviewed lifecycle.
     """
 
-    def __init__(self):
+    def __init__(self, *, parent=None):
+        self._parent = parent
         self._lock = threading.Lock()
         self._failure = None
 
@@ -53,7 +58,14 @@ class PageResourceAdmission:
             if self._failure is None:
                 self._failure = type(error), error.reason, error.failure_classes
 
+    @property
+    def failed_locally(self):
+        with self._lock:
+            return self._failure is not None
+
     def require_open(self):
+        if self._parent is not None:
+            self._parent.require_open()
         with self._lock:
             failure = self._failure
         if failure is not None:
@@ -235,7 +247,7 @@ _MARKET_PAGES = ContextVar("market_owned_pages", default=None)
 
 
 @contextmanager
-def market_read_pages(owner, admission):
+def market_read_pages(owner, admission, *, recover_closed=False):
     """Thread-local scope around canonical clients, never a second page manager.
 
     Only pages created by new_background_page within this exact request can be
@@ -243,7 +255,7 @@ def market_read_pages(owner, admission):
     """
     if not isinstance(admission, PageResourceAdmission) or _MARKET_PAGES.get() is not None:
         raise ValueError("INVALID_MARKET_PAGE_SCOPE")
-    if not isinstance(owner, str) or not re.fullmatch(r"market-[a-f0-9]{32}", owner):
+    if not isinstance(owner, str) or not re.fullmatch(r"(?:market-[a-f0-9]{32}|mail-[a-f0-9]{12}-[a-f0-9]{16})", owner):
         raise ValueError("INVALID_MARKET_PAGE_SCOPE")
     admission.require_open()
     scope = (owner, admission, [])
@@ -252,8 +264,12 @@ def market_read_pages(owner, admission):
         yield
     finally:
         try:
+            unexpectedly_closed = any(page.is_closed() and not getattr(page, "_inso_read_retired", False)
+                                      for page in scope[2])
             for page in tuple(scope[2]):
                 close_research_page(page)
+            if recover_closed and unexpectedly_closed:
+                raise ReadOnlyPageClosed("OWNED_READ_TAB_CLOSED")
             admission.require_open()
         finally:
             _MARKET_PAGES.reset(token)
@@ -292,6 +308,7 @@ def close_research_page(page):
                 _MARKET_PAGES.reset(token)
         admission.require_open()
         page.close()
+        page._inso_read_retired = True
         if not page.is_closed():
             raise PageTargetCleanupError(())
     except PageTargetCleanupError as fault:

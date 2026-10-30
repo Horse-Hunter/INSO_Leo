@@ -48,7 +48,7 @@ def test_dedicated_park_creates_background_blank_before_closing_tabs(monkeypatch
     monkeypatch.setattr(original, "evaluate", lambda script: "")  # unowned tab marker
     calls = background_spy(monkeypatch, browser_bootstrap, browser, context)
     browser_bootstrap.park_shared_cdp(browser)
-    assert calls == ["background"] and original.closed
+    assert calls == ["background"] and not original.closed
 
 
 @pytest.mark.parametrize("fresh", [False, True])

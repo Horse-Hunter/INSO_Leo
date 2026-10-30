@@ -55,8 +55,9 @@ class FakeNotificationTransport:
 class V12NotificationWorker:
     """Claim/deliver one recipient at a time; delivery never controls purchase."""
 
-    def __init__(self, store: V12Store, transport: NotificationTransport, *, review_current=None) -> None:
+    def __init__(self, store: V12Store, transport: NotificationTransport, *, review_current=None, prepare_content=None, scope="all") -> None:
         self._review_current = review_current
+        self._prepare_content, self._scope = prepare_content, scope
         self._store = store
         self._transport = transport
         self._dispatch_lock = Lock()
@@ -79,7 +80,7 @@ class V12NotificationWorker:
         with self._dispatch_lock:
             if self._deferred and self._dispatch_owner != get_ident():
                 return 0  # No network on the shared browser actor.
-        commands = self._store.claim_due_notifications(now=now, limit=limit)
+        commands = self._store.claim_due_notifications(now=now, limit=limit, scope=self._scope)
         sent_attempts = 0
         for command in commands:
             for recipient in command.recipients:
@@ -98,6 +99,15 @@ class V12NotificationWorker:
                             command = replace(command, review=json.dumps(proof, sort_keys=True))
                             self._store.refresh_notification_review(command.command_id, command.review)
                     except Exception:  # noqa: BLE001 - an unavailable review never permits sending
+                        reason = "CURRENT_REVIEW_PENDING"
+                if reason is None and self._prepare_content is not None:
+                    try:
+                        prepared = self._prepare_content(command, now)
+                        if prepared is None:
+                            reason = "CURRENT_REVIEW_PENDING"
+                        else:
+                            command = prepared
+                    except Exception:  # noqa: BLE001 - unavailable content defers without SMTP
                         reason = "CURRENT_REVIEW_PENDING"
                 if reason is None:
                     reason = review_reason(command, now)

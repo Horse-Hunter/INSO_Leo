@@ -8,7 +8,6 @@ from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
 
-from src.research.source_contracts import money_text
 from src.sheets.pending import identify_worksheet_row
 from src.sheets.tp_brief import TpLocalError, TpOrder, bind_tp_order, source_worksheet
 
@@ -153,110 +152,22 @@ class TpStore:
 
 
 def tp_mail(order, result, command_id, now):
-    from datetime import timedelta, timezone
-    from html import escape
-
-    from src.research.tp import distinct_two
-
-    names = {"ic.net": "IC.net", "findchips": "Findchips", "hqew": "华强",
-             "lcsc": "立创", "bom.ai": "正能量", "inso": "INSO"}
-    def source_name(q):
-        return names[q.offer.source.value]
-    def valid(q):
-        return (q is not None and q.rmb.is_finite() and q.rmb > 0
-                and q.offer.price.is_finite() and q.offer.price > 0
-                and q.offer.currency in {"USD", "HKD", "RMB", "CNY"}
-                and (q.offer.current or q.offer.quoted_at is not None
-                     and q.offer.quoted_at.tzinfo is not None))
-    def quote(q, *, include_source=False):
-        o = q.offer
-        price = f"{money_text(o.price)} {o.currency}"
-        if o.currency not in {"RMB", "CNY"}:
-            price += f" ≈ {money_text(q.rmb)} RMB"
-        # Quote history is limited to the current12 months; Shanghai is UTC+8.
-        # Match the existing BOM date parser without a tzdata runtime dependency.
-        when = "现价" if o.current else o.quoted_at.astimezone(timezone(timedelta(hours=8))).date().isoformat()
-        parts = [price]
-        if include_source:
-            parts.append(source_name(q))
-        parts.append(when)
-        if not o.stocked:
-            parts.append("无库存")
-        return " · ".join(parts)
-    lowest = result.lowest if valid(result.lowest) else None
-    second = result.second if valid(result.second) else None
-    if lowest is None:
-        opening = "请人工加急跟进：暂无有效报价。"
-    elif lowest.rmb < result.target_rmb:
-        opening = "请人工加急跟进：最低价低于 TP。"
-    elif lowest.rmb == result.target_rmb:
-        opening = "最低价等于 TP。"
-    else:
-        opening = "最低价高于 TP。"
-    identity = []
-    if order.customer:
-        identity.append(f"客户：{order.customer}")
-    identity.extend([f"型号：{order.mpn}　数量：{order.quantity:,}",
-        f"订单：{order.sheet} 第{order.row}行　{order.rfq_date.split('T')[0].split(' ')[0]}"])
-    target = f"TP：{order.target_raw}"
-    if order.currency not in {"RMB", "CNY"}:
-        target += f" ≈ {money_text(result.target_rmb)} RMB"
-    summary = [target, f"货量：{result.stock_label}"]
-    if lowest is not None:
-        summary.append("最低：" + quote(lowest, include_source=True))
-        if second is not None:
-            summary.append("次低：" + quote(second, include_source=True))
-        if result.estimated_total is not None and result.estimated_total.is_finite() and result.estimated_total > 0:
-            summary.append(f"预计订单总价：{money_text(result.estimated_total)} RMB")
-    if result.fallback:
-        summary.append("仅无库存报价，需人工核实。")
-    source_lines, table_rows = [], []
-    for source in result.sources:
-        available = [q for q in source.quotes if valid(q)]
-        pool = [q for q in available if q.offer.stocked] or available
-        pair = distinct_two(pool)
-        if not pair:
-            continue
-        label = names[source.source.value]
-        values = [quote(q) for q in pair]
-        source_lines.append(label + "：" + values[0]
-                            + ("；次低 " + values[1] if len(values) == 2 else ""))
-        table_rows.append((label, values))
-    paragraphs = [opening, "\n".join(identity), "\n".join(summary)]
-    if source_lines:
-        paragraphs.append("各来源报价\n" + "\n".join(source_lines))
-    html = ('<div style="max-width:760px;font:14px/1.8 Arial,Microsoft YaHei,sans-serif;color:#20252b">'
-        + '<p style="font-size:17px;font-weight:bold;margin:0 0 20px">' + escape(opening) + '</p>'
-        + '<p style="margin:0 0 18px">' + "<br>".join(map(escape, identity)) + '</p>'
-        + '<p style="padding:14px 16px;background:#f5f7fa;margin:0 0 20px">'
-        + "<br>".join(map(escape, summary)) + '</p>')
-    if table_rows:
-        has_second = any(len(values) == 2 for _, values in table_rows)
-        rows = []
-        for label, values in table_rows:
-            cells = [label, *values, *([""] if has_second and len(values) == 1 else [])]
-            rows.append("<tr>" + "".join(
-                '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;vertical-align:top">'
-                + escape(value) + "</td>" for value in cells) + "</tr>")
-        html += ('<table style="border-collapse:collapse;width:100%;font-size:13px;text-align:left">'
-            '<tr style="background:#f5f7fa"><th style="padding:10px 12px">来源</th>'
-            '<th style="padding:10px 12px">最低</th>'
-            + ('<th style="padding:10px 12px">次低</th>' if has_second else '') + '</tr>'
-            + "".join(rows) + '</table>')
-    html += '</div>'
+    from src.research.report import render_market_report
+    text, html = render_market_report(order, result)
     return NotificationCommand(command_id, None, NotificationKind.TP_RESEARCH,
         (NotificationRecipient("owner", "linan229@qq.com"),
          NotificationRecipient("ops", "shawn@inso-hk.com")),
-        "【INSO】TP 专项调研", "\n\n".join(paragraphs), html, now)
+        "【INSO】TP 专项调研", text, html, now)
 
 
 class TpCycle:
     """Runs exclusively on the existing poll/manual thread; DB claim is final guard."""
     def __init__(self, *, store, brief, reader, research, outbox, worker,
-                 prepare=lambda _key: None, stop_requested=lambda: False, clock=None):
+                 prepare=lambda _key: None, stop_requested=lambda: False, clock=None, report_observer=None):
         self.store, self.brief, self.reader = store, brief, reader
         self.research, self.outbox, self.worker = research, outbox, worker
         self.clock = clock
+        self.report_observer = report_observer
         self.prepare, self.stop_requested = prepare, stop_requested
         self.issues = {}
         self._continuation_sources = {}
@@ -385,6 +296,8 @@ class TpCycle:
             raise TpLocalError("TP_SOURCE_CHANGED")
         try:
             mail = tp_mail(order, result, command, now)
+            if self.report_observer is not None:
+                self.report_observer(order, result, now)
             if manual:
                 from dataclasses import replace
                 mail = replace(mail, review=json.dumps({"manual": True, "owner_request": command}))

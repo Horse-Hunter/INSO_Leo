@@ -26,6 +26,7 @@ def refresh(status, baseline, price):
     source.after = [status]
     prices = Prices(None if baseline is None else Decimal(baseline))
     updater._prices = prices
+    updater.bind_uncertain_guard(lambda pending: None)  # Synthetic durable-guard seam; real DB crash tests in RFQ016 review.
     result = replace(found(), source_status=status)
     raw = list(result.quotation.payload)
     raw[7] = price
@@ -192,7 +193,8 @@ def test_10_to_8_uncertain_then_8_skips_then_6_updates_with_real_store_outbox_an
     actions.popups = ['未知结果']
     updater = V13QuotationUpdater(source=WorkflowQuotationSource(reader=sheets,store=store),
         quotation_input=Input(), actions=actions, wait=lambda _: False, price_store=prices,
-        notify_refresh_uncertain=lambda r, old, new: notify_refresh_uncertain(ledger,r,old,new,at=NOW))
+        notify_refresh_uncertain=lambda r, old, new: notify_refresh_uncertain(ledger,r,old,new,at=NOW),
+        persist_uncertain=lambda r: holds.hold(replace(r, quotation=None), r.record_identity))
     first, = make(updater.update_one).run(WS)
     assert first.outcome is QuotationOutcome.BASELINE_RECORDED and first.row_error_reason
     assert '不确定' in quotation_gui(first,inquiry).waiting_label

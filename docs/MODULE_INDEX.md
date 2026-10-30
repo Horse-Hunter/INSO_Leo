@@ -149,3 +149,25 @@ Independent CEO source Review and separate Owner production-install
 authorization are required for the new executable. Publish evidence
 in existing canonical V1.6 task/report; retire only owned temporary
 test resources, never production/rollback/protected pages.
+
+
+## RFQ-016 detailed-mail subtask (Owner2026-10-30; SOURCE REVIEW REQUIRED)
+
+Owner explicitly authorizes process-lifetime independent IMAP research in the same
+application, superseding the old RFQ016 prohibition only for this new capability.
+No second Chrome/profile/port, SMTP implementation or standalone daemon is added.
+`order_mail.research_requests` owns read-only TLS IMAP/header parsing using Core
+Vault. `workflow.mail_research` owns request identity/UID baseline, two bounded
+process-lifetime loops, read-only order catalog, retries/health and existing V12
+outbox orchestration. Its two additive tables share the configured workflow DB;
+email UIDs never masquerade as Google inquiry IDs. Existing SENT/UNKNOWN remain
+untouched. `research.detailed` is the single TP/detailed acquisition/FX/ranking
+implementation (`research.tp` is compatibility exports); `research.report` owns
+one layout. TP target decisions are unchanged; ordinary reports have no target.
+`launcher` composes independent thread-owned read-only9222 attachments through
+canonical PageResourceAdmission/market_read_pages, exact native target leases and
+foreground priority. A child read admission isolates its own cleanup uncertainty;
+shared resource uncertainty still blocks new background reads. Only original
+source-owner reads feed the immutable catalog. No browser object crosses threads.
+GUI only invokes process-service startup/exit, not its business buttons. Independent
+live concurrent-browser/IMAP/Vault delivery remains NOT_VERIFIED and NOT_DEPLOYED.

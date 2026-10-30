@@ -143,7 +143,6 @@ from .v12_gui import read_startup_interruptions, read_v12_order_state
 from .v13_integration import (
     notify_quotation,
     notify_quotation_model_difference,
-    notify_refresh_uncertain,
     notify_runtime_fault,
     notify_website_issue,
     quotation_gui,
@@ -527,6 +526,9 @@ def _website_failure(exc):
     return None
 
 
+from .research_budget import ResearchBudget, foreground_resources
+
+
 class ProductionBackend(GuiBackend):
     """Own one GUI run session and stop it only at safe Workflow boundaries."""
 
@@ -545,6 +547,10 @@ class ProductionBackend(GuiBackend):
         self.cdp_probe = cdp_probe
         self._browser_acquirer = browser_acquirer
         self._page_admission = PageResourceAdmission()
+        self._background_research_budget = ResearchBudget()
+        self._mail_research_service = None
+        from src.workflow.mail_research import InquiryCatalog
+        self._research_catalog = InquiryCatalog()
         self._browser_handle: BrowserHandle | None = None
         self._inso_session: InsoResearchSession | None = None
         self._inso_cdp_url: str | None = None
@@ -646,6 +652,32 @@ class ProductionBackend(GuiBackend):
             self._local_view_thread.start()
         else:
             self._load_local_view()
+
+    def start_process_services(self):
+        """Called once by the process entry; never coupled to business buttons."""
+        if self._mail_research_service is not None:
+            return
+        local = self._local_view_thread
+        if local is not None:
+            local.join()
+        try:
+            from .mail_research_composition import build_mail_research
+            self._mail_research_service = build_mail_research(self)
+            self._mail_research_service.start()
+        except Exception as error:  # noqa: BLE001 - isolate independent service startup
+            self._append_log("WARNING", "独立邮件调研尚未就绪，请检查本地配置和授权提示。")
+            log.warning("Independent mail research startup unavailable; class=%s", type(error).__name__)
+
+    def _remember_detailed_report(self, order, result, now):
+        if self._mail_research_service is not None:
+            try:
+                self._mail_research_service.remember_report(order, result, now)
+            except Exception:  # noqa: BLE001 - optional cache cannot affect TP business result
+                log.warning("Detailed report cache unavailable; TP result preserved")
+
+    def _prepare_business_mail(self, command, now):
+        from .mail_research_composition import prepare_business_report
+        return prepare_business_report(self, command, now)
 
     def _load_local_view(self):
         try:
@@ -796,16 +828,18 @@ class ProductionBackend(GuiBackend):
                 if rc.excel_output_path.is_absolute()
                 else resolve_app_path(rc.excel_output_path, root=self.root)
             )
+            if (self._mail_research_service is not None
+                    and self._mail_research_service.store.path.resolve() != db.resolve()):
+                raise V12DatabaseError("workflow database configuration changed while process service is active")
             self._store = WorkflowStateStore(db)
             # The V1.2 release owns this startup boundary before any worker is
             # started.  The existing migration makes a verified timestamped
             # backup and only adds V1.2 schema; a clean V1.1 database therefore
             # never requires hand preparation.
-            migrate_v12(
-                db,
-                db.parent / "backups",
-                quiesce=lambda: nullcontext(),
-            )
+            if self._mail_research_service is None:
+                migrate_v12(db, db.parent / "backups", quiesce=lambda: nullcontext())
+            # Otherwise process startup already completed this quiesced migration.
+            # Do not repeat a quiescence assertion while independent SMTP runs.
             self._v12_store = V12Store(db)
             follow_up_store = None
             if cfg.get("v13_enabled") is True or (
@@ -917,6 +951,7 @@ class ProductionBackend(GuiBackend):
                     brand_updater=AutomaticBrandUpdater(),
                     brief_snapshot=lambda ws: self._inquiry_brief_snapshot(admission_brief, ws),
                     clock=utc_now, notification_review=self._review_current_mail,
+                    notification_prepare=self._prepare_business_mail,
                 )
                 self._v12_composition.coordinator.initialize_run_state(now=utc_now())
             else:
@@ -970,8 +1005,10 @@ class ProductionBackend(GuiBackend):
                             service=service, source_reader=active_reader,
                             store=active_store, browser_handle=handle, location=location,
                             price_store=price_store, currency_rate=cycle.currency_rate,
-                            notify_refresh_uncertain=lambda result, old, new: notify_refresh_uncertain(
-                                self._v12_store, result, old, new, at=utc_now()),
+                            persist_uncertain=lambda result: active_holds.hold(
+                                replace(result, quotation=None), result.record_identity),
+                            notify_refresh_uncertain=lambda result, old, new: self._notify_quotation(
+                                result, *active_holds.hold(replace(result, quotation=None), result.record_identity), at=utc_now()),
                             wait=self._stop.wait, stop_requested=self._immediate_stop_requested,
                             notify_model_difference=lambda result, model: self._notify_model_difference(
                                 result, model, at=utc_now()))
@@ -1018,7 +1055,7 @@ class ProductionBackend(GuiBackend):
                     research=research, outbox=self._v12_store,
                     worker=self._v12_composition.notification_worker, now=utc_now(),
                     prepare=prepare_tp, stop_requested=self._stop.is_set,
-                    retry_wait=self._stop.wait)
+                    retry_wait=self._stop.wait, report_observer=self._remember_detailed_report)
             self._refresh_history(force=True)
             self._set_health(("正常", "待命", "正常", "正常"), "正常")
 
@@ -1344,6 +1381,7 @@ class ProductionBackend(GuiBackend):
                 self._observation.stage('quotation', prior.stage, site=prior.site,
                                         order_ref=prior.order_ref)
 
+    @foreground_resources
     def _run_independent_job(self, module, *, started=None):
         # Sync browser ownership is fixed to this thread. Only closed-row waits
         # nest here; business/session state must not be snapshotted or rolled back.
@@ -1474,6 +1512,7 @@ class ProductionBackend(GuiBackend):
         self._append_log("WARNING", "采购模块暂停，报价模块继续；请检查采购网站或订单。")
         self._notify()
 
+    @foreground_resources
     def _v13_browser(self, rc, cfg):
         self._page_admission.require_open()
         for attempt in range(4):
@@ -1711,6 +1750,7 @@ class ProductionBackend(GuiBackend):
         finally:
             self._owner_single_order = previous
 
+    @foreground_resources
     def _execute_order_action_impl(self, request):
         request_id, inquiry, action, field, value = request
         success, message = False, "操作未执行。"
@@ -1891,6 +1931,7 @@ class ProductionBackend(GuiBackend):
                 self._observe_source_failure(inquiry_id, last_result)
             raise
 
+    @foreground_resources
     def _run_source_query(self, inquiry_id, site, operation, reconnect):
         self._observe_stage("tp" if inquiry_id.startswith("tp_") else "inquiry",
                             "六源价格查询", site=site.value, order_ref=inquiry_id)
@@ -1951,6 +1992,7 @@ class ProductionBackend(GuiBackend):
         self._begin_inso_inquiry(inquiry_id)
         self._observe_stage("inquiry", "检查近七天重复采购记录", site="INSO", order_ref=inquiry_id)
 
+    @foreground_resources
     def _begin_inso_inquiry(self, inquiry_id):
         self._observe_stage("tp" if inquiry_id.startswith("tp_") else "inquiry",
                             "准备订单调研会话", order_ref=inquiry_id)
@@ -2073,6 +2115,7 @@ class ProductionBackend(GuiBackend):
                 raise
         self._set_health(("正常", "已连接", "正常", "正常"), "正常")
 
+    @foreground_resources
     def _open_research_session(self, research_config, production_config) -> None:
         """Acquire or reuse the approved CDP browser and verify the INSO shell."""
 
@@ -2854,8 +2897,8 @@ class ProductionBackend(GuiBackend):
             item = self._store.get_by_inquiry_id(inquiry_id)
         except KeyError:
             return None
-        observed = (self._source_projection.last_success if persistent else self._source_projection.rows).get(item.record_identity.worksheet)
-        if observed is None or (not persistent and not timedelta(0) <= now-observed[1] <= timedelta(minutes=15)):
+        observed = self._source_projection.rows.get(item.record_identity.worksheet)
+        if observed is None or (not timedelta(0) <= now-observed[1] <= timedelta(minutes=15)):
             return None
         rows = observed[0]
         schema = worksheet_schema(item.record_identity.worksheet.worksheet)
@@ -2899,7 +2942,7 @@ class ProductionBackend(GuiBackend):
 
     def _notify_runtime_fault(self, key, reason, *, at):
         from src.sheets.worksheet_schema import worksheet_schema
-        from src.workflow.automatic_admission import age_reason, binding_key
+        from src.workflow.automatic_admission import binding_key
         inquiry = self._active_inso_inquiry
         manual_login = reason == "INSO_AUTHENTICATION_REQUIRED" and "INSO" in self._site_manual_wait
         sites = {"GOOGLE": "Google Sheets", "INSO": "INSO", "IC_NET": "IC.net", "FX": "汇率网站", "BROWSER": "Browser/CDP"}
@@ -2922,18 +2965,9 @@ class ProductionBackend(GuiBackend):
                         "source_binding": binding_key(item.record_identity),
                         "inquiry_day": str(current[4]), "reason_code": "PROGRAM_OPERATION_BLOCKED",
                         "original_event": incident_key, "last_success": current[2].isoformat(),
-                        "current_business": True, "verified": True, "uncertainty": "当前来源状态未能重新读取；无法据此判断Google整站可用性",
+                        "current_business": True, "verified": True, "uncertainty": "当前订单来源已在本轮核实；无法据此判断Google整站可用性",
                         "action": "请检查原程序的读取/授权提示，并核对受保护订单；不要重发采购。"}
                     break
-            if proof is None and self._v12_store is not None:
-                previous = self._v12_store.active_incident_evidence(incident_key)
-                if previous and self._store:
-                    try:
-                        item = self._store.get_by_inquiry_id(previous["inquiry_id"])
-                    except KeyError:
-                        item = None
-                    if item and previous.get("source_binding") == binding_key(item.record_identity) and item.status.value in {"QUEUED", "RETRY_WAIT", "RESEARCHING"} and not age_reason(previous.get("inquiry_day"), at, module="inquiry"):
-                        proof = previous
             if proof is not None:
                 proof.update(active=True, verified_at=at.isoformat(), retries_exhausted=True,
                              needs_owner=reason.endswith("OUTAGE_THREE_HOURS"))
@@ -2956,6 +2990,8 @@ class ProductionBackend(GuiBackend):
 
     def _review_current_mail(self, command, now):
         import json
+        if command.command_id.startswith("mail-research:") or json.loads(command.review or "{}").get("module") == "mail_research":
+            return "CURRENT_REVIEW_PENDING"
         allowed = {"linan229@qq.com", "shawn@inso-hk.com"}
         if self._v12_adapters is not None:
             allowed.update(r.address.strip().casefold() for r in self._v12_adapters.recipients)
@@ -2996,14 +3032,31 @@ class ProductionBackend(GuiBackend):
                     or proof["module"] not in self._site_outages
                     or age_reason(proof.get("inquiry_day"), now, module="inquiry")):
                 return "EVENT_NOT_CURRENT"
+            current = self._current_mail_source(command.inquiry_id, now, module="inquiry")
+            if current is None:
+                return "CURRENT_REVIEW_PENDING"
+            from src.sheets.worksheet_schema import worksheet_schema
+            if current[1].cells.get(worksheet_schema(item.record_identity.worksheet.worksheet).status_column) != "未发":
+                return "EVENT_NOT_CURRENT"
             return None
         current = self._current_mail_source(command.inquiry_id, now, module=module, manual=proof.get("manual") is True)
         if current is None:
             return "CURRENT_REVIEW_PENDING"
+        if command.kind in {NotificationKind.IMPORTANT_ORDER, NotificationKind.DUPLICATE_ORDER}:
+            from src.sheets.worksheet_schema import worksheet_schema
+            status = current[1].cells.get(worksheet_schema(current[0].record_identity.worksheet.worksheet).status_column)
+            if status not in {"未发", "发给采购", "采购已报价"}:
+                return "EVENT_NOT_CURRENT"
         if command.kind is NotificationKind.PURCHASE_EXCEPTION:
             if proof.get("reason_code") in {"PURCHASE_FOLLOW_UP_REQUIRED", "SOURCE_STATUS_NOT_UPDATED"}:
                 from src.sheets.worksheet_schema import worksheet_schema
                 if current[1].cells.get(worksheet_schema(current[0].record_identity.worksheet.worksheet).status_column) != "发给采购":
+                    return "EVENT_RECOVERED"
+            if proof.get("reason_code") == "PURCHASE_FOLLOW_UP_REQUIRED":
+                from src.workflow.purchase_follow_up import purchase_episode_overdue
+                from src.workflow.v13_follow_up_store import V13PurchaseFollowUpStore
+                episode = V13PurchaseFollowUpStore(self._v12_store.database_path).latest(command.inquiry_id)
+                if episode is None or episode.episode_id != proof.get("original_event") or not purchase_episode_overdue(episode, now):
                     return "EVENT_RECOVERED"
             if proof.get("reason_code") == "SOURCE_STATUS_NOT_UPDATED" and not self._v12_store.quotation_event_active(
                     command.inquiry_id, proof["original_event"], "SOURCE_STATUS_NOT_UPDATED"):
@@ -3015,10 +3068,69 @@ class ProductionBackend(GuiBackend):
                 return "EVENT_RECOVERED"
         return None
 
+    def _catalog_source(self, worksheet, rows, items):
+        from datetime import datetime, time
+
+        from src.research.detailed import DetailedOrder
+        from src.sheets.pending import identify_worksheet_row
+        from src.sheets.worksheet_schema import worksheet_schema
+        from src.workflow.automatic_admission import SHANGHAI, inquiry_day, source_date
+        schema = worksheet_schema(worksheet.worksheet)
+        brief = getattr(self, "_mail_brief", None)
+        lines = brief.cached_lines(worksheet.spreadsheet) if brief else ()
+        from collections import defaultdict
+        by_location, by_row = defaultdict(list), defaultdict(list)
+        for item in items:
+            if item.record_identity.worksheet == worksheet:
+                by_location[(item.record_identity.row_position, item.mpn, item.quantity, item.resolved_brand or item.brand)].append(item)
+        for line in lines:
+            pointer = line.get("sheet_row")
+            if line.get("sheet") == worksheet.worksheet and isinstance(pointer, str) and pointer.isdecimal():
+                by_row[int(pointer)].append(line)
+        entries = []
+        for row in rows:
+            try:
+                identity = identify_worksheet_row(worksheet, row)
+                matched = by_location.get((row.row_position, row.cells.get(schema.model_column), row.cells.get(schema.quantity_column), row.cells.get(schema.brand_column)), ())
+                bound_identity = matched[0].record_identity if len(matched) == 1 else identity
+                day, _ = source_date(bound_identity, row, by_row.get(row.row_position, ()), lambda matched=matched: matched[0].created_at if len(matched) == 1 else None)
+                parsed = inquiry_day(day)
+                if parsed is None:
+                    stamp = None
+                else:
+                    try:
+                        stamp = datetime.fromisoformat(str(day))
+                        if stamp.tzinfo is None:
+                            stamp = stamp.replace(tzinfo=SHANGHAI)
+                    except ValueError:
+                        stamp = datetime.combine(parsed, time(), SHANGHAI)
+                try:
+                    quantity = int(row.cells[schema.quantity_column])
+                    if quantity <= 0:
+                        raise ValueError("QUANTITY_UNVERIFIED")
+                except (ValueError, TypeError, KeyError):
+                    if row.cells.get(schema.model_column):
+                        entries.append((str(identity), DetailedOrder(row.cells[schema.model_column]), None))
+                    continue
+                if not row.cells.get(schema.model_column):
+                    continue
+                customer = schema.fixed_customer_name or row.cells.get(schema.customer_name_column)
+                order = DetailedOrder(row.cells[schema.model_column], row.cells.get(schema.brand_column) or None,
+                    quantity, customer, str(day) if day else None, worksheet.worksheet, row.row_position, spreadsheet=worksheet.spreadsheet)
+                entries.append((str(identity), order, stamp))
+            except (TypeError, ValueError, KeyError):
+                continue
+        self._research_catalog.observe(worksheet, entries)
+
     def _observe_source_rows(self, worksheet, rows, failed):
         try:
             items = self._store.all_items() if self._store else ()
             self._source_projection.observe(worksheet, rows, items, at=utc_now(), failed=failed)
+            if not failed:
+                try:
+                    self._catalog_source(worksheet, rows, items)
+                except Exception:  # noqa: BLE001 - optional read-only catalog cannot invalidate source/UNKNOWN projection
+                    log.warning("Detailed research order catalog unavailable")
             if self._v12_store is not None:
                 self._quotation_unknown_ids = self._v12_store.quotation_unknown_ids()
             for item in items:
@@ -3148,6 +3260,7 @@ class ProductionBackend(GuiBackend):
             self._order_notifications = OrderExceptionNotifications(self.root)
         self._order_notifications.notify(**kwargs)
 
+    @foreground_resources
     def _order_mail_worker(self) -> None:
         from .sales_header import run_sales_header_check
         try:
@@ -3226,6 +3339,7 @@ class ProductionBackend(GuiBackend):
             except Exception as exc:  # noqa: BLE001 - fail closed at runtime boundary
                 log.debug("login sweep callback failed (%s)", type(exc).__name__)
 
+    @foreground_resources
     def _run_login_sweep(self, *, background=False, check_only=False, only_sites=None) -> tuple[SiteLoginResult, ...]:
         """Attach the approved CDP browser, sweep it, then give it back."""
 
@@ -3398,6 +3512,8 @@ class ProductionBackend(GuiBackend):
             login_thread.join()
         if mail_thread and mail_thread is not threading.current_thread():
             mail_thread.join()
+        if self._mail_research_service is not None:
+            self._mail_research_service.close()
         local_thread = self._local_view_thread
         if local_thread and local_thread is not threading.current_thread():
             local_thread.join()

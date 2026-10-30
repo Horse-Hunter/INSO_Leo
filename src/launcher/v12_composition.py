@@ -522,12 +522,12 @@ def compose_v12_production(
     brand_updater=None,
     brief_snapshot=lambda worksheet: (),
     clock=None,
-    notification_review=None,
+    notification_review=None, notification_prepare=None,
 ) -> V12ProductionComposition:
     """Build the real seams only when every required adapter is explicit."""
 
     notification_worker = V12NotificationWorker(
-        v12_store, adapters.notification_transport, review_current=notification_review
+        v12_store, adapters.notification_transport, review_current=notification_review, prepare_content=notification_prepare, scope="business"
     )
     coordinator = V12WorkflowCoordinator(
         workflow_store,

@@ -141,7 +141,7 @@ class V13QuotationUpdater:
                  clock: Callable[[], float] = monotonic,
                  notify_model_difference: Callable[[V13QuotationResult, str], None] = lambda _r, _m: None,
                  price_store=None, currency_rate=None,
-                 notify_refresh_uncertain=lambda _r, _old, _new: None):
+                 notify_refresh_uncertain=lambda _r, _old, _new: None, persist_uncertain=None):
         if not 1 <= status_reads <= 31 or not 0 < status_interval <= 5:
             raise ValueError("status polling must be short and bounded")
         self._source, self._input, self._actions = source, quotation_input, actions
@@ -151,6 +151,9 @@ class V13QuotationUpdater:
         self._notify_model_difference = notify_model_difference
         self._prices, self._currency_rate = price_store, currency_rate
         self._notify_refresh_uncertain = notify_refresh_uncertain
+        self._persist_uncertain = persist_uncertain
+        self._protect_dispatch = self._confirm_dispatch = None
+        self._dispatch_token = None
 
     def run(self, results: Iterable[V13QuotationResult]) -> tuple[V13QuotationResult, ...]:
         output = []
@@ -159,7 +162,19 @@ class V13QuotationUpdater:
             output.append(self.update_one(result))
         return tuple(output)
 
+    def bind_dispatch_guard(self, protect, confirm):
+        self._protect_dispatch, self._confirm_dispatch = protect, confirm
+
     def update_one(self, result: V13QuotationResult) -> V13QuotationResult:
+        self._dispatch_token = None
+        self._native_confirmation = None
+        final = self._update_one(result)
+        if (self._dispatch_token is not None and not final.effect_uncertain
+                and self._native_confirmation is not None):
+            self._confirm_dispatch(self._dispatch_token, self._native_confirmation)
+        return final
+
+    def _update_one(self, result: V13QuotationResult) -> V13QuotationResult:
         if result.outcome is not QuotationOutcome.QUOTE_FOUND:
             return result
         self._check_stop()
@@ -229,6 +244,10 @@ class V13QuotationUpdater:
                                             else RowErrorReason.QUOTE_INPUT_WRITE_FAILED)
                     else:
                         return self._failed(result, write_reason)
+                    if self._protect_dispatch is not None:
+                        pending = replace(result, quotation=None, outcome=QuotationOutcome.ROW_FAILED,
+                            row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED, effect_uncertain=True)
+                        self._dispatch_token = self._protect_dispatch(pending)
                     try:
                         self._actions.click_update_quote()
                     except UpdateClickUnconfirmed:
@@ -256,6 +275,7 @@ class V13QuotationUpdater:
                             return self._uncertain_refresh(result, baseline, price)
                         if not isinstance(exc, UpdateAttemptUnconfirmed):
                             raise
+                    self._native_confirmation = self._success(result, popup).outcome
                     if refresh:
                         if popup is not UpdatePopupOutcome.INSERTED:
                             return self._uncertain_refresh(result, baseline, price)
@@ -296,11 +316,19 @@ class V13QuotationUpdater:
                        row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED,
                        effect_uncertain=True)
 
+    def bind_uncertain_guard(self, guard):
+        """Composition supplies the native durable hold before any price advance."""
+        if self._persist_uncertain is None:
+            self._persist_uncertain = guard
+
     def _uncertain_refresh(self, result, old, new):
-        # Enqueue first, so advancing the comparison baseline cannot lose the notice.
-        # The existing outbox deduplicates the inquiry + old/new price transition.
         uncertain = replace(result, outcome=QuotationOutcome.BASELINE_RECORDED,
                             row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED, effect_uncertain=True)
+        # Only a committed native hold authorizes advancing the baseline. Mail
+        # credentials/evidence are not the authority for unknown-write protection.
+        if self._persist_uncertain is None:
+            return uncertain  # Integrated settlement persists it; retain old baseline.
+        self._persist_uncertain(uncertain)
         self._notify_refresh_uncertain(uncertain, old, new)
         self._prices.record(result.inquiry_id, new)
         return uncertain

@@ -97,6 +97,24 @@ class ResearchService:
         from .tp import execute_tp
         return execute_tp(self, task_id, order, now)
 
+    def read_detailed_source(self, source, order, *, now, fx):
+        """Canonical public read-only source projection; no TP or business writes."""
+        from .detailed import collect_tp, icnet_detailed_result
+        if source is ResearchSource.IC_NET:
+            result = self._icnet.search(order.mpn, order.brand, order.quantity or 1)
+            return icnet_detailed_result(result, fx), result.stock_label
+        sources = (ResearchSource.FINDCHIPS, ResearchSource.HQEW, ResearchSource.LCSC,
+                   ResearchSource.BOM_AI, ResearchSource.INSO)
+        return collect_tp(self._price_sources[sources.index(source)], source, order.mpn,
+                          order.quantity or 1, now, fx), None
+
+    def execute_market_report(self, task_id, order, *, now):
+        """Read-only detailed report; no output workbook, business write or target."""
+        from .detailed import execute_tp
+        if getattr(order, "target_price", None) is not None:
+            raise ValueError("ORDINARY_REPORT_TARGET_FORBIDDEN")
+        return execute_tp(self, task_id, order, now)
+
     def execute(self, research_input: ResearchInput) -> ResearchResult:
         return self.execute_detailed(research_input).result
 

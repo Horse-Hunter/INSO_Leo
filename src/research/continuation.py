@@ -20,8 +20,6 @@ from .source_contracts import (
 )
 from .tp import (
     TpFx,
-    TpOffer,
-    TpQuote,
     TpSourceResult,
     finish_tp,
     select_tp_offers,
@@ -41,7 +39,7 @@ class ResearchContinuation:
         self._now, self._owner = now, threading.get_ident()
         self._results, self._icnet, self._finished = [], None, False
         self._fx = TpFx(service._fx_provider, now) if order is not None else None
-        self._target_rmb = self._fx.convert(order.target_price, order.currency) if order is not None else None
+        self._target_rmb = self._fx.convert(order.target_price, order.currency) if order is not None and getattr(order, "target_price", None) is not None else None
 
     def _check_owner(self):
         if self._owner != threading.get_ident():
@@ -75,7 +73,7 @@ class ResearchContinuation:
         if source not in actor_sources:
             return None
         item = self._order or self._input
-        return MarketReadQuery(source, self.mode, item.mpn, item.quantity, self._now, item.brand)
+        return MarketReadQuery(source, self.mode, item.mpn, item.quantity or 1, self._now, item.brand)
 
     def read_owner(self):
         self._check_owner()
@@ -83,7 +81,7 @@ class ResearchContinuation:
             raise RuntimeError("RESEARCH_CONTINUATION_COMPLETE")
         service, source, item = self._service, self.source, self._order or self._input
         if source is ResearchSource.IC_NET:
-            operation = lambda: service._icnet.search(item.mpn, item.brand, item.quantity)
+            operation = lambda: service._icnet.search(item.mpn, item.brand, item.quantity or 1)
         else:
             adapter = service._price_sources[PRICE_SOURCES.index(source) - 1]
             def operation():
@@ -98,7 +96,7 @@ class ResearchContinuation:
                                 datetime.now(UTC), fields=(EvidenceField("failure_code", "SOURCE_UNAVAILABLE"),)))
                 try:
                     from .tp import collect_tp
-                    return collect_tp(adapter, source, item.mpn, item.quantity, self._now, self._fx)
+                    return collect_tp(adapter, source, item.mpn, item.quantity or 1, self._now, self._fx)
                 except Exception as exc:
                     from .lcsc import LcscNoMatchingProduct
                     if source is ResearchSource.LCSC and isinstance(exc, LcscNoMatchingProduct):
@@ -144,11 +142,8 @@ class ResearchContinuation:
             native = result.source_result
             selected = native
             if self._order is not None:
-                candidate = native.price_candidate
-                quotes = () if candidate is None else (TpQuote(TpOffer(source, candidate.matched_mpn,
-                    candidate.raw_price, candidate.raw_currency, None, True),
-                    self._fx.convert(candidate.raw_price, candidate.raw_currency)),)
-                selected = TpSourceResult(source, native.outcome, native.evidence, quotes)
+                from .detailed import icnet_detailed_result
+                selected = icnet_detailed_result(result, self._fx)
             observation = native
         else:
             expected = TpSourceResult if self._order is not None else SourceResult

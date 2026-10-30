@@ -258,3 +258,24 @@ tab_owner reserves V1.4 query tabs against parallel inquiry parking. Only the
 client's own query tab is closed in its existing finally path. Launcher reuses
 CoreResearchCredentials, shared9222 attachment and this client, no second login
 or search implementation. Exact repeated contract models cache per invocation.
+
+
+### RFQ-016 shared detailed report (source only; review pending)
+
+`detailed.py` now canonically owns the original TP offers, FX snapshot,12-month
+selection, distinct minimum/second price, stock fallback and acquisition. `tp.py`
+only reexports compatibility names; there is no second selection algorithm.
+`ResearchService.read_detailed_source` is the shared read-only source contract.
+`report.render_market_report(target=False)` uses the same layout/formatter without
+TP comparisons; it includes all six source outcomes, original currencies/RMB,
+capture/history dates and reference total only for trusted real quantities.
+A missing quantity uses1 only inside the native query; never in report totals.
+TP keeps its original target logic and no-price presentation. The original
+purchase selection, customer quote selection and comparison pricing are unchanged.
+A fresh completed TP report can seed the bounded64-entry detailed report cache;
+otherwise important/follow-up content is collected asynchronously, off purchase
+writes. Stale current-price/FX progress is reacquired safely after15minutes.
+`mail_session.DetailedReadSession` reuses canonical read-only source adapters,
+attaches to the existing9222, never launches or closes Chrome, and owns only
+`mail-<task hash12>-<random16>` native targets. Owner-closed read-only targets get
+at most two replacement attempts per source. No URL-based page adoption is allowed.
