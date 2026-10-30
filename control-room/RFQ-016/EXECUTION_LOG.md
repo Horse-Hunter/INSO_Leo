@@ -228,3 +228,20 @@ comma/integral forms, and leaves unavailable identity as unmatched unit-price
 research. Invalid latest local records must not cause an older arbitrary match.
 No original workflow/trading quantity rules change. Four regression variants
 cover10.5,True,1,000and10.0. Exact final source rerun follows.
+
+
+## Superseding final delivery receipt
+
+Final source `08a00cf6abacc73a4c06b7721f4dfff51fd5e373`; src tree `b229db56c486bc0afe064d3a6cf01f57bd19647e`; tests tree `05f57f1cf1b3fa8fbc7f5e274b30a2edee11d9da`.
+Full suite3334PASS/1SKIP183.33s console (183.267s JUnit),111associated
+RFQ016 cases PASS. Same Windows symlink skip, no test threshold relaxation or
+unrelated exclusion. JUnit SHA256 `4af86bf70c0391c0756a9c65bd1f1ab43911bc36152a091e80c1c5a3f5c60c4c`.
+This supersedes earlier candidate receipts as the submitted source identity.
+Source and tests are unchanged after this run. Raw test sandboxes/XML are retired
+after compact receipt extraction; TEST_REPORT.json retains exact case IDs,
+source/test trees, results, hashes, red evidence and separately attributed24h/
+crash acceptance. Only documentation/evidence changes follow this source commit.
+No live production action or Computer Use. No automatic installation authorization.
+
+Final cleanup receipt: retired 9 explicitly named additional task-owned temporary items; retained 0. First pass retired35. Compact metrics/hashes retained in TEST_REPORT.json. No reparse traversal, permission changes, production assets or prior-task exceptions touched. Source08a00cf unchanged; documentation-only handoff.
+Final read-only recheck: initial Ruff default cache write was denied by workspace sandbox (no code finding); reran python -m ruff check --no-cache src tests: PASS. git diff --check: PASS. Source/test trees still match final receipt; preserved7574516 ancestor verified.

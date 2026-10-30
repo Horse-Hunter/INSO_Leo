@@ -1,6 +1,6 @@
 # RFQ-016 subtask: detailed mail research and independent IMAP
 
-Status: IN_PROGRESS / NOT_DEPLOYED. Requirement: Owner attachment dated 2026-10-30 (complete seven-part request), plus RFQ-016 CEO review at 6c1ba7f.
+Status: REVIEW_REQUIRED / NOT_DEPLOYED. Source: `08a00cf6abacc73a4c06b7721f4dfff51fd5e373`. Offline full regression: 3334PASS/1SKIP. Evidence: `control-room/RFQ-016/TEST_REPORT.json`. Actual production acceptance remains NOT_VERIFIED. Requirement: Owner attachment dated 2026-10-30 (complete seven-part request), plus RFQ-016 CEO review at 6c1ba7f.
 
 Scope: fix A/B/C first; extract canonical TP detailed collection/report without changing TP target selection or purchase/quote behavior; enrich important/follow-up mail; process new authenticated-sender IMAP research requests independently of business buttons. Same Chrome9222, per-task owned pages, no production operations. Reuse Core Vault, native six adapters, FX, SQLite outbox and SMTP protection. Offline fakes only. Owner separately authorizes installation after CEO review.
 

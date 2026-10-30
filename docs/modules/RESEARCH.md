@@ -279,3 +279,8 @@ writes. Stale current-price/FX progress is reacquired safely after15minutes.
 attaches to the existing9222, never launches or closes Chrome, and owns only
 `mail-<task hash12>-<random16>` native targets. Owner-closed read-only targets get
 at most two replacement attempts per source. No URL-based page adoption is allowed.
+
+Report intake fallback retains the explicit local-date approximation label; aware
+source dates use Shanghai calendar day. Report/catalog quantities reuse the
+original public quantity_value parser; fractional/bool values are never truncated
+into customer counts. These metadata rules do not change trading quantity rules.
