@@ -50,8 +50,20 @@ def test_fake_tls_uses_vault_identity_peek_and_uid_range_only():
 def test_native_auth_rejection_disconnects_and_exposes_only_closed_code():
     client = IMAP()
     def reject(*_):
-        raise imaplib.IMAP4.error("synthetic provider text")
+        raise imaplib.IMAP4.error("[AUTHENTICATIONFAILED] synthetic provider text")
     client.login = reject
     with pytest.raises(ImapAuthenticationRequired, match="IMAP_AUTH_REQUIRED"), ResearchInbox(credentials=lambda _: SimpleNamespace(username=ACCOUNT, password="synthetic"), factory=lambda *a, **k: client):
+        pytest.fail("must not enter")
+    assert client.closed
+
+
+@pytest.mark.parametrize("response", ["[UNAVAILABLE] temporary server maintenance", "rate limited; try later", "LOGIN failed; reason unknown"])
+def test_transient_or_unclassified_login_response_is_not_an_auth_incident(response):
+    client = IMAP()
+    def reject(*_):
+        raise imaplib.IMAP4.error(response)
+    client.login = reject
+    with pytest.raises(ValueError, match="IMAP_LOGIN_UNCONFIRMED"), ResearchInbox(
+            credentials=lambda _: SimpleNamespace(username=ACCOUNT, password="synthetic"), factory=lambda *a, **k: client):
         pytest.fail("must not enter")
     assert client.closed

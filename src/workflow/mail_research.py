@@ -108,6 +108,7 @@ class MailResearchService:
             if count:
                 self.wake.set()
         except CredentialError:
+            self._auth_failures = 0
             self.health = "CREDENTIAL_REQUIRED"
             LOG.warning("229 mailbox needs IMAP authorization in existing Vault (imap.qq.com)")
         except Exception as error:  # noqa: BLE001 - isolated service boundary; sanitized class only
@@ -127,7 +128,11 @@ class MailResearchService:
 
     def _receive(self):
         while not self.stop_event.is_set():
-            self.tick()
+            try:
+                self.tick()
+            except Exception as error:  # noqa: BLE001 - local ledger/alert failure cannot kill receiver or main
+                self.health = "WAITING_RECOVERY"
+                LOG.warning("IMAP poll not committed; protected wait; class=%s", type(error).__name__)
             self.stop_event.wait(max(.05, min(1, self.next_poll - self.timer())))
 
     def run_one(self):
@@ -252,7 +257,9 @@ class MailResearchService:
                 return "RECIPIENT_NOT_CONFIGURED"
             code = proof.get("reason_code")
             if code == "IMAP_AUTH_REQUIRED":
-                return None if self.health == "WAITING_RECOVERY" and self._auth_failures >= 3 else "EVENT_RECOVERED"
+                if self.health == "WAITING_RECOVERY" and self._auth_failures >= 3:
+                    return None
+                return "EVENT_NOT_CURRENT" if self.health == "CREDENTIAL_REQUIRED" else "CURRENT_REVIEW_PENDING"
             if code == "REPORT_DELIVERY_UNKNOWN":
                 with self.store.connect() as db:
                     unknown = db.execute("SELECT 1 FROM workflow_v12_notification_recipients WHERE command_id=? AND outcome='UNKNOWN'", (proof["original_event"],)).fetchone()

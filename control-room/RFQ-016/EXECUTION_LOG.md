@@ -145,3 +145,15 @@ waits are deferred locally rather than poisoning main admission or opening targe
 Read-only catalog updates index original source identities/Brief rows instead of
 performing quadratic matches on critical source callbacks. Optional catalog/cache
 errors cannot prevent original source freshness/UNKNOWN projection updates.
+
+
+Candidate e786af9de620395a84f2d619ae086759a6da3c1c full suite:3323passed,
+1skipped185.68s. During supplementary audit a new fake-IMAP/actual-QQSMTPTransport
+regression reproduced temporary [UNAVAILABLE] login response being classified as
+manual authorization: fake SMTP1 where0 required. This candidate was not pushed.
+Fixed by allowing only explicit [AUTHENTICATIONFAILED]/[AUTHORIZATIONFAILED]
+native response codes; maintenance/rate limiting/unclassified LOGIN NO stay local.
+The receiver loop now also catches local ledger/incident-enqueue failures so its
+own thread cannot fail out and affect the main process. New regression requires
+five temporary-login failures to produce0 SMTP attempts. Final exact patched
+source full regression is required before delivery.

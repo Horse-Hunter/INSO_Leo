@@ -461,3 +461,33 @@ def test_delivery_terminal_state_is_not_rescanned_as_an_active_request(tmp_path)
         assert service.store._active_count(db) == 0
     service.store.migrate(); service.poll_once(); service.worker.run_due(now=NOW)
     assert len(smtp.calls) == 1
+
+
+
+def test_actual_imap_temporary_login_rejection_never_reaches_smtp(tmp_path):
+    import imaplib
+
+    from src.order_mail.research_requests import ACCOUNT, ResearchInbox
+    from tests.workflow.test_rfq016_regressions import real_fake_smtp
+    service, *_ = scene(tmp_path)
+    class Busy:
+        def login(self, *_):
+            raise imaplib.IMAP4.error("[UNAVAILABLE] temporary server maintenance")
+        def logout(self):
+            pass
+    service.inbox_factory = lambda: ResearchInbox(credentials=lambda _: SimpleNamespace(username=ACCOUNT, password="synthetic"), factory=lambda *a, **k: Busy())
+    worker, smtp = real_fake_smtp(service.outbox, now=NOW, review_current=service.review_mail)
+    for _ in range(5):
+        service.poll_once(); worker.run_due(now=NOW)
+    assert smtp.send_attempts == 0
+
+
+def test_receiver_loop_survives_local_queue_or_alert_exception(tmp_path):
+    service, *_ = scene(tmp_path)
+    def broken():
+        raise RuntimeError("synthetic local ledger unavailable")
+    service.tick = broken
+    stopped = [False]
+    service.stop_event = SimpleNamespace(is_set=lambda: stopped[0], wait=lambda _: stopped.__setitem__(0, True))
+    service._receive()
+    assert stopped[0] and service.health == "WAITING_RECOVERY"

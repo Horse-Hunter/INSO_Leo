@@ -70,8 +70,13 @@ class ResearchInbox:
             self.client = self.factory("imap.qq.com", 993, ssl_context=ssl.create_default_context(), timeout=20)
             try:
                 ok(self.client.login(login.username, login.password))
-            except imaplib.IMAP4.error:
-                raise ImapAuthenticationRequired("IMAP_AUTH_REQUIRED") from None
+            except imaplib.IMAP4.error as error:
+                # Login-stage NO can mean maintenance/rate limiting, not a
+                # credential fault. Only explicit standardized auth rejection
+                # is evidence that an Owner authorization check is required.
+                if re.search(r"\[(?:AUTHENTICATIONFAILED|AUTHORIZATIONFAILED)\]", str(error), re.IGNORECASE):
+                    raise ImapAuthenticationRequired("IMAP_AUTH_REQUIRED") from None
+                raise ValueError("IMAP_LOGIN_UNCONFIRMED") from None
             ok(self.client.select("INBOX", readonly=True))
             if not self.client.is_readonly:
                 raise ValueError("IMAP_READONLY_UNCONFIRMED")
