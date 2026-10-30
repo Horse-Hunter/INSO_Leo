@@ -1108,9 +1108,12 @@ class ProductionBackend(GuiBackend):
                 except Exception as exc:  # noqa: BLE001 - fail closed at runtime boundary
                     self._runtime_error(exc)
                 finally:
-                    if self._v13_enabled:
-                        self._release_idle_browser(force=True)
-                    BrowserHandle.drain_deferred_stops()
+                    try:
+                        self._retire_google_pages(web_service)
+                    finally:
+                        if self._v13_enabled:
+                            self._release_idle_browser(force=True)
+                        BrowserHandle.drain_deferred_stops()
 
             def worker_loop():
                 try:
@@ -1164,6 +1167,29 @@ class ProductionBackend(GuiBackend):
                     reason=None if self._state is RunState.STOPPED else "业务暂停，请核对异常与健康状态")
                 self._cache_workbench(force=True)
                 self._notify()
+
+    def _retire_google_pages(self, web_service):
+        """Called on the original poller only after all module scopes unwind."""
+        retire = getattr(web_service, "release_retained_pages", None)
+        if not callable(retire):
+            return  # Existing non-web transport ports have no retained pages.
+        if (self._state in {RunState.MANUAL_REVIEW, RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}
+                or self._keepalive_protected_targets or self._site_manual_wait):
+            return  # Human recovery surfaces must outlive this runtime.
+        try:
+            self._page_admission.require_open()
+            handle = self._browser_handle
+            if handle is not None and handle._owner_thread != threading.get_ident():
+                raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
+            if handle is not None and (handle.browser is None or not handle.browser.is_connected()):
+                handle = None
+            BrowserHandle.drain_deferred_stops()
+            retire(browser_handle=handle)
+        except Exception as exc:  # noqa: BLE001 - final uncertainty remains an original runtime safety fault
+            log_step("google-final-page-retire", cause=exc)
+            fault = exc if isinstance(exc, V12Fault) else V12Fault(
+                FaultScope.GLOBAL_STOP, "GOOGLE_OPERATION_NOT_CLOSED")
+            self._runtime_error(fault)
 
     def _publish_module_plans(self):
         runtime = self._module_runtime

@@ -12,7 +12,7 @@ import logging
 import re
 import threading
 from collections import OrderedDict
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass
 from decimal import Decimal
@@ -20,7 +20,7 @@ from pathlib import Path
 from time import monotonic
 from urllib.parse import parse_qs, urlsplit
 
-from src.research.cdp_pages import shared_playwright_factory
+from src.research.cdp_pages import page_owner, shared_playwright_factory
 from src.sheets.quotation_input import QuotationInputBusy, QuotationInputUnavailable
 from src.sheets.worksheet_schema import worksheet_schema
 from src.workflow.v12_faults import FaultScope, V12Fault
@@ -29,7 +29,9 @@ from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
 from .browser_bootstrap import BrowserHandle
 from .diagnostics import log_step
 from .google_quote_update import (
+    _UNSAFE_POLL_PAGE,
     GoogleQuotationUpdateActions,
+    _google_target_id,
     google_operation_scope,
     google_operations_idle,
 )
@@ -164,8 +166,9 @@ class GoogleSheetsWebService:
     """One thread-safe transport injected into existing readers and writers."""
     def __init__(self, session, *, actions_factory=GoogleQuotationUpdateActions, on_read_success=lambda: None,
                  timer=monotonic, read_guard=lambda: None, stop_requested=lambda: False,
-                 retain_pages=False):
+                 retain_pages=False, retire_session=None):
         self._session, self._actions_factory = session, actions_factory
+        self._retire_session = retire_session or session
         self._on_read_success = on_read_success
         self._timer, self._read_guard, self._stop_requested = timer, read_guard, stop_requested
         # One bounded process-service cache; no pages, files or caller-mutable rows.
@@ -173,6 +176,61 @@ class GoogleSheetsWebService:
         self._live_read_revision = 0
         self._retained_pages = {} if retain_pages else None
         self._poll_handle = ContextVar("google_web_poll_handle", default=None)
+
+    def release_retained_pages(self, *, browser_handle=None):
+        """Final drained-Owner cleanup only; never adopt previous-run pages.
+
+        Registry IDs are the sole candidates. Unknown/protected/manual pages
+        survive, including a known page whose worksheet was changed by Owner.
+        Stop does not suppress cleanup; shared safety admission still does.
+        """
+        with _GOOGLE_GRID_LOCK:
+            if not self._retained_pages:
+                return
+            if self._poll_handle.get() is not None:
+                raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_OPERATION_NOT_CLOSED")
+            self._read_guard()
+            if browser_handle is not None and (
+                    browser_handle.owned or browser_handle._owner_thread != threading.get_ident()):
+                raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
+            session = (nullcontext(browser_handle) if browser_handle is not None
+                       else self._retire_session())
+            with session as handle:
+                browser = handle.browser
+                if handle.owned or browser is None or not browser.is_connected() or len(browser.contexts) != 1:
+                    raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")
+                pages = tuple(browser.contexts[0].pages)
+                for key, (native, protected, _reopenable) in tuple(self._retained_pages.items()):
+                    if protected:
+                        continue
+                    self._read_guard()
+                    matches = [p for p in pages if not p.is_closed() and _google_target_id(p) == native]
+                    if not matches:
+                        self._retained_pages.pop(key, None)  # Gone, never reopen at shutdown.
+                        continue
+                    if len(matches) != 1:
+                        raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
+                    page = matches[0]
+                    actual = urlsplit(page.url)
+                    actions = self._actions_factory(browser_handle=handle, location=_Location(page.url))
+                    actions._page = page
+                    try:
+                        actions._guard()
+                        if ((actual.scheme, actual.hostname, actual.path) != key[:3]
+                                or page_owner(page) != "google-operation"):
+                            raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
+                        state = page.evaluate("""() => ({title: document.querySelector(
+                            '.docs-sheet-active-tab .docs-sheet-tab-name')?.textContent})""")
+                        if state.get("title") != key[3] or page.evaluate(_UNSAFE_POLL_PAGE):
+                            self._retained_pages[key] = (native, True, False)
+                            continue
+                        actions.close()  # Original native close and last-tab protection.
+                        if not page.is_closed():
+                            raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_OPERATION_NOT_CLOSED")
+                    except BaseException:
+                        self._retained_pages[key] = (native, True, False)
+                        raise
+                    self._retained_pages.pop(key, None)
 
     @contextmanager
     def poll_scope(self):
@@ -615,12 +673,14 @@ def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, 
         return provider() if provider else None
 
     @contextmanager
-    def session():
-        with shared_playwright_factory(shared)() as playwright:
+    def session(*, retire=False):
+        # Final cleanup must never bootstrap Chrome through the business provider.
+        with shared_playwright_factory(None if retire else shared)() as playwright:
             browser = playwright.chromium.connect_over_cdp(cdp_url, timeout=10000)
             if not browser.is_connected() or len(browser.contexts) != 1:
                 raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")
             yield BrowserHandle(owned=False, browser=browser)
 
     return GoogleSheetsWebService(session, on_read_success=on_read_success,
-                                  read_guard=read_guard, stop_requested=stop_requested, retain_pages=True)
+                                  read_guard=read_guard, stop_requested=stop_requested, retain_pages=True,
+                                  retire_session=lambda: session(retire=True))

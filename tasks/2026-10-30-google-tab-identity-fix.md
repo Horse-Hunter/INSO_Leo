@@ -53,3 +53,25 @@ SQLite integrity ok；历史125条不可变命令、156条SENT完整行及4个�
 正式程序2875文件再次逐项哈希相等，原单实例检查通过。当前BUSINESS_RUNNING / V16_REVIEW_REQUIRED；继续低干扰跟进，真实长期稳定、DPI和游戏影响NOT_VERIFIED。COMPUTER_USE_NOT_USED。无需Owner再点重跑或开始。
 
 最终资源/清理补充：正式GUI122秒短测0.30449%host CPU、RSS114.6~118.4MiB、线程12~18、句柄1086~1318；非长期稳定结论。已退休本次构建暂存2876文件/268036144字节、兼容副本843776字节及8个一次性脚本；保留正式程序、回滚及仅日志/只读账本跟进工具。原“Owner需右键重跑”已SUPERSEDED，新单一次原API重跑已成功收口，Owner无需重复操作。
+
+
+## Owner追加：Google历史页面增长诊断与最小收口（2026-10-30）
+Owner要求自行分析并决定处理，不反复询问。仅HTTP现有目标清单元数据（无调试会话/页面操作）确认14个Google页，其中11个在本次正式进程前已存在、3个后续工作页；不是已证明每轮无限创建。源码四页registry仅服务内存，正常poller停止未退休已确认空闲的自有页，跨进程旧页按原安全规则不认领。复用原native target证明、Page所有权、认证/DOM未完成检查和close接口，在原poller线程退出时退休仅其registry内且证实空闲的页；保护/未知/人工页保留。必要重新attach仅原CDP，不启动Chrome、无写表/邮件/改账本。四页跨正常轮次照常复用，不在每轮结束清理。离线验证及原全量回归；不为本次清理而立即强杀/重启正在处理业务的旧EXE，避免又添一组旧页。候选随下一次真正必要的安全程序更新使用，不自行清理历史未知页。
+
+
+Lifecycle candidate verification:22 focusedPASS0.46s;198 affectedPASS4.74s;
+final full3221PASS/1SKIP125.84s;Ruff(no-cache)/diffPASS. Initial test parent missing
+caused22setup errors before execution; initial focused20PASS2FAIL used unsupported
+fake auth/dirty attributes, corrected to original login_markers and synthetic unsafe
+predicate port (original real-JS predicate tests retained); no product safety rule
+weakened. Original real Backend production composition is tested in both legacy and
+independent modes, proving retirement occurs on production-sheets-poller, not GUI
+shutdown thread. HTTP metadata09:49:36 and09:58:36 Shanghai:14pages both,0new/0closed,
+11present before current formal run+3subsequent working pages. No debugger sessions,
+page actions, download, credentials or customer data. This is not 24h stability or
+safe ownership proof for historical pages. No current production replacement,
+restart, Chrome action, SQL/config/Vault/SENT change, purchase or mail. Normal-stop
+fix does not promise cleanup after force termination; unknown historical pages stay.
+Owner autonomous decision: preserve live business, keep candidate for next necessary
+safe update; do not force-restart merely to clear tabs and generate another group.
+COMPUTER_USE_NOT_USED. Candidate and installed application SHA recorded separately.

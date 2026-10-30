@@ -211,19 +211,25 @@ def _wait_until(predicate, timeout=5):
     return bool(predicate())
 
 
+@pytest.mark.parametrize("independent", [False, True])
 def test_production_composition_builds_real_seams_without_network(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, independent
 ):
     production, research_config, rows = _write_runtime_configs(tmp_path)
+    config = json.loads(production.read_text(encoding="utf-8"))
+    config["v16_enabled"] = independent
+    production.write_text(json.dumps(config), encoding="utf-8")
     monkeypatch.setattr(QQSMTPTransport, "send_operator_alert", lambda *_args, **_kwargs:
                         SimpleNamespace(outcome=DeliveryOutcome.SENT))
     sheets_called = Event()
     readiness_calls = []
-    monkeypatch.setattr(
-        launcher,
-        "build_google_web_service",
-        lambda _path, **_kwargs: _SheetsService(rows, sheets_called),
-    )
+    retired = []
+    def sheets(_path, **_kwargs):
+        from threading import current_thread
+        service = _SheetsService(rows, sheets_called)
+        service.release_retained_pages = lambda **kw: retired.append((current_thread().name, kw))
+        return service
+    monkeypatch.setattr(launcher, "build_google_web_service", sheets)
     monkeypatch.setattr(
         launcher,
         "assess_readiness",
@@ -261,6 +267,7 @@ def test_production_composition_builds_real_seams_without_network(
 
     assert backend._thread is not None and not backend._thread.is_alive()
     assert readiness_calls
+    assert retired == [("production-sheets-poller", {"browser_handle": None})]
     assert backend._store is not None
     assert backend._store.database_path == tmp_path / "production.sqlite3"
     assert backend._v12_composition is not None

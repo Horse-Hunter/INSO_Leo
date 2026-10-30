@@ -220,3 +220,19 @@ never attach/download/read fallback, refresh callback or write certification.
 SHAHAB date proof from bind_tp_order, reused unchanged by TP. Quotation checks
 unique Brief pointer and original unique inquiry/source binding first; duplicate
 or conflicting Brief cannot select an arbitrary date. No second join/ID/cache.
+
+
+## Normal runtime stop: retained-slot retirement (2026-10-30 candidate)
+
+After the original poller has unwound all module/manual scopes, normal Stop/Exit
+retires only exact native IDs in that service registry. Original document, owner,
+authentication, active worksheet and unsaved/dialog/script predicates are re-proven;
+protected/changed/manual/unknown pages survive. Existing close preserves the last
+browser tab. The same original poller owns cleanup; no Playwright objects cross
+threads. Reuse its live handle, otherwise use the existing connect-only CDP wrapper
+without calling the business bootstrap provider or launching Chrome. Closed shared
+admission and human-recovery states preserve surfaces; cleanup uncertainty reaches
+the original runtime safety handler. No normal poll is changed: four slots still
+survive between polls. Force termination/crash cannot run this cleanup; old-run
+unknown pages are deliberately not adopted. Candidate is offline-tested, NOT
+installed solely to reduce old tab counts; current production b40467e7 unchanged.
