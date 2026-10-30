@@ -108,5 +108,6 @@
     "failed_as_expected": 1,
     "seconds": 0.86,
     "verified_repair": "temporary final-review unavailability defers, then current legal business mail reaches fake SMTP"
-  }
+  },
+  "source_commit": "77a3e83f499d91242fe8012570f939b09d8c25a0"
 }
