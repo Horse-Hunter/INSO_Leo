@@ -10,6 +10,7 @@ from src.research.cdp_pages import PageResourceAdmission
 from src.research.ecb_fx import EcbDailyUsdRmbProvider
 from src.research.mail_session import DetailedReadSession
 from src.research.runtime import load_runtime_config
+from src.sheets.tp_brief import quantity_value
 from src.workflow.mail_research import MailResearchService
 from src.workflow.mail_research_store import MailResearchStore
 from src.workflow.store import WorkflowStateStore
@@ -41,7 +42,7 @@ def build_mail_research(backend):
         if item.created_at is None or item.created_at.tzinfo is None:
             continue
         try:
-            quantity = int(item.quantity)
+            quantity = quantity_value(item.quantity)
             if quantity <= 0:
                 continue
             order = DetailedOrder(item.mpn, item.resolved_brand or item.brand or None, quantity,
@@ -50,6 +51,7 @@ def build_mail_research(backend):
                 spreadsheet=item.record_identity.worksheet.spreadsheet)
             entries[item.record_identity.worksheet].append((str(item.record_identity), order, item.created_at))
         except (TypeError, ValueError):
+            entries[item.record_identity.worksheet].append((str(item.record_identity), DetailedOrder(item.mpn), None))
             continue
     for source, rows in entries.items():
         backend._research_catalog.observe(source, rows)
@@ -105,7 +107,7 @@ def prepare_business_report(backend, command, now):
     item, row, _, date_origin, day = current
     schema = worksheet_schema(item.record_identity.worksheet.worksheet)
     try:
-        quantity = int(item.quantity)
+        quantity = quantity_value(item.quantity)
         if quantity <= 0:
             return None
     except (ValueError, TypeError):

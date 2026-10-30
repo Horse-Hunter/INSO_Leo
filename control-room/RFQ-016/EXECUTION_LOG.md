@@ -217,3 +217,14 @@ Propagate the existing LOCAL_INTAKE_APPROXIMATION label into business/catalog
 report metadata and format aware inquiry timestamps by Shanghai calendar day.
 This changes report labels only, not admission dates, source histories or trading
 selection. New red→green regression plus exact final whole suite required.
+
+
+e3b8cd0606e7c27d2565d3a3701961b362186225 full regression:3330PASS/1SKIP184.40s.
+Supplementary synthetic quantity audit reproduced10.5being displayed as10 by an
+int()cast in the new read-only catalog. Replace all new report/catalog intake
+casts with the existing public sheets.tp_brief.quantity_value parser. It rejects
+fractional/bool quantities rather than fabricating an integer, accepts canonical
+comma/integral forms, and leaves unavailable identity as unmatched unit-price
+research. Invalid latest local records must not cause an older arbitrary match.
+No original workflow/trading quantity rules change. Four regression variants
+cover10.5,True,1,000and10.0. Exact final source rerun follows.

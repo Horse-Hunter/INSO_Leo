@@ -518,3 +518,23 @@ def test_unmatched_report_keeps_canonically_resolved_source_brand(tmp_path):
     assert "品牌：VERIFIED-BRAND" in report["text"]
     assert "询价数量：未匹配" in report["text"] and "订单总价：" not in report["text"]
     assert canonical.read_detailed_source(PRICE_SOURCES[0], DetailedOrder("MPN"), now=NOW, fx=TpFx(None, NOW))
+
+
+
+@pytest.mark.parametrize("raw,expected", [(10.5, None), (True, None), ("1,000", 1000), (10.0, 10)])
+def test_catalog_reuses_canonical_quantity_without_truncation(tmp_path, raw, expected):
+    from src.launcher.backend import ProductionBackend
+    from src.sheets import WorksheetRow
+    from src.sheets.pending import query_pending_records
+    from tests.workflow.test_v12_flow import SHEET, FakeSheetsReader, _make_flow
+    _, queue, *_ = _make_flow(tmp_path)
+    reader = FakeSheetsReader()
+    reader.row = WorksheetRow(reader.row.row_position, {**reader.row.cells, "G": raw})
+    record, = query_pending_records(reader, SHEET)
+    queue.enqueue(record, now=NOW)
+    backend = ProductionBackend(root=tmp_path)
+    backend._mail_brief = SimpleNamespace(cached_lines=lambda _: ())
+    backend._catalog_source(SHEET, (reader.row,), queue.all_items())
+    order = backend._research_catalog.match(record.model, now=NOW)
+    assert (order.quantity if order else None) == expected
+    backend.shutdown()

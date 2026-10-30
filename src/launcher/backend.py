@@ -3073,6 +3073,7 @@ class ProductionBackend(GuiBackend):
 
         from src.research.detailed import DetailedOrder
         from src.sheets.pending import identify_worksheet_row
+        from src.sheets.tp_brief import quantity_value
         from src.sheets.worksheet_schema import worksheet_schema
         from src.workflow.automatic_admission import SHANGHAI, inquiry_day, source_date
         schema = worksheet_schema(worksheet.worksheet)
@@ -3105,7 +3106,7 @@ class ProductionBackend(GuiBackend):
                     except ValueError:
                         stamp = datetime.combine(parsed, time(), SHANGHAI)
                 try:
-                    quantity = int(row.cells[schema.quantity_column])
+                    quantity = quantity_value(row.cells[schema.quantity_column])
                     if quantity <= 0:
                         raise ValueError("QUANTITY_UNVERIFIED")
                 except (ValueError, TypeError, KeyError):
