@@ -6801,5 +6801,370 @@
         "SENT": 156
       }
     }
+  },
+  "google_owned_download_and_read_selection_20261030": {
+    "source": "b40467e7d5457fa1e1f9daa288e19b6fd0414e5e",
+    "src_tree": "156385c1e6035949a9910035bbb9f441e2975c27",
+    "tests_tree": "d58f0ba2dd39cf9b269ce6b17b465e97872f0a59",
+    "full_passed": 3200,
+    "full_skipped": 1,
+    "full_seconds": 127.03,
+    "related_passed": 251,
+    "related_seconds": 8.25,
+    "modules": 117,
+    "files": 2875,
+    "exe_sha256": "bc7970317fc8f277da4d609f7d04a79f85425b3a641d15426a6db0c790f0f301",
+    "manifest_sha256": "d55ef976e1ce3e23922c286d7e6fd1afe4d837c5d3b202427001db0c5b251c4c",
+    "status": "BUSINESS_RUNNING_V16_REVIEW_REQUIRED",
+    "production_replaced": true,
+    "installation": {
+      "installed_at": "2026-10-30T00:29:32.050461+00:00",
+      "installation": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6",
+      "source_application": "b40467e7d5457fa1e1f9daa288e19b6fd0414e5e",
+      "src_tree": "156385c1e6035949a9910035bbb9f441e2975c27",
+      "build_head": "b40467e7d5457fa1e1f9daa288e19b6fd0414e5e",
+      "exe_sha256": "bc7970317fc8f277da4d609f7d04a79f85425b3a641d15426a6db0c790f0f301",
+      "verified_assets": 2875,
+      "rollback": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-google-read-fix-20261030T002505Z\\program",
+      "rollback_selfcheck": true,
+      "self_check": true,
+      "idle_self_check": true,
+      "all_business_tables_unchanged": true,
+      "protected_configuration_vault_junction_unchanged": true,
+      "v14_v15_assets_unchanged": true,
+      "migration_on_production": false,
+      "parallel_actors_enabled": false,
+      "state": "INSTALLED_IDLE"
+    },
+    "original_old_gui_exit": {
+      "forced": true,
+      "native_exit_code": 57345,
+      "safe_boundary": true,
+      "minimum_next_module_margin_s": 687.8,
+      "chrome_terminated": false
+    },
+    "live": {
+      "source_equivalent_original_backend_started_local": "2026-10-30T08:32:48+08:00",
+      "formal_gui_started": true,
+      "manual_target_retry_requested": true,
+      "runtime_fault_at_local": "2026-10-30T08:40:08+08:00",
+      "reason": "GOOGLE_WEB_READ_UNAVAILABLE",
+      "inquiry_completed_s": 636.391,
+      "tp_completed_s": 11.938,
+      "all_bugs_fixed": false,
+      "quotation_completed_s": 397.016,
+      "formal_all_three_cycles_completed": false,
+      "source_equivalent_all_three_cycles_completed": true
+    },
+    "historical_integrity": {
+      "integrity": "ok",
+      "historic_command_count": 125,
+      "historic_commands_immutable": true,
+      "historic_sent_count": 156,
+      "historic_sent_full_rows_unchanged": true,
+      "historic_tp_count": 4,
+      "historic_tp_full_rows_unchanged": true,
+      "current_recipients": {
+        "SENT": 156
+      },
+      "current_tp_states": {
+        "MAIL_QUEUED": 4
+      },
+      "new_recipient_kind_outcomes": {},
+      "purchase_outcomes_before": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 23,
+        "VALIDATION_FAILED": 3
+      },
+      "purchase_outcomes_current": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 24,
+        "VALIDATION_FAILED": 3
+      },
+      "qualification": "SMTP SENT means transport acceptance only; no final mailbox receipt. No forced business writes or replays."
+    },
+    "initial_related_run": {
+      "passed": 249,
+      "failed": 2,
+      "cause": "legacy assertions rejected lawful same-gid A1 read selection; write and identity negative cases preserved"
+    },
+    "source_changed_during_active_backend": false,
+    "computer_use": "COMPUTER_USE_NOT_USED",
+    "qualification": "Real original Backend one-shot used canonical permissions, one request, external saved-record reconciliation, Google write/readback episode. Formal EXE now resumed; do not substitute source CLI cycles for frozen GUI cycle evidence. No new SMTP receipts; historic156 intact.",
+    "operator_result": {
+      "source": "b40467e7d5457fa1e1f9daa288e19b6fd0414e5e",
+      "pid": 116844,
+      "started_at": "2026-10-30T00:32:45.975497+00:00",
+      "kind": "original Backend public API one-shot, frozen-source equivalent, no concurrent GUI",
+      "manual_request_count": 1,
+      "result": "MANUAL_FINISHED",
+      "computer_use": "COMPUTER_USE_NOT_USED",
+      "manual_success": true,
+      "label": "PURCHASE_SENT",
+      "closed_at": "2026-10-30T00:52:56.855015+00:00",
+      "original_backend_shutdown_completed": true
+    },
+    "target_receipt": {
+      "at": "2026-10-30T00:56:03.056988+00:00",
+      "sample": "new-order-1",
+      "work": [
+        [
+          "COMPLETED",
+          1,
+          "PARTIAL_SUCCESS",
+          null,
+          null,
+          "2026-10-30T00:50:12.720291+00:00"
+        ]
+      ],
+      "business": [
+        [
+          "PURCHASE_RECORDED",
+          "2026-10-30T00:51:52.575994+00:00"
+        ]
+      ],
+      "purchase": [
+        [
+          "SAVED",
+          null,
+          1,
+          "2026-10-30T00:51:50.578071+00:00"
+        ]
+      ],
+      "events": [
+        [
+          "DUPLICATE_CHECK_STARTED",
+          null,
+          null,
+          "2026-10-29T16:06:36.797167+00:00"
+        ],
+        [
+          "DUPLICATE_CHECK_STARTED",
+          null,
+          null,
+          "2026-10-29T16:06:36.797167+00:00"
+        ],
+        [
+          "HUMAN_RESOLUTION_RECORDED",
+          null,
+          null,
+          "2026-10-29T16:30:59.687874+00:00"
+        ],
+        [
+          "PURCHASE_DRAFT_STARTED",
+          null,
+          null,
+          "2026-10-30T00:50:12.720291+00:00"
+        ],
+        [
+          "HUMAN_RESOLUTION_RECORDED",
+          null,
+          null,
+          "2026-10-30T00:50:12.720291+00:00"
+        ],
+        [
+          "RESEARCH_STARTED",
+          null,
+          null,
+          "2026-10-30T00:50:12.720291+00:00"
+        ],
+        [
+          "DUPLICATE_CHECK_CONFIRMED",
+          null,
+          null,
+          "2026-10-30T00:50:12.720291+00:00"
+        ],
+        [
+          "DUPLICATE_CHECK_STARTED",
+          null,
+          null,
+          "2026-10-30T00:50:12.720291+00:00"
+        ],
+        [
+          "PURCHASE_DRAFT_STARTED",
+          null,
+          null,
+          "2026-10-30T00:50:12.720291+00:00"
+        ],
+        [
+          "PURCHASE_DRAFT_STARTED",
+          null,
+          null,
+          "2026-10-30T00:50:12.720291+00:00"
+        ],
+        [
+          "AI_RECOGNITION_READY",
+          null,
+          null,
+          "2026-10-30T00:51:43.586371+00:00"
+        ],
+        [
+          "SAVE_CLICK_COMPLETED",
+          null,
+          null,
+          "2026-10-30T00:51:43.588832+00:00"
+        ],
+        [
+          "SAVE_DISPATCH_ARMED",
+          null,
+          null,
+          "2026-10-30T00:51:43.588832+00:00"
+        ],
+        [
+          "SAVE_OUTCOME_UNKNOWN",
+          "SAVE_OUTCOME_UNKNOWN",
+          null,
+          "2026-10-30T00:51:43.588832+00:00"
+        ],
+        [
+          "RECONCILIATION_STARTED",
+          "SAVE_OUTCOME_UNKNOWN",
+          null,
+          "2026-10-30T00:51:50.578071+00:00"
+        ],
+        [
+          "RECONCILIATION_CONFIRMED_SAVED",
+          null,
+          null,
+          "2026-10-30T00:51:52.547842+00:00"
+        ],
+        [
+          "ALERT_RECOVERED",
+          null,
+          null,
+          "2026-10-30T00:51:52.547842+00:00"
+        ],
+        [
+          "PURCHASE_DATA_SAVED",
+          null,
+          null,
+          "2026-10-30T00:51:52.575994+00:00"
+        ]
+      ],
+      "confirmed_google_write_readback": [
+        [
+          "2026-10-30T00:52:47.231186+00:00"
+        ]
+      ]
+    },
+    "owned_page_retirement": {
+      "closed_owned": 3,
+      "preserved_protected_or_unknown": 0,
+      "already_closed": 0,
+      "errors": [],
+      "baseline_targets_closed": 0,
+      "computer_use": "COMPUTER_USE_NOT_USED"
+    },
+    "final_assets_and_mutex": {
+      "program_files": 2875,
+      "all_hashes_equal": true,
+      "exe_sha256": "bc7970317fc8f277da4d609f7d04a79f85425b3a641d15426a6db0c790f0f301",
+      "original_single_instance_held": true,
+      "source_application": "b40467e7d5457fa1e1f9daa288e19b6fd0414e5e",
+      "computer_use": "COMPUTER_USE_NOT_USED"
+    },
+    "formal_gui": {
+      "pid": 145364,
+      "exe_sha256": "BC7970317FC8F277DA4D609F7D04A79F85425B3A641D15426A6DB0C790F0F301",
+      "computer_use": "COMPUTER_USE_NOT_USED",
+      "kind": "installed formal GUI EXE with original --start-inquiry once",
+      "started_at": "2026-10-30T00:54:24.9378183Z",
+      "gui_ready_at": "2026-10-30T00:54:26.546860+00:00",
+      "observer_pid": 139324,
+      "inquiry_begin_at": "2026-10-30T00:54:28.957+00:00",
+      "responding": true
+    },
+    "manual_target_retry_requested": true,
+    "all_bugs_fixed": false,
+    "remaining": [
+      "Residual real Google TimeoutError recovered this run; exact historical duration root UNKNOWN",
+      "Supplier quotation and target-specific TP are not asserted complete",
+      "No double-market actors",
+      "Long-term stability, DPI and game effects NOT_VERIFIED",
+      "Legacy Google pages retained because prior ownership is incomplete"
+    ],
+    "formal_gui_resources": {
+      "pid": 145364,
+      "watch_pid": 139324,
+      "elapsed": 122.03099999995902,
+      "samples": 13,
+      "logical_cpus": 16,
+      "qualification": "Finite read-only GetProcessTimes/GetThreadTimes on installed live process and its existing observer; menu/tray activity may occur; authorized production business active; excludes Chrome child resource totals.",
+      "app": {
+        "seconds": 121.875,
+        "cpu_host_percent": 0.3044871794871795,
+        "rss_min": 120156160,
+        "rss_max": 124137472,
+        "private_min": 90443776,
+        "private_max": 94101504,
+        "threads_min": 12,
+        "threads_max": 18,
+        "handles_min": 1086,
+        "handles_max": 1318,
+        "gdi_range": [
+          136,
+          137
+        ],
+        "user_range": [
+          258,
+          258
+        ]
+      },
+      "observer": {
+        "seconds": 121.90700000000652,
+        "cpu_host_percent": 0.0,
+        "rss_min": 21778432,
+        "rss_max": 21827584,
+        "private_min": 15171584,
+        "private_max": 15269888,
+        "threads_min": 1,
+        "threads_max": 4,
+        "handles_min": 128,
+        "handles_max": 128,
+        "gdi_range": [
+          0,
+          0
+        ],
+        "user_range": [
+          1,
+          1
+        ]
+      }
+    },
+    "cleanup": {
+      "helper_scripts_retired": [
+        "check_frozen.py",
+        "page_check_after_stop.py",
+        "preflight.py",
+        "prepare.py",
+        "replace.py",
+        "retire_operator_pages.py",
+        "run_current_order.py",
+        "wait_safe_exit.py"
+      ],
+      "directories": [
+        {
+          "path": "C:\\Users\\Leo\\.codex\\worktrees\\v16-independent-scheduling\\INSO_Leo\\build\\windows-release-stage-1.6",
+          "bytes": 268036144.0,
+          "files": 2876
+        },
+        {
+          "path": "D:\\Program_Leo\\INSO_Leo\\.tmp\\v16-google-read-fix-20261030\\compatibility",
+          "bytes": 843776.0,
+          "files": 1
+        }
+      ],
+      "kept": [
+        "read_cycles.py",
+        "read_target.py",
+        "check_ledger.py",
+        "small receipts and logs",
+        "installed program",
+        "fresh rollback",
+        "shared runtime/config/Vault/Chrome"
+      ]
+    }
   }
 }

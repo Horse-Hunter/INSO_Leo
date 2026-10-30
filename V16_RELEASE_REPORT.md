@@ -1,6 +1,17 @@
 # V1.6 unified release and initial production verification
 
-## 2026-10-30 07:50 Owner认证恢复后：只读跟进进行中
+## 当前现场：2026-10-30 08:59 自主修复已安装，新单已保存，正式业务运行
+
+**BUSINESS_RUNNING / V16_REVIEW_REQUIRED。原“需要Owner右键重跑”建议已被一次原公开API处理完成替代，无需Owner再点击。**
+应用 b40467e7d5457fa1e1f9daa288e19b6fd0414e5e，src树156385c1e6035949a9910035bbb9f441e2975c27；EXE BC7970317FC8F277DA4D609F7D04A79F85425B3A641D15426A6DB0C790F0F301。最终3200PASS/1SKIP/127.03s，2875程序文件及117冻结模块比对通过。
+原GUI109068已于安全收口后按Owner许可强制退出一次；原Backend一次性操作116844正常退出，未强杀Chrome。当前正式GUI145364/原观察器139324，08:54:26 gui_ready，08:54:28真实询价开始，单实例及响应核验通过。
+样本new-order-1：一次原权限内重跑、attempt1；原外部对账确认INSO采购SAVED/非空记录凭据，08:52:47 Google状态写入并鲜读回，最终PURCHASE_SENT。不重复保存/采购、不新增SMTP消息；125历史命令、156SENT及4历史TP任务保持完整，无UNKNOWN残留。后续采购方报价及目标单TP不冒充已完成。
+仅退休本次新建且精确确认安全的3个Google页，其他历史页面保留。已退休本次268MB构建暂存、843776字节兼容副本和8个一次性操作脚本；正式程序、新鲜FEFCC回滚及生产runtime/config/Vault/Chrome均保留。
+122秒正式GUI短测：0.30449%整机CPU，RSS114.6~118.4MiB，Private86.3~89.7MiB，线程12~18，句柄1086~1318，GDI136~137/USER258；原观察器CPU0%。不代表长期稳定或Chrome/游戏影响。
+本轮仍观测一次可恢复GOOGLE_WEB_READ_UNAVAILABLE；精确历史超时根因UNKNOWN，不能说所有bug消除。双市场Actor仍未启用。继续仅日志/只读账本自然轮次跟进，禁止额外浏览器探针交叠。COMPUTER_USE_NOT_USED。完整证据见本文末尾及原JSON `google_owned_download_and_read_selection_20261030`。
+
+
+## 历史07:50恢复快照（已被上述08:59现场取代）
 
 08:01只读心跳补充：认证恢复后07:58:46再次GOOGLE_WEB_READ_UNAVAILABLE，07:59:01出现GOOGLE_OPERATION_SURFACE_UNCONFIRMED。本轮询价仍未完成，没有新模块完成/采购凭据；SENT仍156，无UNKNOWN，新单仍MANUAL_REVIEW/attempt0/INTERRUPTED_UNSENT。程序原进程与路径核验正常，本心跳未重启、改动或连接浏览器。此证据确认不能把认证后的问题全归INSO，也不能宣称Google读取已经彻底修复；仍需等待原重试结果，不把单次可恢复失败说成GLOBAL_STOP或重试耗尽。已通知Owner一次，后续重复同类重试静默。
 
@@ -20,7 +31,7 @@
 
 因此并非全部INSO故障。Google原客户端/报价TP交接和新单显示修复已安装，凌晨最新实测TP返回未再触发该身份故障；但Google原生下载超时精确根因仍UNKNOWN，未宣布所有bug修好。SENT156，无UNKNOWN/SENDING/待发；旧154SENT完整行及124命令不变，4TP保留。本次只读，无测试邮件、采购或浏览器检查。
 
-目标新单仍MANUAL_REVIEW/attempt0/INTERRUPTED_UNSENT，不会因再次开始运行自动重试。这是原防重复门禁，不能直接SQL重置。当前GUI无安全外部重跑API且禁止ComputerUse；Owner可在原自然倒计时中对该新单选择原右键“重跑采购流程”一次，原实时身份/发送/采购门禁仍强制验证。不能在当前GUI业务运行时另启Backend替代操作。
+**SUPERSEDED：本段为07:50历史操作建议；新单已于08:52自主收口，不要再重跑。** 当时目标新单仍MANUAL_REVIEW/attempt0/INTERRUPTED_UNSENT，不会因再次开始运行自动重试。这是原防重复门禁，不能直接SQL重置。当前GUI无安全外部重跑API且禁止ComputerUse；Owner可在原自然倒计时中对该新单选择原右键“重跑采购流程”一次，原实时身份/发送/采购门禁仍强制验证。不能在当前GUI业务运行时另启Backend替代操作。
 
 原线程心跳已恢复为5分钟低干扰只读跟进；正常无变化静默，仅真实新故障、订单终态或首轮完整收口才报告。仍不接额外CDP、不改周期/配置、不启双Actor、不制造写入。后续结果继续追加此报告/原JSON键owner_authenticated_resume_watch_20261030，仅交Owner，不联系CEO。COMPUTER_USE_NOT_USED。
 
@@ -2292,3 +2303,25 @@ Final full result and source/tree SHA recorded separately after this commit.
 本轮离线临时工作清理：8个自有测试目录、15415文件、635609959字节已退休；
 保留必要小型测试输出和摘要。9个本轮CLI检查/发布/测试辅助脚本已退休，
 原生产、共享runtime、账本、Vault、Chrome及新鲜程序回滚保持不变。
+
+## 2026-10-30 08:41修复阶段快照（后续已于08:54收口）
+
+应用源码 b40467e7d5457fa1e1f9daa288e19b6fd0414e5e；src树156385c1e6035949a9910035bbb9f441e2975c27；tests树d58f0ba2dd39cf9b269ce6b17b465e97872f0a59。
+同gid且唯一、合法A1选区仅允许只读导出，写入仍执行原严格身份检查。复用原Playwright客户端，为本次Download完成、路径、取消、清理设置有界等待；取消或清理结果不能确认仍GLOBAL_STOP。未放宽认证、来源、重试、写入或SENT/UNKNOWN规则。
+最终专项251PASS/8.25s，全量3200PASS/1SKIP/127.03s；初次专项249PASS/2FAIL为旧测试把同gid的合法选区变化误当页面身份变化，已按新的只读契约修正，其他身份负例保留。117个冻结模块逐个比对，2875文件、自检、空闲检查及RELEASE_SCAN_OK通过。
+
+08:23:54在原三模块收口、下一轮至少687.8秒、无待执行/结果未知采购及邮件时，按Owner明确授权对精确旧GUI进程句柄强制结束一次（exit57345）；未终止Chrome。此前拒绝过一次非空闲退出。不是正常退出，不隐瞒此区别。
+08:29:32仅程序文件覆盖安装；EXE BC7970317FC8F277DA4D609F7D04A79F85425B3A641D15426A6DB0C790F0F301；新鲜FEFCC回滚保留，数据库全表、配置、Vault、runtime链接、V1.4/V1.5保持不变，无生产迁移。
+原GUI没有远程重跑接口。在同一个原单实例锁下，临时使用与冻结源码等价的原ProductionBackend及can_order_action/request_order_action公开入口，等待原安全空闲后只请求一次中断未发新单；不直接修改SQL或绕过持久化权限。08:32:48开始原自然轮次，截至08:41仍未获空闲，尚未发出人工重跑。该临时CLI验证不冒充正式GUI运行，结束后收口并恢复正式EXE。
+08:40:08仍出现GOOGLE_WEB_READ_UNAVAILABLE，精确耗时根因尚未确认；不能宣称下载修复解决全部历史故障。停机后只读页面统计发现11个历史Google页面，跨进程旧页面归属不完整，全部保留，不清理未知/人工页面。双Actor未启用。
+COMPUTER_USE_NOT_USED。08:41时状态：INSTALLED / ORIGINAL_BACKEND_VALIDATION_IN_PROGRESS / V16_REVIEW_REQUIRED；已由下节08:54正式运行记录取代。订单真实采购及后续报价、TP成功尚未取得，不以离线通过冒充真实成功。报告仅交Owner。
+
+
+### 本轮实际收口：新单保存、Google写回与正式GUI恢复（2026-10-30 08:54）
+
+原公开入口08:50:12仅接受一次purchase重跑；原持久化权限和来源鲜检均保留。真实新单一次attempt完成六源调研（PARTIAL_SUCCESS，不宣称六站全有报价）。INSO保存点击后先记UNKNOWN，再由原只读对账确认SAVED及非空外部record reference，最终PURCHASE_RECORDED；未再次点击保存、未重发采购。08:52:47原follow-up episode确认本单Google状态发生写入并已鲜读回，不只是本地SUCCESS。08:52:56原Backend返回manual_success=true、PURCHASE_SENT并正常shutdown/释放锁。
+原自然询价636.391秒、报价397.016秒、嵌套TP11.938秒均结束；包含一次Google读取超时后恢复，不能宣布所有读取故障已消除。Google/INSO历史故障并非同一根因。
+仅退休本次原Backend新建、精确native ID且已证实空闲的3个Google页；0个历史页面关闭，0个保护页面关闭，其他历史11个Google页保留。未强杀Chrome。单次CLI辅助已退出，不留第二生产Backend。
+08:54:24正式EXE BC7970…启动一次--start-inquiry；实际GUI145364、原观察器139324；08:54:26 gui_ready，08:54:28实际询价begin，响应正常，原单实例锁持有。启动中的previous_abnormal_exit是08:23授权强制退出的历史凭据，不作新的业务故障或静默清除。
+SQLite integrity ok；历史125条不可变命令、156条SENT完整行及4个历史TP任务不变（其中原6条TP-SENT保留）。SAVED由23增24；无新增SMTP收据，无UNKNOWN残留。SMTP发信和供应商后续报价不能凭采购保存冒充完成；目标单是否满足TP由原自然轮次判断，不制造TP任务或邮件。原900/120秒及双Actor关闭保持不变。
+正式程序2875文件再次逐项哈希相等，原单实例检查通过。当前BUSINESS_RUNNING / V16_REVIEW_REQUIRED；继续低干扰跟进，真实长期稳定、DPI和游戏影响NOT_VERIFIED。COMPUTER_USE_NOT_USED。无需Owner再点重跑或开始。

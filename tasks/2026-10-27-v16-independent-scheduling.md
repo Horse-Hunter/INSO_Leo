@@ -5215,3 +5215,15 @@ Owner confirms authentication and already clickedStart; do not click/start/resta
 
 
 08:01 passiveheartbeat: currentOwner-resumed run recordedGoogleREAD_UNAVAILABLE07:58:46 andSURFACE_UNCONFIRMED07:59:01; inquiry stillinprogress, no newmail/purchase/unknown. Exact process109068/121936 paths verified. Original retry result pending, not globalstop proof. Canonical report/JSON updated; notifyOwner once of post-auth Googlefailure, repeatedsameerrors quiet; no production/CDP action.
+
+
+### 本轮实际收口：新单保存、Google写回与正式GUI恢复（2026-10-30 08:54）
+
+原公开入口08:50:12仅接受一次purchase重跑；原持久化权限和来源鲜检均保留。真实新单一次attempt完成六源调研（PARTIAL_SUCCESS，不宣称六站全有报价）。INSO保存点击后先记UNKNOWN，再由原只读对账确认SAVED及非空外部record reference，最终PURCHASE_RECORDED；未再次点击保存、未重发采购。08:52:47原follow-up episode确认本单Google状态发生写入并已鲜读回，不只是本地SUCCESS。08:52:56原Backend返回manual_success=true、PURCHASE_SENT并正常shutdown/释放锁。
+原自然询价636.391秒、报价397.016秒、嵌套TP11.938秒均结束；包含一次Google读取超时后恢复，不能宣布所有读取故障已消除。Google/INSO历史故障并非同一根因。
+仅退休本次原Backend新建、精确native ID且已证实空闲的3个Google页；0个历史页面关闭，0个保护页面关闭，其他历史11个Google页保留。未强杀Chrome。单次CLI辅助已退出，不留第二生产Backend。
+08:54:24正式EXE BC7970…启动一次--start-inquiry；实际GUI145364、原观察器139324；08:54:26 gui_ready，08:54:28实际询价begin，响应正常，原单实例锁持有。启动中的previous_abnormal_exit是08:23授权强制退出的历史凭据，不作新的业务故障或静默清除。
+SQLite integrity ok；历史125条不可变命令、156条SENT完整行及4个历史TP任务不变（其中原6条TP-SENT保留）。SAVED由23增24；无新增SMTP收据，无UNKNOWN残留。SMTP发信和供应商后续报价不能凭采购保存冒充完成；目标单是否满足TP由原自然轮次判断，不制造TP任务或邮件。原900/120秒及双Actor关闭保持不变。
+正式程序2875文件再次逐项哈希相等，原单实例检查通过。当前BUSINESS_RUNNING / V16_REVIEW_REQUIRED；继续低干扰跟进，真实长期稳定、DPI和游戏影响NOT_VERIFIED。COMPUTER_USE_NOT_USED。无需Owner再点重跑或开始。
+
+最终资源/清理补充：正式GUI122秒短测0.30449%host CPU、RSS114.6~118.4MiB、线程12~18、句柄1086~1318；非长期稳定结论。已退休本次构建暂存2876文件/268036144字节、兼容副本843776字节及8个一次性脚本；保留正式程序、回滚及仅日志/只读账本跟进工具。原“Owner需右键重跑”已SUPERSEDED，新单一次原API重跑已成功收口，Owner无需重复操作。
