@@ -1,67 +1,64 @@
-# RFQ-016 — Production trust repair: source-status display, age admission, and false-alert prevention
+# RFQ-016 — 生产可信度紧急整改：防误报警邮件、旧订单轮询隔离、任务中心状态同步
 
-**Status:** SPEC_READY / NOT_IMPLEMENTED / NO_RELEASE_AUTHORIZATION
-**Owner requirement date:** 2026-10-30 (Asia/Shanghai)
-**Requirement authority:** Owner; **spec/review:** CEO; **implementation:** newly opened Codex Executor
-**Source starting reference:** GitHub remote branch `codex/v1-6-independent-scheduling`, verified remote HEAD at spec drafting `f8f2c3217fca5215a9eb94b39d23cd76d988dc4e`. This is NOT proof of the installed executable or Owner's unpushed local commit `7574516f18c8ee3225b5039f2eb4aeabd0045bbc`.
+**状态：OWNER_REQUIREMENT_FROZEN / CODE_NOT_IMPLEMENTED / NOT_DEPLOYED**  
+**Owner 最新明确口径：2026-10-30，上海时间。Owner/CEO 负责需求与复审；新 Codex Executor 负责实现。**  
+**起点：**GitHub `codex/v1-6-independent-scheduling` 上次已核实源码 `f8f2c3217fca5215a9eb94b39d23cd76d988dc4e`。旧 Codex 最终声称本地报告 commit `7574516f18c8ee3225b5039f2eb4aeabd0045bbc` 未推送，不得猜本地源码/正式 EXE 与远端一致。新窗口须先只读确认当前仓库/安装/未提交状态，保存独有历史，禁止清理或覆盖未知 worktree。
 
-## 0. Owner's direct requirement / outcome
+## 一、必须达成的真实业务结果
 
-Owner reports serious production problems:
-- A customer order was **manually quoted / source Google status updated**, while task center still displays **“已发采购单”** (or equivalent prior workflow state).
-- Many unwanted anomaly emails: Google transient/recovery notifications and **old orders (e.g. one month ago) reported as failed inquiry entry**.
-- Old orders still enter inquiry even though source status is **customer quoted/sent**, not `未发`.
-- **All orders older than seven days must be excluded from inquiry AND quotation modules**; orders older than **one calendar month** must be excluded from TP.
-- **Redesign and strictly audit all automatic abnormal-email generation and actual send admission**; Owner does not want any unsubstantiated, obsolete, duplicate or misleading anomaly emails.
+1. Owner 已经**手动给客户完成报价、修改 Google 原单状态**，任务中心却还显示“已发采购单”：任务中心必须在原正常且成功的 Google 来源读取后展示**真实最新客户订单状态**，而不是拿采购历史里程碑冒充实时状态；若该次读失败，明确显示“来源尚未核实/可能过期”，不要谎称已同步。原采购发送确实发生过时历史里程碑仍要保留，`UPDATE_RESULT_UNCONFIRMED` 等持久化保护不能据此清除。
+2. **自动询价和自动报价：只扫描订单询价日期最近 7 个自然日（含边界）的订单。** 7 天之外任何当前状态都不允许自动入队、重新认领、重试或进入 INSO、Google 写入/提醒。自动询价还必须具有**当前来源状态精确为 `未发`** 的鲜读证明；`已报价给客户`、`发给采购` 等非 `未发` 绝不因 SQLite 旧 `QUEUED/RETRY_WAIT` 再次进入询价。自动报价在期限内仅处理原本允许的 `发给采购`、`采购已报价`、`已报价给客户`。
+3. **自动 TP 与全部后续个性化需求模块：只扫描询价日期最近 1 个自然月（含边界）的订单。** 超过一月连自动新建任务/恢复旧 `PENDING/FAILED`、轮询调研、生成新通知都禁止；任何未来接入的个性化模块必须复用同一准入接口，不能遗漏。
+4. **单独由 Owner 发起的某一订单“重跑询价/采购、重跑报价、手动 TP 或个性化需求”必须保留，且不受 7 天/1 个月自动期限限制。** 只有显式且可追溯的 Owner 手工单笔操作可绕过“年龄”限制；仍然必须通过该动作原有的实时**状态权限、身份、订单绑定、Stop、UNKNOWN、邮件幂等、不能重复下单/重复更新**等全部保护。年龄豁免不等于强制重做，不能偷偷恢复自动重试。
+5. **必须杜绝缺乏可靠证据的异常告警邮件；真正需要 Owner 干预的重大故障仍必须通知一次。** Owner 已收到大量Google告警，打开电脑发现Google表格正常；这不是“Google整站故障”的证据。Google 网页能打开也不是程序读/写成功的证据。应区分**网页可达、程序真实读/写状态、能否自动恢复、该轮最终是否完成、有没有实际需要人工处理的持续阻断**。只在最后一种且经过核验时发邮件。
 
-This task is a production correctness/safety repair, not another new scheduling/Actor feature or an opportunity for broad refactoring. Implement it rather than drafting only another investigation report. The Owner has explicitly banned Codex agent Computer Use: read `AGENTS.md` and `AI_START_HERE.md`.
+## 二、年龄和身份：自动准入通用规则
 
-## 1. Immediate safety and handoff (must precede changes)
+- 时区统一 `Asia/Shanghai`。日期来源优先现有**可信且唯一对应当前原订单**的询价日：原 Google 原单询价日期 / `RFQ_BRIEF.rfq_date`，并结合 2026、SHAHAB 已审核的原工作表/row/型号/品牌/数量等绑定；SHAHAB 的原来源日期必须保持一致；Brief `updated_at` 是批处理更新时间，不能当订单日期。若原询价日期未可靠获得，可用原相同 `inquiry_id` 不可变 SQLite `created_at` 作为**显式标注为近似值**的后备策略；未来日期、坏格式、来源冲突、不匹配、无日期时自动禁止处理并仅记录本地非邮件原因。切勿用供应商报价日期、最后扫描时间、状态修改时间或仅 MPN 猜测。
+- 7天界限按上海当地日期：`inquiry_day >= shanghai_today - 7 days` 含边界；不是原“已报价客户才7天”规则。自然月界限按日历向前减1个月并正确处理月底、2月29日；例如 3月31日上一月是2月最后一天。含边界，超期不进入自动任务。
+- 年龄准入**必须同时拦截发现、已有持久化队列、恢复/重试、独立调度、每笔原任务 continuation，以及第一次外部读/写前**。更早通过的缓存/旧 row 不能替代本次现场身份/状态校验。年龄跳过是 `SKIPPED/EXCLUDED`，不是 `FAILED`，不得因此形成异常邮件、重置单据/ledger 或更新 Google 原单。
+- 新旧订单保留在历史界面和账本，可供人工单独操作；不另造 scheduler/SQLite 表/浏览器客户端。全部独立调度和单 Owner、安全报价让位 TP 的正确能力保留。
 
-1. Inspect `git status`, worktrees and actual installed program metadata vs original reports; **do not assume local and GitHub are synchronized**. Last Codex reported local commit `7574516f18c8ee3225b5039f2eb4aeabd0045bbc` **NOT PUSHED**, and an installed fix. Preserve all local/dirty/private state before branch switching; don't blindly reset/rebase/force push, don't overwrite another branch. GitHub latest known published source is `f8f2c321...`. If local commit/source is available, inspect/diff against remote before choosing a safe base. Never copy production secrets/log bodies into Git.
-2. **Do not connect another browser/CDP/Playwright client while production owns Chrome.** Do not close or steal Owner's manually edited pages, test old-order actions, resend, clear existing holds or retry unknown effects.
-3. While false emails are actively flowing, propose **immediate containment** first: use existing authorized safe Stop/drain or Owner-assisted normal GUI action to suspend *untrusted automatic anomaly-mail emission* while retaining local error/health visibility, protected business data, outbox and real order safety; if it cannot be done safely without code change, explain the one required Owner intervention rather than live patch/forcekill. Never edit Vault/SMTP auth, indiscriminately erase queued mail, or secretly shut off safety/data-integrity gates. Do not make unverified install claims. Preserve normal legitimate order/TP notices but do not send them until their existing authorizations and evidence have been checked.
-4. Any source/test change is **not authorized for automatic production replacement** by the previous one-time 7-day approval. No install, live write or new release without independent source review and new specific release decision. Offline/local sandbox work is authorized now.
+## 三、邮件：严格证据审核而不是全禁
 
-## 2. Canonical business age admission — applies before EVERY business side effect
+**邮件最终规则：对同一个未经证实、已恢复、过期、非当前业务的故障，外发数量必须等于 0；对一个确实需要 Owner 干预的持续故障，最多发送 1 封准确的邮件。** 原正常且合法的业务邮件（真正的新重要订单、TP结果、交易已证实的提醒）在核对证据后保留。不能靠“邮件没发”来掩盖真实系统暂停/未知写入，应在任务中心/日志明确显示。
 
-**Source and age:** Prefer original order **inquiry date** from a verified, uniquely mapped current source/Brief row (`RFQ_BRIEF.rfq_date`; SHAHAB native date if verified); existing immutable local inquiry intake date may be a *clearly labelled fallback proxy*, not an invented actual customer-quote date. Use the same shared identity mapping for 2026 and SHAHAB; no MPN-only or old physical row guess. `updated_at` from bulk Brief is NOT per-order inquiry date. If data are absent, corrupt, in the future, ambiguous or incorrectly bound: **do not admit the row for automatic processing**, retain a local non-email reason/counter, no new ID; never process a stale row on date uncertainty.
+**自动技术异常邮件分类：**
+- **本地日志/UI、不发邮件：** 一次或数次 Google 下载/读取超时但原重试成功或轮次收口；页面加载暂慢；单站临时不可用且正常恢复；旧订单历史故障；已超过期限、不符合状态的旧订单；仅从本地过时状态推测的“询价录入失败”；无可归属原始订单/真实性不足的警告；同一故障重复的 poll/cycle/run/restart。禁止把“程序某次读取超时”写作“Google表格异常/Google不可用”邮件。
+- **真正需要人工干预，核实后发 1 封：** 原程序已经连续完成重试仍被**真实阻断**、后续正常周期仍无法恢复，并且被阻断的真实当前业务需要 Owner 操作；已可靠确认需要短信/验证码/重新授权；真实持久化未确认外部写入/可能造成重单，必须 Owner 核对。严重持久性单实例/数据保护/业务停止也可按相同规则通知。**真实性证据要包括：**固定故障码、当时模块、已完成重试/持续阻断而非单次异常、最后成功时刻、对应当前业务/风险、必须进行的人工动作，以及哪些事实仍不确定。不能凭网站 URL 看起来正常与否猜原因。真正涉及UNKNOWN写入的邮件不能冒充“报价已失败”或“报价已成功”，只说“写入待人工核实，原订单被保护不会自动重做”。
+- 不把有恢复可能的故障第一时间标成不可恢复。高风险持久化外部效果 UNKNOWN 的保护动作**立即执行**，可在核实是真实业务事件/需要人工核对后立即发邮件一次；其他持续技术故障必须在原既有受限恢复机制确实耗尽或有确定手工验证要求后才能邮件升级。不要无谓添加新的后台定时邮件巡查。
+- 邮件标题正文准确具体，Owner能区分【真正需要处理】与日志中仅警告；绝不称“Google整站不可用”，除非真的有相应外部证据。没有确定行动的“Google运行异常”不得发送。
 
-- **INQUIRY:** eligible only when the **fresh actual Google source status is exactly `未发`** AND order inquiry-age is within inclusive 7 calendar days (Asia/Shanghai). Once source status becomes customer-quoted/customer-sent, purchased, or any other non-`未发` state, it must not enter Inquiry, no matter what the local SQLite QUEUED/RETRY_WAIT state or historical label says. Apply at discovery, durable queued/retry claim, continuation, pre-Research/INSO, and pre-purchase/external-effect guard. Don't rewrite historical completed business state to achieve a skip. If current source read is unavailable, fail closed; don't infer `未发` from old cached state.
-- **QUOTATION:** only the original explicitly supported current quotation statuses (`发给采购`, `采购已报价`, `已报价给客户`), AND original inquiry-age within inclusive 7 Shanghai calendar days **for ALL three statuses**. Current status and identity must be freshly checked before opening INSO quote tab and again before any Google price update. User says `已发送给客户` conversationally; inspect actual Sheet enum and don't silently invent or conflate status strings. Existing no-repeat, price baseline and hold safety remains.
-- **TP:** only when source/Brief inquiry-age is within **one calendar month** of Shanghai today (inclusive exact boundary; e.g., March31 cutoff February28 or29 using calendar-month subtraction, not arbitrary 30*24h), AND TP identity/target price/source is uniquely verified. Check at discovery, durable PENDING/FAILED retry, manual route, continuation and pre-Research/outbox effect. Do not create a TP task/email for old or date-unknown rows; keep existing SENT/UNKNOWN delivery ledger and stable task identity. Report clearly if the implementation uses a different age interpretation; do not silently substitute 30 days.
-- **Manual operations:** Owner said `禁止再进入` these modules, so the age rule applies to automatic AND manual execution by default. No hidden manual bypass without a later explicit Owner exception. Existing permission, Stop, 120-second retry, browser owner, source identity, purchase/SENT/UNKNOWN barriers all remain stronger than age filtering.
-- Age filtering is an **admission/skip**, not a new `FAILED` event, notification, requeue, destructive SQL migration or reason to replay past emails. Old rows are visible as historical records but never reprocessed automatically solely because they exist in DB.
+**必须双重审核：**
+1. **产生/入队前审核**：当前订单真实性、来源当前状态/年龄（用于自动旧单故障）、明确的业务作用/后果、真实持续故障/人手动作、同一事故的历史首次告警、完全禁止的类别。
+2. **发送前审核（含重启恢复旧待发命令）**：不可仅信任旧 outbox，必须检查当前事件仍然有效、仍需通知、当前订单/来源状态仍适用、同一事故未通知过、收件人合规、原 SENT/UNKNOWN 保护无误。旧未发送邮件若过期/已恢复/旧单/误报，应**停止对外发送并保留可审计的抑制记录**，不改历史 SENT、不假装未知外发不存在、不清空 DB。
+3. **跨启动与跨轮次幂等**：单一稳定持久化 incident key（故障类别+受影响模块/原订单/根事件，不能靠 run_id、cycle_id 或每次重试时间生成新事故）；同一持续未恢复事故只发一次，修复后若再次真正独立发生，才可能是新事故，必须有独立证据，不能只因为重启就重发。
+4. 保留原正确的采购邮件、TP报告及需要的人为风险通知，但也严格保证**旧误报告警不会被历史 SMTP Worker 补发**。审核所有入口：`src/launcher/v13_integration.py` 的 `notify_runtime_fault` / `notify_website_issue` / `notify_quotation`；`backend.py` 的 `_observe_source_failure`、`_defer_website_poll`、`_defer_google_read_poll`、登录通知与 `_record_fault_alert`；`src/workflow/v12_flow.py` 的历史 A 类/询价异常；`src/workflow/v12_notifications.py` worker、`v12_store.py` outbox、`v12_smtp_transport.py` 真正发信接口；TP、订单邮件其它异常路径。复用现有 ledger，不能额外搭一套报警系统。
+5. 防误报优先于“发一封保险”：证据不足时只记**本地警告和业务安全 hold**，不能发猜测性邮件。**一旦有确认的真实严重故障，又必须及时发 1 封**，不因全面禁邮件而漏掉需要 Owner 干预的业务。无 Owner 专门许可，不发一封真实测试邮件。
 
-## 3. Task-center status must match verified latest source
+## 四、任务中心：手工报价后状态真实同步
 
-Inspect real mapping across `src/launcher/backend.py` (snapshot/history refresh), `src/launcher/v12_gui.py`, `src/launcher/v13_integration.py`, `src/workflow/v12_store.py` and GUI DTO/workbench. After Owner manually changes the confirmed, uniquely bound source row status in Google:
-- Show the **current Google business status** accurately (e.g. `已报价给客户`) upon the next **successful and fresh** read; distinguish it visibly from immutable local workflow milestone `已发采购单`, which may still be true as history. Show source freshness/read failure/identity ambiguity rather than persistently pretending old cached workflow label is the latest customer status.
-- Never automatically claim Google quote update succeeded, clear `UPDATE_RESULT_UNCONFIRMED`, advance price baseline, modify Google, or erase an immutable purchase/SMTP receipt from a mere human-edited status. If external Google write/result unknown, label **待核对** separately while showing confirmed source status. Manual resolution only by original properly verified path.
-- No extra browser polling, new Google tab or unbounded periodic refresh solely to repaint GUI. Reuse already authorized Sheets read/observed revision and original one-row binding; avoid guessing from MPN or row order.
+排查并修正 `backend._refresh_history/_cache_workbench/_refresh`、`src/launcher/v12_gui.py`、`src/launcher/v13_integration.py`、原 V12 durable business state、GUI DTO/view 的来源优先级与缓存失效。
+- 已人工完成Google报价、手工改为 `已报价给客户`（依据实际Sheet列字符串，不把口语“已发送给客户”直接冒充枚举），**下一次原计划正常成功读取并确认唯一订单身份后**，任务中心必须优先展示此客户状态，原“已发采购单”独立保留为采购历史，而不是一直占用当前业务状态位置。
+- 当次 Google 读取失败/身份不确定，显示明确“状态待同步/读取不可靠”，**不能一直展示旧状态且声称是当前状态**；不创建额外实时 CDP 连接、后台盲刷、价格基线重设、自动补发、清除 `UPDATE_RESULT_UNCONFIRMED` 或重跑。
+- 可读性的真实当前来源状态与持久化 UNKNOWN/人工核对标识可以同时存在，不能因人改Sheet就自动证明此前程序提交成功。
 
-## 4. Redesign email anomaly admission (both enqueue AND send-time)
+## 五、新 Executor 的执行顺序与验收门槛
 
-Audit **all** paths—not just a UI toggle: `src/launcher/v13_integration.py::notify_runtime_fault/notify_website_issue/notify_quotation`, launcher `_observe_source_failure`, `_defer_website_poll`, `_defer_google_read_poll`, login alerts and `_record_fault_alert`; V12 coordinator `_notify_a_if_nonduplicate`, `_enqueue_notification`; TP fault/notification; existing `V12NotificationWorker`, SQLite outbox/recipient records and SMTP send boundary, including recovery/restart of old pending commands.
+1. **先保护现场**：核实原远端与当前本地 git/worktree/正式 EXE 是不是同版本；找出且保护未推送 `7574516f18c8ee3225b5039f2eb4aeabd0045bbc`。别丢历史/覆盖未知工作。只读原有脱敏日志、SQLite 和既有书面记录分析 Google 假异常邮件的**具体触发、入队、送信路径**，确认是 Google读取可恢复、旧告警重启补发，还是实际写入 UNKNOWN；不能推测都属一类。严格不碰真实浏览器/Chrome owner页面/邮件外发。
+2. **明确止扰策略**：不依赖调低邮件发送频率这一表层补丁；在原通知工作者的发信入口加本轮统一邮件准入/事故身份、复核队列已有异常，同时覆盖创建入口。若旧版正在持续轰炸且现有正式程序没有可信、可区分异常邮件的开关，不得在运行中直接编辑 EXE/数据库/SMTP凭据。向Owner明确“正常Stop会同时暂停自动业务”的取舍，遵循原安全 Stop/drain/手动协助，不强杀。
+3. **最小复用实现**：公共“自动业务年龄/原来源状态准入”与“手工单笔年龄豁免”分离；现有 GUI 来源读取投影修复；统一异常邮件验证与原 durable outbox/SMTP send gate。不得新增第二调度、第二数据库、第二浏览器控制、临时长期守护任务或无穷重试。保持原900秒调度、报价向TP让位、120秒安全等待、Google/INSO原账号授权和邮件SENT/UNKNOWN保护。
+4. **必须有离线真实失败再修复的回归**，含：
+   - 一个月前、来源已 `已报价给客户`、本地 QUEUED/RETRY_WAIT 旧单：**零自动询价、零研究/INSO、零新失败邮件**。当前 `未发` 但>7天也跳过；7天边界仍自动允许。当前非 `未发` 即使最近7天也绝不自动询价。
+   - 自动报价的三种已许可状态都按7天全拦截；旧候选、重复源位置、跨表错绑不能绕过；近7天的普通报价仍保留。
+   - 自动TP和未来个性化需求公共准入：1个自然月、跨月最后一天/闰年边界、已持久化旧PENDING/FAILED重试都不执行；近一个月有效任务正常。
+   - **人工单笔重跑老订单**在原状态权限和其它防重门禁通过时仍能进入；状态不允许、真正UNKNOWN、身份不符则不允许，不能把年龄豁免变成权限绕过。
+   - Google短暂读超时->重试成功、Google页面可见但程序当轮读失败随后恢复、程序仅等待下轮、不需要人干预：**0封技术异常邮件**；跨启动3轮同故障阻断：**最多1封且须经证据条件证明**；真正人工登录/危险写入待核对：1封准确行动邮件；同一次事故不因重启/不同run_id重复。
+   - 已入队1个月前旧询价失败、已恢复Google警告、已SENT/UNKNOWN历史命令：没有旧告警发出去、没有重发、未破坏原账本；合法当前重要订单/TP业务邮件仍可到 fake SMTP。
+   - 手工把Google状态改为客户已报价：新一次正常原Sheets读取后任务中心变更；只读失败则标记不新鲜、采购历史仍保留、UNKNOWN不自动消除。
+   - 全量源代码回归；只能使用本地沙箱 SQLite/假Google/假INSO/假SMTP，不要发测试邮件或创建真实订单。
+5. **交付与发布隔离**：先提交精简源代码差异及定向/全量测试结果、已知事实/未核实项、处理旧已待发告警的策略、完整 Git SHA，送CEO源码复审。**Owner本次尚未授权RFQ-016自动安装**，不要像之前一样声称“测试通过=生产已修复”。生产维持运行或如真实邮件风险需Owner决定正常安全停止；不能擅自重启/代替人工页面操作。
 
-Mandatory properties:
-1. **Default-deny abnormal emails** until an approved exact event type has an attributable current order/source identity (if order-scoped), contemporaneous evidence and required human action. Every alert must say what's confirmed, what remains unverified, and what action actually helps. A transient Google read timeout that recovered, stale old-order discovery/retry, stale run-id, source status already completed, ambiguous identity, or unconfirmed old event must NOT create a new outward anomaly email. Keep useful fault information in local logs/GUI without external noise.
-2. Apply age/status/source identity admission **before generating any anomaly command**, and re-check applicability at the recipient **send boundary** for queued unsent historical events. A stale queued command may never send merely because it survived restart. Do not re-send `SENT`, do not silently erase unknown external outcomes, and do not mutate already-SENT receipts. If source unavailable, suppress external delivery of unverified order alerts and log a bounded local reason; do not issue another email about the suppression.
-3. Use **persistent durable incident identity and cooldown/collapse** across cycles/restarts (not merely new run/cycle IDs). Send at most one valid actionable abnormal alert per currently unresolved unique incident while it remains active, unless a genuinely changed severity/new independently verified incident requires new notice. Document the exact dedup/cooldown boundary and ensure no alert cascades or retries turn into flooding; recipient dedup and durable UNKNOWN/SENT semantics unchanged.
-4. Separately preserve **legitimate, verified business communications** (new important order, genuinely confirmed exception requiring human intervention, TP verified task result, verified model difference where still applicable). Their existing correct recipients, approved business conditions and format are not an excuse to send general site-recovery noise. **No live test email** without separate Owner authorization; rely on fake SMTP and isolated DB for regression.
-5. Fail safely on ambiguous or malformed evidence: *no external anomalous email*, not a fabricated success. A real dangerous unknown external write still gets a local persistent hold and accurate GUI warning; absence of email must never remove data-integrity protections. Do not indiscriminately delete old outbox rows; reconcile unsent ones with traceable suppressed/obsolete decision if the reviewed schema supports it, otherwise keep on durable hold until a safe design passes Review.
+**硬性治理：** `AGENTS.md` + `AI_START_HERE.md` 的 `COMPUTER_USE_NOT_USED`；绝不调用 agent Computer Use，绝不用自制桌面控制替代，绝不抢夺关闭人工页面。无另一个 live CDP 客户端，不强杀生产 Chrome，不盲目恢复 UNKNOWN/历史订单，禁止修改 Config/Vault/收件人/历史业务数据来实现止扰。历史 Owner 单独重跑只豁免期限而不豁免权限。只对正式提交的源码、测试和日志做事实陈述，不猜成功。
 
-## 5. Acceptance tests and delivery
-
-Must demonstrate with deterministic offline fixtures and fake transport:
-- Current source manually becomes `已报价给客户`: task center shows **source current status** without overwriting truthful purchase history/unknown-write barrier; stale/failed Sheets read shows uncertain, not falsely fresh.
-- Very old **customer-quoted** order in local QUEUED/RETRY_WAIT/RESEARCHING cannot enter Inquiry, create failed-inquiry event or anomaly email; old `未发` also excluded by age; current `未发` ≤7d still works.
-- All quotation statuses ≤7d eligible under original safety; >7d all blocked before INSO/tab/Google actions even if source status is `发给采购` or `采购已报价`. At exactly 7d inclusive; future/missing ambiguous date fail closed.
-- TP ≤1 calendar month including end-of-month/leap-year inclusive; older TP blocked before reading sites, creating task/new outbox; persisted old PENDING/FAILED/manual retries cannot evade it.
-- Automatic/manual entry, retries after restart, stale cached snapshots, moved/reused rows, mismatched 2026/SHAHAB duplicate MPN and stale persisted source status cannot bypass gates.
-- Replaying a month-old failed inquiry, transient Google recoverable fault, multiple repeated same-site faults across run IDs, delayed old notification already queued, restarted mail worker: **zero erroneous outbound**. True confirmed human-actionable incident at most one permitted alert; legitimate verified business mail retains correct original behavior. Existing SENT/UNKNOWN records unchanged.
-- No production Chrome/Profile/Vault/runtime modification, no unexpected process/page closure, no test email/old order submission. Full existing regression plus targeted, report exact failures/limitations.
-
-**Execution:** First report factual baseline/safety diagnosis from *non-invasive already-existing logs, locally verified config/read-only data* only. No overlapping browser probe or operation and no automatic production restart/rollback during diagnosis. Implement minimal reuse-first code in current suitable worktree with tests and a short structured execution receipt, update THIS spec execution status, `control-room/COORDINATION.md` and original `V16_RELEASE_REPORT.md` only when useful. Do not create parallel scheduler/notification store/browser/GUI framework. Then push full SHA for CEO **SOURCE Review**. **No automatic production installation is authorized for RFQ-016.**
-
-**Source of truth and enforcement:** This RFQ + `AGENTS.md` + `AI_START_HERE.md`; the actual unchanged production immutable ledger/source/current state is authoritative only within correctly verified boundaries. CEO review rejects any age/status/mail path that fails tests, wrong business-time semantics, new invasive CDP/Computer Use, deleted original data, fake send confirmation, or unsupported live-success claim. Preserve historical evidence, protected runtime and unknown effects; clean only owned disposable test artifacts. Final business-facing report uses exactly seven `docs/REPORTING.md` headings and says `COMPUTER_USE_NOT_USED`.
+**Owner 验收底线：**“自动询价/自动报价7天，自动TP/个性化需求1个月，人工单笔重跑可做；任务中心显示真实的客户已报价状态；误报邮件为0，真正需要我处理的故障只来1封准确邮件。” 任何一条未满足则本任务不能判PASS。
