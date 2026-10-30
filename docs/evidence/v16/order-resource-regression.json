@@ -7591,5 +7591,184 @@
       "related.log": "1c81090c5bc739068afa1853a87f92d69d15ddfadd87ca58e836bc415e719d7d",
       "full.log": "9d614cbe53e53ef42e83a18659ced3da9c935e702bfe7f3b118f37859ec63ff0"
     }
+  },
+  "hourly_watch_latest": {
+    "at": "2026-10-30T02:28:59.333671+00:00",
+    "window_start": "2026-10-30T01:28:59.333671+00:00",
+    "native": {
+      "computer_use": "COMPUTER_USE_NOT_USED",
+      "exe_sha256": "BC7970317FC8F277DA4D609F7D04A79F85425B3A641D15426A6DB0C790F0F301",
+      "processes": [
+        {
+          "threads": 9,
+          "private_bytes": 107872256,
+          "responding": true,
+          "cpu_s": 241.65625,
+          "created_at": "2026-10-30T00:54:24.9843610Z",
+          "pid": 145364,
+          "rss": 139784192,
+          "parent": 130656,
+          "path": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6\\INSO_V1.6.exe",
+          "handles": 652
+        },
+        {
+          "threads": 1,
+          "private_bytes": 15171584,
+          "responding": true,
+          "cpu_s": 0.109375,
+          "created_at": "2026-10-30T00:54:25.1573440Z",
+          "pid": 139324,
+          "rss": 21798912,
+          "parent": 145364,
+          "path": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6\\INSO_V1.6.exe",
+          "handles": 128
+        }
+      ],
+      "at": "2026-10-30T02:27:56.1721783Z"
+    },
+    "ledger": {
+      "integrity": "ok",
+      "old_commands_count": 125,
+      "old_commands_immutable": true,
+      "old_sent_count": 156,
+      "old_sent_unchanged": true,
+      "old_tp_count": 4,
+      "old_tp_unchanged": true,
+      "mail_states": {
+        "SENT": 157
+      },
+      "purchase_states": {
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1,
+        "SAVED": 24,
+        "VALIDATION_FAILED": 3
+      },
+      "target": {
+        "sample": "new-order-1",
+        "work": [
+          [
+            "COMPLETED",
+            1
+          ]
+        ],
+        "business": [
+          [
+            "PURCHASE_RECORDED"
+          ]
+        ],
+        "purchase": [
+          [
+            "SAVED",
+            1
+          ]
+        ],
+        "google_write_readback_count": 1
+      }
+    },
+    "completed_cycles_last_hour": {
+      "inquiry": 3,
+      "tp": 3,
+      "quotation": 3
+    },
+    "latest_module_events": {
+      "inquiry": {
+        "at": "2026-10-30T02:19:57.139000+00:00",
+        "module": "inquiry",
+        "phase": "completed",
+        "elapsed_s": 211.078,
+        "due_in_s": 900.0
+      },
+      "tp": {
+        "at": "2026-10-30T02:20:06.307000+00:00",
+        "module": "tp",
+        "phase": "completed",
+        "elapsed_s": 8.922,
+        "due_in_s": 900.0
+      },
+      "quotation": {
+        "at": "2026-10-30T02:23:53.055000+00:00",
+        "module": "quotation",
+        "phase": "completed",
+        "elapsed_s": 208.453,
+        "due_in_s": 900.0
+      }
+    },
+    "faults_last_hour": [],
+    "business_results_last_hour": {
+      "SOURCE_IDENTITY_UNRESOLVED": 3,
+      "QUOTE_AGE_EXPIRED": 66,
+      "NO_RECENT_QUOTE": 36
+    },
+    "target_quotation_results": [
+      {
+        "at": "2026-10-30T01:46:57.195000+00:00",
+        "result": "NO_RECENT_QUOTE"
+      },
+      {
+        "at": "2026-10-30T02:05:24.376000+00:00",
+        "result": "NO_RECENT_QUOTE"
+      },
+      {
+        "at": "2026-10-30T02:23:52.896000+00:00",
+        "result": "NO_RECENT_QUOTE"
+      }
+    ],
+    "observed_start_delays": [
+      {
+        "module": "inquiry",
+        "start_delay_s": 0.018
+      },
+      {
+        "module": "tp",
+        "start_delay_s": 186.799
+      },
+      {
+        "module": "quotation",
+        "start_delay_s": 0
+      },
+      {
+        "module": "inquiry",
+        "start_delay_s": 0.011
+      },
+      {
+        "module": "tp",
+        "start_delay_s": 203.574
+      },
+      {
+        "module": "quotation",
+        "start_delay_s": 0.001
+      }
+    ],
+    "google_metadata": {
+      "count": 3,
+      "previous_count": 14,
+      "new_targets": 1,
+      "closed_targets": 12,
+      "debugger_attached": false,
+      "page_actions": false
+    },
+    "computer_use": "COMPUTER_USE_NOT_USED",
+    "new_commands_since_backup": [
+      {
+        "kind": "PURCHASE_EXCEPTION",
+        "command_family": "idle-login",
+        "fixed_reason": "UNCLASSIFIED",
+        "created_at": "2026-10-30T01:41:51.220838+00:00",
+        "receipts": [
+          {
+            "outcome": "SENT",
+            "last_attempt_at": "2026-10-30T01:43:06.824104+00:00",
+            "reason_code": "NOTIFICATION_SENT"
+          }
+        ]
+      }
+    ],
+    "idle_login_notifications": [
+      {
+        "site": "Findchips",
+        "outcome": "UNAVAILABLE",
+        "created_at": "2026-10-30T01:41:51.220838+00:00"
+      }
+    ]
   }
 }
