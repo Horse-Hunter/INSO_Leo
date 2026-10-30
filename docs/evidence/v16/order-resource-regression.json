@@ -6853,7 +6853,7 @@
       "tp_completed_s": 11.938,
       "all_bugs_fixed": false,
       "quotation_completed_s": 397.016,
-      "formal_all_three_cycles_completed": false,
+      "formal_all_three_cycles_completed": true,
       "source_equivalent_all_three_cycles_completed": true
     },
     "historical_integrity": {
@@ -7074,7 +7074,8 @@
       "gui_ready_at": "2026-10-30T00:54:26.546860+00:00",
       "observer_pid": 139324,
       "inquiry_begin_at": "2026-10-30T00:54:28.957+00:00",
-      "responding": true
+      "responding": true,
+      "first_all_modules_completed_local": "2026-10-30T09:08:56.611+08:00"
     },
     "manual_target_retry_requested": true,
     "all_bugs_fixed": false,
@@ -7164,7 +7165,346 @@
         "installed program",
         "fresh rollback",
         "shared runtime/config/Vault/Chrome"
+      ],
+      "followup_helper_scripts_retired": [
+        "read_cycles.py",
+        "read_target.py",
+        "check_ledger.py"
       ]
-    }
+    },
+    "formal_first_cycle_observation": {
+      "result": "ALL_THREE_MODULES_COMPLETED_WITH_RECOVERED_GOOGLE_TIMEOUT",
+      "cycles": {
+        "cycles": [
+          {
+            "at": "2026-10-30T08:54:28.957000+08:00",
+            "cycle": "cycle_23749c1bde15445c9048daa463619c4c",
+            "module": "inquiry",
+            "phase": "begin",
+            "elapsed": 0.0,
+            "due_in": 0.0
+          },
+          {
+            "at": "2026-10-30T09:05:15.735000+08:00",
+            "cycle": "cycle_23749c1bde15445c9048daa463619c4c",
+            "module": "inquiry",
+            "phase": "completed",
+            "elapsed": 646.781,
+            "due_in": 900.0
+          },
+          {
+            "at": "2026-10-30T09:05:16.044000+08:00",
+            "cycle": "cycle_8f1fd666afe943acb5c8285ef448decf",
+            "module": "quotation",
+            "phase": "begin",
+            "elapsed": 0.0,
+            "due_in": 0.0
+          },
+          {
+            "at": "2026-10-30T09:05:33.909000+08:00",
+            "cycle": "cycle_2a023331008e4909b1e41bbf734c9b29",
+            "module": "tp",
+            "phase": "begin",
+            "elapsed": 0.0,
+            "due_in": 0.0
+          },
+          {
+            "at": "2026-10-30T09:05:46.857000+08:00",
+            "cycle": "cycle_2a023331008e4909b1e41bbf734c9b29",
+            "module": "tp",
+            "phase": "completed",
+            "elapsed": 12.953,
+            "due_in": 900.0
+          },
+          {
+            "at": "2026-10-30T09:08:56.611000+08:00",
+            "cycle": "cycle_8f1fd666afe943acb5c8285ef448decf",
+            "module": "quotation",
+            "phase": "completed",
+            "elapsed": 220.562,
+            "due_in": 900.0
+          }
+        ],
+        "reasons": {
+          "GOOGLE_WEB_READ_UNAVAILABLE": 1
+        },
+        "business_results": {
+          "V1.3:SOURCE_IDENTITY_UNRESOLVED": 1,
+          "V1.3:QUOTE_AGE_EXPIRED": 22,
+          "V1.3:NO_RECENT_QUOTE": 12
+        }
+      },
+      "classification": {
+        "faults": [
+          {
+            "at": "2026-10-30T09:02:37.391000+08:00",
+            "reason": "GOOGLE_WEB_READ_UNAVAILABLE"
+          }
+        ],
+        "target_source_identity_unresolved": false,
+        "target_quotation_results": [
+          {
+            "at": "2026-10-30T09:08:56.414000+08:00",
+            "result": "NO_RECENT_QUOTE"
+          }
+        ]
+      },
+      "final_process_and_native_counters": {
+        "exe_sha256": "BC7970317FC8F277DA4D609F7D04A79F85425B3A641D15426A6DB0C790F0F301",
+        "qualification": "Read-only final heartbeat snapshot, not a continuous long-term or Chrome resource test",
+        "at": "2026-10-30T01:12:52.0697881Z",
+        "computer_use": "COMPUTER_USE_NOT_USED",
+        "counters": [
+          {
+            "cpu_s": 0.109375,
+            "private_bytes": 15171584,
+            "handles": 128,
+            "rss": 21798912,
+            "responding": true,
+            "threads": 1,
+            "pid": 139324
+          },
+          {
+            "cpu_s": 50.265625,
+            "private_bytes": 105963520,
+            "handles": 591,
+            "rss": 136077312,
+            "responding": true,
+            "threads": 9,
+            "pid": 145364
+          }
+        ],
+        "processes": [
+          {
+            "ProcessId": 145364,
+            "ParentProcessId": 130656,
+            "CreationDate": "2026-10-30T08:54:24.984361+08:00",
+            "ExecutablePath": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6\\INSO_V1.6.exe"
+          },
+          {
+            "ProcessId": 139324,
+            "ParentProcessId": 145364,
+            "CreationDate": "2026-10-30T08:54:25.157344+08:00",
+            "ExecutablePath": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6\\INSO_V1.6.exe"
+          }
+        ]
+      },
+      "earlier_heartbeat_counters": {
+        "processes": [
+          {
+            "responding": true,
+            "private_bytes": 15171584,
+            "handles": 128,
+            "rss": 21798912,
+            "threads": 1,
+            "pid": 139324,
+            "cpu_s": 0.109375
+          },
+          {
+            "responding": true,
+            "private_bytes": 104230912,
+            "handles": 3545,
+            "rss": 133562368,
+            "threads": 9,
+            "pid": 145364,
+            "cpu_s": 40.578125
+          }
+        ],
+        "unknown_recipients": 0,
+        "historical_commands_immutable": 125,
+        "target": "SAVED / attempt1 / unchanged",
+        "historical_sent_unchanged": 156,
+        "google_read_unavailable": 1,
+        "formal_inquiry_completed_s": 646.781,
+        "action": "READ_ONLY_NO_USER_ACTION",
+        "computer_use": "COMPUTER_USE_NOT_USED",
+        "at": "2026-10-30T01:08:02.2000267Z",
+        "google_retry_exhausted": 0,
+        "formal_quotation": "IN_PROGRESS",
+        "formal_tp_completed_s": 12.953
+      },
+      "target_receipt": {
+        "at": "2026-10-30T01:12:51.975194+00:00",
+        "sample": "new-order-1",
+        "work": [
+          [
+            "COMPLETED",
+            1,
+            "PARTIAL_SUCCESS",
+            null,
+            null,
+            "2026-10-30T00:50:12.720291+00:00"
+          ]
+        ],
+        "business": [
+          [
+            "PURCHASE_RECORDED",
+            "2026-10-30T00:51:52.575994+00:00"
+          ]
+        ],
+        "purchase": [
+          [
+            "SAVED",
+            null,
+            1,
+            "2026-10-30T00:51:50.578071+00:00"
+          ]
+        ],
+        "events": [
+          [
+            "DUPLICATE_CHECK_STARTED",
+            null,
+            null,
+            "2026-10-29T16:06:36.797167+00:00"
+          ],
+          [
+            "DUPLICATE_CHECK_STARTED",
+            null,
+            null,
+            "2026-10-29T16:06:36.797167+00:00"
+          ],
+          [
+            "HUMAN_RESOLUTION_RECORDED",
+            null,
+            null,
+            "2026-10-29T16:30:59.687874+00:00"
+          ],
+          [
+            "PURCHASE_DRAFT_STARTED",
+            null,
+            null,
+            "2026-10-30T00:50:12.720291+00:00"
+          ],
+          [
+            "HUMAN_RESOLUTION_RECORDED",
+            null,
+            null,
+            "2026-10-30T00:50:12.720291+00:00"
+          ],
+          [
+            "RESEARCH_STARTED",
+            null,
+            null,
+            "2026-10-30T00:50:12.720291+00:00"
+          ],
+          [
+            "DUPLICATE_CHECK_CONFIRMED",
+            null,
+            null,
+            "2026-10-30T00:50:12.720291+00:00"
+          ],
+          [
+            "DUPLICATE_CHECK_STARTED",
+            null,
+            null,
+            "2026-10-30T00:50:12.720291+00:00"
+          ],
+          [
+            "PURCHASE_DRAFT_STARTED",
+            null,
+            null,
+            "2026-10-30T00:50:12.720291+00:00"
+          ],
+          [
+            "PURCHASE_DRAFT_STARTED",
+            null,
+            null,
+            "2026-10-30T00:50:12.720291+00:00"
+          ],
+          [
+            "AI_RECOGNITION_READY",
+            null,
+            null,
+            "2026-10-30T00:51:43.586371+00:00"
+          ],
+          [
+            "SAVE_CLICK_COMPLETED",
+            null,
+            null,
+            "2026-10-30T00:51:43.588832+00:00"
+          ],
+          [
+            "SAVE_DISPATCH_ARMED",
+            null,
+            null,
+            "2026-10-30T00:51:43.588832+00:00"
+          ],
+          [
+            "SAVE_OUTCOME_UNKNOWN",
+            "SAVE_OUTCOME_UNKNOWN",
+            null,
+            "2026-10-30T00:51:43.588832+00:00"
+          ],
+          [
+            "RECONCILIATION_STARTED",
+            "SAVE_OUTCOME_UNKNOWN",
+            null,
+            "2026-10-30T00:51:50.578071+00:00"
+          ],
+          [
+            "RECONCILIATION_CONFIRMED_SAVED",
+            null,
+            null,
+            "2026-10-30T00:51:52.547842+00:00"
+          ],
+          [
+            "ALERT_RECOVERED",
+            null,
+            null,
+            "2026-10-30T00:51:52.547842+00:00"
+          ],
+          [
+            "PURCHASE_DATA_SAVED",
+            null,
+            null,
+            "2026-10-30T00:51:52.575994+00:00"
+          ]
+        ],
+        "confirmed_google_write_readback": [
+          [
+            "2026-10-30T00:52:47.231186+00:00"
+          ]
+        ]
+      },
+      "historical_integrity": {
+        "integrity": "ok",
+        "historic_command_count": 125,
+        "historic_commands_immutable": true,
+        "historic_sent_count": 156,
+        "historic_sent_full_rows_unchanged": true,
+        "historic_tp_count": 4,
+        "historic_tp_full_rows_unchanged": true,
+        "current_recipients": {
+          "SENT": 156
+        },
+        "current_tp_states": {
+          "MAIL_QUEUED": 4
+        },
+        "new_recipient_kind_outcomes": {},
+        "purchase_outcomes_before": {
+          "AI_RECOGNIZED": 3,
+          "MANUAL_REVIEW": 1,
+          "SAVED": 23,
+          "VALIDATION_FAILED": 3
+        },
+        "purchase_outcomes_current": {
+          "AI_RECOGNIZED": 3,
+          "MANUAL_REVIEW": 1,
+          "SAVED": 24,
+          "VALIDATION_FAILED": 3
+        },
+        "qualification": "SMTP SENT means transport acceptance only; no final mailbox receipt. No forced business writes or replays."
+      },
+      "extra_browser_client": false,
+      "business_actions_by_observer": false,
+      "full_regression_repeated": false,
+      "qualification": "Formal installed EXE natural cycles, not prior CLI cycles. TP completion does not prove a new TP Research/mail. Target quotation remains NO_RECENT_QUOTE. One unrelated source-identity safety block preserved, not bypassed. Resource snapshots show handles release, not long-term no-leak proof. Computer Use not used.",
+      "read_only_helpers_retired": [
+        "read_cycles.py",
+        "read_target.py",
+        "check_ledger.py"
+      ]
+    },
+    "observation_completed": true
   }
 }

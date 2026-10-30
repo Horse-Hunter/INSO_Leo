@@ -5227,3 +5227,24 @@ SQLite integrity ok；历史125条不可变命令、156条SENT完整行及4个�
 正式程序2875文件再次逐项哈希相等，原单实例检查通过。当前BUSINESS_RUNNING / V16_REVIEW_REQUIRED；继续低干扰跟进，真实长期稳定、DPI和游戏影响NOT_VERIFIED。COMPUTER_USE_NOT_USED。无需Owner再点重跑或开始。
 
 最终资源/清理补充：正式GUI122秒短测0.30449%host CPU、RSS114.6~118.4MiB、线程12~18、句柄1086~1318；非长期稳定结论。已退休本次构建暂存2876文件/268036144字节、兼容副本843776字节及8个一次性脚本；保留正式程序、回滚及仅日志/只读账本跟进工具。原“Owner需右键重跑”已SUPERSEDED，新单一次原API重跑已成功收口，Owner无需重复操作。
+
+
+## 2026-10-30 09:13 正式EXE首轮自然三模块收口（只读观察结束）
+
+应用/EXE仍为b40467e7 / BC7970317FC8F277DA4D609F7D04A79F85425B3A641D15426A6DB0C790F0F301；精确GUI145364创建08:54:24、观察器139324创建08:54:25及路径核对，未重启/安装/改配置或连接CDP。本节全部来自正式EXE自然日志，不再借用此前CLI轮次：
+
+| 模块 | 实际开始（上海） | 实际完成 | 本轮耗时 |
+|---|---|---|---|
+| 询价 | 08:54:28.957 | 09:05:15.735 | 646.781秒 |
+| 报价 | 09:05:16.044 | 09:08:56.611 | 220.562秒（含让位TP） |
+| TP | 09:05:33.909 | 09:05:46.857 | 12.953秒 |
+
+三模块均有真实completed，下一次截止仍由原900秒计算。报价期间TP让位真实发生；本轮首轮启动无先前900秒deadline，不把该记录说成硬实时准时性通过或双Actor并行。09:02:37.391一次GOOGLE_WEB_READ_UNAVAILABLE，后续询价、TP、报价均完成，未见GOOGLE_READ_RETRY_EXHAUSTED、旧page-budget或新的全局安全停止；不因此宣称所有Google超时根因修复。
+
+目标new-order-1仍COMPLETED/attempt1、PURCHASE_RECORDED/SAVED及非空原外部记录凭据；08:52:47原Google写入鲜读回episode保持，仅一次保存派发，无重复采购。09:08:56.414该单报价结果NO_RECENT_QUOTE，尚无采购方新报价；不制造业务填补。另有1个SOURCE_IDENTITY_UNRESOLVED，已比对并非该新单，原安全拦截保留；其他自然结果QUOTE_AGE_EXPIRED22、NO_RECENT_QUOTE12。TP轮次完成不等于新TP任务调研/发信成功，未新增SMTP记录。
+
+只读一致性：integrity ok，125历史不可变命令及156历史SENT完整行不变，4历史TP及原6TP-SENT保留，收件状态只有SENT156，无UNKNOWN/PENDING/SENDING，采购SAVED24（原23+本单1）。无新增保存派发或待执行恢复动作。原GUI继续BUSINESS_RUNNING / V16_REVIEW_REQUIRED，Owner无需点开始或重跑。
+
+资源仅有限计数器：09:08快照GUI句柄3545，09:12:52回落591，线程9，RSS129.77MiB、Private101.05MiB；原观察器句柄128、RSS20.79MiB、线程1。窗口进程响应正常。结合原122秒短测仅证明本轮资源释放，不证明长期内存稳定或全部Chrome进程/游戏影响，DPI及长稳仍NOT_VERIFIED。
+
+本轮未新增监控、浏览器连接、业务动作或全量测试重复；仅更新原报告/JSON。结束后退休最后3个自有只读辅助脚本（read_cycles/read_target/check_ledger），保留必要小型JSON/日志；部署/强杀/重跑脚本此前已退休，不新增平行系统。按本心跳约定，提交观察证据后删除此临时心跳，正式程序不停止。COMPUTER_USE_NOT_USED。仅向Owner交付，不联系CEO。
