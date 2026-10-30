@@ -7,7 +7,7 @@ import re
 from contextlib import ExitStack, contextmanager, nullcontext
 from contextvars import ContextVar
 from types import SimpleNamespace
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 from src.inso.quotation_read import QUOTATION_COLUMNS
 from src.research.cdp_pages import (
@@ -203,6 +203,27 @@ def _retain_google_entry(key, entry, retained):
     retained[key] = (target_id, protected, entry.get("reopenable", False))
 
 
+def _same_read_sheet_selection(actual, expected):
+    """Only a valid cell selection may vary; never a document or worksheet ID."""
+    def parts(fragment):
+        try:
+            pairs = parse_qsl(fragment, keep_blank_values=True, strict_parsing=True)
+        except ValueError:
+            return None
+        values = dict(pairs)
+        if len(values) != len(pairs) or set(values) not in ({"gid"}, {"gid", "range"}):
+            return None
+        if not re.fullmatch(r"[0-9]+", values.get("gid", "")):
+            return None
+        if "range" in values and not re.fullmatch(
+                r"\$?[A-Za-z]{1,3}\$?[1-9][0-9]{0,6}(?::\$?[A-Za-z]{1,3}\$?[1-9][0-9]{0,6})?",
+                values["range"]):
+            return None
+        return values["gid"]
+    gid = parts(expected)
+    return gid is not None and parts(actual) == gid
+
+
 class GoogleQuotationUpdateActions:
     def __init__(self, *, browser_handle, location: QuotationInputLocation,
                  timeout_ms: int = 10000, readiness_timeout_ms: int = 30000,
@@ -257,7 +278,7 @@ class GoogleQuotationUpdateActions:
                     raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from None
                 recovery.close()
 
-    def _guard(self):
+    def _guard(self, *, read_selection=False):
         browser = self._handle.browser
         if browser is None or not browser.is_connected():
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")
@@ -281,7 +302,10 @@ class GoogleQuotationUpdateActions:
                     else "google-document-path-mismatch")
             log_step(step)
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SPREADSHEET_UNAVAILABLE")
-        if parsed.fragment != expected.fragment:
+        if parsed.fragment != expected.fragment and not (
+                read_selection and _same_read_sheet_selection(parsed.fragment, expected.fragment)):
+            log_step("google-read-surface-fragment-unconfirmed" if read_selection
+                     else "google-write-surface-fragment-unconfirmed")
             raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
 
     def open_quote_input(self):

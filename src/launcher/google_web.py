@@ -5,6 +5,7 @@ All I/O uses native Sheets UI through the existing protected Chrome session:
 select sheet, File/Download TSV for reads, name box + formula editor for writes.
 No OAuth, HTTP export endpoint, clipboard, private Sheets model, or new login.
 """
+import asyncio
 import csv
 import io
 import logging
@@ -37,6 +38,29 @@ _GOOGLE_GRID_LOCK = threading.RLock()
 _TITLES = ("2026", "SHAHAB", "报价输入")
 
 
+class _GoogleDownloadWaitTimeout(TimeoutError):
+    """Only a timed-out wait on this exact native READ artifact."""
+
+
+def _download_call(download, operation, *, timeout):
+    """Bound artifact waits on the SAME bundled synchronous client/Owner.
+
+    Public Download.failure/path/delete have no timeout argument. Reuse its
+    existing dispatcher and implementation coroutine, never another thread,
+    event loop, connection or browser. Synthetic transport ports stay unchanged.
+    """
+    from playwright.sync_api import Download
+    if not isinstance(download, Download):
+        return getattr(download, operation)()
+    async def bounded():
+        return await asyncio.wait_for(getattr(download._impl_obj, operation)(), timeout)
+    try:
+        return download._sync(bounded())
+    except TimeoutError as exc:
+        log_step("google-download-" + operation + "-timeout", cause=exc)
+        raise _GoogleDownloadWaitTimeout("GOOGLE_WEB_READ_DOWNLOAD_TIMEOUT") from None
+
+
 def _temporary_web_read_failure(exc):
     """Unwrap only known read wrappers; unknown/auth/write faults stay closed."""
     visited, temporary = set(), False
@@ -44,6 +68,8 @@ def _temporary_web_read_failure(exc):
         visited.add(id(exc))
         if isinstance(exc, V12Fault):
             return False
+        if isinstance(exc, _GoogleDownloadWaitTimeout):
+            return True  # Exact owned-read timeout; never an auth/identity failure.
         if type(exc).__module__.startswith("playwright"):
             if type(exc).__name__ == "TimeoutError":
                 temporary = True
@@ -456,6 +482,8 @@ class GoogleSheetsWebService:
                         "GOOGLE_OPERATION_SURFACE_UNAVAILABLE", "GOOGLE_OPERATION_SURFACE_UNCONFIRMED",
                     }:
                         reason = str(exc)  # Safe exact guard code; never page text/URLs.
+                    elif isinstance(exc, _GoogleDownloadWaitTimeout):
+                        reason = "GOOGLE_WEB_READ_DOWNLOAD_TIMEOUT"
                     elif isinstance(exc, TimeoutError) and str(exc) == "GOOGLE_WEB_READ_ARTIFACT_LOST":
                         reason = "GOOGLE_WEB_READ_ARTIFACT_LOST"
                     elif isinstance(exc, QuotationInputBusy):
@@ -533,18 +561,18 @@ class GoogleSheetsWebService:
 
     @staticmethod
     def _download(page, actions):
-        actions._guard()
+        actions._guard(read_selection=True)
         page.get_by_role("menuitem", name="文件", exact=True).click(timeout=10000)
         page.get_by_role("menuitem", name=re.compile("^下载")).click(timeout=10000)
         with page.expect_download(timeout=30000) as pending:
             page.get_by_role("menuitem", name=re.compile(r"\.tsv\)")).click(timeout=10000)
         download = pending.value
         try:
-            failure = download.failure()
+            failure = _download_call(download, "failure", timeout=60)
             if failure:
                 raise TimeoutError("GOOGLE_WEB_READ_UNAVAILABLE")
             try:
-                path = Path(download.path())
+                path = Path(_download_call(download, "path", timeout=10))
                 if path.stat().st_size > 32 * 1024 * 1024:
                     raise ValueError("GOOGLE_WEB_READ_TOO_LARGE")
                 content = path.read_text(encoding="utf-8-sig")
@@ -555,13 +583,21 @@ class GoogleSheetsWebService:
             rows = list(csv.reader(io.StringIO(content), delimiter="\t"))
             if len(rows) > 100000:
                 raise ValueError("GOOGLE_WEB_READ_TOO_LARGE")
-            actions._guard()
+            actions._guard(read_selection=True)
             return rows
+        except _GoogleDownloadWaitTimeout:
+            try:
+                _download_call(download, "cancel", timeout=10)
+            except Exception as exc:  # exact owned artifact could not be retired
+                raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_DOWNLOAD_CANCEL_UNCONFIRMED") from exc
+            raise
         finally:
             try:
-                download.delete()  # Customer data stays temporary, never evidence/logs/Git.
+                _download_call(download, "delete", timeout=10)
             except FileNotFoundError:
                 pass  # Already removed; never mask a completed read/its real failure.
+            except _GoogleDownloadWaitTimeout as exc:
+                raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_DOWNLOAD_CLEANUP_UNCONFIRMED") from exc
 
 
 def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, browser_handle=None,

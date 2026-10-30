@@ -710,7 +710,7 @@ def test_new_read_diagnostics_remain_sanitized(web, monkeypatch, caplog):
 
 @pytest.mark.parametrize('title', ['2026', 'SHAHAB'])
 @pytest.mark.parametrize('failure', ['closed', 'gid_before', 'gid_after', 'range_after'])
-def test_read_surface_loss_rejects_result_and_reenters_fresh_sheet(web, monkeypatch, title, failure):
+def test_read_surface_changes_reject_actual_loss_but_keep_valid_selection(web, monkeypatch, title, failure):
     service, _browser, _, original_page = web
     attempts = []
     download = service._download
@@ -734,8 +734,11 @@ def test_read_surface_loss_rejects_result_and_reenters_fresh_sheet(web, monkeypa
     monkeypatch.setattr(Download, 'path', path)
     with service.poll_scope():
         result = GoogleSheetsRowReader(service).read_rows(WorksheetIdentity('test', title))
-    assert len(attempts) == 2 and attempts[0] is not attempts[1]
-    assert attempts[1].title == title
+    if failure == 'range_after':
+        assert len(attempts) == 1  # Same gid, valid A1 selection is not identity loss.
+    else:
+        assert len(attempts) == 2 and attempts[0] is not attempts[1]
+    assert attempts[-1].title == title
     assert result and not original_page.closed
     assert all(p.closed for p in attempts)
     assert all(not d.file.exists() for p in attempts for d in p.downloads)
@@ -788,7 +791,7 @@ def test_read_guard_code_is_logged_without_exception_or_page_content(web, monkey
     service, _, _, _ = web
     download = service._download
     def read(page, actions):
-        page.url += '&range=A1'
+        page.url = page.url.split('#')[0] + '#gid=999'
         return download(page, actions)
     monkeypatch.setattr(service, '_download', read)
     with service.poll_scope(), pytest.raises(GoogleSheetsReadUnavailable):
