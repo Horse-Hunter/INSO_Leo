@@ -83,3 +83,8 @@ Rules:
 - Reuse checks are lightweight: inspect only the relevant existing implementation/history. Extra documentation is required only when choosing not to reuse a plausible existing solution.
 - Owner-facing instructions should contain only the minimum actions needed to move delivery forward.
 
+
+
+## Owner completion audit before ending a turn (2026-10-30)
+
+Trigger: every Executor task completion or proposed stop. Owner: active Executor. Before ending, re-read the original objective and latest steering, check implementation AND the requested actual outcome, inspect outstanding operations/tests/deployment/business verification and task-owned cleanup, then check the remaining-work list a second time against actual evidence. Finish all authorized feasible work; do not silently stop at analysis, code, tests, packaging or status reports when the requested outcome remains pending. If blocked by safety, unavailable capability or missing external evidence, state the exact unfinished action and evidence, preserve the scene and continue unaffected work; never bypass business protections, invent success or imply hidden background progress. Record completed/pending/blocked items in the existing canonical task/evidence. Reviewer enforces this audit; Owner must not repeatedly ask the Executor to continue. This rule does not authorize unbounded work, unsafe side effects or concealing a genuine blocker.

@@ -7828,5 +7828,25 @@
     "production_operations": false,
     "external_write_success": "NOT_VERIFIED",
     "computer_use": "COMPUTER_USE_NOT_USED"
+  },
+  "owner_final_closeout": {
+    "source": "f8f2c3217fca5215a9eb94b39d23cd76d988dc4e",
+    "exe_sha256": "B51C7F66E41A6C3F6266FF772E9EEF8AEB161F986D2705B97320D67CE62B283B",
+    "assets": 2875,
+    "frozen_modules": 117,
+    "full_pass": 3223,
+    "full_skip": 1,
+    "quotation_success": "NOT_VERIFIED",
+    "source_api_quote_request_accepted": false,
+    "source_waiter_cancelled": true,
+    "formal_gui_restored": true,
+    "formal_inquiry_begin_shanghai": "14:56:03",
+    "force_exit_count": 2,
+    "owner_reported_manual_interruption": true,
+    "google_artifact_root": "UNKNOWN",
+    "google_write_result": "UNKNOWN",
+    "automation_deleted": true,
+    "stage_cleanup": "PENDING_APPROVAL_REVIEW_TIMEOUT",
+    "computer_use": "COMPUTER_USE_NOT_USED"
   }
 }
