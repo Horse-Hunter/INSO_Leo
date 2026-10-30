@@ -157,3 +157,21 @@ The receiver loop now also catches local ledger/incident-enqueue failures so its
 own thread cannot fail out and affect the main process. New regression requires
 five temporary-login failures to produce0 SMTP attempts. Final exact patched
 source full regression is required before delivery.
+
+
+295fa4411b1369d5b80293ddd702d5be2de9818b full regression:3328passed,
+1skipped184.76s (JUnit184.703s). Supplementary24h composed fake-CDP + fake-IMAP
++ original QQSMTPTransport with ScriptedSMTP passed:721checks,720independent
+requests/reports,4338created targets including18bounded closed-page replacements,
+max1owned live target,0remaining owned targets,2foreign Owner/main targets
+preserved,0thread growth,0business-history changes,0technical false-alert commands,
+0real network connections. Capacity/foreground priority were exercised together.
+
+Final report-completeness audit added a red case: unmatched MPN with a full-model
+native source match and canonical resolved_brand lost that already-verified brand
+in the report (1failed0.84s). Preserve this narrow canonical evidence as report-only
+metadata; never infer a brand from a partial/unavailable match and never write it
+back to the Google order or original workflow history. Quantity remains unknown,
+no technical1 appears as customer quantity or fabricated total. No TP algorithm or
+original ordinary Research/purchase branding path changes. Exact final SHA and
+whole-suite rerun follow this last source delta.

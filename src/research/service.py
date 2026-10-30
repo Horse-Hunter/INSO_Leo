@@ -99,10 +99,22 @@ class ResearchService:
 
     def read_detailed_source(self, source, order, *, now, fx):
         """Canonical public read-only source projection; no TP or business writes."""
+        from dataclasses import replace
+
+        from src.core.mpn import normalize_lookup_mpn
+
         from .detailed import collect_tp, icnet_detailed_result
+        from .source_contracts import EvidenceField, SourceOutcome
         if source is ResearchSource.IC_NET:
             result = self._icnet.search(order.mpn, order.brand, order.quantity or 1)
-            return icnet_detailed_result(result, fx), result.stock_label
+            selected = icnet_detailed_result(result, fx)
+            brand = result.resolved_brand
+            if (isinstance(brand, str) and brand.strip() and len(brand) <= 256
+                    and selected.outcome is not SourceOutcome.SOURCE_UNAVAILABLE
+                    and normalize_lookup_mpn(selected.evidence.matched_mpn) == normalize_lookup_mpn(order.mpn)):
+                selected = replace(selected, evidence=replace(selected.evidence,
+                    fields=(*selected.evidence.fields, EvidenceField("trusted_report_brand", brand))))
+            return selected, result.stock_label
         sources = (ResearchSource.FINDCHIPS, ResearchSource.HQEW, ResearchSource.LCSC,
                    ResearchSource.BOM_AI, ResearchSource.INSO)
         return collect_tp(self._price_sources[sources.index(source)], source, order.mpn,

@@ -3,7 +3,7 @@ import json
 import logging
 import threading
 from collections import OrderedDict
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from time import monotonic
 from types import SimpleNamespace
@@ -182,6 +182,11 @@ class MailResearchService:
                         SourceEvidence(source, order.mpn, None, SourceOutcome.SOURCE_UNAVAILABLE, reference))
                     stock = None
                     LOG.warning("Read-only research source unavailable; source=%s class=%s", source.value, type(error).__name__)
+                if order.brand is None:
+                    brand = next((f.value for f in result.evidence.fields if f.key == "trusted_report_brand"), None)
+                    if isinstance(brand, str) and brand.strip():
+                        order = replace(order, brand=brand)
+                        progress["order"] = asdict(order)  # Report metadata only; no original order mutation.
                 progress[source.value] = dump_source(result)
                 if stock:
                     progress["stock"] = stock

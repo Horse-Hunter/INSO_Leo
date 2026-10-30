@@ -491,3 +491,29 @@ def test_receiver_loop_survives_local_queue_or_alert_exception(tmp_path):
     service.stop_event = SimpleNamespace(is_set=lambda: stopped[0], wait=lambda _: stopped.__setitem__(0, True))
     service._receive()
     assert stopped[0] and service.health == "WAITING_RECOVERY"
+
+
+
+def test_unmatched_report_keeps_canonically_resolved_source_brand(tmp_path):
+    from src.research.detailed import TpFx
+    from src.research.icnet import IcNetResult
+    from src.research.service import ResearchService
+    from src.research.source_contracts import PriceCandidate, SourceResult
+    service, inbox, *_ = scene(tmp_path)
+    evidence = SourceEvidence(PRICE_SOURCES[0], "MPN", "MPN", SourceOutcome.SUCCESS, NOW)
+    candidate = PriceCandidate(PRICE_SOURCES[0], "MPN", Decimal(2), "RMB", Decimal(2), NOW)
+    native = IcNetResult(SourceResult(PRICE_SOURCES[0], SourceOutcome.SUCCESS, evidence, candidate),
+                        resolved_brand="VERIFIED-BRAND", stock_label="货多")
+    canonical = ResearchService(icnet=SimpleNamespace(search=lambda *_: native), findchips=None,
+        hqew=None, lcsc=None, bom_ai=None, inso=None, output=None)
+    original_read = service.source_reader
+    def read(key, source, order, reference, fx):
+        return canonical.read_detailed_source(source, order, now=reference, fx=fx) if source is PRICE_SOURCES[0] else original_read(key, source, order, reference, fx)
+    service.source_reader = read
+    receive(service, inbox)
+    service.run_one()
+    with service.store.connect() as db:
+        report = json.loads(db.execute("SELECT report FROM workflow_mail_research WHERE origin='imap'").fetchone()[0])
+    assert "品牌：VERIFIED-BRAND" in report["text"]
+    assert "询价数量：未匹配" in report["text"] and "订单总价：" not in report["text"]
+    assert canonical.read_detailed_source(PRICE_SOURCES[0], DetailedOrder("MPN"), now=NOW, fx=TpFx(None, NOW))
