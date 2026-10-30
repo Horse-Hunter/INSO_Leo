@@ -6755,7 +6755,7 @@
       }
     ],
     "new_fixed_fault_reasons": {},
-    "status": "OWNER_RESUMED_BUSINESS_RUNNING / NATURAL_CYCLE_OBSERVING",
+    "status": "BUSINESS_RUNNING / GOOGLE_READ_FAILURE_OBSERVED / NATURAL_CYCLE_PENDING",
     "source": "779459ae21c91228ad55a33aba2e0b246ebff287",
     "exe_sha256": "FEFCC435E791B58C45CC76DBF762867074A9AA2EAE967A6FE30D58DE68B93C4E",
     "gui_pid": 109068,
@@ -6765,6 +6765,41 @@
     "target_note": "original interrupted-unsent guard remains; original GUI rerun purchase at idle required, not SQL reset or implicit replay",
     "google_download_root_cause": "UNKNOWN; not all bugs declared fixed",
     "computer_use": "COMPUTER_USE_NOT_USED",
-    "production_modified": false
+    "production_modified": false,
+    "follow_up_0801_shanghai": {
+      "checked_at": "2026-10-30T00:01:04.867255+00:00",
+      "cycles": [
+        {
+          "at_local": "2026-10-30 07:50:54,205",
+          "module": "inquiry",
+          "phase": "begin",
+          "elapsed": 0.0
+        }
+      ],
+      "faults": [
+        {
+          "at_local": "2026-10-30 07:58:46,905",
+          "reason": "GOOGLE_WEB_READ_UNAVAILABLE"
+        },
+        {
+          "at_local": "2026-10-30 07:59:01,566",
+          "reason": "GOOGLE_OPERATION_SURFACE_UNCONFIRMED"
+        }
+      ],
+      "target_work": [
+        [
+          "MANUAL_REVIEW",
+          0
+        ]
+      ],
+      "target_business": [
+        [
+          "INTERRUPTED_UNSENT"
+        ]
+      ],
+      "mail_states": {
+        "SENT": 156
+      }
+    }
   }
 }

@@ -2,6 +2,9 @@
 
 ## 2026-10-30 07:50 Owner认证恢复后：只读跟进进行中
 
+08:01只读心跳补充：认证恢复后07:58:46再次GOOGLE_WEB_READ_UNAVAILABLE，07:59:01出现GOOGLE_OPERATION_SURFACE_UNCONFIRMED。本轮询价仍未完成，没有新模块完成/采购凭据；SENT仍156，无UNKNOWN，新单仍MANUAL_REVIEW/attempt0/INTERRUPTED_UNSENT。程序原进程与路径核验正常，本心跳未重启、改动或连接浏览器。此证据确认不能把认证后的问题全归INSO，也不能宣称Google读取已经彻底修复；仍需等待原重试结果，不把单次可恢复失败说成GLOBAL_STOP或重试耗尽。已通知Owner一次，后续重复同类重试静默。
+
+
 **OWNER_RESUMED / BUSINESS_RUNNING / NATURAL_CYCLE_OBSERVING，尚无本轮三模块全部完成或本单采购成功凭据。** Owner已确认完成认证并点击开始运行；原GUI109068/观察器121936仍在，EXE仍FEFCC435...，未重新启动/安装/修改生产。07:50:54询价begin；截至07:54:30日志只有本轮开始，无新增固定故障代码。前节HEALTH_HOLD为凌晨历史现场，不能覆盖当前Owner恢复事实；登录后的实际INSO查询恢复仍待自然业务证明。
 
 已用只读一致性快照逐项核对异常通知，不输出正文/客户/地址：
