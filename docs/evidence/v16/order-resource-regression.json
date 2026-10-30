@@ -7506,5 +7506,90 @@
       ]
     },
     "observation_completed": true
+  },
+  "google_retained_stop_lifecycle_20261030": {
+    "source_application": "4c3c465206f6ef08c469f1e7884945a101600e02",
+    "src_tree": "9de0a3ca46402bbd0cb431333caaead41971b3b6",
+    "tests_tree": "c64d801bb738fa6e38dd287c7e67b59dbfe550d8",
+    "status": "CANDIDATE_OFFLINE_PASS_NOT_DEPLOYED",
+    "installed_application_unchanged": "b40467e7d5457fa1e1f9daa288e19b6fd0414e5e",
+    "installed_exe_sha256": "BC7970317FC8F277DA4D609F7D04A79F85425B3A641D15426A6DB0C790F0F301",
+    "inventory": {
+      "at": "2026-10-30T01:49:36.374092+00:00",
+      "google_sheet_pages": 14,
+      "present_in_pre_operator_baseline": 11,
+      "created_after_that_baseline": 3,
+      "debugger_session_attached": false,
+      "page_operations": false,
+      "qualification": "HTTP discovery metadata only; URL/count does not establish safe close ownership"
+    },
+    "growth_observation": {
+      "first_at": "2026-10-30T01:49:36.374092+00:00",
+      "second_at": "2026-10-30T01:58:36.724163+00:00",
+      "first_count": 14,
+      "second_count": 14,
+      "new_targets_since_first": 0,
+      "closed_targets_since_first": 0,
+      "debugger_session_attached": false,
+      "page_operations": false,
+      "qualification": "Two metadata snapshots only; not a continuous lifetime or no-leak proof"
+    },
+    "verification": {
+      "focused_passed": 22,
+      "focused_s": 0.46,
+      "affected_passed": 198,
+      "affected_s": 4.74,
+      "full_passed": 3221,
+      "full_skipped": 1,
+      "full_s": 125.84,
+      "ruff_no_cache": "PASS",
+      "diff_check": "PASS",
+      "initial_setup_errors": 22,
+      "initial_focused_passed": 20,
+      "initial_focused_failed": 2,
+      "initial_failure_explanation": "Missing isolated test parent, then fake auth/dirty attributes did not simulate existing real guard; corrected port fields and original unsafe predicate. Product guards unchanged."
+    },
+    "cleanup": {
+      "small_logs_kept": true,
+      "verified_absent": true,
+      "retired": [
+        {
+          "bytes": 321295.0,
+          "files": 14,
+          "name": "focused"
+        },
+        {
+          "bytes": 321331.0,
+          "files": 14,
+          "name": "focused-final"
+        },
+        {
+          "bytes": 8049368.0,
+          "files": 259,
+          "name": "related"
+        },
+        {
+          "bytes": 217555019.0,
+          "files": 5448,
+          "name": "full"
+        }
+      ],
+      "production_untouched": true
+    },
+    "actual_actions": {
+      "debugger_session_attached": false,
+      "page_actions": false,
+      "production_restart": false,
+      "production_replacement": false,
+      "business_writes": false,
+      "computer_use": "COMPUTER_USE_NOT_USED"
+    },
+    "decision": "Do not restart a healthy live EXE solely to remove orphans; ship candidate with the next necessary safe update. Unknown old pages are not adopted or closed. Normal stops retire known settled own pages; force/crash may still leave protected/unknown pages. Four slots are not a browser-wide hard cap.",
+    "test_log_sha256": {
+      "focused.log": "6f50922dfb5f839e620dff4beaecbc896251208296ec058677a80bc94a603978",
+      "focused-final.log": "0bf4c8d9e49cd4cd1274b49cfb6c0b9246cced0f91f6dd70da2ab6bb467caf73",
+      "related.log": "1c81090c5bc739068afa1853a87f92d69d15ddfadd87ca58e836bc415e719d7d",
+      "full.log": "9d614cbe53e53ef42e83a18659ced3da9c935e702bfe7f3b118f37859ec63ff0"
+    }
   }
 }

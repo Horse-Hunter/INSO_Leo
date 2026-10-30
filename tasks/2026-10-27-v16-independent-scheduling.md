@@ -5248,3 +5248,16 @@ SQLite integrity ok；历史125条不可变命令、156条SENT完整行及4个�
 资源仅有限计数器：09:08快照GUI句柄3545，09:12:52回落591，线程9，RSS129.77MiB、Private101.05MiB；原观察器句柄128、RSS20.79MiB、线程1。窗口进程响应正常。结合原122秒短测仅证明本轮资源释放，不证明长期内存稳定或全部Chrome进程/游戏影响，DPI及长稳仍NOT_VERIFIED。
 
 本轮未新增监控、浏览器连接、业务动作或全量测试重复；仅更新原报告/JSON。结束后退休最后3个自有只读辅助脚本（read_cycles/read_target/check_ledger），保留必要小型JSON/日志；部署/强杀/重跑脚本此前已退休，不新增平行系统。按本心跳约定，提交观察证据后删除此临时心跳，正式程序不停止。COMPUTER_USE_NOT_USED。仅向Owner交付，不联系CEO。
+
+
+## 2026-10-30 Google页增长专项：历史遗留确认、正常停止收口候选（未部署）
+
+Owner要求自行分析决定处理。仅原9222的HTTP目标清单元数据，未建立调试/Playwright客户端、未运行页面脚本/刷新/导航/关闭/下载。09:49:36及09:58:36上海均14个Google页，0新增/0关闭；其中11页存在于本次正式进程前、3页随后工作页。原四页registry是进程/服务内存，跨进程不认领历史页，正常poller退出也未调用退休；多次更新/重启因此积累旧页。该9分钟样本不证明长期不增长，未把URL当安全关闭凭据。
+
+最小候选4c3c465206f6ef08c469f1e7884945a101600e02；src9de0a3ca46402bbd0cb431333caaead41971b3b6；tests c64d801bb738fa6e38dd287c7e67b59dbfe550d8。原poller在全部模块scope退出、原浏览器释放前调用GoogleSheetsWebService.release_retained_pages；只处理该service registry中精确native ID。再验证文档/Owner/认证/当前子表/未完成写入/弹窗/脚本，保护或人工改变页保留，错误走原runtime全局安全分类，跨线程对象拒绝。复用原Google close/最后标签保护；原handle可用则借用，否则原attach-only包装仅连现有CDP，绝不调用业务bootstrap或启动Chrome。正常轮询仍保留四页，不改60秒缓存、鲜检、900/120秒、来源租约或SENT/UNKNOWN。
+
+22专项PASS/0.46秒；198受影响PASS/4.74秒；最终3221PASS/1SKIP/125.84秒；Ruff(--no-cache)/diffPASS。覆盖重复5个正常生命周期、保护/未知/人工页、未保存、认证失效、native/文档/Owner丢失、关闭失败、原安全故障、同线程所有权；原Backend真实生产组合legacy/independent两条离线调用链均验证在production-sheets-poller清理。初次22测试setup目录错误和随后20PASS/2FAIL（测试替身字段）均记录，不隐藏失败，不削弱生产判断。无真实关闭或强杀测试。
+
+自主决定：当前正式业务不因标签清理停机，不立即打包/覆盖；强杀旧版本既不会跑清理反而可能多留一组。候选完整离线验证后保留，随下一次真正必要的安全更新使用，不需要Owner再次讨论此普通修复。安装仍b40467e7/BC7970…，候选HEAD不等于生产版本。历史11页不批量关闭；正常退出候选只清理已证明空闲的自身页，强杀/崩溃或未知写入仍可能合法保留页面，不承诺全Chrome永远只有4页。未移除安全保护、修改生产/账本/配置/Vault/邮件；COMPUTER_USE_NOT_USED。
+
+本次4个自有测试目录已验证退休（5735文件、226247013字节），保留小型日志/元数据及原全部生产、回滚、Chrome/未知文件。原小时值守继续，新增记录区分此候选与实际安装版本，并先看页面数量/相同进程时间线再判断增长，不能按URL扫关闭。源码及证据仅交Owner，不自行联系CEO；V16_REVIEW_REQUIRED / CANDIDATE_NOT_DEPLOYED。
