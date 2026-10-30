@@ -2383,3 +2383,12 @@ new-order-1仍COMPLETED/attempt1、PURCHASE_RECORDED/SAVED、有原外部记录�
 第二封对应真实未确认的报价更新，不能当误报关闭。原正式报价轮次11:40:57 completed，目标已持久化active UPDATE_RESULT_UNCONFIRMED hold；原prepare_run先排除held inquiry，避免下一轮盲目重新更新。采购COMPLETED/attempt1未变，无再次采购。现SENT160（原157+此两命令共3个收件收据），无PENDING/SENDING/UNKNOWN收件记录，integrity ok。邮件SENT与Google写入是否成功是不同事实，不能用前者证明后者。
 
 现有固定日志无法区分提交按钮、结果弹窗、脚本结算或源状态鲜读的具体未确认分支，精确根因UNKNOWN，外部报价是否完成NOT_VERIFIED。原保护已暂停该单自动报价，不重跑/重发/清hold，不为定位与生产交叠建立浏览器连接。当前证据不足以认定代码缺陷或宣称已修复；保留正常其他业务并由原小时值守继续检查自然日志/安全边界，未打包安装或改代码/配置/账本。只读核验不重复全量离线测试。COMPUTER_USE_NOT_USED。
+
+
+## Manual quotation pre-dispatch busy classification — isolated source correction
+
+Owner requested diagnosis of recurring manual-intervention state. Offline original Backend -> selected-row integrated cycle -> original V13QuotationUpdater reproduces QuotationInputBusy at input-open and input-write admission: updater returns the unchanged QUOTE_FOUND before click, and ManualRetryHolds.finalize previously classified it as fatal V13_MANUAL_RETRY_UNSETTLED. Both new regressions failed at that boundary before correction.
+
+Minimal correction in src/launcher/manual_order.py: after existing selected-row identity checks, only a QUOTE_FOUND with a nonempty immutable quotation and no row error is reported via the existing manual ValueError rejection path. All durable old holds remain bytewise unchanged, manual success is false, no click/dismiss is performed, and Backend state/Stop are not changed. This does NOT certify source writes, close unknown barriers, automatically retry, or catch shared/ownership/DB/auth/Stop faults. Malformed results and other unknown terminal states retain original GLOBAL_STOP.
+
+137 affected tests PASS; full offline suite3223PASS/1SKIP128.43s. Initial test setup needed its missing isolated parent directory (2 setup errors); corrected run then reproduced2expected failures before the source fix. Ruff first found an unused test variable; final change only prefixes that unused variable, then Ruff/diffPASS and full lifecycle29PASS4.50s. No production/browser/site/SMTP operations or deployment were performed for validation. Source-only correction, NOT_DEPLOYED; unknown prior external-write results remain outside this correction. COMPUTER_USE_NOT_USED.

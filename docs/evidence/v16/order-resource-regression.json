@@ -7809,5 +7809,24 @@
     "browser_connected": false,
     "production_modified": false,
     "computer_use": "COMPUTER_USE_NOT_USED"
+  },
+  "manual_quote_busy_source_correction": {
+    "scope": "SOURCE_ONLY_NOT_DEPLOYED",
+    "pre_fix_expected_failures": 2,
+    "setup_errors_before_parent_directory_fix": 2,
+    "affected_pass": 137,
+    "full_pass": 3223,
+    "full_skip": 1,
+    "full_seconds": 128.43,
+    "final_lifecycle_pass": 29,
+    "final_lifecycle_seconds": 4.5,
+    "ruff": "PASS_AFTER_UNUSED_TEST_VARIABLE_RENAME",
+    "diff_check": "PASS",
+    "original_backend_and_updater_path": true,
+    "durable_hold_unchanged": true,
+    "new_submit_clicks": 0,
+    "production_operations": false,
+    "external_write_success": "NOT_VERIFIED",
+    "computer_use": "COMPUTER_USE_NOT_USED"
   }
 }

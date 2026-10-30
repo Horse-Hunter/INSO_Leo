@@ -239,3 +239,37 @@ def test_final_close_database_fault_rolls_back_all_matching_old_holds(tmp_path, 
     with pytest.raises(V12Fault) as exc:
         backend._execute_order_action(("r", inquiry, "quotation", None, None))
     assert exc.value.scope is FaultScope.GLOBAL_STOP and holds.active() == before
+
+
+@pytest.mark.parametrize("busy_phase", ["open", "write"])
+def test_manual_quote_busy_before_dispatch_retains_hold_without_pausing_backend(tmp_path, monkeypatch, busy_phase):
+    from src.sheets.quotation_input import QuotationInputBusy
+    from tests.workflow.test_v13_quote_update import service
+
+    backend, _store, _source, inquiry, _record, holds, _key = setup_hold(tmp_path, monkeypatch)
+    before = holds.active()
+    updater, _src, io, actions, _waits = service()
+    io.worksheet = SimpleNamespace(spreadsheet=SHEET.spreadsheet)
+
+    def busy(*args):
+        raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
+
+    if busy_phase == "open":
+        actions.open_quote_input = busy
+    else:
+        io.write_payload = busy
+
+    def runner(worksheet, *, source_reader, source_store, hold_store):
+        cycle = make_cycle(source_reader, source_store, hold_store, Quotes([(quote(model="OLD"),)]))
+        cycle.updater_factory = lambda: updater
+        return cycle.run(worksheet)
+
+    backend._manual_quote = runner, holds
+    state = backend._state
+    backend._execute_order_action(("busy-request", inquiry, "quotation", None, None))
+    result = backend.get_manual_order_result()
+    assert not result.success and "忙" in result.message
+    assert backend._state is state and not backend._stop.is_set()
+    assert holds.active() == before
+    assert actions.clicks == actions.dismissed == 0
+    assert io.writes == []

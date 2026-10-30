@@ -113,6 +113,13 @@ class ManualRetryHolds:
         if (worksheet != self.identity.worksheet or row != self.identity.row_position
                 or result.inquiry_id not in {None, self.inquiry}):
             raise V12Fault(FaultScope.GLOBAL_STOP, "V13_MANUAL_RETRY_UNSETTLED")
+        if (result.outcome is QuotationOutcome.QUOTE_FOUND
+                and result.quotation is not None and result.row_error_reason is None):
+            # The canonical updater returns the original quote only when input
+            # admission is busy before submission. This is NOT settlement: keep
+            # every old barrier and let the existing manual ValueError path
+            # report a rejected attempt without upgrading it to shared failure.
+            raise ValueError("报价输入页仍忙或上次操作待确认，本次未提交；原订单保护保留，请勿反复重跑。")
         if result.outcome is QuotationOutcome.ROW_FAILED:
             active = {row[0]: row for row in self.holds.active()}
             current = self.new_hold_keys & active.keys()
