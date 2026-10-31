@@ -333,3 +333,11 @@ malformed result cannot starve these still-valid notices. Core source/event/age
 or recipient validation remains mandatory and can still prevent a mail. Actual
 SMTP/provider/browser behavior remains NOT_VERIFIED and no release is authorized.
 Final source `55ba0f230ce4a42eeda78d4aa942e9065bfc4ba3`; src tree `555f1ddf94cd9cb3cbec3643976ba25ff9f4444c`, tests tree `49c68dafc92ec8586a118edd46fccca009347bf6`.39targetedPASS11.79s; full3393PASS/1SKIP211.28s. Source/test receipt and cleanup are in original RFQ evidence; no production claim.
+
+## CEO fourth independent source review — F closed / QQ live command still held (2026-10-31)
+
+**SOURCE_ACCEPTED_FOR_CONTROLLED_RELEASE_DECISION / PRODUCTION_NOT_DEPLOYED** for reviewed application `55ba0f230ce4a42eeda78d4aa942e9065bfc4ba3` (source tree `555f1ddf94cd9cb3cbec3643976ba25ff9f4444c`, tests tree `49c68dafc92ec8586a118edd46fccca009347bf6`). Original important inquiry and three-working-hour procurement follow-up mail can no longer be indefinitely held solely because the optional independent research service fails: verified notices use full six-source data when ready; otherwise they fall back after120s from the original durable notice creation on the next eligible dispatch, with no invented price/stock/total and original source/event/recipient/SENT/UNKNOWN review intact. Reviewed actual production patch and real-preparer+V12-worker+fake-QQSMTP integration tests; Executor reports39 targeted PASS and3393 full PASS/1 environment SKIP. Original A/B/C/D/E paths unchanged.
+
+**NOT IMPLEMENTED / SECURITY_ENABLEMENT_BLOCKED:** real QQ IMAP sender authenticity. `verify_sender_origin` still returns false; no live `调研 MPN` command may research or mail Shawn. This cannot be represented as implemented-and-verified. Only a separately reviewed authenticated provider binding (or a narrow explicitly Owner-accepted sender-spoofing residual risk) can enable real commands.
+
+**NOT DEPLOYED / NOT VERIFIED:** actual live mailbox, source freshness, Chrome resources, SMTP provider delivery, production EXE and user-observed false alert recovery. This review does not authorize a build/install, testing through live SMTP, or switching off native UNKNOWN protection. Exact independent CEO review details in `control-room/RFQ-016/TASK_SPEC.md`, Re-Review #4.
