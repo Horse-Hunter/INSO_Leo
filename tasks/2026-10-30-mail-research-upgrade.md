@@ -271,3 +271,15 @@ Acceptance: all Owner attachment cases, bounded polling/research, durable UID/ou
 **最终目标：旧订单不再乱处理、任务中心状态真实、误报邮件不再骚扰Owner；重要询价和采购待跟进邮件具备TP级详细信息；独立IMAP调研服务每2分钟持续检查并能够安全恢复误关闭的专属标签页，且不影响原正常主业务。**
 
 `COMPUTER_USE_NOT_USED`
+
+## CEO independent audit of detailed-mail extension (2026-10-31)
+
+**`CHANGES_REQUESTED / SOURCE_NOT_APPROVED / NOT_DEPLOYED`.** Final source `08a00cf6abacc73a4c06b7721f4dfff51fd5e373` and document/report `e2965645360ecbbab59fc30780c3de34f8986f37`. All previously identified A/B/C correctness fixes are provisionally accepted as source paths; no production effect is established. Exact review findings and regression gates are in **`control-room/RFQ-016/TASK_SPEC.md`**, section *CEO independent SOURCE Re-Review — RFQ016 + detailed mail/IMAP extension*.
+
+**D / P0:** `InquiryCatalog.match` can call an old local SQLite/cache MPN record “最近询价” while the independent IMAP service operates with main Google polling stopped. Without proven fresh/complete source, never attach that possibly obsolete customer's quantity/name/estimated total; still allow MPN-only research and send an honest unmatched report. Demonstrate main-paused and stale-after-restart cases.
+
+**E / P1:** the shared `ResearchBudget` `RLock` gives foreground priority only if main wins the race; when background already holds the lock, due foreground jobs wait for that entire read. Prove bounded/no-harm foreground progress with background-first/hung-source tests while retaining same CDP and exact page ownership. Do not solve by opening extra uncontrolled Chrome, closing human pages or changing due clocks.
+
+**Sender check / P1:** syntactic `From` equality alone cannot certify that email truly came from `sales2@inso-hk.com`. Require actual provider-verifiable sender authenticity or an explicitly authorized narrowly documented risk boundary. Existing malformed-From tests do not test forged exact From.
+
+Only source patch, fake adapters, targeted red→green/full regression, refreshed original reports and new SHA are authorized. No release/build swap or live mailbox/network test. Do not collapse new IMAP code into original business Owner; protect source tests/production and enforce `COMPUTER_USE_NOT_USED`.
