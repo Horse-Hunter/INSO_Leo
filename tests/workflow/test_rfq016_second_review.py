@@ -308,3 +308,23 @@ def test_successful_imap_read_with_unverified_sender_breaks_old_auth_failure_str
     service.inbox_factory = Auth
     service.poll_once(); service.worker.run_due(now=NOW)
     assert service._auth_failures == 1 and smtp.calls == []
+
+
+def test_receipt_proof_starts_after_slow_imap_fetch_not_before_connection(tmp_path):
+    service, inbox, smtp, calls, clock, _ = scene(tmp_path)
+    service.catalog.configure_sources(("sheet",))
+    old = DetailedOrder("MPN", quantity=999, customer="OLD_CUSTOMER", rfq_date="2026-09-01")
+    # Timeline: poll startsT0; source readT1; newer Google orderT5;
+    # request header is receivedT10. T1 is NOT a post-receipt current view.
+    service.catalog.observe("sheet", (("old", old, NOW-timedelta(days=2)),), observed_at=NOW+timedelta(seconds=1))
+    original = service.inbox_factory.read
+    def slow_fetch(client, after, limit=32):
+        clock[0] = NOW+timedelta(seconds=10)
+        return original(client, after, limit=limit)
+    service.inbox_factory.read = slow_fetch
+    receive(service, inbox)
+    service.run_one(); service.worker.run_due(now=clock[0])
+    assert all(qty is None for _, _, qty in calls)
+    with service.store.connect() as db:
+        text = db.execute("SELECT text_body FROM workflow_v12_notification_commands").fetchone()[0]
+    assert "OLD_CUSTOMER" not in text and "订单总价：" not in text and len(smtp.calls) == 1

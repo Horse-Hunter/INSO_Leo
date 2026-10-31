@@ -120,7 +120,7 @@ class MailResearchService:
                     count = self.store.accept_scan(ACCOUNT, inbox.validity, inbox.latest, (), now)
                 else:
                     upper, messages = inbox.read(cursor[1])
-                    count = self.store.accept_scan(ACCOUNT, inbox.validity, upper, messages, now)
+                    count = self.store.accept_scan(ACCOUNT, inbox.validity, upper, messages, self.clock())
             self.health, self._failures, self._auth_failures = "READY", 0, 0
             self.outbox.resolve_incidents("mail_research", at=now, reason_code="IMAP_AUTH_REQUIRED")
             LOG.info("IMAP check complete; accepted=%s", count)
