@@ -1,6 +1,6 @@
 # RFQ-016 subtask: detailed mail research and independent IMAP
 
-Status: REVIEW_REQUIRED / NOT_DEPLOYED / SECURITY_ENABLEMENT_BLOCKED (real IMAP commands). Final second-review source `1dd31b283ec34126637e173830dbc3c321b7c89d`;3354PASS/1SKIP,20new cases,31final targeted. Evidence: `control-room/RFQ-016/TEST_REPORT.json`. Prior3334tests retained; A/B/C not rewritten. Production remains NOT_VERIFIED. Requirements: original Owner attachment and CEO50dfe3d.
+Status: REVIEW_REQUIRED / NOT_DEPLOYED. F source `55ba0f230ce4a42eeda78d4aa942e9065bfc4ba3`;39targeted PASS,3393full PASS/1SKIP. Existing3354tests and A/B/C/D/E preserved. QQ real IMAP commands remain SECURITY_ENABLEMENT_BLOCKED. Production effects NOT_VERIFIED. See original RFQ016 TEST_REPORT.json/EXECUTION_LOG.md.
 
 Scope: fix A/B/C first; extract canonical TP detailed collection/report without changing TP target selection or purchase/quote behavior; enrich important/follow-up mail; process new authenticated-sender IMAP research requests independently of business buttons. Same Chrome9222, per-task owned pages, no production operations. Reuse Core Vault, native six adapters, FX, SQLite outbox and SMTP protection. Offline fakes only. Owner separately authorizes installation after CEO review.
 
@@ -310,3 +310,26 @@ Source `1dd31b283ec34126637e173830dbc3c321b7c89d`, delivery `0f33b97ed2abfde9ca7
 **`CHANGES_REQUESTED` for original business-mail degradation:** if new optional service startup fails (`backend._mail_research_service=None`) or its owned page is persistently blocked, `prepare_business_report` returns `None` forever, causing original verified IMPORTANT_ORDER and PURCHASE_FOLLOW_UP_REQUIRED alerts to be indefinitely deferred in existing V12 mail worker. This violates the Owner's requirement that the new independent module cannot stop normal business functionality. Add a bounded, truthful no-invented-market-data fallback for current, already-authorized original business emails, retaining send-time source/status/cooldown/recipient/UNKNOWN protections. Do not treat failed enrichment as false business success; preserve full-six-source content when available.
 
 Exact test matrix and source paths in original `control-room/RFQ-016/TASK_SPEC.md`, CEO SOURCE Re-Review #3. No production deployment or automatic mail enablement authorized; source patch and fake-SMTP regression only.
+
+
+## F-only third-review remediation — bounded original business notice content
+
+Original important/follow-up notices retain their native trigger, recipients and
+actual-send review. Detailed report acquisition is optional, with120s elapsed
+from the existing durable notice creation time (not a new timer, startup time,
+last attempt or job creation). Retry/restart cannot extend it. Fresh complete
+six-source content wins whenever available; otherwise the first eligible send
+after the deadline uses current verified order identity/metadata and business
+purpose, plus “详细市场报价暂不可用／未核实”. It never copies historical market
+price, inventory or estimated totals, nor claims research succeeded/market empty.
+Confirmed original follow-up time is retained. No automatic later supplementary
+mail is generated. SENT/UNKNOWN remain terminal for the original recipient.
+
+Only launcher/mail_research_composition.py changes in production source; no
+A/B/C/D/E, main scheduler, manual/TP actions, native page lifecycle, sender
+verification, V12 queue or SMTP changes. A failed optional startup/cache/queue,
+persisted local resource protection, unavailable background admission, stale or
+malformed result cannot starve these still-valid notices. Core source/event/age
+or recipient validation remains mandatory and can still prevent a mail. Actual
+SMTP/provider/browser behavior remains NOT_VERIFIED and no release is authorized.
+Final source `55ba0f230ce4a42eeda78d4aa942e9065bfc4ba3`; src tree `555f1ddf94cd9cb3cbec3643976ba25ff9f4444c`, tests tree `49c68dafc92ec8586a118edd46fccca009347bf6`.39targetedPASS11.79s; full3393PASS/1SKIP211.28s. Source/test receipt and cleanup are in original RFQ evidence; no production claim.

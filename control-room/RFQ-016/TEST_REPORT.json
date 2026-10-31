@@ -1,31 +1,24 @@
 {
   "rfq": "RFQ-016",
-  "subtask": "tasks/2026-10-30-mail-research-upgrade.md",
+  "active_scope": "CEO third review F only",
   "status": "REVIEW_REQUIRED",
   "deployment": "NOT_DEPLOYED",
   "production_resolution": "NOT_VERIFIED",
-  "review_base": "50dfe3d981bddc4c5a61865123f590d16b68f1cc",
-  "source_commit": "1dd31b283ec34126637e173830dbc3c321b7c89d",
-  "source_tree": "593bde76eb764b4e3ccb39e625800d07c7166704",
-  "test_tree": "3f5bab1ebd34fb543b8b6d39f967657bc011662a",
+  "review_base": "8a0d121cbb722a9a981e64fa6380904dac5ca12e",
+  "source_commit": "55ba0f230ce4a42eeda78d4aa942e9065bfc4ba3",
+  "source_tree": "555f1ddf94cd9cb3cbec3643976ba25ff9f4444c",
+  "test_tree": "49c68dafc92ec8586a118edd46fccca009347bf6",
   "preserved_ancestor": "7574516f18c8ee3225b5039f2eb4aeabd0045bbc",
-  "changed_paths": [
-    "src/launcher/backend.py",
-    "src/launcher/mail_research_composition.py",
-    "src/launcher/research_budget.py",
-    "src/order_mail/research_requests.py",
-    "src/research/cdp_pages.py",
-    "src/research/mail_session.py",
-    "src/sheets/google_reader.py",
-    "src/workflow/mail_research.py",
-    "tests/order_mail/test_research_requests.py",
-    "tests/workflow/test_mail_research.py",
-    "tests/workflow/test_rfq016_second_review.py"
+  "changed_source_paths": [
+    "src/launcher/mail_research_composition.py"
   ],
-  "scope": "Only CEO D/E plus sender authenticity decision; A/B/C and original business paths retained",
+  "changed_test_paths": [
+    "tests/launcher/test_business_mail_fallback.py"
+  ],
+  "baseline_existing_test_files_untouched": true,
   "full_regression": {
-    "tests": 3355,
-    "passed": 3354,
+    "tests": 3394,
+    "passed": 3393,
     "failures": 0,
     "errors": 0,
     "skipped": [
@@ -34,352 +27,227 @@
         "reason": "symlink creation not available in this test environment"
       }
     ],
-    "duration_seconds": 199.827,
-    "timestamp": "2026-10-31T09:35:43.753449+08:00",
-    "junit_sha256": "b89118d5f9beb11e4f0ee1c4cd4170fd659787b2a9ac9fbe107a14202ab0ba64",
-    "all_case_ids_sha256": "d053feb2c712db47bc20177270efc7757ddfe6e8ddf0ceba2b4b8601121dee1d",
-    "console_duration_seconds": 199.89,
+    "duration_seconds": 211.202,
+    "timestamp": "2026-10-31T17:16:11.740183+08:00",
+    "junit_sha256": "3b70d51a1b26c20f47294197b76e46479e467412435c9dc4eec730b0613e64a5",
+    "all_case_ids_sha256": "43cd10b07cc92a1eb8b0471443063ab61356a9ce5b5825adfff996a701732757",
+    "console_duration_seconds": 211.28,
     "command": "python -X utf8 -m pytest tests -q -p no:cacheprovider --basetemp <owned sandbox> --tb=short --junitxml=<owned evidence>"
   },
-  "second_review_case_count": 20,
-  "second_review_case_ids": [
-    "tests.workflow.test_rfq016_second_review::test_local_or_previous_poll_cannot_prove_latest_when_main_stopped",
-    "tests.workflow.test_rfq016_second_review::test_stopped_main_old_cache_report_has_no_customer_quantity_total",
-    "tests.workflow.test_rfq016_second_review::test_background_first_cannot_hold_due_foreground_until_read_returns[slow]",
-    "tests.workflow.test_rfq016_second_review::test_background_first_cannot_hold_due_foreground_until_read_returns[hung]",
-    "tests.workflow.test_rfq016_second_review::test_forged_exact_from_and_self_asserted_auth_never_enter_research[]",
-    "tests.workflow.test_rfq016_second_review::test_forged_exact_from_and_self_asserted_auth_never_enter_research[Authentication-Results: mx.qq.com; dkim=pass header.d=inso-hk.com; dmarc=pass header.from=inso-hk.com\\r\\n]",
-    "tests.workflow.test_rfq016_second_review::test_forged_exact_from_and_self_asserted_auth_never_enter_research[Received-SPF: pass\\r\\nReturn-Path: <sales2@inso-hk.com>\\r\\n]",
-    "tests.workflow.test_rfq016_second_review::test_only_complete_post_request_live_sources_can_enrich_and_expire",
-    "tests.workflow.test_rfq016_second_review::test_restart_discards_even_recent_persisted_customer_progress",
-    "tests.workflow.test_rfq016_second_review::test_smtp_downgrades_enrichment_if_source_expires_after_ready",
-    "tests.workflow.test_rfq016_second_review::test_live_source_observer_excludes_discovery_partial_and_failed_reads",
-    "tests.workflow.test_rfq016_second_review::test_legacy_unverified_requests_never_research_or_send[PENDING]",
-    "tests.workflow.test_rfq016_second_review::test_legacy_unverified_requests_never_research_or_send[READY]",
-    "tests.workflow.test_rfq016_second_review::test_unverified_sender_retains_cursor_and_polls_without_alert",
-    "tests.workflow.test_rfq016_second_review::test_native_owned_background_first_defers_checkpoint_and_never_closes_main[slow]",
-    "tests.workflow.test_rfq016_second_review::test_native_owned_background_first_defers_checkpoint_and_never_closes_main[hung]",
-    "tests.workflow.test_rfq016_second_review::test_native_owned_background_first_defers_checkpoint_and_never_closes_main[closed_before_retry]",
-    "tests.workflow.test_rfq016_second_review::test_google_updated_without_main_poll_degrades_then_fresh_complete_view_enriches",
-    "tests.workflow.test_rfq016_second_review::test_successful_imap_read_with_unverified_sender_breaks_old_auth_failure_streak",
-    "tests.workflow.test_rfq016_second_review::test_receipt_proof_starts_after_slow_imap_fetch_not_before_connection"
+  "targeted_case_count": 39,
+  "targeted_case_ids": [
+    "tests.launcher.test_business_mail_fallback::test_optional_failure_delivers_current_original_notice_after_bounded_wait[build_error-important]",
+    "tests.launcher.test_business_mail_fallback::test_optional_failure_delivers_current_original_notice_after_bounded_wait[build_error-followup]",
+    "tests.launcher.test_business_mail_fallback::test_optional_failure_delivers_current_original_notice_after_bounded_wait[start_error-important]",
+    "tests.launcher.test_business_mail_fallback::test_optional_failure_delivers_current_original_notice_after_bounded_wait[start_error-followup]",
+    "tests.launcher.test_business_mail_fallback::test_optional_failure_delivers_current_original_notice_after_bounded_wait[blocked-important]",
+    "tests.launcher.test_business_mail_fallback::test_optional_failure_delivers_current_original_notice_after_bounded_wait[blocked-followup]",
+    "tests.launcher.test_business_mail_fallback::test_optional_failure_delivers_current_original_notice_after_bounded_wait[ineligible-important]",
+    "tests.launcher.test_business_mail_fallback::test_optional_failure_delivers_current_original_notice_after_bounded_wait[ineligible-followup]",
+    "tests.launcher.test_business_mail_fallback::test_optional_failure_delivers_current_original_notice_after_bounded_wait[exception-important]",
+    "tests.launcher.test_business_mail_fallback::test_optional_failure_delivers_current_original_notice_after_bounded_wait[exception-followup]",
+    "tests.launcher.test_business_mail_fallback::test_optional_failure_delivers_current_original_notice_after_bounded_wait[queue_full-important]",
+    "tests.launcher.test_business_mail_fallback::test_optional_failure_delivers_current_original_notice_after_bounded_wait[queue_full-followup]",
+    "tests.launcher.test_business_mail_fallback::test_recovered_detailed_report_wins_even_at_deadline_without_extra_mail[60-important]",
+    "tests.launcher.test_business_mail_fallback::test_recovered_detailed_report_wins_even_at_deadline_without_extra_mail[60-followup]",
+    "tests.launcher.test_business_mail_fallback::test_recovered_detailed_report_wins_even_at_deadline_without_extra_mail[120-important]",
+    "tests.launcher.test_business_mail_fallback::test_recovered_detailed_report_wins_even_at_deadline_without_extra_mail[120-followup]",
+    "tests.launcher.test_business_mail_fallback::test_fallback_deadline_never_overrides_current_business_gate[completed-important]",
+    "tests.launcher.test_business_mail_fallback::test_fallback_deadline_never_overrides_current_business_gate[completed-followup]",
+    "tests.launcher.test_business_mail_fallback::test_fallback_deadline_never_overrides_current_business_gate[expired-important]",
+    "tests.launcher.test_business_mail_fallback::test_fallback_deadline_never_overrides_current_business_gate[expired-followup]",
+    "tests.launcher.test_business_mail_fallback::test_fallback_deadline_never_overrides_current_business_gate[unverified_source-important]",
+    "tests.launcher.test_business_mail_fallback::test_fallback_deadline_never_overrides_current_business_gate[unverified_source-followup]",
+    "tests.launcher.test_business_mail_fallback::test_followup_changed_status_or_new_episode_cannot_use_old_fallback[status]",
+    "tests.launcher.test_business_mail_fallback::test_followup_changed_status_or_new_episode_cannot_use_old_fallback[episode]",
+    "tests.launcher.test_business_mail_fallback::test_restart_does_not_resend_terminal_recipients_after_fallback_and_recovery[SENT-important]",
+    "tests.launcher.test_business_mail_fallback::test_restart_does_not_resend_terminal_recipients_after_fallback_and_recovery[SENT-followup]",
+    "tests.launcher.test_business_mail_fallback::test_restart_does_not_resend_terminal_recipients_after_fallback_and_recovery[UNKNOWN-important]",
+    "tests.launcher.test_business_mail_fallback::test_restart_does_not_resend_terminal_recipients_after_fallback_and_recovery[UNKNOWN-followup]",
+    "tests.launcher.test_business_mail_fallback::test_persistent_resource_quarantine_restart_keeps_original_notice_deadline[important]",
+    "tests.launcher.test_business_mail_fallback::test_persistent_resource_quarantine_restart_keeps_original_notice_deadline[followup]",
+    "tests.launcher.test_business_mail_fallback::test_unconfigured_recipient_is_still_suppressed_at_fallback",
+    "tests.launcher.test_business_mail_fallback::test_optional_missing_service_adds_no_wait_or_mutation_to_notice_preparation[important]",
+    "tests.launcher.test_business_mail_fallback::test_optional_missing_service_adds_no_wait_or_mutation_to_notice_preparation[followup]",
+    "tests.launcher.test_business_mail_fallback::test_unusable_ready_content_does_not_extend_deadline[stale-important]",
+    "tests.launcher.test_business_mail_fallback::test_unusable_ready_content_does_not_extend_deadline[stale-followup]",
+    "tests.launcher.test_business_mail_fallback::test_unusable_ready_content_does_not_extend_deadline[malformed-important]",
+    "tests.launcher.test_business_mail_fallback::test_unusable_ready_content_does_not_extend_deadline[malformed-followup]",
+    "tests.launcher.test_business_mail_fallback::test_unrelated_notification_preparation_has_no_optional_service_dependency[TP_RESEARCH]",
+    "tests.launcher.test_business_mail_fallback::test_unrelated_notification_preparation_has_no_optional_service_dependency[DUPLICATE_ORDER]"
   ],
   "final_targeted": {
-    "tests": 31,
-    "passed": 31,
+    "tests": 39,
+    "passed": 39,
     "failures": 0,
     "errors": 0,
     "skipped": [],
-    "duration_seconds": 3.128,
-    "timestamp": "2026-10-31T09:35:39.651021+08:00",
-    "junit_sha256": "ea4bb630ffaf6f5bacc9f47f12191d973f285d17acc4ea2448d4e0075b603b73",
-    "all_case_ids_sha256": "f959d7884ba06287a5de8475a158931f3b6a4142f74cd4b57cb8292d489372df"
+    "duration_seconds": 11.75,
+    "timestamp": "2026-10-31T17:15:59.084313+08:00",
+    "junit_sha256": "3314d60d4e0c52bc79b57795fb6a050834a200adfcffa8597eba08fe19224c7c",
+    "all_case_ids_sha256": "3c0c1c3ce9df14bc93ed393a7be962d6d171f7071daf46d2cf59d8f354e58427"
   },
-  "prior_and_intermediate_runs": {
+  "red_green_and_context_runs": {
     "red": {
-      "tests": 7,
+      "tests": 10,
       "passed": 0,
-      "failures": 7,
+      "failures": 10,
       "errors": 0,
       "skipped": [],
-      "duration_seconds": 1.697,
-      "timestamp": "2026-10-31T09:17:58.513329+08:00",
-      "junit_sha256": "d4bb92c0f57a7882477503fbdf5fdf27a27ae729e46d2501ff687addb302b8b0",
-      "all_case_ids_sha256": "cb4eafa4e67b119a223c91fa8198a707dbc90859d418df01ac3e630ae9cb1d6b"
+      "duration_seconds": 2.414,
+      "timestamp": "2026-10-31T17:08:20.638317+08:00",
+      "junit_sha256": "e11ec0fe251e779cfa5e25752ddb573d2449052d73c94e52a0604bf136d9c632",
+      "all_case_ids_sha256": "ec45d1aec2dda21936397dd80dfb1adfd9a2c8bc7270db75fa61f442e6e9780a"
     },
     "green": {
-      "tests": 59,
-      "passed": 57,
-      "failures": 2,
+      "tests": 10,
+      "passed": 10,
+      "failures": 0,
       "errors": 0,
       "skipped": [],
-      "duration_seconds": 57.23,
-      "timestamp": "2026-10-31T09:19:51.350808+08:00",
-      "junit_sha256": "b99ca04bacbebb2bd734b2a1ef340005b1d5c6bcd21456ec23ffb7b3efda4fe0",
-      "all_case_ids_sha256": "13cc65ac7eac9be47da8d0eb1641d19c7e0af304472353557eea631c3220f37b"
+      "duration_seconds": 3.913,
+      "timestamp": "2026-10-31T17:09:14.550298+08:00",
+      "junit_sha256": "e257d49c9f007e9e37adc2485d004fe60167c913c5eea893a294fc622bcb0cf9",
+      "all_case_ids_sha256": "ec45d1aec2dda21936397dd80dfb1adfd9a2c8bc7270db75fa61f442e6e9780a"
     },
     "expanded": {
-      "tests": 17,
-      "passed": 16,
-      "failures": 1,
-      "errors": 0,
-      "skipped": [],
-      "duration_seconds": 2.77,
-      "timestamp": "2026-10-31T09:21:34.750901+08:00",
-      "junit_sha256": "86bb33da49eef140fd164c4d0afb4e8522747b0cac53c0f50c29afd8909e1bd7",
-      "all_case_ids_sha256": "6c9839c51d28ebda78f9ec1e67fb0bb83656569a4050bc5fa435f29bf5e6519b"
-    },
-    "focus": {
-      "tests": 42,
-      "passed": 42,
-      "failures": 0,
-      "errors": 0,
-      "skipped": [],
-      "duration_seconds": 2.582,
-      "timestamp": "2026-10-31T09:21:59.150492+08:00",
-      "junit_sha256": "2330b5c64d1670e9e9f4b952aa1929502c372f815e7a0b185640a6582f641a39",
-      "all_case_ids_sha256": "302971360458cf3d6e7124978459082f65f99222705047931e5d5bce198def33"
-    },
-    "targeted": {
-      "tests": 84,
-      "passed": 84,
-      "failures": 0,
-      "errors": 0,
-      "skipped": [],
-      "duration_seconds": 58.828,
-      "timestamp": "2026-10-31T09:23:01.189579+08:00",
-      "junit_sha256": "61cd4163a426c34bc70f9709444fd34e8f8264241ad18a4c3f272b61d5e0a3df",
-      "all_case_ids_sha256": "c403a33ac893aac6493507b7cac4e85d569f9a50a859fd8b9f1d1ef3a8da74cd"
-    },
-    "finalfocus": {
-      "tests": 24,
-      "passed": 24,
-      "failures": 0,
-      "errors": 0,
-      "skipped": [],
-      "duration_seconds": 2.345,
-      "timestamp": "2026-10-31T09:24:50.430909+08:00",
-      "junit_sha256": "a838931bf735b29abfd76ad3dbb075c9c875e4392715361b0a87a070aca651e4",
-      "all_case_ids_sha256": "23ba55309c9126e02a91eb120678c6440ede37a6a1d4a812762baa6740f9d39e"
-    },
-    "full": {
-      "tests": 3353,
-      "passed": 3352,
-      "failures": 0,
-      "errors": 0,
-      "skipped": [
-        {
-          "case": "tests.workflow.test_v12_evidence_and_safety::test_existing_path_rejects_symlink_escape_when_supported",
-          "reason": "symlink creation not available in this test environment"
-        }
-      ],
-      "duration_seconds": 191.98,
-      "timestamp": "2026-10-31T09:25:09.866238+08:00",
-      "junit_sha256": "db0592f24dbd0d907dc4c37bc309faf117ee77097a74868707c0ee0ceed8fa92",
-      "all_case_ids_sha256": "48038844063ea07ff07dafc387c310f3b103c547af4695c95be40bd1fb926fb8"
-    },
-    "auth-red": {
-      "tests": 1,
-      "passed": 0,
-      "failures": 1,
-      "errors": 0,
-      "skipped": [],
-      "duration_seconds": 0.995,
-      "timestamp": "2026-10-31T09:28:34.695155+08:00",
-      "junit_sha256": "607a8ac1f11e904399df3287ae8bcf812a79dd3640eb8cfc1d07b79b9970b261",
-      "all_case_ids_sha256": "76486219d5d83c9f3db113ae36be848624bbdd02027b44e592a2deac3137d1f8"
-    },
-    "final": {
       "tests": 30,
       "passed": 30,
       "failures": 0,
       "errors": 0,
       "skipped": [],
-      "duration_seconds": 3.275,
-      "timestamp": "2026-10-31T09:28:55.139627+08:00",
-      "junit_sha256": "dc60d053918f38e35e767728d9f473a7cc01563bd4a2bb6f4034c11b62db416d",
-      "all_case_ids_sha256": "03802b28913dbd2ee95a42ad2a7431c62659962be1945f029a3082763513f791"
+      "duration_seconds": 8.344,
+      "timestamp": "2026-10-31T17:11:51.352221+08:00",
+      "junit_sha256": "64e372c9c19006cab0a3cfb289c9e12d24ffed82f0adc3f6aca007c43108d43a",
+      "all_case_ids_sha256": "7645a781334911b6aef73c4ed602f9b3116e67d464b694ac32317148c678b7cc"
     },
-    "source71f3e06_full": {
-      "tests": 3354,
-      "passed": 3353,
-      "failures": 0,
-      "errors": 0,
-      "skipped": [
-        {
-          "case": "tests.workflow.test_v12_evidence_and_safety::test_existing_path_rejects_symlink_escape_when_supported",
-          "reason": "symlink creation not available in this test environment"
-        }
-      ],
-      "duration_seconds": 191.332,
-      "timestamp": "2026-10-31T09:28:59.340591+08:00",
-      "junit_sha256": "9d8a81f460a9d148435cddd1ccbfac562d399b804d5371444373abc7a5ab9490",
-      "all_case_ids_sha256": "4538afe0fd788f1b8999112435c3866fe84c319e954ef526f4c3d6d4c065996b",
-      "console_duration_seconds": 191.39,
-      "command": "python -X utf8 -m pytest tests -q -p no:cacheprovider --basetemp <owned sandbox> --tb=short --junitxml=<owned evidence>"
-    },
-    "receipt_red": {
-      "tests": 1,
-      "passed": 0,
-      "failures": 1,
-      "errors": 0,
-      "skipped": [],
-      "duration_seconds": 1.076,
-      "timestamp": "2026-10-31T09:35:21.796344+08:00",
-      "junit_sha256": "7bb99c3a51692e30749ab9c9b423cda3b33c22c5d6a13d489fc91701549cf083",
-      "all_case_ids_sha256": "380a80e53eb6359293bbe2960517ab76cd6822f43895fff6c0ad7fdf7bffcd39"
-    },
-    "receipt_green": {
-      "tests": 31,
-      "passed": 31,
+    "focused": {
+      "tests": 80,
+      "passed": 80,
       "failures": 0,
       "errors": 0,
       "skipped": [],
-      "duration_seconds": 3.128,
-      "timestamp": "2026-10-31T09:35:39.651021+08:00",
-      "junit_sha256": "ea4bb630ffaf6f5bacc9f47f12191d973f285d17acc4ea2448d4e0075b603b73",
-      "all_case_ids_sha256": "f959d7884ba06287a5de8475a158931f3b6a4142f74cd4b57cb8292d489372df"
+      "duration_seconds": 68.127,
+      "timestamp": "2026-10-31T17:13:41.258999+08:00",
+      "junit_sha256": "8fcb6110fc47350df2062014b179b2e6158b6c39eac3fd675ff05b1541f5fe75",
+      "all_case_ids_sha256": "6284818e80f016b5ac6efe2cf161f3ba7a67a7a38e2069dfebae07228d4249d9"
+    },
+    "final": {
+      "tests": 39,
+      "passed": 39,
+      "failures": 0,
+      "errors": 0,
+      "skipped": [],
+      "duration_seconds": 11.75,
+      "timestamp": "2026-10-31T17:15:59.084313+08:00",
+      "junit_sha256": "3314d60d4e0c52bc79b57795fb6a050834a200adfcffa8597eba08fe19224c7c",
+      "all_case_ids_sha256": "3c0c1c3ce9df14bc93ed393a7be962d6d171f7071daf46d2cf59d8f354e58427"
     }
   },
-  "red_evidence": [
-    {
-      "source_commit": "50dfe3d981bddc4c5a61865123f590d16b68f1cc",
-      "result": "7FAIL/1.74s before patch;2cached-order assertions,2background-first250ms assertions,3forged exact From/header assertions"
-    },
-    {
-      "source_commit": "8526523c7dfaee55bd132b5690eed20dce5ee4e9",
-      "result": "1FAIL/1.03s: successful login/read with unverified sender retained3rather than1auth failures after next rejection; final source resets/resolves old login incident"
-    },
-    {
-      "source_commit": "71f3e06301d3a62ac8a22b2510163f85b19437d2",
-      "result": "1FAIL/1.12s; slow IMAP fetch allowed source observed before actual header receipt to enrich old customer. Final local receipt clock is captured after header fetch."
-    }
-  ],
-  "latest_match": {
-    "local_history_is_current_proof": false,
-    "configured_complete_source_set_required": true,
-    "mandatory_full_live_reads_only": true,
-    "read_start_at_or_after_local_request_receipt": true,
-    "max_observation_age_seconds": 120,
-    "future_failed_discovery_partial_restart_proof_rejected": true,
-    "unproven_latest": "MPN-only; no cached customer/quantity/order total",
-    "fresh_unique_latest_can_enrich": true,
-    "cross_sheet_ties_conflicts": "MPN-only",
-    "restored_progress_revalidated": true,
-    "SMTP_enrichment_revalidated_or_removed": true,
-    "new_Google_client_or_poll": false,
-    "actual_receipt_after_header_FETCH_not_connection_start": true
+  "red_evidence": {
+    "application_base": "8a0d121cbb722a9a981e64fa6380904dac5ca12e",
+    "result": "10FAIL/2.46s before patch; actual Backend final reviewer/preparer + V12 queue + original QQSMTPTransport with injected fake SMTP. Both notice types across5optional failures still0SMTP at120s when2required."
   },
-  "foreground_budget": {
-    "foreground_waits_on_background_io_lock": false,
-    "foreground_own_reentrant_serialization_retained": true,
-    "max_background_reads": 1,
-    "offline_main_progress_bound_seconds": 0.25,
-    "asserted_while_background_read_still_blocked": true,
-    "native_page_scope_recovery_deferral_tested": true,
-    "deferred_attempts_increment": false,
-    "extra_targets_after_preemption": 0,
-    "false_SMTP_on_deferral": 0,
-    "physical_live_Chrome_latency_guarantee": false,
-    "limit": "One in-flight sync read may drain until its native timeout; main does not wait on that read. Shared CPU/network/CDP responsiveness remains NOT_VERIFIED."
-  },
-  "sender_authentication": {
-    "status": "QQ_PROVIDER_CONTRACT_NOT_VERIFIED / SECURITY_ENABLEMENT_BLOCKED",
-    "From_equality_is_authentication": false,
-    "production_verifier_available": false,
-    "production_default": "reject candidate before queue/market/SMTP; keep UID cursor; continue120s polling with local SENDER_AUTH_UNVERIFIED",
-    "provider_headers_self_assertions_accepted": false,
-    "live_contract_or_risk_acceptance": false,
-    "test_verifier": "Explicitly injected synthetic boundary proof only; not a QQ implementation",
-    "legacy_unverified_requests": "PENDING blocked; READY outbox suppressed; SENT/UNKNOWN preserved",
-    "minimum_proposed_verification": "Provider-grounded result with documented trust boundary/forged-header removal, aligned domain auth plus exact sending-account binding; CEO review before enablement",
-    "decision_record": "tasks/2026-10-30-mail-research-upgrade.md#sender-authenticity-decision--second-review-source-remediation",
-    "sources": [
-      "https://service.mail.qq.com/detail/0/75",
-      "https://www.rfc-editor.org/rfc/rfc9051.html",
-      "https://www.rfc-editor.org/rfc/rfc8601.html",
-      "https://cloud.tencent.com.cn/document/faq/1288/60652"
+  "bounded_enrichment": {
+    "wait_seconds": 120,
+    "authority": "original durable NotificationCommand.created_at",
+    "new_timer_sleep_or_scheduler": false,
+    "retry_restart_queue_refresh_resets_deadline": false,
+    "delivery_opportunity": "first original worker run at/after deadline that still passes all original business reviews",
+    "not_a_network_delivery_deadline": true,
+    "healthy_full_six_source_content_still_preferred": true,
+    "fallback": "current verified order metadata and original business purpose; original confirmed follow-up time retained; explicit detailed market quote unavailable/unverified; no historic market prices/stock/estimated totals",
+    "original_trigger_subject_recipients_and_final_review_unchanged": true,
+    "core_unknown_source_or_invalid_event": "no outbound, deadline is not permission",
+    "optional_failures_covered": [
+      "real Backend build exception",
+      "real Backend start exception",
+      "persisted local resource quarantine after fake successful Backend startup",
+      "background admission unavailable",
+      "full request queue",
+      "optional cache exception",
+      "stale READY report",
+      "malformed READY report"
+    ],
+    "recovery_covered": [
+      "full six-source content before deadline",
+      "full six-source content at deadline",
+      "late optional report after fallback creates no extra mail"
+    ],
+    "restart_covered": [
+      "persisted resource quarantine retains119/120s original deadline",
+      "SENT and UNKNOWN recipients unchanged and never re-sent"
     ]
   },
   "smtp_safety": {
-    "false_sample_attempts": 0,
-    "evidence": "Full suite retains original false-sample real QQSMTPTransport/fake SMTP assertions; new unverified-candidate/legacy/deferral samples produce zero calls. Not an aggregate claim that legitimate mail is zero.",
-    "ordinary_important_followup_TP_recipients_and_conditions": "unchanged, covered by full regression",
-    "SENT_UNKNOWN_protected": true
+    "negative_invalid_completed_expired_unverified_source_bad_recipient_attempts": 0,
+    "legitimate_fallback": "one attempt each to229andShawn on eligible deadline; no technical alert generated",
+    "injected_transport": "original QQSMTPTransport + ScriptedSMTP subclass, synthetic credentials, no socket/Vault",
+    "SENT_UNKNOWN_recipient_history_preserved": true,
+    "no_price_stock_total_in_fallback": true
+  },
+  "preserved_behavior": {
+    "A_B_C_D_E_not_rewritten": true,
+    "all_other_production_source_files_unchanged": true,
+    "composition_startup_and_append_report_functions_AST_unchanged": true,
+    "queue_SMTP_browser_budget_sender_authentication_main_manual_inquiry_quote_TP_unchanged": true,
+    "QQ_real_sender_authentication": "SECURITY_ENABLEMENT_BLOCKED; verifier unchanged/false"
   },
   "checks": {
     "ruff_all_src_tests_no_cache": "PASS",
     "git_diff_check": "PASS",
     "COMPUTER_USE_NOT_USED": true,
-    "method": "CLI/PowerShell/Python, synthetic adapters and native lease logic with fake CDP only",
-    "agent_live_IMAP_Google_CDP_SMTP_connections": 0,
-    "public_documentation_lookup": true,
-    "production_install_restart_kill_writes": false,
-    "protected_source_paths_unchanged_from_CEO_base": {
-      "src/workflow/automatic_admission.py": true,
-      "src/launcher/source_status.py": true,
-      "src/workflow/v13_quote_update.py": true,
-      "src/workflow/v13_integration.py": true,
-      "src/workflow/v12_notifications.py": true,
-      "src/workflow/v12_store.py": true,
-      "src/workflow/v12_smtp_transport.py": true,
-      "src/workflow/notification_review.py": true,
-      "src/research/detailed.py": true,
-      "src/research/report.py": true,
-      "src/workflow/tp_research.py": true
-    }
+    "method": "PowerShell/Python/CLI; fake source/CDP/SMTP only",
+    "production_install_restart_kill_business_writes": false,
+    "agent_live_IMAP_Google_CDP_SMTP_connections": 0
   },
   "environment": {
     "python": "3.12.10",
-    "dependencies": "Reused existing release venv site-packages and V1.6 Tcl/Tk data; installed nothing"
+    "dependencies": "Existing release venv site-packages and V1.6 Tcl/Tk reused; no installation"
   },
   "prior_delivery": {
-    "source_commit": "08a00cf6abacc73a4c06b7721f4dfff51fd5e373",
-    "report_commit": "e2965645360ecbbab59fc30780c3de34f8986f37",
-    "passed": 3334,
+    "source_commit": "1dd31b283ec34126637e173830dbc3c321b7c89d",
+    "report_commit": "0f33b97ed2abfde9ca7fbc94b47e4ca36030f5c4",
+    "passed": 3354,
     "skipped": 1,
-    "historical_24h_composed_acceptance": "On295fa44, not rerun or claimed unchanged on final source. Final suite contains720-poll offline persistence simulation."
+    "A_B_C_D_E": "CEO provisional source acceptance, not production acceptance"
   },
   "unknowns": [
-    "Actual QQ inbound sender-authentication semantics and account binding",
-    "Live229 IMAP authorization",
-    "Live source/customer/order truth",
-    "Actual shared Chrome resource contention and website latency",
-    "Real SMTP provider delivery",
-    "Installed EXE/source equivalence",
-    "Production resolution"
+    "Actual production state and installed-source equivalence",
+    "Live Google/customer status and business notice delivery",
+    "Physical Chrome/site contention",
+    "Live SMTP provider delivery",
+    "Trustworthy QQ sender verifier; remains SECURITY_ENABLEMENT_BLOCKED"
   ],
   "cleanup": {
     "status": "COMPLETE",
     "only_this_round_owned_temporary_files": true,
-    "previous_task_exceptions_not_revisited": [
+    "prior_task_exceptions_not_revisited": [
       "rfq016-debug",
       "rfq016-full2",
       "rfq016-green1",
       "rfq016-red"
     ],
-    "first_pass": {
+    "receipt": {
+      "permissions_changed": false,
+      "root": "D:\\Program_Leo\\INSO_Leo\\.tmp",
+      "run_hashes_case_summary_retained": true,
+      "retained": [],
+      "reparse_points_followed": false,
       "protected_runtime_touched": false,
       "retired": [
-        "rfq016-second-red",
-        "rfq016-second-red.xml",
-        "rfq016-second-green",
-        "rfq016-second-green.xml",
-        "rfq016-second-expanded",
-        "rfq016-second-expanded.xml",
-        "rfq016-second-focus",
-        "rfq016-second-focus.xml",
-        "rfq016-second-targeted",
-        "rfq016-second-targeted.xml",
-        "rfq016-second-finalfocus",
-        "rfq016-second-finalfocus.xml",
-        "rfq016-second-full",
-        "rfq016-second-full.xml",
-        "rfq016-second-auth-red",
-        "rfq016-second-auth-red.xml",
-        "rfq016-second-final",
-        "rfq016-second-final.xml",
-        "rfq016-second-full-final",
-        "rfq016-second-full-final.xml"
-      ],
-      "reparse_points_followed": false,
-      "permissions_changed": false,
-      "raw_evidence_hashes_and_case_summary_retained": true,
-      "retained": [],
-      "root": "D:\\Program_Leo\\INSO_Leo\\.tmp"
-    },
-    "final_pass": {
-      "permissions_changed": false,
-      "protected_runtime_touched": false,
-      "reparse_points_followed": false,
-      "retained": [],
-      "retired": [
-        "rfq016-second-receipt-red",
-        "rfq016-second-receipt-red.xml",
-        "rfq016-second-receipt-green",
-        "rfq016-second-receipt-green.xml",
-        "rfq016-second-certified",
-        "rfq016-second-certified.xml"
+        "rfq016-F-red",
+        "rfq016-F-red.xml",
+        "rfq016-F-green",
+        "rfq016-F-green.xml",
+        "rfq016-F-expanded",
+        "rfq016-F-expanded.xml",
+        "rfq016-F-focused",
+        "rfq016-F-focused.xml",
+        "rfq016-F-final",
+        "rfq016-F-final.xml",
+        "rfq016-F-full",
+        "rfq016-F-full.xml"
       ]
     }
   }

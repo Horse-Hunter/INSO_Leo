@@ -335,3 +335,22 @@ parser does not authenticate From. Production QQ provider proof remains unavaila
 unverified candidates retain cursor and no market task/SMTP is admitted. Legacy
 unverified requests are locally blocked/suppressed, without rewriting SENT/UNKNOWN.
 See the existing subtask's sender decision for verified facts/proposed contract.
+
+
+RFQ016 third-review F (source review pending): optional detailed content for the
+original important-order and three-working-hour follow-up notifications has a
+120s elapsed budget from the original durable NotificationCommand.created_at.
+At the next ordinary eligible send opportunity after that deadline, absent,
+blocked, saturated, stale/malformed or failed optional research gives a truthful
+verified-order summary with explicit detailed-market-data-unavailable wording.
+Historical market price/stock/totals are omitted. A fresh complete report still
+wins, including when it becomes available at/after the deadline. No deadline
+reset on retry/restart or another report request; no sleeping loop/new timer.
+The original Backend source/event/age/recipient gates and V12 per-recipient
+SENT/UNKNOWN protections stay authoritative. Missing current business proof
+still defers/suppresses; the deadline cannot authorize sending. Only the existing
+launcher content preparer changes, with no network/research on its send path.
+Main business, TP, manual tasks, accepted A/B/C/D/E and QQ sender security hold
+remain unchanged. Final fake Backend/outbox/QQSMTP regressions cover startup
+failure, persisted resource protection/restart, starvation/full capacity,
+recovery, unusable READY results, invalid events and terminal recipient outcomes.
