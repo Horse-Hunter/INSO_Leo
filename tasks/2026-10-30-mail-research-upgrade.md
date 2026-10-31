@@ -302,3 +302,11 @@ Primary sources consulted2026-10-31:
 - Tencent Cloud outbound SES authentication FAQ: https://cloud.tencent.com.cn/document/faq/1288/60652 — outbound domain auth only; not imported as QQ receiving semantics.
 
 Synthetic verified test fixtures use an explicitly injected boundary verifier/ResearchMail proof. These are offline test capabilities, **not a delivered live QQ verifier**. No custom SMTP, credentials, dependencies or headers-as-commands were added.
+
+## CEO final D/E/sender review: one optional-service isolation blocker (2026-10-31)
+
+Source `1dd31b283ec34126637e173830dbc3c321b7c89d`, delivery `0f33b97ed2abfde9ca7fbc94b47e4ca36030f5c4`. The previous D and E fixes are source-level provisionally accepted, with synthetic tests; authentic QQ sender proof remains **NOT IMPLEMENTED / SECURITY_ENABLEMENT_BLOCKED** by design, so real new IMAP commands cannot research or send.
+
+**`CHANGES_REQUESTED` for original business-mail degradation:** if new optional service startup fails (`backend._mail_research_service=None`) or its owned page is persistently blocked, `prepare_business_report` returns `None` forever, causing original verified IMPORTANT_ORDER and PURCHASE_FOLLOW_UP_REQUIRED alerts to be indefinitely deferred in existing V12 mail worker. This violates the Owner's requirement that the new independent module cannot stop normal business functionality. Add a bounded, truthful no-invented-market-data fallback for current, already-authorized original business emails, retaining send-time source/status/cooldown/recipient/UNKNOWN protections. Do not treat failed enrichment as false business success; preserve full-six-source content when available.
+
+Exact test matrix and source paths in original `control-room/RFQ-016/TASK_SPEC.md`, CEO SOURCE Re-Review #3. No production deployment or automatic mail enablement authorized; source patch and fake-SMTP regression only.
