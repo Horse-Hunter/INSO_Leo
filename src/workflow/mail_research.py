@@ -135,7 +135,8 @@ class MailResearchService:
             LOG.warning("229 mailbox needs IMAP authorization in existing Vault (imap.qq.com)")
         except Exception as error:  # noqa: BLE001 - isolated service boundary; sanitized class only
             if isinstance(error, ValueError) and str(error) == "SENDER_AUTH_UNVERIFIED":
-                self.health = "SENDER_AUTH_UNVERIFIED"
+                self.health, self._failures, self._auth_failures = "SENDER_AUTH_UNVERIFIED", 0, 0
+                self.outbox.resolve_incidents("mail_research", at=now, reason_code="IMAP_AUTH_REQUIRED")
                 LOG.warning("Sender origin not verified; UID cursor retained; no research or mail admitted")
                 return
             self._failures += 1

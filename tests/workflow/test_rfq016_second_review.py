@@ -287,3 +287,24 @@ def test_google_updated_without_main_poll_degrades_then_fresh_complete_view_enri
     assert len(smtp.calls) == 2 and all("OLD_CUSTOMER" not in text for text in texts)
     assert any("NEW_CUSTOMER" in text and "40 RMB" in text for text in texts)
     assert [qty for _, _, qty in calls[6:]] == [20]*6
+
+
+def test_successful_imap_read_with_unverified_sender_breaks_old_auth_failure_streak(tmp_path):
+    from src.order_mail.research_requests import ImapAuthenticationRequired
+    service, _, smtp, *_ = scene(tmp_path)
+    service.poll_once()  # establish baseline before a later mail arrives
+    class Auth:
+        def __enter__(self):
+            raise ImapAuthenticationRequired()
+        def __exit__(self, *_):
+            pass
+    service.inbox_factory = Auth
+    service.poll_once(); service.poll_once()
+    # Successful TLS/login/select/header FETCH proves the old login block recovered,
+    # even though sender origin is unavailable and the instruction must not run.
+    service.inbox_factory = lambda: ResearchInbox(credentials=lambda _: SimpleNamespace(username=ACCOUNT, password="synthetic"), factory=lambda *a, **k: IMAP())
+    service.poll_once()
+    assert service.health == "SENDER_AUTH_UNVERIFIED"
+    service.inbox_factory = Auth
+    service.poll_once(); service.worker.run_due(now=NOW)
+    assert service._auth_failures == 1 and smtp.calls == []
