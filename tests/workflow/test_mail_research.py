@@ -39,10 +39,15 @@ def test_header_request(subject):
 
 @pytest.mark.parametrize("subject,sender", [("调研", "sales2@inso-hk.com"),
     ("调研 MPN DROP ALL", "sales2@inso-hk.com"), ("Re: 调研MPN", "sales2@inso-hk.com"),
-    ("调研MPN", "sales2@inso-hk.com.attacker.invalid"), ("调研MPN", '"sales2@inso-hk.com" <attacker@example.invalid>'),
-    ("调研MPN", "sal\u200bes2@inso-hk.com"), ("调研MPN", "sales2@inso-hk.com, other@example.invalid")])
+])
 def test_untrusted_header_ignored(subject, sender):
     assert parse_research_header(header(subject, sender)) is None
+
+
+@pytest.mark.parametrize("sender", ["sales2@inso-hk.com.attacker.invalid", '"sales2@inso-hk.com" <attacker@example.invalid>',
+    "sal\u200bes2@inso-hk.com", "sales2@inso-hk.com, other@example.invalid"])
+def test_owner_subject_only_policy_ignores_from_spelling(sender):
+    assert parse_research_header(header("调研MPN", sender)).mpn == "MPN"
 
 
 def scene(tmp_path, *, capacity=64, outbox=None):
@@ -81,7 +86,7 @@ def scene(tmp_path, *, capacity=64, outbox=None):
 
 def receive(service, inbox, count=1):
     service.poll_once()  # establishes baseline, ignores historic100
-    inbox.messages = [(101+i, ResearchMail("MPN", NOW.isoformat(), f"<mail-{i}>", sender_verified=True)) for i in range(count)]
+    inbox.messages = [(101+i, ResearchMail("MPN", NOW.isoformat(), f"<mail-{i}>", trigger_policy="subject-only-v1")) for i in range(count)]
     inbox.latest = 100+count
     service.poll_once()
 
@@ -330,7 +335,7 @@ def test_720_simulated_polls_no_active_queue_growth_or_cross_task_state(tmp_path
         timer[0] = tick*120
         clock[0] = NOW+timedelta(seconds=timer[0])
         inbox.latest = 100+tick
-        inbox.messages = [(100+tick, ResearchMail("MPN", None, str(tick), sender_verified=True))]
+        inbox.messages = [(100+tick, ResearchMail("MPN", None, str(tick), trigger_policy="subject-only-v1"))]
         service.tick()
         assert service.run_one()
         service.worker.run_due(now=clock[0])

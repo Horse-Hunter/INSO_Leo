@@ -63,17 +63,13 @@ def test_background_first_cannot_hold_due_foreground_until_read_returns(mode):
 
 
 @pytest.mark.parametrize("claims", [b"", b"Authentication-Results: mx.qq.com; dkim=pass header.d=inso-hk.com; dmarc=pass header.from=inso-hk.com\r\n", b"Received-SPF: pass\r\nReturn-Path: <sales2@inso-hk.com>\r\n"])
-def test_forged_exact_from_and_self_asserted_auth_never_enter_research(claims):
+def test_subject_policy_ignores_claimed_sender_authentication(claims):
     from tests.workflow.test_mail_research import header
     client = IMAP()
     client.uid = lambda *_: ("OK", [(b"101 (UID 101)", claims+header())])
     with ResearchInbox(credentials=lambda _: SimpleNamespace(username=ACCOUNT, password="synthetic"), factory=lambda *a, **k: client) as inbox:
-        try:
-            _, mails = inbox.read(100)
-        except ValueError as exc:
-            assert str(exc) == "SENDER_AUTH_UNVERIFIED"
-        else:
-            assert mails == (), "matching From is not sender authenticity"
+        _, mails = inbox.read(100)
+        assert mails[0][1].mpn == "STM32F103C8T6"  # Owner now authorizes subject only.
     assert client.closed
 
 
@@ -169,14 +165,14 @@ def test_legacy_unverified_requests_never_research_or_send(tmp_path, legacy_stat
         service.run_one()
     with service.store.connect() as db:
         payload = json.loads(db.execute("SELECT payload FROM workflow_mail_research").fetchone()[0])
-        payload.pop("sender_verified")
+        payload.pop("trigger_policy")
         db.execute("UPDATE workflow_mail_research SET payload=?", (json.dumps(payload),))
     calls.clear()
     service.run_one(); service.worker.run_due(now=NOW)
     assert calls == [] and smtp.calls == []
 
 
-def test_unverified_sender_retains_cursor_and_polls_without_alert(tmp_path):
+def test_subject_only_receiver_accepts_new_request_without_auth_alert(tmp_path):
     service, *_ = scene(tmp_path)
     client = IMAP()
     service.inbox_factory = lambda: ResearchInbox(credentials=lambda _: SimpleNamespace(username=ACCOUNT, password="synthetic"), factory=lambda *a, **k: client)
@@ -187,9 +183,9 @@ def test_unverified_sender_retains_cursor_and_polls_without_alert(tmp_path):
     client.uid = lambda *_: ("OK", [(b"102 (UID 102)", header())])
     for _ in range(3):
         service.poll_once(); service.worker.run_due(now=NOW)
-    assert service.health == "SENDER_AUTH_UNVERIFIED" and service.store.cursor(ACCOUNT) == (1, 101)
+    assert service.health == "READY" and service.store.cursor(ACCOUNT) == (1, 102)
     with service.store.connect() as db:
-        assert db.execute("SELECT count(*) FROM workflow_mail_research").fetchone()[0] == 0
+        assert db.execute("SELECT count(*) FROM workflow_mail_research").fetchone()[0] == 1
         assert db.execute("SELECT count(*) FROM workflow_v12_notification_commands").fetchone()[0] == 0
 
 
@@ -277,7 +273,7 @@ def test_google_updated_without_main_poll_degrades_then_fresh_complete_view_enri
     # Next request: only positive live reads of ALL configured sheets restore enrichment.
     clock[0] += timedelta(seconds=1)
     inbox.latest = 102
-    inbox.messages = [(102, ResearchMail("MPN", None, "<second>", sender_verified=True))]
+    inbox.messages = [(102, ResearchMail("MPN", None, "<second>", trigger_policy="subject-only-v1"))]
     service.poll_once()
     service.catalog.observe("2026", (("old", old, NOW-timedelta(days=2)), ("new", external_latest, NOW)), observed_at=clock[0])
     service.catalog.observe("SHAHAB", (), observed_at=clock[0])
@@ -289,7 +285,7 @@ def test_google_updated_without_main_poll_degrades_then_fresh_complete_view_enri
     assert [qty for _, _, qty in calls[6:]] == [20]*6
 
 
-def test_successful_imap_read_with_unverified_sender_breaks_old_auth_failure_streak(tmp_path):
+def test_successful_imap_subject_poll_breaks_old_auth_failure_streak(tmp_path):
     from src.order_mail.research_requests import ImapAuthenticationRequired
     service, _, smtp, *_ = scene(tmp_path)
     service.poll_once()  # establish baseline before a later mail arrives
@@ -304,7 +300,7 @@ def test_successful_imap_read_with_unverified_sender_breaks_old_auth_failure_str
     # even though sender origin is unavailable and the instruction must not run.
     service.inbox_factory = lambda: ResearchInbox(credentials=lambda _: SimpleNamespace(username=ACCOUNT, password="synthetic"), factory=lambda *a, **k: IMAP())
     service.poll_once()
-    assert service.health == "SENDER_AUTH_UNVERIFIED"
+    assert service.health == "READY"
     service.inbox_factory = Auth
     service.poll_once(); service.worker.run_due(now=NOW)
     assert service._auth_failures == 1 and smtp.calls == []

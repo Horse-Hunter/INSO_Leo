@@ -37,7 +37,7 @@ def test_fake_tls_uses_vault_identity_peek_and_uid_range_only():
         assert host == "imap.qq.com" and port == 993 and timeout == 20
         assert ssl_context.check_hostname
         return client
-    with ResearchInbox(credentials=lambda site: SimpleNamespace(username=ACCOUNT, password="synthetic"), factory=factory, verify_origin=lambda _: True) as inbox:
+    with ResearchInbox(credentials=lambda site: SimpleNamespace(username=ACCOUNT, password="synthetic"), factory=factory) as inbox:
         assert inbox.validity == 1 and inbox.latest == 101
         upper, mails = inbox.read(100)
         assert upper == 101 and mails[0][0] == 101

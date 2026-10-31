@@ -2,7 +2,7 @@
 import imaplib
 import re
 import ssl
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from email import policy
 from email.parser import BytesParser
 from email.utils import parsedate_to_datetime
@@ -10,7 +10,7 @@ from email.utils import parsedate_to_datetime
 from src.core import get_login
 
 ACCOUNT = "linan229@qq.com"
-SENDER = "sal" + "es2@inso-hk.com"
+TRIGGER_POLICY = "subject-only-v1"
 
 
 @dataclass(frozen=True)
@@ -18,32 +18,25 @@ class ResearchMail:
     mpn: str
     sent_at: str | None
     message_id: str | None
-    sender_verified: bool = False
+    trigger_policy: str | None = None
 
 
-def verify_sender_origin(_raw):
-    """QQ IMAP authenticity contract NOT_VERIFIED. Never trust self-added headers.
-
-    A reviewed provider-grounded verifier is required before live enablement.
-    No config/address/authserv-id guess can enable this boundary.
-    """
-    return False
+def parse_research_subject(subject):
+    match = re.fullmatch(r"调研\s*([A-Za-z0-9][A-Za-z0-9._+/#-]{0,127})", subject)
+    return match[1] if match else None
 
 
 def parse_research_header(raw):
-    """Syntax only; a matching From is NOT authentication."""
+    """Owner accepts any sender; only one decoded legal subject is authoritative."""
     if len(raw) > 32768:
         return None
     try:
         mail = BytesParser(policy=policy.default).parsebytes(raw, headersonly=True)
-        if mail.defects or len(mail.get_all("From", [])) != 1 or len(mail.get_all("Subject", [])) != 1:
-            return None
-        sender = mail["From"]
-        if sender.defects or len(sender.addresses) != 1 or sender.addresses[0].addr_spec.casefold() != SENDER:
+        if len(mail.get_all("Subject", [])) != 1 or mail["Subject"].defects:
             return None
         subject = str(mail["Subject"])
-        match = re.fullmatch(r"调研\s*([A-Za-z0-9][A-Za-z0-9._+/#-]{0,127})", subject)
-        if match is None:
+        mpn = parse_research_subject(subject)
+        if mpn is None:
             return None
         date = None
         try:
@@ -52,7 +45,7 @@ def parse_research_header(raw):
                 date = value.isoformat()
         except (TypeError, ValueError, OverflowError):
             pass
-        return ResearchMail(match[1], date, str(mail.get("Message-ID", ""))[:512] or None)
+        return ResearchMail(mpn, date, str(mail.get("Message-ID", ""))[:512] or None, TRIGGER_POLICY)
     except (ValueError, TypeError, AttributeError):
         return None
 
@@ -69,9 +62,8 @@ class ImapAuthenticationRequired(RuntimeError):
 
 class ResearchInbox:
     """A short TLS connection per poll; durable cursor belongs to Workflow."""
-    def __init__(self, *, credentials=get_login, factory=imaplib.IMAP4_SSL, verify_origin=verify_sender_origin):
+    def __init__(self, *, credentials=get_login, factory=imaplib.IMAP4_SSL):
         self.credentials, self.factory = credentials, factory
-        self.verify_origin = verify_origin
         self.client = None
 
     def __enter__(self):
@@ -109,7 +101,7 @@ class ResearchInbox:
         if upper <= after:
             return upper, ()
         data = ok(self.client.uid("fetch", f"{after+1}:{upper}",
-            "(UID BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])"))
+            "(UID BODY.PEEK[HEADER.FIELDS (SUBJECT DATE MESSAGE-ID)])"))
         found = []
         for item in data:
             if not isinstance(item, tuple):
@@ -120,9 +112,7 @@ class ResearchInbox:
                 raise ValueError("IMAP_UID_UNCONFIRMED")
             parsed = parse_research_header(raw)
             if parsed is not None:
-                if self.verify_origin(raw) is not True:
-                    raise ValueError("SENDER_AUTH_UNVERIFIED")  # Keep UID cursor; no work/SMTP.
-                found.append((int(match[1]), replace(parsed, sender_verified=True)))
+                found.append((int(match[1]), parsed))
         return upper, tuple(found)
 
     def __exit__(self, *_):

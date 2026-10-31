@@ -4,6 +4,8 @@ import sqlite3
 from contextlib import contextmanager
 from hashlib import sha256
 
+from src.order_mail.research_requests import ACCOUNT, TRIGGER_POLICY
+
 from .v12_store import create_verified_backup
 
 
@@ -51,12 +53,51 @@ class MailResearchStore:
             row = db.execute("SELECT validity,last_uid FROM workflow_mail_cursor WHERE account=?", (account,)).fetchone()
         return tuple(row) if row else None
 
+    def establish_subject_baseline(self, account, validity, latest):
+        """One atomic policy activation; existing blocked UID backlog is history.
+
+        The second cursor row is a durable policy marker, not another mailbox.
+        Subsequent restarts keep normal UID progress and accepted task identity.
+        """
+        if account != ACCOUNT:
+            raise ValueError("IMAP_ACCOUNT_UNCONFIRMED")
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            marker = "policy:"+TRIGGER_POLICY+":"+account
+            if db.execute("SELECT 1 FROM workflow_mail_cursor WHERE account=?", (marker,)).fetchone():
+                return False
+            db.execute("INSERT INTO workflow_mail_cursor VALUES (?,?,?)", (marker, validity, latest))
+            db.execute("INSERT OR REPLACE INTO workflow_mail_cursor VALUES (?,?,?)", (account, validity, latest))
+            return True
+
+    def admitted_subject_request(self, job):
+        """Recheck persisted origin, policy, UID binding and activation boundary."""
+        try:
+            payload = json.loads(job["payload"])
+            if job["origin"] != "imap" or payload.get("trigger_policy") != TRIGGER_POLICY or payload.get("account") != ACCOUNT:
+                return False
+            validity, uid, after = (payload[k] for k in ("uid_validity", "uid", "after_uid"))
+            if any(type(n) is not int for n in (validity, uid, after)) or validity <= 0 or not 0 <= after < uid:
+                return False
+            expected = "mail-research:"+sha256(f"{ACCOUNT}:{validity}:{uid}".encode()).hexdigest()
+            if job["task_id"] != expected:
+                return False
+            from src.order_mail.research_requests import parse_research_subject
+            if parse_research_subject("调研 "+payload["mpn"]) != payload["mpn"]:
+                return False
+            marker = self.cursor("policy:"+TRIGGER_POLICY+":"+ACCOUNT)
+            return marker is not None and (validity != marker[0] or uid > marker[1])
+        except (ValueError, TypeError, KeyError):
+            return False
+
     @staticmethod
     def _active_count(db):
         # A report awaiting SMTP is still queued work, not a completed request.
         return db.execute("""SELECT count(*) FROM workflow_mail_research m WHERE
-            m.state IN ('PENDING','RUNNING','BLOCKED') OR
-            (m.origin='imap' AND m.state='READY' AND NOT EXISTS (
+            (m.state IN ('PENDING','RUNNING','BLOCKED') AND (m.origin!='imap' OR
+                CASE WHEN json_valid(m.payload) THEN json_extract(m.payload,'$.trigger_policy') END='subject-only-v1')) OR
+            (m.origin='imap' AND m.state='READY' AND
+                CASE WHEN json_valid(m.payload) THEN json_extract(m.payload,'$.trigger_policy') END='subject-only-v1' AND NOT EXISTS (
                 SELECT 1 FROM workflow_v12_notification_recipients r
                 WHERE r.command_id=m.task_id AND r.outcome IN ('SENT','UNKNOWN','PERMANENT_FAILURE','SUPPRESSED')))""").fetchone()[0]
 
@@ -71,7 +112,7 @@ class MailResearchStore:
             count = self._active_count(db)
             added = 0
             for uid, mail in messages:
-                if uid <= previous[1]:
+                if mail.trigger_policy != TRIGGER_POLICY or uid <= previous[1]:
                     continue
                 key = "mail-research:" + sha256(f"{account}:{validity}:{uid}".encode()).hexdigest()
                 if db.execute("SELECT 1 FROM workflow_mail_research WHERE task_id=?", (key,)).fetchone():
@@ -79,8 +120,9 @@ class MailResearchStore:
                 if count + added >= self.capacity:
                     return added  # Cursor stays; duplicates safely skipped next scan.
                 from dataclasses import asdict
+                payload = {**asdict(mail), "account": account, "uid_validity": validity, "uid": uid, "after_uid": previous[1]}
                 db.execute("INSERT INTO workflow_mail_research (task_id,origin,payload,state,created_at) VALUES (?,?,?,'PENDING',?)",
-                    (key, "imap", json.dumps(asdict(mail)), now.isoformat()))
+                    (key, "imap", json.dumps(payload), now.isoformat()))
                 added += 1
             db.execute("UPDATE workflow_mail_cursor SET last_uid=? WHERE account=?", (max(upper, previous[1]), account))
             return added
@@ -103,7 +145,7 @@ class MailResearchStore:
     def claim(self, now):
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT * FROM workflow_mail_research WHERE state='PENDING' AND (next_at IS NULL OR next_at<=?) ORDER BY created_at,task_id LIMIT 1", (now.isoformat(),)).fetchone()
+            row = db.execute("SELECT * FROM workflow_mail_research WHERE state='PENDING' AND (origin!='imap' OR CASE WHEN json_valid(payload) THEN json_extract(payload,'$.trigger_policy') END='subject-only-v1') AND (next_at IS NULL OR next_at<=?) ORDER BY created_at,task_id LIMIT 1", (now.isoformat(),)).fetchone()
             if row is None:
                 return None
             db.execute("UPDATE workflow_mail_research SET state='RUNNING' WHERE task_id=?", (row["task_id"],))

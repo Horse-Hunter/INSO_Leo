@@ -116,7 +116,10 @@ class MailResearchService:
         try:
             with self.inbox_factory() as inbox:
                 cursor = self.store.cursor(ACCOUNT)
-                if cursor is None or cursor[0] != inbox.validity:
+                activated = self.store.establish_subject_baseline(ACCOUNT, inbox.validity, inbox.latest)
+                if activated:
+                    LOG.info("Subject-only mail trigger enabled; existing mailbox history excluded")
+                if activated or cursor is None or cursor[0] != inbox.validity:
                     count = self.store.accept_scan(ACCOUNT, inbox.validity, inbox.latest, (), now)
                 else:
                     upper, messages = inbox.read(cursor[1])
@@ -134,11 +137,6 @@ class MailResearchService:
             self.health = "CREDENTIAL_REQUIRED"
             LOG.warning("229 mailbox needs IMAP authorization in existing Vault (imap.qq.com)")
         except Exception as error:  # noqa: BLE001 - isolated service boundary; sanitized class only
-            if isinstance(error, ValueError) and str(error) == "SENDER_AUTH_UNVERIFIED":
-                self.health, self._failures, self._auth_failures = "SENDER_AUTH_UNVERIFIED", 0, 0
-                self.outbox.resolve_incidents("mail_research", at=now, reason_code="IMAP_AUTH_REQUIRED")
-                LOG.warning("Sender origin not verified; UID cursor retained; no research or mail admitted")
-                return
             self._failures += 1
             self.health = "WAITING_RECOVERY"
             LOG.warning("IMAP check deferred; class=%s", type(error).__name__)
@@ -178,8 +176,8 @@ class MailResearchService:
                 if not timedelta(0) <= age <= timedelta(minutes=15):
                     progress = {}  # Stale current-price/FX facts must be reacquired, read-only.
             if job["origin"] == "imap":
-                if payload.get("sender_verified") is not True:
-                    self.store.finish(key, state="BLOCKED", failure="SENDER_AUTH_UNVERIFIED")
+                if not self.store.admitted_subject_request(job):
+                    self.store.finish(key, state="BLOCKED", failure="TRIGGER_POLICY_NOT_ADMITTED")
                     return False
                 current = self.catalog.match(payload["mpn"], now=now,
                     not_before=datetime.fromisoformat(job["created_at"])) or DetailedOrder(payload["mpn"])
@@ -313,8 +311,8 @@ class MailResearchService:
         if command.kind is not NotificationKind.TP_RESEARCH or command.inquiry_id is not None or any(
                 r.address != "shawn@inso-hk.com" for r in command.recipients):
             return "RECIPIENT_NOT_CONFIGURED"
-        if json.loads(job["payload"]).get("sender_verified") is not True:
-            return "SENDER_AUTH_UNVERIFIED"
+        if not self.store.admitted_subject_request(job):
+            return "TRIGGER_POLICY_NOT_ADMITTED"
         return None
 
     def prepare_mail(self, command, now):
@@ -368,7 +366,7 @@ class MailResearchService:
             try:
                 # Recover a crash between result persistence and outbox enqueue.
                 with self.store.connect() as db:
-                    rows = db.execute("SELECT task_id,report FROM workflow_mail_research WHERE origin='imap' AND state='READY' AND task_id NOT IN (SELECT command_id FROM workflow_v12_notification_commands) LIMIT 16").fetchall()
+                    rows = db.execute("SELECT task_id,report FROM workflow_mail_research WHERE origin='imap' AND state='READY' AND CASE WHEN json_valid(payload) THEN json_extract(payload,'$.trigger_policy') END='subject-only-v1' AND task_id NOT IN (SELECT command_id FROM workflow_v12_notification_commands) LIMIT 16").fetchall()
                 for row in rows:
                     if not self.outbox.notification_already_created(row[0], None, NotificationKind.TP_RESEARCH,
                             (NotificationRecipient("ops", "shawn@inso-hk.com"),)):
