@@ -48,7 +48,7 @@ of business HEAD7a5728388fc14cd685521d520e23fbfa19536988. Independent PASS is re
 in control-room/RFQ-014/CEO_REVIEW.md (review commit3eee69a; status commitc023b60).
 | RFQ-015 | Authorized V1.4 Windows release | DEPLOYED | `codex/v1-4-order-mail-inspection` | Owner authorized | `control-room/RFQ-015/TASK_SPEC.md` |
 
-| RFQ-016 | V1.6 production trust: source status, order age gates, false-alert elimination | CHANGES_REQUESTED / NOT_DEPLOYED | `codex/v1-6-independent-scheduling` | REQUIRED | `control-room/RFQ-016/TASK_SPEC.md` |
+| RFQ-016 | V1.6 production trust: source status, order age gates, false-alert elimination | REVIEW_REQUIRED / NOT_DEPLOYED | `codex/v1-6-independent-scheduling` | REQUIRED | `control-room/RFQ-016/TASK_SPEC.md` |
 
 RFQ-016 is a new Owner/CEO production-correctness requirement after the unpushed local installation report `7574516f...`. The verified remote SHA at spec start was `f8f2c321...`; never infer installed source from branch. Code implementation and offline regression are authorized; *no automatic production deployment or external test email* until separate review/release authorization. Preserve current real orders and protected UNKNOWN write outcomes. No agent Computer Use.
 
@@ -57,3 +57,5 @@ CEO source review of `77a3e83` (documentation commit `adcff10`) identified three
 Owner2026-10-30 detailed-mail/independent-IMAP extension is tracked under `tasks/2026-10-30-mail-research-upgrade.md` as part of RFQ016 source remediation. Final source `08a00cf6abacc73a4c06b7721f4dfff51fd5e373` passed 3334 offline tests with1environment skip; independent source re-review remains pending. No installation authorization.
 
 CEO independent re-review 2026-10-31 of final application SHA `08a00cf6...`, final report SHA `e2965645...`: A/B/C quote-hold, stale alert and historical business email paths provisionally accepted; new independent IMAP latest-MPN cache freshness P0, background-first main scheduling contention P1, and exact-From header spoof risk remain. Review and acceptance tests recorded in original RFQ-016 task and `tasks/2026-10-30-mail-research-upgrade.md`; no source approval or live installation authorization.
+
+Second-review Executor delivery: `1dd31b283ec34126637e173830dbc3c321b7c89d`,3354PASS/1SKIP; D/E fixed in source, prior A/B/C retained. Sender proposal/limitation recorded in original subtask; live IMAP-command execution SECURITY_ENABLEMENT_BLOCKED (no trustworthy QQ contract/Owner risk acceptance). CEO source re-review required; NOT_DEPLOYED; production NOT_VERIFIED.

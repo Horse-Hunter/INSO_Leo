@@ -1,6 +1,6 @@
 # RFQ-016 subtask: detailed mail research and independent IMAP
 
-Status: REVIEW_REQUIRED / NOT_DEPLOYED. Source: `08a00cf6abacc73a4c06b7721f4dfff51fd5e373`. Offline full regression: 3334PASS/1SKIP. Evidence: `control-room/RFQ-016/TEST_REPORT.json`. Actual production acceptance remains NOT_VERIFIED. Requirement: Owner attachment dated 2026-10-30 (complete seven-part request), plus RFQ-016 CEO review at 6c1ba7f.
+Status: REVIEW_REQUIRED / NOT_DEPLOYED / SECURITY_ENABLEMENT_BLOCKED (real IMAP commands). Final second-review source `1dd31b283ec34126637e173830dbc3c321b7c89d`;3354PASS/1SKIP,20new cases,31final targeted. Evidence: `control-room/RFQ-016/TEST_REPORT.json`. Prior3334tests retained; A/B/C not rewritten. Production remains NOT_VERIFIED. Requirements: original Owner attachment and CEO50dfe3d.
 
 Scope: fix A/B/C first; extract canonical TP detailed collection/report without changing TP target selection or purchase/quote behavior; enrich important/follow-up mail; process new authenticated-sender IMAP research requests independently of business buttons. Same Chrome9222, per-task owned pages, no production operations. Reuse Core Vault, native six adapters, FX, SQLite outbox and SMTP protection. Offline fakes only. Owner separately authorizes installation after CEO review.
 
@@ -283,3 +283,22 @@ Acceptance: all Owner attachment cases, bounded polling/research, durable UID/ou
 **Sender check / P1:** syntactic `From` equality alone cannot certify that email truly came from `sales2@inso-hk.com`. Require actual provider-verifiable sender authenticity or an explicitly authorized narrowly documented risk boundary. Existing malformed-From tests do not test forged exact From.
 
 Only source patch, fake adapters, targeted red→green/full regression, refreshed original reports and new SHA are authorized. No release/build swap or live mailbox/network test. Do not collapse new IMAP code into original business Owner; protect source tests/production and enforce `COMPUTER_USE_NOT_USED`.
+
+
+## Sender authenticity decision — second-review source remediation
+
+Status: **QQ_PROVIDER_CONTRACT_NOT_VERIFIED / SECURITY_ENABLEMENT_BLOCKED**. No live mailbox inspection, real test mail or risk acceptance was authorized. Public documentation lookup is not a mailbox test. From equality remains only a syntactic candidate check; it does not prove control of sales2@inso-hk.com. The current production verifier returns false and has no config enable switch. Matching candidates keep the original UID cursor, record local SENDER_AUTH_UNVERIFIED and are not researched or emailed. Subsequent120s scans continue; no guessed credential/Google-failure alert is generated. Earlier queued requests lack proof and are blocked/suppressed; SENT/UNKNOWN are retained. Other legitimate business/TP mail paths are unchanged.
+
+Actual available evidence: the existing QQ IMAP client can retrieve requested RFC headers via BODY.PEEK, over authenticated TLS for229's mailbox. TLS proves the receiving endpoint/account connection, not the original sender. No QQ-specific, authenticated per-message sender assertion has been established. QQ's public help catalog lists “发件人地址已验证”, but the available public page does not specify a machine-readable IMAP field, trusted authserv-id, injected-header stripping policy or an exact-mailbox identity binding. Tencent Cloud SES DKIM documentation describes a different outbound product and is not proof of QQ inbound semantics. We did not assume equivalent behavior.
+
+Minimum proposed route before live enablement: (1) obtain provider-confirmed semantics for receiver-origin authentication metadata, including removal/renaming of forged inbound copies and exact trusted receiving boundary; (2) validate domain-aligned DKIM/DMARC using those trusted results, and establish the sending provider's binding between the authenticated submitting account and the exact sales2 address (domain authentication alone is not proof of a specific mailbox/person); (3) add a narrow verifier at the existing receiver boundary, covering no-result, failure, duplicate/forged authentication/Received headers, forwarding and spoofed exact From with offline provider fixtures; (4) CEO independently reviews the contract and any explicit residual domain/account delegation risk before enabling real commands. If that contract cannot be obtained, retain the block; only Owner may explicitly accept a precisely documented weaker sender rule. No such acceptance is presumed in this patch.
+
+Do not implement SPF by looking only at Return-Path, trust an arbitrary Received chain/authserv-id, or accept an Authentication-Results header saying pass. Local DKIM verification would additionally need the complete signed message/body hash and trusted key retrieval; the current header-only restriction does not authorize that change. No body/attachment/link is fetched or executed.
+
+Primary sources consulted2026-10-31:
+- QQ official help catalog, including the “发件人地址已验证” entry: https://service.mail.qq.com/detail/0/75 — no validated IMAP authenticity contract obtained.
+- IMAP protocol, RFC9051: https://www.rfc-editor.org/rfc/rfc9051.html — FETCH/ENVELOPE are message data, not an authenticated originating sender assertion.
+- Authentication-Results, RFC8601 sections1.2/7.1: https://www.rfc-editor.org/rfc/rfc8601.html — trust boundary and forged header treatment are essential; the header itself supplies no authentication service.
+- Tencent Cloud outbound SES authentication FAQ: https://cloud.tencent.com.cn/document/faq/1288/60652 — outbound domain auth only; not imported as QQ receiving semantics.
+
+Synthetic verified test fixtures use an explicitly injected boundary verifier/ResearchMail proof. These are offline test capabilities, **not a delivered live QQ verifier**. No custom SMTP, credentials, dependencies or headers-as-commands were added.

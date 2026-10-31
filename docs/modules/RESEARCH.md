@@ -284,3 +284,15 @@ Report intake fallback retains the explicit local-date approximation label; awar
 source dates use Shanghai calendar day. Report/catalog quantities reuse the
 original public quantity_value parser; fractional/bool values are never truncated
 into customer counts. These metadata rules do not change trading quantity rules.
+
+
+RFQ016 second-review correction: foreground never acquires background's I/O
+mutex; its own reentrant serialization remains. A foreground entry invalidates
+the single background generation. Before read/target creation/recovery and after
+read, that generation must still be valid. Deferred work checkpoints no new
+source-success or SMTP and consumes no failure attempt. In-flight read-only I/O
+may drain concurrently on its exact owned target, cleaned only by its own thread;
+main never closes it or waits for it through ResearchBudget. Offline background-
+first tests bound admission progress at250ms; this is not a guarantee about shared
+Chrome CPU/network performance or live site timeouts. No extra Chrome/profile,
+port, per-request thread or global cancellation is added.

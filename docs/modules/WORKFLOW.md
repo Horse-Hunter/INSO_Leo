@@ -324,3 +324,14 @@ All-source acquisition outage fails IMAP tasks after three attempts without an
 empty success report. A still-valid important/follow-up business notice can retain
 its original purpose with explicit six-source unavailable content after bounded
 recovery; it never claims that the market has no offers or invents values.
+
+
+RFQ016 second-review correction (source review pending): the independent catalog
+requires the full configured worksheet set, each mandatory full live read started
+after request receipt and within120s. Discovery/local history/restart is not proof
+of latest. Missing proof gives MPN-only, including restored progress and SMTP-time
+enrichment downgrade. No independent Sheets reader/poll was added. The syntax
+parser does not authenticate From. Production QQ provider proof remains unavailable;
+unverified candidates retain cursor and no market task/SMTP is admitted. Legacy
+unverified requests are locally blocked/suppressed, without rewriting SENT/UNKNOWN.
+See the existing subtask's sender decision for verified facts/proposed contract.
