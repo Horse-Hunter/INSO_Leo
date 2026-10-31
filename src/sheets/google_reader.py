@@ -4,6 +4,7 @@ import socket
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
+from datetime import UTC, datetime
 from types import MappingProxyType
 from typing import Any, Protocol
 
@@ -65,9 +66,11 @@ class GoogleSheetsRowReader:
         first_row: int = 1,
         retry_wait=None,
         on_observation=lambda worksheet, rows, failed: None,
+        on_live_observation=lambda worksheet, rows, started_at: None,
     ) -> None:
         if first_row < 1:
             raise ValueError("first_row must be a positive Google Sheet row number")
+        self._on_live_observation = on_live_observation
         self._on_observation = on_observation
         self._service = service
         self._first_row = first_row
@@ -112,6 +115,7 @@ class GoogleSheetsRowReader:
         return self._read_rows(worksheet, discovery=False)
 
     def _read_rows(self, worksheet, *, discovery):
+        started_at = datetime.now(UTC)
         read_range = _a1_range(worksheet.worksheet, self._first_row)
         try:
             resource = self._service.spreadsheets().values()
@@ -132,6 +136,8 @@ class GoogleSheetsRowReader:
                     WorksheetRow(row.row_position, MappingProxyType(dict(row.cells))) for row in rows
                 )
             self._on_observation(worksheet, rows, False)
+            if not discovery and self._first_row == 1:
+                self._on_live_observation(worksheet, rows, started_at)
             return rows
         except GoogleSheetsReadError:
             self._on_observation(worksheet, (), True)

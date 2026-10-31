@@ -60,10 +60,13 @@ class DetailedReadSession(ResearchMarketSession):
 
     def read_source(self, task_id, source, order, reference, fx):
         self._check_thread()
+        checkpoint = getattr(self, "read_checkpoint", lambda: None)
         for attempt in range(3):
+            checkpoint()
             try:
-                with market_read_pages("mail-" + sha256(task_id.encode()).hexdigest()[:12] + "-" + uuid4().hex[:16], self._admission, recover_closed=True):
+                with market_read_pages("mail-" + sha256(task_id.encode()).hexdigest()[:12] + "-" + uuid4().hex[:16], self._admission, recover_closed=True, checkpoint=checkpoint):
                     result = self._service.read_detailed_source(source, order, now=reference, fx=fx)
+                checkpoint()
                 return result
             except ReadOnlyPageClosed:
                 import logging

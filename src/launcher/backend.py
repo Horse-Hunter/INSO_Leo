@@ -816,7 +816,8 @@ class ProductionBackend(GuiBackend):
                 read_guard=self._page_admission.require_open,
                 stop_requested=self._immediate_stop_requested)
             reader = GoogleSheetsRowReader(web_service, retry_wait=self._stop.wait,
-                                          on_observation=self._observe_source_rows)
+                                          on_observation=self._observe_source_rows,
+                                          on_live_observation=self._observe_catalog_rows)
             worksheets = tuple(
                 WorksheetIdentity(cfg["spreadsheet_id"], title)
                 for title in cfg["worksheet_titles"]
@@ -3068,7 +3069,7 @@ class ProductionBackend(GuiBackend):
                 return "EVENT_RECOVERED"
         return None
 
-    def _catalog_source(self, worksheet, rows, items):
+    def _catalog_source(self, worksheet, rows, items, *, observed_at=None):
         from datetime import datetime, time
 
         from src.research.detailed import DetailedOrder
@@ -3121,18 +3122,27 @@ class ProductionBackend(GuiBackend):
                     date_source="本地订单日期（近似）" if date_origin == "LOCAL_INTAKE_APPROXIMATION" else None)
                 entries.append((str(identity), order, stamp))
             except (TypeError, ValueError, KeyError):
+                # A malformed competing row must not make an older same-model
+                # record appear uniquely latest.
+                if row.cells.get(schema.model_column):
+                    entries.append((str((worksheet, row.row_position)),
+                        DetailedOrder(row.cells[schema.model_column]), None))
                 continue
-        self._research_catalog.observe(worksheet, entries)
+        self._research_catalog.observe(worksheet, entries, observed_at=observed_at)
+
+    def _observe_catalog_rows(self, worksheet, rows, started_at):
+        try:
+            items = self._store.all_items() if self._store else ()
+            self._catalog_source(worksheet, rows, items, observed_at=started_at)
+        except Exception:  # noqa: BLE001 - optional enrichment cannot affect business safety
+            self._research_catalog.invalidate(worksheet)
+            log.warning("Detailed research order catalog unavailable")
 
     def _observe_source_rows(self, worksheet, rows, failed):
         try:
             items = self._store.all_items() if self._store else ()
             self._source_projection.observe(worksheet, rows, items, at=utc_now(), failed=failed)
-            if not failed:
-                try:
-                    self._catalog_source(worksheet, rows, items)
-                except Exception:  # noqa: BLE001 - optional read-only catalog cannot invalidate source/UNKNOWN projection
-                    log.warning("Detailed research order catalog unavailable")
+            self._research_catalog.invalidate(worksheet)
             if self._v12_store is not None:
                 self._quotation_unknown_ids = self._v12_store.quotation_unknown_ids()
             for item in items:

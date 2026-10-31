@@ -28,19 +28,41 @@ LOG = logging.getLogger("inso.mail_research")
 
 
 class InquiryCatalog:
-    """Immutable facts copied by the original source owner; never another reader."""
-    def __init__(self):
-        self.lock, self.sources = threading.Lock(), {}
+    """A local index is not proof of latest. Require all configured live views."""
+    MAX_AGE = timedelta(seconds=120)
 
-    def observe(self, source, entries):
+    def __init__(self):
+        self.lock, self.sources, self.observed = threading.Lock(), {}, {}
+        self.expected = frozenset()
+
+    def configure_sources(self, sources):
+        with self.lock:
+            self.expected = frozenset(sources)
+            self.observed.clear()  # Startup/configuration is never live evidence.
+
+    def observe(self, source, entries, *, observed_at=None):
         with self.lock:
             self.sources[source] = tuple(entries)
+            self.observed[source] = observed_at
 
-    def match(self, mpn, *, now=None):
+    def invalidate(self, source):
         with self.lock:
+            self.observed.pop(source, None)
+
+    def match(self, mpn, *, now=None, not_before=None):
+        now = now or datetime.now(UTC)
+        not_before = not_before or now-self.MAX_AGE
+        with self.lock:
+            if not self.expected or set(self.sources) != self.expected:
+                return None
+            for source in self.expected:
+                observed = self.observed.get(source)
+                if observed is None or observed.tzinfo is None or not (
+                        not_before <= observed <= now and timedelta(0) <= now-observed <= self.MAX_AGE):
+                    return None
             matches = [(key, order, stamp) for entries in self.sources.values() for key, order, stamp in entries
                        if normalize_lookup_mpn(order.mpn) == normalize_lookup_mpn(mpn)]
-        if not matches or any(stamp is None or stamp.tzinfo is None or (now is not None and stamp > now) for _, _, stamp in matches):
+        if not matches or any(stamp is None or stamp.tzinfo is None or stamp > now for _, _, stamp in matches):
             return None
         latest = max(stamp for _, _, stamp in matches)
         recent = [(key, order) for key, order, stamp in matches if stamp == latest]
@@ -112,6 +134,10 @@ class MailResearchService:
             self.health = "CREDENTIAL_REQUIRED"
             LOG.warning("229 mailbox needs IMAP authorization in existing Vault (imap.qq.com)")
         except Exception as error:  # noqa: BLE001 - isolated service boundary; sanitized class only
+            if isinstance(error, ValueError) and str(error) == "SENDER_AUTH_UNVERIFIED":
+                self.health = "SENDER_AUTH_UNVERIFIED"
+                LOG.warning("Sender origin not verified; UID cursor retained; no research or mail admitted")
+                return
             self._failures += 1
             self.health = "WAITING_RECOVERY"
             LOG.warning("IMAP check deferred; class=%s", type(error).__name__)
@@ -150,10 +176,18 @@ class MailResearchService:
                 age = now-datetime.fromisoformat(progress["reference_at"])
                 if not timedelta(0) <= age <= timedelta(minutes=15):
                     progress = {}  # Stale current-price/FX facts must be reacquired, read-only.
+            if job["origin"] == "imap":
+                if payload.get("sender_verified") is not True:
+                    self.store.finish(key, state="BLOCKED", failure="SENDER_AUTH_UNVERIFIED")
+                    return False
+                current = self.catalog.match(payload["mpn"], now=now,
+                    not_before=datetime.fromisoformat(job["created_at"])) or DetailedOrder(payload["mpn"])
+                if progress.get("order") != asdict(current):
+                    progress = {}  # Restart/expired view cannot preserve old customer/quantity.
             if "order" in progress:
                 order = DetailedOrder(**progress["order"])
             else:
-                order = (self.catalog.match(payload["mpn"], now=now) or DetailedOrder(payload["mpn"])) if job["origin"] == "imap" else DetailedOrder(**payload)
+                order = current if job["origin"] == "imap" else DetailedOrder(**payload)
                 progress["order"] = asdict(order)
                 progress["reference_at"] = now.isoformat()
                 self.store.checkpoint(key, progress)
@@ -278,7 +312,38 @@ class MailResearchService:
         if command.kind is not NotificationKind.TP_RESEARCH or command.inquiry_id is not None or any(
                 r.address != "shawn@inso-hk.com" for r in command.recipients):
             return "RECIPIENT_NOT_CONFIGURED"
+        if json.loads(job["payload"]).get("sender_verified") is not True:
+            return "SENDER_AUTH_UNVERIFIED"
         return None
+
+    def prepare_mail(self, command, now):
+        """Enrichment is optional; stale source proof must not escape at SMTP."""
+        if command.kind is NotificationKind.PURCHASE_EXCEPTION:
+            return command
+        job = self.store.get(command.command_id)
+        payload, progress = json.loads(job["payload"]), json.loads(job["progress"])
+        previous = DetailedOrder(**progress["order"])
+        if previous.rfq_date is None:
+            return command
+        current = self.catalog.match(payload["mpn"], now=now,
+            not_before=datetime.fromisoformat(job["created_at"]))
+        if current == previous:
+            return command
+        # Keep the confirmed market prices/capture dates, remove all cached
+        # customer/order fields. No Google/market call occurs on the SMTP path.
+        order = DetailedOrder(payload["mpn"])
+        reference = datetime.fromisoformat(progress["reference_at"])
+        fx = TpFx(None, reference)
+        if progress.get("fx_rate"):
+            from decimal import Decimal
+            fx.quote = SimpleNamespace(rate=Decimal(progress["fx_rate"]))
+        results = tuple(load_source(progress[source.value], order.mpn) for source in PRICE_SOURCES)
+        result = finish_tp(order, SimpleNamespace(stock_label=progress.get("stock", "待验证")),
+            results, target_rmb=None, fx=fx)
+        text, html = render_market_report(order, result, target=False, context=("邮件指令调研",
+            "请求型号："+payload["mpn"], "来源邮件时间："+(payload.get("sent_at") or "未核实"),
+            "匹配情况：未可靠匹配询价；仅市场单价"))
+        return replace(command, text_body=text, html_body=html)
 
     def audit_delivery(self):
         """Bounded local delivery facts and incident repair, never another sender."""

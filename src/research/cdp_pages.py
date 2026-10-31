@@ -244,10 +244,11 @@ def shared_playwright_factory(
 
 
 _MARKET_PAGES = ContextVar("market_owned_pages", default=None)
+_MARKET_CHECKPOINT = ContextVar("market_read_checkpoint", default=lambda: None)
 
 
 @contextmanager
-def market_read_pages(owner, admission, *, recover_closed=False):
+def market_read_pages(owner, admission, *, recover_closed=False, checkpoint=lambda: None):
     """Thread-local scope around canonical clients, never a second page manager.
 
     Only pages created by new_background_page within this exact request can be
@@ -259,6 +260,7 @@ def market_read_pages(owner, admission, *, recover_closed=False):
         raise ValueError("INVALID_MARKET_PAGE_SCOPE")
     admission.require_open()
     scope = (owner, admission, [])
+    check_token = _MARKET_CHECKPOINT.set(checkpoint)
     token = _MARKET_PAGES.set(scope)
     try:
         yield
@@ -273,6 +275,7 @@ def market_read_pages(owner, admission, *, recover_closed=False):
             admission.require_open()
         finally:
             _MARKET_PAGES.reset(token)
+            _MARKET_CHECKPOINT.reset(check_token)
 
 
 def close_research_page(page):
@@ -342,6 +345,7 @@ def new_background_page(
     admission = getattr(browser, "_inso_page_admission", None)
     scope = _MARKET_PAGES.get()
     if scope is not None:
+        _MARKET_CHECKPOINT.get()()
         if admission is not scope[1] or owner not in (None, scope[0]):
             fault = PageTargetOwnershipError((ValueError("MARKET_PAGE_ADMISSION_MISMATCH"),))
             scope[1].invalidate(fault)

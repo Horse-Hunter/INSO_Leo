@@ -75,12 +75,13 @@ def scene(tmp_path, *, capacity=64, outbox=None):
         fx_provider=None, catalog=InquiryCatalog(), outbox=outbox, worker=worker,
         clock=lambda: clock[0], timer=lambda: timer[0])
     worker._review_current = service.review_mail
+    worker._prepare_content = service.prepare_mail
     return service, inbox, transport, calls, clock, timer
 
 
 def receive(service, inbox, count=1):
     service.poll_once()  # establishes baseline, ignores historic100
-    inbox.messages = [(101+i, ResearchMail("MPN", NOW.isoformat(), f"<mail-{i}>")) for i in range(count)]
+    inbox.messages = [(101+i, ResearchMail("MPN", NOW.isoformat(), f"<mail-{i}>", sender_verified=True)) for i in range(count)]
     inbox.latest = 100+count
     service.poll_once()
 
@@ -113,18 +114,20 @@ def test_latest_exact_order_unique_ties_and_conflicts():
     catalog = InquiryCatalog()
     old = DetailedOrder("MPN", "BRAND", 100, "CUSTOMER", "2026-10-01")
     recent = replace(old, rfq_date="2026-10-30", quantity=200)
-    catalog.observe("one", (("old", old, NOW-timedelta(days=2)), ("new", recent, NOW)))
-    assert catalog.match("mpn") == recent
-    assert catalog.match("MPN-SIMILAR") is None
+    catalog.configure_sources(("one",))
+    catalog.observe("one", (("old", old, NOW-timedelta(days=2)), ("new", recent, NOW)), observed_at=NOW)
+    assert catalog.match("mpn", now=NOW) == recent
+    assert catalog.match("MPN-SIMILAR", now=NOW) is None
     catalog.observe("two", (("same-date-other-order", recent, NOW),))
-    assert catalog.match("MPN") is None
+    assert catalog.match("MPN", now=NOW) is None
     catalog.observe("two", (("unknown-conflict", recent, None),))
-    assert catalog.match("MPN") is None
+    assert catalog.match("MPN", now=NOW) is None
 
 
 def test_matching_quantity_reference_total_and_missing_brand(tmp_path):
     service, inbox, smtp, calls, *_ = scene(tmp_path)
-    service.catalog.observe("verified", (("one", DetailedOrder("MPN", None, 200, "CUSTOMER", "2026-09-01"), NOW),))
+    service.catalog.configure_sources(("verified",))
+    service.catalog.observe("verified", (("one", DetailedOrder("MPN", None, 200, "CUSTOMER", "2026-09-01"), NOW),), observed_at=NOW)
     receive(service, inbox)
     service.run_one()
     service.worker.run_due(now=NOW)
@@ -309,7 +312,7 @@ def test_mail_report_through_original_smtp_adapter_only_shawn_once_after_restart
     smtp = ScriptedSMTP()
     worker = V12NotificationWorker(service.outbox, QQSMTPTransport(
         config=QQSMTPConfig(sender_address="sender@example.invalid"), credentials=FakeCredentials(login()),
-        smtp_factory=lambda *a, **k: smtp, clock=lambda: clock[0]), scope="mail", review_current=service.review_mail)
+        smtp_factory=lambda *a, **k: smtp, clock=lambda: clock[0]), scope="mail", review_current=service.review_mail, prepare_content=service.prepare_mail)
     receive(service, inbox)
     service.run_one()
     worker.run_due(now=NOW)
@@ -327,7 +330,7 @@ def test_720_simulated_polls_no_active_queue_growth_or_cross_task_state(tmp_path
         timer[0] = tick*120
         clock[0] = NOW+timedelta(seconds=timer[0])
         inbox.latest = 100+tick
-        inbox.messages = [(100+tick, ResearchMail("MPN", None, str(tick)))]
+        inbox.messages = [(100+tick, ResearchMail("MPN", None, str(tick), sender_verified=True))]
         service.tick()
         assert service.run_one()
         service.worker.run_due(now=clock[0])
@@ -534,7 +537,8 @@ def test_catalog_reuses_canonical_quantity_without_truncation(tmp_path, raw, exp
     queue.enqueue(record, now=NOW)
     backend = ProductionBackend(root=tmp_path)
     backend._mail_brief = SimpleNamespace(cached_lines=lambda _: ())
-    backend._catalog_source(SHEET, (reader.row,), queue.all_items())
+    backend._research_catalog.configure_sources((SHEET,))
+    backend._catalog_source(SHEET, (reader.row,), queue.all_items(), observed_at=NOW)
     order = backend._research_catalog.match(record.model, now=NOW)
     assert (order.quantity if order else None) == expected
     backend.shutdown()

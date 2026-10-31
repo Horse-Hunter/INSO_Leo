@@ -2,7 +2,7 @@
 import imaplib
 import re
 import ssl
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from email import policy
 from email.parser import BytesParser
 from email.utils import parsedate_to_datetime
@@ -18,9 +18,20 @@ class ResearchMail:
     mpn: str
     sent_at: str | None
     message_id: str | None
+    sender_verified: bool = False
+
+
+def verify_sender_origin(_raw):
+    """QQ IMAP authenticity contract NOT_VERIFIED. Never trust self-added headers.
+
+    A reviewed provider-grounded verifier is required before live enablement.
+    No config/address/authserv-id guess can enable this boundary.
+    """
+    return False
 
 
 def parse_research_header(raw):
+    """Syntax only; a matching From is NOT authentication."""
     if len(raw) > 32768:
         return None
     try:
@@ -58,8 +69,9 @@ class ImapAuthenticationRequired(RuntimeError):
 
 class ResearchInbox:
     """A short TLS connection per poll; durable cursor belongs to Workflow."""
-    def __init__(self, *, credentials=get_login, factory=imaplib.IMAP4_SSL):
+    def __init__(self, *, credentials=get_login, factory=imaplib.IMAP4_SSL, verify_origin=verify_sender_origin):
         self.credentials, self.factory = credentials, factory
+        self.verify_origin = verify_origin
         self.client = None
 
     def __enter__(self):
@@ -108,7 +120,9 @@ class ResearchInbox:
                 raise ValueError("IMAP_UID_UNCONFIRMED")
             parsed = parse_research_header(raw)
             if parsed is not None:
-                found.append((int(match[1]), parsed))
+                if self.verify_origin(raw) is not True:
+                    raise ValueError("SENDER_AUTH_UNVERIFIED")  # Keep UID cursor; no work/SMTP.
+                found.append((int(match[1]), replace(parsed, sender_verified=True)))
         return upper, tuple(found)
 
     def __exit__(self, *_):

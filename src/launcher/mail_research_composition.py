@@ -24,7 +24,7 @@ def build_mail_research(backend):
     cfg = json.loads(backend.production_path.read_text(encoding="utf-8"))
     rc = load_runtime_config(backend.config_path)
     path = resolve_app_path(cfg.get("sqlite_path", "runtime/production/workflow.sqlite3"), root=backend.root)
-    workflow = WorkflowStateStore(path)
+    WorkflowStateStore(path)  # Preserve original V1.1 baseline initialization.
     # This entry is before the GUI starts business workers. The local history
     # loader has joined. No migration is invoked by a mailbox poll or task.
     migrate_v12(path, path.parent / "backups" / "v12-upgrade", quiesce=nullcontext)
@@ -33,44 +33,33 @@ def build_mail_research(backend):
     store.migrate()
     outbox = V12Store(path)
     outbox.recover_abandoned_notification_attempts(at=datetime.now(UTC), scope="mail")
-    from collections import defaultdict
+    from src.sheets.pending import WorksheetIdentity
 
-    from src.research.detailed import DetailedOrder
-    rc = replace(rc, icnet=replace(rc.icnet, mode="cdp"))  # This service attaches only; never credential-mode browser launch.
-    entries = defaultdict(list)
-    for item in workflow.all_items():
-        if item.created_at is None or item.created_at.tzinfo is None:
-            continue
-        try:
-            quantity = quantity_value(item.quantity)
-            if quantity <= 0:
-                continue
-            order = DetailedOrder(item.mpn, item.resolved_brand or item.brand or None, quantity,
-                rfq_date=item.created_at.isoformat(), sheet=item.record_identity.worksheet.worksheet,
-                row=item.record_identity.row_position, date_source="本地订单日期（近似）",
-                spreadsheet=item.record_identity.worksheet.spreadsheet)
-            entries[item.record_identity.worksheet].append((str(item.record_identity), order, item.created_at))
-        except (TypeError, ValueError):
-            entries[item.record_identity.worksheet].append((str(item.record_identity), DetailedOrder(item.mpn), None))
-            continue
-    for source, rows in entries.items():
-        backend._research_catalog.observe(source, rows)
+    rc = replace(rc, icnet=replace(rc.icnet, mode="cdp"))  # Attach only; no new browser.
+    backend._research_catalog.configure_sources(
+        WorksheetIdentity(cfg["spreadsheet_id"], title) for title in cfg.get("worksheet_titles", ())
+    )
     admission = PageResourceAdmission(parent=backend._page_admission)
     budget = backend._background_research_budget
     def read(key, source, order, reference, fx):
         from src.research.cdp_pages import PageTargetCleanupError
 
         from .research_budget import ResearchDeferred
-        with budget.background():
+        with budget.background() as checkpoint:
             try:
                 with DetailedReadSession(rc, admission) as session:
-                    return session.read_source(key, source, order, reference, fx)
+                    session.read_checkpoint = checkpoint
+                    checkpoint()
+                    result = session.read_source(key, source, order, reference, fx)
+                    checkpoint()
+                    return result
             except PageTargetCleanupError:
                 if not admission.failed_locally:
                     raise ResearchDeferred("SHARED_RESOURCE_WAITING_OWNER") from None
                 raise
     worker = V12NotificationWorker(outbox, QQSMTPTransport(config=QQSMTPConfig(sender_address="1069599116@qq.com")), scope="mail",
-        review_current=lambda command, now: service.review_mail(command, now))
+        review_current=lambda command, now: service.review_mail(command, now),
+        prepare_content=lambda command, now: service.prepare_mail(command, now))
     service = MailResearchService(store=store, inbox_factory=ResearchInbox, source_reader=read,
         fx_provider=EcbDailyUsdRmbProvider(), catalog=backend._research_catalog,
         outbox=outbox, worker=worker,
