@@ -299,11 +299,12 @@ Purchase follow-up additionally checks the exact original episode, current
 The new process-lifetime mail service polls read-only229 IMAP every120seconds,
 independently of business Start/Stop/Pause/manual operations. One receiver and one
 research/delivery worker are bounded; active capacity64 includes reports awaiting
-SMTP. First mailbox epoch establishes UIDNEXT baseline; changed UIDVALIDITY
+SMTP. One-time subject-only activation marker atomically establishes UIDNEXT baseline,
+including an existing blocked old cursor; later restarts retain progress. Changed UIDVALIDITY
 establishes another baseline, preserving previously accepted task/outbox records.
 Identity uses account+UIDVALIDITY+UID; Message-ID is ancillary. Same-model distinct
-UIDs remain distinct requests. Strict standard sender and decoded subject matching
-ignore bodies/attachments. Matching uses full normalized MPN equality and unique
+UIDs remain distinct requests. Owner2026-10-31 subject-only policy accepts any
+sender; strict single decoded `调研 MPN` matching ignores bodies/attachments/links. Matching uses full normalized MPN equality and unique
 latest verified dates; ties/conflicts degrade to unit-price-only research.
 
 `workflow_mail_cursor` and `workflow_mail_research` are additive in the existing
@@ -326,18 +327,20 @@ its original purpose with explicit six-source unavailable content after bounded
 recovery; it never claims that the market has no offers or invents values.
 
 
-RFQ016 second-review correction (source review pending): the independent catalog
+RFQ016 accepted second-review correction: the independent catalog
 requires the full configured worksheet set, each mandatory full live read started
 after request receipt and within120s. Discovery/local history/restart is not proof
 of latest. Missing proof gives MPN-only, including restored progress and SMTP-time
 enrichment downgrade. No independent Sheets reader/poll was added. The syntax
-parser does not authenticate From. Production QQ provider proof remains unavailable;
-unverified candidates retain cursor and no market task/SMTP is admitted. Legacy
-unverified requests are locally blocked/suppressed, without rewriting SENT/UNKNOWN.
-See the existing subtask's sender decision for verified facts/proposed contract.
+parser does not authenticate From. Owner explicitly accepts any sender, so no
+provider identity proof is claimed. Admission and pre-send checks require the
+subject-only policy tag,229 account, UID epoch/UID/after binding, canonical MPN,
+request hash and activation marker. Legacy untagged tasks are excluded from
+claims/capacity/READY repair, without rewriting historical SENT/UNKNOWN.
+See the original subtask for the explicit policy change and release evidence.
 
 
-RFQ016 third-review F (source review pending): optional detailed content for the
+RFQ016 accepted third-review F: optional detailed content for the
 original important-order and three-working-hour follow-up notifications has a
 120s elapsed budget from the original durable NotificationCommand.created_at.
 At the next ordinary eligible send opportunity after that deadline, absent,
@@ -350,7 +353,7 @@ The original Backend source/event/age/recipient gates and V12 per-recipient
 SENT/UNKNOWN protections stay authoritative. Missing current business proof
 still defers/suppresses; the deadline cannot authorize sending. Only the existing
 launcher content preparer changes, with no network/research on its send path.
-Main business, TP, manual tasks, accepted A/B/C/D/E and QQ sender security hold
-remain unchanged. Final fake Backend/outbox/QQSMTP regressions cover startup
+Main business, TP, manual tasks and accepted A/B/C/D/E remain unchanged; only
+the old sender-security hold is superseded by the explicit Owner subject policy. Final fake Backend/outbox/QQSMTP regressions cover startup
 failure, persisted resource protection/restart, starvation/full capacity,
 recovery, unusable READY results, invalid events and terminal recipient outcomes.

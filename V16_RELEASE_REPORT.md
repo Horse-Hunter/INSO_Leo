@@ -1,3 +1,11 @@
+# 当前发布：2026-10-31 RFQ-016正式覆盖
+
+Source `4b61f521c0f1f0836be71e3cfc792c66e5e4610d`。EXE SHA256 `7d5f6ff489d95f479c9db196ec542dd2c8f10a1972c82106ce800bb427d55512`。正式位置 `D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe`。原程序及一致性数据备份 `D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-rfq016-20261031T101939Z`，原runtime/数据库/WAL/SHM/配置/Vault/Profile保留。2875应用文件比对、回滚原程序自检、新程序自检及原生空闲启动检查通过。
+
+专项46通过，全量3414通过/1环境跳过。仅修改IMAP主题触发和持久化审核，任意发件人可触发新合法主题，首次收件基线阻止旧游标积压补跑。原六来源/业务邮件系统及RFQ-016 A–F保护保留。已启动原正常业务入口，界面就绪，询价、报价与TP首轮均正常完成；229真实登录及首次基线已验证、0历史任务。原进程启动122秒后再次自然连接IMAP993，120秒轮询已观察；最终状态BUSINESS_RUNNING。后续自然周期/新邮件报告/实际Shawn收信核验见RFQ-016 TEST_REPORT.json；启动不代表全业务验收。无Computer Use、无额外生产CDP、无测试外发。
+
+以下为历史发布记录，不代表当前程序版本或当前阻断：
+
 # V1.6 unified release and initial production verification
 
 最新10:29值守：原b40467e7正式程序未替换，近一小时三模块各收口3轮；Google表格页现为3（此前14，减少来源UNKNOWN，本观察器没有关页）。新单仍一次SAVED等待采购方报价。正常停机收口候选4c3c465未部署，不为标签清理重启业务；详见末尾。

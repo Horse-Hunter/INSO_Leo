@@ -48,7 +48,9 @@ of business HEAD7a5728388fc14cd685521d520e23fbfa19536988. Independent PASS is re
 in control-room/RFQ-014/CEO_REVIEW.md (review commit3eee69a; status commitc023b60).
 | RFQ-015 | Authorized V1.4 Windows release | DEPLOYED | `codex/v1-4-order-mail-inspection` | Owner authorized | `control-room/RFQ-015/TASK_SPEC.md` |
 
-| RFQ-016 | V1.6 production trust: source status, order age gates, false-alert elimination | CORE_SOURCE_PASS / IMAP_SECURITY_HOLD / NOT_DEPLOYED | `codex/v1-6-independent-scheduling` | REQUIRED | `control-room/RFQ-016/TASK_SPEC.md` |
+| RFQ-016 | V1.6 production trust: source status, order age gates, false-alert elimination | DEPLOYED / BUSINESS_RUNNING | `codex/v1-6-independent-scheduling` | Owner final release authorized | `control-room/RFQ-016/TASK_SPEC.md` |
+
+Historical RFQ-016 source-review sequence (release/subject-policy holds below superseded by Owner final2026-10-31 authorization; current status is the row above and final receipt below):
 
 RFQ-016 is a new Owner/CEO production-correctness requirement after the unpushed local installation report `7574516f...`. The verified remote SHA at spec start was `f8f2c321...`; never infer installed source from branch. Code implementation and offline regression are authorized; *no automatic production deployment or external test email* until separate review/release authorization. Preserve current real orders and protected UNKNOWN write outcomes. No agent Computer Use.
 
@@ -65,3 +67,5 @@ CEO third source review of `1dd31b283ec34126637e173830dbc3c321b7c89d` (delivery 
 F-only Executor delivery: `55ba0f230ce4a42eeda78d4aa942e9065bfc4ba3`,39targetedPASS and3393fullPASS/1SKIP. Original important/follow-up notices use120s durable enrichment budget, then truthful fallback through unchanged final business/recipient/SENT/UNKNOWN gates. A/B/C/D/E retained; QQ security hold retained. REVIEW_REQUIRED / NOT_DEPLOYED; production NOT_VERIFIED.
 
 CEO fourth source review of application `55ba0f230ce4a42eeda78d4aa942e9065bfc4ba3` (Executor F evidence `9d09ccde`) closes final F issue at source level: original IMPORTANT_ORDER and overdue purchase-follow-up notices wait <=120s from durable command creation for healthy six-source enrichment; fallback truthfully and only at next originally eligible dispatch without invented market prices/stock/total or bypassing original current source/event/recipient/SENT/UNKNOWN reviews. Executor reports39 targeted and3393 full PASS/1 symlink SKIP. **RFQ016 CORE SOURCE PASS / READY_FOR_SEPARATE_RELEASE_DECISION**, **IMAP real commands remain SECURITY_ENABLEMENT_BLOCKED**, **production NOT_DEPLOYED/NOT_VERIFIED**. Immutable source/test tree and independent review in original RFQ016 task. No release/install/livemail authorization; no Computer Use.
+
+Owner final instruction authorizes subject-only IMAP activation and one controlled RFQ016 production release after tests. DEPLOYED_NATURAL_VERIFICATION; prior SECURITY_ENABLEMENT_BLOCKED/separate-release gate superseded only by this explicit authorization. Installed source4b61f521;3414PASS/1SKIP; GUI ready; all three natural inquiry/quotation/TP cycles completed; authenticated IMAP baseline established with no historical jobs. Actual new-mail report/SMTP awaiting natural trigger. See current TEST_REPORT/FINAL_REPORT/release report.
