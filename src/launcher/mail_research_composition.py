@@ -1,8 +1,9 @@
 """Process-lifetime composition; invoked before business Start, never by a poll."""
 import json
+import logging
 from contextlib import nullcontext
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from src.core.app_paths import resolve_app_path
 from src.order_mail.research_requests import ResearchInbox
@@ -78,6 +79,28 @@ def append_report(command, report):
     return replace(command, text_body=command.text_body+"\n\n"+report["text"], html_body=body)
 
 
+# Existing120s mail poll budget, measured from the original durable notice.
+# No sleep/timer, schema, or retry/restart reset; final business review still gates SMTP.
+BUSINESS_REPORT_WAIT = timedelta(seconds=120)
+
+
+def _business_report_unavailable(command, order, *, follow_up):
+    import html
+
+    lines = (["该订单发给采购后已超过3个工作小时，原表仍为‘发给采购’，请人工跟进采购报价；不要重发采购。"]
+             if follow_up else ["原重要询价通知：请及时跟进该询价。"])
+    lines += [f"客户名称：{order.customer or '未核实'}", f"型号：{order.mpn}",
+              f"品牌：{order.brand or '未核实'}", f"数量：{order.quantity}",
+              "询价日期："+str(order.rfq_date)+(f"（{order.date_source}）" if order.date_source else "")]
+    if follow_up:
+        # Preserve only the native confirmed purchase timestamp from the original
+        # episode notice; never copy its whole body or historical market facts.
+        lines += [line for line in command.text_body.splitlines() if line.startswith("发给采购时间：")]
+    lines += ["详细市场报价暂不可用／未核实。价格与库存尚未核实，本通知不含市场数据或估算金额。"]
+    text = "\n".join(lines)
+    return replace(command, text_body=text, html_body="<html><body><pre>"+html.escape(text)+"</pre></body></html>")
+
+
 def prepare_business_report(backend, command, now):
     import json
 
@@ -87,9 +110,6 @@ def prepare_business_report(backend, command, now):
     proof = json.loads(command.review or "{}")
     if command.kind is not NotificationKind.IMPORTANT_ORDER and proof.get("reason_code") != "PURCHASE_FOLLOW_UP_REQUIRED":
         return command
-    service = backend._mail_research_service
-    if service is None:
-        return None
     current = backend._current_mail_source(command.inquiry_id, now, manual=proof.get("manual") is True)
     if current is None:
         return None
@@ -106,20 +126,27 @@ def prepare_business_report(backend, command, now):
                           customer, str(day), item.record_identity.worksheet.worksheet, row.row_position,
                           spreadsheet=item.record_identity.worksheet.spreadsheet,
                           date_source="本地订单日期（近似）" if date_origin == "LOCAL_INTAKE_APPROXIMATION" else None)
-    cached = service.cached_report(order, now)
-    if cached is not None:
-        return append_report(command, cached)
-    job = service.store.get(command.command_id)
-    if job is None:
-        service.store.request_business(command, order, now)
-        service.wake.set()
+    expired = now-command.created_at >= BUSINESS_REPORT_WAIT
+    service = backend._mail_research_service
+    try:
+        if service is not None:
+            cached = service.cached_report(order, now)
+            if cached is not None:
+                return append_report(command, cached)
+            job = service.store.get(command.command_id)
+            if job is not None and job["state"] == "READY":
+                report = json.loads(job["report"])
+                if timedelta(0) <= now-datetime.fromisoformat(report["completed_at"]) <= timedelta(minutes=15):
+                    return append_report(command, report)
+                if not expired:
+                    service.store.refresh_business(command.command_id)
+                    service.wake.set()
+            elif job is None and not expired:
+                service.store.request_business(command, order, now)
+                service.wake.set()
+    except Exception as error:  # noqa: BLE001 - optional enrichment never disables verified business notices
+        logging.getLogger(__name__).warning("Business mail detailed report unavailable; class=%s", type(error).__name__)
+    if not expired:
         return None
-    if job["state"] != "READY":
-        return None
-    report = json.loads(job["report"])
-    from datetime import timedelta
-    if not timedelta(0) <= now-datetime.fromisoformat(report["completed_at"]) <= timedelta(minutes=15):
-        service.store.refresh_business(command.command_id)
-        service.wake.set()
-        return None
-    return append_report(command, report)
+    return _business_report_unavailable(command, order,
+        follow_up=proof.get("reason_code") == "PURCHASE_FOLLOW_UP_REQUIRED")
