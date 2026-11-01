@@ -1,3 +1,9 @@
+# 2026-11-01订单关联修复候选：待原程序正常退出后覆盖
+
+状态BLOCKED_NORMAL_EXIT；上一版正式程序仍运行，修复版尚未安装。候选源码5bb8c941d8f772ea6cfb209b077a91c678b400ea；专项172通过，全量3428通过/1环境跳过；原发布构建、扫描、自检通过。候选EXE SHA25608a734889aaf259b01c33a2a4a1619c8de479256093fa2e6f3a0579308da0e58，原build/windows-release-stage-1.6/dist/INSO_V1.6目录保留。旧EXE/数据/已发邮件/Chrome未改动，没有重发旧报告。原程序窗口X只隐藏到托盘、无CLI退出入口；Owner需从托盘正常退出一次，随后继续已授权备份覆盖启动，不再次审批。原正式位置仍为D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe。COMPUTER_USE_NOT_USED。当前详细证据见原RFQ016。
+
+以下为前次发布现场，不能当作本次修复版已安装或已验证的证据：
+
 # 当前发布：2026-10-31 RFQ-016正式覆盖
 
 Source `4b61f521c0f1f0836be71e3cfc792c66e5e4610d`。EXE SHA256 `7d5f6ff489d95f479c9db196ec542dd2c8f10a1972c82106ce800bb427d55512`。正式位置 `D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe`。原程序及一致性数据备份 `D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-rfq016-20261031T101939Z`，原runtime/数据库/WAL/SHM/配置/Vault/Profile保留。2875应用文件比对、回滚原程序自检、新程序自检及原生空闲启动检查通过。

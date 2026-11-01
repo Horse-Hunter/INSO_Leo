@@ -331,7 +331,16 @@ RFQ016 accepted second-review correction: the independent catalog
 requires the full configured worksheet set, each mandatory full live read started
 after request receipt and within120s. Discovery/local history/restart is not proof
 of latest. Missing proof gives MPN-only, including restored progress and SMTP-time
-enrichment downgrade. No independent Sheets reader/poll was added. The syntax
+enrichment downgrade. Owner2026-11-01 correction adds on-demand acquisition through
+the SAME canonical Sheets reader in the independent worker, not another polling
+framework: RFQ_BRIEF plus every configured source must be freshly acquired after
+receipt. Exact page role google-mail-read/private read lock prevents background
+reads from holding the main Google write lock or recovering main/manual pages;
+write calls are rejected. The original default main lock/actions remain unchanged.
+Expired order proof is reacquired before mail-only dispatch, while original main
+business notification preparation still never reads Google. Read failures, actual
+absence, unknown dates and conflicting latest orders have distinct truthful text.
+Existing SENT/UNKNOWN tasks are never replayed. The syntax
 parser does not authenticate From. Owner explicitly accepts any sender, so no
 provider identity proof is claimed. Admission and pre-send checks require the
 subject-only policy tag,229 account, UID epoch/UID/after binding, canonical MPN,

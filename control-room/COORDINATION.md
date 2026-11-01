@@ -48,7 +48,7 @@ of business HEAD7a5728388fc14cd685521d520e23fbfa19536988. Independent PASS is re
 in control-room/RFQ-014/CEO_REVIEW.md (review commit3eee69a; status commitc023b60).
 | RFQ-015 | Authorized V1.4 Windows release | DEPLOYED | `codex/v1-4-order-mail-inspection` | Owner authorized | `control-room/RFQ-015/TASK_SPEC.md` |
 
-| RFQ-016 | V1.6 production trust: source status, order age gates, false-alert elimination | DEPLOYED / BUSINESS_RUNNING | `codex/v1-6-independent-scheduling` | Owner final release authorized | `control-room/RFQ-016/TASK_SPEC.md` |
+| RFQ-016 | V1.6 production trust: source status, order age gates, false-alert elimination | BLOCKED_NORMAL_EXIT / PREVIOUS_RELEASE_RUNNING | `codex/v1-6-independent-scheduling` | Owner final release authorized | `control-room/RFQ-016/TASK_SPEC.md` |
 
 Historical RFQ-016 source-review sequence (release/subject-policy holds below superseded by Owner final2026-10-31 authorization; current status is the row above and final receipt below):
 
@@ -69,3 +69,7 @@ F-only Executor delivery: `55ba0f230ce4a42eeda78d4aa942e9065bfc4ba3`,39targetedP
 CEO fourth source review of application `55ba0f230ce4a42eeda78d4aa942e9065bfc4ba3` (Executor F evidence `9d09ccde`) closes final F issue at source level: original IMPORTANT_ORDER and overdue purchase-follow-up notices wait <=120s from durable command creation for healthy six-source enrichment; fallback truthfully and only at next originally eligible dispatch without invented market prices/stock/total or bypassing original current source/event/recipient/SENT/UNKNOWN reviews. Executor reports39 targeted and3393 full PASS/1 symlink SKIP. **RFQ016 CORE SOURCE PASS / READY_FOR_SEPARATE_RELEASE_DECISION**, **IMAP real commands remain SECURITY_ENABLEMENT_BLOCKED**, **production NOT_DEPLOYED/NOT_VERIFIED**. Immutable source/test tree and independent review in original RFQ016 task. No release/install/livemail authorization; no Computer Use.
 
 Owner final instruction authorizes subject-only IMAP activation and one controlled RFQ016 production release after tests. DEPLOYED_NATURAL_VERIFICATION; prior SECURITY_ENABLEMENT_BLOCKED/separate-release gate superseded only by this explicit authorization. Installed source4b61f521;3414PASS/1SKIP; GUI ready; all three natural inquiry/quotation/TP cycles completed; authenticated IMAP baseline established with no historical jobs. Actual new-mail report/SMTP awaiting natural trigger. See current TEST_REPORT/FINAL_REPORT/release report.
+
+Owner2026-11-01 requests order-association correction and controlled overwrite/run. Immutable candidate5bb8c941d8f772ea6cfb209b077a91c678b400ea; targeted172PASS, full regression in progress. Prior installed program remains running unchanged until package validation and safe normal exit. No historic report resend.
+
+Correction5bb8c941:172 targeted PASS9.87s,3428 full PASS/1 environment SKIP319.97s; canonical build/scan/candidate self-check PASS. CandidateSHA25608a734889aaf259b01c33a2a4a1619c8de479256093fa2e6f3a0579308da0e58. BLOCKED solely by old app still running/no supported CLI exit; Owner asked for original tray Exit under no-force-kill/no-CU policy. No program replacement/data backup claimed; one needed release candidate retained, test disposables retired.
