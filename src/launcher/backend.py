@@ -3097,6 +3097,12 @@ class ProductionBackend(GuiBackend):
                 matched = by_location.get((row.row_position, row.cells.get(schema.model_column), row.cells.get(schema.quantity_column), row.cells.get(schema.brand_column)), ())
                 bound_identity = matched[0].record_identity if len(matched) == 1 else identity
                 day, date_origin = source_date(bound_identity, row, by_row.get(row.row_position, ()), lambda matched=matched: matched[0].created_at if len(matched) == 1 else None)
+                # Market-report association only: a blank optional brief date is
+                # missing evidence, not a contradiction of an exact original intake.
+                if (day is None and date_origin == "RFQ_DATE" and len(matched) == 1
+                        and len(by_row.get(row.row_position, ())) == 1
+                        and not str(by_row[row.row_position][0].get("rfq_date") or "").strip()):
+                    day, date_origin = matched[0].created_at, "LOCAL_INTAKE_APPROXIMATION"
                 parsed = inquiry_day(day)
                 if parsed is None:
                     stamp = None

@@ -37,7 +37,7 @@ def render_market_report(order, result, *, target=True, context=()):
         if not o.stocked:
             parts.append("无库存")
         elif not target:
-            parts.append("有库存")
+            parts.append("有库存" if o.source.value in {"findchips", "lcsc"} else "库存未单独核实")
         return " · ".join(parts)
     lowest = result.lowest if valid(result.lowest) else None
     second = result.second if valid(result.second) else None

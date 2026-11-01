@@ -42,3 +42,13 @@ def test_target_free_report_shows_all_retained_stock_buckets_and_single_quote_re
     assert "本次仅取得1条有效报价" in text
     assert "有库存" in text and "无库存" in text
     assert "已保留报价" in html and ">次低</th>" not in html
+
+
+
+def test_historical_default_stock_bucket_does_not_assert_current_inventory():
+    now=datetime(2026,11,1,8,tzinfo=UTC);order=DetailedOrder("TEST123")
+    source=next(s for s in PRICE_SOURCES if s.value=="inso")
+    quote=TpQuote(TpOffer(source,order.mpn,Decimal(2),"RMB",now,False),Decimal(2))
+    result=finish_tp(order,SimpleNamespace(stock_label="待验证"),(TpSourceResult(source,SourceOutcome.SUCCESS,SourceEvidence(source,order.mpn,order.mpn,SourceOutcome.SUCCESS,now),(quote,)),),target_rmb=None,fx=TpFx(None,now))
+    text,_=render_market_report(order,result,target=False)
+    assert "库存未单独核实" in text and "有库存" not in text

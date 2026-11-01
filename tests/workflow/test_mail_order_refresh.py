@@ -92,3 +92,12 @@ def test_send_time_expired_catalog_refresh_retains_same_verified_order(tmp_path)
     with service.store.connect() as db:
         text=db.execute("select text_body from workflow_v12_notification_commands where command_id like 'mail-research:%'").fetchone()[0]
     assert "SYNTHETIC" in text and "订单总价" in text and len(reads)==6
+
+
+
+def test_multiple_local_approximate_dates_cannot_prove_latest_order():
+    catalog=InquiryCatalog();catalog.configure_sources(("one",))
+    a=DetailedOrder("MPN",quantity=300,rfq_date="2026-09-01",date_source="本地订单日期（近似）")
+    b=DetailedOrder("MPN",quantity=500,rfq_date="2026-09-02",date_source="本地订单日期（近似）")
+    catalog.observe("one",(("a",a,NOW-timedelta(days=2)),("b",b,NOW-timedelta(days=1))),observed_at=NOW)
+    assert catalog.match("MPN",now=NOW) is None

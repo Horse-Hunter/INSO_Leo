@@ -23,7 +23,7 @@ def web(tmp_path):
     return ports.web.__wrapped__(tmp_path)
 
 
-@pytest.mark.parametrize("with_unwritten_intake",[False,True])
+@pytest.mark.parametrize("with_unwritten_intake",[False,"missing_brief","blank_brief"])
 @pytest.mark.parametrize("unknown",[False,True])
 def test_actual_composition_refreshes_stopped_main_from_native_google_and_sends_order(web,tmp_path,monkeypatch,unknown,with_unwritten_intake):
     import src.launcher.google_web as google
@@ -57,6 +57,9 @@ def test_actual_composition_refreshes_stopped_main_from_native_google_and_sends_
         from src.workflow.store import WorkflowStateStore
         rows["2026"][1][5]="UNKNOWN"
         rows["RFQ_BRIEF"]=[list(BRIEF_HEADERS)]
+        if with_unwritten_intake=="blank_brief":
+            blank={**line,"rfq_date":"","mfr":"UNKNOWN"}
+            rows["RFQ_BRIEF"].append([blank.get(k,"") for k in BRIEF_HEADERS])
         sheet=WorksheetIdentity("test","2026")
         original=WorksheetRow(2,dict(zip("ABCDEFG",["未发","","B","SYNTHETIC","TEST123","UNKNOWN",300],strict=True)))
         record,=query_pending_records(SimpleNamespace(read_rows=lambda _:(original,)),sheet)
@@ -89,7 +92,7 @@ def test_actual_composition_refreshes_stopped_main_from_native_google_and_sends_
     with service.store.connect() as db:
         text=db.execute("select text_body from workflow_v12_notification_commands where command_id like 'mail-research:%'").fetchone()[0]
     assert "SYNTHETIC" in text and "300" in text and "订单总价" in text
-    if with_unwritten_intake:assert "本地订单日期（近似）" in text and "原询价日期" not in text
+    if with_unwritten_intake:assert "本地订单日期（近似）" in text and "原询价日期：" not in text
     assert not human.closed and browser.connected and len(options)==1
     assert all(p.closed for p in browser.contexts[0].pages[1:])
     composed.close();backend.shutdown()

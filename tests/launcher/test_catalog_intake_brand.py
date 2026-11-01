@@ -63,3 +63,20 @@ def test_confirmed_brand_write_uses_verified_updated_brand(tmp_path):
     order=backend._research_catalog.match(record.model,now=NOW)
     assert order is not None and order.brand=="TI" and order.quantity==300
     backend.shutdown()
+
+
+@pytest.mark.parametrize("rfq_date,conflict,allowed",[("",False,True),("invalid",False,False),("2026-09-07",False,True),("",True,False)])
+def test_blank_optional_date_uses_only_exact_immutable_intake_not_invalid_or_conflicting_date(tmp_path,rfq_date,conflict,allowed):
+    from src.sheets.tp_brief import BRIEF_HEADERS, BriefLine
+    _,queue,*_=_make_flow(tmp_path);reader=FakeSheetsReader(brand="UNKNOWN",quantity=300)
+    record,=query_pending_records(reader,SHEET);queue.enqueue(record,now=NOW-timedelta(days=20))
+    item=replace(queue.all_items()[0],resolved_brand="TI",brand_update_status="NOT_CONFIGURED")
+    values={"sheet":"2026","sheet_row":str(record.row_position),"mpn":record.model,"mfr":"UNKNOWN","qty":"301" if conflict else "300","rfq_date":rfq_date}
+    line=BriefLine(2,tuple(values.get(k,"") for k in BRIEF_HEADERS))
+    backend=ProductionBackend(root=tmp_path);backend._research_catalog.configure_sources((SHEET,))
+    backend._catalog_source(SHEET,(reader.row,),(item,),observed_at=NOW,brief_lines=(line,))
+    order=backend._research_catalog.match(record.model,now=NOW)
+    assert (order is not None)==allowed
+    if order and not rfq_date:assert order.date_source=="本地订单日期（近似）"
+    if order and rfq_date:assert order.date_source is None and order.rfq_date==rfq_date
+    backend.shutdown()

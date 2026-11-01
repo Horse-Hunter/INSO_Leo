@@ -66,6 +66,9 @@ class InquiryCatalog:
                        if normalize_lookup_mpn(order.mpn) == normalize_lookup_mpn(mpn)]
         if not matches or any(stamp is None or stamp.tzinfo is None or stamp > now for _, _, stamp in matches):
             return None
+        if len({key for key, _, _ in matches}) > 1 and any(
+                order.date_source == "本地订单日期（近似）" for _, order, _ in matches):
+            return None  # Approximate intake timestamps cannot prove true RFQ order.
         latest = max(stamp for _, _, stamp in matches)
         recent = [(key, order) for key, order, stamp in matches if stamp == latest]
         unique = {(key, order) for key, order in recent}
@@ -197,10 +200,11 @@ class MailResearchService:
                 reason = "订单来源暂未核实；仅市场单价"
             else:
                 with self.catalog.lock:
-                    matches = [stamp for entries in self.catalog.sources.values() for _, candidate, stamp in entries
-                               if normalize_lookup_mpn(candidate.mpn) == normalize_lookup_mpn(payload["mpn"])]
-                detail = ("未找到同型号询价" if not matches else
-                          "同型号订单日期未能核实" if any(stamp is None or stamp > now for stamp in matches) else
+                    candidates = [(candidate, stamp) for entries in self.catalog.sources.values() for _, candidate, stamp in entries
+                                  if normalize_lookup_mpn(candidate.mpn) == normalize_lookup_mpn(payload["mpn"])]
+                detail = ("未找到同型号询价" if not candidates else
+                          "同型号订单日期未能核实" if any(stamp is None or stamp.tzinfo is None or stamp > now for _, stamp in candidates) else
+                          "多笔同型号订单含近似登记日期，无法核实真实先后" if any(c.date_source == "本地订单日期（近似）" for c, _ in candidates) else
                           "最近询价存在同日多单冲突")
                 reason = "已读取当前Google；"+detail+"；仅市场单价"
         return order, reason
@@ -284,7 +288,8 @@ class MailResearchService:
                 self.store.checkpoint(key, progress)
                 raise ValueError("ALL_SOURCES_UNAVAILABLE")
             context = (("邮件指令调研", "请求型号：" + payload["mpn"], "来源邮件时间：" + (payload.get("sent_at") or "未核实"),
-                        "匹配情况：" + ("唯一最近询价" if order.rfq_date else progress.get("order_match_reason", "未可靠匹配询价；仅市场单价")))
+                        "匹配情况：" + ("唯一匹配当前Google订单；本地登记日期近似，原询价日期未核实" if order.rfq_date and order.date_source == "本地订单日期（近似）" else
+                                      "唯一最近询价" if order.rfq_date else progress.get("order_match_reason", "未可靠匹配询价；仅市场单价")))
                        if job["origin"] == "imap" else ())
             if all_unavailable:
                 context = (*context, "六来源详细调研暂未完成；未取得有效报价不代表市场无报价。")
