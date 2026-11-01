@@ -36,6 +36,8 @@ def render_market_report(order, result, *, target=True, context=()):
         parts.append(when)
         if not o.stocked:
             parts.append("无库存")
+        elif not target:
+            parts.append("有库存")
         return " · ".join(parts)
     lowest = result.lowest if valid(result.lowest) else None
     second = result.second if valid(result.second) else None
@@ -85,15 +87,22 @@ def render_market_report(order, result, *, target=True, context=()):
     for source in result.sources:
         available = [q for q in source.quotes if valid(q)]
         pool = [q for q in available if q.offer.stocked] or available
-        pair = distinct_two(pool)
+        pair = (distinct_two(pool) if target else tuple(sorted(available,
+                key=lambda q: (not q.offer.stocked, q.rmb,
+                               q.offer.quoted_at.isoformat() if q.offer.quoted_at else ""))))
         if target and not pair:
             continue
         label = names[source.source.value]
         missing = {"SOURCE_UNAVAILABLE": "来源暂不可用或资料不足", "NO_STRICT_MPN_MATCH": "未匹配完整型号",
                    "NO_VALID_PRICE": "价格或报价日期不适用", "SUCCESS": "未取得可信价格"}
         values = [quote(q) for q in pair] or ["未取得有效报价（" + missing[source.outcome.value] + "）"]
-        source_lines.append(label + "：" + values[0]
-                            + ("；次低 " + values[1] if len(values) == 2 else ""))
+        if target:
+            source_lines.append(label + "：" + values[0]
+                                + ("；次低 " + values[1] if len(values) == 2 else ""))
+        else:
+            lines = (["报价"+str(i+1)+"："+value for i, value in enumerate(values)] if pair else values)
+            source_lines.append(label+"："+lines[0]+"".join("\n    "+line for line in lines[1:])
+                                + ("\n    本次仅取得1条有效报价，未编造第二条。" if len(pair) == 1 else ""))
         table_rows.append((label, values))
     paragraphs = [opening, "\n".join(identity), "\n".join(summary)]
     if source_lines:
@@ -103,7 +112,20 @@ def render_market_report(order, result, *, target=True, context=()):
         + '<p style="margin:0 0 18px">' + "<br>".join(map(escape, identity)) + '</p>'
         + '<p style="padding:14px 16px;background:#f5f7fa;margin:0 0 20px">'
         + "<br>".join(map(escape, summary)) + '</p>')
-    if table_rows:
+    if table_rows and not target:
+        rows = []
+        for label, values in table_rows:
+            quotes_html = "<br>".join(escape("报价"+str(i+1)+"："+value) for i, value in enumerate(values))
+            note = ("<br><span style=\"color:#64748b\">本次仅取得1条有效报价，未编造第二条。</span>"
+                    if len(values) == 1 and not values[0].startswith("未取得有效报价") else "")
+            rows.append('<tr><td style="padding:10px 8px;vertical-align:top;border-bottom:1px solid #e5e7eb">'
+                        + escape(label) + '</td><td style="padding:10px 8px;overflow-wrap:anywhere;border-bottom:1px solid #e5e7eb">'
+                        + quotes_html+note+'</td></tr>')
+        html += ('<p>以下为本次已核实并保留的报价，不代表全站所有报价。</p>'
+                 '<table style="border-collapse:collapse;width:100%;font-size:13px;text-align:left">'
+                 '<tr><th style="padding:10px 8px">来源</th><th style="padding:10px 8px">已保留报价（逐条显示）</th></tr>'
+                 + "".join(rows) + '</table>')
+    if table_rows and target:
         has_second = any(len(values) == 2 for _, values in table_rows)
         rows = []
         for label, values in table_rows:

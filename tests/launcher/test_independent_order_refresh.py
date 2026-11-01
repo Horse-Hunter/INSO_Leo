@@ -1,7 +1,7 @@
 """Native Sheets read/ownership and actual mail composition; all external ports fake."""
 import json
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -23,8 +23,9 @@ def web(tmp_path):
     return ports.web.__wrapped__(tmp_path)
 
 
+@pytest.mark.parametrize("with_unwritten_intake",[False,True])
 @pytest.mark.parametrize("unknown",[False,True])
-def test_actual_composition_refreshes_stopped_main_from_native_google_and_sends_order(web,tmp_path,monkeypatch,unknown):
+def test_actual_composition_refreshes_stopped_main_from_native_google_and_sends_order(web,tmp_path,monkeypatch,unknown,with_unwritten_intake):
     import src.launcher.google_web as google
     import src.launcher.mail_research_composition as composition
     native,browser,rows,human=web
@@ -49,6 +50,21 @@ def test_actual_composition_refreshes_stopped_main_from_native_google_and_sends_
         return GoogleSheetsWebService(native._session,isolated_read=True,read_guard=kw["read_guard"])
     monkeypatch.setattr(google,"build_google_web_service",transport)
     composed=build_mail_research(backend)
+    if with_unwritten_intake:
+        from src.research import ResearchResult, ResearchStatus
+        from src.sheets import WorksheetRow
+        from src.sheets.pending import query_pending_records
+        from src.workflow.store import WorkflowStateStore
+        rows["2026"][1][5]="UNKNOWN"
+        rows["RFQ_BRIEF"]=[list(BRIEF_HEADERS)]
+        sheet=WorksheetIdentity("test","2026")
+        original=WorksheetRow(2,dict(zip("ABCDEFG",["未发","","B","SYNTHETIC","TEST123","UNKNOWN",300],strict=True)))
+        record,=query_pending_records(SimpleNamespace(read_rows=lambda _:(original,)),sheet)
+        queue=WorkflowStateStore(tmp_path/"workflow.sqlite3")
+        queue.enqueue(record,now=datetime.now(UTC)-timedelta(days=20))
+        item=queue.claim_due(now=datetime.now(UTC))
+        queue.apply_research_result(item.id,ResearchResult(item.inquiry_id,ResearchStatus.SUCCESS,resolved_brand="TI"))
+        queue.record_brand_update(item.id,"NOT_CONFIGURED")
     backend._stop.set()
     service,inbox,smtp,reads,*_=scene(tmp_path/"mail")
     service.clock=lambda:datetime.now(UTC)
@@ -73,6 +89,7 @@ def test_actual_composition_refreshes_stopped_main_from_native_google_and_sends_
     with service.store.connect() as db:
         text=db.execute("select text_body from workflow_v12_notification_commands where command_id like 'mail-research:%'").fetchone()[0]
     assert "SYNTHETIC" in text and "300" in text and "订单总价" in text
+    if with_unwritten_intake:assert "本地订单日期（近似）" in text and "原询价日期" not in text
     assert not human.closed and browser.connected and len(options)==1
     assert all(p.closed for p in browser.contexts[0].pages[1:])
     composed.close();backend.shutdown()

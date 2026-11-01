@@ -3073,10 +3073,11 @@ class ProductionBackend(GuiBackend):
         from datetime import datetime, time
 
         from src.research.detailed import DetailedOrder
-        from src.sheets.pending import identify_worksheet_row
+        from src.sheets.pending import identify_worksheet_row, usable_brand
         from src.sheets.tp_brief import quantity_value
         from src.sheets.worksheet_schema import worksheet_schema
         from src.workflow.automatic_admission import SHANGHAI, inquiry_day, source_date
+        from src.workflow.v13_quotation import expected_source_brand
         schema = worksheet_schema(worksheet.worksheet)
         brief = getattr(self, "_mail_brief", None)
         lines = brief_lines if brief_lines is not None else brief.cached_lines(worksheet.spreadsheet) if brief else ()
@@ -3084,7 +3085,7 @@ class ProductionBackend(GuiBackend):
         by_location, by_row = defaultdict(list), defaultdict(list)
         for item in items:
             if item.record_identity.worksheet == worksheet:
-                by_location[(item.record_identity.row_position, item.mpn, item.quantity, item.resolved_brand or item.brand)].append(item)
+                by_location[(item.record_identity.row_position, item.mpn, item.quantity, expected_source_brand(item))].append(item)
         for line in lines:
             pointer = line.get("sheet_row")
             if line.get("sheet") == worksheet.worksheet and isinstance(pointer, str) and pointer.isdecimal():
@@ -3117,7 +3118,7 @@ class ProductionBackend(GuiBackend):
                 if not row.cells.get(schema.model_column):
                     continue
                 customer = schema.fixed_customer_name or row.cells.get(schema.customer_name_column)
-                order = DetailedOrder(row.cells[schema.model_column], row.cells.get(schema.brand_column) or None,
+                order = DetailedOrder(row.cells[schema.model_column], usable_brand(row.cells.get(schema.brand_column)),
                     quantity, customer, str(day) if day else None, worksheet.worksheet, row.row_position, spreadsheet=worksheet.spreadsheet,
                     date_source="本地订单日期（近似）" if date_origin == "LOCAL_INTAKE_APPROXIMATION" else None)
                 entries.append((str(identity), order, stamp))
