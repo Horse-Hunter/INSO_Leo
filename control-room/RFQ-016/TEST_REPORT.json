@@ -1,8 +1,8 @@
 {
   "rfq": "RFQ-016",
   "active_scope": "Owner2026-11-01 on-demand order association fix + controlled overwrite/run",
-  "status": "BLOCKED_NORMAL_EXIT",
-  "deployment": "NOT_INSTALLED_PREVIOUS_RELEASE_RUNNING",
+  "status": "DEPLOYED",
+  "deployment": "INSTALLED_STARTED",
   "source_commit": "5bb8c941d8f772ea6cfb209b077a91c678b400ea",
   "source_tree": "ce899cf719c4891e5107708207f47fd3b423eae6",
   "test_tree": "0b1101a6120536693037e7e13a66e9af5cbbafcd",
@@ -611,20 +611,22 @@
   },
   "COMPUTER_USE_NOT_USED": true,
   "cleanup": {
-    "status": "COMPLETE_FOR_CURRENT_BLOCK",
+    "status": "COMPLETE",
     "retired_owned_test_dirs_xml_build_log": 25,
     "retired_unused_release_helper": 1,
-    "retained_candidate_stage": 1,
-    "retention_reason": "Single tested canonical release candidate needed for already authorized install after normal exit; not a redundant package",
+    "retained_candidate_stage": 0,
+    "retention_reason": "Installed program and verified rollback retained; candidate stage retired after complete manifest verification",
     "no_background_helpers": true,
     "creator_context_cleanup": "First cross-context access denied before deletion; original creator contexts used, recursive containment/no-reparse checked, no ACL change/force unlock",
-    "protected_assets": "formal program, runtime, SQLite/WAL/SHM, sent mail records, config/Vault/Chrome/Profile/Git/rollback untouched"
+    "protected_assets": "formal program, runtime, SQLite/WAL/SHM, sent mail records, config/Vault/Chrome/Profile/Git/rollback untouched",
+    "release_stage_retired": true,
+    "release_helper_retired": true
   },
   "live": {
     "current_old_GUI_pid": 26444,
     "current_old_observer_pid": 12464,
-    "new_package_installed": false,
-    "new_production_order_match": "NOT_VERIFIED; awaits safe deployment and natural new request",
+    "new_package_installed": true,
+    "new_production_order_match": "NOT_VERIFIED until a natural new valid email; all tests use synthetic source/SMTP",
     "existing_sent_report": "unchanged; no resend",
     "normal_exit_last_observation": {
       "utc": "2026-11-01T04:09:55Z",
@@ -634,9 +636,80 @@
       "completed": false,
       "exit_reason": null
     },
-    "old_formal_exe_sha256": "7d5f6ff489d95f479c9db196ec542dd2c8f10a1972c82106ce800bb427d55512"
+    "old_formal_exe_sha256": "7d5f6ff489d95f479c9db196ec542dd2c8f10a1972c82106ce800bb427d55512",
+    "owner_normal_exit": {
+      "utc": "2026-11-01T04:11:09.526234Z",
+      "classification": "normal",
+      "exit_code": 0,
+      "completed": true,
+      "exit_reason": "owner_exit"
+    },
+    "started_utc": "2026-11-01T04:15:45.2642868Z",
+    "GUI_pid": 163608,
+    "observer_pid": 181684,
+    "GUI_responding": true,
+    "GUI_window_present": true,
+    "gui_ready": true,
+    "inquiry": "Natural first cycle began04:15:52.818Z; completion pending",
+    "quotation": "First natural cycle pending",
+    "tp": "First natural cycle pending",
+    "smtp_outcomes": {
+      "SENT": 174,
+      "SUPPRESSED": 2
+    },
+    "old_research_report": "DELIVERY_SENT remains one; original already sent report not resent",
+    "original_UID_baseline": 218,
+    "original_UID_cursor": 219,
+    "imap_research_jobs": 1,
+    "production_status": "BUSINESS_RUNNING",
+    "actual_new_report_or_Shawn_receipt": "PENDING_NATURAL_REQUEST",
+    "agent_CDP": "NOT_USED",
+    "COMPUTER_USE_NOT_USED": true,
+    "natural_cycles": {
+      "inquiry": {
+        "phase": "completed",
+        "elapsed_seconds": 204.562,
+        "due_in_seconds": "900.000",
+        "observed_at_shanghai": "2026-11-01 12:19:17,382"
+      },
+      "quotation": {
+        "phase": "completed",
+        "elapsed_seconds": 127.563,
+        "due_in_seconds": "900.000",
+        "observed_at_shanghai": "2026-11-01 12:21:25,850"
+      },
+      "tp": {
+        "phase": "completed",
+        "elapsed_seconds": 11.203,
+        "due_in_seconds": "900.000",
+        "observed_at_shanghai": "2026-11-01 12:19:58,838"
+      }
+    },
+    "imap_repeat_observation": {
+      "seconds": 150,
+      "port": 993,
+      "matching_samples": 0,
+      "result": "NOT_SEPARATELY_VERIFIED; short-lived sockets may be missed; original runtime sanitizer suppresses mail INFO; unchanged existing cursor is not proof of fresh login",
+      "no_extra_IMAP_client": true,
+      "observer_finished": true
+    },
+    "all_three_first_cycles_completed": true,
+    "final_mail_counts": {
+      "SENT": 174,
+      "SUPPRESSED": 2
+    },
+    "final_research_states": [
+      [
+        "imap",
+        "DELIVERY_SENT",
+        1
+      ]
+    ],
+    "final_database_quick_check": "ok",
+    "final_exe_sha256": "08a734889aaf259b01c33a2a4a1619c8de479256093fa2e6f3a0579308da0e58",
+    "final_configs_match_backup": true
   },
-  "next_required_operation": "Owner original system tray Exit; no new authorization required. On observed safe exit: backup current data+program, verify hashes, replace only program assets, original self-check/idle-check, start --start-inquiry, read-only verify natural business and mailbox.",
+  "next_required_operation": "NONE; legitimate future new mail is needed to verify real Google association/report delivery; never resend SENT task automatically",
   "release": {
     "canonical_build": "PASS",
     "release_scan": "RELEASE_SCAN_OK",
@@ -645,7 +718,42 @@
     "candidate_exe_sha256": "08a734889aaf259b01c33a2a4a1619c8de479256093fa2e6f3a0579308da0e58",
     "candidate_path": "C:\\Users\\Leo\\.codex\\worktrees\\v16-independent-scheduling\\INSO_Leo\\build\\windows-release-stage-1.6\\dist\\INSO_V1.6\\INSO_V1.6.exe",
     "build_log_sha256": "ba09ca4d5854661109486805dd6160a210dd94c011a585a04ca47f933710c027",
-    "installed": false
+    "installed": true,
+    "app": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6",
+    "backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-order-association-20261101T041255Z",
+    "runtime": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.4\\runtime",
+    "database": "D:\\Program_Leo\\INSO_Leo\\.worktrees\\v1-2-design\\dist\\INSO_V1.1\\runtime\\production\\workflow.sqlite3",
+    "old_exe_sha256": "7d5f6ff489d95f479c9db196ec542dd2c8f10a1972c82106ce800bb427d55512",
+    "new_exe_sha256": "08a734889aaf259b01c33a2a4a1619c8de479256093fa2e6f3a0579308da0e58",
+    "database_backup_verified": true,
+    "all_installed_asset_hashes_match": true,
+    "rollback_assets_verified": true,
+    "prestart_protected_tables_unchanged": true,
+    "installed_self_check": 0,
+    "installed_idle_self_check": 0,
+    "all_program_files_verified": 2875,
+    "old_program_self_check": "PASS",
+    "backup_contents": [
+      "program/INSO_V1.6.exe and _internal",
+      "data/workflow.sqlite3 consistent verified SQLite backup",
+      "data/raw WAL/SHM if present",
+      "data/runtime-v14 original physical runtime"
+    ],
+    "prestart_config_and_every_existing_table_content_hash_match": true,
+    "initial_install_check_retry": "Runtime Junction.Target was a single string, erroneous [0] gave first character; pre-move check rejected, no files moved. Reused same verified backup; corrected scalar/array handling, no link/config/database change."
   },
-  "normal_exit_requirement": "Current formal GUI26444/observer12464 running. Source verifies window X hides in tray; no supported CLI exit. Owner asked to use original tray Exit because force kill/Computer Use forbidden. No shutdown/GUI-control workaround attempted."
+  "normal_exit_requirement": "RESOLVED by Owner original tray Exit; normal receipt and zero processes verified before installing",
+  "unknowns": [
+    "Real new mail order association/actual report delivery after this fix remains pending natural request",
+    "New runtime repeat IMAP auth/poll not independently proven by unchanged cursor or zero socket samples",
+    "Long-term browser/site behavior and false-alert absence cannot be proved by one startup window"
+  ],
+  "checks": {
+    "source_test_tree_immutability": "PASS",
+    "prior_7574516_ancestor_retained": true,
+    "installed_exe_config_hashes": "PASS",
+    "protected_tables_prestart_exact_match": "PASS",
+    "no_test_or_build_process_pending": true,
+    "COMPUTER_USE_NOT_USED": true
+  }
 }

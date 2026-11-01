@@ -48,7 +48,7 @@ of business HEAD7a5728388fc14cd685521d520e23fbfa19536988. Independent PASS is re
 in control-room/RFQ-014/CEO_REVIEW.md (review commit3eee69a; status commitc023b60).
 | RFQ-015 | Authorized V1.4 Windows release | DEPLOYED | `codex/v1-4-order-mail-inspection` | Owner authorized | `control-room/RFQ-015/TASK_SPEC.md` |
 
-| RFQ-016 | V1.6 production trust: source status, order age gates, false-alert elimination | BLOCKED_NORMAL_EXIT / PREVIOUS_RELEASE_RUNNING | `codex/v1-6-independent-scheduling` | Owner final release authorized | `control-room/RFQ-016/TASK_SPEC.md` |
+| RFQ-016 | V1.6 production trust: source status, order age gates, false-alert elimination | DEPLOYED / BUSINESS_RUNNING | `codex/v1-6-independent-scheduling` | Owner final release authorized | `control-room/RFQ-016/TASK_SPEC.md` |
 
 Historical RFQ-016 source-review sequence (release/subject-policy holds below superseded by Owner final2026-10-31 authorization; current status is the row above and final receipt below):
 
@@ -73,3 +73,5 @@ Owner final instruction authorizes subject-only IMAP activation and one controll
 Owner2026-11-01 requests order-association correction and controlled overwrite/run. Immutable candidate5bb8c941d8f772ea6cfb209b077a91c678b400ea; targeted172PASS, full regression in progress. Prior installed program remains running unchanged until package validation and safe normal exit. No historic report resend.
 
 Correction5bb8c941:172 targeted PASS9.87s,3428 full PASS/1 environment SKIP319.97s; canonical build/scan/candidate self-check PASS. CandidateSHA25608a734889aaf259b01c33a2a4a1619c8de479256093fa2e6f3a0579308da0e58. BLOCKED solely by old app still running/no supported CLI exit; Owner asked for original tray Exit under no-force-kill/no-CU policy. No program replacement/data backup claimed; one needed release candidate retained, test disposables retired.
+
+Normal-exit blocker RESOLVED by Owner original trayExit, normal code0. Correction source5bb8c941 installed/started after verified consistent backup and2875-file manifest/self-checks; startup business/config records unchanged. New GUI163608/originalobserver181684; inquiry204.562s/quotation127.563s/TP11.203s first natural cycles all completed, original900s due intervals retained. Current BUSINESS_RUNNING; real new-mail order association/recipient receipt pending natural trigger, no synthetic real send and no old report replay. Candidate stage/helper retired. Exact receipt and remaining UNKNOWNs in current TEST_REPORT/FINAL_REPORT.

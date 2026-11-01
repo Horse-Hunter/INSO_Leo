@@ -1,8 +1,13 @@
-# 2026-11-01订单关联修复候选：待原程序正常退出后覆盖
+# 当前发布：2026-11-01订单关联修复已覆盖运行
 
-状态BLOCKED_NORMAL_EXIT；上一版正式程序仍运行，修复版尚未安装。候选源码5bb8c941d8f772ea6cfb209b077a91c678b400ea；专项172通过，全量3428通过/1环境跳过；原发布构建、扫描、自检通过。候选EXE SHA25608a734889aaf259b01c33a2a4a1619c8de479256093fa2e6f3a0579308da0e58，原build/windows-release-stage-1.6/dist/INSO_V1.6目录保留。旧EXE/数据/已发邮件/Chrome未改动，没有重发旧报告。原程序窗口X只隐藏到托盘、无CLI退出入口；Owner需从托盘正常退出一次，随后继续已授权备份覆盖启动，不再次审批。原正式位置仍为D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe。COMPUTER_USE_NOT_USED。当前详细证据见原RFQ016。
+BUSINESS_RUNNING。源码5bb8c941d8f772ea6cfb209b077a91c678b400ea；专项172通过，全量3428通过/1环境跳过；原发布构建、扫描、自检通过。正式EXE SHA25608a734889aaf259b01c33a2a4a1619c8de479256093fa2e6f3a0579308da0e58，位置D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe。
 
-以下为前次发布现场，不能当作本次修复版已安装或已验证的证据：
+Owner托盘正常退出、原正常code0凭据和进程归零后，备份原程序与一致性数据到D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-order-association-20261101T041255Z。只替换程序文件；2875完整清单、原回滚/新程序/原生空闲自检、启动前原业务表及配置哈希一致性均通过。原数据库、WAL/SHM、配置、Vault/Profile/Chrome、采购/UNKNOWN和邮件幂等记录保留。
+
+新正式GUI163608/原观察器181684于12:15:45上海启动，界面响应，询价、报价、TP首轮均自然完成，原900秒调度周期保持；详情见RFQ016 TEST_REPORT。那封旧报告保留唯一DELIVERY_SENT，不重发；174SENT/2SUPPRESSED及旧收件游标保留。真实新邮件的关联报告与实际Shawn收信仍待自然验证，不能把旧游标和短时未采样到IMAP连接当作本次登录成功证明。无测试外发、额外CDP或Computer Use。构建暂存和辅助文件已退休，正式程序及验证过的回滚/数据备份保留。
+
+以下为历史发布现场，由上述当前发布状态取代：
+
 
 # 当前发布：2026-10-31 RFQ-016正式覆盖
 
