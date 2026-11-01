@@ -12,7 +12,7 @@ from src.research.ecb_fx import EcbDailyUsdRmbProvider
 from src.research.mail_session import DetailedReadSession
 from src.research.runtime import load_runtime_config
 from src.sheets.tp_brief import quantity_value
-from src.workflow.mail_research import MailResearchService
+from src.workflow.mail_research import InquiryCatalog, MailResearchService
 from src.workflow.mail_research_store import MailResearchStore
 from src.workflow.store import WorkflowStateStore
 from src.workflow.v12_notifications import V12NotificationWorker
@@ -25,7 +25,7 @@ def build_mail_research(backend):
     cfg = json.loads(backend.production_path.read_text(encoding="utf-8"))
     rc = load_runtime_config(backend.config_path)
     path = resolve_app_path(cfg.get("sqlite_path", "runtime/production/workflow.sqlite3"), root=backend.root)
-    WorkflowStateStore(path)  # Preserve original V1.1 baseline initialization.
+    workflow = WorkflowStateStore(path)  # Preserve original V1.1 baseline initialization.
     # This entry is before the GUI starts business workers. The local history
     # loader has joined. No migration is invoked by a mailbox poll or task.
     migrate_v12(path, path.parent / "backups" / "v12-upgrade", quiesce=nullcontext)
@@ -58,12 +58,51 @@ def build_mail_research(backend):
                 if not admission.failed_locally:
                     raise ResearchDeferred("SHARED_RESOURCE_WAITING_OWNER") from None
                 raise
+    def refresh_catalog(job):
+        from src.sheets.google_reader import GoogleSheetsRowReader
+        from src.sheets.tp_brief import BriefReader
+
+        from .google_web import build_google_web_service
+        catalog = InquiryCatalog()
+        worksheets = tuple(WorksheetIdentity(cfg["spreadsheet_id"], title) for title in cfg["worksheet_titles"])
+        brief_source = WorksheetIdentity(cfg["spreadsheet_id"], "RFQ_BRIEF")
+        catalog.configure_sources((*worksheets, brief_source))
+        with budget.background() as checkpoint, DetailedReadSession(rc, admission) as session:
+            deadline = service.timer()+120
+            def guard():
+                admission.require_open()
+                checkpoint()
+                if service.timer() > deadline:
+                    raise TimeoutError("ORDER_SOURCE_READ_BUDGET_EXHAUSTED")
+            web = build_google_web_service(rc.cdp.cdp_url, provider=session.shared_provider,
+                read_guard=guard, stop_requested=service.stop_event.is_set, isolated_read=True)
+            def retry_wait(seconds):
+                guard()
+                stopped = service.stop_event.wait(seconds)
+                guard()
+                return stopped
+            brief_started = service.clock()
+            brief = BriefReader(web, retry_wait=retry_wait).read(cfg["spreadsheet_id"])
+            catalog.observe(brief_source, (), observed_at=brief_started)
+            items = workflow.all_items()
+            reader = GoogleSheetsRowReader(web, retry_wait=retry_wait)
+            for worksheet in worksheets:
+                guard()
+                started = service.clock()
+                rows = reader.read_rows(worksheet)
+                guard()
+                backend._catalog_source(worksheet, rows, items, observed_at=started,
+                                        catalog=catalog, brief_lines=brief)
+            guard()
+        return catalog
+
     worker = V12NotificationWorker(outbox, QQSMTPTransport(config=QQSMTPConfig(sender_address="1069599116@qq.com")), scope="mail",
         review_current=lambda command, now: service.review_mail(command, now),
         prepare_content=lambda command, now: service.prepare_mail(command, now))
     service = MailResearchService(store=store, inbox_factory=ResearchInbox, source_reader=read,
         fx_provider=EcbDailyUsdRmbProvider(), catalog=backend._research_catalog,
         outbox=outbox, worker=worker,
+        refresh_catalog=refresh_catalog,
         admit=lambda: (backend._poll_idle.is_set() and not backend._manual_busy
                        and backend._manual_request is None and not backend.login_all_running() and not backend.order_mail_running()))
     return service

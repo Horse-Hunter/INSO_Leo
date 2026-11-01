@@ -32,7 +32,7 @@ class InquiryCatalog:
     MAX_AGE = timedelta(seconds=120)
 
     def __init__(self):
-        self.lock, self.sources, self.observed = threading.Lock(), {}, {}
+        self.lock, self.sources, self.observed = threading.RLock(), {}, {}
         self.expected = frozenset()
 
     def configure_sources(self, sources):
@@ -49,17 +49,19 @@ class InquiryCatalog:
         with self.lock:
             self.observed.pop(source, None)
 
+    def is_current(self, *, now, not_before):
+        with self.lock:
+            return bool(self.expected and set(self.sources) == self.expected and all(
+                (stamp := self.observed.get(source)) is not None and stamp.tzinfo is not None
+                and not_before <= stamp <= now and timedelta(0) <= now-stamp <= self.MAX_AGE
+                for source in self.expected))
+
     def match(self, mpn, *, now=None, not_before=None):
         now = now or datetime.now(UTC)
         not_before = not_before or now-self.MAX_AGE
         with self.lock:
-            if not self.expected or set(self.sources) != self.expected:
+            if not self.is_current(now=now, not_before=not_before):
                 return None
-            for source in self.expected:
-                observed = self.observed.get(source)
-                if observed is None or observed.tzinfo is None or not (
-                        not_before <= observed <= now and timedelta(0) <= now-observed <= self.MAX_AGE):
-                    return None
             matches = [(key, order, stamp) for entries in self.sources.values() for key, order, stamp in entries
                        if normalize_lookup_mpn(order.mpn) == normalize_lookup_mpn(mpn)]
         if not matches or any(stamp is None or stamp.tzinfo is None or stamp > now for _, _, stamp in matches):
@@ -73,10 +75,11 @@ class InquiryCatalog:
 class MailResearchService:
     def __init__(self, *, store, inbox_factory, source_reader, fx_provider, catalog,
                  outbox, worker, clock=lambda: datetime.now(UTC), timer=monotonic,
-                 admit=lambda: True):
+                 admit=lambda: True, refresh_catalog=None):
         self.store, self.inbox_factory, self.source_reader = store, inbox_factory, source_reader
         self.fx_provider, self.catalog, self.outbox, self.worker = fx_provider, catalog, outbox, worker
         self.clock, self.timer, self.admit = clock, timer, admit
+        self.refresh_catalog = refresh_catalog
         self.stop_event, self.wake = threading.Event(), threading.Event()
         self.threads, self.next_poll, self.health = [], 0.0, "INITIALIZING"
         self._failures = 0
@@ -160,6 +163,48 @@ class MailResearchService:
                 LOG.warning("IMAP poll not committed; protected wait; class=%s", type(error).__name__)
             self.stop_event.wait(max(.05, min(1, self.next_poll - self.timer())))
 
+    def _match_order(self, job):
+        now = self.clock()
+        received = datetime.fromisoformat(job["created_at"])
+        reason = "未可靠匹配询价；仅市场单价"
+        if not self.catalog.is_current(now=now, not_before=received) and self.refresh_catalog:
+            try:
+                self.catalog = self.refresh_catalog(job)
+                now = self.clock()
+            except Exception as error:
+                from src.research.cdp_pages import PageTargetCleanupError
+                seen = set()
+                cause = error
+                while cause is not None and id(cause) not in seen:
+                    seen.add(id(cause))
+                    if type(cause).__name__ == "ResearchDeferred":
+                        raise cause
+                    if isinstance(cause, PageTargetCleanupError) or getattr(cause, "reason", None) in {
+                        "GOOGLE_OPERATION_NOT_CLOSED", "GOOGLE_DOWNLOAD_CLEANUP_UNCONFIRMED", "GOOGLE_DOWNLOAD_CANCEL_UNCONFIRMED",
+                    }:
+                        self._resource_blocked = True
+                        self.store.block_resource(now)
+                        self.raise_alert("CDP_RESOURCE_UNCONFIRMED", "owned-read-resource", now)
+                        raise PageTargetCleanupError((cause,)) from error
+                    cause = cause.__cause__ or cause.__context__
+                return None, "订单来源暂未核实（读取未完成）；不能据此认定没有订单；仅市场单价"
+            if not self.catalog.is_current(now=now, not_before=received):
+                return None, "订单来源暂未核实（完整读取已超出新鲜度期限）；仅市场单价"
+        payload = json.loads(job["payload"])
+        order = self.catalog.match(payload["mpn"], now=now, not_before=received)
+        if self.refresh_catalog and order is None:
+            if not self.catalog.is_current(now=now, not_before=received):
+                reason = "订单来源暂未核实；仅市场单价"
+            else:
+                with self.catalog.lock:
+                    matches = [stamp for entries in self.catalog.sources.values() for _, candidate, stamp in entries
+                               if normalize_lookup_mpn(candidate.mpn) == normalize_lookup_mpn(payload["mpn"])]
+                detail = ("未找到同型号询价" if not matches else
+                          "同型号订单日期未能核实" if any(stamp is None or stamp > now for stamp in matches) else
+                          "最近询价存在同日多单冲突")
+                reason = "已读取当前Google；"+detail+"；仅市场单价"
+        return order, reason
+
     def run_one(self):
         if self.stop_event.is_set() or self._resource_blocked or not self.admit():
             return False
@@ -179,8 +224,8 @@ class MailResearchService:
                 if not self.store.admitted_subject_request(job):
                     self.store.finish(key, state="BLOCKED", failure="TRIGGER_POLICY_NOT_ADMITTED")
                     return False
-                current = self.catalog.match(payload["mpn"], now=now,
-                    not_before=datetime.fromisoformat(job["created_at"])) or DetailedOrder(payload["mpn"])
+                matched, match_reason = self._match_order(job)
+                current = matched or DetailedOrder(payload["mpn"])
                 if progress.get("order") != asdict(current):
                     progress = {}  # Restart/expired view cannot preserve old customer/quantity.
             if "order" in progress:
@@ -189,6 +234,8 @@ class MailResearchService:
                 order = current if job["origin"] == "imap" else DetailedOrder(**payload)
                 progress["order"] = asdict(order)
                 progress["reference_at"] = now.isoformat()
+                if job["origin"] == "imap":
+                    progress["order_match_reason"] = match_reason
                 self.store.checkpoint(key, progress)
             reference = datetime.fromisoformat(progress["reference_at"])
             fx = TpFx(self.fx_provider, reference)
@@ -237,7 +284,7 @@ class MailResearchService:
                 self.store.checkpoint(key, progress)
                 raise ValueError("ALL_SOURCES_UNAVAILABLE")
             context = (("邮件指令调研", "请求型号：" + payload["mpn"], "来源邮件时间：" + (payload.get("sent_at") or "未核实"),
-                        "匹配情况：" + ("唯一最近询价" if order.rfq_date else "未可靠匹配询价；仅市场单价"))
+                        "匹配情况：" + ("唯一最近询价" if order.rfq_date else progress.get("order_match_reason", "未可靠匹配询价；仅市场单价")))
                        if job["origin"] == "imap" else ())
             if all_unavailable:
                 context = (*context, "六来源详细调研暂未完成；未取得有效报价不代表市场无报价。")
@@ -316,7 +363,7 @@ class MailResearchService:
         return None
 
     def prepare_mail(self, command, now):
-        """Enrichment is optional; stale source proof must not escape at SMTP."""
+        """Mail-only worker revalidates order evidence before original SMTP dispatch."""
         if command.kind is NotificationKind.PURCHASE_EXCEPTION:
             return command
         job = self.store.get(command.command_id)
@@ -324,12 +371,14 @@ class MailResearchService:
         previous = DetailedOrder(**progress["order"])
         if previous.rfq_date is None:
             return command
-        current = self.catalog.match(payload["mpn"], now=now,
-            not_before=datetime.fromisoformat(job["created_at"]))
-        if current == previous:
+        if self._resource_blocked:
+            return None
+        current, reason = self._match_order(job)
+        if current == previous or (current is not None and current.brand is None
+                                   and replace(previous, brand=None) == current):
             return command
         # Keep the confirmed market prices/capture dates, remove all cached
-        # customer/order fields. No Google/market call occurs on the SMTP path.
+        # customer/order fields. Market acquisition is never repeated at dispatch.
         order = DetailedOrder(payload["mpn"])
         reference = datetime.fromisoformat(progress["reference_at"])
         fx = TpFx(None, reference)
@@ -341,7 +390,7 @@ class MailResearchService:
             results, target_rmb=None, fx=fx)
         text, html = render_market_report(order, result, target=False, context=("邮件指令调研",
             "请求型号："+payload["mpn"], "来源邮件时间："+(payload.get("sent_at") or "未核实"),
-            "匹配情况：未可靠匹配询价；仅市场单价"))
+            "匹配情况："+reason if current is None else "匹配情况：订单信息已变化，未沿用旧客户数量；仅市场单价"))
         return replace(command, text_body=text, html_body=html)
 
     def audit_delivery(self):

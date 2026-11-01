@@ -227,7 +227,10 @@ def _same_read_sheet_selection(actual, expected):
 class GoogleQuotationUpdateActions:
     def __init__(self, *, browser_handle, location: QuotationInputLocation,
                  timeout_ms: int = 10000, readiness_timeout_ms: int = 30000,
-                 result_timeout_ms: int = 30000):
+                 result_timeout_ms: int = 30000, page_role="google-operation"):
+        if page_role not in {"google-operation", "google-mail-read"}:
+            raise ValueError("GOOGLE_PAGE_ROLE_INVALID")
+        self._page_role = page_role
         if browser_handle.owned:
             raise ValueError("quotation UI must reuse the protected shared CDP handle")
         self._handle, self._location, self._timeout = browser_handle, location, timeout_ms
@@ -249,7 +252,7 @@ class GoogleQuotationUpdateActions:
         expected = urlsplit(self._location.url)
         for context in browser.contexts:
             for page in tuple(context.pages):
-                if page.is_closed() or page_owner(page) != "google-operation":
+                if page.is_closed() or page_owner(page) != self._page_role:
                     continue
                 actual = urlsplit(page.url)
                 if (actual.hostname, actual.path) != (expected.hostname, expected.path):
@@ -260,7 +263,7 @@ class GoogleQuotationUpdateActions:
                         raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
                     continue
                 recovery = GoogleQuotationUpdateActions(browser_handle=self._handle,
-                    location=SimpleNamespace(url=page.url), result_timeout_ms=self._result_timeout)
+                    location=SimpleNamespace(url=page.url), result_timeout_ms=self._result_timeout, page_role=self._page_role)
                 recovery._page, recovery._script_pending = page, True
                 recovery._price_refresh = True
                 recovery._guard()  # Authentication/CDP failures retain their existing boundaries.
@@ -329,7 +332,7 @@ class GoogleQuotationUpdateActions:
         expected_document = urlsplit(self._location.url)
         for old in tuple(browser.contexts[0].pages):
             actual = urlsplit(old.url)
-            if old.is_closed() or page_owner(old) != "google-operation":
+            if old.is_closed() or page_owner(old) != self._page_role:
                 continue
             if not old.evaluate("() => window.__insoGoogleReadFailed === true"):
                 continue
@@ -338,7 +341,7 @@ class GoogleQuotationUpdateActions:
             ) and actual.hostname != "accounts.google.com":
                 continue
             recovery = GoogleQuotationUpdateActions(browser_handle=self._handle,
-                location=SimpleNamespace(url=old.url))
+                location=SimpleNamespace(url=old.url), page_role=self._page_role)
             recovery._page = old
             recovery._guard()
             if not old.evaluate(_UNSAFE_POLL_PAGE):
@@ -387,7 +390,7 @@ class GoogleQuotationUpdateActions:
             actual = urlsplit(self._page.url)
             try:
                 self._guard()
-                if (actual.scheme, actual.hostname, actual.path) != document_key or page_owner(self._page) != "google-operation":
+                if (actual.scheme, actual.hostname, actual.path) != document_key or page_owner(self._page) != self._page_role:
                     log_step("google-pooled-document-mismatch" if
                              (actual.scheme, actual.hostname, actual.path) != document_key
                              else "google-tab-ownership-lost")
@@ -416,12 +419,12 @@ class GoogleQuotationUpdateActions:
         # still apply, and each originating scope retires only its own pages.
         try:
             self._page = new_background_page(browser, browser.contexts[0], timeout_ms=self._timeout,
-                                             owner="google-operation")
+                                             owner=self._page_role)
         except Exception:  # noqa: BLE001 - shared context cannot create the owned operation
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE") from None
         self._attempt(lambda: self._page.goto(self._location.url, wait_until="domcontentloaded", timeout=self._timeout))
         self._guard()
-        mark_owned_page(self._page, "google-operation")
+        mark_owned_page(self._page, self._page_role)
         if pool is not None:
             self._poll_entry = {"page": self._page, "actions": self, "protected": False}
             pool[key] = self._poll_entry
@@ -542,7 +545,7 @@ class GoogleQuotationUpdateActions:
         """Never pass a failed phase's page to another phase/retry."""
         if read_only and self._page is not None and not self._page.is_closed():
             try:
-                mark_owned_page(self._page, "google-operation")
+                mark_owned_page(self._page, self._page_role)
                 self._page.evaluate("() => { window.__insoGoogleReadFailed = true; }")
             except Exception:  # noqa: BLE001 - inability to tag never makes a page safe
                 self._protected = True
@@ -581,7 +584,7 @@ class GoogleQuotationUpdateActions:
                     entry["protected"] |= (
                         (actual.scheme, actual.hostname, actual.path) !=
                         (target.scheme, target.hostname, target.path)
-                        or page_owner(self._page) != "google-operation"
+                        or page_owner(self._page) != self._page_role
                         or bool(self._page.evaluate(_UNSAFE_POLL_PAGE)))
                 except Exception:  # noqa: BLE001 - unknown surfaces are quarantined, never reused
                     entry["protected"] = True

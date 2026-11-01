@@ -3069,7 +3069,7 @@ class ProductionBackend(GuiBackend):
                 return "EVENT_RECOVERED"
         return None
 
-    def _catalog_source(self, worksheet, rows, items, *, observed_at=None):
+    def _catalog_source(self, worksheet, rows, items, *, observed_at=None, catalog=None, brief_lines=None):
         from datetime import datetime, time
 
         from src.research.detailed import DetailedOrder
@@ -3079,7 +3079,7 @@ class ProductionBackend(GuiBackend):
         from src.workflow.automatic_admission import SHANGHAI, inquiry_day, source_date
         schema = worksheet_schema(worksheet.worksheet)
         brief = getattr(self, "_mail_brief", None)
-        lines = brief.cached_lines(worksheet.spreadsheet) if brief else ()
+        lines = brief_lines if brief_lines is not None else brief.cached_lines(worksheet.spreadsheet) if brief else ()
         from collections import defaultdict
         by_location, by_row = defaultdict(list), defaultdict(list)
         for item in items:
@@ -3128,7 +3128,7 @@ class ProductionBackend(GuiBackend):
                     entries.append((str((worksheet, row.row_position)),
                         DetailedOrder(row.cells[schema.model_column]), None))
                 continue
-        self._research_catalog.observe(worksheet, entries, observed_at=observed_at)
+        (catalog or self._research_catalog).observe(worksheet, entries, observed_at=observed_at)
 
     def _observe_catalog_rows(self, worksheet, rows, started_at):
         try:

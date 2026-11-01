@@ -166,8 +166,13 @@ class GoogleSheetsWebService:
     """One thread-safe transport injected into existing readers and writers."""
     def __init__(self, session, *, actions_factory=GoogleQuotationUpdateActions, on_read_success=lambda: None,
                  timer=monotonic, read_guard=lambda: None, stop_requested=lambda: False,
-                 retain_pages=False, retire_session=None):
+                 retain_pages=False, retire_session=None, isolated_read=False):
         self._session, self._actions_factory = session, actions_factory
+        self._isolated_read = isolated_read
+        self._grid_lock = threading.RLock() if isolated_read else _GOOGLE_GRID_LOCK
+        if isolated_read:
+            from functools import partial
+            self._actions_factory = partial(actions_factory, page_role="google-mail-read")
         self._retire_session = retire_session or session
         self._on_read_success = on_read_success
         self._timer, self._read_guard, self._stop_requested = timer, read_guard, stop_requested
@@ -184,7 +189,7 @@ class GoogleSheetsWebService:
         survive, including a known page whose worksheet was changed by Owner.
         Stop does not suppress cleanup; shared safety admission still does.
         """
-        with _GOOGLE_GRID_LOCK:
+        with self._grid_lock:
             if not self._retained_pages:
                 return
             if self._poll_handle.get() is not None:
@@ -245,7 +250,7 @@ class GoogleSheetsWebService:
             return
         with ExitStack() as lifetime, ExitStack() as pages:
             pages.enter_context(google_operation_scope(
-                retained=self._retained_pages, lock=_GOOGLE_GRID_LOCK))
+                retained=self._retained_pages, lock=self._grid_lock))
             token = self._poll_handle.set({"handle": None, "lifetime": lifetime, "pages": pages})
             try:
                 yield
@@ -272,7 +277,7 @@ class GoogleSheetsWebService:
         finally:
             self._poll_handle.reset(token)
             state["pages"].enter_context(google_operation_scope(
-                retained=self._retained_pages, lock=_GOOGLE_GRID_LOCK))
+                retained=self._retained_pages, lock=self._grid_lock))
 
     @contextmanager
     def _operation_session(self):
@@ -292,12 +297,12 @@ class GoogleSheetsWebService:
                 raise
             if state is None and self._retained_pages is not None:
                 lifetime.enter_context(google_operation_scope(
-                    retained=self._retained_pages, lock=_GOOGLE_GRID_LOCK))
+                    retained=self._retained_pages, lock=self._grid_lock))
             yield handle
 
     def operations_idle(self):
         """Optional original-Owner checkpoint under the unchanged global lock."""
-        with _GOOGLE_GRID_LOCK:
+        with self._grid_lock:
             self._read_guard()
             if self._stop_requested() or self._poll_handle.get() is None:
                 return False
@@ -327,7 +332,7 @@ class GoogleSheetsWebService:
 
     def peek_brief_snapshot(self, spreadsheet):
         """Optional ordinary-read hint only. Never attaches, refreshes or downloads."""
-        with _GOOGLE_GRID_LOCK:
+        with self._grid_lock:
             self._read_guard()
             if self._stop_requested():
                 from src.workflow.v13_quotation import V13Stopped
@@ -349,9 +354,11 @@ class GoogleSheetsWebService:
         return self._execute({"spreadsheetId": spreadsheet}, write=False, brief_read=True)
 
     def _execute(self, options, *, write, brief_read=False, discovery=False):
+        if write and self._isolated_read:
+            raise ValueError("GOOGLE_MAIL_READ_ONLY")
         # Reuse the canonical UI lock for hit/miss/write invalidation and single
         # flight. No UI objects cross threads and no TTL sleep/timer is introduced.
-        with _GOOGLE_GRID_LOCK:
+        with self._grid_lock:
             try:
                 self._read_guard()
                 if self._stop_requested():
@@ -438,7 +445,7 @@ class GoogleSheetsWebService:
         if write and (geometry is None or options.get("valueInputOption") != "RAW"):
             raise ValueError("GOOGLE_WRITE_UNCONFIRMED")
         base = f"https://docs.google.com/spreadsheets/d/{spreadsheet}/edit#gid=0"
-        with _GOOGLE_GRID_LOCK, self._operation_session() as handle:
+        with self._grid_lock, self._operation_session() as handle:
             actions = self._actions_factory(browser_handle=handle, location=_Location(base))
             dirty = False
             stage = "google-open-sheet"
@@ -660,7 +667,7 @@ class GoogleSheetsWebService:
 
 def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, browser_handle=None,
                              on_read_success=lambda: None, read_guard=lambda: None,
-                             stop_requested=lambda: False):
+                             stop_requested=lambda: False, isolated_read=False):
     """Reuse the existing shared Playwright provider; attach only, never launch/login."""
     if cdp_url.rstrip("/") != "http://127.0.0.1:9222":
         raise ValueError("CANONICAL_CDP_REQUIRED")
@@ -682,5 +689,5 @@ def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, 
             yield BrowserHandle(owned=False, browser=browser)
 
     return GoogleSheetsWebService(session, on_read_success=on_read_success,
-                                  read_guard=read_guard, stop_requested=stop_requested, retain_pages=True,
+                                  read_guard=read_guard, stop_requested=stop_requested, retain_pages=not isolated_read, isolated_read=isolated_read,
                                   retire_session=lambda: session(retire=True))

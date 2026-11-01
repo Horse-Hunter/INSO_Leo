@@ -748,6 +748,14 @@ class ResearchMarketSession:
             self.__exit__(None, None, None)
             raise
 
+    def shared_provider(self):
+        """Borrow this thread-owned attachment; never start another browser/client."""
+        self._check_thread()
+        self._admission.require_open()
+        if self._playwright is None or self._browser is None:
+            raise RuntimeError("MARKET_SESSION_NOT_OPEN")
+        return self._playwright, self._browser
+
     def read(self, query):
         from uuid import uuid4
 
