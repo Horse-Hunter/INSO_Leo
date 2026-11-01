@@ -1,3 +1,13 @@
+# 当前发布：2026-11-01实际品牌/日期关联与逐条报价修复已覆盖运行
+
+BUSINESS_RUNNING。源码325cd19052a17c05c1d2b59a4528a2a38183b8bb；专项148通过，完整3450通过/1系统符号链接权限跳过。正式EXE SHA25655be53be2c00079efcdb17addf930e30a7ce25cf233725bbd5f25500b1526bc3；位置D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe。
+
+Owner原托盘正常退出、正常0凭据及进程归零后，一致性程序/运行数据/SQLite备份在D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-brand-date-quotes-20261101T064857Z。只替换2875应用文件，完整清单/回滚及新版/原生空闲自检和启动前原表/配置哈希均通过。Vault/Profile/Chrome、DB/WAL/SHM和所有业务邮件/采购/UNKNOWN状态保留。
+
+14:50:28上海启动新GUI422964/原观察器422044，询价206.297秒/报价85.016秒/TP13.562秒首轮自然完成，原900秒周期保持。175SENT/2SUPPRESSED与两封历史研究SENT及旧收件基线保留，未重放；真实新邮件的关联和最终收信仍待自然触发。已清理35项本轮测试/诊断/构建/辅助暂存，保留实际程序及验证回滚。无真实测试邮件、生产CDP探针或Computer Use。详见RFQ016当前TEST_REPORT/FINAL_REPORT。
+
+以下为历史发布现场，由上述当前发布取代：
+
 # 当前发布：2026-11-01订单关联修复已覆盖运行
 
 BUSINESS_RUNNING。源码5bb8c941d8f772ea6cfb209b077a91c678b400ea；专项172通过，全量3428通过/1环境跳过；原发布构建、扫描、自检通过。正式EXE SHA25608a734889aaf259b01c33a2a4a1619c8de479256093fa2e6f3a0579308da0e58，位置D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe。

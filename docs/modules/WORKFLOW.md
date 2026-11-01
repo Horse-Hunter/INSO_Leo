@@ -366,3 +366,18 @@ Main business, TP, manual tasks and accepted A/B/C/D/E remain unchanged; only
 the old sender-security hold is superseded by the explicit Owner subject policy. Final fake Backend/outbox/QQSMTP regressions cover startup
 failure, persisted resource protection/restart, starvation/full capacity,
 recovery, unusable READY results, invalid events and terminal recipient outcomes.
+
+
+Owner2026-11-01 second correction: market catalog binds current raw brand through
+public expected_source_brand (research-resolved brand is not a write receipt).
+Canonical usable_brand normalizes report metadata only, never the raw identity.
+Blank optional RFQ_BRIEF date may use one exactly-bound immutable local intake,
+explicitly approximate; invalid/conflicting dates or identities remain UNKNOWN.
+Multiple candidate orders containing any approximate date cannot establish true
+latest; singleton wording identifies a unique current row and unverified original
+RFQ date. Automatic order age/source_date/write admission is unchanged.
+Target-free detailed reports list all valid already-retained quotes vertically,
+including stock buckets and dated history, with an explicit single-quote note.
+Historical default stock buckets never assert current inventory. Ordinary TP
+selection/comparison/two-column output is unchanged; no claim of exhaustive
+website offers, price/stock fabrication or old SENT/UNKNOWN replay.
