@@ -4,6 +4,7 @@ Tests of authenticated sessions provide explicit fake logins instead. Production
 credential behavior remains exercised by its owning core/research fake backends.
 """
 
+import gc
 from types import SimpleNamespace
 
 import pytest
@@ -13,6 +14,10 @@ from src.launcher import backend
 
 @pytest.fixture(autouse=True)
 def no_owner_login_lookup(monkeypatch):
+    # GUI tests may leave unreachable Tk/Font cycles. Collect them on their
+    # owning pytest thread before a backend worker can trigger cyclic GC while
+    # the main thread is waiting for that worker (no Tk mainloop is running).
+    gc.collect()
     monkeypatch.setattr(
         backend, "CoreLoginBridge", lambda: SimpleNamespace(login=lambda _site: None)
     )
