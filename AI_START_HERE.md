@@ -59,6 +59,13 @@ The Owner has completed the one-time INSO phone-code login and will not provide 
 
 无论使用GPT、WorkBuddy或其他CEO/Architect窗口，**每次新CEO接管先读 [control-room/CEO_HANDOVER.md](control-room/CEO_HANDOVER.md)**：核对最近Git/生产版本、开放风险、资产地图与下一步事项，再按下文独立Review。它是CEO长期维护的当前事实索引，不是Executor临时HANDOFF；由当前CEO在新Owner决定、复审和发布状态改变后更新并提交，不制造额外审批。由于仓库可公开访问，交接文档不得存放密钥/客户敏感信息。运行状态未经现场核对时标NOT_VERIFIED。
 
+### Owner最新路由（2026-11-02，项目专用）
+
+- 本轮**不做GitHub仓库公开性检查、IMAP邮件链路/策略审计**。这是明确的任务排除，后续窗口不得从旧CEO待办中恢复这两项。
+- **涉及V1.6正式业务/源码/发布/受保护CDP与runtime/数据库/资源并发的任何工作，只交现有V1.6执行窗口**，不派新Codex窗口；该窗口先完成只读资产拓扑与架构方案，后续修改另遵Owner要求。
+- 新Codex窗口只能领取文档、历史证据索引、候选瘦身清单等非业务工作。禁止为审计而操作、清理或构建正式V1.6，禁止丢失旧工作树、Profile或回滚。
+- 持久完整任务说明及窗口分工见`control-room/CEO_HANDOVER.md`第11节；CEO向Owner一次提供适用于**各自窗口的完整指令**，不用Owner拼接。
+
 ## For CEO: Review RFQ-XXX
 
 The Owner returns to the CEO conversation and says only:
