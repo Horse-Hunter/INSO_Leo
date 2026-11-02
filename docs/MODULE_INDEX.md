@@ -12,9 +12,11 @@
 | `workflow` | `src/workflow/` | Scheduler、状态、retry、跨模块编排 |
 | `inso` | `src/inso/` | V1.2 重复检查与受控采购草稿能力 |
 | `order_mail` | `src/order_mail/` | 订单邮件结构与收件指令解析（含独立调研IMAP边界）；不是SMTP最终发送账本所有者 |
-| `quotation` | `src/quotation/` | 后续报价模块，当前非主线 |
+| `quotation` | `src/quotation/` | 当前报价弹窗结果语义解析（`update_result.py` 被 `workflow/v13_quote_update.py` 实际调用）；非完整独立报价调度器 |
 
 **模块注册表补齐（2026-11-02）**：先前存在`src/order_mail/`生产源码但本表缺失该模块；本次仅补充文档索引，未改变任何模块依赖、生产入口或业务逻辑。邮件发送仍由既有Workflow通知账本与SMTP承担。详细文件入口参见`control-room/CEO_HANDOVER.md`。
+
+**报价模块备注（CEO 2026-11-02现场体检后复核）**：`src/quotation/README.md` 的“future-version”描述只对应完整报价模块尚未独立化；`src/quotation/update_result.py::parse_update_popup` 正被 `src/workflow/v13_quote_update.py` 直接导入，属于当前业务逻辑，**不能按空闲目录清理**。本条仅纠正文档登记，不改任何源码/依赖。
 
 依赖原则：
 
