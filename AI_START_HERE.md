@@ -55,6 +55,10 @@ The Owner has completed the one-time INSO phone-code login and will not provide 
 - **Owner:** Executor applies it and records evidence; Reviewer/CEO enforces it.
 - **Enforcement:** Review fails if any config diverges from the canonical profile/port, if `persistent_session` is disabled, or if a change can close the session browser.
 
+## CEO跨窗口接管入口（GPT / WorkBuddy）
+
+无论使用GPT、WorkBuddy或其他CEO/Architect窗口，**每次新CEO接管先读 [control-room/CEO_HANDOVER.md](control-room/CEO_HANDOVER.md)**：核对最近Git/生产版本、开放风险、资产地图与下一步事项，再按下文独立Review。它是CEO长期维护的当前事实索引，不是Executor临时HANDOFF；由当前CEO在新Owner决定、复审和发布状态改变后更新并提交，不制造额外审批。由于仓库可公开访问，交接文档不得存放密钥/客户敏感信息。运行状态未经现场核对时标NOT_VERIFIED。
+
 ## For CEO: Review RFQ-XXX
 
 The Owner returns to the CEO conversation and says only:
