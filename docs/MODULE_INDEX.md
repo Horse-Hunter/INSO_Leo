@@ -11,7 +11,10 @@
 | `research` | `src/research/` | 只读市场调研、价格聚合、Research Excel |
 | `workflow` | `src/workflow/` | Scheduler、状态、retry、跨模块编排 |
 | `inso` | `src/inso/` | V1.2 重复检查与受控采购草稿能力 |
+| `order_mail` | `src/order_mail/` | 订单邮件结构与收件指令解析（含独立调研IMAP边界）；不是SMTP最终发送账本所有者 |
 | `quotation` | `src/quotation/` | 后续报价模块，当前非主线 |
+
+**模块注册表补齐（2026-11-02）**：先前存在`src/order_mail/`生产源码但本表缺失该模块；本次仅补充文档索引，未改变任何模块依赖、生产入口或业务逻辑。邮件发送仍由既有Workflow通知账本与SMTP承担。详细文件入口参见`control-room/CEO_HANDOVER.md`。
 
 依赖原则：
 
