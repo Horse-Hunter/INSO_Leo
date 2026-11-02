@@ -27,11 +27,11 @@
 | --- | --- | --- |
 | 仓库 | `https://github.com/Horse-Hunter/INSO_Leo`；API返回 `private=false` | CODE_VERIFIED |
 | 活跃版本分支 | `codex/v1-6-independent-scheduling`；审计锚点 `f07ed60eac7c35b4a3f1e8170f92b547947c08bc` | CODE_VERIFIED |
-| 最近正式应用源码 | `325cd19052a17c05c1d2b59a4528a2a38183b8bb`；截至审计HEAD其后只增文档 | CODE_VERIFIED + DOC_REPORTED |
+| 最近正式应用源码 | `325cd19052a17c05c1d2b59a4528a2a38183b8bb`；当前Git审计至文档提交 `5ba62dfe081641e4a3f3e73adfa12782274cb950`，应用源码未变 | CODE_VERIFIED + DOC_REPORTED |
 | 冻结 `src/` 树 | `1e1e11776165fe0f920dd9fc4af8d0330fb8fc3f` | CODE_VERIFIED |
 | 冻结 `tests/` 树 | `f87eb9dbfab149ce25adc995bf397c6cc65ae860` | CODE_VERIFIED |
-| 正式安装（报告） | `D:\Program_Leo\INSO_Leo\dist\INSO_V1.6\INSO_V1.6.exe` | DOC_REPORTED；本轮未查Windows |
-| EXE SHA256（报告） | `55be53be2c00079efcdb17addf930e30a7ce25cf233725bbd5f25500b1526bc3` | DOC_REPORTED |
+| 正式安装 | `D:\Program_Leo\INSO_Leo\dist\INSO_V1.6\INSO_V1.6.exe` | V1.6执行窗口于11月2日只读核对路径/进程；CEO通过Git报告复核，**非CEO亲临现场** |
+| EXE SHA256 | `55be53be2c00079efcdb17addf930e30a7ce25cf233725bbd5f25500b1526bc3` | EXECUTOR_LIVE_REPORTED（11月2日计算，与发布收据一致）；CEO未自行复算 |
 | 上次发布状态 | 2026-11-01报告为 `BUSINESS_RUNNING`；询价、报价、TP首轮自然完成，900秒各自轮询 | DOC_REPORTED；**非2026-11-02实时值** |
 | 测试结果 | 2026-11-01正式源码的专项148 PASS、全量3450 PASS / 1环境SKIP | EXECUTOR_REPORTED；CEO本轮未重跑 |
 | 独立IMAP | QQ229收件；120秒检查；Owner已明确选择“**任何发件人，仅主题 `调研<MPN>`**”触发；自动研究发Shawn | CODE_VERIFIED；真实新邮件端到端仍NOT_VERIFIED |
@@ -98,7 +98,7 @@
 
 | 等级 | 风险/债务 | 证据及准确边界 | CEO下一步 |
 | --- | --- | --- | --- |
-| **P0 运营资产** | 唯一INSO已登录Chrome实体profile位于**旧Research工作树内部**，对工作树清理/迁移高度敏感 | `docs/CDP_SESSION_POLICY.md` 明示稳定junction `D:\Program_Leo\INSO_CDP\chrome-profile` 指向旧 `.worktrees\research-v1-production-runtime-buddy\.browser-profile\cdp`；本次未核Windows当前链接 | 先只读核对junction目标及备份可恢复性；有明确Owner授权和完整冷备后才考虑把实体目录迁至稳定非worktree位置。现在绝对不移动/删除 |
+| **P0 运营资产（路径已核）** | 受保护Chrome实体Profile仍位于旧Research工作树，且与当前CDP9222相关联 | V1.6窗口11月2日只读报告确认junction真实指向及Profile约1.095GiB；`session-backup`仅约21KB，不是完整冷备；**真实登录有效性、完整恢复能力未验证** | **保留原Profile及整个承载父目录**；迁移/清理另案评估，现不操作 |
 | 排除本轮 | 历史记录：GitHub公开性与证据信息风险 | 留作上下文；Owner本轮明确不做该项 | **不立项，不派任务** |
 | 排除本轮 | 历史记录：独立IMAP新邮件真实端到端闭环未完成 | 原RFQ016报告有背景，当前不启动验证 | **不立项，不派任务** |
 | **P1 架构集中** | `src/launcher/backend.py`约195KB、3700余行，混合调度、Browser Owner、报价、邮件、GUI投影、恢复；`src/workflow/v12_store.py`约82KB | 代码体积与实际职责可见；**复杂度高是维护风险，不是已证实线上错误** | 先做接口/状态清单和安全边界回归，分三四次无业务行为变更地抽取组合层，不整体重写 |
@@ -106,7 +106,7 @@
 | **P1 共享依赖** | 独立IMAP任务仍共享Chrome/CDP/CPU/网络；Google/六源站点故障和页面资源隔离须持续观察 | `mail_research_composition.py`、`research_budget.py`、`mail_session.py`、对应fake CDP测试 | 在不扰动自然订单前提下做长期延迟/页面数量/Chrome RSS观测；不要称“完全物理独立” |
 | **P1 冷热状态** | 运行中原SQLite加WAL/SHM、不可逆外部写入和SMTP UNKNOWN，跨版本恢复成本高 | `v12_store.py`、RFQ016历史、release规范 | 保留有时点一致性的备份+EXE manifest；只回滚程序，不以旧账本覆盖新业务 |
 | **P2 文档过载** | 执行报告、实验结果、RFQ时间轴中旧结论易遮盖当前状态 | `V16_RELEASE_REPORT.md`顶部已有“当前/历史”区分，仍有约2435行；`COORDINATION.md`中历史状态多 | CEO_HANDOVER维持一页决策摘要+资产地图+权威链接；历史日志保持只读，旧结论加SUPERSEDED |
-| **P2 未充分利用能力** | MarketReadActors已有大量并行架构与测试，但默认生产未启用 | `src/launcher/market_actors.py` 顶部明确Not enabled，Backend参数默认None | 先用实测是否超900秒/影响TP评估收益，做实验/增量门控，不直接打开双Actor |
+| **P2 未充分利用能力** | MarketReadActors已有并行架构与测试，但默认生产未启用 | `market_actors.py`及Backend默认factory=None；V1.6窗口11月2日报告再次确认 | 后续依据长期实际耗时评估，**本轮不启用双Actor** |
 | **P2 业务日期依据** | 普通订单没有可信原询价日期时，来源可能只提供“本地登记日期近似”，不应冒充真正客户日期 | `src/workflow/automatic_admission.py::source_date`、RESEARCH/邮件报告日期说明 | 报告继续准确标注近似；未来最好补上原询价日期的权威来源而非用更复杂的猜测兜底 |
 
 ### 特别避免的三种混淆
@@ -136,9 +136,9 @@
 
 ### 本轮按窗口分开的三个后续动作
 
-1. **V1.6窗口：保护与核对运行资产**。只读核对受保护CDP实体Profile、runtime/junction、当前正式程序和已存在回滚备份的真实关联；输出“禁止清理/可提出候选”两档，不进行任何迁移或业务操作。
-2. **新Codex窗口：非业务资产瘦身预清单**。统计历史日志/证据/无引用临时stage的真实空间，列出引用和独特历史价值；只处理明确无运行关联的文档索引。任何删除候选必须先报告，不直接执行。
-3. **V1.6窗口：后台架构技术方案**。为 `backend.py` 建立调用/状态/锁/数据库/浏览器边界与回归映射，选择最低风险的一个抽取点；先给建议，不在本轮直接修改业务源码或启用默认OFF的双Actor。
+1. **V1.6窗口：保护与核对运行资产（已完成）**。11月2日报告已核实受保护CDP实体Profile、runtime/junction、当前正式程序和回滚备份的关联。**可立即删除量为0**；当前不清理、不迁移。
+2. **新Codex窗口：非业务资产瘦身预清单**。其已有332个文件/5,551,859字节的**本地未推送**工作报告；CEO截至本次尚未读到三个原件，后续只核对文档候选，不触及V1.6资产。
+3. **V1.6窗口：后台架构技术方案（已完成，未实施）**。已提出资源防误删检查、通知组合层小步拆分、复用`get_diagnostics`汇总健康三个方向；没有V1.6源码改动。
 
 ### Owner已明确的长期偏好
 
@@ -193,7 +193,7 @@
 | `src/workflow/service.py` | 1024 | 已有 `WorkflowRuntime`/任务与资源租约所有权；不应新造第二调度器。 | V1.6窗口 |
 | `src/inso/duplicate_history.py` | 1548 | 站点页面读取、严格来源及历史解析；重构涉及真站解析契约，非简单“长文件删除”。 | V1.6窗口 |
 | `src/launcher/market_actors.py` | 416 | 2个固定Actor及页面回收契约，但 `ProductionBackend`默认`market_actor_factory=None`；**有价值、非默认生产**，按自然轮次耗时决策试点，不盲开。 | V1.6窗口 |
-| `src/quotation/README.md` | 占位 | 真正报价逻辑在 `workflow/v13_*`、`launcher/google_quote_update.py`；避免误删当前业务模块，也不必为占位重构。 | 新Codex仅标注 |
+| `src/quotation/` | 部分占位，部分在用 | `README.md`描述未来模块，但`update_result.py::parse_update_popup`已被`workflow/v13_quote_update.py`直接引用；**禁止按闲置目录删除**。 | V1.6窗口才可改动 |
 
 ### B. 脚本/文档资产复用与轻量瘦身证据
 
@@ -210,3 +210,22 @@
 **新Codex窗口接收 DOC-ASSET-ONLY：** 只读文件体积/引用/重复证据与历史任务状态索引；维护与业务无关的文档和资产候选清单，不操作生产目录任何内容，也不得更改 `src/`、`tests/`、`runtime/`、发布构建脚本/Spec、GUI/CDP/DB/SMTP/IMAP。即使发现可删候选，本轮**只列精确路径+引用判据+预计回收空间+回滚证据**，禁止实际删除。经CEO确认不影响资产和旧证据后另行决定是否由资产窗口执行清理。
 
 **CEO完成条件：** 已把这两个完整窗口分工记入持久交接；新业务事项不再误派给新Codex；已读Git元数据部分不重复采样或重建资产表；任务返回时核对现场实证并更新本文件，不把Executor自述写成实时验证。
+
+## 12. CEO验收 — V1.6生产资产体检（2026-11-02）
+
+**审核结论：`ASSET_AUDIT_PASS / NO_RUNTIME_CHANGE / NO_CLEANUP_AUTHORIZED`。** 实际审计报告：`control-room/RFQ-016/ASSET_ARCHITECTURE_AUDIT_2026-11-02.md`，Executor提交 `5ba62dfe081641e4a3f3e73adfa12782274cb950`。CEO核对了远端commit仅新增该报告和两项原任务日志增量，以及原`src/`、`tests/`源码未变；抽查`quotation/update_result.py`真实业务引用、`backend.shutdown`中无超时的`join`、`v12_store`原事务/SQLite30s超时和`ResearchBudget`前台让位机制。**现场容量/EXE哈希源于Executor的PowerShell、CIM和Python现场检查报告，CEO没有第二次现场独立测量。**
+
+**关键新事实（现场报告，2026-11-02约09时，不冒充之后实时状态）：**
+
+| 资产 | 元数据事实 | 审查处理 |
+| --- | --- | --- |
+| 当前V1.6正式EXE | SHA256 `55be53be2c00079efcdb17addf930e30a7ce25cf233725bbd5f25500b1526bc3`与旧发布收据相等；报告一GUI进程+一原有观察器 | **版本一致性有现场佐证，不代表全站功能验收** |
+| CDP Profile | 实体在D盘`.worktrees/research-v1-production-runtime-buddy/.browser-profile/cdp`，约1.095GiB，canonical alias是junction；Chrome本次PID7052/9222 | 现绝对不可清理载体；唯一登录是否仍有效NOT_VERIFIED |
+| V1.6 runtime | 指向V1.4/runtime，V1.5也共享；再依赖旧V1.2 runtime/SQLite位于v1-2工作树 | 禁止按版本旧名递归删除；当前DB打开句柄NOT_VERIFIED |
+| 回滚目录 | `dist/release-backups`约4.028GiB（4,324,945,826 B），最新三份内容有独立文件ID/非hardlink证据 | 同一D盘非异地备份；**可立即确认删除量为0** |
+| 历史旧回滚与发行文件 | 较老备份合计约3.269GiB；V1.2及V1.5旧发行应用文件合计约508MiB（不含runtime） | 属候选上限而非可删空间；须先确认运行引用、唯一历史和可恢复性 |
+| 特别纠错 | `src/quotation/update_result.py`当前真被`workflow/v13_quote_update.py`引用，非死代码 | 已在`docs/MODULE_INDEX.md`更正备注 |
+
+**架构评审（非bug断言）：** `ProductionBackend`约3710行职责集中、退出路径多个`thread.join()`没有统一期限、共享CDP拥有多套owner及deferred释放时序、SQLite写状态与SMTP物理发送边界均是维护风险。但没有新增**已证实生产故障**；现有UNKNOWN阻止重复发信不是可去掉的“冗余”。推荐按顺序：保护清理入口的junction真实目标；再考虑保持旧接口的小步邮件组合层整理；最后复用现有diagnostics/模块日志增加只读健康摘要。全部**留在现有V1.6窗口、按需另定修改任务**。不直接启用默认OFF的MarketReadActors，不拆数据库，不重写业务。
+
+**本次任务收口**：`AUDIT_PASS`仅表示审计报告及执行范围被CEO接受；**不表示允许删除、迁移Profile/数据库、重构、部署**。本轮明确排除GitHub公开性、IMAP专项，仍不重新分派。下一次CEO接手应把原第11节“待V1.6窗口检查”的旧任务标为已完成，先查此报告，不重复询问Owner同一信息。后续真正的架构实施仍由原1.6窗口负责。
