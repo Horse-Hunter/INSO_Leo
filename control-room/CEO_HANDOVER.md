@@ -5,6 +5,13 @@
 > **更新基准**：2026-11-02；本次只读审计原始 HEAD `f07ed60eac7c35b4a3f1e8170f92b547947c08bc`，本次新增交接文档产生的后续文档提交**不意味着应用代码更改**。  
 > **证据等级**：`CODE_VERIFIED`=GitHub可见源码；`DOC_REPORTED`=历史部署/执行报告自述；`LIVE_VERIFIED`=本次现场实测。**本次没有LIVE_VERIFIED证据**，不要把昨日报告等同于今天的在线状态。
 
+## Owner最新执行范围与窗口归属（2026-11-02，优先于旧待办）
+
+- **本轮明确排除**：GitHub仓库公开性/信息审查；IMAP邮箱端到端验收、触发策略及相关优化。下文保留两项的历史事实只是接管背景，**不列本轮待办、不派给任何Executor**。
+- **现有V1.6窗口独占所有可能影响正常V1.6业务的事项**：正式Windows环境、CDP9222及实体登录Profile、runtime/junction、数据库、SMTP状态、性能并发及实际运行观测、`src/`和`tests/`的业务实现、打包与部署。它决定是否只读检查或另行进行变更；CEO不向新Codex窗口分派这些事情。
+- **新Codex窗口仅承担非业务资产整理**：只读磁盘空间/文件引用清单（接触到运行目录时仅元数据、不打开敏感内容）、无副作用的历史文档索引/过期标签/可删除候选报告。禁止删文件、迁目录、改源码、重跑业务、构建和安装；发现任何受保护工作树/数据/链接立即移交V1.6窗口。
+- **CEO本窗口已完成**：Git代码树与文档资产统计、重点代码责任/大小映射、历史/当前区分及本接管手册维护。下面各节中旧的优化建议均服从本段最新范围。
+
 ## 0. 接手窗口的90秒操作
 
 1. 首先读本文件的**当前快照、开放问题、最近变更**；然后读 `AGENTS.md`、`AI_START_HERE.md`、`control-room/COORDINATION.md`。
@@ -92,10 +99,10 @@
 | 等级 | 风险/债务 | 证据及准确边界 | CEO下一步 |
 | --- | --- | --- | --- |
 | **P0 运营资产** | 唯一INSO已登录Chrome实体profile位于**旧Research工作树内部**，对工作树清理/迁移高度敏感 | `docs/CDP_SESSION_POLICY.md` 明示稳定junction `D:\Program_Leo\INSO_CDP\chrome-profile` 指向旧 `.worktrees\research-v1-production-runtime-buddy\.browser-profile\cdp`；本次未核Windows当前链接 | 先只读核对junction目标及备份可恢复性；有明确Owner授权和完整冷备后才考虑把实体目录迁至稳定非worktree位置。现在绝对不移动/删除 |
-| **P1 信息治理** | 仓库是**公开**的；代码与大量历史证据可被外界浏览。是否包含真实客户数据或认证片段尚未逐件查全 | GitHub仓库API `private=false`，仓库内174个证据文件；此处**不宣称已发现秘密泄露** | Owner确认是否确需公开；对证据截图/JSONL/历史commit做凭据与客户信息专项扫描；必要时限权/去敏，注意Git历史并不会因删HEAD文件自动消失 |
-| **P1 功能验收** | 新IMAP主题触发+最新订单补充+Shawn实际接收尚无修复后真实邮件全链条证据 | `RFQ-016/FINAL_REPORT.md` 及最新 `V16_RELEASE_REPORT.md` | 由自然新邮件做小范围只读追踪并验证对方收件；不重跑旧邮件，不模拟实际发送成功 |
+| 排除本轮 | 历史记录：GitHub公开性与证据信息风险 | 留作上下文；Owner本轮明确不做该项 | **不立项，不派任务** |
+| 排除本轮 | 历史记录：独立IMAP新邮件真实端到端闭环未完成 | 原RFQ016报告有背景，当前不启动验证 | **不立项，不派任务** |
 | **P1 架构集中** | `src/launcher/backend.py`约195KB、3700余行，混合调度、Browser Owner、报价、邮件、GUI投影、恢复；`src/workflow/v12_store.py`约82KB | 代码体积与实际职责可见；**复杂度高是维护风险，不是已证实线上错误** | 先做接口/状态清单和安全边界回归，分三四次无业务行为变更地抽取组合层，不整体重写 |
-| **P1 已接受的触发取舍** | 任何能投递至229的邮件都可凭 `调研 MPN` 主题触发网站访问/向Shawn发报告，存在刷任务/耗资源/非授权人员诱导的余留风险 | `src/order_mail/research_requests.py` 当前 `subject-only-v1`；这是Owner明确选择，不得擅自改回发件人白名单 | 先复核容量/限频、邮件唯一性及异常观察，不更改Owner触发策略；有实际滥用迹象再提需求 |
+| 排除本轮 | 历史记录：Owner已接受仅主题触发的邮件策略 | 仅保留既定业务合同，不复议 | **不改IMAP策略** |
 | **P1 共享依赖** | 独立IMAP任务仍共享Chrome/CDP/CPU/网络；Google/六源站点故障和页面资源隔离须持续观察 | `mail_research_composition.py`、`research_budget.py`、`mail_session.py`、对应fake CDP测试 | 在不扰动自然订单前提下做长期延迟/页面数量/Chrome RSS观测；不要称“完全物理独立” |
 | **P1 冷热状态** | 运行中原SQLite加WAL/SHM、不可逆外部写入和SMTP UNKNOWN，跨版本恢复成本高 | `v12_store.py`、RFQ016历史、release规范 | 保留有时点一致性的备份+EXE manifest；只回滚程序，不以旧账本覆盖新业务 |
 | **P2 文档过载** | 执行报告、实验结果、RFQ时间轴中旧结论易遮盖当前状态 | `V16_RELEASE_REPORT.md`顶部已有“当前/历史”区分，仍有约2435行；`COORDINATION.md`中历史状态多 | CEO_HANDOVER维持一页决策摘要+资产地图+权威链接；历史日志保持只读，旧结论加SUPERSEDED |
@@ -110,11 +117,10 @@
 
 ## 6. 架构优化建议（先小后大）
 
-**第一阶段 P0：运维资产安全和证据可靠性（不改业务代码）**
-- 核对GitHub公开属性是否符合Owner意图；专项检查公开证据与Git历史。
-- 给共享CDP实体profile及runtime真实junction出一张可恢复的资产拓扑图，保护旧worktree不被一般清理规则误删除。
-- 建立“源码SHA / EXE SHA / 当前进程 / 数据库时点 / 最近自然轮次 / 已知未验收功能”五项短表；不要再让CEO从200KB日志猜现状。
-- 自然邮件触发后核对UID→任务→订单关联→研究→outbox→收件证据；只读取证，不篡改业务。
+**第一阶段 P0：运维资产安全和证据可靠性（由原V1.6窗口执行）**
+- 只读核对共享CDP实体Profile与runtime的junction/真实目录/备份和受保护工作树拓扑，防止后续瘦身误删；**不移动、不重建、不登录**。
+- 由V1.6窗口确认“应用源码SHA / 已安装EXE SHA / 当前进程 / 数据库只读状态 / 最近自然轮次”的现行摘要，无法核实的字段如实标注。
+- 新Codex仅整理与正式运行无关的文档资产索引；**本轮不做GitHub公开性及IMAP链路审查**。
 
 **第二阶段 P1：拆分最重的编排职责，不动业务结果**
 - 优先从 `backend.py` 提取 `NotificationCoordinator`（内容准备、最后审核、事件观察），再考虑 `BrowserRuntimeOwner`（资源与页租约）、`ModuleSchedulerFacade`（三模块调度）。每次只迁移一个稳定边界，保持现有函数入口/状态兼容与原测试不变。
@@ -128,11 +134,11 @@
 
 ## 7. 接管决策与近期未完事项
 
-### 现在最高价值的三个后续动作
+### 本轮按窗口分开的三个后续动作
 
-1. **自然新邮件实收链路验收**：特别是同型号最近询价日期/品牌/数量与Shawn收信；缺数据时应明确MPN-only。若没有真实邮件，则保持NOT_VERIFIED。
-2. **受保护CDP及公开仓库资产核查**：检查旧工作树内的唯一登录profile是否被未来worktree prune、备份整理或其他“瘦身”任务误伤；确认公开证据是否包含不应公开的内容。
-3. **编排层抽取的只读技术方案**：量化 `backend.py` 的职责、mutable shared state、线程边界和相应测试，选一个最小、无行为改变的重构点，而不是马上启动大规模重写。
+1. **V1.6窗口：保护与核对运行资产**。只读核对受保护CDP实体Profile、runtime/junction、当前正式程序和已存在回滚备份的真实关联；输出“禁止清理/可提出候选”两档，不进行任何迁移或业务操作。
+2. **新Codex窗口：非业务资产瘦身预清单**。统计历史日志/证据/无引用临时stage的真实空间，列出引用和独特历史价值；只处理明确无运行关联的文档索引。任何删除候选必须先报告，不直接执行。
+3. **V1.6窗口：后台架构技术方案**。为 `backend.py` 建立调用/状态/锁/数据库/浏览器边界与回归映射，选择最低风险的一个抽取点；先给建议，不在本轮直接修改业务源码或启用默认OFF的双Actor。
 
 ### Owner已明确的长期偏好
 
@@ -175,3 +181,32 @@
 ---
 
 **新CEO的第一句话应当是**：我先核对当前Git SHA、真实已安装版本、上次开放风险和Owner本轮要求，然后才判断修改/验收；不会把旧的 `REVIEW_REQUIRED` 或 `BUSINESS_RUNNING` 当成今天未经核实的事实。
+
+## 11. 2026-11-02 本轮深化审计：可直接使用的证据与准确任务边界
+
+### A. 代码责任密度（静态Git扫描，不等于静态分析器/实时运行）
+
+| 模块 | 行数 | 静态可见职责与处理建议 | 归属 |
+| --- | ---: | --- | --- |
+| `src/launcher/backend.py` | 3711 | 约137个顶层/缩进级`def`；`ProductionBackend`包含调度、页面、邮件最后审核、故障恢复、手工动作和GUI状态。**先绘制依赖与副作用边界，再提取无行为变化的稳定接口**。 | V1.6窗口 |
+| `src/workflow/v12_store.py` | 1802 | 事务迁移、通知账本、审批/UNKNOWN和多种状态在同一文件；不建议拆数据库，优先梳理持久化状态/事务责任。 | V1.6窗口 |
+| `src/workflow/service.py` | 1024 | 已有 `WorkflowRuntime`/任务与资源租约所有权；不应新造第二调度器。 | V1.6窗口 |
+| `src/inso/duplicate_history.py` | 1548 | 站点页面读取、严格来源及历史解析；重构涉及真站解析契约，非简单“长文件删除”。 | V1.6窗口 |
+| `src/launcher/market_actors.py` | 416 | 2个固定Actor及页面回收契约，但 `ProductionBackend`默认`market_actor_factory=None`；**有价值、非默认生产**，按自然轮次耗时决策试点，不盲开。 | V1.6窗口 |
+| `src/quotation/README.md` | 占位 | 真正报价逻辑在 `workflow/v13_*`、`launcher/google_quote_update.py`；避免误删当前业务模块，也不必为占位重构。 | 新Codex仅标注 |
+
+### B. 脚本/文档资产复用与轻量瘦身证据
+
+- **现行发布链必保留**：`scripts/build_windows_release.ps1`（支持1.6）、`packaging/INSO_V1.1.spec`（名字旧但真在用）、`scripts/scan_release_artifact.py`、`scripts/windows_release_entry.py`；`scripts/open_cdp_session.ps1`关联唯一登录会话，只归V1.6窗口。
+- **历史/专项工具非默认产品入口**：`scripts/start_v12_phase_a.ps1`偏旧Phase A；`scripts/measure_workbench.py`、`scripts/accept_workbench.py`、`scripts/verify_workbench_ui.py`属于性能和UI验收能力，保留供对照而非加入日常后台。文档索引标记LEGACY或TEST_TOOL即可，不删。
+- **最值得索引而不是删除的体积源**：`tasks/2026-10-27-v16-independent-scheduling.md`约308KB，`V16_RELEASE_REPORT.md`约198KB，`control-room/RFQ-016/EXECUTION_LOG.md`约62KB；`docs/evidence/v15b`及`v16`存在大型JSONL、PNG和单次性能样本。先以每个任务/发布的SHA、时间、报告和唯一证据建索引，再谈冷归档。
+- **文件名不是废弃凭据**：旧V1.1 spec仍为V1.6真实入口、旧V1.4 runtime可能承载当前V1.6状态、旧Research工作树可能承载唯一Chrome实体；这三类旧名字都不能按版本号扫删。
+- **本轮未查的现场容量**：`D:\\Program_Leo\\INSO_Leo\\dist`、`release-backups`、`runtime`、`.tmp`、`.venv-release`、`.worktrees`，也没有查Windows锁/真实junction，**不能声称已经替Owner清理空间**。
+
+### C. 任务包及验收口径（不用另开平行业务窗口）
+
+**现有V1.6窗口接收 V16-OWNER-SCOPE：** 只读资产拓扑与受保护Profile/共享runtime备份检查、真实安装版本快照、`backend.py`/SQLite/页面资源合同的最小拆分方案；**只生成诊断与建议，不进行Profile迁移、旧worktree清理、EXE覆盖、业务自动化、业务代码变更或双Actor启用**。若后续Owner决定实施架构修改，仍由此窗口执行与回归，CEO独立复审。
+
+**新Codex窗口接收 DOC-ASSET-ONLY：** 只读文件体积/引用/重复证据与历史任务状态索引；维护与业务无关的文档和资产候选清单，不操作生产目录任何内容，也不得更改 `src/`、`tests/`、`runtime/`、发布构建脚本/Spec、GUI/CDP/DB/SMTP/IMAP。即使发现可删候选，本轮**只列精确路径+引用判据+预计回收空间+回滚证据**，禁止实际删除。经CEO确认不影响资产和旧证据后另行决定是否由资产窗口执行清理。
+
+**CEO完成条件：** 已把这两个完整窗口分工记入持久交接；新业务事项不再误派给新Codex；已读Git元数据部分不重复采样或重建资产表；任务返回时核对现场实证并更新本文件，不把Executor自述写成实时验证。
