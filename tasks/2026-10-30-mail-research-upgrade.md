@@ -372,3 +372,5 @@ Second correction release completion2026-11-01:immutable source325cd19052a17c05c
 Owner要求定位并修复。只读原运行日志确认10:47:45报价失败、10:47:46 GOOGLE_TAB_IDENTITY_UNCONFIRMED，GUI进程仍在；上次11-02退出有owner_exit/normal0记录，不冒称崩溃。范围：复用原Google retained目标身份保护，修复无关页面身份探测导致误停的路径；补齐经验证的真实主业务安全暂停通知及原邮件worker收口发送，保留UNKNOWN/最终审核/持久去重与旧单保护。先离线复现再修复、专项及全量测试；不接生产CDP、不读凭据、不测试外发、不清保护、不强杀或关闭Chrome。继续复用原发布流程，安全退出若需Owner原托盘操作，仅在通过验证的具体包就绪后提出。
 
 Owner追加明确要求：Google手工可用时不得将程序读取/页识别瞬态问题升级全业务停止。扩大本次最小修复至只读native证明失败的有界重试，以及超过三小时仍按原模块周期自动恢复、其余模块继续；写入UNKNOWN、身份确实冲突、权限及人工页面保护不放松。此前3465PASS/1SKIP是第一阶段结果，扩大后必须重新专项及全量验证。
+
+修复交付：源码6b85130df1cb579ac184a0ca6ef989f9d53e495f，专项369PASS/完整3474PASS+1环境SKIP；原流程构建、自检、扫描、2875清单和5修改冻结模块匹配PASS。候选EXE9c0ba24bcd53f7b97d19e4f530b7bc65680b01ccca94d519d17f967690c64b34。BLOCKED_NORMAL_EXIT：已向Owner提出唯一原托盘正常退出操作；正式旧55be53be仍在，尚未备份覆盖/启动修复版，不宣称生产解决。原Chrome/DB/UNKNOWN未改，COMPUTER_USE_NOT_USED。

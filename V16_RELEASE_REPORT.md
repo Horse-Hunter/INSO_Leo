@@ -1,6 +1,8 @@
-# 当前现场：2026-11-04 Google读取恢复与漏报修复验证完成，尚未覆盖生产
+# 当前现场：2026-11-04 Google读取恢复与漏报修复已打包，等待原程序正常退出
 
-HEALTH_HOLD / SOURCE_TESTED_BUILD_PENDING。原GUI仍在，11-03 10:47:45报价轮次失败，10:47:46记录GOOGLE_TAB_IDENTITY_UNCONFIRMED；不能据此认定Google网站故障。原正式EXE仍55be53be...，未重启或覆盖。当前修复完整离线3474PASS/1环境SKIP，专项369PASS；正在原流程打包。程序自己的读取连接/识别故障与真实写入/身份冲突分级：前者有界重试并按原模块周期继续，不永久锁定；后者保留原保护及当前故障最终审核通知。未做生产CDP或真实测试发信，COMPUTER_USE_NOT_USED。后续部署结果必须另有真实凭据，以下BUSINESS_RUNNING为历史发布结果。
+BLOCKED_NORMAL_EXIT / PRODUCTION_HEALTH_HOLD。源码6b85130df1cb579ac184a0ca6ef989f9d53e495f已推送；专项369PASS、完整3474PASS/1环境SKIP。原发布构建/自检/RELEASE_SCAN_OK、2875文件清单及五个修改模块与冻结代码逐一匹配通过；候选EXE SHA2569c0ba24bcd53f7b97d19e4f530b7bc65680b01ccca94d519d17f967690c64b34。
+
+原正式GUI20620/观察器22976仍运行旧55be53be...，自动业务自11-03 10:47:46暂停，不能归因Google整站不可用。未覆盖、未启动修复版。唯一必要Owner操作是原INSO托盘右键退出，保留Chrome；原程序无安全退出CLI，项目禁Computer Use与强杀，不能用新窗口/消息注入绕过。正常退出后按原授权继续一致性备份、仅程序覆盖、原入口启动及自然业务核验；不重复审批、不清账本/UNKNOWN。无生产CDP连接、真实测试外发或数据改动，COMPUTER_USE_NOT_USED。以下BUSINESS_RUNNING属于历史发布结果。
 
 # 当前发布：2026-11-01实际品牌/日期关联与逐条报价修复已覆盖运行
 

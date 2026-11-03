@@ -309,11 +309,11 @@
   },
   "incident_20261103_04": {
     "scope": "Owner2026-11-03/04 Google read resilience and missing safety-stop notice",
-    "status": "SOURCE_TESTED_BUILD_PENDING",
+    "status": "BUILD_VERIFIED_WAIT_NORMAL_EXIT",
     "production_status": "HEALTH_HOLD_OLD_PROGRAM_NOT_REPLACED",
     "baseline": "5ba62dfe081641e4a3f3e73adfa12782274cb950",
     "installed_exe_sha256_before": "55be53be2c00079efcdb17addf930e30a7ce25cf233725bbd5f25500b1526bc3",
-    "source_commit": null,
+    "source_commit": "6b85130df1cb579ac184a0ca6ef989f9d53e495f",
     "computer_use": "COMPUTER_USE_NOT_USED",
     "production_cdp_connected": false,
     "real_test_email_sent": false,
@@ -369,6 +369,41 @@
       "Live failing Page and exact underlying Playwright Error text NOT_VERIFIED; no production CDP probe or raw exception content read.",
       "SMTP outage cannot guarantee delivery; original durable retry and UNKNOWN protections preserved.",
       "No forced exit, Profile movement, manual UNKNOWN clearing, or historic mail replay."
-    ]
+    ],
+    "source_tree": "295ddfb92eb1a06af242b3b0e14ff0691b6376c9",
+    "test_tree": "d7e577111e696af8999ec57180ecce8a05a51022",
+    "deployment": "NOT_INSTALLED",
+    "only_owner_action": "Original INSO tray Exit; no Chrome closure or force kill",
+    "build": {
+      "script": "scripts/build_windows_release.ps1 -BuildOnly -Version 1.6 -PythonExecutable <existing release environment>",
+      "exe_sha256": "9c0ba24bcd53f7b97d19e4f530b7bc65680b01ccca94d519d17f967690c64b34",
+      "files": 2875,
+      "manifest_sha256": "bbac8add19beeb8c3712c1f0a422712d744ee524331f63743e05301e035ae990",
+      "frozen_changed_modules_match": {
+        "src.launcher.backend": true,
+        "src.launcher.google_quote_update": true,
+        "src.launcher.google_web": true,
+        "src.launcher.v13_integration": true,
+        "src.workflow.notification_review": true
+      },
+      "self_check": true,
+      "release_scan": "RELEASE_SCAN_OK",
+      "staging": "C:/Users/Leo/.codex/worktrees/v16-independent-scheduling/INSO_Leo/build/windows-release-stage-1.6/dist/INSO_V1.6",
+      "program_installed": false,
+      "program_started": false
+    },
+    "cleanup": {
+      "retired_count": 22,
+      "retained_access_denied": [
+        "inso-stop-debug-kc6wfgc2",
+        "inso-stop-debug-y5r1br2g"
+      ],
+      "retained_required": [
+        "canonical verified BuildOnly candidate",
+        "task package manifest",
+        "task build log"
+      ],
+      "default_pytest_temp": "Initial default pytest temp directories not individually identified; no deletion of unknown paths/ACL changes"
+    }
   }
 }
