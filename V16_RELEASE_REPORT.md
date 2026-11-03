@@ -1,3 +1,7 @@
+# 当前现场：2026-11-04 Google读取恢复与漏报修复验证完成，尚未覆盖生产
+
+HEALTH_HOLD / SOURCE_TESTED_BUILD_PENDING。原GUI仍在，11-03 10:47:45报价轮次失败，10:47:46记录GOOGLE_TAB_IDENTITY_UNCONFIRMED；不能据此认定Google网站故障。原正式EXE仍55be53be...，未重启或覆盖。当前修复完整离线3474PASS/1环境SKIP，专项369PASS；正在原流程打包。程序自己的读取连接/识别故障与真实写入/身份冲突分级：前者有界重试并按原模块周期继续，不永久锁定；后者保留原保护及当前故障最终审核通知。未做生产CDP或真实测试发信，COMPUTER_USE_NOT_USED。后续部署结果必须另有真实凭据，以下BUSINESS_RUNNING为历史发布结果。
+
 # 当前发布：2026-11-01实际品牌/日期关联与逐条报价修复已覆盖运行
 
 BUSINESS_RUNNING。源码325cd19052a17c05c1d2b59a4528a2a38183b8bb；专项148通过，完整3450通过/1系统符号链接权限跳过。正式EXE SHA25655be53be2c00079efcdb17addf930e30a7ce25cf233725bbd5f25500b1526bc3；位置D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe。

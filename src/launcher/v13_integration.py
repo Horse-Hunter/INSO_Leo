@@ -98,6 +98,11 @@ def notify_runtime_fault(store, key, reason, *, at, evidence=None, occurrence=No
         f"情况：原程序业务操作尚未恢复，需人工处理。\n"
         f"最后成功：{evidence.get('last_success') or '尚未核实'}\n"
         f"处理：{evidence['action']}\n待核实：{evidence['uncertainty']}", None, at)
+    if evidence.get("category") == "runtime_stop":
+        from dataclasses import replace
+        command = replace(command, subject="【需要处理】INSO自动业务安全暂停",
+            text_body="情况：自动询价、报价和TP已安全暂停，主程序仍在；不会自动重复提交。\n"
+                + f"暂停原因：Google操作页身份或操作收口未能确认。\n处理：{evidence['action']}\n待核对：{evidence['uncertainty']}")
     store.observe_incident(command, evidence, occurrence=occurrence or key)
 
 

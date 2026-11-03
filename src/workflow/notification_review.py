@@ -5,6 +5,11 @@ from datetime import datetime, timedelta
 
 from .v12_contracts import NotificationKind
 
+RUNTIME_SAFETY_REASONS = frozenset({
+    "GOOGLE_TAB_IDENTITY_UNCONFIRMED", "GOOGLE_OPERATION_NOT_CLOSED",
+    "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED",
+})
+
 
 def review_reason(command, now):
     if command.kind is not NotificationKind.PURCHASE_EXCEPTION:
@@ -30,6 +35,16 @@ def review_reason(command, now):
                     or proof.get("reason_code") not in {"IMAP_AUTH_REQUIRED", "REPORT_DELIVERY_UNKNOWN", "CDP_RESOURCE_UNCONFIRMED"}
                     or proof.get("completed_cycles", 0) < 3 and proof.get("reason_code") not in {"REPORT_DELIVERY_UNKNOWN", "CDP_RESOURCE_UNCONFIRMED"}):
                 return "SERVICE_INTERVENTION_UNVERIFIED"
+            return None
+        if category == "runtime_stop":
+            if (proof.get("module") != "business_runtime"
+                    or proof.get("reason_code") != "PROGRAM_SAFETY_PAUSED"
+                    or proof.get("stop_reason") not in RUNTIME_SAFETY_REASONS
+                    or proof.get("halted") is not True
+                    or proof.get("stop_state") not in {"GLOBAL_STOP", "MODULE_PAUSED"}
+                    or not isinstance(proof.get("run_id"), str) or not proof["run_id"]
+                    or command.inquiry_id is not None):
+                return "RUNTIME_STOP_UNVERIFIED"
             return None
         if not proof.get("manual") and age_reason(proof.get("inquiry_day"), now, module=proof.get("business_module", "quotation")):
             return "ORDER_AGE_EXCLUDED"

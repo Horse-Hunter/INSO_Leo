@@ -152,6 +152,10 @@ def google_operations_idle():
     return True
 
 
+class GoogleReadTargetUnavailable(TimeoutError):
+    """No read/write may proceed; retry the original read on its next attempt."""
+
+
 def _google_target_id(page):
     """Prove native identity; factory leases use explicit browser target queries.
 
@@ -163,6 +167,7 @@ def _google_target_id(page):
     """
     session = None
     step = "google-target-session"
+    attaching, proving = None, False
     try:
         if page.is_closed():
             raise ValueError("GOOGLE_TARGET_CLOSED")
@@ -171,22 +176,35 @@ def _google_target_id(page):
             expected, _owner, context, browser = lease
             if context is not page.context or not isinstance(expected, str) or not expected:
                 raise ValueError("GOOGLE_NATIVE_LEASE_INVALID")
+            attaching = "native"
             session = browser.new_browser_cdp_session()
+            attaching = None
             step = "google-target-explicit-proof"
-            info = session.send("Target.getTargetInfo", {"targetId": expected})["targetInfo"]
+            proving = True
+            response = session.send("Target.getTargetInfo", {"targetId": expected})
+            proving = False
+            info = response["targetInfo"]
             target = info["targetId"]
             if target != expected or info.get("type") != "page":
                 raise ValueError("GOOGLE_NATIVE_TARGET_MISMATCH")
         else:
+            attaching = "page"
             session = page.context.new_cdp_session(page)
+            attaching = None
             step = "google-target-page-proof"
-            target = session.send("Target.getTargetInfo")["targetInfo"]["targetId"]
+            proving = True
+            response = session.send("Target.getTargetInfo")
+            proving = False
+            target = response["targetInfo"]["targetId"]
         if not isinstance(target, str) or not target:
             raise ValueError("MISSING_TARGET_ID")
         return target
     except Exception as exc:
         log_step(step, cause=exc)
-        raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED") from exc
+        failure = V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
+        failure._google_probe_attach_failed = attaching == "page" and session is None
+        failure._google_native_transport_failed = attaching == "native" or proving
+        raise failure from exc
     finally:
         if session is not None:
             try:
@@ -196,8 +214,55 @@ def _google_target_id(page):
                 raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED") from exc
 
 
+
+def _retained_google_matches(pages, target_id, *, read_only=False):
+    """Require positive exact proof; an unrelated failed probe is not our fault.
+
+    Reattached clients enumerate Owner/manual/extension pages as well as ours.
+    Never adopt an unproved page or interpret a failed probe as disappearance.
+    """
+    matches, failure = [], None
+    for page in pages:
+        if page.is_closed():
+            continue
+        try:
+            actual = _google_target_id(page)
+        except V12Fault as error:
+            # Detach/cleanup failures remain globally unsafe even if another
+            # target can be proved. Only a failed attachment to an unleased
+            # candidate may be irrelevant to the positively identified page.
+            foreign_attach = (getattr(page, "_inso_native_page_owner", None) is None
+                              and getattr(error, "_google_probe_attach_failed", False) is True)
+            read_transport = read_only and getattr(error, "_google_native_transport_failed", False) is True
+            if error.reason != "GOOGLE_TAB_IDENTITY_UNCONFIRMED" or not (foreign_attach or read_transport):
+                raise
+            failure = error
+            continue
+        if actual == target_id:
+            matches.append(page)
+    if failure is not None and not matches:
+        if read_only:
+            raise GoogleReadTargetUnavailable("GOOGLE_READ_TARGET_UNAVAILABLE")
+        raise failure  # Missing target cannot be inferred from an unreadable page.
+    return matches
+
+
 def _retain_google_entry(key, entry, retained):
-    target_id = _google_target_id(entry["page"])
+    read_unavailable = False
+    try:
+        target_id = _google_target_id(entry["page"])
+    except V12Fault as error:
+        if (not entry.get("read_only") or (entry["protected"] and not entry.get("reopenable", False))
+                or not getattr(error, "_google_native_transport_failed", False)):
+            raise
+        read_unavailable = True
+    if read_unavailable:
+        # Factory leases were positively bound at creation. Retain only that
+        # identity for a later fresh proof, not permission to use this Page.
+        lease = getattr(entry["page"], "_inso_native_page_owner", None)
+        if key not in retained and lease is not None:
+            retained[key] = (lease[0], False, False)
+        raise GoogleReadTargetUnavailable("GOOGLE_READ_TARGET_UNAVAILABLE")
     previous = retained.get(key)
     protected = entry["protected"] or bool(previous and previous[0] == target_id and previous[1])
     retained[key] = (target_id, protected, entry.get("reopenable", False))
@@ -240,6 +305,7 @@ class GoogleQuotationUpdateActions:
         self._script_pending = False
         self._price_refresh = False
         self._poll_entry = None
+        self._read_only = False
 
     def prepare_price_refresh(self):
         self._price_refresh = True
@@ -356,13 +422,13 @@ class GoogleQuotationUpdateActions:
         entry = pool.get(key) if pool is not None else None
         if entry is None and retained is not None and key in retained:
             target_id, protected, reopenable = retained[key]
-            matches = [page for page in browser.contexts[0].pages
-                       if not page.is_closed() and _google_target_id(page) == target_id]
+            matches = _retained_google_matches(browser.contexts[0].pages, target_id,
+                read_only=self._read_only and not (protected and not reopenable))
             if len(matches) > 1:
                 raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
             if matches:
                 entry = {"page": matches[0], "actions": self, "protected": protected,
-                         "reopenable": reopenable}
+                         "reopenable": reopenable, "read_only": self._read_only and not protected}
                 pool[key] = entry
             else:
                 # An exactly known target disappeared (Owner closed it). Reopen
@@ -383,6 +449,7 @@ class GoogleQuotationUpdateActions:
             log_step("google-busy-protected-entry")
             raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
         if entry is not None and not entry["protected"]:
+            entry["read_only"] = entry.get("read_only", False) and self._read_only
             self._page, self._poll_entry = entry["page"], entry
             # Prove the current document/authentication BEFORE navigating away.
             expected = self._location
@@ -426,7 +493,8 @@ class GoogleQuotationUpdateActions:
         self._guard()
         mark_owned_page(self._page, self._page_role)
         if pool is not None:
-            self._poll_entry = {"page": self._page, "actions": self, "protected": False}
+            self._poll_entry = {"page": self._page, "actions": self, "protected": False,
+                                "read_only": self._read_only}
             pool[key] = self._poll_entry
             if retained is not None:
                 _retain_google_entry(key, self._poll_entry, retained)

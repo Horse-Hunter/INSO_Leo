@@ -365,3 +365,10 @@ Second correction release completion2026-11-01:immutable source325cd19052a17c05c
 ## Owner2026-11-02生产资产与架构专项体检（已完成，仅审计）
 
 按Owner新指令由原V1.6窗口独立执行；基线23aaf84。只读Windows元数据和静态源码，未改业务/部署/生产状态。Profile仍落旧Research载体、业务DB仍落v1-2工作树；明确保护、回滚容量/独立性及三个小步优化建议。完整证据及NOT_VERIFIED见 [专项审计](../control-room/RFQ-016/ASSET_ARCHITECTURE_AUDIT_2026-11-02.md)。本次排除GitHub公开性和IMAP专项；COMPUTER_USE_NOT_USED。
+
+
+## Owner2026-11-03生产暂停且无通知修复（IN_PROGRESS）
+
+Owner要求定位并修复。只读原运行日志确认10:47:45报价失败、10:47:46 GOOGLE_TAB_IDENTITY_UNCONFIRMED，GUI进程仍在；上次11-02退出有owner_exit/normal0记录，不冒称崩溃。范围：复用原Google retained目标身份保护，修复无关页面身份探测导致误停的路径；补齐经验证的真实主业务安全暂停通知及原邮件worker收口发送，保留UNKNOWN/最终审核/持久去重与旧单保护。先离线复现再修复、专项及全量测试；不接生产CDP、不读凭据、不测试外发、不清保护、不强杀或关闭Chrome。继续复用原发布流程，安全退出若需Owner原托盘操作，仅在通过验证的具体包就绪后提出。
+
+Owner追加明确要求：Google手工可用时不得将程序读取/页识别瞬态问题升级全业务停止。扩大本次最小修复至只读native证明失败的有界重试，以及超过三小时仍按原模块周期自动恢复、其余模块继续；写入UNKNOWN、身份确实冲突、权限及人工页面保护不放松。此前3465PASS/1SKIP是第一阶段结果，扩大后必须重新专项及全量验证。

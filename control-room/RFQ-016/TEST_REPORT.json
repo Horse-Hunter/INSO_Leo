@@ -306,5 +306,69 @@
     "old_google_test_file_and_deadline_unchanged": true,
     "COMPUTER_USE_NOT_USED": true,
     "preserved_7574516_ancestor": true
+  },
+  "incident_20261103_04": {
+    "scope": "Owner2026-11-03/04 Google read resilience and missing safety-stop notice",
+    "status": "SOURCE_TESTED_BUILD_PENDING",
+    "production_status": "HEALTH_HOLD_OLD_PROGRAM_NOT_REPLACED",
+    "baseline": "5ba62dfe081641e4a3f3e73adfa12782274cb950",
+    "installed_exe_sha256_before": "55be53be2c00079efcdb17addf930e30a7ce25cf233725bbd5f25500b1526bc3",
+    "source_commit": null,
+    "computer_use": "COMPUTER_USE_NOT_USED",
+    "production_cdp_connected": false,
+    "real_test_email_sent": false,
+    "runs": {
+      "red_original": {
+        "tests": 4,
+        "failures": 4,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.39,
+        "xml_sha256": "9eceb58bf47e33cea7a262cbf0274ec8460f1e0082f94f1ff5ae78c3dcbc197b",
+        "case_ids_sha256": "d9a59dd43eb8f3727e3e158def0a6df8fcbca656c9f13cdd3a6299a57e507348"
+      },
+      "red_resilience": {
+        "tests": 8,
+        "failures": 7,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.495,
+        "xml_sha256": "a759b3e7d5f9d54cebba7b1e598e3ce029b23e4a1b1b05290435d1a722ef6a47",
+        "case_ids_sha256": "4e900cc73b71a03e9be5a4b5c4b36428a81a6dcb081c12b2df6bf277cc50f855"
+      },
+      "targeted": {
+        "tests": 369,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 27.524,
+        "xml_sha256": "b23089eb2fd73e5fd3f1fe61387f82634c69c65274cd66f62d47edd0586600ec",
+        "case_ids_sha256": "ab1d02234ec721c809ce15a7ecd89ddae7f0d28d212e9ff5cc496e1a8c3780e6"
+      },
+      "full": {
+        "tests": 3475,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1,
+        "seconds": 248.605,
+        "xml_sha256": "8d1802a05e5d31af3843cc1c68fad351810bec5707590b9cf305211fbb17e0e4",
+        "case_ids_sha256": "5495002b9892096b85046d30a0d14094b83a0c5ccd41db188635a2c285719e28"
+      },
+      "intermediate_full": {
+        "tests": 3466,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1,
+        "seconds": 253.501,
+        "xml_sha256": "1ec97645ceae54eb960efce1aed494c97faa286cdb25590ea24ce785ca169c6a",
+        "case_ids_sha256": "d2775a5b5400160cd8037dd6e5cec550e891d1047fed5f1e9f6d33e973d6b3dc"
+      }
+    },
+    "intermediate_failures": "Initial harness corrected to include native V13 nullable-notification migration; system Python alone lacked tzdata, reused existing release PYTHONPATH. Initial native-fault test injected into unrelated page; retargeted exact owned browser proof. Temporary pytest path access denied, switched to explicitly task-owned basetemp. All preserved in execution record; final suite unfiltered.",
+    "limitations": [
+      "Live failing Page and exact underlying Playwright Error text NOT_VERIFIED; no production CDP probe or raw exception content read.",
+      "SMTP outage cannot guarantee delivery; original durable retry and UNKNOWN protections preserved.",
+      "No forced exit, Profile movement, manual UNKNOWN clearing, or historic mail replay."
+    ]
   }
 }

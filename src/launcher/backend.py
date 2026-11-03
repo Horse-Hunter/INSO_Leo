@@ -113,7 +113,10 @@ from .browser_bootstrap import (
     park_shared_cdp,
 )
 from .diagnostics import log_step
-from .google_quote_update import build_v13_quotation_updater
+from .google_quote_update import (
+    GoogleReadTargetUnavailable,
+    build_v13_quotation_updater,
+)
 from .google_web import build_google_web_service
 from .inso_session import (
     InsoAuthenticationError,
@@ -513,7 +516,7 @@ def _website_failure(exc):
     if (reasons & {"SHEETS_READ_UNAVAILABLE", "SHEETS_AUTH_UNAVAILABLE", "GOOGLE_SHEETS_UNAVAILABLE",
                    "GOOGLE_AUTHENTICATION_REQUIRED", "GOOGLE_SPREADSHEET_UNAVAILABLE",
                    "GOOGLE_SHEET_UNCONFIRMED", "QUOTE_INPUT_METADATA_UNAVAILABLE"}
-            or any(type(e).__name__ in {"GoogleSheetsReadError", "GoogleSheetsReadUnavailable"} for e in chain)):
+            or any(type(e).__name__ in {"GoogleSheetsReadError", "GoogleSheetsReadUnavailable", "GoogleReadTargetUnavailable"} for e in chain)):
         return "Google Sheets"
     if "IC_NET_UNAVAILABLE" in reasons:
         return "IC.net"
@@ -593,6 +596,8 @@ class ProductionBackend(GuiBackend):
         self._thread = None
         self._closed = False
         self._run_id = None
+        self._runtime_stop_reason = None
+        self._owner_stop_requested = False
         self._cycle_id = None
         self._state = RunState.STOPPED
         self._started = self._stopped = self._last_poll = None
@@ -734,6 +739,8 @@ class ProductionBackend(GuiBackend):
                 or (self._login_all_thread is not None and self._login_all_thread.is_alive())
             ):
                 return
+            self._runtime_stop_reason = None
+            self._owner_stop_requested = False
             self._combined = None
             self._v13_ledger_ready = False
             self._v13_enabled = False
@@ -773,6 +780,7 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             if self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}:
                 self._state = RunState.STOPPING_AFTER_CYCLE
+                self._owner_stop_requested = True
                 self._next_poll_at = None
                 with self._poll_gate:
                     self._drain_due_on_stop.set()
@@ -1076,6 +1084,8 @@ class ProductionBackend(GuiBackend):
                 self._module_failures.clear()
                 self._v12_composition.notification_worker.defer_delivery()
 
+            poll_drained = threading.Event()
+
             def poll_loop():
                 try:
                     if independent:
@@ -1165,9 +1175,12 @@ class ProductionBackend(GuiBackend):
                     try:
                         self._retire_google_pages(web_service)
                     finally:
-                        if self._v13_enabled:
-                            self._release_idle_browser(force=True)
-                        BrowserHandle.drain_deferred_stops()
+                        try:
+                            if self._v13_enabled:
+                                self._release_idle_browser(force=True)
+                            BrowserHandle.drain_deferred_stops()
+                        finally:
+                            poll_drained.set()
 
             def worker_loop():
                 try:
@@ -1187,7 +1200,17 @@ class ProductionBackend(GuiBackend):
                 except Exception as exc:  # noqa: BLE001 - local failure or proven prolonged outage
                     self._runtime_error(exc)
                 finally:
-                    BrowserHandle.drain_deferred_stops()
+                    # Stop can wake this worker before the poller records its
+                    # safety incident. Keep the original SMTP owner for one
+                    # final reviewed pass after that evidence is durable.
+                    poll_drained.wait()
+                    try:
+                        if self._runtime_stop_reason and self._v12_composition is not None:
+                            self._v12_composition.coordinator.run_notifications(now=utc_now())
+                    except Exception as error:  # noqa: BLE001 - preserve original durable retry/UNKNOWN
+                        log.warning("Final notification pass unavailable; class=%s", type(error).__name__)
+                    finally:
+                        BrowserHandle.drain_deferred_stops()
 
             poll_thread = threading.Thread(
                 target=poll_loop, name="production-sheets-poller"
@@ -1425,8 +1448,12 @@ class ProductionBackend(GuiBackend):
         except (sqlite3.Error, V12DatabaseError):
             raise
         except Exception as exc:
+            from src.sheets.google_reader import GoogleSheetsReadUnavailable
+            recoverable_read = isinstance(exc, (GoogleSheetsReadUnavailable, GoogleReadTargetUnavailable))
             cause, seen = exc, set()
             while cause is not None and id(cause) not in seen:
+                if isinstance(cause, V12Fault):
+                    recoverable_read = False  # Never hide an auth/write/ownership fault in a read wrapper.
                 seen.add(id(cause))
                 if isinstance(cause, (PageTargetCleanupError, OrderResourceOwnershipError)):
                     runtime.abort_module_resource()
@@ -1448,7 +1475,13 @@ class ProductionBackend(GuiBackend):
                 retry = min(900 * 2**min(count-1, 4), 10800)
                 reason = f"等待{site}恢复"
                 since = self._site_outages.get(site, monotonic())
-                if site != "Browser/CDP" and monotonic()-since >= 10800:
+                if site == "Google Sheets" and recoverable_read:
+                    # Keep the configured module cadence, bounded read attempts,
+                    # and other modules alive even after hours of read failures.
+                    # No permanent pause or source-wide outage claim is proved.
+                    retry = None
+                    self._defer_website_poll(exc, runtime.poll_interval, notify=False, recoverable_read=True)
+                elif site != "Browser/CDP" and monotonic()-since >= 10800:
                     paused, retry, reason = True, None, f"{site}连续三小时未恢复，请人工处理"
                 elif not self._defer_website_poll(exc, timedelta(seconds=retry)):
                     raise
@@ -1471,6 +1504,8 @@ class ProductionBackend(GuiBackend):
                 raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_OPERATION_NOT_CLOSED") from cleanup
             finally:
                 if not runtime.module_resource_failed:
+                    if module == "quotation" and outcome == "completed" and self._v12_store is not None:
+                        self._v12_store.resolve_incidents("business_runtime", at=utc_now())
                     runtime.complete_module(module, retry_after=retry, pause=paused)
                 else:
                     paused, reason = True, "共享资源状态未确认，已停止共享业务"
@@ -2416,7 +2451,7 @@ class ProductionBackend(GuiBackend):
             if self._state is RunState.QUOTATION_RUNNING:
                 self._state = RunState.RUNNING
 
-    def _defer_website_poll(self, exc, interval, *, notify=True):
+    def _defer_website_poll(self, exc, interval, *, notify=True, recoverable_read=False):
         site = _website_failure(exc)
         if site is None:
             return False
@@ -2424,7 +2459,7 @@ class ProductionBackend(GuiBackend):
             if self._stop.is_set():
                 return True  # Explicit Owner stop always wins over automatic recovery.
             since = self._site_outages.setdefault(site, monotonic())
-            if site != "Browser/CDP" and monotonic() - since >= 3 * 60 * 60:
+            if not recoverable_read and site != "Browser/CDP" and monotonic() - since >= 3 * 60 * 60:
                 return False
             cause, visited = exc, set()
             while cause is not None and id(cause) not in visited:
@@ -2594,6 +2629,7 @@ class ProductionBackend(GuiBackend):
         if prolonged:
             reason = {"INSO": "INSO_OUTAGE_THREE_HOURS", "Google Sheets": "GOOGLE_OUTAGE_THREE_HOURS",
                       "IC.net": "IC_NET_OUTAGE_THREE_HOURS", "汇率网站": "FX_OUTAGE_THREE_HOURS"}[site]
+        self._runtime_stop_reason = reason
         safe_reason = reason if isinstance(reason, str) and re.fullmatch(r"[A-Z_]{1,64}", reason) else "V12_INTERNAL_FAILURE"
         root_cause, visited = exc, set()
         while root_cause.__cause__ is not None and id(root_cause) not in visited:
@@ -2951,7 +2987,21 @@ class ProductionBackend(GuiBackend):
         if reason == "GOOGLE_READ_RETRY_EXHAUSTED":
             site = "Google Sheets"
         proof = None
-        if manual_login:
+        from src.workflow.notification_review import RUNTIME_SAFETY_REASONS
+        if (reason in RUNTIME_SAFETY_REASONS and self._runtime_stop_reason == reason
+                and not self._owner_stop_requested
+                and self._stop.is_set() and self._run_id
+                and self._state in {RunState.GLOBAL_STOP, RunState.MODULE_PAUSED}):
+            proof = {"incident_key": "program-safety-stop:google-operation",
+                "category": "runtime_stop", "module": "business_runtime",
+                "reason_code": "PROGRAM_SAFETY_PAUSED", "stop_reason": reason,
+                "run_id": self._run_id, "stop_state": self._state.name, "halted": True,
+                "active": True, "current_business": True, "verified": True,
+                "needs_owner": True, "verified_at": at.isoformat(),
+                "original_event": "program-safety-stop:google-operation",
+                "action": "请检查原程序暂停提示及Google操作页；保留人工页面，不要重发采购或报价。",
+                "uncertainty": "尚不能确认操作页身份或收口；不能据此判断Google整体不可用，也不能推断订单写入成功或失败。"}
+        elif manual_login:
             proof = self._fault_evidence(inquiry, reason, at=at, event="native-manual-login", module="INSO")
         elif site and (reason.endswith(("WAITING_RECOVERY", "OUTAGE_THREE_HOURS")) or reason == "GOOGLE_READ_RETRY_EXHAUSTED"):
             incident_key = f"program-blocked:{site}"
@@ -2998,6 +3048,15 @@ class ProductionBackend(GuiBackend):
             allowed.update(r.address.strip().casefold() for r in self._v12_adapters.recipients)
         if any(r.address.strip().casefold() not in allowed for r in command.recipients):
             return "RECIPIENT_NOT_CONFIGURED"
+        proof = json.loads(command.review or "{}")
+        if proof.get("category") == "runtime_stop":
+            if (self._closed or self._owner_stop_requested or proof.get("run_id") != self._run_id
+                    or proof.get("stop_reason") != self._runtime_stop_reason
+                    or not self._stop.is_set()
+                    or self._state not in {RunState.GLOBAL_STOP, RunState.MODULE_PAUSED}
+                    or {r.address.strip().casefold() for r in command.recipients} != {"linan229@qq.com"}):
+                return "EVENT_NOT_CURRENT"
+            return None
         if command.kind is NotificationKind.TP_RESEARCH:
             from src.workflow.automatic_admission import age_reason
             from src.workflow.tp_research import load_order

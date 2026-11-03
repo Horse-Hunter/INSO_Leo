@@ -66,7 +66,7 @@ def test_cleanup_faults_remain_shared_faults_and_do_not_discard_ownership(web, p
     elif problem == 'document': page.url = page.url.replace('/d/test/', '/d/other/')
     elif problem == 'owner': page.owner_name = 'INSO_OWNER_TAB:manual'
     elif problem == 'native':
-        monkeypatch.setattr(page.context, 'new_cdp_session', lambda _p: (_ for _ in ()).throw(ValueError('proof')))
+        monkeypatch.setattr(web[1], 'new_browser_cdp_session', lambda: (_ for _ in ()).throw(ValueError('proof')))
     else: monkeypatch.setattr(page, 'close', lambda: (_ for _ in ()).throw(ValueError('close')))
     with pytest.raises(V12Fault) as fault:
         service.release_retained_pages()

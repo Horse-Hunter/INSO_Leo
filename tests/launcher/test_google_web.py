@@ -1427,7 +1427,7 @@ def test_retained_cache_hit_does_not_reopen_closed_page_until_live_read_due(web)
     assert len(browser.contexts[0].pages) == 3 and not browser.contexts[0].pages[-1].closed
 
 
-def test_retained_stop_blocks_reopening_and_native_identity_failure_stops(web):
+def test_retained_stop_blocks_reopening_and_unproved_read_defers_without_new_page(web):
     service, browser, _, _ = web
     service._retained_pages = {}
     with service.poll_scope():
@@ -1441,6 +1441,6 @@ def test_retained_stop_blocks_reopening_and_native_identity_failure_stops(web):
     assert len(browser.contexts[0].pages) == 2
     service._stop_requested = lambda: False
     browser.contexts[0].new_cdp_session = lambda p: (_ for _ in ()).throw(RuntimeError('synthetic proof loss'))
-    with service.poll_scope(), pytest.raises(V12Fault, match='IDENTITY_UNCONFIRMED'):
+    with service.poll_scope(), pytest.raises(TimeoutError, match='GOOGLE_WEB_READ_UNAVAILABLE'):
         service.get(spreadsheetId='test', range="'2026'!A1:G1").execute()
     assert len(browser.contexts[0].pages) == 2

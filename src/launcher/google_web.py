@@ -31,7 +31,8 @@ from .diagnostics import log_step
 from .google_quote_update import (
     _UNSAFE_POLL_PAGE,
     GoogleQuotationUpdateActions,
-    _google_target_id,
+    GoogleReadTargetUnavailable,
+    _retained_google_matches,
     google_operation_scope,
     google_operations_idle,
 )
@@ -68,6 +69,8 @@ def _temporary_web_read_failure(exc):
     visited, temporary = set(), False
     while exc is not None and id(exc) not in visited:
         visited.add(id(exc))
+        if isinstance(exc, GoogleReadTargetUnavailable):
+            return True  # Exact read-only boundary; no write or identity adoption.
         if isinstance(exc, V12Fault):
             return False
         if isinstance(exc, _GoogleDownloadWaitTimeout):
@@ -209,7 +212,7 @@ class GoogleSheetsWebService:
                     if protected:
                         continue
                     self._read_guard()
-                    matches = [p for p in pages if not p.is_closed() and _google_target_id(p) == native]
+                    matches = _retained_google_matches(pages, native)
                     if not matches:
                         self._retained_pages.pop(key, None)  # Gone, never reopen at shutdown.
                         continue
@@ -447,6 +450,7 @@ class GoogleSheetsWebService:
         base = f"https://docs.google.com/spreadsheets/d/{spreadsheet}/edit#gid=0"
         with self._grid_lock, self._operation_session() as handle:
             actions = self._actions_factory(browser_handle=handle, location=_Location(base))
+            actions._read_only = not write
             dirty = False
             stage = "google-open-sheet"
             try:
