@@ -223,6 +223,8 @@ class FakePage:
         self.target_id = "target-operation-child"
         self.request = FakeRequest(response_text, captured)
         self.closed = False
+        self._response_text = response_text
+        self.captured = captured
 
     def is_closed(self) -> bool:
         return self.closed
@@ -234,12 +236,24 @@ class FakePage:
 class FakeOperationPage:
     def __init__(self, page: FakePage) -> None:
         self.page = page
+        self.shell_frame = page
 
     def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *_args: object) -> None:
-        self.page.close()
+        pass  # The borrowed original operation page is never closed.
+
+
+class FakeNativeHistoryPage:
+    def __init__(self, frame, *, timeout_ms):
+        self.frame = frame
+        self.frame.captured["timeout"] = timeout_ms
+
+    def query_exact_response(self, target_mpn):
+        import json
+        self.frame.captured["native_target"] = target_mpn
+        return json.loads(self.frame._response_text)
 
 
 class FakeOperationAccess:
@@ -250,7 +264,7 @@ class FakeOperationAccess:
         return FakeOperationPage(self.page)
 
 
-def test_concrete_browser_uses_cdp_and_posts_stock_venquote() -> None:
+def test_concrete_browser_reuses_original_native_query_and_preserves_borrowed_page() -> None:
     payload = {
         "total": -1,
         "rows": [
@@ -273,23 +287,19 @@ def test_concrete_browser_uses_cdp_and_posts_stock_venquote() -> None:
         ),
         settle_ms=0,
         operation_access=FakeOperationAccess(page),
+        page_factory=FakeNativeHistoryPage,
     )
 
     capture = acquisition.fetch_procurement_temporary_inquiry_history(
         " ABC-1 ", InsoLogin("u", "p")
     )
 
-    assert "searchData[DetailFieldValue]=%20ABC-1%20&" in captured["data"]
-    assert "para=%20ABC-1%20&" in captured["url"]
+    assert captured["native_target"] == " ABC-1 "
+    assert "data" not in captured and "headers" not in captured
     assert capture.records[0].mpn == "ABC-1"
-    assert captured["headers"]["Content-Type"].startswith(
-        "application/x-www-form-urlencoded"
-    )
-    assert "action=Stock_VenQuote" in captured["url"]
-    assert "DetailField=PartNo" in captured["url"]
     assert capture.records[0].price == Decimal("1.25")
     assert capture.records[0].currency == "USD"
-    assert page.closed
+    assert not page.closed
     assert not hasattr(acquisition, "close_browser")
     assert not hasattr(acquisition, "submit")
     assert not hasattr(acquisition, "create_order")
@@ -302,6 +312,7 @@ def test_concrete_browser_empty_response_is_fail_closed() -> None:
         InsoBrowserConfig(login_url="https://inso.example/"),
         settle_ms=0,
         operation_access=FakeOperationAccess(page),
+        page_factory=FakeNativeHistoryPage,
     )
 
     try:
@@ -321,6 +332,7 @@ def test_concrete_browser_expired_session_is_identified_without_rows() -> None:
         InsoBrowserConfig(login_url="https://inso.example/"),
         settle_ms=0,
         operation_access=FakeOperationAccess(page),
+        page_factory=FakeNativeHistoryPage,
     )
 
     with pytest.raises(InsoReadError) as caught:
@@ -328,7 +340,7 @@ def test_concrete_browser_expired_session_is_identified_without_rows() -> None:
             "ABC", InsoLogin("u", "p")
         )
     assert caught.value.code == "AUTHENTICATED_SESSION_REQUIRED"
-    assert page.closed
+    assert not page.closed
 
 
 def test_concrete_browser_without_explicit_lease_fails_closed() -> None:
@@ -390,22 +402,21 @@ def test_separated_model_research_api_uses_literal_token_and_converts_usd():
     page = FakePage(json.dumps({"rows": [{"CreateTime": "2026-09-24 08:00:00",
         "InPrice": "1.25", "CurrencyID": "USD", "PartNo": "RM342-059-581-7200"}]}), captured)
     browser = PlaywrightInsoReadOnlyBrowser(InsoBrowserConfig(login_url="https://inso.example/"),
-        settle_ms=0, operation_access=FakeOperationAccess(page))
+        settle_ms=0, operation_access=FakeOperationAccess(page), page_factory=FakeNativeHistoryPage)
     capture = browser.fetch_procurement_temporary_inquiry_history("RM342-059-581-7200", InsoLogin("u", "p"))
-    assert "searchData[DetailFieldValue]=RM342-059-581-7200&" in captured["data"]
-    assert "para=RM342-059-581-7200&" in captured["url"]
+    assert captured["native_target"] == "RM342-059-581-7200"
+    assert "data" not in captured
     assert capture.records[0].mpn == "RM342-059-581-7200"
     assert InsoHistoryAdapter._to_normalized_rmb(capture.records[0], Fx().get_quote()) == Decimal("8.75")
 
 
-def test_http_query_preserves_raw_model_as_encoded_data_not_form_or_url_syntax():
+def test_native_query_preserves_raw_model_as_literal_data():
     import json
-    from urllib.parse import parse_qs, urlsplit
     source = " Ab+C&12 _- "
     captured = {}
     page = FakePage(json.dumps({"rows": []}), captured)
     browser = PlaywrightInsoReadOnlyBrowser(InsoBrowserConfig(login_url="https://inso.example/"),
-        settle_ms=0, operation_access=FakeOperationAccess(page))
+        settle_ms=0, operation_access=FakeOperationAccess(page), page_factory=FakeNativeHistoryPage)
     browser.fetch_procurement_temporary_inquiry_history(source, InsoLogin("u", "p"))
-    assert parse_qs(captured["data"])["searchData[DetailFieldValue]"] == [source]
-    assert parse_qs(urlsplit(captured["url"]).query)["para"] == [source]
+    assert captured["native_target"] == source
+    assert "data" not in captured and "url" not in captured

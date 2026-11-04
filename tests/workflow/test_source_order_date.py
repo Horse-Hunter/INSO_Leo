@@ -80,3 +80,28 @@ def test_revival_of_missing_item_remains_false(tmp_path):
     row=source();record,=query_pending_records(SimpleNamespace(read_rows=lambda _: (row,)),WS)
     store=WorkflowStateStore(tmp_path/"synthetic.sqlite3")
     assert not store.revive_item(999,record,now=NOW,manual_retry=True)
+
+
+@pytest.mark.parametrize("mode",["safe_read_retry","save_armed","old_date","no_source_date","unknown_write","future_date","future_intake"])
+def test_restart_preserves_only_recent_proven_unsubmitted_read_retry(tmp_path,mode):
+    from src.workflow.v12_contracts import BusinessState, EventType, WorkflowEvent
+    from tests.workflow.test_v12_flow import _make_flow
+    flow,store,ledger,*_= _make_flow(tmp_path)
+    row=source();record,=query_pending_records(SimpleNamespace(read_rows=lambda _: (row,)),WS)
+    original="2026-10-01" if mode=="old_date" else None if mode=="no_source_date" else "2026-11-05" if mode=="future_date" else "2026-11-04"
+    store.enqueue(record,now=NOW+timedelta(days=1) if mode=="future_intake" else NOW,source_order_date=original)
+    iid=store.inquiry_id_for(record.record_identity)
+    ledger.set_business_state(iid,BusinessState.RESEARCH_RETRY_WAIT,WorkflowEvent("synthetic-retry",iid,EventType.RESEARCH_RETRY_SCHEDULED,NOW,"workflow"))
+    if mode=="save_armed":
+        ledger.append_event(WorkflowEvent("synthetic-save-arm",iid,EventType.SAVE_DISPATCH_ARMED,NOW,"workflow"))
+    if mode=="unknown_write":
+        from src.workflow.v12_contracts import PurchaseOutcome
+        ledger.set_purchase_state(iid,"cmd_synthetic",PurchaseOutcome.PRE_SAVE_READY,at=NOW)
+        ledger.set_purchase_state(iid,"cmd_synthetic",PurchaseOutcome.AI_RECOGNIZED,at=NOW)
+        ledger.begin_save_dispatch(iid,at=NOW)
+    flow.initialize_run_state(now=NOW+timedelta(seconds=1))
+    state=ledger.business_state(iid)
+    if mode=="safe_read_retry":
+        assert state is BusinessState.RESEARCH_RETRY_WAIT and store.get_by_inquiry_id(iid).status.value=="QUEUED"
+    else:
+        assert state in {BusinessState.INTERRUPTED_UNSENT,BusinessState.INTERRUPTED_POSSIBLY_SENT}

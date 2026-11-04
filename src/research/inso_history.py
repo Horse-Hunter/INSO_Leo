@@ -10,7 +10,6 @@ RMB using the shared USD/RMB FX quote, so the emitted
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
@@ -20,7 +19,11 @@ from typing import Protocol
 from urllib.parse import quote, urlsplit
 
 from src.core.mpn import inso_lookup_query, lookup_mpn_matches
-from src.inso.session import InsoOperationAccess
+from src.inso.duplicate_history import (
+    InsoDuplicateHistoryError,
+    PlaywrightProcurementHistoryPage,
+)
+from src.inso.session import InsoOperationAccess, SecurityViolation
 
 from .fx import UsdRmbProvider, UsdRmbQuote
 from .source_contracts import (
@@ -247,6 +250,7 @@ class PlaywrightInsoReadOnlyBrowser:
         *,
         timeout_ms: int = 45_000,
         settle_ms: int = 2_000,
+        page_factory: Callable = PlaywrightProcurementHistoryPage,
         operation_access: InsoOperationAccess
         | Callable[[], InsoOperationAccess]
         | None = None,
@@ -254,6 +258,7 @@ class PlaywrightInsoReadOnlyBrowser:
         self._config = config
         self._timeout_ms = timeout_ms
         self._settle_ms = settle_ms
+        self._page_factory = page_factory
         self._operation_access = operation_access
 
     def fetch_procurement_temporary_inquiry_history(
@@ -284,44 +289,27 @@ class PlaywrightInsoReadOnlyBrowser:
             "&BillPage=Stock_VenQuote"
             f"&pageindex=1&pagesize={self._config.pagesize}"
         )
-        body = build_inso_stock_venquote_form(mpn_clean)
-
         try:
             with access.operation_page() as operation_page:
-                page = operation_page.page
-                response = page.request.post(
-                    url,
-                    headers={
-                        "Content-Type": (
-                            "application/x-www-form-urlencoded; charset=UTF-8"
-                        ),
-                        "X-Requested-With": "XMLHttpRequest",
-                        "Referer": (
-                            f"{self._config.login_url.rstrip('/')}"
-                            "/skins/etaoerp//InnerEnquiry/YeWuXJ/List.aspx"
-                        ),
-                        "Accept": "application/json, text/javascript, */*; q=0.01",
-                    },
-                    data=body,
-                    timeout=self._timeout_ms,
-                )
-                text = response.text()
-                if not text or text.strip() in {"{}", ""}:
+                # Reuse the same native, settled and fully paged read as the
+                # quotation module. The site's own query supplies its page
+                # identity; direct HTTP cannot prove it and may return409.
+                payload = self._page_factory(
+                    operation_page.shell_frame, timeout_ms=self._timeout_ms,
+                ).query_exact_response(mpn_clean)
+                if not payload:
                     raise InsoReadError("AUTHENTICATED_READ_EMPTY", url)
-                try:
-                    payload = json.loads(text)
-                except json.JSONDecodeError as exc:
-                    raise InsoReadError("RESPONSE_NOT_JSON", url) from exc
                 rows = payload.get("rows") if isinstance(payload, dict) else None
                 if rows is None:
-                    if (
-                        isinstance(payload, dict)
-                        and str(payload.get("isLogin")).strip().casefold()
-                        in {"false", "0", "no"}
-                    ):
+                    if (isinstance(payload, dict) and
+                            str(payload.get("isLogin")).strip().casefold() in {"false", "0", "no"}):
                         raise InsoReadError("AUTHENTICATED_SESSION_REQUIRED", url)
                     raise InsoReadError("RESPONSE_ROWS_MISSING", url)
                 records = parse_inso_history_rows(rows)
+        except SecurityViolation as exc:
+            raise InsoReadError("AUTHENTICATED_SESSION_REQUIRED", url) from exc
+        except InsoDuplicateHistoryError as exc:
+            raise InsoReadError(str(exc.code), url) from exc
         except InsoReadError:
             raise
         except TimeoutError as exc:

@@ -211,7 +211,7 @@ class V12WorkflowCoordinator:
         return not self._stop_requested()
 
     def initialize_run_state(self, *, now: datetime) -> None:
-        """Quarantine prior unfinished work; never automatically resume it."""
+        """Quarantine unfinished effects; retain only proven current read retries."""
         for item in self._workflow_store.all_items():
             try:
                 state = self._v12_store.business_state(item.inquiry_id)
@@ -223,6 +223,17 @@ class V12WorkflowCoordinator:
                 purchase = self._v12_store.purchase_state(item.inquiry_id)
             except KeyError:
                 purchase = None
+            # A safely released read-only retry is not an interrupted write.
+            # This applies only to newly source-dated, recent queued work with
+            # no purchase state or dispatch proof. Normal polling must still
+            # freshly revalidate original identity/status/date before execution.
+            from .automatic_admission import age_reason
+            source_day = getattr(item, "source_order_date", None)
+            if (state is BusinessState.RESEARCH_RETRY_WAIT and item.status.value == "QUEUED"
+                    and item.attempt_count == 0 and purchase is None and not armed
+                    and source_day is not None and age_reason(source_day, now, module="inquiry") is None
+                    and age_reason(item.created_at, now, module="inquiry") is None):
+                continue
             interrupted = interrupted_business_state(state, purchase, armed,
                 execution_started=(item.status.value == "RESEARCHING" or item.attempt_count > 0
                     or any(e.event_type in EXECUTION_EVENT_TYPES for e in events)))

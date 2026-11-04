@@ -1,3 +1,11 @@
+# 当前发布：2026-11-04 新订单原表日期漏读修复已覆盖，真实新单处理中
+
+BUSINESS_RUNNING / NATURAL_ORDER_IN_PROGRESS。源码d5117ec790d8aff854f90d2cd40e3a4a41ca7478，专项156PASS、完整3501PASS/1原系统权限SKIP。原构建/扫描/新旧程序及空闲自检通过；2875文件及12修改冻结模块与测试源码一致。正式EXE SHA25607bc8d22925e1d544313fb81c6f35ef6df493eb6945e0f6bde58245a7959027b，路径D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe。
+
+原Owner托盘正常退出0后，原程序/一致性数据备份D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-source-date-20261104T155324Z。仅程序替换，启动前16原业务表/配置及回滚清单均核对一致；原DB/WAL/SHM、runtime junction、Vault/Profile/Chrome和UNKNOWN保留。23:54:43上海原正式入口启动GUI33388/观察器39888，界面响应。真实匿名watch-order-1已入队attempt1/原表日期2026-11-04，防重复确认后进入调研；采购成功与Google回写尚未验证。175旧SENT/UNKNOWN收件记录逐条保持，未新增测试邮件或额外CDP客户端。构建暂存及12假服务测试目录已退休，回滚与运行数据保留。COMPUTER_USE_NOT_USED。
+
+以下为已被当前发布取代的历史状态；原BLOCKED_NORMAL_EXIT已解除：
+
 # 当前现场：2026-11-04 Google读取恢复与漏报修复已打包，等待原程序正常退出
 
 BLOCKED_NORMAL_EXIT / PRODUCTION_HEALTH_HOLD。源码6b85130df1cb579ac184a0ca6ef989f9d53e495f已推送；专项369PASS、完整3474PASS/1环境SKIP。原发布构建/自检/RELEASE_SCAN_OK、2875文件清单及五个修改模块与冻结代码逐一匹配通过；候选EXE SHA2569c0ba24bcd53f7b97d19e4f530b7bc65680b01ccca94d519d17f967690c64b34。
