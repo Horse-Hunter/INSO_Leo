@@ -1,8 +1,10 @@
-# 当前发布：2026-11-04 新订单原表日期漏读修复已覆盖，真实新单处理中
+# 当前发布：2026-11-05 日期漏读、INSO页面身份及安全读取恢复修复已覆盖运行
 
-BUSINESS_RUNNING / NATURAL_ORDER_IN_PROGRESS。源码d5117ec790d8aff854f90d2cd40e3a4a41ca7478，专项156PASS、完整3501PASS/1原系统权限SKIP。原构建/扫描/新旧程序及空闲自检通过；2875文件及12修改冻结模块与测试源码一致。正式EXE SHA25607bc8d22925e1d544313fb81c6f35ef6df493eb6945e0f6bde58245a7959027b，路径D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe。
+BUSINESS_RUNNING / NATURAL_ORDER_RESEARCH_NO_QUOTE。源码97f0ac6959e4efb3bd30bac48fa6e812b001c238，专项165PASS、完整3515PASS/1原系统权限SKIP。原构建/扫描/新旧程序及空闲自检通过；2875文件及13修改冻结模块与测试源码一致。正式EXE SHA256dd92ddb8f046694accd005f160db6bf34e7118bfc784b0141cc9350be0c32891，路径D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe。
 
-原Owner托盘正常退出0后，原程序/一致性数据备份D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-source-date-20261104T155324Z。仅程序替换，启动前16原业务表/配置及回滚清单均核对一致；原DB/WAL/SHM、runtime junction、Vault/Profile/Chrome和UNKNOWN保留。23:54:43上海原正式入口启动GUI33388/观察器39888，界面响应。真实匿名watch-order-1已入队attempt1/原表日期2026-11-04，防重复确认后进入调研；采购成功与Google回写尚未验证。175旧SENT/UNKNOWN收件记录逐条保持，未新增测试邮件或额外CDP客户端。构建暂存及12假服务测试目录已退休，回滚与运行数据保留。COMPUTER_USE_NOT_USED。
+Owner在本单安全退回队列、其余模块收口后托盘正常退出0；原程序/一致性数据备份D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-inso-native-20261104T163413Z。仅程序替换，16原业务表/配置/回滚清单在启动前及空闲自检后均核对一致；原DB/WAL/SHM、runtime junction、Vault/Profile/Chrome与UNKNOWN保护完整保留。00:35:15上海原正式入口启动GUI27868/观察器10780，界面响应、原Chrome29232/9222仍在。匿名watch-order-1保持原表日期及同一原队列身份，未误转人工中断。真实调研完成EXCEPTION/NO_MATCHING_PRODUCT，六来源均无有效报价，按原无报价规则RESEARCH_FAILED/未发采购；采购状态为空、保存武装/点击/保存事件0，无Google业务写入。不能据此断言客户型号填写错误，也不伪称采购成功。询价333.578s、报价58.219s、TP8.687s首轮全部completed，最终新版无恢复故障记录；不代表未来实际采购/客户报价及长期稳定已验证。175旧邮件终态及1受保护未知写入记录逐条保持，当前175SENT9SUPPRESSED。
+
+只执行Owner明确授权的空闲限定只读诊断，所有诊断连接已断开；无代理界面控制、真实测试邮件、数据库状态手工修改或重复采购。原生INSO查询仅由正常程序调用原已审核代码，不提取或伪造页面令牌。构建暂存及8假服务测试目录已退休，运行与验证回滚保留。COMPUTER_USE_NOT_USED。
 
 以下为已被当前发布取代的历史状态；原BLOCKED_NORMAL_EXIT已解除：
 

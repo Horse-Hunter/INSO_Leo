@@ -1,18 +1,19 @@
 {
   "rfq": "RFQ-016",
   "active_scope": "Owner2026-11-04 new pending order source-date omission repair",
-  "status": "DEPLOYED_OBSERVING",
-  "deployment": "INSTALLED_STARTED",
-  "source_commit": "d5117ec790d8aff854f90d2cd40e3a4a41ca7478",
-  "source_tree": "8f4be47d8a9d5fd161a3c6dcab7cf127b89636cd",
-  "test_tree": "7e514602d4ea509e1af9448fd30d5a652f81d05b",
+  "status": "DEPLOYED_OBSERVED",
+  "deployment": "INSTALLED_STARTED_OBSERVED",
+  "source_commit": "97f0ac6959e4efb3bd30bac48fa6e812b001c238",
+  "source_tree": "902db15c7f4fce203c41b185a4a1b41310e05209",
+  "test_tree": "7e7c911caa0f30187574ca37e85d321d07044d54",
   "previous_delivery_commit": "814859c7f1138329a69f1c771dda7271fc770ef0",
-  "previous_source": "6b85130df1cb579ac184a0ca6ef989f9d53e495f",
+  "previous_source": "d5117ec790d8aff854f90d2cd40e3a4a41ca7478",
   "preserved_ancestor": "7574516f18c8ee3225b5039f2eb4aeabd0045bbc",
   "changed_source_paths": [
     "src/launcher/backend.py",
     "src/launcher/google_web.py",
     "src/launcher/mail_research_composition.py",
+    "src/research/inso_history.py",
     "src/sheets/google_reader.py",
     "src/sheets/pending.py",
     "src/workflow/automatic_admission.py",
@@ -25,6 +26,8 @@
   ],
   "changed_test_paths": [
     "tests/launcher/test_source_date_flow.py",
+    "tests/research/test_inso_history.py",
+    "tests/research/test_inso_native_page_identity.py",
     "tests/workflow/test_source_order_date.py"
   ],
   "runs": {
@@ -147,22 +150,22 @@
     }
   },
   "targeted": {
-    "passed": 156,
-    "seconds": 69.14,
-    "frozen_source": "d5117ec790d8aff854f90d2cd40e3a4a41ca7478"
+    "passed": 165,
+    "seconds": 6.69,
+    "frozen_source": "97f0ac6959e4efb3bd30bac48fa6e812b001c238"
   },
   "full_offline": {
-    "passed": 3501,
+    "passed": 3515,
     "skipped": 1,
-    "seconds": 262.35,
-    "new_cases": 27,
+    "seconds": 249.72,
+    "new_cases": 41,
     "skip": "Original Windows symlink privilege restriction",
     "no_collection_filter_or_diagnostic_plugin": true,
     "ruff_all_src_tests": "PASS",
     "diff_check": "PASS",
     "actual_external_test_messages": 0
   },
-  "root_cause": "Research-resolved brand was incorrectly substituted for actual raw Google source brand despite NOT_CONFIGURED; exact immutable intake binding lost. Public expected_source_brand contract reused.",
+  "root_cause": "Pending source W date omitted before first intake; related INSO direct HTTP lacked server-required page identity; safely deferred new-date reads quarantined on restart.",
   "date_contract": {
     "single_current_row": "Fresh full configured Google sources, exact source row/model/quantity/actual-brand and unique original intake",
     "blank_optional_date": "Only blank missing field may use exact existing immutable intake, labelled approximate; automatic age/source_date/write path unchanged",
@@ -189,8 +192,8 @@
     "diagnostic_log_sha256": "5256a8a0b3023f07b22ba6b22fc6cc442e949e8066bf7da2455c92da2e82b3e5"
   },
   "source_test_immutability": {
-    "src": "8f4be47d8a9d5fd161a3c6dcab7cf127b89636cd",
-    "tests": "7e514602d4ea509e1af9448fd30d5a652f81d05b"
+    "src": "902db15c7f4fce203c41b185a4a1b41310e05209",
+    "tests": "7e7c911caa0f30187574ca37e85d321d07044d54"
   },
   "safety": {
     "original_UID_policy_baseline": "unchanged",
@@ -202,21 +205,24 @@
     "dependencies_scheduler_mail_system": "no new implementation"
   },
   "live": {
-    "status": "BUSINESS_RUNNING_REAL_ORDER_IN_PROGRESS",
+    "status": "BUSINESS_RUNNING_ORDER_RESEARCH_NO_QUOTE",
     "observation": {
       "order_count": 1,
       "orders": [
         {
-          "status": "RESEARCHING",
+          "status": "FAILED",
           "attempt_count": 1,
           "source_order_date": "2026-11-04",
-          "research_status": null,
-          "business_state": "RESEARCHING",
+          "research_status": "EXCEPTION",
+          "business_state": "RESEARCH_FAILED",
           "purchase": null,
           "event_counts": {
-            "DUPLICATE_CHECK_STARTED": 2,
-            "RESEARCH_STARTED": 1,
-            "DUPLICATE_CHECK_CONFIRMED": 1
+            "DUPLICATE_CHECK_STARTED": 4,
+            "RESEARCH_STARTED": 3,
+            "DUPLICATE_CHECK_CONFIRMED": 3,
+            "RESEARCH_RETRY_SCHEDULED": 2,
+            "NOTIFICATION_COMMAND_CREATED": 2,
+            "RESEARCH_FAILED": 1
           }
         }
       ],
@@ -224,61 +230,87 @@
       "prior_terminal_recipients_unchanged": true,
       "notification_outcomes": {
         "SENT": 175,
-        "SUPPRESSED": 7
+        "SUPPRESSED": 9
       },
+      "prior_unknown_purchase_count": 1,
       "prior_unknown_purchase_unchanged": true,
       "module_phases": {
-        "inquiry": "begin"
+        "inquiry": "completed",
+        "quotation": "completed",
+        "tp": "completed"
       },
       "runtime_reasons": [],
       "gui_ready": true,
-      "runtime_finished": false
+      "runtime_finished": false,
+      "original_intake_timestamps_unchanged": true,
+      "new_unrelated_queue_items": 0,
+      "watched_save_events": 0,
+      "market_source_outcome": "ALL_SIX_NO_VALID_QUOTE; aggregation EXCEPTION/NO_MATCHING_PRODUCT, not SOURCE_UNAVAILABLE",
+      "external_purchase_or_Google_write": "NOT_EXECUTED_PER_EXISTING_NO_QUOTE_RULE",
+      "all_future_business_paths_verified": false
     },
-    "additional_production_cdp_client_after_deployment": false,
-    "synthetic_order_or_test_mail": false
+    "agent_browser_diagnostics": "Only Owner-authorized idle-only Google date and single-MPN INSO API diagnostics; all disconnected",
+    "native_ui_execution": "Normal application runtime only; no agent GUI-control diagnostics",
+    "synthetic_order_or_test_mail": false,
+    "completed_modules": [
+      {
+        "module": "inquiry",
+        "phase": "begin",
+        "seconds": 0.0
+      },
+      {
+        "module": "inquiry",
+        "phase": "completed",
+        "seconds": 333.578
+      },
+      {
+        "module": "quotation",
+        "phase": "begin",
+        "seconds": 0.0
+      },
+      {
+        "module": "tp",
+        "phase": "begin",
+        "seconds": 0.0
+      },
+      {
+        "module": "tp",
+        "phase": "completed",
+        "seconds": 8.687
+      },
+      {
+        "module": "quotation",
+        "phase": "completed",
+        "seconds": 58.219
+      }
+    ]
   },
   "cleanup": {
-    "canonical_stage_retired": true,
-    "owned_test_directories_retired": 12,
-    "rollback_runtime_profile_retained": true
+    "date_phase_stage_and_12_test_dirs_retired": true,
+    "native_stage_bytes_retired": 268131090,
+    "native_8_test_dirs_retired": true,
+    "verified_program_data_rollbacks_and_runtime_profile_preserved": true
   },
   "COMPUTER_USE_NOT_USED": true,
   "release": {
-    "exe_sha256": "07bc8d22925e1d544313fb81c6f35ef6df493eb6945e0f6bde58245a7959027b",
-    "manifest_sha256": "ac5072c98bc306f8abad2b19d4e4914f2528f5ddd8ba36d2ac546d00cd693616",
-    "files": 2875,
-    "changed_frozen_modules_verified": [
-      "src.launcher.backend",
-      "src.launcher.google_web",
-      "src.launcher.mail_research_composition",
-      "src.sheets.google_reader",
-      "src.sheets.pending",
-      "src.workflow.automatic_admission",
-      "src.workflow.models",
-      "src.workflow.purchase_follow_up",
-      "src.workflow.quotation_age",
-      "src.workflow.store",
-      "src.workflow.v12_flow",
-      "src.workflow.v13_quotation"
-    ],
-    "release_scan": "RELEASE_SCAN_OK",
-    "self_checks": {
-      "rollback": 0,
-      "installed": 0,
-      "idle": 0
-    },
-    "backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-source-date-20261104T155324Z",
-    "database_backup_verified": true,
-    "prestart_all_16_tables_and_configuration_unchanged": true,
-    "only_program_replaced": true,
-    "runtime_junction_preserved": true,
-    "no_test_external_messages": true,
-    "normal_owner_exit": true,
-    "canonical_stage_retired": true,
-    "source_sha": "d5117ec790d8aff854f90d2cd40e3a4a41ca7478",
+    "source_sha": "97f0ac6959e4efb3bd30bac48fa6e812b001c238",
     "app": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6\\INSO_V1.6.exe",
+    "backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-inso-native-20261104T163413Z",
     "runtime": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.4\\runtime",
-    "new_exe_sha256": "07bc8d22925e1d544313fb81c6f35ef6df493eb6945e0f6bde58245a7959027b"
+    "old_exe_sha256": "07bc8d22925e1d544313fb81c6f35ef6df493eb6945e0f6bde58245a7959027b",
+    "new_exe_sha256": "dd92ddb8f046694accd005f160db6bf34e7118bfc784b0141cc9350be0c32891",
+    "database_backup_verified": true,
+    "all_2875_installed_asset_hashes_match": true,
+    "rollback_assets_verified": true,
+    "prestart_all_16_protected_tables_unchanged": true,
+    "configuration_unchanged": true,
+    "rollback_self_check": 0,
+    "installed_self_check": 0,
+    "installed_idle_self_check": 0,
+    "canonical_build": true,
+    "release_scan": "RELEASE_SCAN_OK",
+    "build_log_sha256": "0eeb92afb3b55383110408165f9b7e9519ec5d48e907cc57da1ee8043b59b692",
+    "candidate_stage_retired": true
   },
   "checks": {
     "source_tree_unchanged": true,
@@ -389,7 +421,7 @@
     }
   },
   "new_order_source_date_20261104": {
-    "status": "INSTALLED_STARTED_REAL_ORDER_IN_PROGRESS",
+    "status": "SUPERSEDED_INSTALLED_DATE_FIX_PROVEN; original run deferred INSOspecific read, followed by native repair",
     "previous_installed_source": "6b85130df1cb579ac184a0ca6ef989f9d53e495f",
     "red": {
       "tests": 2,
@@ -510,7 +542,7 @@
     ]
   },
   "inso_native_20261105": {
-    "status": "FINAL_OFFLINE_PASS_NOT_INSTALLED",
+    "status": "DEPLOYED_OBSERVED_BUSINESS_RUNNING",
     "red_native": {
       "tests": 1,
       "failures": 1,
@@ -573,6 +605,98 @@
       "case_ids_sha256": "7eeda365d112c99017d2aeb4b43f5f5987fbf182f9f42872cdc3da5a6645850f"
     },
     "ruff": "PASS",
-    "diff_check": "PASS"
+    "diff_check": "PASS",
+    "source_commit": "97f0ac6959e4efb3bd30bac48fa6e812b001c238",
+    "source_tree": "902db15c7f4fce203c41b185a4a1b41310e05209",
+    "tests_tree": "7e7c911caa0f30187574ca37e85d321d07044d54",
+    "build": {
+      "exe_sha256": "dd92ddb8f046694accd005f160db6bf34e7118bfc784b0141cc9350be0c32891",
+      "files": 2875,
+      "manifest_sha256": "8199d3af14ebc8c655d0238880a1464a97cb676b195ec53c4e6031036922cf30",
+      "verified_changed_modules": [
+        "src.launcher.backend",
+        "src.launcher.google_web",
+        "src.launcher.mail_research_composition",
+        "src.research.inso_history",
+        "src.sheets.google_reader",
+        "src.sheets.pending",
+        "src.workflow.automatic_admission",
+        "src.workflow.models",
+        "src.workflow.purchase_follow_up",
+        "src.workflow.quotation_age",
+        "src.workflow.store",
+        "src.workflow.v12_flow",
+        "src.workflow.v13_quotation"
+      ],
+      "release_scan": "RELEASE_SCAN_OK",
+      "self_check": 0,
+      "installed": true,
+      "owner_exit_requested_after_order_safely_deferred": true
+    },
+    "release": {
+      "source_sha": "97f0ac6959e4efb3bd30bac48fa6e812b001c238",
+      "app": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6\\INSO_V1.6.exe",
+      "backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-inso-native-20261104T163413Z",
+      "runtime": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.4\\runtime",
+      "old_exe_sha256": "07bc8d22925e1d544313fb81c6f35ef6df493eb6945e0f6bde58245a7959027b",
+      "new_exe_sha256": "dd92ddb8f046694accd005f160db6bf34e7118bfc784b0141cc9350be0c32891",
+      "database_backup_verified": true,
+      "all_2875_installed_asset_hashes_match": true,
+      "rollback_assets_verified": true,
+      "prestart_all_16_protected_tables_unchanged": true,
+      "configuration_unchanged": true,
+      "rollback_self_check": 0,
+      "installed_self_check": 0,
+      "installed_idle_self_check": 0,
+      "canonical_build": true,
+      "release_scan": "RELEASE_SCAN_OK",
+      "build_log_sha256": "0eeb92afb3b55383110408165f9b7e9519ec5d48e907cc57da1ee8043b59b692",
+      "candidate_stage_retired": true
+    },
+    "live": {
+      "order_count": 1,
+      "orders": [
+        {
+          "status": "FAILED",
+          "attempt_count": 1,
+          "source_order_date": "2026-11-04",
+          "research_status": "EXCEPTION",
+          "business_state": "RESEARCH_FAILED",
+          "purchase": null,
+          "event_counts": {
+            "DUPLICATE_CHECK_STARTED": 4,
+            "RESEARCH_STARTED": 3,
+            "DUPLICATE_CHECK_CONFIRMED": 3,
+            "RESEARCH_RETRY_SCHEDULED": 2,
+            "NOTIFICATION_COMMAND_CREATED": 2,
+            "RESEARCH_FAILED": 1
+          }
+        }
+      ],
+      "prior_terminal_recipients": 175,
+      "prior_terminal_recipients_unchanged": true,
+      "notification_outcomes": {
+        "SENT": 175,
+        "SUPPRESSED": 9
+      },
+      "prior_unknown_purchase_count": 1,
+      "prior_unknown_purchase_unchanged": true,
+      "module_phases": {
+        "inquiry": "completed",
+        "quotation": "completed",
+        "tp": "completed"
+      },
+      "runtime_reasons": [],
+      "gui_ready": true,
+      "runtime_finished": false,
+      "original_intake_timestamps_unchanged": true,
+      "new_unrelated_queue_items": 0,
+      "watched_save_events": 0,
+      "market_source_outcome": "ALL_SIX_NO_VALID_QUOTE; aggregation EXCEPTION/NO_MATCHING_PRODUCT, not SOURCE_UNAVAILABLE",
+      "external_purchase_or_Google_write": "NOT_EXECUTED_PER_EXISTING_NO_QUOTE_RULE",
+      "all_future_business_paths_verified": false
+    },
+    "repair_deployed_and_observed": true,
+    "production_complete_limitation": "No live purchase or Google quote/status write: all six sources yielded no quote. Long-term and future quote delivery paths not re-proven."
   }
 }
