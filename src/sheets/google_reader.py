@@ -4,6 +4,7 @@ import socket
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import MappingProxyType
 from typing import Any, Protocol
@@ -128,12 +129,31 @@ class GoogleSheetsRowReader:
                 ).execute(), retry_wait=self._retry_wait)
             values = response.get("values", [])
             rows = _to_worksheet_rows(values, first_row=self._first_row)
+            evidence = response.get("source_order_dates")
+            if evidence is not None:
+                if (worksheet.worksheet != "2026" or not isinstance(evidence, Mapping)
+                        or evidence.get("column") != "W" or evidence.get("header") != "quote_date"):
+                    raise GoogleSheetsReadError("source order date header is unverified")
+                proofs = {}
+                for proof in evidence.get("rows", ()):
+                    if not isinstance(proof, (tuple, list)) or len(proof) != 5 or type(proof[0]) is not int or proof[0] in proofs:
+                        raise GoogleSheetsReadError("source order date binding is ambiguous")
+                    proofs[proof[0]] = proof
+                enriched = []
+                for row in rows:
+                    proof = proofs.get(row.row_position)
+                    if proof is not None:
+                        if tuple(row.cells.get(k) for k in ("E", "F", "G")) != tuple(proof[1:4]):
+                            raise GoogleSheetsReadError("source order date identity changed")
+                        row = replace(row, source_order_date=proof[4])
+                    enriched.append(row)
+                rows = tuple(enriched)
             cache = self._discovery.get()
             if cache is not None:
                 # A mandatory live check also refreshes later discovery, but a
                 # discovery snapshot never substitutes for that live check.
                 cache[worksheet] = tuple(
-                    WorksheetRow(row.row_position, MappingProxyType(dict(row.cells))) for row in rows
+                    replace(row, cells=MappingProxyType(dict(row.cells))) for row in rows
                 )
             self._on_observation(worksheet, rows, False)
             if not discovery and self._first_row == 1:

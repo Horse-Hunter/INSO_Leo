@@ -167,6 +167,7 @@ class V12WorkflowCoordinator:
         self._brief_snapshot = brief_snapshot
         self._manual_age_id = None
         self.admission_skips = {}
+        self._admission_dates = {}
         self._row_closed = False
         self.pending_rows_seen = 0
         self._records: dict[str, PendingSheetRecord] = {}
@@ -178,6 +179,7 @@ class V12WorkflowCoordinator:
     def begin_poll_cycle(self) -> None:
         self._row_closed = False
         self.pending_rows_seen = 0
+        self._admission_dates.clear()
 
     def rerun_unsubmitted(self, inquiry_id, record, reader, *, now):
         """Explicit Owner retry through the original coordinator and submit guard."""
@@ -298,11 +300,13 @@ class V12WorkflowCoordinator:
         try:
             item = self._workflow_store.get_by_inquiry_id(iid)
             intake = item.created_at
+            recorded_date = getattr(item, "source_order_date", None)
             from .v13_quotation import expected_source_brand
             identity = replace(identity, identifying_snapshot=replace(
                 identity.identifying_snapshot, brand=expected_source_brand(item)))
         except KeyError:
             intake = None  # Never mint today's date for an undated historical row.
+            recorded_date = None
         schema = worksheet_schema(identity.worksheet.worksheet)
         if self._current_reader is not None:
             rows = tuple(self._current_reader.read_rows(identity.worksheet))
@@ -319,9 +323,11 @@ class V12WorkflowCoordinator:
                 schema.status_column: record.status, schema.model_column: record.model,
                 schema.brand_column: record.brand, schema.quantity_column: record.quantity})
         result = admit(identity, row, self._brief_snapshot(identity.worksheet), lambda: intake,
-                       now=now, module="inquiry", manual=iid == self._manual_age_id)
+                       now=now, module="inquiry", manual=iid == self._manual_age_id, recorded_source_date=recorded_date)
         if not result.allowed:
             self.admission_skips[iid] = result.reason
+        elif result.order_date is not None:
+            self._admission_dates[iid] = result.order_date.isoformat()
         return result.allowed
 
     def prepare_pending(
@@ -346,7 +352,8 @@ class V12WorkflowCoordinator:
         # Procurement still requires a real brand after Research.
         for record in records:
             inquiry_id = self._workflow_store.inquiry_id_for(record.record_identity)
-            enqueued_now = self._workflow_store.enqueue(record, now=now)
+            enqueued_now = self._workflow_store.enqueue(record, now=now,
+                **({"source_order_date": self._admission_dates[inquiry_id]} if inquiry_id in self._admission_dates else {}))
             if not enqueued_now and not self._is_skipped(inquiry_id):
                 existing = self._workflow_store.get_by_inquiry_id(inquiry_id)
                 if existing.record_identity.identifying_snapshot != record.record_identity.identifying_snapshot:

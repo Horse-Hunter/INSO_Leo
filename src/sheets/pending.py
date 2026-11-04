@@ -54,6 +54,7 @@ class WorksheetRow:
 
     row_position: int
     cells: Mapping[str, CellValue]
+    source_order_date: CellValue = None  # Verified same-download 2026 quote_date; not a guessed intake.
 
 
 class WorksheetRowReader(Protocol):

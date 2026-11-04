@@ -87,6 +87,7 @@ class WorkflowStateStore:
         record: PendingSheetRecord,
         *,
         now: datetime | None = None,
+        source_order_date: str | None = None,
     ) -> bool:
         observed_at = _as_utc(now or datetime.now(UTC))
         identity = record.record_identity
@@ -105,7 +106,7 @@ class WorkflowStateStore:
                     identity.worksheet.worksheet,
                     identity.row_position,
                     self.inquiry_id_for(identity),
-                    _identity_to_json(identity),
+                    _identity_to_json(identity, source_order_date=source_order_date),
                     _value_to_json(record.model),
                     _value_to_json(record.brand),
                     _value_to_json(record.quantity),
@@ -413,6 +414,10 @@ class WorkflowStateStore:
 
         changed_at = _as_utc(now or datetime.now(UTC))
         with self._connect() as connection:
+            original = connection.execute("SELECT record_identity_json FROM workflow_items WHERE id = ?", (item_id,)).fetchone()
+            if original is None:
+                return False
+            original_date = json.loads(original["record_identity_json"]).get("source_order_date")
             extra = "research_status=NULL, resolved_brand=NULL, brand_update_status=NULL," if manual_retry else ""
             statuses = "'FAILED', 'MANUAL_REVIEW', 'COMPLETED', 'QUEUED', 'RETRY_WAIT'" if manual_retry else "'FAILED', 'MANUAL_REVIEW'"
             cursor = connection.execute(
@@ -426,7 +431,7 @@ class WorkflowStateStore:
                 """,
                 (
                     _time_to_text(changed_at),
-                    _identity_to_json(record.record_identity),
+                    _identity_to_json(record.record_identity, source_order_date=original_date),
                     _value_to_json(record.model),
                     _value_to_json(record.brand),
                     _value_to_json(record.quantity),
@@ -527,10 +532,11 @@ def _inquiry_id(key: str) -> str:
     return "inq_" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:24]
 
 
-def _identity_to_json(identity: SheetRecordIdentity) -> str:
+def _identity_to_json(identity: SheetRecordIdentity, *, source_order_date=None) -> str:
     snapshot = identity.identifying_snapshot
+    extra = {} if source_order_date is None else {"source_order_date": source_order_date}
     return json.dumps(
-        {
+        {**extra,
             "spreadsheet": identity.worksheet.spreadsheet,
             "worksheet": identity.worksheet.worksheet,
             "row_position": identity.row_position,
@@ -584,6 +590,7 @@ def _row_to_item(row: sqlite3.Row) -> WorkItem:
         brand_update_status=row["brand_update_status"],
         last_error=row["last_error"],
         created_at=_intake_time(row["created_at"]),
+        source_order_date=json.loads(row["record_identity_json"]).get("source_order_date"),
     )
 
 

@@ -2951,7 +2951,8 @@ class ProductionBackend(GuiBackend):
         # Cached Brief was obtained through the original source owner only.
         brief = getattr(self, "_mail_brief", None)
         lines = brief.cached_lines(item.record_identity.worksheet.spreadsheet) if brief else ()
-        value, origin = source_date(item.record_identity, row, lines, lambda: item.created_at)
+        value, origin = source_date(item.record_identity, row, lines, lambda: item.created_at,
+                                    recorded_source_date=getattr(item, "source_order_date", None), as_of=now)
         if not manual and age_reason(value, now, module=module):
             return None
         return item, row, observed[1], origin, value
@@ -3155,13 +3156,16 @@ class ProductionBackend(GuiBackend):
                 identity = identify_worksheet_row(worksheet, row)
                 matched = by_location.get((row.row_position, row.cells.get(schema.model_column), row.cells.get(schema.quantity_column), row.cells.get(schema.brand_column)), ())
                 bound_identity = matched[0].record_identity if len(matched) == 1 else identity
-                day, date_origin = source_date(bound_identity, row, by_row.get(row.row_position, ()), lambda matched=matched: matched[0].created_at if len(matched) == 1 else None)
+                day, date_origin = source_date(bound_identity, row, by_row.get(row.row_position, ()), lambda matched=matched: matched[0].created_at if len(matched) == 1 else None,
+                    recorded_source_date=getattr(matched[0], "source_order_date", None) if len(matched)==1 else None,
+                    as_of=observed_at or utc_now(), conservative_intake=False)
                 # Market-report association only: a blank optional brief date is
                 # missing evidence, not a contradiction of an exact original intake.
                 if (day is None and date_origin == "RFQ_DATE" and len(matched) == 1
                         and len(by_row.get(row.row_position, ())) == 1
                         and not str(by_row[row.row_position][0].get("rfq_date") or "").strip()):
-                    day, date_origin = matched[0].created_at, "LOCAL_INTAKE_APPROXIMATION"
+                    day = getattr(matched[0], "source_order_date", None) or matched[0].created_at
+                    date_origin = "SOURCE_ORDER_DATE" if getattr(matched[0], "source_order_date", None) else "LOCAL_INTAKE_APPROXIMATION"
                 parsed = inquiry_day(day)
                 if parsed is None:
                     stamp = None
@@ -3185,7 +3189,8 @@ class ProductionBackend(GuiBackend):
                 customer = schema.fixed_customer_name or row.cells.get(schema.customer_name_column)
                 order = DetailedOrder(row.cells[schema.model_column], usable_brand(row.cells.get(schema.brand_column)),
                     quantity, customer, str(day) if day else None, worksheet.worksheet, row.row_position, spreadsheet=worksheet.spreadsheet,
-                    date_source="本地订单日期（近似）" if date_origin == "LOCAL_INTAKE_APPROXIMATION" else None)
+                    date_source=("本地订单日期（近似）" if date_origin == "LOCAL_INTAKE_APPROXIMATION" else
+                                     "原表日期（非客户发信时间）" if date_origin == "SOURCE_ORDER_DATE" else None))
                 entries.append((str(identity), order, stamp))
             except (TypeError, ValueError, KeyError):
                 # A malformed competing row must not make an older same-model

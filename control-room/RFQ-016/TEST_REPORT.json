@@ -1,7 +1,7 @@
 {
   "rfq": "RFQ-016",
-  "active_scope": "Owner2026-11-01 second correction: true source brand/date association and retained-quote detail",
-  "status": "DEPLOYED",
+  "active_scope": "Owner2026-11-04 new pending order source-date omission repair",
+  "status": "TESTED_READY_FOR_BUILD",
   "deployment": "INSTALLED_STARTED",
   "source_commit": "325cd19052a17c05c1d2b59a4528a2a38183b8bb",
   "source_tree": "1e1e11776165fe0f920dd9fc4af8d0330fb8fc3f",
@@ -372,7 +372,7 @@
     ],
     "source_tree": "295ddfb92eb1a06af242b3b0e14ff0691b6376c9",
     "test_tree": "d7e577111e696af8999ec57180ecce8a05a51022",
-    "deployment": "NOT_INSTALLED",
+    "deployment": "INSTALLED_STARTED_OBSERVED_SUPERSEDED_BY_NEW_DATE_FIX",
     "only_owner_action": "Original INSO tray Exit; no Chrome closure or force kill",
     "build": {
       "script": "scripts/build_windows_release.ps1 -BuildOnly -Version 1.6 -PythonExecutable <existing release environment>",
@@ -405,5 +405,42 @@
       ],
       "default_pytest_temp": "Initial default pytest temp directories not individually identified; no deletion of unknown paths/ACL changes"
     }
+  },
+  "new_order_source_date_20261104": {
+    "status": "OFFLINE_PASS_NOT_INSTALLED",
+    "previous_installed_source": "6b85130df1cb579ac184a0ca6ef989f9d53e495f",
+    "red": {
+      "tests": 2,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.667,
+      "xml_sha256": "1c1dd0517b30dd2a6ff3c164d19180726d6b5f62ca9e9cd361133cc01f8f6afd",
+      "case_ids_sha256": "4952a0b0e1dd16331328a11a65633b3f81455d856042f1f226403c4e640df9ed"
+    },
+    "targeted": {
+      "tests": 156,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 69.09,
+      "xml_sha256": "e2ae5be47f184ff91784c503cec523fc5a3bce11242da2f4fb0c745a2e372366",
+      "case_ids_sha256": "2e77a870dcd6e591d6fe07409bd5d84ecc34514b401a254f9085be30d24f020c"
+    },
+    "full": {
+      "tests": 3502,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "seconds": 262.273,
+      "xml_sha256": "2a3eeda9ee294a1a8d56a3ccccffe410f81fda62afa564a7a82fe52f5645bd40",
+      "case_ids_sha256": "8b8b50d06b0e13d6b647d5a8ab2694bfdfbff447876653c37f0d503c98358cf3"
+    },
+    "ruff": "PASS",
+    "diff_check": "PASS",
+    "customer_data_in_evidence": false,
+    "computer_use": "COMPUTER_USE_NOT_USED",
+    "production_order": "watch-order-1",
+    "real_processing": "NOT_STARTED_BY_NEW_SOURCE"
   }
 }

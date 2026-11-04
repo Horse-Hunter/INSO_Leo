@@ -253,7 +253,7 @@ class V13QuotationCycle:
         rows = _read_source_rows(self._reader, worksheet)
         row = relocate_quotation_source(item.record_identity, rows, expected_brand=_expected_brand(item))
         value, _ = source_date(item.record_identity, row, self._brief_snapshot(worksheet),
-                               lambda: self._store.inquiry_intake_at(result.inquiry_id))
+                               lambda: self._store.inquiry_intake_at(result.inquiry_id), recorded_source_date=getattr(item, "source_order_date", None), as_of=self._clock())
         return age_reason(value, self._clock())
 
     def execute_candidate(self, candidate, worksheet, *, on_result=lambda result: result):
@@ -313,7 +313,8 @@ class V13QuotationCycle:
                     except Exception as exc:
                         raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from exc
                 value, self.quote_age_date_source = quotation_age_date(
-                    candidate, row, self._brief_snapshot(worksheet), intake)
+                    candidate, row, self._brief_snapshot(worksheet), intake,
+                    recorded_source_date=getattr(bound[0], "source_order_date", None), as_of=self._clock())
                 if self._stop():
                     raise V13Stopped("STOP_REQUESTED")
                 reason = age_reason(value, self._clock())

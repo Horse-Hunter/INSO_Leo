@@ -67,7 +67,8 @@ class PurchaseFollowUp:
             rows = tuple(self.reader.read_rows(worksheet))
             row = relocate_quotation_source(item.record_identity, rows, expected_brand=expected_source_brand(item))
             day, origin = source_date(item.record_identity, row, self._brief_snapshot(worksheet),
-                                       lambda inquiry_id=candidate.inquiry_id: self.workflow_store.inquiry_intake_at(inquiry_id))
+                                       lambda inquiry_id=candidate.inquiry_id: self.workflow_store.inquiry_intake_at(inquiry_id),
+                                       recorded_source_date=getattr(item, "source_order_date", None), as_of=now)
             if age_reason(day, now):
                 continue
             episode = self.episodes.latest(candidate.inquiry_id)

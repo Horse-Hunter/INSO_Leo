@@ -35,3 +35,4 @@ class WorkItem:
     brand_update_status: str | None
     last_error: str | None
     created_at: datetime | None = None  # immutable local intake time, display only
+    source_order_date: str | None = None  # Original source calendar evidence, never reset by retries.

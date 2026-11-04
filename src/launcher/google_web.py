@@ -395,9 +395,9 @@ class GoogleSheetsWebService:
                             raise V13Stopped()
                         self._live_read_revision += 1
                     if seed:
-                        self._remember(key, result["values"])
+                        self._remember(key, result["values"], result.get("source_order_dates"))
                         _, first, start, last, end = geometry
-                        return {"values": [list(row[first-1:last]) for row in result["values"][start-1:end]]}
+                        return self._source_response(result["values"], first, start, last, end, result.get("source_order_dates"))
                     return result
                 if (write or geometry is None or geometry[0] not in {"2026", "SHAHAB", "RFQ_BRIEF"}
                         or (not brief_read and geometry[3] > 7)):
@@ -416,20 +416,30 @@ class GoogleSheetsWebService:
                     # Native download and header/worksheet/gid validation have
                     # completed; TTL starts now, never at navigation start.
                     values = tuple(tuple(row) for row in result["values"])
-                    entry = self._remember(key, values)
+                    entry = self._remember(key, values, result.get("source_order_dates"))
                     self._live_read_revision += 1
                     self._on_read_success()  # Real acquisition ONLY, never a hit.
                 self._snapshots.move_to_end(key)
                 _, first, start, last, end = geometry
-                return {"values": [list(row[first-1:last]) for row in entry[1][start-1:end]]}
+                return self._source_response(entry[1], first, start, last, end, entry[2] if len(entry) > 2 else None)
             except BaseException:
                 # Includes Stop/cancellation, metadata/auth/Busy/schema failures.
                 # A session fault cannot be hidden behind another sheet's cache.
                 self._snapshots.clear()
                 raise
 
-    def _remember(self, key, rows):
-        entry = (self._timer(), tuple(tuple(row) for row in rows))
+    @staticmethod
+    def _source_response(rows, first, start, last, end, evidence=None):
+        result = {"values": [list(row[first-1:last]) for row in rows[start-1:end]]}
+        if evidence is not None:
+            result["source_order_dates"] = {"column": evidence.get("column"), "header": evidence.get("header"),
+                "rows": [list(row) for row in evidence["rows"]]}
+        return result
+
+    def _remember(self, key, rows, evidence=None):
+        frozen = None if evidence is None else {"column": evidence.get("column"), "header": evidence.get("header"),
+                                               "rows": tuple(tuple(row) for row in evidence["rows"])}
+        entry = (self._timer(), tuple(tuple(row) for row in rows), frozen)
         self._snapshots[key] = entry
         self._snapshots.move_to_end(key)
         if len(self._snapshots) > 6:
@@ -477,7 +487,18 @@ class GoogleSheetsWebService:
                     stage = "google-download-read"
                     rows = self._download(page, actions)
                     self._headers(rows, title)
-                    return {"values": _source_values(rows, title, first, start, last, end)}
+                    result = {"values": _source_values(rows, title, first, start, last, end)}
+                    # One native download contains the original W date as well
+                    # as A:G. Carry only a uniquely headed, exact-row proof;
+                    # never widen business input fields or read twice per row.
+                    if title == "2026" and rows and "quote_date" in rows[0]:
+                        if len(rows[0]) < 23 or rows[0][22] != "quote_date" or rows[0].count("quote_date") != 1:
+                            raise ValueError("GOOGLE_ORDER_DATE_HEADER_AMBIGUOUS")
+                        basic = _source_values(rows, title, 1, 1, 7, None)
+                        result["source_order_dates"] = {"column": "W", "header": "quote_date", "rows": [
+                            (n, basic[n-1][4], basic[n-1][5], basic[n-1][6], raw[22] if len(raw)>22 else "")
+                            for n,raw in enumerate(rows,1) if n>1 and len(raw)>4 and raw[4]]}
+                    return result
                 values = options.get("body", {}).get("values")
                 if (not isinstance(values, list) or len(values) != 1 or not isinstance(values[0], list)
                         or end != start or len(values[0]) != last - first + 1

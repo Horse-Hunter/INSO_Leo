@@ -164,7 +164,8 @@ def prepare_business_report(backend, command, now):
     order = DetailedOrder(item.mpn, item.resolved_brand or item.brand or None, quantity,
                           customer, str(day), item.record_identity.worksheet.worksheet, row.row_position,
                           spreadsheet=item.record_identity.worksheet.spreadsheet,
-                          date_source="本地订单日期（近似）" if date_origin == "LOCAL_INTAKE_APPROXIMATION" else None)
+                          date_source=("本地订单日期（近似）" if date_origin == "LOCAL_INTAKE_APPROXIMATION" else
+                                     "原表日期（非客户发信时间）" if date_origin == "SOURCE_ORDER_DATE" else None))
     expired = now-command.created_at >= BUSINESS_REPORT_WAIT
     service = backend._mail_research_service
     try:
