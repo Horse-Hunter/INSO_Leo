@@ -1917,6 +1917,11 @@ class ProductionBackend(GuiBackend):
         login = (inso_auth_stop if result.source is ResearchSource.INSO else
                  any(token in code for token in ("LOGIN", "CREDENTIAL", "AUTHENTICATION", "VERIFICATION", "CHALLENGE", "SESSION_STALE")))
         if result.source is ResearchSource.IC_NET:
+            if code in {"MANUAL_VERIFICATION_REQUIRED", "INTERACTIVE_CHALLENGE_REQUIRED", "CAPTCHA_REQUIRED",
+                        "OTP_REQUIRED", "CREDENTIAL_REJECTED", "CREDENTIALS_UNAVAILABLE", "CREDENTIAL_NOT_CONFIGURED"}:
+                self._site_manual_wait.add("IC.net")
+                if self._v13_ledger_ready:
+                    self._notify_runtime_fault(self._cycle_id or "manual-icnet", "IC_NET_VERIFICATION_REQUIRED", at=utc_now())
             self._manual_review(inquiry_id, "IC.net：需要人工验证" if login else "IC.net：查询不可用", notify=False)
             raise V12Fault(FaultScope.V12_PAUSE, "IC_NET_UNAVAILABLE")
         if result.source is ResearchSource.INSO and login:
@@ -2938,11 +2943,12 @@ class ProductionBackend(GuiBackend):
         if observed is None or (not timedelta(0) <= now-observed[1] <= timedelta(minutes=15)):
             return None
         rows = observed[0]
+        from src.workflow.v13_quotation import expected_source_brand
         schema = worksheet_schema(item.record_identity.worksheet.worksheet)
         matches = [r for r in rows if r.row_position == item.record_identity.row_position
                    and r.cells.get(schema.model_column) == item.mpn
                    and r.cells.get(schema.quantity_column) == item.quantity
-                   and r.cells.get(schema.brand_column) == (item.resolved_brand or item.brand)]
+                   and r.cells.get(schema.brand_column) == expected_source_brand(item)]
         if len(matches) != 1:
             return None
         row = matches[0]
@@ -2957,6 +2963,49 @@ class ProductionBackend(GuiBackend):
             return None
         return item, row, observed[1], origin, value
 
+    def _no_quote_event(self, inquiry_id, now, *, manual=False):
+        """Only a recent, unresolved, durably confirmed no-price result."""
+        from src.workflow.automatic_admission import age_reason
+        item = self._store.get_by_inquiry_id(inquiry_id)
+        if (item.status.value != "FAILED" or item.research_status != "EXCEPTION"
+                or item.last_error != "NO_MATCHING_PRODUCT"
+                or self._v12_store.business_state(inquiry_id).value != "RESEARCH_FAILED"
+                or not manual and age_reason(item.created_at, now, module="inquiry")):
+            return None
+        try:
+            self._v12_store.purchase_state(inquiry_id)
+        except KeyError:
+            pass
+        else:
+            return None
+        events = self._v12_store.event_history(inquiry_id)
+        if any(e.event_type in {EventType.SAVE_DISPATCH_ARMED, EventType.SAVE_CLICK_COMPLETED,
+                               EventType.SAVE_OUTCOME_UNKNOWN, EventType.PURCHASE_DATA_SAVED} for e in events):
+            return None
+        failures = [e for e in events if e.event_type is EventType.RESEARCH_FAILED]
+        if not failures or age_reason(failures[-1].occurred_at, now, module="inquiry"):
+            return None
+        return failures[-1]
+
+    def _pre_submit_failure_event(self, inquiry_id, now, *, manual=False):
+        from src.workflow.automatic_admission import age_reason
+        item = self._store.get_by_inquiry_id(inquiry_id)
+        if (self._v12_store.business_state(inquiry_id).value != "PURCHASE_EXCEPTION"
+                or not manual and age_reason(item.created_at, now, module="inquiry")):
+            return None
+        try:
+            if self._v12_store.purchase_state(inquiry_id) is not PurchaseOutcome.VALIDATION_FAILED:
+                return None
+        except KeyError:
+            return None
+        events = self._v12_store.event_history(inquiry_id)
+        if any(e.event_type in {EventType.SAVE_DISPATCH_ARMED, EventType.SAVE_CLICK_COMPLETED,
+                               EventType.SAVE_OUTCOME_UNKNOWN, EventType.PURCHASE_DATA_SAVED} for e in events):
+            return None
+        failures = [e for e in events if e.event_type is EventType.AI_RECOGNITION_MISMATCH
+                    and e.reason_code is ReasonCode.AI_RECOGNITION_MISMATCH]
+        return failures[-1] if failures and age_reason(failures[-1].occurred_at, now, module="inquiry") is None else None
+
     def _fault_evidence(self, inquiry_id, reason, *, at, event, module="inquiry", manual=False):
         manual = manual or getattr(self, "_owner_single_order", None) == inquiry_id
         from src.workflow.automatic_admission import binding_key
@@ -2964,10 +3013,23 @@ class ProductionBackend(GuiBackend):
         current = self._current_mail_source(inquiry_id, at, module=business_module, manual=manual)
         if current is None:
             return None
-        category = "business_confirmed" if reason in {"MODEL_DIFFERENCE_CONFIRMED", "SOURCE_STATUS_NOT_UPDATED"} else "unknown_write" if reason in {"UPDATE_RESULT_UNCONFIRMED", "SAVE_OUTCOME_UNKNOWN", "UNKNOWN_WRITE_OUTCOME"} else "manual_login"
+        no_quote = self._no_quote_event(inquiry_id, at, manual=manual) if reason == "NO_MATCHING_PRODUCT" else None
+        if reason == "NO_MATCHING_PRODUCT":
+            from src.sheets.worksheet_schema import worksheet_schema
+            status = current[1].cells.get(worksheet_schema(current[0].record_identity.worksheet.worksheet).status_column)
+            if no_quote is None or status != "未发":
+                return None
+            event = no_quote.event_id
+        pre_submit = self._pre_submit_failure_event(inquiry_id, at, manual=manual) if reason == "AI_RECOGNITION_MISMATCH" else None
+        if reason == "AI_RECOGNITION_MISMATCH":
+            from src.sheets.worksheet_schema import worksheet_schema
+            if pre_submit is None or current[1].cells.get(worksheet_schema(current[0].record_identity.worksheet.worksheet).status_column) != "未发":
+                return None
+            event = pre_submit.event_id
+        category = "business_confirmed" if reason in {"MODEL_DIFFERENCE_CONFIRMED", "SOURCE_STATUS_NOT_UPDATED", "NO_MATCHING_PRODUCT", "AI_RECOGNITION_MISMATCH"} else "unknown_write" if reason in {"UPDATE_RESULT_UNCONFIRMED", "SAVE_OUTCOME_UNKNOWN", "UNKNOWN_WRITE_OUTCOME"} else "manual_login"
         if category == "manual_login" and reason not in {"INSO_AUTHENTICATION_REQUIRED", "MANUAL_VERIFICATION_REQUIRED", "CREDENTIAL_REJECTED", "SHEETS_AUTH_UNAVAILABLE"}:
             return None
-        return {"incident_key": f"{module}:{inquiry_id}:{reason}:{event}", "category": category,
+        proof = {"incident_key": f"{module}:{inquiry_id}:{reason}:{event}", "category": category,
                     "inquiry_id": inquiry_id, "module": module, "reason_code": reason, "active": True,
                     "source_binding": binding_key(current[0].record_identity),
                     "current_business": True, "needs_owner": True, "verified": True,
@@ -2978,11 +3040,24 @@ class ProductionBackend(GuiBackend):
                             else "请在原Chrome完成已确认的登录或人工验证；不要重发采购。"),
                     "uncertainty": "外部写入结果尚未确认" if category == "unknown_write" else "登录完成后的业务结果尚未核实"}
 
+        if no_quote is not None:
+            proof.update(research_status="EXCEPTION", no_quote_confirmed=True, purchase_absent=True,
+                research_recorded_at=no_quote.occurred_at.isoformat(),
+                action="请人工跟进可用报价并决定后续处理；本单未发采购。",
+                uncertainty="最近一次调研未取得有效报价，不代表型号错误或网站故障。",
+                legacy_commands=[f"purchase-exception:{inquiry_id}:RESEARCH:NO_MATCHING_PRODUCT"])
+        if pre_submit is not None:
+            proof.update(pre_submit_confirmed=True, purchase_outcome="VALIDATION_FAILED", dispatch_absent=True,
+                action="请核对保留的录单页面及订单；校验通过后使用原单手工重跑。",
+                uncertainty="录单未完成，未发采购；不据此认定网站故障。")
+        return proof
+
     def _notify_runtime_fault(self, key, reason, *, at):
         from src.sheets.worksheet_schema import worksheet_schema
         from src.workflow.automatic_admission import binding_key
         inquiry = self._active_inso_inquiry
-        manual_login = reason == "INSO_AUTHENTICATION_REQUIRED" and "INSO" in self._site_manual_wait
+        manual_site = {"INSO_AUTHENTICATION_REQUIRED": "INSO", "IC_NET_VERIFICATION_REQUIRED": "IC.net"}.get(reason)
+        manual_login = manual_site is not None and manual_site in self._site_manual_wait
         sites = {"GOOGLE": "Google Sheets", "INSO": "INSO", "IC_NET": "IC.net", "FX": "汇率网站", "BROWSER": "Browser/CDP"}
         site = next((value for code, value in sites.items() if reason.startswith(code+"_")), None)
         if reason == "GOOGLE_READ_RETRY_EXHAUSTED":
@@ -3003,7 +3078,17 @@ class ProductionBackend(GuiBackend):
                 "action": "请检查原程序暂停提示及Google操作页；保留人工页面，不要重发采购或报价。",
                 "uncertainty": "尚不能确认操作页身份或收口；不能据此判断Google整体不可用，也不能推断订单写入成功或失败。"}
         elif manual_login:
-            proof = self._fault_evidence(inquiry, reason, at=at, event="native-manual-login", module="INSO")
+            proof = self._fault_evidence(inquiry, reason, at=at, event="native-manual-login", module="INSO") if manual_site == "INSO" else None
+            if (proof is None and self._v13_ledger_ready and self._run_id and not self._closed and not self._owner_stop_requested
+                    and self._state in {RunState.RUNNING, RunState.QUOTATION_RUNNING, RunState.MANUAL_REVIEW,
+                                        RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}):
+                proof = {"incident_key": f"{manual_site}:verified-unbound-manual-login", "category": "runtime_login",
+                    "module": manual_site, "reason_code": reason, "run_id": self._run_id,
+                    "original_event": "native-manual-login", "active": True, "current_business": True,
+                    "needs_owner": True, "verified": True, "verified_at": at.isoformat(),
+                    "manual_verification_confirmed": True,
+                    "action": f"请在原Chrome完成已确认的{manual_site}登录或人工验证；不要重复提交采购。",
+                    "uncertainty": "相关来源操作尚未恢复；不能据此推断任何订单已发送或失败。"}
         elif site and (reason.endswith(("WAITING_RECOVERY", "OUTAGE_THREE_HOURS")) or reason == "GOOGLE_READ_RETRY_EXHAUSTED"):
             incident_key = f"program-blocked:{site}"
             # Only a previously bound active task can establish affected business.
@@ -3050,6 +3135,14 @@ class ProductionBackend(GuiBackend):
         if any(r.address.strip().casefold() not in allowed for r in command.recipients):
             return "RECIPIENT_NOT_CONFIGURED"
         proof = json.loads(command.review or "{}")
+        if proof.get("category") == "runtime_login":
+            if (self._closed or self._owner_stop_requested or proof.get("run_id") != self._run_id
+                    or proof.get("module") not in self._site_manual_wait
+                    or self._state not in {RunState.RUNNING, RunState.QUOTATION_RUNNING, RunState.MANUAL_REVIEW,
+                                           RunState.MODULE_PAUSED, RunState.GLOBAL_STOP}
+                    or {r.address.strip().casefold() for r in command.recipients} != {"linan229@qq.com"}):
+                return "EVENT_NOT_CURRENT"
+            return None
         if proof.get("category") == "runtime_stop":
             if (self._closed or self._owner_stop_requested or proof.get("run_id") != self._run_id
                     or proof.get("stop_reason") != self._runtime_stop_reason
@@ -3100,9 +3193,41 @@ class ProductionBackend(GuiBackend):
             if current[1].cells.get(worksheet_schema(item.record_identity.worksheet.worksheet).status_column) != "未发":
                 return "EVENT_NOT_CURRENT"
             return None
+        if proof.get("reason_code") == "AI_RECOGNITION_MISMATCH":
+            failure = self._pre_submit_failure_event(command.inquiry_id, now, manual=proof.get("manual") is True)
+            if (failure is None or failure.event_id != proof.get("original_event")
+                    or {r.address.strip().casefold() for r in command.recipients} != {"linan229@qq.com"}):
+                return "EVENT_RECOVERED"
+        if proof.get("reason_code") == "NO_MATCHING_PRODUCT":
+            from src.workflow.automatic_admission import age_reason
+            if not proof.get("manual") and age_reason(proof.get("inquiry_day"), now, module="inquiry"):
+                return "ORDER_AGE_EXCLUDED"
+            failure = self._no_quote_event(command.inquiry_id, now, manual=proof.get("manual") is True)
+            if failure is None or failure.event_id != proof.get("original_event"):
+                return "EVENT_RECOVERED"
+            recipients = (NotificationRecipient("owner", "linan229@qq.com"),
+                          NotificationRecipient("ops", "shawn@inso-hk.com"))
+            # Claimed commands contain only due recipients, not already SENT peers.
+            if (any(r not in recipients for r in command.recipients)
+                    or command.command_id != f"purchase-exception:{command.inquiry_id}:RESEARCH:NO_MATCHING_PRODUCT:recipients-v2"
+                    or not self._v12_store.notification_already_created(
+                        command.command_id, command.inquiry_id, command.kind, recipients)):
+                return "RECIPIENT_NOT_CONFIGURED"
         current = self._current_mail_source(command.inquiry_id, now, module=module, manual=proof.get("manual") is True)
         if current is None:
             return "CURRENT_REVIEW_PENDING"
+        if proof.get("reason_code") == "NO_MATCHING_PRODUCT":
+            from src.sheets.worksheet_schema import worksheet_schema
+            from src.workflow.automatic_admission import binding_key
+            if (proof.get("source_binding") != binding_key(current[0].record_identity)
+                    or current[1].cells.get(worksheet_schema(current[0].record_identity.worksheet.worksheet).status_column) != "未发"):
+                return "EVENT_RECOVERED"
+        if proof.get("reason_code") == "AI_RECOGNITION_MISMATCH":
+            from src.sheets.worksheet_schema import worksheet_schema
+            from src.workflow.automatic_admission import binding_key
+            if (proof.get("source_binding") != binding_key(current[0].record_identity)
+                    or current[1].cells.get(worksheet_schema(current[0].record_identity.worksheet.worksheet).status_column) != "未发"):
+                return "EVENT_RECOVERED"
         if command.kind in {NotificationKind.IMPORTANT_ORDER, NotificationKind.DUPLICATE_ORDER}:
             from src.sheets.worksheet_schema import worksheet_schema
             status = current[1].cells.get(worksheet_schema(current[0].record_identity.worksheet.worksheet).status_column)
@@ -3343,6 +3468,10 @@ class ProductionBackend(GuiBackend):
             self._order_notifications = OrderExceptionNotifications(self.root)
         self._order_notifications.notify(**kwargs)
 
+    def _resolve_order_exception(self, pi_no, *, at):
+        if self._order_notifications is not None:
+            self._order_notifications.resolve_order(pi_no, at=at)
+
     @foreground_resources
     def _order_mail_worker(self) -> None:
         from .sales_header import run_sales_header_check
@@ -3353,6 +3482,7 @@ class ProductionBackend(GuiBackend):
             stage, text = run_sales_header_check(
                 config_path=self.config_path,
                 production_path=self.production_path, root=self.root, notify=self._notify_order_exception,
+                resolve_notify=self._resolve_order_exception,
             )
         except Exception:  # noqa: BLE001 - never leak provider/customer data
             stage, text = "STOPPED", "订单头部检查未完成；未保存或提交，请检查配置后重试。"

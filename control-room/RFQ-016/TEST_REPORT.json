@@ -698,5 +698,204 @@
     },
     "repair_deployed_and_observed": true,
     "production_complete_limitation": "No live purchase or Google quote/status write: all six sources yielded no quote. Long-term and future quote delivery paths not re-proven."
+  },
+  "mail_gate_audit_20261105": {
+    "status": "OFFLINE_PASS_BUILD_PENDING",
+    "producer_inventory": [
+      {
+        "file": "src/launcher/backend.py",
+        "producer": "ProductionBackend._idle_login_tick",
+        "policy": "Unverified optional idle maintenance is local only",
+        "positive": [
+          "INTENTIONALLY_UNVERIFIED_MAINTENANCE"
+        ],
+        "negative": [
+          "tests/workflow/test_rfq016_regressions.py::test_recoverable_google_warning_never_reaches_smtp"
+        ]
+      },
+      {
+        "file": "src/launcher/purchase_completion.py",
+        "producer": "PurchaseCompletionActions.notify",
+        "policy": "Confirmed no-quote, unsubmitted validation and durable UNKNOWN only",
+        "positive": [
+          "tests/workflow/test_no_quote_notice.py::test_current_no_quote_sends_original_two_recipient_business_notice_once",
+          "tests/workflow/test_mail_gate_audit.py::test_durable_unsubmitted_purchase_validation_failure_notifies_owner"
+        ],
+        "negative": [
+          "tests/workflow/test_no_quote_notice.py::test_closed_or_already_purchased_source_never_emits_no_quote_notice"
+        ]
+      },
+      {
+        "file": "src/launcher/v13_integration.py",
+        "producer": "notify_quotation",
+        "policy": "Current durable unknown write or confirmed source-status mismatch, not a transient pre-click read",
+        "positive": [
+          "tests/workflow/test_rfq016_review.py::test_native_dispatch_crash_restart_preserves_unknown_and_one_alert"
+        ],
+        "negative": [
+          "tests/workflow/test_mail_gate_audit.py::test_quote_without_row_error_is_safely_ignored_not_a_mail_exception"
+        ]
+      },
+      {
+        "file": "src/launcher/v13_integration.py",
+        "producer": "notify_runtime_fault",
+        "policy": "Verified manual verification, current safety pause or verified persistent incident",
+        "positive": [
+          "tests/workflow/test_mail_gate_audit.py::test_confirmed_manual_auth_before_order_binding_still_notifies_owner_once",
+          "tests/workflow/test_mail_gate_audit.py::test_verified_icnet_manual_challenge_is_not_lost_in_generic_read_defer"
+        ],
+        "negative": [
+          "tests/workflow/test_mail_gate_audit.py::test_runtime_manual_notice_is_rechecked_before_actual_smtp"
+        ]
+      },
+      {
+        "file": "src/launcher/v13_integration.py",
+        "producer": "notify_quotation_model_difference",
+        "policy": "Verified original-model versus actual-quote difference; no assertion of final write outcome",
+        "positive": [
+          "tests/workflow/test_mail_gate_audit.py::test_current_model_difference_is_deliverable_to_original_pair_without_false_write_claim"
+        ],
+        "negative": [
+          "tests/workflow/test_rfq016_review.py::test_completed_customer_suppresses_original_business_notice"
+        ]
+      },
+      {
+        "file": "src/workflow/mail_research.py",
+        "producer": "MailResearchService.enqueue_report",
+        "policy": "Admitted new subject/UID task; same original SMTP; Shawn only; no SENT/UNKNOWN repeat",
+        "positive": [
+          "tests/workflow/test_mail_research.py::test_baseline_restart_uid_epoch_distinct_requests_and_exact_outbox"
+        ],
+        "negative": [
+          "tests/workflow/test_rfq016_second_review.py::test_legacy_unverified_requests_never_research_or_send"
+        ]
+      },
+      {
+        "file": "src/workflow/mail_research.py",
+        "producer": "MailResearchService.raise_alert",
+        "policy": "Verified service auth/resource/delivery intervention through service-scoped final review",
+        "positive": [
+          "tests/workflow/test_mail_research.py::test_transient_imap_errors_zero_alerts_and_confirmed_auth_once"
+        ],
+        "negative": [
+          "tests/workflow/test_mail_research.py::test_all_unavailable_fails_bounded_without_empty_success_mail"
+        ]
+      },
+      {
+        "file": "src/workflow/order_notifications.py",
+        "producer": "exception_command",
+        "policy": "Actual closed-code manual invocation STOPPED; original Owner only; mail evidence resolution does not mutate orders",
+        "positive": [
+          "tests/workflow/test_mail_gate_audit.py::test_actual_owner_manual_order_failure_has_verified_notice_not_blanket_suppression"
+        ],
+        "negative": [
+          "tests/workflow/test_mail_gate_audit.py::test_manual_notice_recovery_changes_only_mail_proof_not_business_rows"
+        ]
+      },
+      {
+        "file": "src/workflow/purchase_follow_up.py",
+        "producer": "PurchaseFollowUp.run",
+        "policy": "Original confirmed purchase episode overdue 3 work hours, current source still awaiting procurement",
+        "positive": [
+          "tests/workflow/test_purchase_follow_up.py::test_threshold_is_strict_and_restart_deduplicates_both_recipients"
+        ],
+        "negative": [
+          "tests/workflow/test_purchase_follow_up.py::test_no_reminder_after_source_status_changes"
+        ]
+      },
+      {
+        "file": "src/workflow/tp_research.py",
+        "producer": "tp_mail",
+        "policy": "Exact TP task/source/one-month age or explicit manual task; original TP recipients",
+        "positive": [
+          "tests/workflow/test_tp_research.py::test_historical_no_inquiry_15_minute_polls_tp_edits_and_manual_generation",
+          "tests/workflow/test_rfq016_regressions.py::test_current_legal_business_mail_still_reaches_fake_smtp"
+        ],
+        "negative": [
+          "tests/workflow/test_tp_research.py::test_source_revalidation_conflict_prevents_mail_and_duplicate_brief_anchor_holds"
+        ]
+      },
+      {
+        "file": "src/workflow/v12_flow.py",
+        "producer": "V12WorkflowCoordinator._enqueue_notification",
+        "policy": "Original important/duplicate business notices, current identity/source/age and configured recipients",
+        "positive": [
+          "tests/workflow/test_mail_research.py::test_important_mail_actual_backend_async_six_sources_and_closed_suppression"
+        ],
+        "negative": [
+          "tests/workflow/test_rfq016_review.py::test_completed_customer_suppresses_original_business_notice"
+        ]
+      },
+      {
+        "file": "src/workflow/v12_store.py",
+        "producer": "V12Store.claim_due_notifications",
+        "policy": "Decoder of original durable queue, not a new producer",
+        "positive": [
+          "NOT_A_PRODUCER"
+        ],
+        "negative": [
+          "NOT_A_PRODUCER"
+        ]
+      }
+    ],
+    "source_sha_before": "97f0ac6959e4efb3bd30bac48fa6e812b001c238",
+    "production_installed": false,
+    "no_customer_data": true,
+    "fixed_gate_failures": [
+      "Confirmed six-source no-quote business notice unreachable behind unknown-only guard",
+      "Durable unsubmitted validation failure lacked admitted business proof",
+      "Verified shared INSO human challenge before order binding lacked notice",
+      "Explicit IC.net human challenge lost in generic read defer",
+      "Typed actual manual sales-header stop had no admitted proof",
+      "Raw source brand wrongly compared to unconfirmed derived brand",
+      "Due-recipient subset must not be rejected on partial SMTP retry"
+    ],
+    "retained_suppression": [
+      "Legacy, expired or unbound automatic order notices",
+      "Recovered or no-longer-triggered business or technical events",
+      "Single transient Google/provider read failure or exhausted read without verified intervention evidence",
+      "Wrong current identity/status/date or recipient",
+      "Prior SENT/UNKNOWN or abandoned SENDING protected across restart",
+      "Unverified optional idle login maintenance and direct operator-alert bypass"
+    ],
+    "unchanged_mail_paths": [
+      "IMPORTANT_ORDER",
+      "DUPLICATE_ORDER",
+      "PURCHASE_FOLLOW_UP_REQUIRED with original120s truthful fallback",
+      "MODEL_DIFFERENCE_CONFIRMED with truthful body",
+      "Unknown external writes with original persistent hold",
+      "TP original recipients/task age review",
+      "Independent admitted IMAP subject/UID report to Shawn only"
+    ],
+    "external_effects_for_testing": false,
+    "production_cdp_connections": 0,
+    "COMPUTER_USE_NOT_USED": true,
+    "targeted": {
+      "evidence": "D:\\Program_Leo\\INSO_Leo\\.tmp\\mail-final-target-20261105.xml",
+      "sha256": "3f80433a9d06edfe6f2596d5b8b898fceb4816a733373d4e736a611de3c0126c",
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "127",
+      "time": "15.754",
+      "timestamp": "2026-11-05T11:09:21.513799+08:00",
+      "hostname": "Leo229"
+    },
+    "full": {
+      "evidence": "D:\\Program_Leo\\INSO_Leo\\.tmp\\mail-gates-full-final-20261105.xml",
+      "sha256": "3099ad749de06c485f9891303ab0202d36f2463c3378571ae84ca484a247d7ae",
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "1",
+      "tests": "3571",
+      "time": "255.681",
+      "timestamp": "2026-11-05T11:06:07.822383+08:00",
+      "hostname": "Leo229"
+    },
+    "ruff": "PASS src tests",
+    "diff_check": "PASS",
+    "false_alert_sample_smtp_sends": 0
   }
 }

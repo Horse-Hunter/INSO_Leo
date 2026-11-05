@@ -612,7 +612,9 @@ def test_model_difference_mail_reuses_durable_outbox_two_recipients_restart_and_
         subject, body = c.execute("SELECT subject,text_body FROM workflow_v12_notification_commands").fetchone()
         assert subject == "【INSO】采购报价差异"
         assert "原表型号：MPN" in body and "报价实际型号：MPN suffix" in body
-        assert "报价更新尚未确认" in body
+        assert "本次匹配到的报价型号与原表不同" in body
+        assert "不作为报价写入成功或失败的凭据" in body
+        assert "报价更新尚未确认" not in body
     transport = FakeNotificationTransport({"owner": (DeliveryOutcome.SENT,), "ops": (DeliveryOutcome.RETRYABLE_FAILURE, DeliveryOutcome.SENT)})
     V12NotificationWorker(ledger, transport).run_due(now=NOW)
     notify_quotation_model_difference(V12Store(db), result, "MPN", at=NOW, evidence=evidence)

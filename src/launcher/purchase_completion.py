@@ -96,6 +96,12 @@ class PurchaseCompletionActions:
         for item in self.workflow_store.all_items():
             if not self._automatic_admission(item.inquiry_id, at):
                 continue
+            if (item.status.value == "FAILED" and item.last_error == "NO_MATCHING_PRODUCT"
+                    and self.v12_store.business_state(item.inquiry_id) is BusinessState.RESEARCH_FAILED):
+                # Reconcile a still-current unresolved business notice through
+                # the original queue; never rerun research or procurement.
+                self.notify(item.inquiry_id, "RESEARCH", "NO_MATCHING_PRODUCT", at=at)
+                continue
             if item.inquiry_id in self._settled_status_ids:
                 continue
             pending = self.v12_store.business_state(item.inquiry_id) is BusinessState.STATUS_WRITE_PENDING
@@ -141,6 +147,37 @@ class PurchaseCompletionActions:
             PurchaseOutcome.UNKNOWN_WRITE_OUTCOME, PurchaseOutcome.MANUAL_REVIEW,
             PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED,
         }
+        if phase == "RESEARCH" and reason == "NO_MATCHING_PRODUCT" and outcome is None:
+            if self._mail_evidence is None:
+                return
+            import json
+            proof = self._mail_evidence(inquiry_id, reason, at=at,
+                                        event=command_id, module="inquiry")
+            if proof is None:
+                return
+            body = (f"型号：{item.mpn}\n品牌：{item.brand or '未填写'}\n数量：{item.quantity}\n"
+                    "情况：最近一次已记录调研，六来源均未取得有效报价；该单未发采购。\n"
+                    f"调研登记时间：{proof['research_recorded_at']}\n"
+                    "处理：请人工跟进可用报价并决定后续处理。\n"
+                    "未取得报价不代表客户型号填写错误；没有可核实的价格、库存或订单总价。")
+            self.v12_store.enqueue_notification(NotificationCommand(
+                command_id, inquiry_id, NotificationKind.PURCHASE_EXCEPTION, recipients,
+                f"【询价待处理】六来源未取得有效报价：{item.mpn}", body, None, at,
+                2, json.dumps(proof, sort_keys=True)))
+            return
+        if (phase == "PURCHASE" and reason == "AI_RECOGNITION_MISMATCH"
+                and outcome is PurchaseOutcome.VALIDATION_FAILED and self._mail_evidence is not None):
+            import json
+            proof = self._mail_evidence(inquiry_id, reason, at=at, event=command_id, module="inquiry")
+            if proof is not None:
+                self.v12_store.enqueue_notification(NotificationCommand(
+                    command_id, inquiry_id, NotificationKind.PURCHASE_EXCEPTION, (OWNER,),
+                    f"【采购待处理】录单校验未通过：{item.mpn}",
+                    f"型号：{item.mpn}\n情况：录单校验或操作未完成，未发采购。\n"
+                    "请核对保留的录单页面及原订单信息，处理后使用原单手工重跑；不要重复提交。",
+                    None, at, 2, json.dumps(proof, sort_keys=True)))
+            return
+        recipients = (OWNER,)  # Unknown writes retain the original Owner-only protection.
         # Technical errors stay in the local state/alerts. Only a durable unknown
         # external effect can justify this immediate actionable notification.
         if not uncertain or self._mail_evidence is None:

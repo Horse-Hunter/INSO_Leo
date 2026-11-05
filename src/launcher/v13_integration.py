@@ -68,7 +68,7 @@ def notify_refresh_uncertain(store, result, old_price, new_price, *, at):
 
 
 def notify_quotation(store, result, key, episode, *, at, old_price=None, new_price=None, evidence=None):
-    if result.inquiry_id is None or result.row_error_reason.value not in {"UPDATE_RESULT_UNCONFIRMED", "SOURCE_STATUS_NOT_UPDATED"} or evidence is None:
+    if evidence is None or result.inquiry_id is None or result.row_error_reason is None or result.row_error_reason.value not in {"UPDATE_RESULT_UNCONFIRMED", "SOURCE_STATUS_NOT_UPDATED"}:
         return
     if result.row_error_reason.value == "UPDATE_RESULT_UNCONFIRMED" and not getattr(result, "effect_uncertain", False):
         return  # A pre-click timeout cannot claim an unknown external write.
@@ -143,8 +143,9 @@ def notify_quotation_model_difference(store, result, source_model, *, at, eviden
         f"原表型号：{source_model}\n报价实际型号：{actual_model}\n"
         f"位置：{result.source_worksheet.worksheet if result.source_worksheet else '未能确认'}"
         f"，行号{result.source_row_position}（定位参考）\n"
-        "情况：匹配到的报价型号与原表不同，报价更新尚未确认。\n"
-        "处理：请核对型号差异；原表型号保留，实际报价型号会追加到备注。"
+        "情况：本次匹配到的报价型号与原表不同。\n"
+        "处理：请核对型号差异、相关报价记录及原表备注；原表型号保留。\n"
+        "本提醒不作为报价写入成功或失败的凭据。"
     )
     store.enqueue_notification(NotificationCommand(
         command_id, result.inquiry_id, NotificationKind.PURCHASE_EXCEPTION,

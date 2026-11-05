@@ -95,7 +95,7 @@ def prepare_sales_rows(order, client):
     return tuple(rows)
 
 
-def run_sales_header_check(*, config_path, production_path, root, notify=None):
+def run_sales_header_check(*, config_path, production_path, root, notify=None, resolve_notify=None):
     """One explicit click -> oldest unfilled mail -> new owned unsaved order."""
     from datetime import UTC, datetime
     from uuid import uuid4
@@ -186,6 +186,12 @@ def run_sales_header_check(*, config_path, production_path, root, notify=None):
         from .sales_intent import intent_report, mark_sales_intent
         sheets_report = intent_report(mark_sales_intent(order, production=production, root=root, browser_handle=handle))
         page.bring_to_front()
+        if resolve_notify is not None:
+            try:
+                resolve_notify(order.pi_no, at=datetime.now(UTC))
+            except Exception:  # noqa: BLE001 - notification recovery cannot abort completed preparation
+                import logging
+                logging.getLogger(__name__).warning("Manual order notice recovery unavailable")
         return "WAITING_OWNER", (f"本次订单：合同{count}行已完成解析和 ICNET 封装查询（已脱敏）。\n"
             "头部及全部明细字段读回一致，PDF 已上传1张，等待 Owner 复核。\n"
             "V1.4 worker 已结束，不影响询价；销售订单页面保留。\n"
@@ -221,7 +227,7 @@ def run_sales_header_check(*, config_path, production_path, root, notify=None):
         if notify is not None:
             try:
                 notify(invocation_id=invocation, pi_no=error.pi_no, part_number=error.part_number,
-                    situation=situation, treatment=treatment, at=datetime.now(UTC))
+                    situation=situation, treatment=treatment, at=datetime.now(UTC), event_code=error.code)
                 notified = True
             except Exception:  # noqa: BLE001, S110 - retain safe report if SMTP/outbox unavailable
                 pass

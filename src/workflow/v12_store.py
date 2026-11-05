@@ -712,7 +712,30 @@ class V12Store:
 
     def previous_incident_delivery_protected(self, review):
         with _connect(self.database_path) as db:
-            return _legacy_notice_protected(db, review)
+            if _legacy_notice_protected(db, review):
+                return True
+            proof = json.loads(review or "{}")
+            if (proof.get("reason_code") == "INSO_AUTHENTICATION_REQUIRED"
+                    and proof.get("module") == "INSO"
+                    and proof.get("category") in {"manual_login", "runtime_login"}):
+                # A login challenge belongs to the shared session, not one row.
+                # Protect prior bound/unbound deliveries across the same unresolved episode.
+                for row in db.execute("SELECT c.review_json FROM workflow_v12_notification_commands c "
+                        "JOIN workflow_v12_notification_recipients r USING(command_id) "
+                        "WHERE r.outcome IN ('SENT','UNKNOWN','SENDING','OPERATIONAL_SENDING')"):
+                    try:
+                        previous = json.loads(row[0] or "{}")
+                    except (TypeError, ValueError):
+                        continue
+                    if not isinstance(previous, dict):
+                        continue
+                    if (previous.get("incident_key") != proof.get("incident_key")
+                            and previous.get("module") == "INSO" and previous.get("active") is True
+                            and not previous.get("recovered_at")
+                            and previous.get("reason_code") == "INSO_AUTHENTICATION_REQUIRED"
+                            and previous.get("category") in {"manual_login", "runtime_login"}):
+                        return True
+            return False
 
     def notification_review(self, command_id):
         with _connect(self.database_path) as db:

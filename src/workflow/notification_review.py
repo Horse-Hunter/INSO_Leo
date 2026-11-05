@@ -30,6 +30,23 @@ def review_reason(command, now):
             return "REASON_UNVERIFIED"
         category = proof.get("category")
         from .automatic_admission import age_reason
+        if category == "runtime_login":
+            if (proof.get("reason_code") != {"INSO": "INSO_AUTHENTICATION_REQUIRED", "IC.net": "IC_NET_VERIFICATION_REQUIRED"}.get(proof.get("module"))
+                    or proof.get("module") not in {"INSO", "IC.net"}
+                    or proof.get("manual_verification_confirmed") is not True
+                    or not proof.get("run_id") or command.inquiry_id is not None):
+                return "MANUAL_REQUIREMENT_UNVERIFIED"
+            return None
+        if category == "manual_order":
+            from .order_notifications import MANUAL_ORDER_CODES
+            if (proof.get("module") != "sales_order" or proof.get("reason_code") != "MANUAL_ORDER_NEEDS_REVIEW"
+                    or proof.get("event_code") not in MANUAL_ORDER_CODES
+                    or proof.get("manual_invocation") is not True or proof.get("automatic_stopped") is not True
+                    or command.command_id != "v14-exception:"+str(proof.get("invocation_id"))
+                    or command.inquiry_id != "v14-notify:"+str(proof.get("invocation_id"))):
+                return "BUSINESS_EVENT_UNVERIFIED"
+            from .automatic_admission import age_reason
+            return "ORDER_AGE_EXCLUDED" if age_reason(proof.get("invoked_at"), now, module="inquiry") else None
         if category == "service_stop":
             if (proof.get("module") != "mail_research" or proof.get("account") != "linan229@qq.com"
                     or proof.get("reason_code") not in {"IMAP_AUTH_REQUIRED", "REPORT_DELIVERY_UNKNOWN", "CDP_RESOURCE_UNCONFIRMED"}
@@ -57,7 +74,19 @@ def review_reason(command, now):
             if proof["reason_code"] not in {"INSO_AUTHENTICATION_REQUIRED", "MANUAL_VERIFICATION_REQUIRED", "CREDENTIAL_REJECTED", "SHEETS_AUTH_UNAVAILABLE"}:
                 return "MANUAL_REQUIREMENT_UNVERIFIED"
         elif category == "business_confirmed":
-            if proof["reason_code"] not in {"MODEL_DIFFERENCE_CONFIRMED", "PURCHASE_FOLLOW_UP_REQUIRED", "SOURCE_STATUS_NOT_UPDATED"}:
+            if proof["reason_code"] not in {"MODEL_DIFFERENCE_CONFIRMED", "PURCHASE_FOLLOW_UP_REQUIRED", "SOURCE_STATUS_NOT_UPDATED", "NO_MATCHING_PRODUCT", "AI_RECOGNITION_MISMATCH"}:
+                return "BUSINESS_EVENT_UNVERIFIED"
+            if proof["reason_code"] == "NO_MATCHING_PRODUCT" and (
+                    proof.get("module") != "inquiry" or proof.get("business_module") != "inquiry"
+                    or proof.get("research_status") != "EXCEPTION"
+                    or proof.get("no_quote_confirmed") is not True
+                    or proof.get("purchase_absent") is not True
+                    or not proof.get("source_binding") or not proof.get("research_recorded_at")):
+                return "BUSINESS_EVENT_UNVERIFIED"
+            if proof["reason_code"] == "AI_RECOGNITION_MISMATCH" and (
+                    proof.get("module") != "inquiry" or proof.get("pre_submit_confirmed") is not True
+                    or proof.get("purchase_outcome") != "VALIDATION_FAILED" or proof.get("dispatch_absent") is not True
+                    or not proof.get("source_binding")):
                 return "BUSINESS_EVENT_UNVERIFIED"
         elif category == "unknown_write":
             if proof["reason_code"] not in {"UPDATE_RESULT_UNCONFIRMED", "SAVE_OUTCOME_UNKNOWN", "UNKNOWN_WRITE_OUTCOME"}:
