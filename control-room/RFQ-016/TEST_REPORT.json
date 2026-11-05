@@ -700,7 +700,7 @@
     "production_complete_limitation": "No live purchase or Google quote/status write: all six sources yielded no quote. Long-term and future quote delivery paths not re-proven."
   },
   "mail_gate_audit_20261105": {
-    "status": "OFFLINE_PASS_BUILD_PENDING",
+    "status": "HEALTH_HOLD",
     "producer_inventory": [
       {
         "file": "src/launcher/backend.py",
@@ -839,7 +839,7 @@
       }
     ],
     "source_sha_before": "97f0ac6959e4efb3bd30bac48fa6e812b001c238",
-    "production_installed": false,
+    "production_installed": true,
     "no_customer_data": true,
     "fixed_gate_failures": [
       "Confirmed six-source no-quote business notice unreachable behind unknown-only guard",
@@ -868,7 +868,7 @@
       "Independent admitted IMAP subject/UID report to Shawn only"
     ],
     "external_effects_for_testing": false,
-    "production_cdp_connections": 0,
+    "production_cdp_connections": 6,
     "COMPUTER_USE_NOT_USED": true,
     "targeted": {
       "evidence": "D:\\Program_Leo\\INSO_Leo\\.tmp\\mail-final-target-20261105.xml",
@@ -896,6 +896,112 @@
     },
     "ruff": "PASS src tests",
     "diff_check": "PASS",
-    "false_alert_sample_smtp_sends": 0
+    "false_alert_sample_smtp_sends": 0,
+    "source_sha": "2bb0c0b7c932f75552bca6d9cccbc87853194676",
+    "source_tree": "64272e94d686178ec7b926a82fe3fe78865ee714",
+    "tests_tree": "49321aec755ac2c5ae6b35a13dbc252e366dab24",
+    "exe_sha256": "2c884d756921c7f07911182de19bd0493c828cc3937905117e51c25b8cd8fae9",
+    "package_files": 2875,
+    "frozen_modified_modules": 7,
+    "manifest_sha256": "7ea37dadaa8a2c703344f0d46b8fd527f634f8877d9a14f295319cae91792a6a",
+    "build_self_check": "PASS exit0 / RELEASE_SCAN_OK",
+    "remaining": "First current-source read has not completed; no-quote notice not created; exact pending app browser call needs further source/liveness investigation. Do not claim complete production recovery.",
+    "formal_exe_unchanged": false,
+    "normal_exit_requested_but_incomplete": true,
+    "exit_block": {
+      "evidence": "D:\\Program_Leo\\INSO_Leo\\.tmp\\mail-gates-exit-block-20261105.json",
+      "sha256": "211127f19a923b2463cfa81d20e4191a26b2db83cf88515008925a6f66bef846",
+      "method": "Existing py-spy --json --nonblocking, no locals, no process pause/injection, no production CDP",
+      "observed": "production-sheets-poller waiting in Playwright event loop; launcher joins poller; research worker waits poll_drained; GUI still mainloop; owner_exit requested incomplete",
+      "exact_pending_browser_call": "NOT_VERIFIED",
+      "provider_outage": "NOT_VERIFIED; not evidence Google globally unavailable",
+      "forced_termination": true,
+      "program_replacement": true,
+      "next": "Original forced-exit blocker resolved by latest Owner authorization. New run first read still waits; mail source repair installed but operational acceptance HEALTH_HOLD."
+    },
+    "cleanup": {
+      "fake_test_dirs": 19,
+      "fake_test_bytes_retired": 851786429,
+      "canonical_stage_bytes_retired": 268140245,
+      "backup_retained": true,
+      "all_protected_runtime_profile_history_preserved": true,
+      "all_one_use_helpers_retired": true
+    },
+    "normal_exit_block_resolved_by": "Owner explicitly authorized one forced main-process exit after failure; prior global ban remains for all other actions",
+    "forced_exit_authorized": true,
+    "backup": "D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-mail-gates-20261105T063900Z",
+    "installed_exe": "D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe",
+    "gui_pid": 39036,
+    "original_observer_pid": 29616,
+    "chrome_listener_pid_unchanged": 29232,
+    "self_checks": {
+      "old": 0,
+      "installed": 0,
+      "idle": 0
+    },
+    "all_16_tables_and_configs_unchanged_after_install_and_idle_check": true,
+    "start": "2026-11-05T06:40:12.1671261Z",
+    "live_business_notice": "NOT_CREATED / NOT_VERIFIED; no forced stale-source send",
+    "final_observation": {
+      "at": "2026-11-05T07:06:48.437455+00:00",
+      "integrity": "ok",
+      "prior_terminal_count": 175,
+      "prior_terminal_unchanged": true,
+      "prior_protected_unknown_count": 1,
+      "prior_protected_unknown_unchanged": true,
+      "original_intake_times_unchanged": true,
+      "watched_orders": [
+        {
+          "label": "watch-order-1",
+          "status": "FAILED",
+          "research_status": "EXCEPTION",
+          "last_error": "NO_MATCHING_PRODUCT",
+          "notice": [],
+          "save_events": 0
+        }
+      ],
+      "mail_counts": {
+        "SENT": 175,
+        "SUPPRESSED": 9
+      },
+      "last_log_timestamp": "2026-11-05 14:40:16,476",
+      "new_module_events": [
+        [
+          "2026-11-05 14:40:16,476",
+          "inquiry",
+          "begin",
+          "0.000"
+        ]
+      ]
+    },
+    "modules": {
+      "gui": "READY one formal GUI+original observer",
+      "inquiry": "FIRST_READ_WAIT_NOT_COMPLETED",
+      "quotation": "NOT_YET_OBSERVED_IN_NEW_RUN",
+      "tp": "NOT_YET_OBSERVED_IN_NEW_RUN",
+      "mail_research": "ORIGINAL_RECEIVER_WORKER_THREADS_ALIVE; live trigger not exercised"
+    },
+    "production_cdp_diagnostic_authorization": "Owner explicit later allows this one read-only stalled-run diagnosis; no further scope implied",
+    "readonly_cdp": {
+      "evidence": "D:\\Program_Leo\\INSO_Leo\\.tmp\\mail-gates-cdp-readonly-20261105.json",
+      "sha256": "a1081a68d1c435fa0d446de5367b956b9384d835c56cc049406f07b2e8630b1e",
+      "targets_before_after": 9,
+      "original_targets_preserved": true,
+      "owned_google_pages": "2 immediate responses; complete; no refresh/readFailed/settlement/dialog flags",
+      "cookie_or_token_access": false,
+      "page_navigation_input_close_create": false,
+      "all_diagnostic_connections_disconnected": true,
+      "browser_session_attach_detach": "immediate response; own observation session only",
+      "not_proven": "Exact application pending call; browser outage; final inbox delivery"
+    },
+    "source_files": [
+      "src/launcher/backend.py",
+      "src/launcher/purchase_completion.py",
+      "src/launcher/sales_header.py",
+      "src/launcher/v13_integration.py",
+      "src/workflow/notification_review.py",
+      "src/workflow/order_notifications.py",
+      "src/workflow/v12_store.py"
+    ]
   }
 }
