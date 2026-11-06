@@ -507,6 +507,13 @@ def is_isolated_source_read_error(error):
         GoogleSheetsReadError,
         GoogleSheetsReadUnavailable,
     )
+    # The quotation coordinator wraps an actual reader failure at its boundary.
+    # Accept only that exact wrapper with a reader cause, never arbitrary faults.
+    while isinstance(error, V12Fault) and error.reason == "SHEETS_READ_UNAVAILABLE":
+        nested = error.__cause__ or error.__context__
+        if nested is error or nested is None:
+            return False
+        error = nested
     if not isinstance(error, GoogleSheetsReadError):
         return False
     allowed = isinstance(error, GoogleSheetsReadUnavailable)

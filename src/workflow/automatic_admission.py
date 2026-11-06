@@ -131,7 +131,7 @@ def admit(identity, row, brief_lines, intake_at, *, now, module, manual=False, r
         return Admission(True, None, "OWNER_SINGLE_ORDER")
     value, origin = source_date(identity, row, brief_lines, intake_at, recorded_source_date=recorded_source_date, as_of=now)
     reason = age_reason(value, now, module=module)
-    return Admission(reason is None, reason, origin, inquiry_day(value) if reason is None and origin == "SOURCE_ORDER_DATE" else None)
+    return Admission(reason is None, reason, origin, inquiry_day(value) if reason is None and origin in {"SOURCE_ORDER_DATE", "SOURCE_RFQ_DATE", "RFQ_DATE"} else None)
 
 
 def binding_key(identity):

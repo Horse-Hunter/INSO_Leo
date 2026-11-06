@@ -1102,5 +1102,22 @@
       }
     ]
   },
-  "installed_source_commit": "2bb0c0b7c932f75552bca6d9cccbc87853194676"
+  "installed_source_commit": "2bb0c0b7c932f75552bca6d9cccbc87853194676",
+  "google_read_cross_review_20261106": {
+    "status": "OFFLINE_PASS_BUILD_PENDING",
+    "reviewed_base": "cd4d53141c31edbcdd62b572dcfb1b2fbb7f4789",
+    "independent_readonly_reviewers": 2,
+    "confirmed_P1_groups": 5,
+    "unresolved_scoped_P0_P1": 0,
+    "targeted_pass": 148,
+    "full_pass": 3623,
+    "full_skip": 1,
+    "full_seconds": 252.28,
+    "full_xml_sha256": "849267d8ac2b1eb6521f67799b68c41955290b4d5f90740e09c3ce3f4f48e35b",
+    "source_test_fingerprint_sha256": "09e30a0cbbd9848605298aba08197680f6e3c45389aa5eba391ab26f2327735a",
+    "red_cases_failed": 7,
+    "full_intermediate_not_acceptance": "23FAIL3582PASS11restricted-hostSKIP; obsolete injections and truthful explicit-date assertions corrected",
+    "production": "Owner normal exited; previous candidate installed but never started; latest build required",
+    "computer_use": "COMPUTER_USE_NOT_USED"
+  }
 }

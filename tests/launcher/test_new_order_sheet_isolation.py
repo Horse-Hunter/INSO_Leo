@@ -122,3 +122,69 @@ def test_google_read_does_not_probe_unrelated_manual_page_ownership(web,monkeypa
     monkeypatch.setattr(human,"evaluate",forbidden)
     with service.poll_scope():assert GoogleSheetsRowReader(service).read_rows(WorksheetIdentity("test","2026"))
     assert not human.closed and browser.connected
+
+
+@pytest.mark.parametrize("title",["2026","SHAHAB"])
+def test_plain_native_read_does_not_require_quotation_script_menu(web,title):
+    from src.sheets.google_reader import GoogleSheetsRowReader
+    service,browser,_,human=web
+    create=browser.contexts[0].new_page
+    def new_page():
+        page=create();page.menu_failure=True;return page
+    browser.contexts[0].new_page=new_page
+    with service.poll_scope():
+        assert GoogleSheetsRowReader(service,retry_wait=lambda _:False).read_rows(WorksheetIdentity("test",title))
+    assert not human.closed
+
+
+@pytest.mark.parametrize("quotation_wrapper",[False,True])
+def test_wrapped_safe_navigation_read_keeps_polling_after_three_hours(tmp_path,monkeypatch,quotation_wrapper):
+    from src.workflow.v12_faults import FaultScope, V12Fault
+    backend,runtime,_clock=prepared(tmp_path,monkeypatch)
+    error=GoogleSheetsReadUnavailable("synthetic read")
+    error.__cause__=V12Fault(FaultScope.GLOBAL_STOP,"GOOGLE_SPREADSHEET_UNAVAILABLE")
+    if quotation_wrapper:
+        outer=V12Fault(FaultScope.GLOBAL_STOP,"SHEETS_READ_UNAVAILABLE");outer.__cause__=error;error=outer
+    backend._module_execute=lambda _:(_ for _ in ()).throw(error)
+    monkeypatch.setattr(backend,"_defer_website_poll",lambda *a,**k:True)
+    backend._site_outages["Google Sheets"]=-20000
+    try:
+        assert runtime.claim_due_module()=="inquiry"
+        backend._run_independent_job("inquiry")
+        assert runtime.module_plans()["inquiry"][0]==900
+        assert runtime.module_plans()["inquiry"][2] is False
+    finally:backend.shutdown()
+
+
+@pytest.mark.parametrize("phase",["before","after"])
+@pytest.mark.parametrize("persistent",[False,True])
+def test_native_sheet_title_drift_rejects_wrong_export_and_retries_locally(web,monkeypatch,phase,persistent):
+    from src.sheets.google_reader import (
+        GoogleSheetsReadUnavailable,
+        GoogleSheetsRowReader,
+    )
+    service,_browser,_,human=web
+    calls=[]
+    original=service._download
+    def download(page,actions):
+        drift=persistent or not calls;calls.append(True)
+        if drift and phase=="before":page.title="2026"
+        if drift and phase=="after":
+            from tests.launcher.test_google_web import Download
+            failure=Download.failure
+            def altered(artifact):
+                page.title="2026";return failure(artifact)
+            monkeypatch.setattr(Download,"failure",altered)
+        else:
+            from tests.launcher.test_google_web import Download
+            monkeypatch.setattr(Download,"failure",lambda _:None)
+        return original(page,actions)
+    monkeypatch.setattr(service,"_download",download)
+    with service.poll_scope():
+        reader=GoogleSheetsRowReader(service,retry_wait=lambda _:False)
+        if persistent:
+            with pytest.raises(GoogleSheetsReadUnavailable):reader.read_rows(WorksheetIdentity("test","SHAHAB"))
+            assert len(calls)==5
+        else:
+            assert reader.read_rows(WorksheetIdentity("test","SHAHAB")) and len(calls)==2
+    assert not human.closed

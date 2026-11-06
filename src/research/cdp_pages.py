@@ -174,10 +174,10 @@ def page_owner(page: Any) -> str | None:
     return None
 
 
-def mark_owned_page(page: Any, owner: str) -> None:
+def mark_owned_page(page: Any, owner: str, *, timeout_ms=None) -> None:
     if not re.fullmatch(r"[a-z][a-z0-9-]{1,40}", owner):
         raise ValueError("INVALID_TAB_OWNER")
-    page.evaluate("name => { window.name = name; }", _OWNER_PREFIX + owner)
+    bounded_browser_call(page, "evaluate", "name => { window.name = name; }", _OWNER_PREFIX + owner, timeout_ms=timeout_ms)
     if page_owner(page) != owner:
         raise ValueError("TAB_OWNERSHIP_UNCONFIRMED")
 
@@ -419,11 +419,11 @@ def new_background_page(
                 if proof_failure is None:
                     raise
         if owner is not None:
-            mark_owned_page(page, owner)
+            mark_owned_page(page, owner, timeout_ms=timeout_ms)
         # Keep exact about:blank for existing navigation-failure and last-tab
         # guards. Native identity below survives document/context transitions;
         # window.name remains only a compatibility/review-page marker.
-        page.evaluate("() => history.replaceState(null, '', 'about:blank')")
+        bounded_browser_call(page, "evaluate", "() => history.replaceState(null, '', 'about:blank')", timeout_ms=timeout_ms)
         if isinstance(admission, PageResourceAdmission):
             admission.require_open()
         if owner is not None:

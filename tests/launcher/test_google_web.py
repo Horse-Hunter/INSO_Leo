@@ -447,15 +447,15 @@ def test_pending_refresh_page_kept_while_other_source_reads_continue(web):
     assert new.closed and not old.closed
 
 
-def test_wrapped_menu_timeout_retries_once_then_recovers_in_reader(web, monkeypatch):
+def test_native_readiness_timeout_retries_once_then_recovers_in_reader(web, monkeypatch):
     from playwright.sync_api import TimeoutError as PageTimeout
 
-    from tests.launcher.test_google_quote_update import Locator
+    Locator = GridLocator
     service, browser, _, _ = web
     calls = []
     original = Locator.wait_for
     def wait(locator, **kwargs):
-        if locator.name == '报价工具':
+        if locator.kind == 'box':
             calls.append(True)
             if len(calls) == 1:
                 raise PageTimeout('synthetic menu loading timeout')
@@ -500,7 +500,7 @@ def test_unknown_and_security_failures_do_not_become_temporary(web, monkeypatch,
     )
     from src.workflow.v12_faults import FaultScope
     from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
-    from tests.launcher.test_google_quote_update import Locator
+    Locator = GridLocator
     service, _, _, _ = web
     errors = {
         'unknown': RuntimeError('private unexpected DOM'),
@@ -513,7 +513,7 @@ def test_unknown_and_security_failures_do_not_become_temporary(web, monkeypatch,
     calls = []
     original = Locator.wait_for
     def wait(locator, **kwargs):
-        if locator.name == '报价工具':
+        if locator.kind == 'box':
             calls.append(True)
             raise errors[failure]
         return original(locator, **kwargs)
@@ -523,7 +523,7 @@ def test_unknown_and_security_failures_do_not_become_temporary(web, monkeypatch,
     assert not isinstance(caught.value, GoogleSheetsReadUnavailable) and len(calls) == 1
 
 
-@pytest.mark.parametrize('failure_mode', ['menu_timeout', 'read_gid_drift', 'read_page_closed',
+@pytest.mark.parametrize('failure_mode', ['native_ready_timeout', 'read_gid_drift', 'read_page_closed',
                                         'artifact_lost', 'timeout_then_busy', 'navigation_error_page', 'session_attach', 'metadata_timeout'])
 def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next_cycle(
         web, tmp_path, monkeypatch, failure_mode):
@@ -534,7 +534,7 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
 
     from src.launcher import backend as launcher
     from tests.launcher.test_backend import _RecordingTransport, _write_runtime_configs
-    from tests.launcher.test_google_quote_update import Locator
+    Locator = GridLocator
     service, browser, rows, original_page = web
     rows['2026'] = [list(row) for row in HEADERS['2026']]
     rows['SHAHAB'] = [list(row) for row in HEADERS['SHAHAB']]
@@ -589,9 +589,9 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
     monkeypatch.setattr(service, '_select', select_sheet)
     original_wait = Locator.wait_for
     def page_wait(locator, **kwargs):
-        if locator.name == '报价工具':
+        if locator.kind == 'box':
             calls.append(True)
-            if len(calls) <= 5 and failure_mode == 'menu_timeout':
+            if len(calls) <= 5 and failure_mode == 'native_ready_timeout':
                 raise PageTimeout('synthetic page load/menu timeout')
         return original_wait(locator, **kwargs)
     monkeypatch.setattr(Locator, 'wait_for', page_wait)
@@ -623,7 +623,7 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
                 assert len(calls) == 1 and len(busy_pages) == 1
                 busy_pages[0].popup = ''  # Site is idle by the next poll.
             else:
-                assert len(calls) == (9 if failure_mode == 'metadata_timeout' else 5)
+                assert len(calls) == (9 if failure_mode in {'metadata_timeout', 'native_ready_timeout', 'session_attach'} else 5)
                 if failure_mode == 'metadata_timeout':
                     assert backend.get_status().new_orders is None  # Optional metrics failed; business reads still ran.
             backend._v12_composition.coordinator.run_notifications(now=launcher.utc_now())
@@ -636,7 +636,8 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
         backend._thread.join(timeout=10)
         assert not backend._thread.is_alive() and waits == [900, 900], (failure_mode, len(calls), waits)
         assert len(calls) == (5 if failure_mode == 'timeout_then_busy' else
-                              12 if failure_mode == 'metadata_timeout' else 9)
+                              12 if failure_mode == 'metadata_timeout' else
+                              11 if failure_mode in {'native_ready_timeout', 'session_attach'} else 9)
         assert backend.get_health().overall == '正常'
         assert len(_RecordingTransport.sent) == 0
         assert backend._store.all_items() == ()
@@ -653,12 +654,12 @@ def test_timeout_does_not_hide_authentication_discovered_by_real_guard(web, monk
         GoogleSheetsReadError,
         GoogleSheetsReadUnavailable,
     )
-    from tests.launcher.test_google_quote_update import Locator
+    Locator = GridLocator
     service, browser, _, _ = web
     original = Locator.wait_for
     calls = []
     def wait(locator, **kwargs):
-        if locator.name == '报价工具':
+        if locator.kind == 'box':
             calls.append(True)
             locator.page.login_markers.add('登录')
             raise PageTimeout('synthetic expired login after loading')
@@ -692,11 +693,11 @@ def test_new_read_diagnostics_remain_sanitized(web, monkeypatch, caplog):
 
     from src.gui.main import _sanitized_line
     from src.sheets.google_reader import GoogleSheetsReadUnavailable
-    from tests.launcher.test_google_quote_update import Locator
+    Locator = GridLocator
     service, _, _, _ = web
     original = Locator.wait_for
     def wait(locator, **kwargs):
-        if locator.name == '报价工具':
+        if locator.kind == 'box':
             raise PageError('net::ERR_CONNECTION_RESET private-customer private-url token=synthetic-secret')
         return original(locator, **kwargs)
     monkeypatch.setattr(Locator, 'wait_for', wait)
@@ -925,12 +926,12 @@ def test_real_web_guard_four_failures_then_fifth_recovers_or_auth_stops(web, mon
         GoogleSheetsReadError,
         GoogleSheetsReadUnavailable,
     )
-    from tests.launcher.test_google_quote_update import Locator
+    Locator = GridLocator
     service, browser, _, _ = web
     attempts = []
     original = Locator.wait_for
     def wait(locator, **kwargs):
-        if locator.name == '报价工具':
+        if locator.kind == 'box':
             attempts.append(locator.page)
             if len(attempts) < 5:
                 raise PageTimeout('synthetic intermittent load')
@@ -1400,7 +1401,15 @@ def test_retained_safe_failed_read_recovers_without_accumulating_tabs(web):
     def once():
         page = create()
         if not first:
-            page.menu_failure = True
+            locate = page.locator
+            def failed_native_readiness(selector):
+                control = locate(selector)
+                if selector == '#t-name-box':
+                    def wait(**kwargs):
+                        raise TimeoutError('synthetic native readiness timeout')
+                    control.wait_for = wait
+                return control
+            page.locator = failed_native_readiness
             first.append(page)
         return page
     browser.contexts[0].new_page = once

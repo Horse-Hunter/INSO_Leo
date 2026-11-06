@@ -960,7 +960,7 @@ class V12Store:
                 )
             return len(rows)
 
-    def resume_premature_source_retry(self, inquiry_id, identity, *, at):
+    def resume_premature_source_retry(self, inquiry_id, identity, *, at, verified_source_date=None):
         """One atomic recovery of the old premature READ failure, not a manual retry."""
         from .automatic_admission import age_reason
         from .store import DEFAULT_RETRY_DELAYS
@@ -968,12 +968,14 @@ class V12Store:
         with _transaction(self.database_path) as db:
             row = db.execute("SELECT w.*,s.business_state FROM workflow_items w "
                 "JOIN workflow_v12_inquiry_state s USING(inquiry_id) WHERE w.inquiry_id=?", (inquiry_id,)).fetchone()
+            payload = json.loads(row["record_identity_json"]) if row is not None else {}
+            source_date = payload.get("source_order_date") or verified_source_date
             if (row is None or row["status"] != "FAILED" or row["research_status"] != "RETRYABLE_FAILURE"
                     or row["business_state"] != BusinessState.RESEARCH_FAILED.value
                     or not 1 <= row["attempt_count"] <= len(DEFAULT_RETRY_DELAYS)
                     or row["last_error"] not in {"SOURCE_UNAVAILABLE", "RETRYABLE_FAILURE", "RESEARCH_SOURCE_FAILURE"}
                     or age_reason(row["created_at"], at, module="inquiry")
-                    or age_reason(json.loads(row["record_identity_json"]).get("source_order_date"), at, module="inquiry")):
+                    or age_reason(source_date, at, module="inquiry")):
                 return False
             if db.execute("SELECT 1 FROM workflow_v12_purchase_state WHERE inquiry_id=?", (inquiry_id,)).fetchone():
                 return False
@@ -983,8 +985,10 @@ class V12Store:
                 return False
             if V13HoldStore(self.database_path).blocks_inquiry_retry(inquiry_id, identity):
                 return False
-            db.execute("UPDATE workflow_items SET status='RETRY_WAIT',next_attempt_at=?,updated_at=? WHERE inquiry_id=?",
-                       (_time_text(at), _time_text(at), inquiry_id))
+            if not payload.get("source_order_date"):
+                payload["source_order_date"] = source_date
+            db.execute("UPDATE workflow_items SET status='RETRY_WAIT',next_attempt_at=?,updated_at=?,record_identity_json=? WHERE inquiry_id=?",
+                       (_time_text(at), _time_text(at), json.dumps(payload,ensure_ascii=False), inquiry_id))
             db.execute("UPDATE workflow_v12_inquiry_state SET business_state=?,updated_at=? WHERE inquiry_id=?",
                        (BusinessState.RESEARCH_RETRY_WAIT.value, _time_text(at), inquiry_id))
             _insert_event(db, WorkflowEvent(_new_id("evt"), inquiry_id, EventType.RESEARCH_RETRY_SCHEDULED,

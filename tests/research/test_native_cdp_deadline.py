@@ -56,3 +56,31 @@ def test_native_create_command_cannot_outlive_deadline_or_close_unproven_target(
         assert len(set(owner))==1 and owner[0]==thread.ident
     finally:release.set();thread.join(2)
     assert not thread.is_alive()
+
+
+def test_ownership_marker_command_has_native_deadline(monkeypatch):
+    from playwright.sync_api import Page
+
+    from src.research.cdp_pages import mark_owned_page
+    monkeypatch.setattr("src.research.cdp_pages.NATIVE_PROTOCOL_TIMEOUT_MS",20)
+    entered=threading.Event();release=threading.Event();done=threading.Event();outcomes=[]
+    def run():
+        loop=asyncio.new_event_loop();dispatcher=greenlet(loop.run_forever)
+        class Impl:
+            _loop=loop
+            _dispatcher_fiber=dispatcher
+            async def evaluate(self,*args,**kwargs):
+                entered.set()
+                while not release.is_set():await asyncio.sleep(.005)
+        try:mark_owned_page(Page(Impl()),"google-operation")
+        except Exception as error:outcomes.append(error)  # noqa: BLE001
+        finally:
+            loop.call_soon(loop.stop);dispatcher.switch()
+            asyncio._set_running_loop(None);loop.close();done.set()
+    thread=threading.Thread(target=run);thread.start()
+    try:
+        assert entered.wait(1)
+        assert done.wait(.3),"Ownership marker ignored native deadline"
+        assert len(outcomes)==1 and isinstance(outcomes[0],TimeoutError)
+    finally:release.set();thread.join(2)
+    assert not thread.is_alive()

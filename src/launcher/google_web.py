@@ -470,9 +470,11 @@ class GoogleSheetsWebService:
                                           worksheet=geometry[0] if geometry else "2026")
                 stage = "google-sheet-ready"
                 page.locator("#t-name-box").wait_for(state="visible", timeout=30000)
-                # Reuse the verified onOpen readiness signal. Selecting SHAHAB
-                # before initialization settles can be reset to the initial tab.
-                actions.wait_for_script_menu()
+                # Native READ does not depend on the quotation Apps Script.
+                # Selection is proved before and after export; writes retain
+                # the existing script-readiness requirement.
+                if write:
+                    actions.wait_for_script_menu()
                 if geometry is None:
                     stage = "google-select-sheet"
                     sheets = []
@@ -484,6 +486,7 @@ class GoogleSheetsWebService:
                 stage = "google-select-sheet"
                 self._select(page, actions, title)
                 if not write:
+                    actions._native_read_title = title
                     stage = "google-download-read"
                     rows = self._download(page, actions)
                     self._headers(rows, title)
@@ -626,9 +629,9 @@ class GoogleSheetsWebService:
             title: document.querySelector('.docs-sheet-active-tab .docs-sheet-tab-name')?.textContent,
             fragment: location.hash})''')
         tab = page.locator(".docs-sheet-tab").filter(has=page.get_by_text(title, exact=True))
-        if tab.count() == 0:
+        if bounded_browser_call(tab, "count") == 0:
             tab.wait_for(state="visible", timeout=10000)
-        if tab.count() != 1:
+        if bounded_browser_call(tab, "count") != 1:
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SHEET_UNCONFIRMED")
         tab.click(timeout=10000)
         page.wait_for_function(
@@ -651,7 +654,16 @@ class GoogleSheetsWebService:
 
     @staticmethod
     def _download(page, actions):
-        actions._guard(read_selection=True)
+        def prove_selection():
+            actions._guard(read_selection=True)
+            expected = getattr(actions, "_native_read_title", None)
+            if expected is not None:
+                observed = bounded_browser_call(page, "evaluate", """() => ({
+                    title: document.querySelector('.docs-sheet-active-tab .docs-sheet-tab-name')?.textContent,
+                    fragment: location.hash})""")
+                if not isinstance(observed, dict) or observed.get("title") != expected:
+                    raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
+        prove_selection()
         page.get_by_role("menuitem", name="文件", exact=True).click(timeout=10000)
         page.get_by_role("menuitem", name=re.compile("^下载")).click(timeout=10000)
         with page.expect_download(timeout=30000) as pending:
@@ -673,7 +685,7 @@ class GoogleSheetsWebService:
             rows = list(csv.reader(io.StringIO(content), delimiter="\t"))
             if len(rows) > 100000:
                 raise ValueError("GOOGLE_WEB_READ_TOO_LARGE")
-            actions._guard(read_selection=True)
+            prove_selection()
             return rows
         except _GoogleDownloadWaitTimeout:
             try:

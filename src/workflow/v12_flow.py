@@ -235,7 +235,9 @@ class V12WorkflowCoordinator:
                 and 1 <= item.attempt_count <= len(DEFAULT_RETRY_DELAYS)
                 and item.next_attempt_at is not None
                 and item.last_error in {"SOURCE_UNAVAILABLE", "RETRYABLE_FAILURE", "RESEARCH_SOURCE_FAILURE"})
-            if (state is BusinessState.RESEARCH_RETRY_WAIT and (safe_unprepared or safe_source_retry)
+            safe_completed_read = state in {BusinessState.RESEARCHING, BusinessState.ROUTING} and self._completed_read_routing_pending(item)
+            if ((state is BusinessState.RESEARCH_RETRY_WAIT and (safe_unprepared or safe_source_retry)
+                    or safe_completed_read)
                     and purchase is None and not armed
                     and self._source_retry_unsubmitted(item)
                     and source_day is not None and age_reason(source_day, now, module="inquiry") is None
@@ -315,6 +317,7 @@ class V12WorkflowCoordinator:
         now = self._clock() if self._clock else now
         identity = record.record_identity
         iid = self._workflow_store.inquiry_id_for(identity)
+        self._admission_dates.pop(iid, None)  # A prior observation cannot supply missing current evidence.
         try:
             item = self._workflow_store.get_by_inquiry_id(iid)
             intake = item.created_at
@@ -348,6 +351,12 @@ class V12WorkflowCoordinator:
             self._admission_dates[iid] = result.order_date.isoformat()
         return result.allowed
 
+    def _completed_read_routing_pending(self, item):
+        return (item.status.value == "COMPLETED"
+            and item.research_status in {"SUCCESS", "PARTIAL_SUCCESS"}
+            and self._v12_store.business_state(item.inquiry_id) in {BusinessState.RESEARCHING, BusinessState.ROUTING}
+            and self._source_retry_unsubmitted(item))
+
     def _source_retry_unsubmitted(self, item):
         from .v13_integration import V13HoldStore
         try:
@@ -367,10 +376,11 @@ class V12WorkflowCoordinator:
                 or not 1 <= item.attempt_count <= len(DEFAULT_RETRY_DELAYS)
                 or self._v12_store.business_state(item.inquiry_id) is not BusinessState.RESEARCH_FAILED
                 or age_reason(item.created_at, now, module="inquiry")
-                or age_reason(item.source_order_date, now, module="inquiry")
+                or age_reason(item.source_order_date or self._admission_dates.get(item.inquiry_id), now, module="inquiry")
                 or not self._source_retry_unsubmitted(item)):
             return
-        self._v12_store.resume_premature_source_retry(item.inquiry_id, item.record_identity, at=now)
+        self._v12_store.resume_premature_source_retry(item.inquiry_id, item.record_identity, at=now,
+            verified_source_date=self._admission_dates.get(item.inquiry_id))
 
     def prepare_pending(
         self, records: tuple[PendingSheetRecord, ...], *, now: datetime
@@ -527,13 +537,16 @@ class V12WorkflowCoordinator:
             if (
                 item is None or item.status.value != "COMPLETED"
                 or item.record_identity.identifying_snapshot != record.record_identity.identifying_snapshot
-                or not self._v12_store.duplicate_confirmation_pending(item.inquiry_id)
+                or (not self._v12_store.duplicate_confirmation_pending(item.inquiry_id)
+                    and not self._completed_read_routing_pending(item))
             ):
                 continue
             try:
                 if not self._before_next_row():
                     break
                 if not self._record_admitted(record, now, fresh=True):
+                    continue
+                if not self._source_retry_unsubmitted(item):
                     continue
                 confirmed = self._duplicate_checker.check(
                     item.inquiry_id, item.mpn, int(item.quantity), at=now
@@ -546,6 +559,8 @@ class V12WorkflowCoordinator:
                 and confirmed.outcome is DuplicateOutcome.CONFIRMED
                 and not self._stop_requested()
             ):
+                if self._v12_store.business_state(item.inquiry_id) is BusinessState.RESEARCHING:
+                    self._set_state(item.inquiry_id, BusinessState.ROUTING, EventType.IMPORTANT_ORDER_DECIDED, now)
                 results.append(self.confirm_duplicate_and_route(
                     item.inquiry_id, confirmed, now=now, record=record
                 ))

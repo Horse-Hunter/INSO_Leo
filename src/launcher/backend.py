@@ -1448,12 +1448,12 @@ class ProductionBackend(GuiBackend):
         except (sqlite3.Error, V12DatabaseError):
             raise
         except Exception as exc:
-            from src.sheets.google_reader import GoogleSheetsReadUnavailable
-            recoverable_read = isinstance(exc, (GoogleSheetsReadUnavailable, GoogleReadTargetUnavailable))
+            from src.workflow.v13_integration import is_isolated_source_read_error
+            recoverable_read = is_isolated_source_read_error(exc) or isinstance(exc, GoogleReadTargetUnavailable)
             cause, seen = exc, set()
             while cause is not None and id(cause) not in seen:
-                if isinstance(cause, V12Fault):
-                    recoverable_read = False  # Never hide an auth/write/ownership fault in a read wrapper.
+                if isinstance(cause, V12Fault) and not is_isolated_source_read_error(exc):
+                    recoverable_read = False  # Shared classifier rejects auth/write/ownership faults.
                 seen.add(id(cause))
                 if isinstance(cause, (PageTargetCleanupError, OrderResourceOwnershipError)):
                     runtime.abort_module_resource()

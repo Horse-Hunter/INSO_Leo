@@ -161,3 +161,69 @@ def test_legacy_retry_recovery_is_atomic_if_event_commit_fails(tmp_path,monkeypa
     assert queue.get_by_inquiry_id(item.inquiry_id)==before
     assert ledger.business_state(item.inquiry_id) is BusinessState.RESEARCH_FAILED
     assert ledger.event_history(item.inquiry_id)==events
+
+
+@pytest.mark.parametrize("recovery",["restart","legacy"])
+def test_shahab_explicit_date_survives_retry_and_legacy_recovery(tmp_path,recovery):
+    from src.sheets import WorksheetIdentity, WorksheetRow
+    from src.workflow.v12_contracts import EventType
+    from src.workflow.v12_flow import V12WorkflowCoordinator
+    flow,queue,_ledger,research,_,_,writer,_=_make_flow(tmp_path,
+        facts=ResearchBusinessFacts("货足",Decimal(2),Decimal(2)))
+    flow._record_admitted=V12WorkflowCoordinator._record_admitted.__get__(flow)
+    flow._brief_snapshot=lambda _:()
+    reader=type("Reader",(),{"read_rows":lambda self,w:(WorksheetRow(3,
+        {"A":NOW.date().isoformat(),"B":"未发","C":1,"D":"Mpn-1","E":"Brand-X","F":7,"G":"PCS"}),)})()
+    sheet=WorksheetIdentity("synthetic-sheet","SHAHAB")
+    original=research.execute
+    research.execute=lambda item:ResearchResult(item.inquiry_id,ResearchStatus.RETRYABLE_FAILURE,
+        reason_code=ResearchReasonCode.SOURCE_UNAVAILABLE)
+    first,=flow.poll_and_process(reader,sheet,now=NOW)
+    item=queue.get_by_inquiry_id(first.inquiry_id)
+    if recovery=="restart":
+        assert item.source_order_date==NOW.date().isoformat()
+        flow.initialize_run_state(now=NOW+timedelta(minutes=1))
+    else:
+        import json
+        import sqlite3
+        queue.finish_row_failure(item.id,"SOURCE_UNAVAILABLE",now=NOW)
+        flow._set_state(item.inquiry_id,BusinessState.RESEARCH_FAILED,EventType.RESEARCH_FAILED,NOW)
+        with sqlite3.connect(queue.database_path) as db:
+            payload=json.loads(db.execute("SELECT record_identity_json FROM workflow_items").fetchone()[0])
+            payload.pop("source_order_date",None)
+            db.execute("UPDATE workflow_items SET record_identity_json=?",(json.dumps(payload),))
+    research.execute=original
+    flow.poll_and_process(reader,sheet,now=NOW+timedelta(minutes=16))
+    current=queue.get_by_inquiry_id(item.inquiry_id)
+    assert current.attempt_count==2 and len(writer.commands)==1
+    assert current.created_at==NOW and current.source_order_date==NOW.date().isoformat()
+
+
+@pytest.mark.parametrize("restart",[False,True])
+@pytest.mark.parametrize("second_failure",[False,True])
+def test_fresh_read_failure_after_completed_research_resumes_routing_without_reresearch(tmp_path,restart,second_failure):
+    from src.sheets.google_reader import GoogleSheetsReadUnavailable
+    from src.workflow.v12_flow import V12WorkflowCoordinator
+    flow,queue,ledger,research,_,_,writer,_=_make_flow(tmp_path,
+        facts=ResearchBusinessFacts("货足",Decimal(2),Decimal(2)))
+    flow._record_admitted=V12WorkflowCoordinator._record_admitted.__get__(flow)
+    flow._brief_snapshot=lambda _:()
+    reader=FakeSheetsReader(tier="C");reader.row=replace(reader.row,source_order_date=NOW.date().isoformat())
+    original=reader.read_rows;failed=[]
+    def read(w):
+        items=queue.all_items()
+        if items and items[0].status.value=="COMPLETED" and not failed:
+            failed.append(True);raise GoogleSheetsReadUnavailable("synthetic source read")
+        if (second_failure and items and failed==[True]
+                and ledger.business_state(items[0].inquiry_id) is BusinessState.ROUTING):
+            failed.append(True);raise GoogleSheetsReadUnavailable("synthetic second read")
+        return original(w)
+    reader.read_rows=read
+    with pytest.raises(GoogleSheetsReadUnavailable):flow.poll_and_process(reader,SHEET,now=NOW)
+    if restart:flow.initialize_run_state(now=NOW+timedelta(minutes=1))
+    if second_failure:
+        with pytest.raises(GoogleSheetsReadUnavailable):
+            flow.poll_and_process(reader,SHEET,now=NOW+timedelta(minutes=16))
+    else:flow.poll_and_process(reader,SHEET,now=NOW+timedelta(minutes=16))
+    flow.poll_and_process(reader,SHEET,now=NOW+timedelta(minutes=32))
+    assert len(research.inputs)==1 and len(writer.commands)==1

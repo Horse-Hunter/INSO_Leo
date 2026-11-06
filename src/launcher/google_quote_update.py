@@ -412,7 +412,7 @@ class GoogleQuotationUpdateActions:
                 location=SimpleNamespace(url=old.url), page_role=self._page_role)
             recovery._page = old
             recovery._guard()
-            if not old.evaluate(_UNSAFE_POLL_PAGE):
+            if not bounded_browser_call(old, "evaluate", _UNSAFE_POLL_PAGE):
                 recovery.close()
         scope = _POLL_GOOGLE_PAGES.get()
         pool, retained = scope if scope is not None else (None, None)
@@ -511,7 +511,7 @@ class GoogleQuotationUpdateActions:
         # Wait for observed script readiness, not a fixed sleep or a shell-only click.
         menu = self._page.get_by_text("报价工具", exact=True)
         self._attempt(lambda: menu.wait_for(state="visible", timeout=self._ready_timeout))
-        if menu.count() != 1:
+        if bounded_browser_call(menu, "count") != 1:
             raise UpdateAttemptUnconfirmed("UPDATE_CONTROL_UNCONFIRMED")
         self._guard()
 
@@ -616,7 +616,7 @@ class GoogleQuotationUpdateActions:
         if read_only and self._page is not None and not self._page.is_closed():
             try:
                 mark_owned_page(self._page, self._page_role)
-                self._page.evaluate("() => { window.__insoGoogleReadFailed = true; }")
+                bounded_browser_call(self._page, "evaluate", "() => { window.__insoGoogleReadFailed = true; }")
             except Exception:  # noqa: BLE001 - inability to tag never makes a page safe
                 self._protected = True
         if self._poll_entry is None:

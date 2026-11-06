@@ -410,3 +410,7 @@ Confirmed source design flaw: optional dashboard counts read all worksheets befo
 
 
 Owner subsequently broadens readonly permission for this repair: “读读读，别他妈每次都问我，需要读就读读怎么了”. Necessary read-only diagnostics on existing9222/nativeprogramownedstate may proceed without repeatedquestions. Keep noComputerUse/noCookie-token/customerunnecessarycontent/noGooglewrite/purchase/navigation/close/newChrome boundaries; this is not forcekill or externalwrite permission. Onebounded diagnostic read13targetsunchanged, owned2026/SHAHAB/RFQ_BRIEF allready, no activeerrorpage remains. Laternaturalpoll foundone newSHAHAB order; genuine source temporaryResearchfailure becameFAILED afterattempt1, no purchase/saveevents. Never commit itsactualMPN; usewatch-order-2. Thus transientnavigationalone is not wholeGooglefailure, and originalsource misses include separate terminalretryprojection bug.
+
+
+## Owner 2026-11-06 完整Google读取排查与交叉复审
+Owner明确要求完整排查Google读取相关代码并交叉复审；继续原修复、离线回归、受控发布和自然业务观察授权，不重新申请已允许的只读诊断。两名只读内部复审者分别检查原生读取/身份/截止时间与业务准入/持久恢复/通知分类；只用合成依赖，不接生产、不开新执行窗口。完整发现与关闭证据见GOOGLE_READ_CROSS_REVIEW_2026-11-06.md。普通读表不可因报价菜单异常、可恢复读取、日期持久化遗漏或已完成调研后的再次读失败而漏单/永久停轮询；外部写UNKNOWN、身份、权限、旧单、邮件终态保护保留。不能保证外网永不故障，必须准确区分程序读取未完成与已证实网络不可达。COMPUTER_USE_NOT_USED。
