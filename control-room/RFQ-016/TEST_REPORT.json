@@ -1,11 +1,11 @@
 {
   "rfq": "RFQ-016",
   "active_scope": "Owner Google full-chain repair, independent cross-review, new-order live watch and3000+Chinese-character accountability",
-  "status": "IN_PROGRESS",
-  "deployment": "CONSOLIDATED_GATE_PASSED_NOT_INSTALLED",
-  "source_commit": "bd565aff1b8d64bd836211a6f869411da18cb48e",
-  "source_tree": "47e31944393201026569212bf6493a2ed9b8b5a4",
-  "test_tree": "4060f4d16a41d50462749599c045d6f73bb57b6d",
+  "status": "REVIEW_REQUIRED",
+  "deployment": "BUSINESS_RUNNING",
+  "source_commit": "92d18b093b2ad6f724dd8268989a66534b392a2c",
+  "source_tree": "9125cfdb9621df32f56ef76ffc35d781e5359f6e",
+  "test_tree": "7431e791ba0f8f4db33f2f055a174b10a99de0e6",
   "previous_delivery_commit": "814859c7f1138329a69f1c771dda7271fc770ef0",
   "previous_source": "d5117ec790d8aff854f90d2cd40e3a4a41ca7478",
   "preserved_ancestor": "7574516f18c8ee3225b5039f2eb4aeabd0045bbc",
@@ -13,14 +13,19 @@
     "src/launcher/backend.py",
     "src/launcher/google_quote_update.py",
     "src/launcher/google_web.py",
+    "src/launcher/mail_research_composition.py",
+    "src/launcher/v12_composition.py",
     "src/launcher/v13_integration.py",
     "src/research/cdp_pages.py",
     "src/sheets/google_reader.py",
+    "src/sheets/quotation_input.py",
     "src/workflow/automatic_admission.py",
     "src/workflow/notification_review.py",
     "src/workflow/v12_flow.py",
+    "src/workflow/v12_notifications.py",
     "src/workflow/v12_store.py",
-    "src/workflow/v13_integration.py"
+    "src/workflow/v13_integration.py",
+    "src/workflow/v13_quote_update.py"
   ],
   "changed_test_paths": [
     "tests/launcher/test_google_web.py",
@@ -1286,8 +1291,83 @@
     "native_sdk_keyword_deadline_tests": "7 PASS including real NativePage and syncPage",
     "amount_correction_tests": "13 PASS original queue and fake SMTP",
     "preliminary_full": "3 failed /3660 passed/1 skipped; old stop expectations migrated to accurate actual-stop notification with zero during temporary waits; obsolete snapshot not acceptance",
-    "production": "NOT_INSTALLED_YET",
-    "corrective_mail": "OWNER_AUTHORIZED_NOT_ENQUEUED_YET",
-    "computer_use": "COMPUTER_USE_NOT_USED"
+    "production": "BUSINESS_RUNNING_OBSERVED_COMPLETE_CYCLE",
+    "corrective_mail": {
+      "smtp_outcome": "2 SENT",
+      "attempts_each": 1,
+      "original_recipients_unchanged": true,
+      "original_terminal_unchanged": true,
+      "inbox_read": "NOT_VERIFIED"
+    },
+    "computer_use": "COMPUTER_USE_NOT_USED",
+    "exe_sha256": "fcdc8b70d0f1d89bc578a942fb479a547385083b623326cf452bb51eaacfad02",
+    "backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-stability-bundle-20261106T042044Z",
+    "package_files": 2875,
+    "frozen_modules": 16,
+    "selfchecks": [
+      {
+        "label": "rollback",
+        "argument": "--self-check",
+        "exit_code": 0
+      },
+      {
+        "label": "formal",
+        "argument": "--self-check",
+        "exit_code": 0
+      },
+      {
+        "label": "formal-idle",
+        "argument": "--idle-self-check",
+        "exit_code": 0
+      }
+    ],
+    "data_unchanged_before_start": true,
+    "natural_cycles_seconds": {
+      "inquiry": 197.516,
+      "quotation": 211.047,
+      "tp": 9.594
+    },
+    "original_mail_terminal_count": 177,
+    "original_intakes": 51,
+    "original_unknown_count": 1,
+    "original_protection_unchanged": true,
+    "quotation_confirmation": {
+      "natural_quotation_confirmations": [
+        {
+          "new_dispatch_protection_closed_by_original_verifier": true,
+          "same_order_new_price_baseline": true
+        }
+      ],
+      "new_price_baseline_count": 1,
+      "manual_hold_changes": 0
+    },
+    "final_verification": {
+      "source_sha": "92d18b093b2ad6f724dd8268989a66534b392a2c",
+      "exe_sha256": "fcdc8b70d0f1d89bc578a942fb479a547385083b623326cf452bb51eaacfad02",
+      "formal_and_rollback_asset_integrity": true,
+      "configs_unchanged": true,
+      "source_tests_still_match_final_gate": true,
+      "original_terminal_mail_unchanged": true,
+      "original_unknown_unchanged": true,
+      "amount_correction_smtp_accepted_once_per_original_recipient": true,
+      "natural_quote_update_and_source_status_verified": true,
+      "manual_hold_clear": false,
+      "computer_use": "COMPUTER_USE_NOT_USED"
+    },
+    "cleanup": {
+      "fake_test_directories": 17,
+      "fake_test_bytes": 749363004,
+      "canonical_stage_bytes": 268159197,
+      "protected_runtime_profile_rollback_kept": true,
+      "retired_one_use_helpers": 24,
+      "long_term_helper_services_created": false
+    },
+    "limitations": [
+      "Long-term stability and future external outages remain naturally observed, not guaranteed",
+      "No new real IMAP request or manual GUI task manufactured for acceptance",
+      "SMTP accepted is not proof of inbox reading"
+    ],
+    "final_observed_at": "2026-11-06T04:33:49.252692+00:00",
+    "mail_producer_inventory_after_records": "1 PASS"
   }
 }
