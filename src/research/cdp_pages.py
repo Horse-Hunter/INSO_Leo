@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import threading
@@ -15,6 +16,25 @@ _LOG = logging.getLogger(__name__)
 
 
 _OWNER_PREFIX = "INSO_OWNER_TAB:"
+NATIVE_PROTOCOL_TIMEOUT_MS = 10000
+
+
+def bounded_browser_call(port, operation, *args, timeout_ms=None, **kwargs):
+    """Bound one original SDK operation on its original Owner loop, never a new client."""
+    from playwright._impl._sync_base import mapping
+    from playwright.sync_api import Browser, BrowserContext, CDPSession, Locator, Page
+    if not isinstance(port, (Browser, BrowserContext, CDPSession, Locator, Page)):
+        return getattr(port, operation)(*args, **kwargs)
+    milliseconds = NATIVE_PROTOCOL_TIMEOUT_MS if timeout_ms is None else timeout_ms
+    if not isinstance(milliseconds, (int, float)) or isinstance(milliseconds, bool) or milliseconds <= 0:
+        raise ValueError("INVALID_NATIVE_OPERATION_TIMEOUT")
+    impl_args = tuple(getattr(arg, "_impl_obj", arg) for arg in args)
+    async def bounded():
+        return await asyncio.wait_for(getattr(port._impl_obj, operation)(*impl_args, **kwargs), milliseconds/1000)
+    try:
+        return mapping.from_maybe_impl(port._sync(bounded()))
+    except TimeoutError:
+        raise TimeoutError("CDP_OPERATION_TIMEOUT") from None
 
 
 class PageTargetCleanupError(RuntimeError):
@@ -105,8 +125,8 @@ def _native_page_owner(page, lease):
         admission.require_open()
     session = None
     try:
-        session = context.new_cdp_session(page)
-        actual = session.send("Target.getTargetInfo")["targetInfo"]["targetId"]
+        session = bounded_browser_call(context, "new_cdp_session", page)
+        actual = bounded_browser_call(session, "send", "Target.getTargetInfo")["targetInfo"]["targetId"]
         if actual != target_id:
             raise ValueError("TAB_TARGET_ID_MISMATCH")
     except Exception as failure:
@@ -116,7 +136,7 @@ def _native_page_owner(page, lease):
     finally:
         if session is not None:
             try:
-                session.detach()
+                bounded_browser_call(session, "detach")
             except Exception as failure:
                 error = PageTargetCleanupError((failure,))
                 _invalidate_page_resource(browser, error)
@@ -148,7 +168,7 @@ def page_owner(page: Any) -> str | None:
     if url.startswith("about:blank#" + _OWNER_PREFIX):
         return url.split("#", 1)[1][len(_OWNER_PREFIX):]
     evaluate = getattr(page, "evaluate", None)
-    name = evaluate("() => window.name") if callable(evaluate) else None
+    name = bounded_browser_call(page, "evaluate", "() => window.name") if callable(evaluate) else None
     if isinstance(name, str) and name.startswith(_OWNER_PREFIX):
         return name[len(_OWNER_PREFIX):]
     return None
@@ -324,7 +344,7 @@ def close_research_page(page):
 
 
 def _close_created_target(session, target_id):
-    if session.send("Target.closeTarget", {"targetId": target_id}).get("success") is not True:
+    if bounded_browser_call(session, "send", "Target.closeTarget", {"targetId": target_id}).get("success") is not True:
         raise RuntimeError("CDP_TARGET_CLOSE_UNCONFIRMED")
 
 
@@ -360,7 +380,7 @@ def new_background_page(
     # A task/site owner is not unique per creation. Match a random creation URL
     # first, then prove the Page's native targetId before touching its document.
     initial_url = "about:blank#INSO_CREATE:" + uuid4().hex
-    session = browser.new_browser_cdp_session()
+    session = bounded_browser_call(browser, "new_browser_cdp_session", timeout_ms=timeout_ms)
     target_id: str | None = None
     creation_attempted = False
     failure = None
@@ -377,15 +397,15 @@ def new_background_page(
             if browser_context_id is not None:
                 params["browserContextId"] = browser_context_id
             creation_attempted = True
-            target_id = session.send("Target.createTarget", params)["targetId"]
+            target_id = bounded_browser_call(session, "send", "Target.createTarget", params, timeout_ms=timeout_ms)["targetId"]
             if not isinstance(target_id, str) or not target_id:
                 target_id = None
                 raise ValueError("CDP_TARGET_ID_MISSING")
         page = pending.value
-        proof = context.new_cdp_session(page)
+        proof = bounded_browser_call(context, "new_cdp_session", page, timeout_ms=timeout_ms)
         proof_failure = None
         try:
-            actual = proof.send("Target.getTargetInfo")["targetInfo"]["targetId"]
+            actual = bounded_browser_call(proof, "send", "Target.getTargetInfo", timeout_ms=timeout_ms)["targetInfo"]["targetId"]
             if actual != target_id:
                 raise ValueError("TAB_TARGET_ID_MISMATCH")
         except BaseException as exc:
@@ -393,7 +413,7 @@ def new_background_page(
             raise
         finally:
             try:
-                proof.detach()
+                bounded_browser_call(proof, "detach", timeout_ms=timeout_ms)
             except Exception as cleanup:
                 cleanup_failures.append(cleanup)
                 if proof_failure is None:
@@ -425,7 +445,7 @@ def new_background_page(
         raise
     finally:
         try:
-            session.detach()
+            bounded_browser_call(session, "detach")
         except Exception as cleanup:  # noqa: BLE001 - converted to typed resource fault below
             cleanup_failures.append(cleanup)
             if failure is None and target_id is not None:

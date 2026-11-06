@@ -12,6 +12,7 @@ from urllib.parse import parse_qsl, urlsplit
 from src.inso.quotation_read import QUOTATION_COLUMNS
 from src.research.cdp_pages import (
     PageTargetOwnershipError,
+    bounded_browser_call,
     mark_owned_page,
     new_background_page,
     page_owner,
@@ -177,11 +178,11 @@ def _google_target_id(page):
             if context is not page.context or not isinstance(expected, str) or not expected:
                 raise ValueError("GOOGLE_NATIVE_LEASE_INVALID")
             attaching = "native"
-            session = browser.new_browser_cdp_session()
+            session = bounded_browser_call(browser, "new_browser_cdp_session")
             attaching = None
             step = "google-target-explicit-proof"
             proving = True
-            response = session.send("Target.getTargetInfo", {"targetId": expected})
+            response = bounded_browser_call(session, "send", "Target.getTargetInfo", {"targetId": expected})
             proving = False
             info = response["targetInfo"]
             target = info["targetId"]
@@ -189,11 +190,11 @@ def _google_target_id(page):
                 raise ValueError("GOOGLE_NATIVE_TARGET_MISMATCH")
         else:
             attaching = "page"
-            session = page.context.new_cdp_session(page)
+            session = bounded_browser_call(page.context, "new_cdp_session", page)
             attaching = None
             step = "google-target-page-proof"
             proving = True
-            response = session.send("Target.getTargetInfo")
+            response = bounded_browser_call(session, "send", "Target.getTargetInfo")
             proving = False
             target = response["targetInfo"]["targetId"]
         if not isinstance(target, str) or not target:
@@ -208,7 +209,7 @@ def _google_target_id(page):
     finally:
         if session is not None:
             try:
-                session.detach()
+                bounded_browser_call(session, "detach")
             except Exception as exc:
                 log_step("google-target-proof-detach", cause=exc)
                 raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED") from exc
@@ -318,13 +319,13 @@ class GoogleQuotationUpdateActions:
         expected = urlsplit(self._location.url)
         for context in browser.contexts:
             for page in tuple(context.pages):
-                if page.is_closed() or page_owner(page) != self._page_role:
-                    continue
                 actual = urlsplit(page.url)
-                if (actual.hostname, actual.path) != (expected.hostname, expected.path):
+                if page.is_closed() or (actual.hostname, actual.path) != (expected.hostname, expected.path):
                     continue
-                if not page.evaluate("() => window.__insoRefreshPending === true"):
-                    if page.evaluate(_UNSAFE_POLL_PAGE):
+                if page_owner(page) != self._page_role:
+                    continue
+                if not bounded_browser_call(page, "evaluate", "() => window.__insoRefreshPending === true"):
+                    if bounded_browser_call(page, "evaluate", _UNSAFE_POLL_PAGE):
                         log_step("google-busy-refresh-surface")
                         raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
                     continue
@@ -358,7 +359,8 @@ class GoogleQuotationUpdateActions:
         login = parsed.hostname == "accounts.google.com"
         for text in ("登录", "Sign in", "Verify it's you", "验证您的身份", "请求访问权限"):
             markers = self._page.get_by_text(text, exact=True)
-            login |= any(markers.nth(i).is_visible() for i in range(markers.count()))
+            login |= any(bounded_browser_call(markers.nth(i), "is_visible")
+                         for i in range(bounded_browser_call(markers, "count")))
         if login:
             self._protected = True
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_AUTHENTICATION_REQUIRED")
@@ -398,13 +400,13 @@ class GoogleQuotationUpdateActions:
         expected_document = urlsplit(self._location.url)
         for old in tuple(browser.contexts[0].pages):
             actual = urlsplit(old.url)
-            if old.is_closed() or page_owner(old) != self._page_role:
-                continue
-            if not old.evaluate("() => window.__insoGoogleReadFailed === true"):
-                continue
-            if (actual.scheme, actual.hostname, actual.path) != (
+            if old.is_closed() or ((actual.scheme, actual.hostname, actual.path) != (
                     expected_document.scheme, expected_document.hostname, expected_document.path
-            ) and actual.hostname != "accounts.google.com":
+            ) and actual.hostname != "accounts.google.com"):
+                continue  # Do not evaluate unrelated manual/INSO/other-document pages.
+            if page_owner(old) != self._page_role:
+                continue
+            if not bounded_browser_call(old, "evaluate", "() => window.__insoGoogleReadFailed === true"):
                 continue
             recovery = GoogleQuotationUpdateActions(browser_handle=self._handle,
                 location=SimpleNamespace(url=old.url), page_role=self._page_role)
@@ -462,7 +464,7 @@ class GoogleQuotationUpdateActions:
                              (actual.scheme, actual.hostname, actual.path) != document_key
                              else "google-tab-ownership-lost")
                     raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SPREADSHEET_UNAVAILABLE")
-                if self._page.evaluate(_UNSAFE_POLL_PAGE):
+                if bounded_browser_call(self._page, "evaluate", _UNSAFE_POLL_PAGE):
                     log_step("google-busy-pooled-unsafe")
                     raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
             except Exception:
@@ -625,7 +627,7 @@ class GoogleQuotationUpdateActions:
         self._poll_entry = None
         try:
             # Ordinary read failures can be closed; unresolved work stays visible.
-            self._protected |= bool(self._page.evaluate(_UNSAFE_POLL_PAGE))
+            self._protected |= bool(bounded_browser_call(self._page, "evaluate", _UNSAFE_POLL_PAGE))
         except Exception:  # noqa: BLE001 - uncertain old surface is retained
             self._protected = True
         failed_entry["reopenable"] = read_only and not self._protected and not self._script_pending
@@ -653,7 +655,7 @@ class GoogleQuotationUpdateActions:
                         (actual.scheme, actual.hostname, actual.path) !=
                         (target.scheme, target.hostname, target.path)
                         or page_owner(self._page) != self._page_role
-                        or bool(self._page.evaluate(_UNSAFE_POLL_PAGE)))
+                        or bool(bounded_browser_call(self._page, "evaluate", _UNSAFE_POLL_PAGE)))
                 except Exception:  # noqa: BLE001 - unknown surfaces are quarantined, never reused
                     entry["protected"] = True
                 finally:
@@ -688,7 +690,7 @@ class GoogleQuotationUpdateActions:
                 blank = new_background_page(self._handle.browser, context, timeout_ms=self._timeout)
                 if blank is self._page or blank.is_closed() or blank.url != "about:blank":
                     raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_OPERATION_NOT_CLOSED")
-            self._page.close()
+            bounded_browser_call(self._page, "close")
             if not self._page.is_closed():
                 raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_OPERATION_NOT_CLOSED")
         except Exception:  # noqa: BLE001 - inability to end the owned surface is shared safety failure

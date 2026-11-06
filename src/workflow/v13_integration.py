@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import sqlite3
 from dataclasses import asdict, replace
 from hashlib import sha256
@@ -81,6 +82,24 @@ class V13HoldStore:
             raise V12Fault(
                 FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE"
             ) from None
+
+    def blocks_inquiry_retry(self, inquiry_id, identity):
+        """Read existing barriers without installing or clearing any V13 schema."""
+        try:
+            with sqlite3.connect(self.path) as db:
+                if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='workflow_v13_holds'").fetchone():
+                    return False
+            for key, _payload, observed_json, _reason, _episode in self.active():
+                if key == inquiry_id:
+                    return True
+                observed = json.loads(observed_json)
+                if observed["worksheet"] == asdict(identity.worksheet) and (
+                        observed["row_position"] == identity.row_position
+                        or observed["identifying_snapshot"] == asdict(identity.identifying_snapshot)):
+                    return True
+            return False
+        except (sqlite3.Error, ValueError, KeyError, TypeError):
+            raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
 
     def active(self):
         try:
@@ -481,6 +500,54 @@ class QuotationOrderContinuation:
         return result
 
 
+def is_isolated_source_read_error(error):
+    """Only a source read may defer one sheet; shared safety failures propagate."""
+    from src.sheets.google_reader import (
+        TEMPORARY_READ_NETWORK_CODES,
+        GoogleSheetsReadError,
+        GoogleSheetsReadUnavailable,
+    )
+    if not isinstance(error, GoogleSheetsReadError):
+        return False
+    allowed = isinstance(error, GoogleSheetsReadUnavailable)
+    seen = set()
+    cause = error
+    while cause is not None and id(cause) not in seen:
+        seen.add(id(cause))
+        if isinstance(cause, V12Fault):
+            if cause.reason != "GOOGLE_SPREADSHEET_UNAVAILABLE":
+                return False
+            allowed = True  # Read rejected its own navigation; no data admitted.
+        elif type(cause).__module__.startswith("playwright"):
+            if type(cause).__name__ != "TimeoutError":
+                codes = re.findall(r"net::(ERR_[A-Z_]+)", str(cause))
+                if not codes or any(code not in TEMPORARY_READ_NETWORK_CODES for code in codes):
+                    return False
+        elif not isinstance(cause, (GoogleSheetsReadError, TimeoutError, ConnectionError)):
+            return False  # DB, authentication, ownership, TLS and unknown faults stay closed.
+        cause = cause.__cause__ or cause.__context__
+    return allowed and cause is None
+
+
+def poll_inquiry_worksheets(v12, reader, worksheets, *, now, stop_requested):
+    """Keep the original serial flow, but do not strand another healthy sheet."""
+    deferred = []
+    for worksheet in worksheets:
+        if stop_requested():
+            return
+        try:
+            v12.poll_and_process(reader, worksheet, now=now)
+        except Exception as error:
+            if not is_isolated_source_read_error(error):
+                raise
+            deferred.append(error)
+            code = {"2026": "MAIN", "SHAHAB": "SHAHAB"}.get(worksheet.worksheet, "OTHER")
+            logging.getLogger("inso.diagnostics").warning("Worksheet source read deferred", extra={
+                "runtime_reason": "SOURCE_"+code+"_SHEET_READ_DEFERRED", "runtime_cause": type(error).__name__})
+    if deferred:
+        raise deferred[0]  # Partial progress is not reported as a fully successful poll.
+
+
 class CombinedCycle:
     """Run A then B without another wait; only V1.2-local faults pause A."""
 
@@ -501,10 +568,7 @@ class CombinedCycle:
         self.v12.begin_poll_cycle()
         if not self.v12_paused:
             try:
-                for worksheet in worksheets:
-                    if self.stop():
-                        return
-                    self.v12.poll_and_process(reader, worksheet, now=now)
+                poll_inquiry_worksheets(self.v12, reader, worksheets, now=now, stop_requested=self.stop)
             except V13Stopped:
                 raise  # A borrowed quotation cancellation must unwind its caller.
             except (sqlite3.Error, V12DatabaseError):
@@ -516,7 +580,9 @@ class CombinedCycle:
                     raise
                 self.v12_paused = True
                 self.on_pause(exc)
-            except Exception as exc:  # noqa: BLE001 - classify the isolated V1.2 boundary
+            except Exception as exc:
+                if is_isolated_source_read_error(exc):
+                    raise
                 # The reviewed Research worker can wrap preparation faults. Preserve
                 # their shared cause instead of treating the wrapper as a local blocker.
                 cause, visited = exc, set()

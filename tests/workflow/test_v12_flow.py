@@ -259,7 +259,8 @@ def test_a_notice_survives_research_retry_but_requires_confirmed_nonduplicate(
         tmp_path, duplicate_failure=duplicate_failure, notification_transport=transport)
     research.execute = lambda item: ResearchResult(item.inquiry_id, ResearchStatus.RETRYABLE_FAILURE)
     result = flow.poll_and_process(FakeSheetsReader(tier="A"), SHEET, now=NOW)
-    assert result[0].waiting_reason == "RESEARCH_NOT_SUCCESSFUL"
+    assert result[0].waiting_reason == "RESEARCH_RETRY_WAIT"
+    assert _ws.get_by_inquiry_id(result[0].inquiry_id).status.value == "RETRY_WAIT"
     worker.run_due(now=NOW)
     assert len(transport.calls) == (0 if duplicate_failure else 1)
 

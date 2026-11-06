@@ -11,6 +11,13 @@ from typing import Any, Protocol
 
 from .pending import WorksheetIdentity, WorksheetRow
 
+TEMPORARY_READ_NETWORK_CODES = frozenset({
+    "ERR_TIMED_OUT", "ERR_CONNECTION_TIMED_OUT", "ERR_CONNECTION_RESET",
+    "ERR_CONNECTION_CLOSED", "ERR_CONNECTION_REFUSED", "ERR_EMPTY_RESPONSE",
+    "ERR_NAME_NOT_RESOLVED", "ERR_NETWORK_CHANGED", "ERR_INTERNET_DISCONNECTED",
+    "ERR_PROXY_CONNECTION_FAILED", "ERR_TUNNEL_CONNECTION_FAILED",
+})
+
 
 class GoogleSheetsReadError(RuntimeError):
     """A Google Sheets read failed or returned an invalid response."""

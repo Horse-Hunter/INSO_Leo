@@ -20,7 +20,12 @@ from pathlib import Path
 from time import monotonic
 from urllib.parse import parse_qs, urlsplit
 
-from src.research.cdp_pages import page_owner, shared_playwright_factory
+from src.research.cdp_pages import (
+    bounded_browser_call,
+    page_owner,
+    shared_playwright_factory,
+)
+from src.sheets.google_reader import TEMPORARY_READ_NETWORK_CODES
 from src.sheets.quotation_input import QuotationInputBusy, QuotationInputUnavailable
 from src.sheets.worksheet_schema import worksheet_schema
 from src.workflow.v12_faults import FaultScope, V12Fault
@@ -80,12 +85,7 @@ def _temporary_web_read_failure(exc):
                 temporary = True
             else:
                 codes = re.findall(r"net::(ERR_[A-Z_]+)", str(exc))
-                if not codes or any(code not in {
-                    "ERR_TIMED_OUT", "ERR_CONNECTION_TIMED_OUT", "ERR_CONNECTION_RESET",
-                    "ERR_CONNECTION_CLOSED", "ERR_CONNECTION_REFUSED", "ERR_EMPTY_RESPONSE",
-                    "ERR_NAME_NOT_RESOLVED", "ERR_NETWORK_CHANGED", "ERR_INTERNET_DISCONNECTED",
-                    "ERR_PROXY_CONNECTION_FAILED", "ERR_TUNNEL_CONNECTION_FAILED",
-                } for code in codes):
+                if not codes or any(code not in TEMPORARY_READ_NETWORK_CODES for code in codes):
                     return False
                 temporary = True
         elif isinstance(exc, (TimeoutError, ConnectionError)):
@@ -227,9 +227,9 @@ class GoogleSheetsWebService:
                         if ((actual.scheme, actual.hostname, actual.path) != key[:3]
                                 or page_owner(page) != "google-operation"):
                             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
-                        state = page.evaluate("""() => ({title: document.querySelector(
+                        state = bounded_browser_call(page, "evaluate", """() => ({title: document.querySelector(
                             '.docs-sheet-active-tab .docs-sheet-tab-name')?.textContent})""")
-                        if state.get("title") != key[3] or page.evaluate(_UNSAFE_POLL_PAGE):
+                        if state.get("title") != key[3] or bounded_browser_call(page, "evaluate", _UNSAFE_POLL_PAGE):
                             self._retained_pages[key] = (native, True, False)
                             continue
                         actions.close()  # Original native close and last-tab protection.
@@ -622,7 +622,7 @@ class GoogleSheetsWebService:
 
     @staticmethod
     def _select(page, actions, title):
-        previous = page.evaluate('''() => ({
+        previous = bounded_browser_call(page, "evaluate", '''() => ({
             title: document.querySelector('.docs-sheet-active-tab .docs-sheet-tab-name')?.textContent,
             fragment: location.hash})''')
         tab = page.locator(".docs-sheet-tab").filter(has=page.get_by_text(title, exact=True))

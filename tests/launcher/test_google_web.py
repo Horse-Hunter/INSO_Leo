@@ -623,7 +623,9 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
                 assert len(calls) == 1 and len(busy_pages) == 1
                 busy_pages[0].popup = ''  # Site is idle by the next poll.
             else:
-                assert len(calls) == 5
+                assert len(calls) == (9 if failure_mode == 'metadata_timeout' else 5)
+                if failure_mode == 'metadata_timeout':
+                    assert backend.get_status().new_orders is None  # Optional metrics failed; business reads still ran.
             backend._v12_composition.coordinator.run_notifications(now=launcher.utc_now())
             return False
         backend._stop.set()
@@ -632,9 +634,9 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
     try:
         backend.start()
         backend._thread.join(timeout=10)
-        assert not backend._thread.is_alive() and waits == [900, 900]
+        assert not backend._thread.is_alive() and waits == [900, 900], (failure_mode, len(calls), waits)
         assert len(calls) == (5 if failure_mode == 'timeout_then_busy' else
-                              10 if failure_mode == 'metadata_timeout' else 9)
+                              12 if failure_mode == 'metadata_timeout' else 9)
         assert backend.get_health().overall == '正常'
         assert len(_RecordingTransport.sent) == 0
         assert backend._store.all_items() == ()

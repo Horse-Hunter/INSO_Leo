@@ -1,8 +1,8 @@
 {
   "rfq": "RFQ-016",
-  "active_scope": "Owner2026-11-04 new pending order source-date omission repair",
-  "status": "DEPLOYED_OBSERVED",
-  "deployment": "INSTALLED_STARTED_OBSERVED",
+  "active_scope": "Owner2026-11-05/06 reliable2026+SHAHAB new order handling and3000+Chinese-character accountability",
+  "status": "IN_PROGRESS",
+  "deployment": "PREVIOUS_RELEASE_HEALTH_HOLD_NEW_REPAIR_BUILD_PENDING",
   "source_commit": "97f0ac6959e4efb3bd30bac48fa6e812b001c238",
   "source_tree": "902db15c7f4fce203c41b185a4a1b41310e05209",
   "test_tree": "7e7c911caa0f30187574ca37e85d321d07044d54",
@@ -742,7 +742,9 @@
         "policy": "Verified manual verification, current safety pause or verified persistent incident",
         "positive": [
           "tests/workflow/test_mail_gate_audit.py::test_confirmed_manual_auth_before_order_binding_still_notifies_owner_once",
-          "tests/workflow/test_mail_gate_audit.py::test_verified_icnet_manual_challenge_is_not_lost_in_generic_read_defer"
+          "tests/workflow/test_mail_gate_audit.py::test_verified_icnet_manual_challenge_is_not_lost_in_generic_read_defer",
+          "tests/launcher/test_native_safety_notice.py::test_verified_native_safety_stop_notifies_owner_once_and_never_blames_google",
+          "tests/launcher/test_native_safety_notice.py::test_wrapped_read_error_keeps_actual_safety_stop_reason_and_owner_notice"
         ],
         "negative": [
           "tests/workflow/test_mail_gate_audit.py::test_runtime_manual_notice_is_rechecked_before_actual_smtp"
@@ -1003,5 +1005,102 @@
       "src/workflow/order_notifications.py",
       "src/workflow/v12_store.py"
     ]
-  }
+  },
+  "new_order_reliability_20261106": {
+    "status": "OFFLINE_PASS_BUILD_PENDING",
+    "source_before": "2bb0c0b7c932f75552bca6d9cccbc87853194676",
+    "source_tests_fingerprint": {
+      "base": "35ed7b3658c91d1df3fd6bcc4d38823e79b3075a",
+      "source_tests_worktree_sha256": "2c6b0974f3888d472a344e014e3c0d6f32abf5f67c922ac5b9973fecb1a88795",
+      "file_count": 333
+    },
+    "production_installed": false,
+    "COMPUTER_USE_NOT_USED": true,
+    "false_alert_fake_smtp_sends": 0,
+    "normal_cadence_seconds": 900,
+    "original_retry_minutes": [
+      15,
+      30,
+      60
+    ],
+    "no_schema_dependencies_browser_profile_scheduler_or_mail_system_added": true,
+    "fixes": [
+      "Optional dashboard counts cannot veto orders and stay UNKNOWN on safe read failure",
+      "Safe source read failure isolated between2026/SHAHAB; partial poll remains deferred",
+      "Original bounded Research retry retained; no first-attempt terminal override",
+      "Narrow automatic legacy safe-read retry recovery preserves dates/attempts and is atomic across queue/business/event",
+      "SameOwner original SDK protocol/metadata waits bounded; unknown target remains protected",
+      "No unrelated manual/INSO/other-document marker probes before Google read",
+      "Verified native resource safety stops accurately notify Owner once",
+      "Read error wrapper cannot erase actual safety reason or suppress genuine stop notice"
+    ],
+    "not_proven": [
+      "Exact old stalled native browser call",
+      "Final inbox delivery",
+      "Future external supplier availability"
+    ],
+    "core_target": {
+      "xml": "D:\\Program_Leo\\INSO_Leo\\.tmp\\new-orders-final-core-20261106.xml",
+      "sha256": "34ad3576561d92a4007ad91e60202f0a753eeb645b09ca5dda87d5f2630a8180",
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "43",
+      "time": "4.955",
+      "timestamp": "2026-11-06T09:02:51.744107+08:00",
+      "hostname": "Leo229"
+    },
+    "mail_target": {
+      "xml": "D:\\Program_Leo\\INSO_Leo\\.tmp\\new-orders-final-safety-20261106.xml",
+      "sha256": "364f6f4a116a2ff4f19a0f42c0f2a9c7a6263c6b3ce1b4a309aa12f0660863fd",
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "91",
+      "time": "7.915",
+      "timestamp": "2026-11-06T09:05:31.759276+08:00",
+      "hostname": "Leo229"
+    },
+    "full": {
+      "xml": "D:\\Program_Leo\\INSO_Leo\\.tmp\\new-orders-full-final-20261106.xml",
+      "sha256": "4b59537c73dcee811665d10c3dc0340c7a5e679a8ec54aaef9afcce0443e798d",
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "1",
+      "tests": "3609",
+      "time": "246.290",
+      "timestamp": "2026-11-06T09:06:08.719717+08:00",
+      "hostname": "Leo229"
+    },
+    "regressions_before_fix": [
+      {
+        "xml": "D:\\Program_Leo\\INSO_Leo\\.tmp\\new-orders-isolation-red-20261105.xml",
+        "sha256": "08cc5569f1a2902a003124c3ae50f46e78e78f7534f63c17a2fc54c6fea1e5ed"
+      },
+      {
+        "xml": "D:\\Program_Leo\\INSO_Leo\\.tmp\\new-orders-retry-red-20261105.xml",
+        "sha256": "77ef79b6ea25e87fd4533e967d763105b2c591c574f7fa81e3101a84c326b077"
+      },
+      {
+        "xml": "D:\\Program_Leo\\INSO_Leo\\.tmp\\new-orders-legacy-red-20261105.xml",
+        "sha256": "5ad4461e9b2e6ec82a016caf18cd34e5f9d63ab4441058414571279d78575ec2"
+      },
+      {
+        "xml": "D:\\Program_Leo\\INSO_Leo\\.tmp\\new-orders-native-red-20261105.xml",
+        "sha256": "e9f3f97247cf394055a3ff559e223c5b012f593afac77146e966ef8f47b1e2f6"
+      },
+      {
+        "xml": "D:\\Program_Leo\\INSO_Leo\\.tmp\\new-orders-native-mail-red-20261105.xml",
+        "sha256": "2dce1fd903a160a48bd666cfec255230757460f5ec240aa3343f034df5119f51"
+      },
+      {
+        "xml": "D:\\Program_Leo\\INSO_Leo\\.tmp\\new-orders-wrapped-safety-red-20261106.xml",
+        "sha256": "bc823fdf02fab1d8c83f4b940e01b20b99844dfb9fc3fd3f13e8a8e8f358e8d9"
+      }
+    ]
+  },
+  "installed_source_commit": "2bb0c0b7c932f75552bca6d9cccbc87853194676"
 }

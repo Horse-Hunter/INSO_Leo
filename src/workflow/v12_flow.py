@@ -30,7 +30,7 @@ from .service import (
     ResearchPreparationError,
     WorkflowWorker,
 )
-from .store import WorkflowStateStore
+from .store import DEFAULT_RETRY_DELAYS, WorkflowStateStore
 from .v12_contracts import (
     EXECUTION_EVENT_TYPES,
     BusinessState,
@@ -229,8 +229,15 @@ class V12WorkflowCoordinator:
             # freshly revalidate original identity/status/date before execution.
             from .automatic_admission import age_reason
             source_day = getattr(item, "source_order_date", None)
-            if (state is BusinessState.RESEARCH_RETRY_WAIT and item.status.value == "QUEUED"
-                    and item.attempt_count == 0 and purchase is None and not armed
+            safe_unprepared = item.status.value == "QUEUED" and item.attempt_count == 0
+            safe_source_retry = (item.status.value == "RETRY_WAIT"
+                and item.research_status == "RETRYABLE_FAILURE"
+                and 1 <= item.attempt_count <= len(DEFAULT_RETRY_DELAYS)
+                and item.next_attempt_at is not None
+                and item.last_error in {"SOURCE_UNAVAILABLE", "RETRYABLE_FAILURE", "RESEARCH_SOURCE_FAILURE"})
+            if (state is BusinessState.RESEARCH_RETRY_WAIT and (safe_unprepared or safe_source_retry)
+                    and purchase is None and not armed
+                    and self._source_retry_unsubmitted(item)
                     and source_day is not None and age_reason(source_day, now, module="inquiry") is None
                     and age_reason(item.created_at, now, module="inquiry") is None):
                 continue
@@ -341,6 +348,30 @@ class V12WorkflowCoordinator:
             self._admission_dates[iid] = result.order_date.isoformat()
         return result.allowed
 
+    def _source_retry_unsubmitted(self, item):
+        from .v13_integration import V13HoldStore
+        try:
+            self._v12_store.purchase_state(item.inquiry_id)
+        except KeyError:
+            pass
+        else:
+            return False
+        if not self._v12_store.manual_purchase_retry_allowed(item.inquiry_id):
+            return False
+        return not V13HoldStore(self._workflow_store.database_path).blocks_inquiry_retry(
+            item.inquiry_id, item.record_identity)
+
+    def _resume_premature_source_failure(self, item, *, now):
+        from .automatic_admission import age_reason
+        if (item.status.value != "FAILED" or item.research_status != "RETRYABLE_FAILURE"
+                or not 1 <= item.attempt_count <= len(DEFAULT_RETRY_DELAYS)
+                or self._v12_store.business_state(item.inquiry_id) is not BusinessState.RESEARCH_FAILED
+                or age_reason(item.created_at, now, module="inquiry")
+                or age_reason(item.source_order_date, now, module="inquiry")
+                or not self._source_retry_unsubmitted(item)):
+            return
+        self._v12_store.resume_premature_source_retry(item.inquiry_id, item.record_identity, at=now)
+
     def prepare_pending(
         self, records: tuple[PendingSheetRecord, ...], *, now: datetime
     ):
@@ -371,6 +402,12 @@ class V12WorkflowCoordinator:
                     self._workflow_store.mark_interrupted(existing.id, now=now)
                     self._set_state(inquiry_id, BusinessState.SOURCE_CHANGED, EventType.SECURITY_CHECK_FAILED, now)
                     held[inquiry_id] = "SOURCE_CHANGED"
+                else:
+                    self._resume_premature_source_failure(existing, now=now)
+                    current = self._workflow_store.get_by_inquiry_id(inquiry_id)
+                    if (current.status.value == "RETRY_WAIT" and current.research_status == "RETRYABLE_FAILURE"
+                            and not self._source_retry_unsubmitted(current)):
+                        held[inquiry_id] = "EXTERNAL_WRITE_PROTECTED"
                     continue
             if (_quantity(record.quantity) is not None and isinstance(record.model, str)
                     and record.model.strip() and _business_tier(record)):
@@ -520,12 +557,6 @@ class V12WorkflowCoordinator:
         if not self._record_admitted(record, now, fresh=True):
             return self._result(inquiry_id, waiting_reason="AUTOMATIC_ADMISSION_EXCLUDED")
         if item.status.value in {"RETRY_WAIT", "RESEARCHING", "QUEUED"}:
-            if research_result is not None and research_result.status is ResearchStatus.RETRYABLE_FAILURE:
-                self._notify_a_if_nonduplicate(inquiry_id, research_result, now)
-                self._workflow_store.finish_row_failure(item.id,
-                    research_result.reason_code.value if research_result.reason_code else "RESEARCH_SOURCE_FAILURE", now=now)
-                self._set_state(inquiry_id, BusinessState.RESEARCH_FAILED, EventType.RESEARCH_FAILED, now)
-                return self._result(inquiry_id, waiting_reason="RESEARCH_NOT_SUCCESSFUL")
             if research_result is not None:
                 self._notify_a_if_nonduplicate(inquiry_id, research_result, now)
             self._set_state(

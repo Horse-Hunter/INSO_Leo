@@ -1118,10 +1118,11 @@ class ProductionBackend(GuiBackend):
                                     self._combined.run(reader, worksheets, now=self._last_poll)
                                 else:
                                     self._v12_composition.coordinator.begin_poll_cycle()
-                                    for worksheet in worksheets:
-                                        if self._immediate_stop_requested():
-                                            return
-                                        self._v12_composition.coordinator.poll_and_process(reader,worksheet,now=self._last_poll)
+                                    from src.workflow.v13_integration import (
+                                        poll_inquiry_worksheets,
+                                    )
+                                    poll_inquiry_worksheets(self._v12_composition.coordinator, reader, worksheets,
+                                        now=self._last_poll, stop_requested=self._immediate_stop_requested)
                                 if self._immediate_stop_requested():
                                     return
                                 self._idle_login_tick(now=utc_now())
@@ -1292,18 +1293,15 @@ class ProductionBackend(GuiBackend):
             self._notify()
             with web.poll_scope(), quotation_operation_scope(), reader.discovery_scope():
                 self._check_site_recovery(rc, cfg)
-                if module in {"inquiry", "quotation"}:
-                    self._refresh_dashboard_counts(reader, worksheets, episodes=episodes, now=utc_now())
                 if module == "inquiry":
                     self._begin_poll_projection()
                     if self._combined is not None:
                         self._combined.run_inquiry(reader, worksheets, now=utc_now())
                     else:
                         self._v12_composition.coordinator.begin_poll_cycle()
-                        for worksheet in worksheets:
-                            if self._immediate_stop_requested():
-                                break
-                            self._v12_composition.coordinator.poll_and_process(reader, worksheet, now=utc_now())
+                        from src.workflow.v13_integration import poll_inquiry_worksheets
+                        poll_inquiry_worksheets(self._v12_composition.coordinator, reader, worksheets,
+                            now=utc_now(), stop_requested=self._immediate_stop_requested)
                     if not self._immediate_stop_requested():
                         self._purchase_completion.retry_saved_statuses(at=utc_now())
                         self._idle_login_tick(now=utc_now())
@@ -1314,6 +1312,8 @@ class ProductionBackend(GuiBackend):
                     self._tp.run(cfg["spreadsheet_id"], now=utc_now())
                     if self._tp.issues:
                         self._append_log("WARNING", f"TP 有 {len(self._tp.issues)} 条待核对，其他任务继续。")
+                if module in {"inquiry", "quotation"} and not self._stop.is_set():
+                    self._refresh_dashboard_counts(reader, worksheets, episodes=episodes, now=utc_now())
         self._module_execute = execute
         try:
             while not self._stop.is_set():
@@ -1879,8 +1879,17 @@ class ProductionBackend(GuiBackend):
 
     def _refresh_dashboard_counts(self, reader, worksheets, *, episodes, now):
         live_before = getattr(reader, "live_read_revision", None)
-        counts = read_dashboard_counts(reader, worksheets, store=self._store,
-                                       episodes=episodes, now=now)
+        try:
+            counts = read_dashboard_counts(reader, worksheets, store=self._store,
+                                           episodes=episodes, now=now)
+        except Exception as error:
+            from src.workflow.v13_integration import is_isolated_source_read_error
+            if not is_isolated_source_read_error(error):
+                raise
+            with self._lock:
+                self._dashboard_counts = None  # Unknown counts never become false zeroes.
+            self._notify()
+            return
         if live_before is None or reader.live_read_revision != live_before:
             self._site_recovered("Google Sheets")
         with self._lock:
@@ -2628,12 +2637,22 @@ class ProductionBackend(GuiBackend):
                 reason = "GOOGLE_SHEETS_UNAVAILABLE"
                 break
             cause = cause.__cause__
-        shared_fault = self._state is RunState.GLOBAL_STOP
+        from src.workflow.notification_review import RUNTIME_SAFETY_REASONS
+        safety_reason, candidate, visited = None, exc, set()
+        while candidate is not None and id(candidate) not in visited:
+            visited.add(id(candidate))
+            if isinstance(candidate, V12Fault) and candidate.reason in RUNTIME_SAFETY_REASONS:
+                safety_reason = candidate.reason
+                break
+            candidate = candidate.__cause__ or candidate.__context__
+        if safety_reason is not None:
+            reason = safety_reason  # A generic read wrapper must not erase the actual safety stop.
         if page_fault is not None:
             reason = page_fault.reason
-        if prolonged:
+        if prolonged and page_fault is None and safety_reason is None:
             reason = {"INSO": "INSO_OUTAGE_THREE_HOURS", "Google Sheets": "GOOGLE_OUTAGE_THREE_HOURS",
                       "IC.net": "IC_NET_OUTAGE_THREE_HOURS", "汇率网站": "FX_OUTAGE_THREE_HOURS"}[site]
+        shared_fault = self._state is RunState.GLOBAL_STOP or reason in RUNTIME_SAFETY_REASONS
         self._runtime_stop_reason = reason
         safe_reason = reason if isinstance(reason, str) and re.fullmatch(r"[A-Z_]{1,64}", reason) else "V12_INTERNAL_FAILURE"
         root_cause, visited = exc, set()
@@ -3068,15 +3087,18 @@ class ProductionBackend(GuiBackend):
                 and not self._owner_stop_requested
                 and self._stop.is_set() and self._run_id
                 and self._state in {RunState.GLOBAL_STOP, RunState.MODULE_PAUSED}):
-            proof = {"incident_key": "program-safety-stop:google-operation",
+            browser_fault = reason.startswith("CDP_PAGE_")
+            stop_key = "program-safety-stop:"+("browser-operation" if browser_fault else "google-operation")
+            proof = {"incident_key": stop_key,
                 "category": "runtime_stop", "module": "business_runtime",
                 "reason_code": "PROGRAM_SAFETY_PAUSED", "stop_reason": reason,
                 "run_id": self._run_id, "stop_state": self._state.name, "halted": True,
                 "active": True, "current_business": True, "verified": True,
                 "needs_owner": True, "verified_at": at.isoformat(),
-                "original_event": "program-safety-stop:google-operation",
-                "action": "请检查原程序暂停提示及Google操作页；保留人工页面，不要重发采购或报价。",
-                "uncertainty": "尚不能确认操作页身份或收口；不能据此判断Google整体不可用，也不能推断订单写入成功或失败。"}
+                "original_event": stop_key,
+                "action": ("请核对原程序的浏览器资源暂停提示；保留所有人工页面和登录会话，不要重复提交。" if browser_fault else
+                    "请检查原程序暂停提示及Google操作页；保留人工页面，不要重发采购或报价。"),
+                "uncertainty": "尚不能确认专属页面创建、身份或收口；不能据此判断Google整体不可用，也不能推断订单写入成功或失败。"}
         elif manual_login:
             proof = self._fault_evidence(inquiry, reason, at=at, event="native-manual-login", module="INSO") if manual_site == "INSO" else None
             if (proof is None and self._v13_ledger_ready and self._run_id and not self._closed and not self._owner_stop_requested
