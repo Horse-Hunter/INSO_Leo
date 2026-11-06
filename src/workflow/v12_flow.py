@@ -229,7 +229,11 @@ class V12WorkflowCoordinator:
             # freshly revalidate original identity/status/date before execution.
             from .automatic_admission import age_reason
             source_day = getattr(item, "source_order_date", None)
-            safe_unprepared = item.status.value == "QUEUED" and item.attempt_count == 0
+            safe_unprepared = item.status.value == "QUEUED" and (
+                item.attempt_count == 0 or (
+                    item.research_status == "RETRYABLE_FAILURE"
+                    and 1 <= item.attempt_count <= len(DEFAULT_RETRY_DELAYS)
+                    and item.last_error == "Research preparation requires manual handling"))
             safe_source_retry = (item.status.value == "RETRY_WAIT"
                 and item.research_status == "RETRYABLE_FAILURE"
                 and 1 <= item.attempt_count <= len(DEFAULT_RETRY_DELAYS)

@@ -2,7 +2,7 @@
   "rfq": "RFQ-016",
   "active_scope": "Owner2026-11-05/06 reliable2026+SHAHAB new order handling and3000+Chinese-character accountability",
   "status": "IN_PROGRESS",
-  "deployment": "PREVIOUS_RELEASE_HEALTH_HOLD_NEW_REPAIR_BUILD_PENDING",
+  "deployment": "PRODUCTION_NORMAL_EXIT_FINAL_RELEASE_GATE_RUNNING",
   "source_commit": "97f0ac6959e4efb3bd30bac48fa6e812b001c238",
   "source_tree": "902db15c7f4fce203c41b185a4a1b41310e05209",
   "test_tree": "7e7c911caa0f30187574ca37e85d321d07044d54",
@@ -1139,5 +1139,26 @@
     "original_unknown_protection_unchanged": 1,
     "computer_use": "COMPUTER_USE_NOT_USED"
   },
-  "deployment_status": "HEALTH_HOLD_URL_SYNC_BUILD_PENDING"
+  "deployment_status": "HEALTH_HOLD_URL_SYNC_BUILD_PENDING",
+  "google_read_release_recovery_20261106": {
+    "status": "OFFLINE_PASS_BUILD_PENDING",
+    "owner_normal_exit": {
+      "run_id": "69e11b61ad3d48b28998590c12e8b503",
+      "completed": true,
+      "exit_reason": "owner_exit",
+      "application_exit_code": 0
+    },
+    "live_recovered_new_order": "QUEUED, source date persisted, original attempt1 retained, no purchase/SAVE",
+    "red_failed": 1,
+    "targeted_pass": 25,
+    "broader_before_three_new_negative_cases_pass": 154,
+    "independent_review": "narrow canonical preparation release with remaining budget; all age/no-effect/hold gates retained",
+    "production_mutations_by_diagnostics": false,
+    "COMPUTER_USE_NOT_USED": true,
+    "full_pass": 3628,
+    "full_skip": 1,
+    "full_seconds": 253.97,
+    "full_xml_sha256": "07e63906e48f0eb17b3e663a5eaf091b2c3abc4384c2ec00ad1cd8208d78d3c8",
+    "source_test_fingerprint_sha256": "455b33b6d1dd3a1b8ad326869e240b08883a97e789b7256d914d9816c7d7a359"
+  }
 }

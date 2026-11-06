@@ -227,3 +227,46 @@ def test_fresh_read_failure_after_completed_research_resumes_routing_without_rer
     else:flow.poll_and_process(reader,SHEET,now=NOW+timedelta(minutes=16))
     flow.poll_and_process(reader,SHEET,now=NOW+timedelta(minutes=32))
     assert len(research.inputs)==1 and len(writer.commands)==1
+
+
+
+@pytest.mark.parametrize("protection",[None,"unknown_release","exhausted_budget","unknown_purchase"])
+def test_released_unprepared_source_retry_keeps_remaining_budget_across_restart(tmp_path,protection):
+    from src.workflow import ResearchPreparationError
+    from src.workflow.v12_flow import V12WorkflowCoordinator
+    flow,queue,_ledger,research,_,_,writer,_=_make_flow(tmp_path,
+        facts=ResearchBusinessFacts("货足",Decimal(2),Decimal(2)))
+    flow._record_admitted=V12WorkflowCoordinator._record_admitted.__get__(flow)
+    flow._brief_snapshot=lambda _:()
+    reader=FakeSheetsReader(tier="C");reader.row=replace(reader.row,source_order_date=NOW.date().isoformat())
+    execute=research.execute
+    research.execute=lambda item:ResearchResult(item.inquiry_id,ResearchStatus.RETRYABLE_FAILURE,
+        reason_code=ResearchReasonCode.SOURCE_UNAVAILABLE)
+    first,=flow.poll_and_process(reader,SHEET,now=NOW)
+    def unavailable(item):raise ResearchPreparationError("synthetic prepare unavailable")
+    research.execute=unavailable
+    with pytest.raises(ResearchPreparationError):
+        flow.poll_and_process(reader,SHEET,now=NOW+timedelta(minutes=16))
+    item=queue.get_by_inquiry_id(first.inquiry_id)
+    assert item.status.value=="QUEUED" and item.attempt_count==1 and not writer.commands
+    if protection in {"unknown_release","exhausted_budget"}:
+        import sqlite3
+        with sqlite3.connect(queue.database_path) as db:
+            if protection=="unknown_release":db.execute("UPDATE workflow_items SET last_error='synthetic other release'")
+            else:db.execute("UPDATE workflow_items SET attempt_count=4")
+    elif protection=="unknown_purchase":
+        from src.workflow.v12_contracts import PurchaseOutcome
+        _ledger.set_purchase_state(item.inquiry_id,"synthetic-draft",PurchaseOutcome.PRE_SAVE_READY,at=NOW)
+        _ledger.set_purchase_state(item.inquiry_id,"synthetic-draft",PurchaseOutcome.AI_RECOGNIZED,at=NOW)
+        _ledger.begin_save_dispatch(item.inquiry_id,at=NOW)
+    flow.initialize_run_state(now=NOW+timedelta(minutes=17))
+    if protection:
+        assert queue.get_by_inquiry_id(item.inquiry_id).status.value=="MANUAL_REVIEW"
+        assert not writer.commands
+        return
+    assert queue.get_by_inquiry_id(item.inquiry_id).status.value=="QUEUED"
+    research.execute=execute
+    flow.poll_and_process(reader,SHEET,now=NOW+timedelta(minutes=18))
+    current=queue.get_by_inquiry_id(item.inquiry_id)
+    assert current.status.value=="COMPLETED" and current.attempt_count==2
+    assert current.created_at==NOW and len(writer.commands)==1
