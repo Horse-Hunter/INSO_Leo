@@ -375,8 +375,8 @@ class GoogleQuotationUpdateActions:
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SPREADSHEET_UNAVAILABLE")
         if parsed.fragment != expected.fragment and not (
                 read_selection and _same_read_sheet_selection(parsed.fragment, expected.fragment)):
-            log_step("google-read-surface-fragment-unconfirmed" if read_selection
-                     else "google-write-surface-fragment-unconfirmed")
+            log_step("google-read-fragment-drift" if read_selection
+                     else "google-write-fragment-drift")
             raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
 
     def open_quote_input(self):

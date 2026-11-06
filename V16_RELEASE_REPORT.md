@@ -1,3 +1,13 @@
+# 最新现场 — 2026-11-06 Google全链路交叉复审补修中
+
+状态 IN_PROGRESS / HEALTH_HOLD，不能宣布新单处理已恢复。
+已安装源码 e4db3fb926f7ac9f7f656a70f7d29ad77317bf7a；EXE SHA256 c83af3fe5d19a7fb046e58e4e867eb3ac914f1013093d18971dc713ea7982bb8。正式路径 D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe。Owner原托盘正常退出后，备份 D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-google-cross-review-20261106T014727Z；此前含2bb真实运行版及一致数据的备份 INSO_V1.6-new-orders-20261106T012321Z 仍保留。候选cd4从未启动，保留历史，不冒称已验收。
+新旧/空闲自检0，2875文件和11修改冻结模块核对；启动前16受保护表和配置逐项一致。正式GUI30924及原观察器31488，run69e11b61ad3d48b28998590c12e8b503；原现有Chrome19208/9222保持，未新建或关闭浏览器。原175SENT、51登记时间及1条未知采购保护不变，数据库检查ok，无新增采购或真实测试外发。
+首轮询价196.453s安全延后，报价128.046s安全延后，TP9.641s完成；收信/独立研究线程运行但本轮未验证新真实邮件链路。Google页原生控件可响应，不能据此声称Google整体故障。生产观察仍失败，原Executor继续修复；额外独立复现页面真实工作表与SDK地址缓存不同步，126相关专项通过，最终全量与新包尚待完成。
+交叉复审记录和>3000字检讨见原RFQ016目录；所有结论以真实源码、测试、安装回执及自然业务观察为准。COMPUTER_USE_NOT_USED。
+
+以下为历史发布记录，所有“当前”“已恢复”“BUSINESS_RUNNING”均以本条最新现场覆盖。
+
 # 当前发布：2026-11-05 日期漏读、INSO页面身份及安全读取恢复修复已覆盖运行
 
 BUSINESS_RUNNING / NATURAL_ORDER_RESEARCH_NO_QUOTE。源码97f0ac6959e4efb3bd30bac48fa6e812b001c238，专项165PASS、完整3515PASS/1原系统权限SKIP。原构建/扫描/新旧程序及空闲自检通过；2875文件及13修改冻结模块与测试源码一致。正式EXE SHA256dd92ddb8f046694accd005f160db6bf34e7118bfc784b0141cc9350be0c32891，路径D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe。

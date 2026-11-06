@@ -38,6 +38,7 @@ from .google_quote_update import (
     GoogleQuotationUpdateActions,
     GoogleReadTargetUnavailable,
     _retained_google_matches,
+    _same_read_sheet_selection,
     google_operation_scope,
     google_operations_idle,
 )
@@ -639,9 +640,29 @@ class GoogleSheetsWebService:
                 && (arg.already || location.hash !== arg.fragment)''',
             arg={"title": title, "already": previous["title"] == title, "fragment": previous["fragment"]},
             timeout=30000)
-        gid = parse_qs(urlsplit(page.url).fragment).get("gid", [])
-        if len(gid) != 1 or not gid[0].isdecimal():
+        # History/active-tab state can precede the SDK frame-URL event. Bind
+        # the native selected sheet, never the previous cached Page.url.
+        selected = bounded_browser_call(page, "evaluate", """() => ({
+            title: document.querySelector('.docs-sheet-active-tab .docs-sheet-tab-name')?.textContent,
+            fragment: location.hash})""")
+        if not isinstance(selected, dict) or selected.get("title") != title:
+            log_step("google-select-title-drift")
+            raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
+        fragment = selected.get("fragment", "").removeprefix("#")
+        gid = parse_qs(fragment).get("gid", [])
+        if (len(gid) != 1 or not gid[0].isdecimal()
+                or not _same_read_sheet_selection(fragment, "gid="+gid[0])):
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SHEET_UNCONFIRMED")
+        document = urlsplit(actions._location.url)
+        def selected_url(url):
+            actual = urlsplit(url)
+            return ((actual.scheme, actual.hostname, actual.path) ==
+                    (document.scheme, document.hostname, document.path) and actual.fragment == fragment)
+        if not selected_url(page.url):
+            log_step("google-select-url-sync")
+            page.wait_for_url(selected_url, timeout=10000, wait_until="domcontentloaded")
+        if not selected_url(page.url):
+            raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
         # Rebind only after a unique visible tab and its active title are confirmed.
         expected = urlsplit(actions._location.url)
         actual = urlsplit(page.url)
@@ -654,16 +675,21 @@ class GoogleSheetsWebService:
 
     @staticmethod
     def _download(page, actions):
-        def prove_selection():
-            actions._guard(read_selection=True)
+        def prove_selection(phase):
+            try:
+                actions._guard(read_selection=True)
+            except UpdateAttemptUnconfirmed:
+                log_step("google-read-"+phase+"-guard")
+                raise
             expected = getattr(actions, "_native_read_title", None)
             if expected is not None:
                 observed = bounded_browser_call(page, "evaluate", """() => ({
                     title: document.querySelector('.docs-sheet-active-tab .docs-sheet-tab-name')?.textContent,
                     fragment: location.hash})""")
                 if not isinstance(observed, dict) or observed.get("title") != expected:
+                    log_step("google-read-"+phase+"-title")
                     raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
-        prove_selection()
+        prove_selection("pre")
         page.get_by_role("menuitem", name="文件", exact=True).click(timeout=10000)
         page.get_by_role("menuitem", name=re.compile("^下载")).click(timeout=10000)
         with page.expect_download(timeout=30000) as pending:
@@ -685,7 +711,7 @@ class GoogleSheetsWebService:
             rows = list(csv.reader(io.StringIO(content), delimiter="\t"))
             if len(rows) > 100000:
                 raise ValueError("GOOGLE_WEB_READ_TOO_LARGE")
-            prove_selection()
+            prove_selection("post")
             return rows
         except _GoogleDownloadWaitTimeout:
             try:

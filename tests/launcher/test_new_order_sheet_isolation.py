@@ -188,3 +188,36 @@ def test_native_sheet_title_drift_rejects_wrong_export_and_retries_locally(web,m
         else:
             assert reader.read_rows(WorksheetIdentity("test","SHAHAB")) and len(calls)==2
     assert not human.closed
+
+
+
+def test_native_selection_does_not_bind_lagging_sdk_url_cache(web,monkeypatch):
+    from src.sheets.google_reader import GoogleSheetsRowReader
+    from tests.launcher.test_google_web import GridLocator, GridPage
+    service,browser,_,human=web
+    click=GridLocator.click;evaluate=GridPage.evaluate
+    waits=[]
+    def select(control,**kwargs):
+        previous=control.page.url;result=click(control,**kwargs)
+        if control.kind=="tab":
+            control.page.live_url=control.page.url;control.page.url=previous
+        return result
+    def observe(page,script,arg=None):
+        if 'docs-sheet-active-tab' in script:
+            return {"title":page.title,"fragment":getattr(page,"live_url",page.url).split('#')[-1]}
+        return evaluate(page,script,arg)
+    def wait_url(page,predicate,**kwargs):
+        assert kwargs['timeout']<=30000 and kwargs['wait_until']=='domcontentloaded' and predicate(page.live_url)
+        waits.append(True);page.url=page.live_url
+    original=service._download
+    def download(page,actions):
+        page.url=page.live_url  # The SDK cache catches up before the export.
+        return original(page,actions)
+    monkeypatch.setattr(GridLocator,"click",select)
+    monkeypatch.setattr(GridPage,"evaluate",observe)
+    monkeypatch.setattr(GridPage,"wait_for_url",wait_url,raising=False)
+    monkeypatch.setattr(service,"_download",download)
+    with service.poll_scope():
+        assert GoogleSheetsRowReader(service,retry_wait=lambda _:False).read_rows(WorksheetIdentity("test","SHAHAB"))
+    assert len(waits)==1 and len(browser.contexts[0].pages)==2
+    assert not human.closed

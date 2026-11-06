@@ -1119,5 +1119,25 @@
     "full_intermediate_not_acceptance": "23FAIL3582PASS11restricted-hostSKIP; obsolete injections and truthful explicit-date assertions corrected",
     "production": "Owner normal exited; previous candidate installed but never started; latest build required",
     "computer_use": "COMPUTER_USE_NOT_USED"
-  }
+  },
+  "google_read_url_sync_20261106": {
+    "status": "OFFLINE_PASS_BUILD_PENDING",
+    "installed_source": "e4db3fb926f7ac9f7f656a70f7d29ad77317bf7a",
+    "live_acceptance": "HEALTH_HOLD; inquiry196.453sdeferred,quotation128.046sdeferred,TP9.641scompleted",
+    "source_issue": "post-select native hash can precede SDK frame URL; captured exact native selection and bounded original wait_for_url at domcontentloaded before binding",
+    "offline_red": "lagging cachedURL real native fixture FAIL before fix",
+    "targeted_pass": 126,
+    "targeted_seconds": 3.59,
+    "full_pass": 3624,
+    "full_skip": 1,
+    "full_seconds": 255.76,
+    "full_xml_sha256": "a91543bc13571b825c4ad4037e9c7a2e466cdc8dd57756e7fdbe5e1fa3a7cd42",
+    "source_test_fingerprint_sha256": "fbd047902e26957b6190e3d877faf2851c398989eb66e874d2eb93de807c72d4",
+    "independent_final_review": "no additional scoped blocker after domcontentloaded correction; exact live attribution NOT_VERIFIED",
+    "original_sent_records_unchanged": 175,
+    "original_intakes_unchanged": 51,
+    "original_unknown_protection_unchanged": 1,
+    "computer_use": "COMPUTER_USE_NOT_USED"
+  },
+  "deployment_status": "HEALTH_HOLD_URL_SYNC_BUILD_PENDING"
 }
