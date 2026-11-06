@@ -170,6 +170,7 @@ def test_actual_poller_observes_twelve_waits_before_three_hour_global_stop(tmp_p
         raise V12Fault(FaultScope.GLOBAL_STOP, reason)
     def wait(seconds):
         assert not backend._stop.is_set() and backend._state is RunState.RUNNING
+        assert not _RecordingTransport.sent
         waits.append(seconds)
         now[0] += seconds
         return False
@@ -181,7 +182,8 @@ def test_actual_poller_observes_twelve_waits_before_three_hour_global_stop(tmp_p
         assert not backend._thread.is_alive()
         assert polls == [900 * i for i in range(13)] and waits == [900] * 12
         assert backend._state is RunState.GLOBAL_STOP and backend._stop.is_set()
-        assert len(_RecordingTransport.sent) == 0
+        assert len(_RecordingTransport.sent) == 1  # Zero during twelve recoverable waits; one only after actual stop.
+        assert "不能据此判断Google整体不可用" in str(_RecordingTransport.sent[0])
         assert backend._store.all_items() == ()
     finally:
         backend.shutdown()

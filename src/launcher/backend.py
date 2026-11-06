@@ -2652,7 +2652,7 @@ class ProductionBackend(GuiBackend):
         if prolonged and page_fault is None and safety_reason is None:
             reason = {"INSO": "INSO_OUTAGE_THREE_HOURS", "Google Sheets": "GOOGLE_OUTAGE_THREE_HOURS",
                       "IC.net": "IC_NET_OUTAGE_THREE_HOURS", "汇率网站": "FX_OUTAGE_THREE_HOURS"}[site]
-        shared_fault = self._state is RunState.GLOBAL_STOP or reason in RUNTIME_SAFETY_REASONS
+        shared_fault = self._stop.is_set() and self._state in {RunState.GLOBAL_STOP, RunState.MODULE_PAUSED}
         self._runtime_stop_reason = reason
         safe_reason = reason if isinstance(reason, str) and re.fullmatch(r"[A-Z_]{1,64}", reason) else "V12_INTERNAL_FAILURE"
         root_cause, visited = exc, set()
@@ -3083,22 +3083,31 @@ class ProductionBackend(GuiBackend):
             site = "Google Sheets"
         proof = None
         from src.workflow.notification_review import RUNTIME_SAFETY_REASONS
-        if (reason in RUNTIME_SAFETY_REASONS and self._runtime_stop_reason == reason
-                and not self._owner_stop_requested
+        if (not manual_login and self._runtime_stop_reason == reason
+                and not self._closed and not self._owner_stop_requested
                 and self._stop.is_set() and self._run_id
                 and self._state in {RunState.GLOBAL_STOP, RunState.MODULE_PAUSED}):
+            internal_fault = reason not in RUNTIME_SAFETY_REASONS
+            actual_reason = reason if re.fullmatch(r"[A-Z_]{1,64}", reason) else "V12_INTERNAL_FAILURE"
             browser_fault = reason.startswith("CDP_PAGE_")
-            stop_key = "program-safety-stop:"+("browser-operation" if browser_fault else "google-operation")
+            auth_fault = reason == "GOOGLE_AUTHENTICATION_REQUIRED"
+            stop_key = "program-safety-stop:"+("runtime-operation" if internal_fault else "google-login" if auth_fault else "browser-operation" if browser_fault else "google-operation")
             proof = {"incident_key": stop_key,
                 "category": "runtime_stop", "module": "business_runtime",
-                "reason_code": "PROGRAM_SAFETY_PAUSED", "stop_reason": reason,
+                "reason_code": "PROGRAM_SAFETY_PAUSED",
+                "stop_reason": "PROGRAM_INTERNAL_STOP" if internal_fault else reason,
+                "actual_stop_reason": actual_reason,
                 "run_id": self._run_id, "stop_state": self._state.name, "halted": True,
                 "active": True, "current_business": True, "verified": True,
                 "needs_owner": True, "verified_at": at.isoformat(),
                 "original_event": stop_key,
-                "action": ("请核对原程序的浏览器资源暂停提示；保留所有人工页面和登录会话，不要重复提交。" if browser_fault else
+                "action": ("请检查原程序停止提示；保留现有业务记录及浏览器会话，不要重复采购或报价。" if internal_fault else
+                    "请核对原Chrome中的Google登录或访问权限及原程序暂停提示，恢复后再启动业务；不要重发采购或报价。" if auth_fault else
+                    "请核对原程序的浏览器资源暂停提示；保留所有人工页面和登录会话，不要重复提交。" if browser_fault else
                     "请检查原程序暂停提示及Google操作页；保留人工页面，不要重发采购或报价。"),
-                "uncertainty": "尚不能确认专属页面创建、身份或收口；不能据此判断Google整体不可用，也不能推断订单写入成功或失败。"}
+                "uncertainty": ("自动业务已停止，具体内部原因待核对；不能据此判断Google整体不可用，也未据此判定任何订单写入结果。" if internal_fault else
+                    "程序未能通过Google登录或访问权限核验，已停止自动业务；不能据此判断Google整体不可用，未据此判定任何订单写入结果。" if auth_fault else
+                    "尚不能确认专属页面创建、身份或收口；不能据此判断Google整体不可用，也不能推断订单写入成功或失败。") }
         elif manual_login:
             proof = self._fault_evidence(inquiry, reason, at=at, event="native-manual-login", module="INSO") if manual_site == "INSO" else None
             if (proof is None and self._v13_ledger_ready and self._run_id and not self._closed and not self._owner_stop_requested
@@ -3167,7 +3176,10 @@ class ProductionBackend(GuiBackend):
             return None
         if proof.get("category") == "runtime_stop":
             if (self._closed or self._owner_stop_requested or proof.get("run_id") != self._run_id
-                    or proof.get("stop_reason") != self._runtime_stop_reason
+                    or (proof.get("stop_reason") != self._runtime_stop_reason
+                        if proof.get("stop_reason") != "PROGRAM_INTERNAL_STOP" else
+                        proof.get("actual_stop_reason") != (self._runtime_stop_reason if isinstance(self._runtime_stop_reason, str)
+                            and re.fullmatch(r"[A-Z_]{1,64}", self._runtime_stop_reason) else "V12_INTERNAL_FAILURE"))
                     or not self._stop.is_set()
                     or self._state not in {RunState.GLOBAL_STOP, RunState.MODULE_PAUSED}
                     or {r.address.strip().casefold() for r in command.recipients} != {"linan229@qq.com"}):
@@ -3251,6 +3263,10 @@ class ProductionBackend(GuiBackend):
                     or current[1].cells.get(worksheet_schema(current[0].record_identity.worksheet.worksheet).status_column) != "未发"):
                 return "EVENT_RECOVERED"
         if command.kind in {NotificationKind.IMPORTANT_ORDER, NotificationKind.DUPLICATE_ORDER}:
+            if command.kind is NotificationKind.IMPORTANT_ORDER and proof.get("business_decision") is not None:
+                from src.workflow.v12_notifications import verified_business_snapshot
+                if verified_business_snapshot(command, current[0], current[1]) is None:
+                    return "BUSINESS_TRIGGER_CHANGED"
             from src.sheets.worksheet_schema import worksheet_schema
             status = current[1].cells.get(worksheet_schema(current[0].record_identity.worksheet.worksheet).status_column)
             if status not in {"未发", "发给采购", "采购已报价"}:

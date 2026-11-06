@@ -1688,14 +1688,14 @@ def test_quotation_terminal_updates_current_poll_counts_without_purchase_complet
 
 def test_shared_sheets_fault_does_not_blame_last_historical_order(caplog):
     from src.workflow.v12_faults import FaultScope, V12Fault
-    from tests.launcher.test_mail_clarity import Mailbox
 
     backend = ProductionBackend()
     backend._inquiries = ["historical-order"]
     backend._active_inso_inquiry = None
     backend._v13_ledger_ready = True
     backend._run_id = "test-runtime"
-    mailbox = Mailbox()
+    incidents = []
+    mailbox = SimpleNamespace(observe_incident=lambda command, proof, **kw: incidents.append((command, proof)))
     backend._v12_store = mailbox
     delivered = []
     backend._v12_composition = SimpleNamespace(coordinator=SimpleNamespace(
@@ -1706,7 +1706,11 @@ def test_shared_sheets_fault_does_not_blame_last_historical_order(caplog):
     failure.__cause__ = TimeoutError("SECRET_PROVIDER_BODY customer address")
     backend._runtime_error(failure)
     assert backend.get_status().state is RunState.MODULE_PAUSED
-    assert mailbox.commands == {}  # A shared read fault is not evidence about a historical order.
+    assert len(incidents) == 1  # The actual stopped program requires an Owner notice, never an order failure.
+    command, proof = incidents[0]
+    assert command.inquiry_id is None and proof["category"] == "runtime_stop"
+    assert "SECRET_PROVIDER_BODY" not in command.text_body
+    assert "不能据此判断Google整体不可用" in command.text_body
     backend.shutdown()
 
 

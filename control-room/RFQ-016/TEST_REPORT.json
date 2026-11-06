@@ -1,152 +1,61 @@
 {
   "rfq": "RFQ-016",
-  "active_scope": "Owner2026-11-05/06 reliable2026+SHAHAB new order handling and3000+Chinese-character accountability",
+  "active_scope": "Owner Google full-chain repair, independent cross-review, new-order live watch and3000+Chinese-character accountability",
   "status": "IN_PROGRESS",
-  "deployment": "PRODUCTION_NORMAL_EXIT_FINAL_RELEASE_GATE_RUNNING",
-  "source_commit": "97f0ac6959e4efb3bd30bac48fa6e812b001c238",
-  "source_tree": "902db15c7f4fce203c41b185a4a1b41310e05209",
-  "test_tree": "7e7c911caa0f30187574ca37e85d321d07044d54",
+  "deployment": "CONSOLIDATED_GATE_PASSED_NOT_INSTALLED",
+  "source_commit": "bd565aff1b8d64bd836211a6f869411da18cb48e",
+  "source_tree": "47e31944393201026569212bf6493a2ed9b8b5a4",
+  "test_tree": "4060f4d16a41d50462749599c045d6f73bb57b6d",
   "previous_delivery_commit": "814859c7f1138329a69f1c771dda7271fc770ef0",
   "previous_source": "d5117ec790d8aff854f90d2cd40e3a4a41ca7478",
   "preserved_ancestor": "7574516f18c8ee3225b5039f2eb4aeabd0045bbc",
   "changed_source_paths": [
     "src/launcher/backend.py",
+    "src/launcher/google_quote_update.py",
     "src/launcher/google_web.py",
-    "src/launcher/mail_research_composition.py",
-    "src/research/inso_history.py",
+    "src/launcher/v13_integration.py",
+    "src/research/cdp_pages.py",
     "src/sheets/google_reader.py",
-    "src/sheets/pending.py",
     "src/workflow/automatic_admission.py",
-    "src/workflow/models.py",
-    "src/workflow/purchase_follow_up.py",
-    "src/workflow/quotation_age.py",
-    "src/workflow/store.py",
+    "src/workflow/notification_review.py",
     "src/workflow/v12_flow.py",
-    "src/workflow/v13_quotation.py"
+    "src/workflow/v12_store.py",
+    "src/workflow/v13_integration.py"
   ],
   "changed_test_paths": [
-    "tests/launcher/test_source_date_flow.py",
-    "tests/research/test_inso_history.py",
-    "tests/research/test_inso_native_page_identity.py",
-    "tests/workflow/test_source_order_date.py"
+    "tests/launcher/test_google_web.py",
+    "tests/launcher/test_native_safety_notice.py",
+    "tests/launcher/test_new_order_sheet_isolation.py",
+    "tests/launcher/test_read_page_recovery.py",
+    "tests/research/test_native_cdp_deadline.py",
+    "tests/workflow/test_mail_research.py",
+    "tests/workflow/test_new_order_retry_recovery.py",
+    "tests/workflow/test_v12_flow.py"
   ],
   "runs": {
-    "red": {
-      "tests": 6,
-      "failures": 5,
-      "errors": 0,
-      "skipped": 0,
-      "seconds": 0.55,
-      "junit_sha256": "b9f2986f2dcbe5e82ad4a8681ff3c8dd72f3096c8b5b84bccc04cb18f1ce0bef",
-      "case_ids_sha256": "7cbdb837cb78c9a0026437fe3157d3f27e12aa877649e33ccd09a9895c00ff6c"
-    },
-    "green": {
-      "tests": 20,
-      "failures": 4,
-      "errors": 0,
-      "skipped": 0,
-      "seconds": 1.486,
-      "junit_sha256": "9e82c48822c5558ed526a70c75256528041c8f3889cb17b7f2ed396958568860",
-      "case_ids_sha256": "c417e3abb01170fda271422f3c9dfdc5ae4b645e94a4607398ffd05767406001"
-    },
-    "target": {
-      "tests": 37,
-      "failures": 0,
-      "errors": 0,
-      "skipped": 0,
-      "seconds": 3.935,
-      "junit_sha256": "139491de6fc15502327c62c71a4312b24cc9e58698834bf99df21c5702963afb",
-      "case_ids_sha256": "608150876bea9ce6b9453fb94a821637358939e03eff48e3ac365e13d8795e29"
-    },
-    "full": {
-      "tests": 3443,
-      "failures": 1,
-      "errors": 0,
-      "skipped": 1,
-      "seconds": 316.775,
-      "junit_sha256": "2032f13cb3a9b2b3ea5ef9c5ca1aad5b535d7bbc4eaf7a58681bcfa8f593a679",
-      "case_ids_sha256": "442ebf24c71db346468a54f8d7ddd6c1601dbba8f3a106603b4006624666b8bd"
-    },
-    "edge-red": {
-      "tests": 6,
-      "failures": 3,
-      "errors": 0,
-      "skipped": 0,
-      "seconds": 0.64,
-      "junit_sha256": "717d1f65dde56ee0cfe8de0c379132c721c402a32a852658eb40a88e40667424",
-      "case_ids_sha256": "1efc74c281e9c784546982cf81a632acabbb444ab2f31eff8bcd93346d77cf02"
-    },
-    "final-target": {
-      "tests": 146,
-      "failures": 2,
-      "errors": 0,
-      "skipped": 0,
-      "seconds": 7.028,
-      "junit_sha256": "3c1b583edd31aa427e31b1ef785508c4f1b75e903f6d20a8295aa7f2b776d3f6",
-      "case_ids_sha256": "6381d122bf4302239bb02568d4e4e62c099a125fd77f989523a2fc1e32df8f68"
-    },
-    "target2": {
-      "tests": 148,
-      "failures": 0,
-      "errors": 0,
-      "skipped": 0,
-      "seconds": 8.305,
-      "junit_sha256": "66311dd3ef375c16b7cb2b13f4849ed535ab22fba95485a6a899d80cc25253cc",
-      "case_ids_sha256": "80f300c5830134dcad327aaac7a67dff310f621bd897ee5a283a70f4a1ac32d7"
-    },
-    "full-final": {
-      "tests": 3451,
-      "failures": 1,
-      "errors": 0,
-      "skipped": 1,
-      "seconds": 305.511,
-      "junit_sha256": "659d5d149ab9954976fad2038c596ac1c7e9f1d2e031507633d82221b2656637",
-      "case_ids_sha256": "a5839d3ebe243fec701492e2674cbe122cadc22d699e75f980c40014e9198d12"
-    },
-    "diagnostic": {
-      "tests": 841,
-      "failures": 0,
-      "errors": 0,
-      "skipped": 0,
-      "seconds": 102.01,
-      "junit_sha256": "d24d6e84d80525eb307c800140eb67655a1bdbcd10e7f88330c4c4a574152e32",
-      "case_ids_sha256": "cc7bb3535beace8862d8da7b249ed93b77d0656381166e3580e888e3f82b0403"
-    },
-    "diagnostic-all": {
-      "tests": 841,
-      "failures": 1,
-      "errors": 0,
-      "skipped": 0,
-      "seconds": 114.261,
-      "junit_sha256": "e42a36f00dda57ab673db987f676cb62a5e4e74ca38a89a4bcf5e33104cb5c9b",
-      "case_ids_sha256": "cc7bb3535beace8862d8da7b249ed93b77d0656381166e3580e888e3f82b0403"
-    },
-    "diagnostic-fixed": {
-      "tests": 841,
-      "failures": 0,
-      "errors": 0,
-      "skipped": 0,
-      "seconds": 100.658,
-      "junit_sha256": "01ee52eee0f131760d6d941d0085f40da09e8df839d4209c11bd682eb6a7f6a0",
-      "case_ids_sha256": "cc7bb3535beace8862d8da7b249ed93b77d0656381166e3580e888e3f82b0403"
-    },
-    "frozen-target": {
-      "tests": 148,
-      "failures": 0,
-      "errors": 0,
-      "skipped": 0,
-      "seconds": 8.645,
-      "junit_sha256": "3715541180cb8fbd52b4a18400dc999c81750171f5e8fff2b90753d02c03517e",
-      "case_ids_sha256": "80f300c5830134dcad327aaac7a67dff310f621bd897ee5a283a70f4a1ac32d7"
-    },
-    "release-full": {
-      "tests": 3451,
+    "final_full": {
+      "tests": 3629,
       "failures": 0,
       "errors": 0,
       "skipped": 1,
-      "seconds": 316.342,
-      "junit_sha256": "a3c422e1f7c4d89ce8fef9dc555b9c4feeadc4b14f498d1b4f8f7d20a5ae7fc6",
-      "case_ids_sha256": "a5839d3ebe243fec701492e2674cbe122cadc22d699e75f980c40014e9198d12"
+      "seconds": 253.891,
+      "xml_sha256": "07e63906e48f0eb17b3e663a5eaf091b2c3abc4384c2ec00ad1cd8208d78d3c8"
+    },
+    "final_retry_protections": {
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 4.798,
+      "xml_sha256": "c19f38008ef587d3f701515388129cb5433a9ff49491ab6166c115f037d26b6d"
+    },
+    "native_read_targeted": {
+      "tests": 126,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 3.54,
+      "xml_sha256": "897e1c8a3fb3993a8d5a346908a2b494534eb4127e0c34fd630272252ca29e94"
     }
   },
   "targeted": {
@@ -838,6 +747,28 @@
         "negative": [
           "NOT_A_PRODUCER"
         ]
+      },
+      {
+        "file": "src/workflow/v12_store.py",
+        "producer": "V12Store.notification_command",
+        "positive": [
+          "NOT_A_PRODUCER"
+        ],
+        "negative": [
+          "NOT_A_PRODUCER"
+        ],
+        "policy": "Read-only reconstruction of an existing immutable command; not a producer."
+      },
+      {
+        "file": "src/workflow/v12_notifications.py",
+        "producer": "enqueue_important_amount_correction",
+        "positive": [
+          "tests/workflow/test_important_amount_correction.py::test_explicit_amount_correction_sends_once_and_never_reopens_original_or_procurement"
+        ],
+        "negative": [
+          "tests/workflow/test_important_amount_correction.py::test_correction_never_bypasses_authority_original_basis_or_final_source_review"
+        ],
+        "policy": "Explicit Owner authorization, immutable original basis, settled original delivery and deterministic correction identity; final current source review remains mandatory."
       }
     ],
     "source_sha_before": "97f0ac6959e4efb3bd30bac48fa6e812b001c238",
@@ -1139,9 +1070,9 @@
     "original_unknown_protection_unchanged": 1,
     "computer_use": "COMPUTER_USE_NOT_USED"
   },
-  "deployment_status": "HEALTH_HOLD_URL_SYNC_BUILD_PENDING",
+  "deployment_status": "IN_PROGRESS_LIVE_VERIFICATION",
   "google_read_release_recovery_20261106": {
-    "status": "OFFLINE_PASS_BUILD_PENDING",
+    "status": "INSTALLED_STARTED_LIVE_VERIFICATION",
     "owner_normal_exit": {
       "run_id": "69e11b61ad3d48b28998590c12e8b503",
       "completed": true,
@@ -1160,5 +1091,203 @@
     "full_seconds": 253.97,
     "full_xml_sha256": "07e63906e48f0eb17b3e663a5eaf091b2c3abc4384c2ec00ad1cd8208d78d3c8",
     "source_test_fingerprint_sha256": "455b33b6d1dd3a1b8ad326869e240b08883a97e789b7256d914d9816c7d7a359"
+  },
+  "historical_top_level_before_final_cross_review_20261106": {
+    "source_commit": "97f0ac6959e4efb3bd30bac48fa6e812b001c238",
+    "source_tree": "902db15c7f4fce203c41b185a4a1b41310e05209",
+    "test_tree": "7e7c911caa0f30187574ca37e85d321d07044d54",
+    "changed_source_paths": [
+      "src/launcher/backend.py",
+      "src/launcher/google_web.py",
+      "src/launcher/mail_research_composition.py",
+      "src/research/inso_history.py",
+      "src/sheets/google_reader.py",
+      "src/sheets/pending.py",
+      "src/workflow/automatic_admission.py",
+      "src/workflow/models.py",
+      "src/workflow/purchase_follow_up.py",
+      "src/workflow/quotation_age.py",
+      "src/workflow/store.py",
+      "src/workflow/v12_flow.py",
+      "src/workflow/v13_quotation.py"
+    ],
+    "changed_test_paths": [
+      "tests/launcher/test_source_date_flow.py",
+      "tests/research/test_inso_history.py",
+      "tests/research/test_inso_native_page_identity.py",
+      "tests/workflow/test_source_order_date.py"
+    ],
+    "deployment": "PRODUCTION_NORMAL_EXIT_FINAL_RELEASE_GATE_RUNNING",
+    "runs": {
+      "red": {
+        "tests": 6,
+        "failures": 5,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.55,
+        "junit_sha256": "b9f2986f2dcbe5e82ad4a8681ff3c8dd72f3096c8b5b84bccc04cb18f1ce0bef",
+        "case_ids_sha256": "7cbdb837cb78c9a0026437fe3157d3f27e12aa877649e33ccd09a9895c00ff6c"
+      },
+      "green": {
+        "tests": 20,
+        "failures": 4,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.486,
+        "junit_sha256": "9e82c48822c5558ed526a70c75256528041c8f3889cb17b7f2ed396958568860",
+        "case_ids_sha256": "c417e3abb01170fda271422f3c9dfdc5ae4b645e94a4607398ffd05767406001"
+      },
+      "target": {
+        "tests": 37,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.935,
+        "junit_sha256": "139491de6fc15502327c62c71a4312b24cc9e58698834bf99df21c5702963afb",
+        "case_ids_sha256": "608150876bea9ce6b9453fb94a821637358939e03eff48e3ac365e13d8795e29"
+      },
+      "full": {
+        "tests": 3443,
+        "failures": 1,
+        "errors": 0,
+        "skipped": 1,
+        "seconds": 316.775,
+        "junit_sha256": "2032f13cb3a9b2b3ea5ef9c5ca1aad5b535d7bbc4eaf7a58681bcfa8f593a679",
+        "case_ids_sha256": "442ebf24c71db346468a54f8d7ddd6c1601dbba8f3a106603b4006624666b8bd"
+      },
+      "edge-red": {
+        "tests": 6,
+        "failures": 3,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.64,
+        "junit_sha256": "717d1f65dde56ee0cfe8de0c379132c721c402a32a852658eb40a88e40667424",
+        "case_ids_sha256": "1efc74c281e9c784546982cf81a632acabbb444ab2f31eff8bcd93346d77cf02"
+      },
+      "final-target": {
+        "tests": 146,
+        "failures": 2,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 7.028,
+        "junit_sha256": "3c1b583edd31aa427e31b1ef785508c4f1b75e903f6d20a8295aa7f2b776d3f6",
+        "case_ids_sha256": "6381d122bf4302239bb02568d4e4e62c099a125fd77f989523a2fc1e32df8f68"
+      },
+      "target2": {
+        "tests": 148,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 8.305,
+        "junit_sha256": "66311dd3ef375c16b7cb2b13f4849ed535ab22fba95485a6a899d80cc25253cc",
+        "case_ids_sha256": "80f300c5830134dcad327aaac7a67dff310f621bd897ee5a283a70f4a1ac32d7"
+      },
+      "full-final": {
+        "tests": 3451,
+        "failures": 1,
+        "errors": 0,
+        "skipped": 1,
+        "seconds": 305.511,
+        "junit_sha256": "659d5d149ab9954976fad2038c596ac1c7e9f1d2e031507633d82221b2656637",
+        "case_ids_sha256": "a5839d3ebe243fec701492e2674cbe122cadc22d699e75f980c40014e9198d12"
+      },
+      "diagnostic": {
+        "tests": 841,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 102.01,
+        "junit_sha256": "d24d6e84d80525eb307c800140eb67655a1bdbcd10e7f88330c4c4a574152e32",
+        "case_ids_sha256": "cc7bb3535beace8862d8da7b249ed93b77d0656381166e3580e888e3f82b0403"
+      },
+      "diagnostic-all": {
+        "tests": 841,
+        "failures": 1,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 114.261,
+        "junit_sha256": "e42a36f00dda57ab673db987f676cb62a5e4e74ca38a89a4bcf5e33104cb5c9b",
+        "case_ids_sha256": "cc7bb3535beace8862d8da7b249ed93b77d0656381166e3580e888e3f82b0403"
+      },
+      "diagnostic-fixed": {
+        "tests": 841,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 100.658,
+        "junit_sha256": "01ee52eee0f131760d6d941d0085f40da09e8df839d4209c11bd682eb6a7f6a0",
+        "case_ids_sha256": "cc7bb3535beace8862d8da7b249ed93b77d0656381166e3580e888e3f82b0403"
+      },
+      "frozen-target": {
+        "tests": 148,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 8.645,
+        "junit_sha256": "3715541180cb8fbd52b4a18400dc999c81750171f5e8fff2b90753d02c03517e",
+        "case_ids_sha256": "80f300c5830134dcad327aaac7a67dff310f621bd897ee5a283a70f4a1ac32d7"
+      },
+      "release-full": {
+        "tests": 3451,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1,
+        "seconds": 316.342,
+        "junit_sha256": "a3c422e1f7c4d89ce8fef9dc555b9c4feeadc4b14f498d1b4f8f7d20a5ae7fc6",
+        "case_ids_sha256": "a5839d3ebe243fec701492e2674cbe122cadc22d699e75f980c40014e9198d12"
+      }
+    }
+  },
+  "final_release_20261106": {
+    "source_sha": "bd565aff1b8d64bd836211a6f869411da18cb48e",
+    "source_tree": "47e31944393201026569212bf6493a2ed9b8b5a4",
+    "tests_tree": "4060f4d16a41d50462749599c045d6f73bb57b6d",
+    "exe_sha256": "e7f1faf747358f9fbcdcadfac9094fdba64a7b66de8c19b67567cce897065165",
+    "manifest_sha256": "55037f68d04a5530a12538c92e3d680e678e1247979152a674a539ab73346a81",
+    "formal_exe": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6\\INSO_V1.6.exe",
+    "backup": "D:\\Program_Leo\\INSO_Leo\\dist\\release-backups\\INSO_V1.6-google-url-sync-20261106T022400Z",
+    "self_checks": {
+      "rollback": 0,
+      "installed": 0,
+      "idle": 0
+    },
+    "manifest_files": 2875,
+    "frozen_source_modules": 11,
+    "prestart_identical_tables": 16,
+    "prestart_config_identical": true,
+    "start": {
+      "exe_sha256": "e7f1faf747358f9fbcdcadfac9094fdba64a7b66de8c19b67567cce897065165",
+      "started_at": "2026-11-06T10:24:49.9587914+08:00",
+      "pid": 32308,
+      "source_sha": "bd565aff1b8d64bd836211a6f869411da18cb48e"
+    },
+    "runtime_junction_preserved": true,
+    "chrome_pid_preserved": 19208,
+    "live_status": "IN_PROGRESS; queuedretry retained through start; normal firstinquiry ongoing",
+    "COMPUTER_USE_NOT_USED": true
+  },
+  "stability_bundle_20261106": {
+    "base_source": "bd565aff1b8d64bd836211a6f869411da18cb48e",
+    "full": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "1",
+      "tests": "3668",
+      "time": "255.039",
+      "timestamp": "2026-11-06T12:14:01.154096+08:00",
+      "hostname": "Leo229"
+    },
+    "full_xml_sha256": "6e8898478b0ad6be7686d0100bbcd9eb1de2cb6a9c2c4beb474e485b2b257127",
+    "tested_tree_sha256": "4e9a5f2c063456f26de263786d86001188b6f285db9247da486aacdf11a59bf2",
+    "source_test_fingerprint_unchanged": true,
+    "ruff": "PASS",
+    "cross_review": "TWO_INDEPENDENT_SCOPED_REVIEWS_NO_REMAINING_CONFIRMED_BLOCKERS",
+    "native_sdk_keyword_deadline_tests": "7 PASS including real NativePage and syncPage",
+    "amount_correction_tests": "13 PASS original queue and fake SMTP",
+    "preliminary_full": "3 failed /3660 passed/1 skipped; old stop expectations migrated to accurate actual-stop notification with zero during temporary waits; obsolete snapshot not acceptance",
+    "production": "NOT_INSTALLED_YET",
+    "corrective_mail": "OWNER_AUTHORIZED_NOT_ENQUEUED_YET",
+    "computer_use": "COMPUTER_USE_NOT_USED"
   }
 }

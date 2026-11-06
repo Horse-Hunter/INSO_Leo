@@ -102,7 +102,9 @@ def notify_runtime_fault(store, key, reason, *, at, evidence=None, occurrence=No
         from dataclasses import replace
         command = replace(command, subject="【需要处理】INSO自动业务安全暂停",
             text_body="情况：自动询价、报价和TP已安全暂停，主程序仍在；不会自动重复提交。\n"
-                + ("暂停原因：程序专属浏览器页面的创建、身份或收口未能确认。\n" if evidence.get("stop_reason", "").startswith("CDP_PAGE_") else
+                + ("暂停原因：内部操作未能正常完成，具体原因待核对。\n" if evidence.get("stop_reason") == "PROGRAM_INTERNAL_STOP" else
+                   "暂停原因：程序的Google登录或访问权限核验未通过，需核对。\n" if evidence.get("stop_reason") == "GOOGLE_AUTHENTICATION_REQUIRED" else
+                   "暂停原因：程序专属浏览器页面的创建、身份或收口未能确认。\n" if evidence.get("stop_reason", "").startswith("CDP_PAGE_") else
                    "暂停原因：Google操作页身份或操作收口未能确认。\n")
                 + f"处理：{evidence['action']}\n待核对：{evidence['uncertainty']}")
     store.observe_incident(command, evidence, occurrence=occurrence or key)

@@ -7,9 +7,9 @@ from .v12_contracts import NotificationKind
 
 RUNTIME_SAFETY_REASONS = frozenset({
     "GOOGLE_TAB_IDENTITY_UNCONFIRMED", "GOOGLE_OPERATION_NOT_CLOSED",
-    "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED",
+    "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED", "GOOGLE_AUTHENTICATION_REQUIRED",
     "CDP_PAGE_CREATION_UNCONFIRMED", "CDP_PAGE_CLEANUP_UNCONFIRMED",
-    "CDP_PAGE_OWNERSHIP_UNCONFIRMED",
+    "CDP_PAGE_OWNERSHIP_UNCONFIRMED", "PROGRAM_INTERNAL_STOP",
 })
 
 
@@ -59,6 +59,10 @@ def review_reason(command, now):
             if (proof.get("module") != "business_runtime"
                     or proof.get("reason_code") != "PROGRAM_SAFETY_PAUSED"
                     or proof.get("stop_reason") not in RUNTIME_SAFETY_REASONS
+                    or (proof.get("stop_reason") == "PROGRAM_INTERNAL_STOP"
+                        and not isinstance(proof.get("actual_stop_reason"), str))
+                    or (proof.get("stop_reason") == "PROGRAM_INTERNAL_STOP"
+                        and not re.fullmatch(r"[A-Z_]{1,64}", proof["actual_stop_reason"]))
                     or proof.get("halted") is not True
                     or proof.get("stop_state") not in {"GLOBAL_STOP", "MODULE_PAUSED"}
                     or not isinstance(proof.get("run_id"), str) or not proof["run_id"]

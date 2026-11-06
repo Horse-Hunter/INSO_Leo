@@ -68,6 +68,8 @@ class ResearchBusinessFacts:
     inventory_status: str
     estimated_total: Decimal | None
     market_minimum_reference_price: Decimal | None
+    recorded_at: datetime | None = None
+    price_sources: tuple[str, ...] = ()
 
 
 class DuplicateChecker(Protocol):
@@ -674,18 +676,7 @@ class V12WorkflowCoordinator:
     def _pending_record(self, inquiry_id: str) -> PendingSheetRecord:
         item = self._workflow_store.get_by_inquiry_id(inquiry_id)
         customer_name, customer_source = self._v12_store.customer_snapshot(inquiry_id)
-        snapshot = item.record_identity.identifying_snapshot
-        return PendingSheetRecord(
-            status=snapshot.status,
-            importance_raw=item.importance_raw,
-            model=item.mpn,
-            brand=item.brand,
-            quantity=item.quantity,
-            row_position=item.record_identity.row_position,
-            record_identity=item.record_identity,
-            customer_name=customer_name,
-            customer_name_source=customer_source,
-        )
+        return pending_record_from_item(item, customer_name, customer_source)
 
     def _check_duplicate(self, research_input: ResearchInput, *, at: datetime) -> None:
         inquiry_id = research_input.inquiry_id
@@ -946,6 +937,15 @@ class V12WorkflowCoordinator:
         subject, body = _notification_content(
             kind, record, research_result, facts, tier, duplicate_result
         )
+        created_at = self._clock() if self._clock is not None else now
+        review = None
+        if kind is NotificationKind.IMPORTANT_ORDER:
+            import json
+
+            from .v12_notifications import business_decision_snapshot
+            snapshot = business_decision_snapshot(self._workflow_store.get_by_inquiry_id(inquiry_id), facts, tier or _business_tier(record), at=created_at)
+            if snapshot is not None:
+                review = json.dumps({"business_decision":snapshot}, sort_keys=True, ensure_ascii=False)
         command = NotificationCommand(
             command_id,
             inquiry_id,
@@ -954,7 +954,7 @@ class V12WorkflowCoordinator:
             subject,
             body,
             f"<html><body><pre>{html.escape(body)}</pre></body></html>",
-            now,
+            created_at, 2 if review else 1, review,
         )
         self._v12_store.enqueue_notification(command)
 
@@ -1162,6 +1162,21 @@ class _DuplicateThenResearch:
             raise
         self.coordinator._research_results[research_input.inquiry_id] = result
         return result
+
+
+def pending_record_from_item(item, customer_name, customer_source):
+    snapshot = item.record_identity.identifying_snapshot
+    return PendingSheetRecord(
+        status=snapshot.status,
+        importance_raw=item.importance_raw,
+        model=item.mpn,
+        brand=item.brand,
+        quantity=item.quantity,
+        row_position=item.record_identity.row_position,
+        record_identity=item.record_identity,
+        customer_name=customer_name,
+        customer_name_source=customer_source,
+    )
 
 
 def _business_tier(record: PendingSheetRecord) -> str | None:

@@ -33,6 +33,25 @@ from .v13_quotation import (
 )
 
 
+def _boundary_safety_fault(error):
+    seen = set()
+    fallback = None
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        if isinstance(error, V12Fault):
+            if error.reason not in {"CDP_SESSION_UNAVAILABLE", "SHEETS_READ_UNAVAILABLE", "GOOGLE_SHEETS_UNAVAILABLE"}:
+                return error
+            fallback = fallback or error
+        reason = getattr(error, "reason", None)
+        if (type(error).__module__ == "src.research.cdp_pages" and reason in {
+                "CDP_PAGE_CREATION_UNCONFIRMED", "CDP_PAGE_CLEANUP_UNCONFIRMED", "CDP_PAGE_OWNERSHIP_UNCONFIRMED"}):
+            fault = V12Fault(FaultScope.GLOBAL_STOP, reason)
+            fault.__cause__ = error
+            return fault
+        error = error.__cause__ or error.__context__
+    return fallback
+
+
 class UpdateAttemptUnconfirmed(RuntimeError):
     """Unconfirmed UI step; only pre-dispatch operations may be repeated."""
 
@@ -239,6 +258,9 @@ class V13QuotationUpdater:
                         except QuotationInputBusy:
                             return result  # Quote remains eligible next poll, no Hold or baseline write.
                         except QuotationInputAttemptFailed as exc:
+                            safety = _boundary_safety_fault(exc)
+                            if safety is not None:
+                                raise safety
                             write_reason = (RowErrorReason.QUOTE_INPUT_READBACK_MISMATCH
                                             if str(exc) == "QUOTE_INPUT_READBACK_MISMATCH"
                                             else RowErrorReason.QUOTE_INPUT_WRITE_FAILED)
@@ -308,7 +330,10 @@ class V13QuotationUpdater:
         except QuotationInputUnavailable as exc:
             if exc.reason == "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED":
                 return self._failed(result, RowErrorReason.QUOTE_INPUT_WRITE_FAILED)
-            raise V12Fault(FaultScope.GLOBAL_STOP, exc.reason) from None
+            safety = _boundary_safety_fault(exc)
+            if safety is not None:
+                raise safety
+            raise V12Fault(FaultScope.GLOBAL_STOP, exc.reason) from exc
 
     def _unconfirmed_initial(self, result):
         """A Sheet status can be edited by a human; it is not click-outcome proof."""

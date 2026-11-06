@@ -148,6 +148,8 @@ class GridPage(Page):
     def wait_for_function(self, script, **kwargs):
         if 'docs-sheet-active-tab' in script:
             assert self.title == kwargs['arg']['title']
+        elif '#t-name-box' in script and 'document.activeElement' in script:
+            assert self.selection == kwargs['arg']
         elif 'docs-save-indicator-badge' in script:
             if self.save_fails:
                 raise TimeoutError('synthetic unsaved edit')

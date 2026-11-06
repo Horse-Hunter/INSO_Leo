@@ -14,6 +14,7 @@ from src.research.cdp_pages import (
     PageTargetOwnershipError,
     bounded_browser_call,
     mark_owned_page,
+    native_page_owner,
     new_background_page,
     page_owner,
 )
@@ -335,12 +336,12 @@ class GoogleQuotationUpdateActions:
                 recovery._price_refresh = True
                 recovery._guard()  # Authentication/CDP failures retain their existing boundaries.
                 try:
-                    if recovery._result_dialog().count() == 1:
+                    if bounded_browser_call(recovery._result_dialog(), "count") == 1:
                         recovery.dismiss_result()  # Confirm result dialog only, never re-click update.
                     else:
-                        page.wait_for_function(_REFRESH_INPUT_IDLE, timeout=self._result_timeout)
+                        bounded_browser_call(page, "wait_for_function", _REFRESH_INPUT_IDLE, timeout=self._result_timeout, timeout_ms=(self._result_timeout)+1000)
                         recovery._guard()
-                        page.evaluate("() => { window.__insoRefreshPending = false; }")
+                        bounded_browser_call(page, "evaluate", "() => { window.__insoRefreshPending = false; }")
                         recovery._script_pending = False
                 except Exception:  # noqa: BLE001 - occupied/uncertain input defers only this attempt
                     recovery._guard()
@@ -480,7 +481,7 @@ class GoogleQuotationUpdateActions:
                     # do not reload default gid=0 on every range operation.
                     self._location = SimpleNamespace(url=self._page.url)
                 elif self._page.url != expected.url:
-                    self._attempt(lambda: self._page.goto(expected.url, wait_until="domcontentloaded", timeout=self._timeout))
+                    self._attempt(lambda: bounded_browser_call(self._page, "goto", expected.url, wait_until="domcontentloaded", timeout=self._timeout, timeout_ms=(self._timeout)+1000))
                 self._guard()
                 return self._page
         # Page count is not transaction safety. Independent/nested task scopes
@@ -491,7 +492,7 @@ class GoogleQuotationUpdateActions:
                                              owner=self._page_role)
         except Exception:  # noqa: BLE001 - shared context cannot create the owned operation
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE") from None
-        self._attempt(lambda: self._page.goto(self._location.url, wait_until="domcontentloaded", timeout=self._timeout))
+        self._attempt(lambda: bounded_browser_call(self._page, "goto", self._location.url, wait_until="domcontentloaded", timeout=self._timeout, timeout_ms=(self._timeout)+1000))
         self._guard()
         mark_owned_page(self._page, self._page_role)
         if pool is not None:
@@ -510,7 +511,7 @@ class GoogleQuotationUpdateActions:
         # Real Sheets exposes the drawing shell before onOpen/menu initialization.
         # Wait for observed script readiness, not a fixed sleep or a shell-only click.
         menu = self._page.get_by_text("报价工具", exact=True)
-        self._attempt(lambda: menu.wait_for(state="visible", timeout=self._ready_timeout))
+        self._attempt(lambda: bounded_browser_call(menu, "wait_for", state="visible", timeout=self._ready_timeout, timeout_ms=(self._ready_timeout)+1000))
         if bounded_browser_call(menu, "count") != 1:
             raise UpdateAttemptUnconfirmed("UPDATE_CONTROL_UNCONFIRMED")
         self._guard()
@@ -522,18 +523,18 @@ class GoogleQuotationUpdateActions:
 
     def _update_control(self):
         button = self._page.get_by_role("button", name="更新报价", exact=True)
-        if button.count() == 1:
+        if bounded_browser_call(button, "count") == 1:
             return button
-        if button.count() > 1:
+        if bounded_browser_call(button, "count") > 1:
             raise UpdateAttemptUnconfirmed("UPDATE_CONTROL_UNCONFIRMED")
         # Verified on the exact metadata-bound quote-input sheet, 2026-10-07:
         # two DOM overlays, only one visible; Owner screenshot identifies it.
         drawing = self._page.locator(
             'div.waffle-borderless-embedded-object-overlay[aria-label="绘图："]:visible'
         )
-        if drawing.count() == 0:
-            self._attempt(lambda: drawing.wait_for(state="visible", timeout=self._timeout))
-        if drawing.count() != 1:
+        if bounded_browser_call(drawing, "count") == 0:
+            self._attempt(lambda: bounded_browser_call(drawing, "wait_for", state="visible", timeout=self._timeout, timeout_ms=(self._timeout)+1000))
+        if bounded_browser_call(drawing, "count") != 1:
             raise UpdateAttemptUnconfirmed("UPDATE_CONTROL_UNCONFIRMED")
         return drawing
 
@@ -543,59 +544,59 @@ class GoogleQuotationUpdateActions:
         self._guard()
         button = self._ready_control()
         # Stale result dialogs cannot be mistaken for this attempt's result.
-        if self._result_dialog().count():
+        if bounded_browser_call(self._result_dialog(), "count"):
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_STALE")
         if self._price_refresh:
             # Arm before native dispatch; a click timeout may mean it DID execute.
-            button.evaluate(_SCRIPT_SETTLEMENT_LATCH, timeout=self._timeout)
-            self._page.evaluate("() => { window.__insoRefreshPending = true; }")
+            bounded_browser_call(button, "evaluate", _SCRIPT_SETTLEMENT_LATCH, timeout=self._timeout)
+            bounded_browser_call(self._page, "evaluate", "() => { window.__insoRefreshPending = true; }")
             self._script_pending = True
             try:
-                button.click(timeout=self._timeout)
+                bounded_browser_call(button, "click", timeout=self._timeout, timeout_ms=(self._timeout)+1000)
             except Exception:  # noqa: BLE001 - do not retry a possibly delivered refresh click
                 raise UpdateClickUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from None
         else:
-            self._attempt(lambda: button.evaluate(_SCRIPT_SETTLEMENT_LATCH, timeout=self._timeout))
-            self._attempt(lambda: self._page.evaluate("() => { window.__insoQuoteSettlement.initial = true; window.__insoRefreshPending = true; }"))
+            self._attempt(lambda: bounded_browser_call(button, "evaluate", _SCRIPT_SETTLEMENT_LATCH, timeout=self._timeout))
+            self._attempt(lambda: bounded_browser_call(self._page, "evaluate", "() => { window.__insoQuoteSettlement.initial = true; window.__insoRefreshPending = true; }"))
             self._script_pending = True
             try:
-                button.click(timeout=self._timeout)
+                bounded_browser_call(button, "click", timeout=self._timeout, timeout_ms=(self._timeout)+1000)
             except Exception:  # noqa: BLE001 - native click may already have executed
                 raise UpdateClickUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from None
 
     def read_update_result(self):
         self._guard()
         dialog = self._result_dialog()
-        self._attempt(lambda: dialog.wait_for(state="visible", timeout=self._result_timeout))
-        if dialog.count() != 1:
+        self._attempt(lambda: bounded_browser_call(dialog, "wait_for", state="visible", timeout=self._result_timeout, timeout_ms=(self._result_timeout)+1000))
+        if bounded_browser_call(dialog, "count") != 1:
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED")
-        return self._attempt(lambda: dialog.inner_text(timeout=self._timeout))
+        return self._attempt(lambda: bounded_browser_call(dialog, "inner_text", timeout=self._timeout, timeout_ms=(self._timeout)+1000))
 
     def dismiss_result(self):
         self._guard()
         dialog = self._result_dialog()
-        if dialog.count() != 1:
+        if bounded_browser_call(dialog, "count") != 1:
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED")
         button = dialog.get_by_role("button", name="确定", exact=True)
-        if button.count() != 1:
+        if bounded_browser_call(button, "count") != 1:
             raise UpdateAttemptUnconfirmed("UPDATE_DISMISS_UNCONFIRMED")
         # Script clears input after UI confirmation. Do not write the next row until
         # this observed execution ends; never clear the shared input ourselves.
         self._script_pending = True
         try:
-            button.evaluate(_SCRIPT_SETTLEMENT_LATCH, timeout=self._timeout)
-            button.click(timeout=self._timeout)
-            self._page.wait_for_function(
+            bounded_browser_call(button, "evaluate", _SCRIPT_SETTLEMENT_LATCH, timeout=self._timeout)
+            bounded_browser_call(button, "click", timeout=self._timeout, timeout_ms=(self._timeout)+1000)
+            bounded_browser_call(self._page, "wait_for_function",
                 "() => window.__insoQuoteSettlement?.confirmed && window.__insoQuoteSettlement.started",
-                timeout=self._result_timeout)
-            self._page.wait_for_function(
+                timeout=self._result_timeout, timeout_ms=(self._result_timeout)+1000)
+            bounded_browser_call(self._page, "wait_for_function",
                 "() => window.__insoQuoteSettlement?.started && window.__insoQuoteSettlement.settled",
-                timeout=self._result_timeout)
+                timeout=self._result_timeout, timeout_ms=(self._result_timeout)+1000)
             self._guard()
-            self._page.evaluate("() => window.__insoQuoteSettlement.observer.disconnect()")
+            bounded_browser_call(self._page, "evaluate", "() => window.__insoQuoteSettlement.observer.disconnect()")
+            bounded_browser_call(self._page, "evaluate", "() => { window.__insoRefreshPending = false; }")
         except Exception:  # noqa: BLE001 - any settlement uncertainty preserves the operation page
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED") from None
-        self._page.evaluate("() => { window.__insoRefreshPending = false; }")
         self._script_pending = False
 
     def _attempt(self, operation):
@@ -676,6 +677,18 @@ class GoogleQuotationUpdateActions:
             return
         if self._protected or self._script_pending or self._page is None:
             return
+        # Earlier ownership cannot authorize closing a surface Owner moved/adopted.
+        special = self._page.url in {"about:blank", "chrome-error://chromewebdata/"}
+        try:
+            actual, expected = urlsplit(self._page.url), urlsplit(self._location.url)
+            owner = native_page_owner(self._page) if special else page_owner(self._page)
+            if (owner != self._page_role or not special and
+                    (actual.scheme, actual.hostname, actual.path) != (expected.scheme, expected.hostname, expected.path)):
+                self._protected = True
+                return
+        except Exception:
+            self._protected = True
+            raise
         try:
             self._guard()
         except V12Fault:

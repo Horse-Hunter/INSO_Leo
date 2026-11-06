@@ -123,7 +123,7 @@ def append_report(command, report):
 BUSINESS_REPORT_WAIT = timedelta(seconds=120)
 
 
-def _business_report_unavailable(command, order, *, follow_up):
+def _business_report_unavailable(command, order, *, follow_up, snapshot=None):
     import html
 
     lines = (["该订单发给采购后已超过3个工作小时，原表仍为‘发给采购’，请人工跟进采购报价；不要重发采购。"]
@@ -135,7 +135,18 @@ def _business_report_unavailable(command, order, *, follow_up):
         # Preserve only the native confirmed purchase timestamp from the original
         # episode notice; never copy its whole body or historical market facts.
         lines += [line for line in command.text_body.splitlines() if line.startswith("发给采购时间：")]
-    lines += ["详细市场报价暂不可用／未核实。价格与库存尚未核实，本通知不含市场数据或估算金额。"]
+    if snapshot is not None:
+        from decimal import Decimal
+
+        from src.workflow.v12_notifications import business_snapshot_time
+        lines += ["已记录的分流参考（非当前市场报价或采购成交价）：",
+                  business_snapshot_time(snapshot),
+                  "参考价格来源："+("、".join(snapshot.get("price_sources", [])) or "原调研记录，来源标记未核实"),
+                  "当时市场参考单价："+(f"{Decimal(snapshot['reference_unit_rmb']):,.2f} 元" if snapshot.get("reference_unit_rmb") is not None else "未记录"),
+                  f"当时预估询价总价：{Decimal(snapshot['estimated_total_rmb']):,.2f} 元",
+                  "详细市场报价暂不可用／未核实。以上仅为已记录的分流参考；当前价格与库存尚未核实。"]
+    else:
+        lines += ["详细市场报价暂不可用／未核实。价格与库存尚未核实，本通知不含市场数据或估算金额。"]
     text = "\n".join(lines)
     return replace(command, text_body=text, html_body="<html><body><pre>"+html.escape(text)+"</pre></body></html>")
 
@@ -153,6 +164,10 @@ def prepare_business_report(backend, command, now):
     if current is None:
         return None
     item, row, _, date_origin, day = current
+    from src.workflow.v12_notifications import verified_business_snapshot
+    snapshot = verified_business_snapshot(command, item, row)
+    if proof.get("correction_of") and snapshot is None:
+        return None
     schema = worksheet_schema(item.record_identity.worksheet.worksheet)
     try:
         quantity = quantity_value(item.quantity)
@@ -189,4 +204,4 @@ def prepare_business_report(backend, command, now):
     if not expired:
         return None
     return _business_report_unavailable(command, order,
-        follow_up=proof.get("reason_code") == "PURCHASE_FOLLOW_UP_REQUIRED")
+        follow_up=proof.get("reason_code") == "PURCHASE_FOLLOW_UP_REQUIRED", snapshot=snapshot)

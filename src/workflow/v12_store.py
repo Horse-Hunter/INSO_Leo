@@ -493,6 +493,23 @@ class V12Store:
             )
         return alert_id
 
+    def notification_command(self, command_id):
+        """Read an original command without claiming, reopening or editing it."""
+        with _connect(self.database_path) as db:
+            row = db.execute("SELECT * FROM workflow_v12_notification_commands WHERE command_id=?", (command_id,)).fetchone()
+            if row is None:
+                raise KeyError(command_id)
+            recipients = tuple(NotificationRecipient(r["recipient_id"], r["address"]) for r in db.execute(
+                "SELECT recipient_id,address FROM workflow_v12_notification_recipients WHERE command_id=? ORDER BY recipient_id", (command_id,)))
+            return NotificationCommand(row["command_id"], row["inquiry_id"], NotificationKind(row["kind"]),
+                recipients, row["subject"], row["text_body"], row["html_body"],
+                _parse_time(row["created_at"]), row["payload_version"], row["review_json"])
+
+    def notification_delivery_states(self, command_id):
+        with _connect(self.database_path) as db:
+            return tuple(row[0] for row in db.execute(
+                "SELECT outcome FROM workflow_v12_notification_recipients WHERE command_id=? ORDER BY recipient_id", (command_id,)))
+
     def notification_already_created(
         self, command_id: str, inquiry_id: str, kind: NotificationKind,
         recipients: tuple[NotificationRecipient, ...],

@@ -22,15 +22,26 @@ NATIVE_PROTOCOL_TIMEOUT_MS = 10000
 def bounded_browser_call(port, operation, *args, timeout_ms=None, **kwargs):
     """Bound one original SDK operation on its original Owner loop, never a new client."""
     from playwright._impl._sync_base import mapping
-    from playwright.sync_api import Browser, BrowserContext, CDPSession, Locator, Page
-    if not isinstance(port, (Browser, BrowserContext, CDPSession, Locator, Page)):
+    from playwright.sync_api import (
+        Browser,
+        BrowserContext,
+        CDPSession,
+        Keyboard,
+        Locator,
+        Page,
+    )
+    if not isinstance(port, (Browser, BrowserContext, CDPSession, Keyboard, Locator, Page)):
         return getattr(port, operation)(*args, **kwargs)
     milliseconds = NATIVE_PROTOCOL_TIMEOUT_MS if timeout_ms is None else timeout_ms
     if not isinstance(milliseconds, (int, float)) or isinstance(milliseconds, bool) or milliseconds <= 0:
         raise ValueError("INVALID_NATIVE_OPERATION_TIMEOUT")
     impl_args = tuple(getattr(arg, "_impl_obj", arg) for arg in args)
+    # Generated public SDK ports use snake_case; their implementation uses camelCase.
+    # Keep synthetic public ports unchanged above; translate only at the native boundary.
+    impl_kwargs = {key.split("_")[0]+"".join(part.title() for part in key.split("_")[1:]):
+                   getattr(value, "_impl_obj", value) for key, value in kwargs.items()}
     async def bounded():
-        return await asyncio.wait_for(getattr(port._impl_obj, operation)(*impl_args, **kwargs), milliseconds/1000)
+        return await asyncio.wait_for(getattr(port._impl_obj, operation)(*impl_args, **impl_kwargs), milliseconds/1000)
     try:
         return mapping.from_maybe_impl(port._sync(bounded()))
     except TimeoutError:

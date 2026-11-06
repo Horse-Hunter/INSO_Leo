@@ -422,6 +422,10 @@ class ResearchExcelFactsProvider:
             inventory_status=row.stock_label,
             estimated_total=_stored_decimal(row.estimated_total),
             market_minimum_reference_price=_market_minimum(row.market_reference),
+            recorded_at=row.processed_at,
+            price_sources=tuple(source for source, text in row.source_values
+                if _market_minimum(text.split("（", 1)[0]) is not None
+                and _market_minimum(text.split("（", 1)[0]) == _market_minimum(row.market_reference)),
         )
 
 

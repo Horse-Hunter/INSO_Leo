@@ -470,7 +470,7 @@ class GoogleSheetsWebService:
                 page = actions.open_sheet(select_worksheet=True,
                                           worksheet=geometry[0] if geometry else "2026")
                 stage = "google-sheet-ready"
-                page.locator("#t-name-box").wait_for(state="visible", timeout=30000)
+                bounded_browser_call(page.locator("#t-name-box"), "wait_for", state="visible", timeout=30000, timeout_ms=(30000)+1000)
                 # Native READ does not depend on the quotation Apps Script.
                 # Selection is proved before and after export; writes retain
                 # the existing script-readiness requirement.
@@ -523,29 +523,37 @@ class GoogleSheetsWebService:
                     stage = "google-write-select-cell"
                     cell = f"{_column(first + offset)}{start}"
                     box = page.locator("#t-name-box")
-                    box.fill(cell)
-                    box.press("Enter")
-                    if box.input_value() != cell:
+                    bounded_browser_call(box, "fill", cell, timeout_ms=31000)
+                    bounded_browser_call(box, "press", "Enter", timeout_ms=31000)
+                    bounded_browser_call(page, "wait_for_function", """cell => {
+                        const box = document.querySelector('#t-name-box');
+                        return !!box && box.value === cell && document.activeElement !== box;
+                    }""", arg=cell, timeout=10000, timeout_ms=(10000)+1000)
+                    if bounded_browser_call(box, "input_value") != cell:
                         raise ValueError("GOOGLE_SELECTION_UNCONFIRMED")
                     # Name-box Enter hands focus back to the selected grid cell.
                     # Sheets' formula-bar DOM fill does not commit its data model.
-                    if box.evaluate("element => element === document.activeElement"):
+                    if bounded_browser_call(box, "evaluate", "element => element === document.activeElement"):
                         raise ValueError("GOOGLE_SELECTION_UNCONFIRMED")
+                    actions._guard()
+                    if page_owner(page) != actions._page_role:
+                        actions._protected = True
+                        raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
                     stage = "google-write-edit"
                     dirty = True
                     if isinstance(value, str):
                         # Sequential native input gives Sheets its key/input
                         # sequence; a bulk DOM/insertText replacement is ignored.
                         # Literal prefix preserves RAW text, not formula evaluation.
-                        page.keyboard.type("'" + value, delay=75)
+                        bounded_browser_call(page.keyboard, "type", "'" + value, delay=75, timeout_ms=max(10000, (len(value)+1)*75+10000))
                     else:
-                        page.keyboard.type(str(value))
-                    page.keyboard.press("Enter")
+                        bounded_browser_call(page.keyboard, "type", str(value))
+                    bounded_browser_call(page.keyboard, "press", "Enter")
                 # Observed live UI badge; do not close a page with unsynced edits.
                 stage = "google-write-save"
-                page.wait_for_function(
+                bounded_browser_call(page, "wait_for_function",
                     '() => document.querySelector("#docs-save-indicator-badge")?.getAttribute("aria-label") === "文档状态：已保存到云端硬盘。"',
-                    timeout=30000)
+                    timeout=30000, timeout_ms=(30000)+1000)
                 stage = "google-write-readback"
                 confirmed = _source_values(self._download(page, actions), title, first, start, last, end)
                 if confirmed != values:
@@ -631,15 +639,15 @@ class GoogleSheetsWebService:
             fragment: location.hash})''')
         tab = page.locator(".docs-sheet-tab").filter(has=page.get_by_text(title, exact=True))
         if bounded_browser_call(tab, "count") == 0:
-            tab.wait_for(state="visible", timeout=10000)
+            bounded_browser_call(tab, "wait_for", state="visible", timeout=10000, timeout_ms=(10000)+1000)
         if bounded_browser_call(tab, "count") != 1:
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SHEET_UNCONFIRMED")
-        tab.click(timeout=10000)
-        page.wait_for_function(
+        bounded_browser_call(tab, "click", timeout=10000, timeout_ms=(10000)+1000)
+        bounded_browser_call(page, "wait_for_function",
             '''arg => document.querySelector('.docs-sheet-active-tab .docs-sheet-tab-name')?.textContent === arg.title
                 && (arg.already || location.hash !== arg.fragment)''',
             arg={"title": title, "already": previous["title"] == title, "fragment": previous["fragment"]},
-            timeout=30000)
+            timeout=30000, timeout_ms=(30000)+1000)
         # History/active-tab state can precede the SDK frame-URL event. Bind
         # the native selected sheet, never the previous cached Page.url.
         selected = bounded_browser_call(page, "evaluate", """() => ({
@@ -660,7 +668,7 @@ class GoogleSheetsWebService:
                     (document.scheme, document.hostname, document.path) and actual.fragment == fragment)
         if not selected_url(page.url):
             log_step("google-select-url-sync")
-            page.wait_for_url(selected_url, timeout=10000, wait_until="domcontentloaded")
+            bounded_browser_call(page, "wait_for_url", selected_url, timeout=10000, wait_until="domcontentloaded", timeout_ms=(10000)+1000)
         if not selected_url(page.url):
             raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
         # Rebind only after a unique visible tab and its active title are confirmed.
@@ -690,10 +698,10 @@ class GoogleSheetsWebService:
                     log_step("google-read-"+phase+"-title")
                     raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
         prove_selection("pre")
-        page.get_by_role("menuitem", name="文件", exact=True).click(timeout=10000)
-        page.get_by_role("menuitem", name=re.compile("^下载")).click(timeout=10000)
+        bounded_browser_call(page.get_by_role("menuitem", name="文件", exact=True), "click", timeout=10000, timeout_ms=(10000)+1000)
+        bounded_browser_call(page.get_by_role("menuitem", name=re.compile("^下载")), "click", timeout=10000, timeout_ms=(10000)+1000)
         with page.expect_download(timeout=30000) as pending:
-            page.get_by_role("menuitem", name=re.compile(r"\.tsv\)")).click(timeout=10000)
+            bounded_browser_call(page.get_by_role("menuitem", name=re.compile(r"\.tsv\)")), "click", timeout=10000, timeout_ms=(10000)+1000)
         download = pending.value
         try:
             failure = _download_call(download, "failure", timeout=60)

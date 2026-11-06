@@ -84,3 +84,62 @@ def test_ownership_marker_command_has_native_deadline(monkeypatch):
         assert len(outcomes)==1 and isinstance(outcomes[0],TimeoutError)
     finally:release.set();thread.join(2)
     assert not thread.is_alive()
+
+import pytest
+
+
+@pytest.mark.parametrize('port_name,method,args',[
+    ('Keyboard','type',('synthetic',)),
+    ('Locator','count',()),
+    ('Locator','evaluate',('element => true',)),
+])
+def test_native_write_metadata_and_keyboard_have_owner_thread_deadline(port_name,method,args):
+    import playwright.sync_api as api
+
+    from src.research.cdp_pages import bounded_browser_call
+    entered=threading.Event();done=threading.Event();outcomes=[];owners=[]
+    def run():
+        loop=asyncio.new_event_loop();dispatcher=greenlet(loop.run_forever)
+        class Impl:
+            _loop=loop
+            _dispatcher_fiber=dispatcher
+        async def stalled(*a,**kw):
+            entered.set();owners.append(threading.get_ident())
+            await asyncio.Event().wait()
+        impl=Impl();setattr(impl,method,stalled)
+        try:bounded_browser_call(getattr(api,port_name)(impl),method,*args,timeout_ms=20)
+        except Exception as error:outcomes.append(error)  # noqa: BLE001
+        finally:
+            loop.call_soon(loop.stop);dispatcher.switch()
+            asyncio._set_running_loop(None);loop.close();done.set()
+    thread=threading.Thread(target=run);thread.start()
+    try:
+        assert entered.wait(1) and done.wait(.3)
+        assert len(outcomes)==1 and isinstance(outcomes[0],TimeoutError)
+        assert owners==[thread.ident]
+    finally:thread.join(2)
+    assert not thread.is_alive()
+
+@pytest.mark.parametrize('method',['goto','wait_for_url'])
+def test_real_page_wrapper_maps_public_navigation_keywords_to_native_signature(method):
+    from playwright._impl._page import Page as NativePage
+    from playwright.sync_api import Page
+
+    from src.research.cdp_pages import bounded_browser_call
+    loop=asyncio.new_event_loop();dispatcher=greenlet(loop.run_forever);seen=[]
+    class Impl:
+        _loop=loop
+        _dispatcher_fiber=dispatcher
+        async def goto(self,url,*,timeout=None,waitUntil=None):
+            seen.append((url,timeout,waitUntil))
+        async def wait_for_url(self,url,*,timeout=None,waitUntil=None):
+            seen.append((url,timeout,waitUntil))
+    try:
+        native=object.__new__(NativePage)
+        native._loop=loop;native._dispatcher_fiber=dispatcher;native._main_frame=Impl()
+        bounded_browser_call(Page(native),method,'https://example.invalid/',
+            timeout=20,wait_until='domcontentloaded',timeout_ms=100)
+        assert seen==[('https://example.invalid/',20,'domcontentloaded')]
+    finally:
+        loop.call_soon(loop.stop);dispatcher.switch()
+        asyncio._set_running_loop(None);loop.close()

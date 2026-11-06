@@ -1,3 +1,12 @@
+# 最新正式安装 — 2026-11-06 最终补修已启动，真实新单核验中
+
+源码 bd565aff1b8d64bd836211a6f869411da18cb48e，完整3628PASS/1系统权限SKIP253.97s，Ruff/diff及源码指纹一致。原发布构建/自检/RELEASE_SCAN_OK通过，2875文件与11修改模块逐一核对。
+正式EXE D:/Program_Leo/INSO_Leo/dist/INSO_V1.6/INSO_V1.6.exe；SHA256 e7f1faf747358f9fbcdcadfac9094fdba64a7b66de8c19b67567cce897065165。
+备份 D:/Program_Leo/INSO_Leo/dist/release-backups/INSO_V1.6-google-url-sync-20261106T022400Z，包含原程序、最新原始数据库/WAL/SHM（存在时）、一致校验数据库及运行数据。旧回滚版本仍保留。Owner正常退出原run69.../code0已验证；只替换程序，16受保护表及配置在启动前后自检阶段完全一致，运行junction/Profile/UNKNOWN不变。回滚/新程序/空闲自检均0。
+正式GUI32308/run378fa22e7c754122a26d01e746c450bc于10:24:49启动，Chrome19208/9222保持。新单QUEUED1及已核实原日期通过重启保留，首轮正常询价10:24:54开始，尚在真实观察。当前IN_PROGRESS_LIVE_VERIFICATION，不能把启动当作新单已完成。Owner无需再退出或手动重跑。COMPUTER_USE_NOT_USED。
+
+以下历史阶段已被本次安装取代，真实业务结果以最终自然观察回执为准。
+
 # 最新进度 — Owner正常退出已验证，最终恢复边界重新验证中
 
 run69e11b61ad3d48b28998590c12e8b503 completed=true/owner_exit/application_exit_code0，无正式实例。Owner无需再次退出。目标新单已通过正常真实读取恢复原日期并安全入队，原重试次数1、无采购/SAVE；覆盖前追加了保留原次数的安全释放恢复边界和负例。最终全量正在进行，随后原流程重新构建/备份/仅程序覆盖/启动及自然跟单。e76719b/be01候选尚未安装，已被本次最小补修取代；正式文件仍e4db/c83且已停止。以下均为历史阶段记录，以最终安装回执为准。

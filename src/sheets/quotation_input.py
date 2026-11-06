@@ -102,8 +102,10 @@ class GoogleQuotationInput:
             ).execute(), retry_wait=self._retry_wait)
         except GoogleSheetsReadUnavailable:
             raise  # Pure read exhaustion keeps the ordinary next-poll recovery path.
-        except Exception:  # noqa: BLE001 - metadata is always a shared boundary
-            raise QuotationInputUnavailable("QUOTE_INPUT_METADATA_UNAVAILABLE") from None
+        except QuotationInputBusy:
+            raise
+        except Exception as exc:
+            raise QuotationInputUnavailable("QUOTE_INPUT_METADATA_UNAVAILABLE") from exc
         if not isinstance(response, dict) or not isinstance(response.get("sheets"), list):
             raise QuotationInputUnavailable("QUOTE_INPUT_METADATA_INVALID")
         matches = []
@@ -130,21 +132,21 @@ class GoogleQuotationInput:
                 valueInputOption="RAW", body={"majorDimension": "ROWS", "values": [list(payload)]},
             ).execute()
         except Exception as exc:
-            if isinstance(exc, QuotationInputBusy):
+            if isinstance(exc, (QuotationInputBusy, QuotationInputUnavailable)):
                 raise
             if _shared_error(exc):
-                raise QuotationInputUnavailable() from None
-            raise QuotationInputAttemptFailed("QUOTE_INPUT_WRITE_FAILED") from None
+                raise QuotationInputUnavailable() from exc
+            raise QuotationInputAttemptFailed("QUOTE_INPUT_WRITE_FAILED") from exc
 
     def read_payload(self):
         try:
             return _row_values(self._get(self.location.input_range))
         except (QuotationInputUnavailable, QuotationInputAttemptFailed):
             raise
-        except Exception as exc:  # noqa: BLE001 - targeted range failure differs from shared API
+        except Exception as exc:
             if _shared_error(exc):
-                raise QuotationInputUnavailable() from None
-            raise QuotationInputAttemptFailed("QUOTE_INPUT_READBACK_MISMATCH") from None
+                raise QuotationInputUnavailable() from exc
+            raise QuotationInputAttemptFailed("QUOTE_INPUT_READBACK_MISMATCH") from exc
 
     def _get(self, range_name):
         return self._service.spreadsheets().values().get(
