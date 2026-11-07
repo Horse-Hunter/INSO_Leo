@@ -55,16 +55,15 @@ The Owner has completed the one-time INSO phone-code login and will not provide 
 - **Owner:** Executor applies it and records evidence; Reviewer/CEO enforces it.
 - **Enforcement:** Review fails if any config diverges from the canonical profile/port, if `persistent_session` is disabled, or if a change can close the session browser.
 
-## CEO跨窗口接管入口（GPT / WorkBuddy）
+## CEO / WorkBuddy 随时接管入口（2026-11-07）
 
-无论使用GPT、WorkBuddy或其他CEO/Architect窗口，**每次新CEO接管先读 [control-room/CEO_HANDOVER.md](control-room/CEO_HANDOVER.md)**：核对最近Git/生产版本、开放风险、资产地图与下一步事项，再按下文独立Review。它是CEO长期维护的当前事实索引，不是Executor临时HANDOFF；由当前CEO在新Owner决定、复审和发布状态改变后更新并提交，不制造额外审批。由于仓库可公开访问，交接文档不得存放密钥/客户敏感信息。运行状态未经现场核对时标NOT_VERIFIED。
+**先读 [control-room/CEO_HANDOVER.md](control-room/CEO_HANDOVER.md)**。这是持续更新的跨GPT、WorkBuddy及其他Agent的**唯一CEO长期交接索引**：第0节90秒接管、第1节冻结Git/正式EXE/业务与Review状态、第3节生产资产依赖、第5节开放风险、第7节跨Agent单一所有权切换。**当前V1.6分支不是默认main**；最新生产事实请核对 `V16_RELEASE_REPORT.md` 顶部及 `control-room/RFQ-016/FINAL_REPORT.md`。
 
-### Owner最新路由（2026-11-02，项目专用）
-
-- 本轮**不做GitHub仓库公开性检查、IMAP邮件链路/策略审计**。这是明确的任务排除，后续窗口不得从旧CEO待办中恢复这两项。
-- **涉及V1.6正式业务/源码/发布/受保护CDP与runtime/数据库/资源并发的任何工作，只交现有V1.6执行窗口**，不派新Codex窗口；该窗口先完成只读资产拓扑与架构方案，后续修改另遵Owner要求。
-- 新Codex窗口只能领取文档、历史证据索引、候选瘦身清单等非业务工作。禁止为审计而操作、清理或构建正式V1.6，禁止丢失旧工作树、Profile或回滚。
-- 持久完整任务说明及窗口分工见`control-room/CEO_HANDOVER.md`第11节；CEO向Owner一次提供适用于**各自窗口的完整指令**，不用Owner拼接。
+- **切换CEO窗口无需新建工作树**，读本文件和当前Git便可接手。只有Owner明确将V1.6实施者从原窗口切换到另一个Agent时，才按原工作区/任务/未提交状态执行单一Executor交接；**禁止两个窗口同时操作正式业务**。
+- Owner在2026-11-02资产治理范围中**排除GitHub公开性和IMAP专项**；作为历史范围约定保留，新任务以Owner最新明确要求为准，不从过时待办自动重开。
+- 重要：旧Research、V1.2工作树、V1.4 runtime与Chrome/CDP/SQLite共享运行资产可能相互引用，不得将“旧目录”当可清理对象。详情见CEO交接第3节。
+- 任何接手Agent不得把Git HEAD、离线测试、上次EXE哈希或历史 `BUSINESS_RUNNING` 直接等同为此刻实时运行状态；对无法核实的项目说明 `NOT_VERIFIED`。
+- CEO负责更新原交接索引及独立Review；新Codex/WorkBuddy若只做非业务文档任务，不能顺带修改V1.6运行源码/部署。给Owner一份完整、可直接转发的执行指令，减少重复审批和搬运。
 
 ## For CEO: Review RFQ-XXX
 
