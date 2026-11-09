@@ -8,6 +8,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol, Self
 
+from src.core import (
+    NativeProtocolTimeout,
+    bounded_browser_call,
+    browser_call_budget,
+)
+
 _LOG = logging.getLogger(__name__)
 
 
@@ -97,7 +103,8 @@ class OperationPage:
 
     def __exit__(self, *_: object) -> None:
         # The page belongs to the authenticated session, not this operation.
-        self._lease._assert_identity()
+        with browser_call_budget(10000, independent=True):
+            self._lease._assert_identity()
 
 
 class InsoOperationAccess:
@@ -203,9 +210,10 @@ class InsoSessionLease:
         page = self._operation_page_handle
         try:
             if not page.is_closed():
-                page.close()
-        except Exception:  # noqa: BLE001 - validation failures close the lease
-            _LOG.warning("the INSO shell tab could not be closed", exc_info=True)
+                bounded_browser_call(page, 'close')
+        except Exception as exc:  # Unknown cleanup must not authorize another browser operation.
+            self.invalidate()
+            raise SecurityViolation("INSO_OPERATION_NOT_CLOSED") from exc
 
     def _assert_identity(self) -> None:
         if self._state is not LeaseState.ACTIVE:
@@ -236,6 +244,8 @@ class InsoSessionLease:
             raise SecurityViolation("verified shell page identity changed")
         try:
             valid_shell = self._operation_page_is_valid(self._operation_page_handle)
+        except NativeProtocolTimeout:
+            raise
         except Exception:  # noqa: BLE001 - validation failures close the lease
             valid_shell = False
         if not valid_shell:

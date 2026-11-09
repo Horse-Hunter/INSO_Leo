@@ -5,6 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Protocol
 
+from src.core import NativeProtocolTimeout
 from src.inso.duplicate_history import InsoDuplicateHistoryError
 from src.inso.quotation_read import (
     InsoQuotationAuthenticationError,
@@ -323,7 +324,10 @@ class V13QuotationCycle:
                     raise _QuotationAgeSkip(reason)
             if self._stop():
                 raise V13Stopped("STOP_REQUESTED")
-            access = self._operations.open(candidate.inquiry_id)
+            try:
+                access = self._operations.open(candidate.inquiry_id)
+            except NativeProtocolTimeout:
+                return None, False  # Unverified read-side identity is not a login verdict.
             try:
                 rows = self._quotes.read(access, candidate.queried_mpn)
                 self._on_query_success()  # INSO read succeeded even if another site's FX fails.

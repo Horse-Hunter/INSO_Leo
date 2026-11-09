@@ -144,7 +144,7 @@ def test_reused_lease_gives_back_the_shell_tab_this_process_opened() -> None:
     assert lease.state is LeaseState.RELEASED
 
 
-def test_a_failing_page_close_never_blocks_the_release() -> None:
+def test_unconfirmed_page_close_retains_protection_and_never_releases_lease() -> None:
     lease, _browser, _context, shell = make_lease(
         BrowserOwnership.REUSED, owns_operation_page=True
     )
@@ -154,9 +154,10 @@ def test_a_failing_page_close_never_blocks_the_release() -> None:
 
     shell.close = explode  # type: ignore[method-assign]
 
-    lease.close_after_drain()
+    with pytest.raises(SecurityViolation, match="INSO_OPERATION_NOT_CLOSED"):
+        lease.close_after_drain()
 
-    assert lease.state is LeaseState.RELEASED
+    assert lease.state is LeaseState.INVALIDATED
 
 
 def test_app_owned_browser_closes_only_after_cycle_drain_and_keeps_shell_page() -> None:

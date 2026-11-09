@@ -221,3 +221,56 @@ def test_native_selection_does_not_bind_lagging_sdk_url_cache(web,monkeypatch):
         assert GoogleSheetsRowReader(service,retry_wait=lambda _:False).read_rows(WorksheetIdentity("test","SHAHAB"))
     assert len(waits)==1 and len(browser.contexts[0].pages)==2
     assert not human.closed
+
+
+def test_safe_quote_timeout_then_three_new_shahab_orders_enter_original_flow_once(web,tmp_path,monkeypatch):
+    from decimal import Decimal
+
+    from src.sheets.google_reader import GoogleSheetsRowReader
+    from src.workflow.inso_query import run_inso_query
+    from src.workflow.v12_contracts import DuplicateCheckResult, DuplicateOutcome
+    from src.workflow.v12_flow import ResearchBusinessFacts, V12WorkflowCoordinator
+    from tests.launcher.test_source_date_flow import NOW
+    from tests.workflow.test_v12_flow import _make_flow
+    service,browser,rows,human=web
+    flow,queue,ledger,_research,checker,_facts,writer,_worker=_make_flow(tmp_path,facts=ResearchBusinessFacts('货足',Decimal(2),Decimal(2)))
+    checker.check=lambda iid,mpn,quantity,at:DuplicateCheckResult(iid,DuplicateOutcome.CONFIRMED,str(mpn),at,repeated=False)
+    flow._record_admitted=V12WorkflowCoordinator._record_admitted.__get__(flow)
+    flow._brief_snapshot=lambda _:();flow._clock=lambda:NOW
+    backend,runtime,clock=prepared(tmp_path,monkeypatch)
+    service._timer=lambda:clock.tick
+    monkeypatch.setattr('src.launcher.backend.utc_now',lambda:NOW)
+    backend._store=queue;backend._v12_store=ledger
+    quote_calls=[];resets=[];retry_waits=[];tp_calls=[]
+    def quote(_):
+        quote_calls.append(clock.tick)
+        if len(quote_calls)==1:
+            def wait(seconds):retry_waits.append(seconds);clock.tick+=seconds;return False
+            run_inso_query(lambda:False,succeeded=bool,reset=lambda:resets.append(True),wait=wait)
+    backend._combined=CombinedCycle(flow,quote,on_pause=lambda _:None)
+    backend._tp=SimpleNamespace(run=lambda *a,**kw:tp_calls.append(clock.tick),issues={})
+    backend._purchase_completion=SimpleNamespace(retry_saved_statuses=lambda **kw:None)
+    for name in ('_check_site_recovery','_idle_login_tick'):
+        monkeypatch.setattr(backend,name,lambda *a,**kw:None)
+    injected=[False]
+    def next_poll(seconds):
+        if clock.tick>=1800:backend._stop.set();return True
+        clock.tick+=seconds
+        if not injected[0]:
+            rows['SHAHAB'].extend([[NOW.date().isoformat(),'未发',n,'SYNTH-NEW-'+str(n),'Brand-X',7,'PCS'] for n in range(1,4)])
+            injected[0]=True
+        return False
+    monkeypatch.setattr(backend,'_wait_between_polls',next_poll)
+    sheets=tuple(WorksheetIdentity('synthetic-sheet',name) for name in ('2026','SHAHAB'))
+    reader=GoogleSheetsRowReader(service,retry_wait=lambda _:False)
+    try:
+        backend._run_independent_poll(runtime,{'spreadsheet_id':'synthetic-sheet'},None,service,reader,sheets,None)
+        items=queue.all_items()
+        assert len(items)==len(writer.commands)==3
+        assert {str(i.mpn) for i in items}=={'SYNTH-NEW-1','SYNTH-NEW-2','SYNTH-NEW-3'}
+        assert all(i.record_identity.worksheet.worksheet=='SHAHAB' and i.source_order_date==NOW.date().isoformat() for i in items)
+        assert all(i.created_at==NOW for i in items)
+        assert len(resets)==4 and retry_waits==[120]*3 and tp_calls
+        assert len(quote_calls)>=2 and clock.tick>=1800
+        assert not human.closed and browser.connected
+    finally:backend.shutdown()

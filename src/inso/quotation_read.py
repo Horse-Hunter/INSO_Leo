@@ -5,6 +5,11 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from src.core import (
+    NativeProtocolTimeout,
+    bounded_browser_call,
+    browser_call_budget,
+)
 from src.core.mpn import inso_lookup_query, lookup_mpn_matches, lookup_mpn_prefix
 
 from .duplicate_history import (
@@ -127,7 +132,7 @@ def capture_quotation_page(frame: object, rows: list[dict]) -> list[dict]:
     keys or substitute API numbers for the displayed text. Missing structure
     differs from a present empty cell. No business content is validated.
     """
-    captured = frame.evaluate(
+    captured = bounded_browser_call(frame, 'evaluate',
         """expected => {
             const panel = document.querySelector('#tabs_b_panel_2');
             const headers = panel ? [...panel.querySelectorAll('th[data-field]')] : [];
@@ -153,8 +158,7 @@ def capture_quotation_page(frame: object, rows: list[dict]) -> list[dict]:
                 });
             });
         }""",
-        {"columns": list(QUOTATION_COLUMNS), "ids": [str(row["id"]) for row in rows]},
-    )
+        {"columns": list(QUOTATION_COLUMNS), "ids": [str(row["id"]) for row in rows]})
     if not isinstance(captured, list) or len(captured) != len(rows):
         raise InsoDuplicateHistoryError(DuplicateHistoryFailure.RESULT_ROW_UNREADABLE)
     result = []
@@ -172,6 +176,7 @@ class InsoQuotationReader:
     def __init__(self, *, page_factory: Callable = PlaywrightProcurementHistoryPage):
         self._page_factory = page_factory
 
+    @browser_call_budget(45000)
     def read(self, access: InsoOperationAccess, mpn: str) -> tuple[V13QuotationRow, ...]:
         target = canonical_history_mpn(mpn)
         if not target or not lookup_mpn_prefix(mpn):
@@ -196,6 +201,8 @@ class InsoQuotationReader:
                     raise TypeError
                 result.append(V13QuotationRow(parse_inso_timestamp(raw[0]), raw))
             return tuple(result)
+        except NativeProtocolTimeout as exc:
+            raise InsoDuplicateHistoryError(DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED) from exc
         except SecurityViolation:
             raise InsoQuotationAuthenticationError("INSO_AUTHENTICATION_REQUIRED") from None
         except InsoDuplicateHistoryError:

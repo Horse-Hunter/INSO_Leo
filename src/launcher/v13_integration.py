@@ -101,8 +101,10 @@ def notify_runtime_fault(store, key, reason, *, at, evidence=None, occurrence=No
     if evidence.get("category") == "runtime_stop":
         from dataclasses import replace
         command = replace(command, subject="【需要处理】INSO自动业务安全暂停",
-            text_body="情况：自动询价、报价和TP已安全暂停，主程序仍在；不会自动重复提交。\n"
-                + ("暂停原因：内部操作未能正常完成，具体原因待核对。\n" if evidence.get("stop_reason") == "PROGRAM_INTERNAL_STOP" else
+            text_body=("情况：程序的一次操作曾长时间未完成确认，已暂停派发后续自动任务；主程序仍在。\n" if evidence.get("stop_reason") == "PROGRAM_OPERATION_STALLED" else
+                "情况：自动询价、报价和TP已安全暂停，主程序仍在；不会自动重复提交。\n")
+                + ("暂停原因：操作进展超出有界等待且经持续复核；在途操作不被视为已取消。\n" if evidence.get("stop_reason") == "PROGRAM_OPERATION_STALLED" else
+                   "暂停原因：内部操作未能正常完成，具体原因待核对。\n" if evidence.get("stop_reason") == "PROGRAM_INTERNAL_STOP" else
                    "暂停原因：程序的Google登录或访问权限核验未通过，需核对。\n" if evidence.get("stop_reason") == "GOOGLE_AUTHENTICATION_REQUIRED" else
                    "暂停原因：程序专属浏览器页面的创建、身份或收口未能确认。\n" if evidence.get("stop_reason", "").startswith("CDP_PAGE_") else
                    "暂停原因：Google操作页身份或操作收口未能确认。\n")

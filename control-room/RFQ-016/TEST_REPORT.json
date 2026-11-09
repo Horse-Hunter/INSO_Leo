@@ -1,8 +1,8 @@
 {
   "rfq": "RFQ-016",
   "active_scope": "Owner Google full-chain repair, independent cross-review, new-order live watch and3000+Chinese-character accountability",
-  "status": "REVIEW_REQUIRED",
-  "deployment": "BUSINESS_RUNNING",
+  "status": "IN_PROGRESS",
+  "deployment": "NOV9_FULL_GATE_PASSED_NOT_INSTALLED",
   "source_commit": "92d18b093b2ad6f724dd8268989a66534b392a2c",
   "source_tree": "9125cfdb9621df32f56ef76ffc35d781e5359f6e",
   "test_tree": "7431e791ba0f8f4db33f2f055a174b10a99de0e6",
@@ -1369,5 +1369,30 @@
     ],
     "final_observed_at": "2026-11-06T04:33:49.252692+00:00",
     "mail_producer_inventory_after_records": "1 PASS"
+  },
+  "shahab_liveness_20261109": {
+    "base_source": "e3ed774c",
+    "current_old_production_source": "92d18b093b2ad6f724dd8268989a66534b392a2c",
+    "full": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "1",
+      "tests": "3688",
+      "time": "421.033",
+      "timestamp": "2026-11-09T14:03:34.158314+08:00",
+      "hostname": "Leo229"
+    },
+    "full_output": "3687 PASS /1 original Windows symlink-permission SKIP421.16s",
+    "full_xml_sha256": "8cc63471f3f3476d6c1f0831df435de099620ff89dd0350b3a8ee173620a88ac",
+    "source_test_fingerprint_unchanged": true,
+    "targeted": "427PASS12.49s; latest public-boundary43PASS6.10s",
+    "independent_native_reviewer": "416PASS9.96s / no remaining confirmed P0/P1 in scope",
+    "independent_flow_reviewer": "real original-owner SDK red/green plus actual scheduler/SMTP/drain review; no remaining concrete blocker",
+    "red": "2 real SDK Frame/Response tests fail prior helper; safe synthetic release used",
+    "safety": "No fake cancellation/drain/lease release, no new actor/thread/Chrome/SMTP; original admission/UNKNOWN/SENT maintained",
+    "owner_force_grant": "Explicit Nov9 current formal program only; not executed yet",
+    "production": "OLD_PROCESS_STALLED_NOT_REPAIRED_YET",
+    "computer_use": "COMPUTER_USE_NOT_USED"
   }
 }

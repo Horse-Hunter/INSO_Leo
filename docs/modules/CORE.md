@@ -141,3 +141,7 @@ process. This cannot reconstruct the previously unrecorded disappearance. Source
 verification uses synthetic processes and Tk callbacks; no real-app crash or
 live business probe, no packaging/deployment in this task. See
 `tasks/2026-10-23-runtime-exit-diagnostics.md`.
+
+
+## Owner2026-11-09 browser protocol liveness repair
+The pre-existing single `research.cdp_pages.bounded_browser_call` implementation is reused under Core's public infrastructure boundary so INSO does not depend on Research. Public imports: `NativeProtocolTimeout`, `bounded_browser_call`, `browser_call_budget`, `observe_browser_calls`. Research's original path remains a compatibility entry into that same implementation. No new dependency, browser client, thread, ownership registry, scheduler, or SMTP sender. Explicitly routed asynchronous native SDK operations run on their original owner loop; Frame and Response are covered through the original SDK SyncBase contract. Public SDK keyword/callback mappings are preserved. A local deadline never proves remote cancellation or write success/failure. Read scopes share a finite total budget; original identity cleanup gets a separate finite reserve. Optional observer callbacks record begin/acknowledgment metadata only; no business effects or I/O. Business adapters retain existing identity/authentication/UNKNOWN and cleanup protections. Owner normal stop/closed sessions and recovered events remain excluded from alerts.

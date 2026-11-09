@@ -48,7 +48,7 @@ of business HEAD7a5728388fc14cd685521d520e23fbfa19536988. Independent PASS is re
 in control-room/RFQ-014/CEO_REVIEW.md (review commit3eee69a; status commitc023b60).
 | RFQ-015 | Authorized V1.4 Windows release | DEPLOYED | `codex/v1-4-order-mail-inspection` | Owner authorized | `control-room/RFQ-015/TASK_SPEC.md` |
 
-| RFQ-016 | V1.6 production trust: source status, order age gates, false-alert elimination | REVIEW_REQUIRED / BUSINESS_RUNNING | `codex/v1-6-independent-scheduling` | Owner authorized release; consolidated cross-review and natural cycle passed; amount correction SENT once | `control-room/RFQ-016/TASK_SPEC.md` |
+| RFQ-016 | V1.6 production trust: source status, order age gates, false-alert elimination | IN_PROGRESS / HEALTH_HOLD | `codex/v1-6-independent-scheduling` | Owner Nov9 three-new-order liveness repair; independent review closed; full gate and controlled release pending | `control-room/RFQ-016/TASK_SPEC.md` |
 
 Historical RFQ-016 source-review sequence (release/subject-policy holds below superseded by Owner final2026-10-31 authorization; current status is the row above and final receipt below):
 

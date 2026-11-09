@@ -33,6 +33,10 @@ from time import monotonic
 from typing import Protocol
 from urllib.parse import parse_qs, urlsplit
 
+from src.core import (
+    bounded_browser_call,
+    browser_call_budget,
+)
 from src.core.mpn import inso_lookup_query, lookup_mpn_matches, lookup_mpn_prefix
 
 from .session import InsoOperationAccess, SecurityViolation
@@ -479,10 +483,10 @@ class InsoDuplicateHistoryReader:
         return access
 
     def _run_exact_query(self, page: DuplicateHistoryPage, target: str) -> None:
-        page.goto(self.list_url)
+        bounded_browser_call(page, 'goto', self.list_url)
         page.set_text(MODEL_QUERY_INPUT, target)
         page.ensure_checked(EXACT_MATCH_CHECKBOX)
-        page.click(QUERY_BUTTON)
+        bounded_browser_call(page, 'click', QUERY_BUTTON)
         page.wait_for_query_settled(timeout_ms=self._timeout_ms)
 
     def _read_rows(self, page: DuplicateHistoryPage, target: str) -> tuple[_ResultRow, ...]:
@@ -531,7 +535,7 @@ class InsoDuplicateHistoryReader:
                 DuplicateHistoryFailure.RECORD_FIELDS_INVALID, self.list_url
             )
         self._run_exact_query(page, target)
-        page.click(DETAIL_LINK_SELECTOR_TEMPLATE.format(argument=row.bill_argument))
+        bounded_browser_call(page, 'click', DETAIL_LINK_SELECTOR_TEMPLATE.format(argument=row.bill_argument))
         page.wait_for(self._detail_bill_id_selector, timeout_ms=self._timeout_ms)
         read_back = page.attributes(self._detail_bill_id_selector, "value")
         bill_id = read_back[0].strip() if read_back and read_back[0] else ""
@@ -594,6 +598,12 @@ class PlaywrightProcurementHistoryPage:
     def query_exact_response(
         self, target_mpn: str, *, capture_page: Callable | None = None,
     ) -> dict[str, object]:
+        with browser_call_budget(self._timeout_ms):
+            return self._query_exact_response(target_mpn, capture_page=capture_page)
+
+    def _query_exact_response(
+        self, target_mpn: str, *, capture_page: Callable | None = None,
+    ) -> dict[str, object]:
         frame = self._page
         owner = frame.page
         deadline = monotonic() + self._timeout_ms / 1000
@@ -605,19 +615,16 @@ class PlaywrightProcurementHistoryPage:
             return value
         if not urlsplit(frame.url).path.casefold().endswith(BUSINESS_INQUIRY_LIST_PATH.casefold()):
             raise InsoDuplicateHistoryError(DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE)
-        if not frame.locator("#DetailField_FenLan").input_value():
-            frame.wait_for_function(
-                "() => !!document.querySelector('#DetailField_FenLan')?.value",
-                timeout=remaining_ms(),
-            )
-        if frame.locator("#DetailField_FenLan").input_value() != "PartNo":
+        if not bounded_browser_call(frame.locator("#DetailField_FenLan"), 'input_value'):
+            bounded_browser_call(frame, 'wait_for_function', "() => !!document.querySelector('#DetailField_FenLan')?.value", timeout=remaining_ms())
+        if bounded_browser_call(frame.locator("#DetailField_FenLan"), 'input_value') != "PartNo":
             raise InsoDuplicateHistoryError(DuplicateHistoryFailure.RECORD_FIELDS_INVALID)
         field = frame.locator("#DetailFieldValue_layout")
-        field.fill(target_mpn, timeout=self._timeout_ms)
-        if field.input_value() != target_mpn:
+        bounded_browser_call(field, 'fill', target_mpn, timeout=self._timeout_ms)
+        if bounded_browser_call(field, 'input_value') != target_mpn:
             raise InsoDuplicateHistoryError(DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED)
-        frame.locator("#tab_b_li2 > a").click(timeout=self._timeout_ms)
-        if frame.evaluate("() => String(tab_b_id)") != "4":
+        bounded_browser_call(frame.locator('#tab_b_li2 > a'), 'click', timeout=self._timeout_ms)
+        if bounded_browser_call(frame, 'evaluate', "() => String(tab_b_id)") != "4":
             raise InsoDuplicateHistoryError(DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE)
 
         def matched(response, page_number):
@@ -640,15 +647,13 @@ class PlaywrightProcurementHistoryPage:
                 lambda response, number=page_number: matched(response, number), timeout=remaining_ms()
             ) as pending:
                 if page_number == 1:
-                    frame.locator("#select_btns_layout").click(timeout=remaining_ms())
+                    bounded_browser_call(frame.locator('#select_btns_layout'), 'click', timeout=remaining_ms())
                 else:
-                    frame.locator("#tabs_b_panel_2 .layui-laypage-next:visible").click(
-                        timeout=remaining_ms()
-                    )
+                    bounded_browser_call(frame.locator('#tabs_b_panel_2 .layui-laypage-next:visible'), 'click', timeout=remaining_ms())
             response = pending.value
             if response.status != 200:
                 raise InsoDuplicateHistoryError(DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE)
-            payload = response.json()
+            payload = bounded_browser_call(response, 'json')
             rows = payload.get("rows") if isinstance(payload, dict) else None
             if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
                 raise InsoDuplicateHistoryError(DuplicateHistoryFailure.RECORD_FIELDS_INVALID)
@@ -657,27 +662,11 @@ class PlaywrightProcurementHistoryPage:
                 raise InsoDuplicateHistoryError(DuplicateHistoryFailure.RESULT_IDENTIFIER_AMBIGUOUS)
             # A matched network response is not enough: wait for the lower
             # native grid and pager to finish rendering this response.
-            frame.wait_for_function(
-                """expected => {
-                    const grid = document.querySelector('#_id_tabs_b_2');
-                    const rows = grid ? [...grid.querySelectorAll('tr[id$="_Main"]')] : [];
-                    const models = rows.map(r => r.querySelector('td[data-field="PartNo"]')?.innerText.replace(/\\s+/g, ' ').trim());
-                    const ids = rows.map(r => r.id.replace(/_Main$/, ''));
-                    const pager = document.querySelector('#tabs_b_panel_2 .layui-laypage-count');
-                    const current = document.querySelector('#tabs_b_panel_2 .layui-laypage-curr em:last-child');
-                    return rows.length === expected.ids.length
-                        && ids.every((id, i) => id === expected.ids[i])
-                        && models.every((model, i) => model === expected.models[i])
-                        && Number(current?.textContent) === expected.page
-                        && !!pager && /\\d+/.test(pager.textContent);
-                }""",
-                arg={"ids": ids, "models": [" ".join(str(row.get("PartNo", "")).split()) for row in rows], "page": page_number},
-                timeout=remaining_ms(),
-            )
+            bounded_browser_call(frame, 'wait_for_function', 'expected => {\n                    const grid = document.querySelector(\'#_id_tabs_b_2\');\n                    const rows = grid ? [...grid.querySelectorAll(\'tr[id$="_Main"]\')] : [];\n                    const models = rows.map(r => r.querySelector(\'td[data-field="PartNo"]\')?.innerText.replace(/\\s+/g, \' \').trim());\n                    const ids = rows.map(r => r.id.replace(/_Main$/, \'\'));\n                    const pager = document.querySelector(\'#tabs_b_panel_2 .layui-laypage-count\');\n                    const current = document.querySelector(\'#tabs_b_panel_2 .layui-laypage-curr em:last-child\');\n                    return rows.length === expected.ids.length\n                        && ids.every((id, i) => id === expected.ids[i])\n                        && models.every((model, i) => model === expected.models[i])\n                        && Number(current?.textContent) === expected.page\n                        && !!pager && /\\d+/.test(pager.textContent);\n                }', arg={'ids': ids, 'models': [' '.join(str(row.get('PartNo', '')).split()) for row in rows], 'page': page_number}, timeout=remaining_ms())
             pager = frame.locator("#tabs_b_panel_2 .layui-laypage:visible")
-            total_text = pager.locator(".layui-laypage-count").inner_text()
+            total_text = bounded_browser_call(pager.locator(".layui-laypage-count"), 'inner_text')
             total_match = re.search(r"\d+", total_text)
-            size = int(pager.locator("select").input_value())
+            size = int(bounded_browser_call(pager.locator("select"), 'input_value'))
             total = int(total_match.group()) if total_match else -1
             if page_number == 1:
                 expected_total, expected_size = total, size
@@ -771,6 +760,10 @@ class PlaywrightDuplicateHistoryPage:
         return self._settlement_evidence.get("FIRST_PAGE_SETTLED") is True
 
     def query_exact_response(self, target_mpn: str) -> dict[str, object]:
+        with browser_call_budget(self._timeout_ms):
+            return self._query_exact_response(target_mpn)
+
+    def _query_exact_response(self, target_mpn: str) -> dict[str, object]:
         """Run the verified native search and return its settled response."""
 
         self._settlement_evidence = _empty_settlement_evidence()
@@ -787,7 +780,7 @@ class PlaywrightDuplicateHistoryPage:
         self._settlement_evidence["FAILED_STAGE"] = "EXACT_FILTER"
         self.ensure_checked(EXACT_MATCH_CHECKBOX)
         self._settlement_evidence["FAILED_STAGE"] = "QUERY_DISPATCH"
-        self.click(QUERY_BUTTON)
+        bounded_browser_call(self, 'click', QUERY_BUTTON)
         return self.wait_for_query_settled(timeout_ms=self._timeout_ms)
 
     # -- DuplicateHistoryPage ----------------------------------------------
@@ -804,7 +797,7 @@ class PlaywrightDuplicateHistoryPage:
             raise InsoDuplicateHistoryError(
                 DuplicateHistoryFailure.HISTORY_LIST_UNAVAILABLE, url
             )
-        self._page.goto(url, wait_until="domcontentloaded", timeout=self._timeout_ms)
+        bounded_browser_call(self._page, 'goto', url, wait_until='domcontentloaded', timeout=self._timeout_ms)
         self._verify_list_identity(url)
 
     def set_text(self, selector: str, value: str) -> None:
@@ -813,12 +806,12 @@ class PlaywrightDuplicateHistoryPage:
                 DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
             )
         locator = self._unique_locator(selector)
-        if not locator.is_visible() or not locator.is_enabled():
+        if not bounded_browser_call(locator, 'is_visible') or not bounded_browser_call(locator, 'is_enabled'):
             raise InsoDuplicateHistoryError(
                 DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
             )
-        locator.fill(value, timeout=self._timeout_ms)
-        if locator.input_value() != value:
+        bounded_browser_call(locator, 'fill', value, timeout=self._timeout_ms)
+        if bounded_browser_call(locator, 'input_value') != value:
             raise InsoDuplicateHistoryError(
                 DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
             )
@@ -834,7 +827,7 @@ class PlaywrightDuplicateHistoryPage:
             # The site hides these form checkboxes. Set their state without a
             # synthetic click, then let the visible query button call native
             # search() and its own form-data serializer.
-            state = self._page.evaluate(
+            state = bounded_browser_call(self._page, 'evaluate',
                 """() => {
                     const forms = document.querySelectorAll('form#search_form');
                     const exacts = document.querySelectorAll('#nolike');
@@ -850,8 +843,7 @@ class PlaywrightDuplicateHistoryPage:
                     exact.checked = true;
                     leftLike.checked = false;
                     return {exact: exact.checked, leftLike: leftLike.checked};
-                }"""
-            )
+                }""")
             if not isinstance(state, dict) or state.get("exact") is not True or state.get("leftLike") is not False:
                 raise InsoDuplicateHistoryError(
                     DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
@@ -871,11 +863,11 @@ class PlaywrightDuplicateHistoryPage:
         )
         if detail_match is not None:
             locator = self._unique_locator(selector)
-            if not locator.is_visible() or not locator.is_enabled():
+            if not bounded_browser_call(locator, 'is_visible') or not bounded_browser_call(locator, 'is_enabled'):
                 raise InsoDuplicateHistoryError(
                     DuplicateHistoryFailure.RESULT_IDENTIFIER_AMBIGUOUS
                 )
-            locator.click(timeout=self._timeout_ms)
+            bounded_browser_call(locator, 'click', timeout=self._timeout_ms)
             return
         if selector != QUERY_BUTTON or not self._target_mpn:
             raise InsoDuplicateHistoryError(
@@ -883,9 +875,9 @@ class PlaywrightDuplicateHistoryPage:
             )
         button = self._unique_locator(selector)
         if (
-            not button.is_visible()
-            or not button.is_enabled()
-            or button.inner_text().strip() != "查询"
+            not bounded_browser_call(button, 'is_visible')
+            or not bounded_browser_call(button, 'is_enabled')
+            or bounded_browser_call(button, 'inner_text').strip() != "查询"
         ):
             raise InsoDuplicateHistoryError(
                 DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
@@ -921,7 +913,7 @@ class PlaywrightDuplicateHistoryPage:
         self._response_listener = on_response
         owner.on("response", on_response)
         try:
-            button.click(timeout=self._timeout_ms)
+            bounded_browser_call(button, 'click', timeout=self._timeout_ms)
             after = self._query_state()
             sequence_advanced = (
                 after is not None
@@ -963,13 +955,7 @@ class PlaywrightDuplicateHistoryPage:
         try:
             if response is None:
                 try:
-                    response = owner.wait_for_event(
-                        "response",
-                        predicate=lambda candidate: _is_exact_history_request(
-                            getattr(candidate, "request", None), target
-                        ),
-                        timeout=timeout_ms,
-                    )
+                    response = bounded_browser_call(owner, 'wait_for_event', 'response', predicate=lambda candidate: _is_exact_history_request(getattr(candidate, 'request', None), target), timeout=timeout_ms)
                     self._settled_response = response
                     self._settled_request = getattr(response, "request", None)
                     self._settlement_evidence["REQUEST_MATCHED"] = True
@@ -986,7 +972,7 @@ class PlaywrightDuplicateHistoryPage:
                 self._settlement_evidence["FAILED_STAGE"] = "HTTP_OK"
                 raise ValueError
             try:
-                payload = response.json()
+                payload = bounded_browser_call(response, 'json')
                 json_ok = isinstance(payload, dict)
             except Exception:
                 self._settlement_evidence["FAILED_STAGE"] = "RESPONSE_JSON_OK"
@@ -1015,12 +1001,7 @@ class PlaywrightDuplicateHistoryPage:
             self._settlement_evidence["RESPONSE_ROWS_VALID"] = True
 
             try:
-                self._page.wait_for_function(
-                    """expected => window._select_pending === false
-                        && (window._select_request_seq || {}).dg === expected""",
-                    arg=sequence,
-                    timeout=timeout_ms,
-                )
+                bounded_browser_call(self._page, 'wait_for_function', 'expected => window._select_pending === false\n                        && (window._select_request_seq || {}).dg === expected', arg=sequence, timeout=timeout_ms)
             except Exception:
                 self._settlement_evidence["FAILED_STAGE"] = "PENDING_FALSE"
                 raise
@@ -1034,15 +1015,11 @@ class PlaywrightDuplicateHistoryPage:
             # before taking the authoritative snapshot below. A timeout here is
             # not itself a verdict: the snapshot checks still decide.
             try:
-                self._page.wait_for_function(
-                    _GRID_RENDERED_PREDICATE,
-                    arg={"rows": len(bill_ids)},
-                    timeout=timeout_ms,
-                )
+                bounded_browser_call(self._page, 'wait_for_function', _GRID_RENDERED_PREDICATE, arg={'rows': len(bill_ids)}, timeout=timeout_ms)
                 self._settlement_evidence["GRID_RENDERED"] = True
             except Exception:  # noqa: BLE001 - raw page/provider failures are sanitized
                 self._settlement_evidence["GRID_RENDERED"] = False
-            snapshot = self._page.evaluate(
+            snapshot = bounded_browser_call(self._page, 'evaluate',
                 """() => {
                     const button = document.querySelector('#select_btns');
                     const cache = window.table && window.table.cache
@@ -1084,8 +1061,7 @@ class PlaywrightDuplicateHistoryPage:
                         currentPage: current ? Number(current.textContent) || null : null,
                         totalCount: totalText ? Number(totalText) : null,
                     };
-                }"""
-            )
+                }""")
             if not isinstance(snapshot, dict):
                 self._settlement_evidence["FAILED_STAGE"] = "CACHE_PRESENT"
                 raise TypeError
@@ -1214,10 +1190,10 @@ class PlaywrightDuplicateHistoryPage:
         return payload
 
     def wait_for(self, selector: str, *, timeout_ms: int) -> None:
-        self._page.wait_for_selector(selector, state="visible", timeout=timeout_ms)
+        bounded_browser_call(self._page, 'wait_for_selector', selector, state='visible', timeout=timeout_ms)
 
     def attributes(self, selector: str, name: str) -> tuple[str | None, ...]:
-        values = self._page.eval_on_selector_all(
+        values = bounded_browser_call(self._page, 'eval_on_selector_all',
             selector,
             "(els, attr) => els.map((el) => el.getAttribute(attr))",
             name,
@@ -1253,7 +1229,7 @@ class PlaywrightDuplicateHistoryPage:
 
     def _unique_locator(self, selector: str) -> object:
         locator = self._page.locator(selector)
-        if locator.count() != 1:
+        if bounded_browser_call(locator, 'count') != 1:
             raise InsoDuplicateHistoryError(
                 DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
             )
@@ -1308,7 +1284,7 @@ class PlaywrightDuplicateHistoryPage:
 
     def _query_state(self) -> dict[str, object] | None:
         try:
-            state = self._page.evaluate(
+            state = bounded_browser_call(self._page, 'evaluate',
                 """() => {
                     const exact = document.querySelector('#nolike');
                     const leftLike = document.querySelector('#leftlike');
@@ -1322,8 +1298,7 @@ class PlaywrightDuplicateHistoryPage:
                         pending: window._select_pending !== false,
                         sequence,
                     };
-                }"""
-            )
+                }""")
             if not isinstance(state, dict):
                 return None
             if not isinstance(state.get("sequence"), int):
@@ -1348,9 +1323,9 @@ class PlaywrightDuplicateHistoryPage:
         return self._element_text(f"{row_id} {cell_selector}", "el => el.textContent")
 
     def _element_text(self, selector: str, expression: str) -> str | None:
-        if int(self._page.locator(selector).count()) != 1:
+        if int(bounded_browser_call(self._page.locator(selector), 'count')) != 1:
             return None
-        value = self._page.eval_on_selector(selector, expression)
+        value = bounded_browser_call(self._page, 'eval_on_selector', selector, expression)
         return value if isinstance(value, str) else None
 
 

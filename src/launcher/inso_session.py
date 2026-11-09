@@ -38,6 +38,11 @@ from time import monotonic, sleep
 from typing import Any
 from urllib.parse import urlsplit
 
+from src.core import (
+    NativeProtocolTimeout,
+    bounded_browser_call,
+)
+
 _log = logging.getLogger("inso.inso_session")
 
 from src.inso.session import (
@@ -49,7 +54,11 @@ from src.inso.session import (
     PageIdentity,
     SecurityViolation,
 )
-from src.research.cdp_pages import new_background_page, page_owner
+from src.research.cdp_pages import (
+    PageTargetCleanupError,
+    new_background_page,
+    page_owner,
+)
 from src.research.site_login import REJECTED_PASSWORD_TEXT, visible_text_contains
 
 _INSO_ORIGIN = "https://yingsuo.alperp.cn"
@@ -239,9 +248,9 @@ def _verified_shell_frame(page: Any, context: Any) -> Any | None:
         # landing page.
         for selector in ("#DetailFieldValue", "button#select_btns"):
             locator = frame.locator(selector)
-            if locator.count() != 1:
+            if bounded_browser_call(locator, 'count') != 1:
                 return None
-            if not locator.is_visible():
+            if not bounded_browser_call(locator, 'is_visible'):
                 return None
         # The result grid must be present exactly once, but it is deliberately
         # not required to be visible. A read-only exact duplicate query that
@@ -250,9 +259,11 @@ def _verified_shell_frame(page: Any, context: Any) -> Any | None:
         # shell fully usable. Requiring a visible grid made the shell
         # unverifiable after the very first duplicate check, which broke the next
         # poll cycle's attach. Presence (not size) is the identity signal here.
-        if frame.locator("#_id_dg").count() != 1:
+        if bounded_browser_call(frame.locator("#_id_dg"), 'count') != 1:
             return None
         return frame
+    except NativeProtocolTimeout:
+        raise
     except Exception:  # noqa: BLE001 - any ambiguity fails closed
         return None
 
@@ -322,7 +333,7 @@ def ensure_inso_authenticated(
                 and guard.opened_page is not None
                 and not guard.opened_page.is_closed()
             ):
-                guard.opened_page.close()
+                bounded_browser_call(guard.opened_page, 'close')
         except Exception:  # noqa: BLE001 - retain the original authentication failure
             _log.warning("failed to close the new INSO authentication tab")
         raise InsoAuthenticationError(
@@ -335,7 +346,7 @@ def _app_markers(page: Any) -> dict[str, Any] | None:
     """Read the ERP's own controls out of a page, or ``None`` if unreadable."""
 
     try:
-        markers = page.evaluate(_APP_MARKERS_JS)
+        markers = bounded_browser_call(page, 'evaluate', _APP_MARKERS_JS)
     except Exception:  # noqa: BLE001 - an unreadable page proves nothing
         return None
     return markers if isinstance(markers, dict) else None
@@ -406,25 +417,24 @@ def _open_list_page(
             return True
         if _is_login_page(page):
             return False
-        menu_ready = page.evaluate(
+        menu_ready = bounded_browser_call(page, 'evaluate',
             "() => document.readyState === 'complete' && "
-            "typeof window.jQuery?.fn?.BillTab === 'function'"
-        ) is True
+            "typeof window.jQuery?.fn?.BillTab === 'function'") is True
         retry_menu = clicks == 0 or (
             clicks == 1 and clock() - last_click >= 5.0
-            and page.locator("iframe#iframe_YeWuXJ_frame").count() == 0
+            and bounded_browser_call(page.locator("iframe#iframe_YeWuXJ_frame"), 'count') == 0
         )
         if retry_menu and menu_ready:
             entry = page.locator("a#iframe_YeWuXJ_menu")
-            if entry.count() > 1:
+            if bounded_browser_call(entry, 'count') > 1:
                 return False
-            if entry.count() == 1 and not entry.is_visible() and not expanded:
+            if bounded_browser_call(entry, 'count') == 1 and not bounded_browser_call(entry, 'is_visible') and not expanded:
                 group = page.locator('a[onclick="expandable(this, 8)"]')
-                if group.count() == 1 and group.is_visible() and group.is_enabled():
-                    group.click(timeout=_NAVIGATION_TIMEOUT_MS)
+                if bounded_browser_call(group, 'count') == 1 and bounded_browser_call(group, 'is_visible') and bounded_browser_call(group, 'is_enabled'):
+                    bounded_browser_call(group, 'click', timeout=_NAVIGATION_TIMEOUT_MS)
                     expanded = True
-            if entry.count() == 1 and entry.is_visible() and entry.is_enabled():
-                entry.click(timeout=_NAVIGATION_TIMEOUT_MS)
+            if bounded_browser_call(entry, 'count') == 1 and bounded_browser_call(entry, 'is_visible') and bounded_browser_call(entry, 'is_enabled'):
+                bounded_browser_call(entry, 'click', timeout=_NAVIGATION_TIMEOUT_MS)
                 # Native tab creation can swallow an early click during home
                 # initialization. Retry that read-navigation once, only if it
                 # created NO iframe; never duplicate a pending/list tab.
@@ -438,7 +448,7 @@ def _open_list_page(
 def _wait_page_events(page: Any, wait: Callable[[float], None], seconds: float) -> None:
     """Pump the existing synchronous client's navigation/frame events."""
     if wait is sleep:
-        page.wait_for_timeout(seconds * 1000)
+        bounded_browser_call(page, 'wait_for_timeout', seconds * 1000)
     else:
         wait(seconds)
 
@@ -568,8 +578,7 @@ class InsoSessionGuard:
                     return InsoSessionStatus(InsoSessionOutcome.DEAD, "CREDENTIAL_REJECTED")
                 # A timed-out navigation may already show the login URL while
                 # its form is incomplete. Reopen, rather than trust that URL.
-                page.goto(self._login_url, wait_until="domcontentloaded",
-                          timeout=_LOGIN_FORM_TIMEOUT_MS)
+                bounded_browser_call(page, 'goto', self._login_url, wait_until='domcontentloaded', timeout=_LOGIN_FORM_TIMEOUT_MS)
             elif self._page is not None:
                 page, opened_here = self._page(), False
             elif self._fresh_page:
@@ -638,11 +647,7 @@ class InsoSessionGuard:
 
         if str(getattr(page, "url", "")) != self._login_url:
             try:
-                page.goto(
-                    self._login_url,
-                    wait_until="domcontentloaded",
-                    timeout=_LOGIN_FORM_TIMEOUT_MS,
-                )
+                bounded_browser_call(page, 'goto', self._login_url, wait_until='domcontentloaded', timeout=_LOGIN_FORM_TIMEOUT_MS)
             except Exception as exc:  # noqa: BLE001 - classify transport without exposing page text
                 raise InsoAuthenticationError(_login_failure_code(exc)) from None
         if _human_verification_required(page):
@@ -730,19 +735,19 @@ def _submit_ordinary_login(page: Any, login: Any | None) -> None:
     except Exception as exc:  # noqa: BLE001 - only known transport errors permit retry
         raise InsoAuthenticationError(_login_failure_code(exc)) from None
     try:
-        username.fill(login.username)
+        bounded_browser_call(username, 'fill', login.username)
         if not _nonempty_readback(username):
             raise ValueError("username read-back is empty")
     except Exception as exc:  # noqa: BLE001 - an unverified read-back must not be submitted
         raise InsoAuthenticationError(_login_failure_code(exc)) from None
     try:
-        password.fill(login.password)
+        bounded_browser_call(password, 'fill', login.password)
         if not _nonempty_readback(password):
             raise ValueError("password read-back is empty")
     except Exception as exc:  # noqa: BLE001 - an unverified read-back must not be submitted
         raise InsoAuthenticationError(_login_failure_code(exc)) from None
     try:
-        button.click()
+        bounded_browser_call(button, 'click')
     except Exception as exc:  # noqa: BLE001 - classify login control transport only, never business submit
         raise InsoAuthenticationError(_login_failure_code(exc)) from None
 
@@ -752,18 +757,18 @@ def _login_button(page: Any) -> Any:
 
     try:
         confirmed = page.locator(_LOGIN_BUTTON_SELECTOR)
-        count = confirmed.count()
+        count = bounded_browser_call(confirmed, 'count')
         if count > 1:
             raise ValueError("the ERP login control is ambiguous")
         if count == 1:
-            if not confirmed.is_visible() or not confirmed.is_enabled():
+            if not bounded_browser_call(confirmed, 'is_visible') or not bounded_browser_call(confirmed, 'is_enabled'):
                 raise ValueError("the ERP login control is not usable")
             return confirmed
         fallback = page.get_by_text(_LOGIN_BUTTON_TEXT, exact=True)
         if (
-            fallback.count() != 1
-            or not fallback.is_visible()
-            or not fallback.is_enabled()
+            bounded_browser_call(fallback, 'count') != 1
+            or not bounded_browser_call(fallback, 'is_visible')
+            or not bounded_browser_call(fallback, 'is_enabled')
         ):
             raise ValueError("login button is not unique and usable")
     except ValueError:
@@ -789,7 +794,7 @@ def _sms_challenge_present(page: Any) -> bool:
 
     try:
         locator = page.locator(_SMS_CHALLENGE_SELECTOR)
-        count = locator.count()
+        count = bounded_browser_call(locator, 'count')
     except Exception:  # noqa: BLE001 - a challenge we cannot read is treated as absent
         return False
     if count == 0:
@@ -797,7 +802,7 @@ def _sms_challenge_present(page: Any) -> bool:
     if count > 1:
         return True
     try:
-        return bool(locator.is_visible())
+        return bool(bounded_browser_call(locator, 'is_visible'))
     except Exception:  # noqa: BLE001 - an unreadable challenge is assumed present
         return True
 
@@ -848,7 +853,7 @@ def _single_visible_enabled(page: Any, selector: str) -> Any:
     locator = page.locator(selector)
     # Every caller supplies a ``:visible`` selector. Count is the safety
     # boundary; the native fill/click below then rejects disabled controls.
-    if locator.count() != 1 or not locator.is_visible() or not locator.is_enabled():
+    if bounded_browser_call(locator, 'count') != 1 or not bounded_browser_call(locator, 'is_visible') or not bounded_browser_call(locator, 'is_enabled'):
         raise ValueError("login control is not unique and usable")
     return locator
 
@@ -857,14 +862,14 @@ def _nonempty_readback(locator: Any) -> bool:
     """Confirm a fill without retaining or exposing its value."""
 
     try:
-        return bool(locator.input_value())
+        return bool(bounded_browser_call(locator, 'input_value'))
     except Exception:  # noqa: BLE001 - an unreadable secret field fails closed
         return False
 
 
 def _manual_verification_present(page: Any) -> bool:
     try:
-        text = page.locator("body").inner_text().casefold()
+        text = bounded_browser_call(page.locator("body"), 'inner_text').casefold()
     except Exception:  # noqa: BLE001 - challenge inspection is best effort
         return False
     return any(marker.casefold() in text for marker in _MANUAL_VERIFICATION_MARKERS)
@@ -928,13 +933,13 @@ def attach_inso_research_session(
         def disconnect_and_close() -> None:
             if hasattr(browser_handle, "disconnect"):
                 if ownership is BrowserOwnership.APP_OWNED:
-                    browser_handle.close()
+                    bounded_browser_call(browser_handle, 'close')
                 else:
                     browser_handle.disconnect()
             else:
                 playwright.stop()
                 if ownership is BrowserOwnership.APP_OWNED:
-                    browser_handle.close()
+                    bounded_browser_call(browser_handle, 'close')
 
         leased_browser = _BrowserHandle(browser, disconnect_and_close)
         leased_context = _ContextHandle(browser, context)
@@ -972,9 +977,9 @@ def attach_inso_research_session(
             operation_page if owns_operation_page and not preserve_operation_page_on_failure else None)
         try:
             if cleanup_page is not None and not cleanup_page.is_closed():
-                cleanup_page.close()
-        except Exception:  # noqa: BLE001 - cleanup must not mask the lease failure
-            _log.warning("failed to close the new INSO operation tab")
+                bounded_browser_call(cleanup_page, 'close')
+        except Exception as cleanup:  # Unconfirmed cleanup cannot authorize retry/reuse.
+            raise PageTargetCleanupError((cleanup,)) from cleanup
         if acquired_here:
             playwright.stop()
         if getattr(browser_handle, "owned", False) and hasattr(
@@ -983,7 +988,7 @@ def attach_inso_research_session(
             # Authentication can stop at a real manual verification challenge.
             # This handle was created for the current operation, so leaving it
             # attached would orphan an app-owned Chrome process.
-            browser_handle.close()
+            bounded_browser_call(browser_handle, 'close')
         elif not acquired_here and hasattr(browser_handle, "disconnect"):
             browser_handle.disconnect()
         raise

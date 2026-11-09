@@ -579,6 +579,8 @@ class ProductionBackend(GuiBackend):
         self._module_failures = {}
         self._module_pause_requested = None
         self._module_contexts = []
+        from .operation_progress import OperationProgress
+        self._operation_progress = OperationProgress()
         from .source_status import SourceStatusProjection
         self._source_projection = SourceStatusProjection()
         self._quotation_unknown_ids = frozenset()
@@ -739,6 +741,8 @@ class ProductionBackend(GuiBackend):
                 or (self._login_all_thread is not None and self._login_all_thread.is_alive())
             ):
                 return
+            from .operation_progress import OperationProgress
+            self._operation_progress = OperationProgress()  # Old owner is confirmed drained by Start gates.
             self._runtime_stop_reason = None
             self._owner_stop_requested = False
             self._combined = None
@@ -1204,7 +1208,14 @@ class ProductionBackend(GuiBackend):
                     # Stop can wake this worker before the poller records its
                     # safety incident. Keep the original SMTP owner for one
                     # final reviewed pass after that evidence is durable.
-                    poll_drained.wait()
+                    while not poll_drained.wait(1):
+                        # The same SMTP owner can report an unreturned operation;
+                        # this never pretends the browser owner has drained.
+                        if self._runtime_stop_reason and self._v12_composition is not None:
+                            try:
+                                self._v12_composition.coordinator.run_notifications(now=utc_now())
+                            except Exception as error:  # noqa: BLE001 - original outbox owns retry/UNKNOWN
+                                log.warning("Pending drain notification unavailable; class=%s", type(error).__name__)
                     try:
                         if self._runtime_stop_reason and self._v12_composition is not None:
                             self._v12_composition.coordinator.run_notifications(now=utc_now())
@@ -1415,7 +1426,8 @@ class ProductionBackend(GuiBackend):
         self._module_contexts.append(module)
         self._research_acquire_failure = None  # New execution never inherits another job's failure.
         try:
-            with self._observation.module_scope(module):
+            from src.core import observe_browser_calls
+            with self._operation_progress.scope(module) as native_progress, observe_browser_calls(native_progress), self._observation.module_scope(module):
                 if started is None:
                     self._run_independent_job_scoped(module)
                 else:
@@ -1449,10 +1461,11 @@ class ProductionBackend(GuiBackend):
             raise
         except Exception as exc:
             from src.workflow.v13_integration import is_isolated_source_read_error
-            recoverable_read = is_isolated_source_read_error(exc) or isinstance(exc, GoogleReadTargetUnavailable)
+            recoverable_inso = isinstance(exc, V12Fault) and exc.reason == "INSO_QUERY_RETRIES_EXHAUSTED"
+            recoverable_read = recoverable_inso or is_isolated_source_read_error(exc) or isinstance(exc, GoogleReadTargetUnavailable)
             cause, seen = exc, set()
             while cause is not None and id(cause) not in seen:
-                if isinstance(cause, V12Fault) and not is_isolated_source_read_error(exc):
+                if isinstance(cause, V12Fault) and not recoverable_inso and not is_isolated_source_read_error(exc):
                     recoverable_read = False  # Shared classifier rejects auth/write/ownership faults.
                 seen.add(id(cause))
                 if isinstance(cause, (PageTargetCleanupError, OrderResourceOwnershipError)):
@@ -1475,7 +1488,7 @@ class ProductionBackend(GuiBackend):
                 retry = min(900 * 2**min(count-1, 4), 10800)
                 reason = f"等待{site}恢复"
                 since = self._site_outages.get(site, monotonic())
-                if site == "Google Sheets" and recoverable_read:
+                if site in {"Google Sheets", "INSO"} and recoverable_read:
                     # Keep the configured module cadence, bounded read attempts,
                     # and other modules alive even after hours of read failures.
                     # No permanent pause or source-wide outage claim is proved.
@@ -2734,7 +2747,26 @@ class ProductionBackend(GuiBackend):
         # No direct send_operator_alert bypass; unverified diagnostics stay local.
         self._append_log("WARNING", "业务需要核实；请查看原程序提示。尚无可靠邮件证据，未外发猜测性告警。")
 
+    def _check_operation_progress(self):
+        def excluded():
+            return self._closed or self._owner_stop_requested or self._stop.is_set()
+        def trip():
+            if excluded():
+                return False
+            self._runtime_stop_reason = "PROGRAM_OPERATION_STALLED"
+            self._state = RunState.GLOBAL_STOP
+            self._next_poll_at = None
+            self._stop.set()  # Admission stops; no browser lease or UNKNOWN is released.
+            return True
+        incident = self._operation_progress.check(excluded=excluded, trip=trip)
+        if incident is not None:
+            log.warning("Automatic operation made no verified progress", extra={"runtime_reason":"PROGRAM_OPERATION_STALLED"})
+            if self._v13_ledger_ready:
+                self._notify_runtime_fault(self._run_id or "run", "PROGRAM_OPERATION_STALLED", at=utc_now())
+            self._append_log("ERROR", "程序的一次操作长时间未完成确认，后续自动任务已暂停；请核对本轮结果，勿重复提交。")
+
     def _refresh(self):
+        self._check_operation_progress()
         if not self._store:
             return
         self._refresh_history()
@@ -3087,25 +3119,29 @@ class ProductionBackend(GuiBackend):
                 and not self._closed and not self._owner_stop_requested
                 and self._stop.is_set() and self._run_id
                 and self._state in {RunState.GLOBAL_STOP, RunState.MODULE_PAUSED}):
+            stalled = reason == "PROGRAM_OPERATION_STALLED"
             internal_fault = reason not in RUNTIME_SAFETY_REASONS
             actual_reason = reason if re.fullmatch(r"[A-Z_]{1,64}", reason) else "V12_INTERNAL_FAILURE"
             browser_fault = reason.startswith("CDP_PAGE_")
             auth_fault = reason == "GOOGLE_AUTHENTICATION_REQUIRED"
-            stop_key = "program-safety-stop:"+("runtime-operation" if internal_fault else "google-login" if auth_fault else "browser-operation" if browser_fault else "google-operation")
+            stop_key = "program-safety-stop:"+("operation-progress" if stalled else "runtime-operation" if internal_fault else "google-login" if auth_fault else "browser-operation" if browser_fault else "google-operation")
             proof = {"incident_key": stop_key,
                 "category": "runtime_stop", "module": "business_runtime",
                 "reason_code": "PROGRAM_SAFETY_PAUSED",
                 "stop_reason": "PROGRAM_INTERNAL_STOP" if internal_fault else reason,
                 "actual_stop_reason": actual_reason,
+                "stall_generation": self._operation_progress.stalled.generation if stalled and self._operation_progress.stalled else None,
                 "run_id": self._run_id, "stop_state": self._state.name, "halted": True,
                 "active": True, "current_business": True, "verified": True,
                 "needs_owner": True, "verified_at": at.isoformat(),
                 "original_event": stop_key,
-                "action": ("请检查原程序停止提示；保留现有业务记录及浏览器会话，不要重复采购或报价。" if internal_fault else
+                "action": ("请检查原程序暂停提示及本轮最终结果；保留浏览器和未知写入保护，不要重发采购或报价。" if stalled else
+                    "请检查原程序停止提示；保留现有业务记录及浏览器会话，不要重复采购或报价。" if internal_fault else
                     "请核对原Chrome中的Google登录或访问权限及原程序暂停提示，恢复后再启动业务；不要重发采购或报价。" if auth_fault else
                     "请核对原程序的浏览器资源暂停提示；保留所有人工页面和登录会话，不要重复提交。" if browser_fault else
                     "请检查原程序暂停提示及Google操作页；保留人工页面，不要重发采购或报价。"),
-                "uncertainty": ("自动业务已停止，具体内部原因待核对；不能据此判断Google整体不可用，也未据此判定任何订单写入结果。" if internal_fault else
+                "uncertainty": ("一次操作曾长时间未完成确认，程序已停止派发后续任务；这不表示在途操作已取消。不能据此判断Google整体不可用或任何订单写入成功、失败。" if stalled else
+                    "自动业务已停止，具体内部原因待核对；不能据此判断Google整体不可用，也未据此判定任何订单写入结果。" if internal_fault else
                     "程序未能通过Google登录或访问权限核验，已停止自动业务；不能据此判断Google整体不可用，未据此判定任何订单写入结果。" if auth_fault else
                     "尚不能确认专属页面创建、身份或收口；不能据此判断Google整体不可用，也不能推断订单写入成功或失败。") }
         elif manual_login:
@@ -3175,6 +3211,10 @@ class ProductionBackend(GuiBackend):
                 return "EVENT_NOT_CURRENT"
             return None
         if proof.get("category") == "runtime_stop":
+            if proof.get("stop_reason") == "PROGRAM_OPERATION_STALLED" and (
+                    self._operation_progress.stalled is None or
+                    proof.get("stall_generation") != self._operation_progress.stalled.generation):
+                return "EVENT_NOT_CURRENT"
             if (self._closed or self._owner_stop_requested or proof.get("run_id") != self._run_id
                     or (proof.get("stop_reason") != self._runtime_stop_reason
                         if proof.get("stop_reason") != "PROGRAM_INTERNAL_STOP" else

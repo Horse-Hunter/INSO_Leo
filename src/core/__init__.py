@@ -7,6 +7,12 @@ reach into private modules (those prefixed with ``_``).
 Canonical contract: ``docs/modules/CORE.md``.
 """
 
+from .browser_protocol import (
+    NativeProtocolTimeout,
+    bounded_browser_call,
+    browser_call_budget,
+    observe_browser_calls,
+)
 from .credential_provider import (
     CredentialError,
     CredentialNotConfiguredError,
@@ -28,9 +34,13 @@ __all__ = [
     "CredentialSiteNotFoundError",
     "CredentialVaultError",
     "Login",
+    "NativeProtocolTimeout",
     "RuntimeDiagnostics",
+    "bounded_browser_call",
+    "browser_call_budget",
     "default_provider",
     "get_login",
+    "observe_browser_calls",
     "run_monitored",
     "watch_runtime",
 ]

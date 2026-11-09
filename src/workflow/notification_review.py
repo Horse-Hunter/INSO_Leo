@@ -9,7 +9,7 @@ RUNTIME_SAFETY_REASONS = frozenset({
     "GOOGLE_TAB_IDENTITY_UNCONFIRMED", "GOOGLE_OPERATION_NOT_CLOSED",
     "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED", "GOOGLE_AUTHENTICATION_REQUIRED",
     "CDP_PAGE_CREATION_UNCONFIRMED", "CDP_PAGE_CLEANUP_UNCONFIRMED",
-    "CDP_PAGE_OWNERSHIP_UNCONFIRMED", "PROGRAM_INTERNAL_STOP",
+    "CDP_PAGE_OWNERSHIP_UNCONFIRMED", "PROGRAM_INTERNAL_STOP", "PROGRAM_OPERATION_STALLED",
 })
 
 
@@ -63,6 +63,8 @@ def review_reason(command, now):
                         and not isinstance(proof.get("actual_stop_reason"), str))
                     or (proof.get("stop_reason") == "PROGRAM_INTERNAL_STOP"
                         and not re.fullmatch(r"[A-Z_]{1,64}", proof["actual_stop_reason"]))
+                    or (proof.get("stop_reason") == "PROGRAM_OPERATION_STALLED"
+                        and not isinstance(proof.get("stall_generation"), str))
                     or proof.get("halted") is not True
                     or proof.get("stop_state") not in {"GLOBAL_STOP", "MODULE_PAUSED"}
                     or not isinstance(proof.get("run_id"), str) or not proof["run_id"]
