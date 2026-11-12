@@ -1406,5 +1406,39 @@
     "owner_force_grant": "Explicit Nov9 current formal program only; not executed yet",
     "production": "OLD_PROCESS_STALLED_NOT_REPAIRED_YET",
     "computer_use": "COMPUTER_USE_NOT_USED"
+  },
+  "handover_recovery_20261112": {
+    "scope": "Delivery handover only (commit, push, evidence recovery). No business logic, no production operation, no restart, no mail.",
+    "worktree": "C:/Users/Leo/.codex/worktrees/v16-independent-scheduling/INSO_Leo",
+    "branch": "codex/v1-6-direct-login-error",
+    "head_before": "635ddfef21302398fcae312936caa3e571331336",
+    "delivery_commit": "d244241eafe564c79812f860b2491c903a4cee1e",
+    "delivery_commit_files": "63 files, +6993/-464 (30 src, 31 tests, RFQ-016 records, mail-research task record)",
+    "remote_branch": "origin/codex/v1-6-independent-scheduling",
+    "remote_before": "635ddfef21302398fcae312936caa3e571331336",
+    "remote_after": "d244241eafe564c79812f860b2491c903a4cee1e",
+    "push_mode": "fast-forward; no force, rebase, merge, new branch or parallel branch",
+    "push_google_verified": "git fetch returned FETCH_HEAD=d244241eafe564c79812f860b2491c903a4cee1e",
+    "git_obstacle": "stale repo config http.https://github.com.proxy=http://127.0.0.1:7890 refused connection; override removed, session proxy reused, no credential change",
+    "stale_local_branch": "codex/v1-6-independent-scheduling left at df6646c7542bea98f2aaeb8218e9254c7873a9c2 untouched",
+    "installed_exe_sha256": "00ac7d68d88e1a27eb52e3b7457b4192b699211df1b1f5e3efe0be406eef30bd",
+    "preserved_build_copy": "D:/Program_Leo/INSO_Leo/.tmp/candidate-purchase-log-20261112",
+    "source_correspondence": "130/130 src Python files byte-identical to the build copy; packaging/ and scripts/ identical; installed program 2875 files all sha256-identical to the candidate stage",
+    "test_tree_correspondence": "NOT_VERIFIED - the build copy contains no tests; only the source tree is byte-proven against the binary",
+    "historical_run_recovered": "26 failed / 3920 passed / 11 skipped in 603.42s; all 26 test ids and the command template recovered verbatim from the executor's Codex session transcript",
+    "historical_run_limit": "NOT_RETAINED - full stdout and per-test tracebacks of that run were truncated by the original tool output limit",
+    "evidence_files": [
+      "docs/evidence/v16/handover-2026-11-12-recovered-failures.json",
+      "docs/evidence/v16/handover-2026-11-12-rerun.json"
+    ],
+    "new_rerun": "NEW RUN, not historical: 30 failed / 3932 passed / 1 skipped in 566.12s; JUnit tests=3963 failures=30 errors=0 skipped=1",
+    "new_rerun_command": "python -X utf8 -m pytest tests -q -p no:cacheprovider --basetemp <task-owned> --tb=short --junitxml=<task-owned>; Python 3.12.10 / pytest 9.1.1, release site-packages via PYTHONPATH, no installs, no network",
+    "new_rerun_comparison": "all 26 historical failures reproduce; 4 extra load/timing-sensitive failures in tests/launcher/test_backend.py (3 pass alone, 1 alternates fail/pass); skip count differs 11 vs 1 so runs are not point-comparable",
+    "new_rerun_evidence": ".tmp/handover-rerun-20261112/full-rerun.log sha256 b44549706dfeb7aa258f5fe493f260e918f086f36172d6e90873ec3bcd687835; full-rerun.xml sha256 8ab72f56f9e2c83cef16fd7ff56fce296375704d0dcd83951a6ff1b93837612c",
+    "no_gaming": "no test deleted, skipped or weakened; no business code changed for the run",
+    "live_observation_readonly": "runtime log since 2026-11-12 21:19 shows 6 inquiry / 6 quotation / 6 TP cycles completed, no ERROR or CRITICAL; scheduler liveness only, no new-order closure and no mail",
+    "open_unknowns": "purchase-entry root cause UNKNOWN; genuine new-order end-to-end NOT_VERIFIED; 26 legacy failures unresolved and outside this handover's scope",
+    "rfq_status": "REVIEW_REQUIRED / HEALTH_HOLD - not declared PASS",
+    "computer_use": "COMPUTER_USE_NOT_USED"
   }
 }
