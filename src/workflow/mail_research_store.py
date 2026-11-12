@@ -14,8 +14,8 @@ class MailResearchStore:
         self.path, self.capacity = path, capacity
 
     @contextmanager
-    def connect(self):
-        db = sqlite3.connect(self.path, timeout=10)
+    def connect(self, *, timeout=10):
+        db = sqlite3.connect(self.path, timeout=timeout)
         db.row_factory = sqlite3.Row
         try:
             with db:
@@ -135,6 +135,84 @@ class MailResearchStore:
                 return False
             db.execute("INSERT OR IGNORE INTO workflow_mail_research (task_id,origin,payload,state,created_at) VALUES (?,?,?,'PENDING',?)",
                 (command.command_id, "business", json.dumps(asdict(order)), now.isoformat()))
+            return True
+
+    @staticmethod
+    def _recovery_key(command_id):
+        return "business-recovery:" + command_id
+
+    def defer_business_recovery(self, command_id, now, *, deadline):
+        from time import monotonic
+        with self.connect(timeout=0.1) as db:
+            db.set_progress_handler(lambda: int(monotonic() >= deadline), 1000)
+            db.execute("BEGIN IMMEDIATE")
+            key = self._recovery_key(command_id)
+            db.execute("INSERT OR IGNORE INTO workflow_mail_research (task_id,origin,payload,state,created_at) VALUES (?,'business-recovery',?,'RECOVERY_WAIT',?)",
+                       (key, json.dumps({"original": command_id}), now.isoformat()))
+            self._defer_recovery_row(db, key, now)
+
+    @staticmethod
+    def _defer_recovery_row(db, key, now):
+        """Bound transient recovery checks independently of actual research attempts."""
+        from datetime import timedelta
+
+        row = db.execute("SELECT progress,payload FROM workflow_mail_research WHERE task_id=? AND state='RECOVERY_WAIT' AND (next_at IS NULL OR next_at<=?)", (key, now.isoformat())).fetchone()
+        if row is None:
+            return
+        try:
+            progress = json.loads(row[0] or "{}")
+            count = int(progress.get("deferrals", 0)) + 1
+        except (ValueError, TypeError, AttributeError):
+            count = 3
+        # Notification creation time does not prove source age; manual requests
+        # may be age-exempt. Keep UNKNOWN deferred until source can be reviewed.
+        delay = min(900, 60 * 2**min(count-1, 4))
+        db.execute("UPDATE workflow_mail_research SET progress=?,next_at=? WHERE task_id=?",
+                   (json.dumps({"deferrals": count}), (now+timedelta(seconds=delay)).isoformat(), key))
+
+    def schedule_business_recovery(self, command, recipient, order, now, *, deadline, expected_state, expected_report):
+        """Recreate or retry one eligible job; durable backoff never clears holds."""
+        from dataclasses import asdict
+        from datetime import timedelta
+        from time import monotonic
+
+        with self.connect(timeout=0.1) as db:
+            db.set_progress_handler(lambda: int(monotonic() >= deadline), 1000)
+            db.execute("BEGIN IMMEDIATE")
+            recipient_row = db.execute("SELECT address,outcome FROM workflow_v12_notification_recipients WHERE command_id=? AND recipient_id=?",
+                                       (command.command_id, recipient.recipient_id)).fetchone()
+            if recipient_row is None or recipient_row[0] != recipient.address or recipient_row[1] != "SENT":
+                return False
+            key = self._recovery_key(command.command_id)
+            db.execute("INSERT OR IGNORE INTO workflow_mail_research (task_id,origin,payload,state,created_at) VALUES (?,'business-recovery',?,'RECOVERY_WAIT',?)",
+                       (key, json.dumps({"original": command.command_id}), now.isoformat()))
+            control = db.execute("SELECT state,attempts,next_at FROM workflow_mail_research WHERE task_id=?", (key,)).fetchone()
+            if (control is None or control[0] != "RECOVERY_WAIT" or control[1] >= 3
+                    or control[2] is not None and control[2] > now.isoformat()):
+                return False
+            if db.execute("SELECT 1 FROM workflow_mail_research WHERE task_id='mail-research:resource-health' AND state='RESOURCE_BLOCKED'").fetchone():
+                self._defer_recovery_row(db, key, now)
+                return False
+            job = db.execute("SELECT origin,payload,state,next_at,report FROM workflow_mail_research WHERE task_id=?", (command.command_id,)).fetchone()
+            if (job is None) != (expected_state is None):
+                self._defer_recovery_row(db, key, now)
+                return False
+            if job is not None and (job[0] != "business" or job[2] not in {"READY", "FAILED"}
+                    or job[2] != expected_state or job[4] != expected_report
+                    or json.loads(job[1]) != asdict(order) or job[3] is not None and job[3] > now.isoformat()):
+                self._defer_recovery_row(db, key, now)
+                return False
+            if self._active_count(db) >= self.capacity:
+                self._defer_recovery_row(db, key, now)
+                return False
+            if job is None:
+                db.execute("INSERT INTO workflow_mail_research (task_id,origin,payload,state,created_at) VALUES (?,'business',?,'PENDING',?)",
+                           (command.command_id, json.dumps(asdict(order)), now.isoformat()))
+            else:
+                db.execute("UPDATE workflow_mail_research SET state='PENDING',progress='{}',report=NULL,failure=NULL,next_at=NULL WHERE task_id=? AND origin='business' AND state IN ('READY','FAILED')",
+                           (command.command_id,))
+            db.execute("UPDATE workflow_mail_research SET attempts=attempts+1,next_at=? WHERE task_id=?",
+                       ((now+timedelta(minutes=15)).isoformat(), key))
             return True
 
     def get(self, key):

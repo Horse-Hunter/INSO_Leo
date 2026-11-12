@@ -325,6 +325,114 @@ def test_native_quote_unknown_mail_and_latest_source_status_do_not_clear_hold(tm
     backend.shutdown()
 
 
+def test_fresh_quote_popup_timeout_sends_owner_even_if_sheet_snapshot_unavailable(tmp_path, monkeypatch):
+    from src.workflow.v13_quotation import (
+        QuotationOutcome,
+        RowErrorReason,
+        V13QuotationResult,
+    )
+
+    backend, _flow, queue, ledger, _reader, record, iid = production_scene(tmp_path)
+    holds = V13HoldStore(ledger.database_path)
+    holds.migrate()
+    result = V13QuotationResult(iid, record.record_identity, record.model, QuotationOutcome.ROW_FAILED,
+        None, RowErrorReason.UPDATE_RESULT_UNCONFIRMED, SHEET, record.row_position,
+        effect_uncertain=True, popup_timeout=True)
+    key, episode = holds.hold(result, record.record_identity)
+    backend._source_projection.observe(SHEET, (), queue.all_items(), at=FLOW_NOW, failed=True)
+    monkeypatch.setattr(backend, "_fault_evidence", lambda *args, **kwargs: pytest.fail("unexpected source recheck"))
+    backend._notify_quotation(result, key, episode, at=FLOW_NOW)
+    worker, smtp = real_fake_smtp(ledger, now=FLOW_NOW, review_current=backend._review_current_mail)
+    worker.run_due(now=FLOW_NOW)
+    assert smtp.send_attempts == 1
+    assert "linan229@qq.com" in smtp.message["To"]
+    assert "一分钟" in smtp.message.get_content()
+    backend._notify_quotation(result, key, episode, at=FLOW_NOW)
+    worker, again = real_fake_smtp(ledger, now=FLOW_NOW, review_current=backend._review_current_mail)
+    worker.run_due(now=FLOW_NOW)
+    assert again.send_attempts == 0
+    backend.shutdown()
+
+
+def test_popup_timeout_survives_restart_and_notifies_once_without_source_snapshot(tmp_path):
+    from src.workflow.v13_integration import restore_result
+    from src.workflow.v13_quotation import (
+        QuotationOutcome,
+        RowErrorReason,
+        V13QuotationResult,
+    )
+
+    backend, _flow, queue, ledger, _reader, record, iid = production_scene(tmp_path)
+    holds = V13HoldStore(ledger.database_path)
+    holds.migrate()
+    pending = V13QuotationResult(iid, record.record_identity, record.model, QuotationOutcome.ROW_FAILED,
+        None, RowErrorReason.UPDATE_RESULT_UNCONFIRMED, SHEET, record.row_position, effect_uncertain=True)
+    key, episode = holds.begin_dispatch(pending, record.record_identity)
+    holds.hold(replace(pending, popup_timeout=True), record.record_identity)
+    restored = restore_result(holds.active()[0][1])
+    assert restored.effect_uncertain and restored.popup_timeout
+    backend._source_projection.observe(SHEET, (), queue.all_items(), at=FLOW_NOW, failed=True)
+    backend._notify_quotation(restored, key, episode, at=FLOW_NOW)
+    worker, smtp = real_fake_smtp(ledger, now=FLOW_NOW, review_current=backend._review_current_mail)
+    worker.run_due(now=FLOW_NOW)
+    assert smtp.send_attempts == 1
+    backend._notify_quotation(restored, key, episode, at=FLOW_NOW)
+    worker, again = real_fake_smtp(ledger, now=FLOW_NOW, review_current=backend._review_current_mail)
+    worker.run_due(now=FLOW_NOW)
+    assert again.send_attempts == 0
+    backend.shutdown()
+
+
+def test_quote_popup_notice_unknown_send_is_not_repeated(tmp_path):
+    from src.workflow.v13_quotation import (
+        QuotationOutcome,
+        RowErrorReason,
+        V13QuotationResult,
+    )
+
+    backend, _flow, _queue, ledger, _reader, record, iid = production_scene(tmp_path)
+    holds = V13HoldStore(ledger.database_path)
+    holds.migrate()
+    result = V13QuotationResult(iid, record.record_identity, record.model, QuotationOutcome.ROW_FAILED,
+        None, RowErrorReason.UPDATE_RESULT_UNCONFIRMED, SHEET, record.row_position,
+        effect_uncertain=True, popup_timeout=True)
+    key, episode = holds.hold(result, record.record_identity)
+    backend._notify_quotation(result, key, episode, at=FLOW_NOW)
+    smtp = ScriptedSMTP(send_error=TimeoutError("synthetic send uncertainty"))
+    transport = QQSMTPTransport(config=QQSMTPConfig(sender_address="sender@example.invalid"),
+        credentials=FakeCredentials(login()), smtp_factory=lambda *a, **k: smtp, clock=lambda: FLOW_NOW)
+    V12NotificationWorker(ledger, transport, review_current=backend._review_current_mail).run_due(now=FLOW_NOW)
+    assert smtp.send_attempts == 1
+    backend._notify_quotation(result, key, episode, at=FLOW_NOW)
+    worker, again = real_fake_smtp(ledger, now=FLOW_NOW, review_current=backend._review_current_mail)
+    worker.run_due(now=FLOW_NOW)
+    assert again.send_attempts == 0
+    backend.shutdown()
+
+
+def test_quote_popup_timeout_notice_survives_temporary_mail_delay(tmp_path):
+    from src.workflow.v13_quotation import (
+        QuotationOutcome,
+        RowErrorReason,
+        V13QuotationResult,
+    )
+
+    backend, _flow, queue, ledger, _reader, record, iid = production_scene(tmp_path)
+    holds = V13HoldStore(ledger.database_path)
+    holds.migrate()
+    result = V13QuotationResult(iid, record.record_identity, record.model, QuotationOutcome.ROW_FAILED,
+        None, RowErrorReason.UPDATE_RESULT_UNCONFIRMED, SHEET, record.row_position,
+        effect_uncertain=True, popup_timeout=True)
+    key, episode = holds.hold(result, record.record_identity)
+    backend._source_projection.observe(SHEET, (), queue.all_items(), at=FLOW_NOW, failed=True)
+    backend._notify_quotation(result, key, episode, at=FLOW_NOW)
+    later = FLOW_NOW + timedelta(minutes=30)
+    worker, smtp = real_fake_smtp(ledger, now=later, review_current=backend._review_current_mail)
+    worker.run_due(now=later)
+    assert smtp.send_attempts == 1 and "linan229@qq.com" in smtp.message["To"]
+    backend.shutdown()
+
+
 def test_preclick_quote_timeout_is_not_a_verified_unknown_write_email(tmp_path):
     from src.workflow.v13_quotation import (
         QuotationOutcome,
@@ -407,3 +515,16 @@ def test_temporarily_unavailable_final_review_defers_legal_business_mail(tmp_pat
     assert smtp.send_attempts == 0
     worker, smtp = real_fake_smtp(store, review_current=lambda command, now: None)
     assert worker.run_due(now=NOW) == 1 and smtp.send_attempts == 1
+
+
+def test_missing_source_status_is_not_reported_as_fresh():
+    from tests.workflow.test_v13_quotation import WS, item, source
+
+    projection = SourceStatusProjection()
+    original = item(2)
+    dto = V12OrderStateDTO(original.inquiry_id, V12BusinessLabel.PURCHASE_SENT, None)
+    row = source(2, "")
+    projection.observe(WS, [row], [original], at=NOW)
+    projected = projection.project(dto, now=NOW)
+    assert projected.source_status is None and not projected.source_fresh
+    assert "状态待同步" in projected.waiting_label

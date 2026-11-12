@@ -712,6 +712,60 @@ def test_runtime_log_keeps_the_failed_step_and_no_page_text(tmp_path):
         assert leaked not in log_text
 
 
+def test_purchase_failure_log_keeps_safe_reason_and_source_without_private_text(tmp_path):
+    import src.gui.main as main_module
+    from src.inso.session import InsoSessionLease, LeaseState, SecurityViolation
+    from src.launcher.diagnostics import log_step
+
+    path = main_module._configure_startup_log(tmp_path)
+    lease = object.__new__(InsoSessionLease)
+    lease._state = LeaseState.INVALIDATED
+    try:
+        lease._assert_identity()
+    except SecurityViolation as exc:
+        log_step("purchase-prepare", cause=exc)
+    try:
+        raise SecurityViolation("客户张三 private-token-value")
+    except SecurityViolation as exc:
+        log_step("purchase-prepare", cause=exc)
+    text = path.read_text(encoding="utf-8")
+    assert "detail=SESSION_LEASE_INACTIVE" in text
+    assert "origin=src.inso.session:" in text
+    assert "detail=SECURITY_OTHER" in text
+    assert "客户张三" not in text and "private-token-value" not in text
+
+
+def test_purchase_login_log_records_phase_and_sanitized_reason(tmp_path):
+    import src.gui.main as main_module
+    from src.launcher.diagnostics import log_purchase_login_failure
+
+    path = main_module._configure_startup_log(tmp_path)
+    log_purchase_login_failure("before", "SESSION_IDENTITY_UNVERIFIED", inquiry_id="inq_" + "a" * 24)
+    log_purchase_login_failure("after", "private-token-value")
+    log_purchase_login_failure("after", ["private-token-value"])
+    text = path.read_text(encoding="utf-8")
+    assert "purchase login phase=before reason=SESSION_IDENTITY_UNVERIFIED inquiry=inq_" + "a" * 24 in text
+    assert "purchase login phase=after reason=OTHER" in text
+    assert "private-token-value" not in text
+
+
+def test_security_log_survives_unprintable_exception_content(tmp_path):
+    import src.gui.main as main_module
+    from src.inso.session import SecurityViolation
+    from src.launcher.diagnostics import log_step
+
+    class Unprintable:
+        def __str__(self):
+            raise ValueError("private-token-value")
+    path = main_module._configure_startup_log(tmp_path)
+    try:
+        raise SecurityViolation(Unprintable())
+    except SecurityViolation as exc:
+        log_step("purchase-prepare", cause=exc)
+    text = path.read_text(encoding="utf-8")
+    assert "detail=SECURITY_OTHER" in text and "private-token-value" not in text
+
+
 def test_runtime_log_rebuilds_from_extras_never_from_the_message(tmp_path):
     """A caller cannot smuggle text in by formatting it into the record."""
 
@@ -732,10 +786,14 @@ def test_runtime_log_rebuilds_from_extras_never_from_the_message(tmp_path):
         LOG_NAME, logging.WARNING, __file__, 1, "private-token-value", (), None
     )
     logger.handle(plain)
+    crafted = logging.LogRecord(LOG_NAME, logging.WARNING, __file__, 1, "ignored", (), None)
+    crafted.inso_step = "purchase-prepare"
+    crafted.inso_origin = "src.inso.session:private_token_value:123"
+    logger.handle(crafted)
 
     log_text = path.read_text(encoding="utf-8")
     assert log_text.count("launcher event (WARNING)") == 2
-    for leaked in ("private-token-value", "张三", "etc/passwd"):
+    for leaked in ("private-token-value", "private_token_value", "张三", "etc/passwd"):
         assert leaked not in log_text
 
 

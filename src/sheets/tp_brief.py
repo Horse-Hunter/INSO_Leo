@@ -94,6 +94,14 @@ class BriefReader:
         response = peek(spreadsheet) if callable(peek) else None
         return () if response is None else self._lines(response)
 
+    def cached_lines_bounded(self, spreadsheet, *, deadline):
+        """Parse only an existing immutable token and stop at the caller's deadline."""
+        peek = getattr(self.service, "peek_brief_token", None)
+        if not callable(peek):
+            raise TimeoutError("TP_BRIEF_SNAPSHOT_UNAVAILABLE")
+        _revision, entry = peek(spreadsheet)
+        return () if entry is None else self._lines({"values": entry[1]}, deadline=deadline)
+
     def _read(self, spreadsheet, *, discovery):
         read = getattr(self.service, "read_brief_discovery", self.service.read_brief) if discovery else self.service.read_brief
         response = execute_google_read(lambda: read(spreadsheet),
@@ -101,13 +109,17 @@ class BriefReader:
         return self._lines(response)
 
     @staticmethod
-    def _lines(response):
+    def _lines(response, *, deadline=None):
         rows = response.get("values", []) if isinstance(response, Mapping) else None
         if (not isinstance(rows, (list, tuple)) or not rows
                 or not isinstance(rows[0], (list, tuple)) or tuple(rows[0]) != BRIEF_HEADERS):
             raise TpLocalError("TP_BRIEF_SCHEMA_UNAVAILABLE")
         result = []
         for position, row in enumerate(rows[1:], 2):
+            if deadline is not None:
+                from time import monotonic
+                if monotonic() >= deadline:
+                    raise TimeoutError("TP_BRIEF_SNAPSHOT_TIMEOUT")
             if not isinstance(row, (list, tuple)) or len(row) > 17 or any(not isinstance(v, str) for v in row):
                 raise TpLocalError("TP_BRIEF_SCHEMA_UNAVAILABLE")
             if any(v.strip() for v in row):

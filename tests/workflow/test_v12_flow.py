@@ -809,3 +809,113 @@ def test_persisted_shahab_a_resumes_with_new_rule_after_restart(tmp_path, total,
     assert writer.commands[0].purchaser == expected_purchaser
     notices = store.claim_due_notifications(now=NOW)
     assert len(notices) == int(expected_purchaser == "颜浩坚")
+
+
+@pytest.mark.parametrize("reason,expected", [
+    (ReasonCode.SESSION_STALE, ReasonCode.SESSION_STALE),
+    (ReasonCode.CONTROL_NOT_FOUND, ReasonCode.CONTROL_NOT_FOUND),
+    (ReasonCode.AI_RECOGNITION_MISMATCH, ReasonCode.AI_RECOGNITION_MISMATCH),
+    (None, ReasonCode.UNKNOWN_EXTERNAL_FAILURE),
+])
+def test_purchase_validation_preserves_the_actual_reason(tmp_path, reason, expected):
+    from src.workflow.v12_contracts import (
+        EventType,
+        PurchaseDraftResult,
+        PurchaseOutcome,
+    )
+
+    flow, _workflow, store, _research, _checker, _facts, writer, _worker = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("synthetic", Decimal(60001), Decimal(2)))
+    writer.prepare = lambda command: PurchaseDraftResult(command.command_id,
+        PurchaseOutcome.VALIDATION_FAILED, NOW, reason_code=reason)
+    result = flow.poll_and_process(FakeSheetsReader(), SHEET, now=NOW)[0]
+    events = [e for e in store.event_history(result.inquiry_id)
+              if e.event_type is EventType.AI_RECOGNITION_MISMATCH]
+    assert result.business_state is BusinessState.PURCHASE_EXCEPTION
+    assert len(events) == 2 and all(e.reason_code is expected for e in events)
+
+
+@pytest.mark.parametrize("outcome", ["AI_RECOGNIZED", "SAVED", "UNKNOWN_WRITE_OUTCOME", "SUBMIT_UNCONFIRMED", "PRE_SAVE_READY"])
+def test_unbound_purchase_result_never_becomes_an_ai_mismatch(tmp_path, outcome):
+    from src.workflow.v12_contracts import PurchaseDraftResult, PurchaseOutcome
+    from src.workflow.v12_faults import V12Fault
+
+    flow, _workflow, store, _research, _checker, _facts, writer, _worker = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("synthetic", Decimal(60001), Decimal(2)))
+    writer.prepare = lambda command: PurchaseDraftResult("wrong-command", PurchaseOutcome(outcome), NOW)
+    with pytest.raises(V12Fault, match="PURCHASE_RESULT_UNCONFIRMED"):
+        flow.poll_and_process(FakeSheetsReader(), SHEET, now=NOW)
+    item = _workflow.all_items()[0]
+    assert store.purchase_state(item.inquiry_id) is PurchaseOutcome.PRE_SAVE_READY
+    assert store.business_state(item.inquiry_id) is BusinessState.INTERRUPTED_POSSIBLY_SENT
+    assert not store.manual_purchase_retry_allowed(item.inquiry_id)
+    flow.initialize_run_state(now=NOW + timedelta(minutes=1))
+    assert store.business_state(item.inquiry_id) is BusinessState.INTERRUPTED_POSSIBLY_SENT
+    assert not store.manual_purchase_retry_allowed(item.inquiry_id)
+
+
+def test_unbound_result_never_clears_an_armed_unknown_purchase(tmp_path):
+    from src.workflow.v12_contracts import PurchaseDraftResult, PurchaseOutcome
+    from src.workflow.v12_faults import V12Fault
+
+    flow, workflow, store, _research, _checker, _facts, writer, _worker = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("synthetic", Decimal(60001), Decimal(2)))
+    def unbound(command):
+        store.set_purchase_state(command.inquiry_id, command.command_id, PurchaseOutcome.AI_RECOGNIZED, at=NOW)
+        store.begin_save_dispatch(command.inquiry_id, at=NOW)
+        return PurchaseDraftResult("wrong-command", PurchaseOutcome.SAVED, NOW)
+    writer.prepare = unbound
+    with pytest.raises(V12Fault, match="PURCHASE_RESULT_UNCONFIRMED"):
+        flow.poll_and_process(FakeSheetsReader(), SHEET, now=NOW)
+    assert store.purchase_state(workflow.all_items()[0].inquiry_id) is PurchaseOutcome.UNKNOWN_WRITE_OUTCOME
+
+
+@pytest.mark.parametrize("malformed", [None, object()])
+def test_malformed_purchase_result_is_held_across_restart(tmp_path, malformed):
+    from src.workflow.v12_contracts import PurchaseOutcome
+    from src.workflow.v12_faults import V12Fault
+
+    flow, workflow, store, _research, _checker, _facts, writer, _worker = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("synthetic", Decimal(60001), Decimal(2)))
+    writer.prepare = lambda command: malformed
+    with pytest.raises(V12Fault, match="PURCHASE_RESULT_UNCONFIRMED"):
+        flow.poll_and_process(FakeSheetsReader(), SHEET, now=NOW)
+    inquiry_id = workflow.all_items()[0].inquiry_id
+    assert store.purchase_state(inquiry_id) is PurchaseOutcome.PRE_SAVE_READY
+    assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_POSSIBLY_SENT
+    flow.initialize_run_state(now=NOW + timedelta(minutes=1))
+    assert not store.manual_purchase_retry_allowed(inquiry_id)
+    assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_POSSIBLY_SENT
+
+
+@pytest.mark.parametrize("outcome", ["SAVED", "SUBMIT_UNCONFIRMED", "UNKNOWN_WRITE_OUTCOME",
+                                  "READ_ONLY_RECONCILIATION_REQUIRED", "MANUAL_REVIEW"])
+def test_undurable_purchase_result_is_held_across_restart(tmp_path, outcome):
+    from src.workflow.v12_contracts import PurchaseDraftResult, PurchaseOutcome
+    from src.workflow.v12_faults import V12Fault
+
+    flow, workflow, store, _research, _checker, _facts, writer, _worker = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("synthetic", Decimal(60001), Decimal(2)))
+    writer.prepare = lambda command: PurchaseDraftResult(command.command_id, PurchaseOutcome(outcome), NOW)
+    with pytest.raises(V12Fault, match="PURCHASE_RESULT_UNCONFIRMED"):
+        flow.poll_and_process(FakeSheetsReader(), SHEET, now=NOW)
+    inquiry_id = workflow.all_items()[0].inquiry_id
+    assert store.purchase_state(inquiry_id) is PurchaseOutcome.PRE_SAVE_READY
+    assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_POSSIBLY_SENT
+    flow.initialize_run_state(now=NOW + timedelta(minutes=1))
+    assert not store.manual_purchase_retry_allowed(inquiry_id)
+    assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_POSSIBLY_SENT
+
+
+def test_unhashable_purchase_outcome_is_held(tmp_path):
+    from src.workflow.v12_contracts import PurchaseDraftResult
+    from src.workflow.v12_faults import V12Fault
+
+    flow, workflow, store, _research, _checker, _facts, writer, _worker = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("synthetic", Decimal(60001), Decimal(2)))
+    writer.prepare = lambda command: PurchaseDraftResult(command.command_id, [], NOW)
+    with pytest.raises(V12Fault, match="PURCHASE_RESULT_UNCONFIRMED"):
+        flow.poll_and_process(FakeSheetsReader(), SHEET, now=NOW)
+    inquiry_id = workflow.all_items()[0].inquiry_id
+    assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_POSSIBLY_SENT
+    assert not store.manual_purchase_retry_allowed(inquiry_id)

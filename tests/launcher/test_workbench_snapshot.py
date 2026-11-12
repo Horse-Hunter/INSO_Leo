@@ -256,3 +256,47 @@ def test_intake_without_research_is_visible_without_invented_prices(tmp_path, mo
     backend._results = [prior]
     backend._cache_workbench(force=True, items={"new": item})
     assert backend.get_workbench_snapshot().orders[0].stock_label == "货少"
+
+
+def test_cached_task_status_expires_and_marks_inflight_source_unverified(tmp_path, monkeypatch):
+    from src.sheets import WorksheetIdentity
+
+    backend = ProductionBackend(root=tmp_path)
+    clock = [datetime(2026, 11, 11, 7, 0, tzinfo=UTC)]
+    monkeypatch.setattr("src.launcher.backend.utc_now", lambda: clock[0])
+    sheet = WorksheetIdentity("synthetic", "2026")
+    inquiry_id = "synthetic-inquiry"
+    backend._results = (Order(inquiry_id, "TEST", None, 1, "待验证", None, None, OrderStatus.COMPLETED),)
+    backend._source_projection.statuses[inquiry_id] = ("已报价给客户", clock[0], True)
+    backend._source_projection._status_sources[inquiry_id] = sheet
+    base = V12OrderStateDTO(inquiry_id, V12BusinessLabel.PURCHASE_SENT, None,
+                            waiting_label="已发采购单")
+    calls = []
+    def state(_inquiry_id):
+        calls.append(1)
+        return backend._source_projection.project(base, now=clock[0])
+    monkeypatch.setattr(backend, "get_v12_order_state", state)
+    backend._cache_workbench(force=True)
+    initial = backend.get_workbench_snapshot().order_states[0]
+    assert initial.source_fresh and initial.source_status == "已报价给客户"
+    assert initial.waiting_label.count("采购/处理历史") == 1
+    ticket = backend._source_projection.begin_update(sheet)
+    backend._view_last_refresh = 0
+    backend._cache_workbench()
+    pending = backend.get_workbench_snapshot().order_states[0]
+    assert not pending.source_fresh and pending.source_status is None
+    assert "已发采购单" in pending.waiting_label
+    backend._source_projection.end_update(sheet, ticket=ticket)
+    clock[0] += timedelta(minutes=16)
+    backend._view_last_refresh = 0
+    backend._cache_workbench()
+    stale = backend.get_workbench_snapshot().order_states[0]
+    assert not stale.source_fresh and "状态待同步" in stale.waiting_label
+    assert stale.waiting_label.count("处理历史") == 1
+    backend._source_projection.statuses[inquiry_id] = ("发给采购", clock[0], True)
+    backend._view_last_refresh = 0
+    backend._cache_workbench()
+    updated = backend.get_workbench_snapshot().order_states[0]
+    assert updated.source_fresh and updated.source_status == "发给采购"
+    assert "已发采购单" in updated.waiting_label
+    assert len(calls) == 1  # No additional per-order database read.

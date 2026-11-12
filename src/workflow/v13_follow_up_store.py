@@ -23,10 +23,13 @@ class V13PurchaseFollowUpStore:
     def __init__(self, path):
         self.path = Path(path)
 
-    def _connect(self):
+    def _connect(self, *, timeout=5, deadline=None):
         if not self.path.is_file():
             raise V12DatabaseError("workflow ledger missing")
-        connection = sqlite3.connect(self.path)
+        connection = sqlite3.connect(self.path, timeout=timeout)
+        if deadline is not None:
+            from time import monotonic
+            connection.set_progress_handler(lambda: int(monotonic() >= deadline), 1000)
         connection.execute("PRAGMA foreign_keys=ON")
         return connection
 
@@ -64,9 +67,10 @@ class V13PurchaseFollowUpStore:
         except (sqlite3.Error, V12DatabaseError, ValueError):
             raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
 
-    def latest(self, inquiry_id):
+    def latest(self, inquiry_id, *, timeout=5, deadline=None):
         try:
-            with self._connect() as db:
+            from contextlib import closing
+            with closing(self._connect(timeout=timeout, deadline=deadline)) as db:
                 row = db.execute(f"SELECT episode_id,inquiry_id,confirmed_at FROM {TABLE} "
                                  "WHERE inquiry_id=? ORDER BY rowid DESC LIMIT 1", (inquiry_id,)).fetchone()
             if row is None:

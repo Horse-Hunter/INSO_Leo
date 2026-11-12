@@ -430,3 +430,58 @@ Reuse originalCLI/program APIs, original9222/profile/outbox; necessary bounded r
 
 
 Owner2026-11-09 explicit force-exit grant: originalprogram cannotexit; Owner directs Executor to force-exit currentinstance, finish verifiedrepair/originalbuild-backup-program-onlyinstall/start andfollow3neworders. Grant applies only to currentformalGUI PID47420 anditsverifiedrun42e4e87cb42e4fe6afbf761bb1f2fe8c; no Chrome/Profile/unknownrecord manipulation or blanket futureforceauthority. Before termination preserve consistent currentDB/config/runtime evidence; verify exactEXE/processidentity/hash andOwnergrant, terminate only exactGUI PID (not tree/Chrome); originalobserver may exitnormally. Retain abnormal-exittruth; do notforgeowner_exit/code0. Then latestcolddata backup andoriginalprotectedinstallation, notDBrestore.
+
+
+## Owner 2026-11-09 consolidated outstanding acceptance (IN_PROGRESS)
+Last ten exchanges reiterate one task, not ten separate completions: reproduce and repair repeated Google read/recovery stops and missed new intake; repair related purchase-session preparation and diagnostics; investigate actual important-notice delivery and missing detailed report; preserve manual completion of three orders with no procurement replay; independently review related paths; run targeted red/green and full offline regressions; commit tested source; build, backup, program-only install and start via original release; verify two latest real orders against fresh source and durable submission/delivery evidence. Do not stop at findings, partial tests, packaging or GUI startup. No blanket claim of zero unknown bugs. Current HEAD635ddfef remains installed baseline; uncommitted session/diagnostic changes and added tests are NOT_DEPLOYED. Existing SMTP queue, 120s original-notice bound, SENT/UNKNOWN, age/date/status/identity protections stay binding. Live target/status and exact initial preparation-control cause remain NOT_VERIFIED. COMPUTER_USE_NOT_USED.
+
+## Owner follow-up 2026-11-11: task-center status clarity
+
+- Scope: concise list status derived from the latest uniquely matched, fresh source observation; keep processing history and unconfirmed-write warnings available in order details. Correct stale/missing source values and task-center classification without changing Google, procurement, mail, or persisted order state.
+- Acceptance: source status is never presented as current when missing, stale, or being refreshed; unknown writes remain visible and block retry; a confirmed customer-quoted state is not obscured by purchase history; compact list, detail, filtering, and sorting remain consistent. Verify with synthetic GUI/source-projection tests; live source contents remain NOT_VERIFIED until a normally authorized read.
+
+## Owner follow-up 2026-11-11: quotation input without observed update
+
+- Owner reports the latest affected order reached the quote-input sheet but the expected update button did not complete the source update; Owner has since updated it manually. Do not replay the order, click the button, clear holds, edit the source, or resend notifications.
+- Read-only local evidence: one exact local item has an active QUOTE_INPUT_WRITE_FAILED hold, episode 1, whose source status is a historical observation. The related later notification is MODEL_DIFFERENCE_CONFIRMED; neither the current source state nor the actual button click is proven by that notification. Installed executable bytecode verifies input write and readback precede the protected button click, and default dialog wait is 30 seconds. A reproduced post-click error can nevertheless be mislabeled as input write failure, so do not infer no click from the hold alone.
+- Acceptance: protect an armed quotation dispatch against later row-error overwrite, retain idempotency across restart, preserve normal pre-click failure handling and verified successful dispatch, and test a simulated 15-second result delay without a real button click. No raw production records, customer information or prices in tests or logs.
+
+
+## Owner follow-up 2026-11-12: remove quotation input readback
+
+Owner explicitly directs removal of quotation-input post-write readback, including both workflow and native web adapter checks, so a completed saved input can proceed directly to the update button. The Apps Script performs the source-row update. Preserve source identity/status and input location checks, native write/save errors, dispatch uncertainty protection, popup/result handling and the existing supplier-model difference remark and notice. Other sheets retain their own write verification. Do not replay the manually completed order or send any messages. The actual historical input/readback difference and native click remain UNKNOWN. Verify with offline synthetic tests only; this change explicitly accepts that silent quotation-input corruption will no longer be detected by readback.
+
+
+## Owner follow-up 2026-11-12: durable Google resource protection
+
+Scope: address protected Google read surfaces and uncertain writes across service instances and application restarts. A resource hold is distinct from an order or notification hold; never reuse the latter's clear/retry rules. Persist only bounded document/target identity, generation, type, and pure-read provenance in the existing workflow database, with a verified pre-migration backup. Restore holds before any browser write can be admitted; storage errors fail closed. A read-only resource hold may be removed only on positive, exact target-identity and settlement/disappearance evidence, with generation-checked compare-and-set and synchronization against writers. Never release an unknown write merely because a page closes or a read hold clears. Do not access production or operate actual pages during tests; use synthetic stores and browser doubles. Scope includes concurrent admission, restart and crash-window tests and full regression before any authorized release. UNKNOWN: whether a protected historical page was taken over or an operation completed when reliable evidence is absent.
+
+
+## Owner 2026-11-12 morning: repeated Google-triggered global pause
+
+Owner reports manual Google Sheets access remained normal when the application paused. Sanitized local log records a 10:37:57 native sheet-download read timeout, after which that inquiry cycle completed; at 10:41:21 the quotation cycle reported GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED and global fault. This establishes neither a site-wide Google outage nor whether a write actually happened. Offline inspection of the installed baseline reproduced a pure-read protected-page cleanup raising that same write-uncertain code without any write. The morning incident is compatible with that defect, but exact target/operation provenance is UNKNOWN and genuine unknown writes remain protected. Scope: repair only positively proven read-only target recovery and source-to-global-fault classification; cover both next-read and next-write, cross-scope, missing identity, historical write and auth cases. Do not clear existing unknown holds, replay orders, send mail, access live browser, or claim production recovery before verified release and normal operation.
+
+
+## Owner 2026-11-12: prioritize business continuity
+
+Owner clarifies that necessary existing checks should remain, but over-designed protections must not cause false alarms to stop normal business. This supersedes the experimental durable Google resource ledger and additional global admission gates above. Preserve existing genuine unknown-write and page-identity handling, and do not replay purchase orders or resend mail. Investigate proven read-only recovery failures with synthetic fixtures. Do not deploy until relevant failures are resolved and verification passes. Actual morning target and write outcome remain UNKNOWN.
+
+
+## Owner 2026-11-12: close program-created failed read pages
+
+Owner expressly permits automatic closure of abnormal Google Sheets pages created by the program after read failure, including the possibility that the Owner later switched to such a page and unsaved activity could be lost. Scope this behavior to an exact program-owned page with confirmed read-only history and a temporary read failure; preserve authentication challenges, uncertain or actual writes, other user pages, and the last browser page. Do not send or replay business transactions. Verify retries, non-owned pages, write uncertainty, authentication, and fallback when cleanup cannot be proved before release.
+
+
+## Owner 2026-11-12: quotation result popup timeout
+
+After dispatching Update Quotation, wait up to 60 seconds for the result popup. If it does not appear, skip the affected order, notify only 229 through the existing notification mechanism, and allow other business work to continue; do not re-click the uncertain update or resend historical messages. Do not infer success or failure from the absence of a popup. Use synthetic tests only, with no real email or production order changes.
+
+
+## Owner 2026-11-12: purchase failure diagnosis logging
+
+Add actionable local diagnostics for future INSO purchase-entry failures. Record the exact internal step, a fixed non-sensitive cause code and safe source location where available, and the precise pre/post-login recovery status. Never log credentials, page text, customer/order values or arbitrary exception messages. Keep purchase behavior unchanged; use synthetic tests and do not send mail, replay orders, or touch live pages. The cause of the latest real failure remains UNKNOWN because the installed version retained only SecurityViolation and SESSION_STALE.
+
+
+## Owner 2026-11-12: requested program replacement after normal exit
+
+Owner states the old program has exited and requests program replacement and launch if there are no other problems. Owner previously explicitly chose not to repair the 26 outstanding special-case test failures and requested only normal-order checks, and requested the purchase-failure logging addition after the real incident. Known limits remain: normal paths were tested offline; the latest actual INSO purchase exception is not root-caused, 26 historical/global-barrier tests still fail, and actual production acceptance remains UNKNOWN. Prepare and verify a consistent database/config/program backup, preserve runtime junction and state, never replay manually completed orders or resend historic mail, and use the original one-instance controlled installation and normal launch if the release checks establish no additional blocker.

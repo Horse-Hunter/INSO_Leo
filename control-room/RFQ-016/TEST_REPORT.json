@@ -617,6 +617,18 @@
     "status": "HEALTH_HOLD",
     "producer_inventory": [
       {
+        "file": "src/launcher/mail_research_composition.py",
+        "producer": "queue_ready_business_supplements",
+        "policy": "Original recipient requires durable same-attempt basic SENT proof, current source and trigger, fresh matching research, and final outbox revalidation; UNKNOWN and unverified evidence never authorize a send.",
+        "positive": [
+          "tests/launcher/test_business_mail_fallback.py::test_ready_report_supplements_only_proven_basic_recipients_once"
+        ],
+        "negative": [
+          "tests/launcher/test_business_mail_fallback.py::test_supplement_protections_prevent_unsafe_delivery",
+          "tests/launcher/test_business_mail_fallback.py::test_supplement_unknown_or_abandoned_is_never_resent"
+        ]
+      },
+      {
         "file": "src/launcher/backend.py",
         "producer": "ProductionBackend._idle_login_tick",
         "policy": "Unverified optional idle maintenance is local only",

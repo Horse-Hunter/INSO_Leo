@@ -538,6 +538,10 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
     from tests.launcher.test_backend import _RecordingTransport, _write_runtime_configs
     Locator = GridLocator
     service, browser, rows, original_page = web
+    if failure_mode == 'timeout_then_busy':
+        # Exercise the fallback when ownership cannot be proved for cleanup.
+        from src.launcher.google_quote_update import GoogleQuotationUpdateActions
+        monkeypatch.setattr(GoogleQuotationUpdateActions, 'close_temporary_failed_read', lambda self: False)
     rows['2026'] = [list(row) for row in HEADERS['2026']]
     rows['SHAHAB'] = [list(row) for row in HEADERS['SHAHAB']]
     production, rc, _ = _write_runtime_configs(tmp_path)
@@ -622,10 +626,12 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
         assert not backend._stop.is_set() and backend.get_status().next_poll_at is not None
         if len(waits) == 1:
             if failure_mode == 'timeout_then_busy':
-                assert len(calls) == 1 and len(busy_pages) == 1
-                busy_pages[0].popup = ''  # Site is idle by the next poll.
+                assert len(calls) == 15 and len(busy_pages) == 15
+                for page in busy_pages:
+                    page.popup = ''  # Both isolated sources are idle by the next poll.
             else:
-                assert len(calls) == (9 if failure_mode in {'metadata_timeout', 'native_ready_timeout', 'session_attach'} else 5)
+                assert len(calls) == (9 if failure_mode in {'metadata_timeout', 'native_ready_timeout', 'session_attach',
+                                      'read_gid_drift', 'read_page_closed', 'navigation_error_page', 'artifact_lost'} else 5)
                 if failure_mode == 'metadata_timeout':
                     assert backend.get_status().new_orders is None  # Optional metrics failed; business reads still ran.
             backend._v12_composition.coordinator.run_notifications(now=launcher.utc_now())
@@ -637,14 +643,18 @@ def test_google_web_timeout_exhaustion_notifies_once_and_actual_poller_runs_next
         backend.start()
         backend._thread.join(timeout=10)
         assert not backend._thread.is_alive() and waits == [900, 900], (failure_mode, len(calls), waits)
-        assert len(calls) == (5 if failure_mode == 'timeout_then_busy' else
+        assert len(calls) == (19 if failure_mode == 'timeout_then_busy' else
                               12 if failure_mode == 'metadata_timeout' else
-                              11 if failure_mode in {'native_ready_timeout', 'session_attach'} else 9)
+                              11 if failure_mode in {'native_ready_timeout', 'session_attach',
+                                  'read_gid_drift', 'read_page_closed', 'navigation_error_page', 'artifact_lost'} else 9)
         assert backend.get_health().overall == '正常'
         assert len(_RecordingTransport.sent) == 0
         assert backend._store.all_items() == ()
         assert not original_page.closed
-        assert all(p.closed for p in browser.contexts[0].pages[1:])
+        if failure_mode == 'timeout_then_busy':
+            assert all(not page.closed for page in busy_pages)  # Preserve formerly protected surfaces.
+        else:
+            assert all(p.closed for p in browser.contexts[0].pages[1:])
     finally:
         backend.shutdown()
 
@@ -1215,7 +1225,7 @@ def test_repeated_auth_polls_reuse_preserved_page_instead_of_opening_more(web, m
     monkeypatch.setattr(GridPage, 'goto', goto)
     with service.poll_scope():
         assert service.get(spreadsheetId='test', range="'2026'!A1:G").execute()['values']
-    assert retained.closed
+    assert not retained.closed  # A prior login page may have been adopted by the Owner.
 
 
 def test_only_successful_reads_signal_site_recovery_not_failed_reads_or_writes(web, monkeypatch):
@@ -1342,8 +1352,8 @@ def test_retained_four_tabs_survive_polls_and_reopen_only_closed_target(web, mon
     read_all()
     pages = browser.contexts[0].pages[1:]
     assert len(pages) == 4 and all(not p.closed for p in pages)
-    assert all(isinstance(target, str) and isinstance(protected, bool)
-               for target, protected, _ in service._retained_pages.values())
+    assert all(isinstance(entry[0], str) and isinstance(entry[1], bool)
+               for entry in service._retained_pages.values())
     for _ in range(4):
         read_all()
     assert browser.contexts[0].pages[1:] == pages
@@ -1457,3 +1467,219 @@ def test_retained_stop_blocks_reopening_and_unproved_read_defers_without_new_pag
     with service.poll_scope(), pytest.raises(TimeoutError, match='GOOGLE_WEB_READ_UNAVAILABLE'):
         service.get(spreadsheetId='test', range="'2026'!A1:G1").execute()
     assert len(browser.contexts[0].pages) == 2
+
+
+def test_brief_token_detects_missing_to_present_to_expired_transition(web):
+    service, _, _, _ = web
+    clock = [0.0]
+    service._timer = lambda: clock[0]
+    before = service.peek_brief_token("test")
+    service._remember(("test", "RFQ_BRIEF"), [["synthetic"]])
+    clock[0] = 61.0
+    after = service.peek_brief_token("test")
+    assert before[1] is None and after[1] is None and before[0] != after[0]
+
+
+def test_brief_token_rejects_failed_page_admission(web):
+    from src.research.cdp_pages import PageResourceAdmission, PageTargetOwnershipError
+    service, _, _, _ = web
+    admission = PageResourceAdmission()
+    service._read_guard = admission.require_open
+    assert service.peek_brief_token("test")[1] is None
+    admission.invalidate(PageTargetOwnershipError((ValueError("synthetic"),)))
+    with pytest.raises(TimeoutError, match="ADMISSION"):
+        service.peek_brief_token("test")
+
+def test_observed_discovery_cache_preserves_original_source_time(web):
+    from src.launcher.source_status import SourceStatusProjection
+    service, _, _, _ = web
+    timer = [0.0]
+    service._timer = lambda: timer[0]
+    projection = SourceStatusProjection()
+    live = []
+    def publish(sheet, rows, failed, *, ticket, observed_at, cached=False):
+        try:
+            return projection.observe(sheet, rows, (), at=observed_at, failed=failed, ticket=ticket)
+        finally:
+            projection.end_update(sheet, ticket=ticket)
+    reader = GoogleSheetsRowReader(service, on_observation_start=projection.begin_update,
+        on_observation=publish, on_live_observation=lambda sheet, rows, at: live.append(at))
+    source = WorksheetIdentity("test", "2026")
+    reader.read_discovery_rows(source)
+    stamp = projection.snapshot(source)[1]
+    timer[0] = 59.0
+    reader.read_discovery_rows(source)
+    assert projection.snapshot(source)[1] == stamp
+    assert live == [stamp]
+
+
+def test_observed_discovery_failure_invalidates_source(web):
+    from src.launcher.source_status import SourceStatusProjection
+    from src.sheets.google_reader import GoogleSheetsReadError
+    service, _, _, _ = web
+    projection = SourceStatusProjection()
+    source = WorksheetIdentity("test", "2026")
+    def publish(sheet, rows, failed, *, ticket, observed_at, cached=False):
+        try:
+            return projection.observe(sheet, rows, (), at=observed_at, failed=failed, ticket=ticket)
+        finally:
+            projection.end_update(sheet, ticket=ticket)
+    reader = GoogleSheetsRowReader(service, on_observation_start=projection.begin_update, on_observation=publish)
+    reader.read_discovery_rows(source)
+    assert projection.snapshot(source) is not None
+    service._timer = lambda: 10**12
+    service._session = lambda: (_ for _ in ()).throw(ValueError("synthetic unavailable"))
+    with pytest.raises(GoogleSheetsReadError):
+        reader.read_discovery_rows(source)
+    assert projection.snapshot(source) is None
+
+def test_retained_protected_read_allows_only_one_isolated_recovery(web, monkeypatch):
+    from playwright.sync_api import TimeoutError as PageTimeout
+
+    service, browser, _, human = web
+    service._retained_pages = {}  # Production retains identity across poll scopes.
+    touched = []
+    def busy(page, actions):
+        touched.append(page)
+        page.popup = "synthetic unresolved work"
+        raise PageTimeout("synthetic read timeout")
+    monkeypatch.setattr(service, "_download", busy)
+    with service.poll_scope(), pytest.raises(TimeoutError):
+        service.get(spreadsheetId="test", range="'2026'!A1:G").execute()
+    assert len(touched) == 1 and not touched[0].closed
+    touched[0].popup = None
+    count = len(browser.contexts[0].pages)
+    with service.poll_scope(), pytest.raises(TimeoutError):
+        service.get(spreadsheetId="test", range="'2026'!A1:G").execute()
+    assert len(browser.contexts[0].pages) == count + 1
+    assert len(touched) == 2 and all(not page.closed for page in touched)
+    touched[1].popup = None
+    with service.poll_scope(), pytest.raises(TimeoutError):
+        service.get(spreadsheetId="test", range="'2026'!A1:G").execute()
+    assert len(browser.contexts[0].pages) == count + 1
+    assert not human.closed
+
+
+@pytest.mark.parametrize("sheet", ["2026", "SHAHAB"])
+def test_cross_scope_recovery_preserves_page_and_blocks_writes(web, monkeypatch, sheet):
+    from playwright.sync_api import TimeoutError as PageTimeout
+
+    from src.sheets.quotation_input import QuotationInputBusy, QuotationInputUnavailable
+
+    service, browser, _rows, human = web
+    service._retained_pages = {}
+    download = service._download
+    pages = []
+    def fail_once(page, actions):
+        if not pages:
+            pages.append(page)
+            page.popup = "synthetic dialog"
+            raise PageTimeout("synthetic timeout")
+        return download(page, actions)
+    monkeypatch.setattr(service, "_download", fail_once)
+    with service.poll_scope(), pytest.raises(TimeoutError):
+        service.get(spreadsheetId="test", range=f"'{sheet}'!A1:G").execute()
+    pages[0].popup = None
+    with service.poll_scope():
+        assert service.get(spreadsheetId="test", range=f"'{sheet}'!A1:G").execute()["values"]
+        with pytest.raises((QuotationInputBusy, QuotationInputUnavailable, TimeoutError)):
+            service.update(spreadsheetId="test", range="'2026'!F2",
+                valueInputOption="RAW", body={"values": [["NEW"]]}).execute()
+    assert not pages[0].closed and not human.closed
+    assert len(browser.contexts[0].pages) == 3
+
+
+def test_quarantined_read_blocks_write_from_another_service(web, monkeypatch):
+    from playwright.sync_api import TimeoutError as PageTimeout
+
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    service, _browser, _rows, _human = web
+    service._retained_pages = {}
+    download = service._download
+    failed = []
+    def fail_once(page, actions):
+        if not failed:
+            failed.append(page)
+            page.popup = "synthetic dialog"
+            raise PageTimeout("synthetic timeout")
+        return download(page, actions)
+    monkeypatch.setattr(service, "_download", fail_once)
+    with service.poll_scope(), pytest.raises(TimeoutError):
+        service.get(spreadsheetId="test", range="'2026'!A1:G").execute()
+    failed[0].popup = None
+    with service.poll_scope():
+        assert service.get(spreadsheetId="test", range="'2026'!A1:G").execute()["values"]
+    other = GoogleSheetsWebService(service._session, retain_pages=True)
+    with other.poll_scope(), pytest.raises(QuotationInputBusy):
+        other.update(spreadsheetId="test", range="'2026'!F2", valueInputOption="RAW",
+                     body={"values": [["NEW"]]}).execute()
+
+
+def test_quotation_input_write_does_not_download_for_readback(web, monkeypatch):
+    service, browser, _rows, original = web
+    monkeypatch.setattr(service, "_download", lambda *_args: pytest.fail("unexpected readback"))
+    values = [["synthetic-value"] * 14]
+    result = service.values().update(spreadsheetId="test", range="'报价输入'!A1:N1",
+        valueInputOption="RAW", body={"values": values}).execute()
+    assert result["updatedCells"] == 14
+    assert browser.contexts[0].pages[-1].closed and not original.closed
+
+
+def test_missing_readback_row_has_bounded_non_sensitive_diagnostic():
+    from src.launcher.google_web import _readback_mismatch_code
+
+    assert _readback_mismatch_code([], [["private"]], 1) == "GOOGLE_READBACK_ROW_UNCONFIRMED"
+    assert _readback_mismatch_code([["private"]], [["different"]], 4) == "GOOGLE_READBACK_DIFF_D"
+
+
+def test_real_input_adapter_proceeds_to_update_without_readback(web, monkeypatch):
+    from src.inso.quotation_read import QUOTATION_COLUMNS
+    from src.workflow.v13_quotation import QuotationOutcome
+    from src.workflow.v13_quote_update import V13QuotationUpdater
+    from tests.workflow.test_v13_quote_update import Actions, Source, found
+
+    service, _browser, rows, _original = web
+    rows["报价输入"] = [list(QUOTATION_COLUMNS)]
+    location = QuotationInputLocation(WorksheetIdentity("fake-sheet", "报价输入"), 2, 1, "29")
+    input_adapter = GoogleQuotationInput(service, location, expected_columns=QUOTATION_COLUMNS)
+    source, actions = Source(), None
+    actions = Actions(source)
+    updater = V13QuotationUpdater(source=source, quotation_input=input_adapter, actions=actions,
+                                  wait=lambda _seconds: False)
+    monkeypatch.setattr(input_adapter, "read_payload", lambda: pytest.fail("unexpected readback"))
+    monkeypatch.setattr(service, "_download", lambda *_args: pytest.fail("unexpected readback"))
+    result = updater.update_one(found())
+    assert result.outcome is QuotationOutcome.UPDATED_INSERTED
+    assert actions.clicks == 1
+
+
+def test_fallback_connection_inherits_shared_root_barrier(monkeypatch):
+    import playwright.sync_api
+
+    from src.launcher.google_quote_update import (
+        _document_barrier,
+        google_resource_barrier,
+    )
+    from src.research.cdp_pages import PageResourceAdmission
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    root = PageResourceAdmission()
+    child = PageResourceAdmission(parent=root)
+    barrier = google_resource_barrier(root)
+    barrier.restore(SimpleNamespace(active=lambda: ()))
+    document = ("https", "docs.google.com", "/spreadsheets/d/test/edit")
+    barrier.quarantine(document)
+    browser = Browser()
+    class Factory:
+        def __enter__(self):
+            return SimpleNamespace(chromium=SimpleNamespace(connect_over_cdp=lambda *_a, **_k: browser))
+        def __exit__(self, *_args):
+            return False
+    monkeypatch.setattr(playwright.sync_api, "sync_playwright", lambda: Factory())
+    service = build_google_web_service(provider=lambda: None, page_admission=child)
+    with service._session() as handle:
+        assert handle.browser._inso_page_admission is child
+        assert _document_barrier(handle.browser) is barrier
+        with pytest.raises(QuotationInputBusy):
+            _document_barrier(handle.browser).begin_write(document)

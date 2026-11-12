@@ -103,6 +103,8 @@ class Page:
             self.script_running = False
             self.settled = True
     def evaluate(self, script, arg=None):
+        if script == "() => !!window.__insoQuoteSettlement":
+            return self.armed
         if "window.__insoGoogleReadFailed = true" in script:
             self.read_failed = True
             return
@@ -349,7 +351,7 @@ def test_live_unnamed_dialog_is_read_dismissed_and_rejected_if_stale():
         actions.click_update_quote()
     assert page.clicks == []
     assert actions.read_update_result() == page.popup
-    assert page.result_waits == [30000]
+    assert page.result_waits == [60000]
     actions.dismiss_result()
     assert page.popup is None and page.clicks == ["确定"]
     assert page.script_waits == [{"state": "started", "timeout": 30000},
@@ -370,9 +372,9 @@ def test_script_settlement_timeout_preserves_surface_and_prevents_next_row():
     assert fault.value.reason == "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"
     actions.close()
     assert not page.closed and browser.connected
-    from src.sheets.quotation_input import QuotationInputBusy
-    with pytest.raises(QuotationInputBusy):
+    with pytest.raises(V12Fault) as blocked:
         actions.open_quote_input()
+    assert blocked.value.reason == "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"
     assert page.clicks == ["确定"]
 
 
@@ -556,6 +558,45 @@ def test_busy_branch_observation_preserves_original_rejection_and_owned_pages(br
 
 
 
+def test_failed_owned_read_does_not_block_next_attempt_in_same_scope():
+    from src.launcher.google_quote_update import google_operation_scope
+    actions, browser = adapter()
+    human = browser.contexts[0].pages[0]
+    with google_operation_scope(retained={}):
+        actions._read_only = True
+        failed = actions.open_sheet(select_worksheet=True, worksheet="2026")
+        actions.retire_failed_page(read_only=True)
+        actions.close()
+        next_read = GoogleQuotationUpdateActions(browser_handle=actions._handle, location=location())
+        next_read._read_only = True
+        recovered = next_read.open_sheet(select_worksheet=True, worksheet="2026")
+        assert recovered is not failed and failed.closed and not human.closed
+        next_read.close()
+
+
+def test_failed_owned_read_navigated_to_error_page_recovers_in_same_scope():
+    from src.launcher.google_quote_update import google_operation_scope
+    actions, browser = adapter()
+    human = browser.contexts[0].pages[0]
+    with google_operation_scope(retained={}):
+        actions._read_only = True
+        failed = actions.open_sheet(select_worksheet=True, worksheet="2026")
+        actions.close()
+        assert not failed.closed
+        failed.url = "chrome-error://chromewebdata/"
+        next_read = GoogleQuotationUpdateActions(browser_handle=actions._handle, location=location())
+        next_read._read_only = True
+        recovered = next_read.open_sheet(select_worksheet=True, worksheet="2026")
+        assert recovered is not failed and not failed.closed and not human.closed
+        next_read.close()
+        # The old unverified surface must not grant permission to write.
+        from src.sheets.quotation_input import QuotationInputBusy
+        from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
+        writer = GoogleQuotationUpdateActions(browser_handle=actions._handle, location=location())
+        with pytest.raises((V12Fault, QuotationInputBusy, UpdateAttemptUnconfirmed)):
+            writer.open_sheet(select_worksheet=True, worksheet="2026")
+
+
 def test_nested_task_scopes_may_exceed_three_and_close_only_their_own_pages():
     from contextlib import ExitStack
 
@@ -590,3 +631,819 @@ def test_repeated_nested_scope_completion_does_not_accumulate_pages():
             assert child.closed and not outer.closed
             assert sum(not p.closed for p in browser.contexts[0].pages) == 2
     assert outer.closed and not human.closed
+
+
+def test_unleased_same_document_page_with_stale_markers_is_never_closed():
+    actions, browser = adapter()
+    human = browser.contexts[0].pages[0]
+    human.url = location().url
+    human.owner_name = "INSO_OWNER_TAB:google-operation"
+    human.read_failed = True
+    actions._read_only = True
+    page = actions.open_sheet(select_worksheet=True, worksheet="2026")
+    assert page is not human and not human.closed
+    actions.close()
+    assert not human.closed
+
+
+def test_protected_failed_page_is_not_closed_after_dialog_clears_and_tab_moves():
+    from src.launcher.google_quote_update import google_operation_scope
+    from src.sheets.quotation_input import QuotationInputBusy
+    from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
+
+    actions, browser = adapter()
+    with google_operation_scope(retained={}):
+        actions._read_only = True
+        page = actions.open_sheet(select_worksheet=True, worksheet="2026")
+        page.popup = "synthetic unresolved work"
+        actions.retire_failed_page(read_only=True)
+        actions.close()
+        page.popup = None
+        page.url = page.url.split("#")[0]+"#gid=999"
+        next_read = GoogleQuotationUpdateActions(browser_handle=actions._handle, location=location())
+        next_read._read_only = True
+        with pytest.raises((V12Fault, QuotationInputBusy, UpdateAttemptUnconfirmed)):
+            next_read.open_sheet(select_worksheet=True, worksheet="2026")
+        assert not page.closed and not browser.contexts[0].pages[0].closed
+
+
+def test_failed_busy_read_with_unchanged_markers_does_not_prove_owner_abandoned_it():
+    from src.launcher.google_quote_update import google_operation_scope
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    actions, browser = adapter()
+    with google_operation_scope(retained={}):
+        actions._read_only = True
+        page = actions.open_sheet(select_worksheet=True, worksheet="2026")
+        page.popup = "synthetic unresolved work"
+        actions.retire_failed_page(read_only=True)
+        actions.close()
+        # A person may take over this same tab without changing its URL or name.
+        page.popup = None
+        another = GoogleQuotationUpdateActions(browser_handle=actions._handle, location=location())
+        another._read_only = True
+        recovered = another.open_sheet(select_worksheet=True, worksheet="2026")
+        assert recovered is not page and not page.closed and not browser.contexts[0].pages[0].closed
+        another.close()
+        writer = GoogleQuotationUpdateActions(browser_handle=actions._handle, location=location())
+        with pytest.raises(QuotationInputBusy):
+            writer.open_sheet(select_worksheet=True, worksheet="2026")
+
+
+def test_recovery_waits_for_inflight_writer_and_then_blocks_new_writers():
+    from src.launcher.google_quote_update import google_operation_scope
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    writer, browser = adapter()
+    with google_operation_scope(retained={}):
+        write_page = writer.open_sheet(select_worksheet=True, worksheet="2026")
+        with google_operation_scope(retained={}):
+            reader = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+            reader._read_only = True
+            old = reader.open_sheet(select_worksheet=True, worksheet="2026")
+            old.popup = "synthetic dialog"
+            reader.retire_failed_page(read_only=True)
+            reader.close()
+            old.popup = None
+            other = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+            other._read_only = True
+            with pytest.raises(QuotationInputBusy):
+                other.open_sheet(select_worksheet=True, worksheet="2026")
+            assert not old.closed and not write_page.closed
+            writer.close()
+            replacement = other.open_sheet(select_worksheet=True, worksheet="2026")
+            assert replacement is not old and not old.closed
+            other.close()
+            blocked = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+            with pytest.raises(QuotationInputBusy):
+                blocked.open_sheet(select_worksheet=True, worksheet="2026")
+    assert not browser.contexts[0].pages[0].closed
+
+
+@pytest.mark.parametrize("uncertain", ["script", "protected"])
+def test_unconfirmed_write_keeps_cross_service_barrier_after_close(uncertain):
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    writer, browser = adapter()
+    page = writer.open_sheet(select_worksheet=True, worksheet="2026")
+    if uncertain == "script":
+        writer._script_pending = True
+    else:
+        writer._protected = True
+    writer.close()
+    assert not page.closed
+    other = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+    with pytest.raises(QuotationInputBusy):
+        other.open_sheet(select_worksheet=True, worksheet="2026")
+    assert not browser.contexts[0].pages[0].closed
+
+
+def test_pending_quote_update_blocks_only_new_writes_until_owner_finishes():
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    writer, browser = adapter()
+    writer.prepare_price_refresh()
+    writer.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    writer.click_update_quote()
+    other = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+    with pytest.raises(QuotationInputBusy):
+        other.open_sheet(select_worksheet=True, worksheet="2026")
+    assert page.refresh_pending and not page.closed
+    page.popup = None
+    page.script_running = False
+    writer.close()
+    other.open_sheet(select_worksheet=True, worksheet="2026")
+    other.close()
+    assert not browser.contexts[0].pages[0].closed
+
+
+@pytest.mark.parametrize("probe_fails", [False, True])
+def test_pending_quote_is_detected_through_reattached_page(monkeypatch, probe_fails):
+    from src.launcher import google_quote_update as module
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    writer, browser = adapter()
+    writer.prepare_price_refresh()
+    writer.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    writer.click_update_quote()
+    lease, active = page._inso_native_page_owner, page._inso_active_quote_action
+    target = lease[0]
+    page._inso_native_page_owner = None
+    page._inso_active_quote_action = None
+    original_target = module._google_target_id
+    def target_id(candidate):
+        if candidate is page:
+            if probe_fails:
+                raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
+            return target
+        return original_target(candidate)
+    monkeypatch.setattr(module, "_google_target_id", target_id)
+    try:
+        other = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+        with pytest.raises(QuotationInputBusy):
+            other.open_sheet(select_worksheet=True, worksheet="2026")
+        assert page.refresh_pending and not page.closed
+    finally:
+        page._inso_native_page_owner, page._inso_active_quote_action = lease, active
+        writer.close()
+
+
+def test_active_quote_blocks_overlap_if_reattached_page_is_temporarily_unresponsive(monkeypatch):
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    writer, browser = adapter()
+    writer.prepare_price_refresh()
+    writer.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    writer.click_update_quote()
+    lease, active = page._inso_native_page_owner, page._inso_active_quote_action
+    page._inso_native_page_owner = None
+    page._inso_active_quote_action = None
+    evaluate = Page.evaluate
+    def unresponsive(candidate, script, *args, **kwargs):
+        if candidate is page and "window.__insoRefreshPending === true" in script:
+            raise TimeoutError("synthetic temporary page failure")
+        return evaluate(candidate, script, *args, **kwargs)
+    monkeypatch.setattr(Page, "evaluate", unresponsive)
+    try:
+        other = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+        with pytest.raises(QuotationInputBusy):
+            other.open_sheet(select_worksheet=True, worksheet="2026")
+        assert not page.closed and page.clicks == ["更新报价"]
+    finally:
+        page._inso_native_page_owner, page._inso_active_quote_action = lease, active
+        writer.close()
+
+
+def test_pending_quote_left_by_previous_client_is_not_replayed():
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    writer, browser = adapter()
+    writer.prepare_price_refresh()
+    writer.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    writer.click_update_quote()
+    writer.close()
+    page._inso_native_page_owner = None  # Reattached client cannot prove prior lease.
+    other = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+    with pytest.raises(QuotationInputBusy):
+        other.open_sheet(select_worksheet=True, worksheet="2026")
+    assert page.refresh_pending and not page.closed and page.clicks == ["更新报价"]
+    reader = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+    reader._read_only = True
+    assert reader.open_sheet(select_worksheet=True, worksheet="2026") is not page
+    reader.close()
+    page.closed = True  # Owner resolves and closes the earlier quotation page.
+    other.open_sheet(select_worksheet=True, worksheet="2026")
+    other.close()
+    assert not browser.contexts[0].pages[0].closed
+
+
+def test_unrelated_read_probe_failure_does_not_block_new_writer(monkeypatch):
+    from src.launcher.google_quote_update import google_operation_scope
+
+    reader, browser = adapter()
+    with google_operation_scope(retained={}):
+        reader._read_only = True
+        old = reader.open_sheet(select_worksheet=True, worksheet="2026")
+        reader.close()
+        evaluate = Page.evaluate
+        def optional_probe_fails(page, script, *args, **kwargs):
+            if page is old and "window.__insoRefreshPending === true" in script:
+                raise TimeoutError("synthetic read page probe failure")
+            return evaluate(page, script, *args, **kwargs)
+        monkeypatch.setattr(Page, "evaluate", optional_probe_fails)
+        writer = GoogleQuotationUpdateActions(browser_handle=reader._handle, location=location())
+        assert writer.open_sheet(select_worksheet=True, worksheet="SHAHAB") is not old
+        writer.close()
+        assert not browser.contexts[0].pages[0].closed
+
+
+def test_recovery_cannot_touch_page_while_original_writer_is_active():
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    writer, browser = adapter()
+    writer.prepare_price_refresh()
+    writer.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    writer.click_update_quote()
+    page.popup = None
+    page.script_running = False
+    other = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+    with pytest.raises(QuotationInputBusy):
+        other.ensure_refresh_input_idle()
+    assert page.refresh_pending and not page.closed
+    writer.close()
+    other.ensure_refresh_input_idle()
+    assert not page.refresh_pending and page.closed
+    assert not browser.contexts[0].pages[0].closed
+
+
+def test_recovery_lease_excludes_all_writers_until_recovery_finishes():
+    import threading
+
+    from src.launcher.google_quote_update import _GoogleDocumentBarrier
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    barrier = _GoogleDocumentBarrier()
+    document = ("https", "docs.google.com", "/spreadsheets/d/test/edit")
+    barrier.begin_reconcile(document)
+    with pytest.raises(QuotationInputBusy):
+        barrier.begin_write(document)
+    with pytest.raises(QuotationInputBusy):
+        barrier.quarantine(document)
+    result = []
+    def competing_writer():
+        try:
+            barrier.begin_write(document)
+        except QuotationInputBusy:
+            result.append("busy")
+        else:
+            result.append("admitted")
+            barrier.end_write(document)
+    thread = threading.Thread(target=competing_writer)
+    thread.start()
+    thread.join(2)
+    assert not thread.is_alive() and result == ["busy"]
+    barrier.end_reconcile(document)
+    barrier.begin_write(document)
+    barrier.end_write(document)
+
+
+def test_owner_adoption_at_refresh_close_retains_shared_hold(monkeypatch):
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    writer, browser = adapter()
+    writer.prepare_price_refresh()
+    writer.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    writer.click_update_quote()
+    page.popup = None
+    writer.close()
+    page.script_running = False
+    close = GoogleQuotationUpdateActions.close
+    def adopt_before_close(actions):
+        if actions._page is page:
+            page.owner_name = "OWNER_ADOPTED"
+        return close(actions)
+    monkeypatch.setattr(GoogleQuotationUpdateActions, "close", adopt_before_close)
+    other = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+    with pytest.raises(V12Fault, match="GOOGLE_TAB_IDENTITY_UNCONFIRMED"):
+        other.open_quote_input()
+    assert not page.closed and not browser.contexts[0].pages[0].closed
+    with pytest.raises(QuotationInputBusy):
+        GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location()).open_sheet()
+
+
+def test_refresh_adoption_during_close_is_detected(monkeypatch):
+    actions, browser = adapter()
+    actions.prepare_price_refresh()
+    actions.open_quote_input()
+    page = actions._page
+    actions.click_update_quote()
+    page.popup = None
+    actions.close()
+    page.script_running = False
+    close = GoogleQuotationUpdateActions.close
+    def adopt_before_close(current):
+        if current._page is page:
+            page.owner_name = "OWNER_ADOPTED"
+        return close(current)
+    monkeypatch.setattr(GoogleQuotationUpdateActions, "close", adopt_before_close)
+    another = GoogleQuotationUpdateActions(browser_handle=actions._handle, location=location())
+    with pytest.raises(V12Fault, match="GOOGLE_TAB_IDENTITY_UNCONFIRMED"):
+        another.open_quote_input()
+    assert not page.closed and not browser.contexts[0].pages[0].closed
+
+
+def test_refresh_settlement_does_not_clear_separate_identity_uncertainty():
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    writer, browser = adapter()
+    writer.prepare_price_refresh()
+    writer.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    writer.click_update_quote()
+    page.popup = None
+    writer._protected = True
+    writer.close()
+    page.script_running = False
+    other = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+    with pytest.raises(QuotationInputBusy):
+        other.open_quote_input()
+    assert page.refresh_pending and not page.closed
+    assert not browser.contexts[0].pages[0].closed
+
+
+def test_write_surface_becoming_busy_during_close_blocks_another_client():
+    from src.launcher.google_quote_update import google_operation_scope
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    writer, browser = adapter()
+    with google_operation_scope(retained={}):
+        page = writer.open_sheet(select_worksheet=True, worksheet="2026")
+        page.popup = "synthetic unresolved work"
+        writer.close()
+        assert not page.closed
+        with google_operation_scope(retained={}):
+            other = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+            with pytest.raises(QuotationInputBusy):
+                other.open_sheet(select_worksheet=True, worksheet="SHAHAB")
+    assert not browser.contexts[0].pages[0].closed
+
+
+def test_confirming_refresh_never_releases_other_unknown_or_read_hold():
+    from src.launcher.google_quote_update import _GoogleDocumentBarrier
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    barrier = _GoogleDocumentBarrier()
+    document = ("https", "docs.google.com", "/spreadsheets/d/test/edit")
+    barrier.begin_write(document)
+    barrier.end_write(document, hold=("refresh", "synthetic-target"))
+    barrier.settle_refresh(document, "different-target")
+    with pytest.raises(QuotationInputBusy):
+        barrier.begin_write(document)
+    barrier.quarantine(document)
+    barrier.settle_refresh(document, "synthetic-target")
+    with pytest.raises(QuotationInputBusy):
+        barrier.begin_write(document)
+
+
+def test_document_write_admission_serializes_threads_but_allows_same_owner_nesting():
+    import threading
+
+    from src.launcher.google_quote_update import _GoogleDocumentBarrier
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    barrier = _GoogleDocumentBarrier()
+    document = ("https", "docs.google.com", "/spreadsheets/d/test/edit")
+    barrier.begin_write(document)
+    barrier.begin_write(document)
+    outcomes = []
+    def competing_writer():
+        try:
+            barrier.begin_write(document)
+        except QuotationInputBusy:
+            outcomes.append("busy")
+        else:
+            outcomes.append("admitted")
+            barrier.end_write(document)
+    thread = threading.Thread(target=competing_writer)
+    thread.start()
+    thread.join(2)
+    assert not thread.is_alive() and outcomes == ["busy"]
+    barrier.end_write(document)
+    barrier.end_write(document)
+    barrier.begin_write(document)
+    barrier.end_write(document)
+
+
+def test_nested_clients_share_document_barrier():
+    from src.launcher.google_quote_update import _document_barrier
+    from src.research.cdp_pages import PageResourceAdmission
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    root = PageResourceAdmission()
+    child = PageResourceAdmission(parent=root)
+    browser_one = SimpleNamespace(_inso_page_admission=root)
+    browser_two = SimpleNamespace(_inso_page_admission=child)
+    first, second = _document_barrier(browser_one), _document_barrier(browser_two)
+    document = ("https", "docs.google.com", "/spreadsheets/d/test/edit")
+    assert first is second
+    first.begin_write(document)
+    with pytest.raises(QuotationInputBusy):
+        second.quarantine(document)
+    first.end_write(document)
+    second.quarantine(document)
+    with pytest.raises(QuotationInputBusy):
+        first.begin_write(document)
+
+
+def test_failed_read_does_not_overwrite_owner_adoption_marker():
+    from src.launcher.google_quote_update import google_operation_scope
+
+    actions, browser = adapter()
+    with google_operation_scope(retained={}):
+        actions._read_only = True
+        page = actions.open_sheet(select_worksheet=True, worksheet="2026")
+        page.owner_name = "OWNER_ADOPTED"
+        actions.retire_failed_page(read_only=True)
+        actions.close()
+        assert page.owner_name == "OWNER_ADOPTED"
+        assert not page.closed and not browser.contexts[0].pages[0].closed
+
+
+@pytest.mark.parametrize("marker", ["OWNER_ADOPTED", ""])
+def test_navigation_does_not_overwrite_owner_adoption_marker(monkeypatch, marker):
+    actions, browser = adapter()
+    original_goto = Page.goto
+    def adopt(page, url, **kwargs):
+        original_goto(page, url, **kwargs)
+        page.owner_name = marker
+    monkeypatch.setattr(Page, "goto", adopt)
+    actions._read_only = True
+    with pytest.raises(V12Fault, match="GOOGLE_TAB_IDENTITY_UNCONFIRMED"):
+        actions.open_sheet(select_worksheet=True, worksheet="2026")
+    page = browser.contexts[0].pages[-1]
+    actions.retire_failed_page(read_only=True)
+    actions.close()
+    assert page.owner_name == marker
+    assert not page.closed and not browser.contexts[0].pages[0].closed
+
+
+def test_native_identity_probe_failure_preserves_page(monkeypatch):
+    import src.launcher.google_quote_update as module
+    from src.research.cdp_pages import PageTargetOwnershipError
+
+    actions, browser = adapter()
+    def fail(_):
+        raise PageTargetOwnershipError((ValueError("synthetic identity failure"),))
+    monkeypatch.setattr(module, "native_page_owner", fail)
+    with pytest.raises(PageTargetOwnershipError):
+        actions.open_sheet(select_worksheet=True, worksheet="2026")
+    page = browser.contexts[0].pages[-1]
+    actions.close()
+    assert not page.closed and not browser.contexts[0].pages[0].closed
+
+
+def test_unleased_refresh_marker_is_never_cleared_or_closed():
+    actions, browser = adapter()
+    human = browser.contexts[0].pages[0]
+    human.url = location().url
+    human.owner_name = "INSO_OWNER_TAB:google-operation"
+    human.refresh_pending = True
+    human.armed = True
+    with pytest.raises(V12Fault, match="GOOGLE_TAB_IDENTITY_UNCONFIRMED"):
+        actions.ensure_refresh_input_idle()
+    assert human.refresh_pending and not human.closed
+
+
+def test_refresh_pending_without_settlement_latch_is_not_released():
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    actions, browser = adapter()
+    actions.open_quote_input()
+    page = actions._page
+    page.refresh_pending = True
+    page.armed = False
+    actions._page = None
+    with pytest.raises(QuotationInputBusy):
+        actions.ensure_refresh_input_idle()
+    assert page.refresh_pending and not page.closed and not browser.contexts[0].pages[0].closed
+
+
+def test_refresh_owner_adoption_during_wait_keeps_pending_and_page(monkeypatch):
+    actions, browser = adapter()
+    actions.prepare_price_refresh()
+    actions.open_quote_input()
+    page = actions._page
+    actions.click_update_quote()
+    page.popup = None
+    page.script_running = False
+    actions.close()
+    original_wait = page.wait_for_function
+    def adopt_after_wait(script, **kwargs):
+        result = original_wait(script, **kwargs)
+        page.owner_name = "OWNER_ADOPTED"
+        return result
+    monkeypatch.setattr(page, "wait_for_function", adopt_after_wait)
+    next_actions = GoogleQuotationUpdateActions(browser_handle=actions._handle, location=location())
+    with pytest.raises(V12Fault, match="GOOGLE_TAB_IDENTITY_UNCONFIRMED"):
+        next_actions.ensure_refresh_input_idle()
+    assert page.refresh_pending and not page.closed and not browser.contexts[0].pages[0].closed
+
+
+def test_refresh_result_wait_adoption_does_not_clear_pending_or_close(monkeypatch):
+    actions, browser = adapter()
+    actions.prepare_price_refresh()
+    actions.open_quote_input()
+    page = actions._page
+    actions.click_update_quote()
+    actions.close()
+    original_wait = page.wait_for_function
+    def adopt_after_settlement(script, **kwargs):
+        result = original_wait(script, **kwargs)
+        if ".settled" in script:
+            page.owner_name = "OWNER_ADOPTED"
+        return result
+    monkeypatch.setattr(page, "wait_for_function", adopt_after_settlement)
+    next_actions = GoogleQuotationUpdateActions(browser_handle=actions._handle, location=location())
+    with pytest.raises(V12Fault, match="GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"):
+        next_actions.ensure_refresh_input_idle()
+    assert page.refresh_pending and page.owner_name == "OWNER_ADOPTED"
+    assert not page.closed and not browser.contexts[0].pages[0].closed
+
+
+def test_failed_read_does_not_make_previously_written_slot_reopenable():
+    from src.launcher.google_quote_update import google_operation_scope
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    writer, browser = adapter()
+    with google_operation_scope(retained={}):
+        page = writer.open_sheet(select_worksheet=True, worksheet="2026")
+        writer.close()
+        reader = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+        reader._read_only = True
+        assert reader.open_sheet(select_worksheet=True, worksheet="2026") is page
+        entry = reader._poll_entry
+        assert entry["read_only"] is False
+        reader.retire_failed_page(read_only=True)
+        reader.close()
+        assert entry["protected"] and not entry["reopenable"]
+        another = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+        another._read_only = True
+        with pytest.raises(QuotationInputBusy):
+            another.open_sheet(select_worksheet=True, worksheet="2026")
+        assert not page.closed and not browser.contexts[0].pages[0].closed
+
+
+def test_failed_read_cannot_erase_write_history_across_scopes():
+    from src.launcher.google_quote_update import google_operation_scope
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    writer, browser = adapter()
+    retained = {}
+    with google_operation_scope(retained=retained):
+        page = writer.open_sheet(select_worksheet=True, worksheet="2026")
+        writer.close()
+    assert next(iter(retained.values()))[3] is False
+    with google_operation_scope(retained=retained):
+        reader = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+        reader._read_only = True
+        assert reader.open_sheet(select_worksheet=True, worksheet="2026") is page
+        entry = reader._poll_entry
+        reader.retire_failed_page(read_only=True)
+        reader.close()
+        assert entry["protected"] and not entry["reopenable"]
+        assert not page.closed and not browser.contexts[0].pages[0].closed
+        another = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+        another._read_only = True
+        with pytest.raises(QuotationInputBusy):
+            another.open_sheet(select_worksheet=True, worksheet="2026")
+    assert next(iter(retained.values()))[1:] == (True, False, False)
+
+
+def test_legacy_retained_target_has_no_read_only_proof():
+    from src.launcher.google_quote_update import google_operation_scope
+
+    original, _browser = adapter()
+    retained = {}
+    with google_operation_scope(retained=retained):
+        original._read_only = True
+        page = original.open_sheet(select_worksheet=True, worksheet="2026")
+        original.close()
+    key = next(iter(retained))
+    retained[key] = retained[key][:3]  # Old registry entries carry no read history.
+    with google_operation_scope(retained=retained):
+        reader = GoogleQuotationUpdateActions(browser_handle=original._handle, location=location())
+        reader._read_only = True
+        assert reader.open_sheet(select_worksheet=True, worksheet="2026") is page
+        assert reader._poll_entry["read_only"] is False
+        reader.retire_failed_page(read_only=True)
+        reader.close()
+        assert not page.closed
+    assert retained[key][1:] == (True, False, False)
+
+
+def test_write_admission_records_lost_read_only_proof_before_use():
+    from src.launcher.google_quote_update import google_operation_scope
+
+    first, _browser = adapter()
+    retained = {}
+    with google_operation_scope(retained=retained):
+        first._read_only = True
+        first.open_sheet(select_worksheet=True, worksheet="2026")
+        first.close()
+    assert next(iter(retained.values()))[3] is True
+    with google_operation_scope(retained=retained):
+        writer = GoogleQuotationUpdateActions(browser_handle=first._handle, location=location())
+        writer.open_sheet(select_worksheet=True, worksheet="2026")
+        assert next(iter(retained.values()))[3] is False
+        writer.close()
+
+
+def test_read_only_history_survives_protected_scope_reattachment():
+    from src.launcher.google_quote_update import google_operation_scope
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    first, _browser = adapter()
+    retained = {}
+    with google_operation_scope(retained=retained):
+        first._read_only = True
+        page = first.open_sheet(select_worksheet=True, worksheet="2026")
+        page.popup = "Synthetic busy dialog"
+        first.retire_failed_page(read_only=True)
+        first.close()
+    key = next(iter(retained))
+    assert retained[key][1:4] == (True, False, True)
+    with google_operation_scope(retained=retained):
+        reader = GoogleQuotationUpdateActions(browser_handle=first._handle, location=location())
+        reader._read_only = True
+        with pytest.raises(QuotationInputBusy):
+            reader.open_sheet(select_worksheet=True, worksheet="2026")
+        assert not page.closed
+    assert retained[key][1:4] == (True, False, True)
+
+
+def test_retained_hard_hold_cannot_be_weakened_by_new_read_entry():
+    from src.launcher.google_quote_update import _google_target_id, _retain_google_entry
+
+    actions, _browser = adapter()
+    page = actions.open_sheet(select_worksheet=True, worksheet="2026")
+    key = ("synthetic",)
+    retained = {key: (_google_target_id(page), True, False, True)}
+    entry = {"page": page, "protected": True, "reopenable": True, "read_only": True}
+    _retain_google_entry(key, entry, retained)
+    assert retained[key][1:4] == (True, False, True)
+
+
+def test_new_target_cannot_replace_a_different_protected_target():
+    from src.launcher.google_quote_update import _retain_google_entry
+
+    actions, _browser = adapter()
+    page = actions.open_sheet(select_worksheet=True, worksheet="2026")
+    key = ("synthetic",)
+    original = ("other-protected-target", True, False, False)
+    retained = {key: original}
+    entry = {"page": page, "protected": False, "reopenable": False, "read_only": True}
+    with pytest.raises(V12Fault, match="GOOGLE_TAB_IDENTITY_UNCONFIRMED"):
+        _retain_google_entry(key, entry, retained)
+    assert retained[key] == (original[0], True, False, False) and not page.closed
+
+
+def test_closed_former_write_target_cannot_clear_its_protection():
+    from src.launcher.google_quote_update import google_operation_scope
+
+    writer, _browser = adapter()
+    retained = {}
+    with google_operation_scope(retained=retained):
+        page = writer.open_sheet(select_worksheet=True, worksheet="2026")
+        writer.close()
+    with google_operation_scope(retained=retained):
+        reader = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+        reader._read_only = True
+        assert reader.open_sheet(select_worksheet=True, worksheet="2026") is page
+        page.close()
+        reader.retire_failed_page(read_only=True)
+        reader.close()
+        retry = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+        retry._read_only = True
+        with pytest.raises(V12Fault, match="GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED"):
+            retry.open_sheet(select_worksheet=True, worksheet="2026")
+    assert next(iter(retained.values()))[1:] == (True, False, False)
+
+
+def test_closed_read_cannot_replace_mismatched_retained_identity():
+    from src.launcher.google_quote_update import google_operation_scope
+
+    reader, _browser = adapter()
+    reader._read_only = True
+    retained = {}
+    with google_operation_scope(retained=retained):
+        page = reader.open_sheet(select_worksheet=True, worksheet="2026")
+        key = next(iter(retained))
+        retained[key] = ("different-target", False, False, True)
+        page.close()
+        reader.retire_failed_page(read_only=True)
+        reader.close()
+        retry = GoogleQuotationUpdateActions(browser_handle=reader._handle, location=location())
+        retry._read_only = True
+        with pytest.raises(V12Fault, match="GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED"):
+            retry.open_sheet(select_worksheet=True, worksheet="2026")
+    assert retained[key][0] == "different-target" and retained[key][1] is True
+
+
+def test_new_target_cannot_replace_another_retained_target_even_when_not_protected():
+    from src.launcher.google_quote_update import _retain_google_entry
+
+    actions, _browser = adapter()
+    page = actions.open_sheet(select_worksheet=True, worksheet="2026")
+    key = ("synthetic",)
+    original = ("other-target", False, False, True)
+    retained = {key: original}
+    entry = {"page": page, "protected": False, "reopenable": False, "read_only": True}
+    with pytest.raises(V12Fault, match="GOOGLE_TAB_IDENTITY_UNCONFIRMED"):
+        _retain_google_entry(key, entry, retained)
+    assert retained[key] == (original[0], True, False, False) and not page.closed
+
+
+def test_missing_quote_popup_waits_one_minute_without_clicking_again():
+    actions, browser = adapter()
+    actions.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    actions.click_update_quote()
+    page.popup = None
+    from src.workflow.v13_quote_update import UpdateResultTimeout
+    with pytest.raises(UpdateResultTimeout):
+        actions.read_update_result()
+    assert page.result_waits == [60000]
+    assert page.clicks == ["更新报价"]
+    actions.close()
+    assert not page.closed and not browser.contexts[0].pages[0].closed
+
+
+def test_popup_timeout_does_not_wait_for_a_second_page_probe(monkeypatch):
+    from src.workflow.v13_quote_update import UpdateResultTimeout
+
+    actions, browser = adapter()
+    actions.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    actions.click_update_quote()
+    page.popup = None
+    guard = actions._guard
+    calls = []
+    def first_guard_only(*args, **kwargs):
+        calls.append(True)
+        if len(calls) > 1:
+            raise TimeoutError("synthetic unresponsive page")
+        return guard(*args, **kwargs)
+    monkeypatch.setattr(actions, "_guard", first_guard_only)
+    with pytest.raises(UpdateResultTimeout):
+        actions.read_update_result()
+    assert page.result_waits == [60000] and len(calls) == 1
+    assert page.clicks == ["更新报价"]
+    actions.close()
+    assert not page.closed
+
+
+def test_next_order_can_proceed_when_timed_out_script_finishes():
+    from src.workflow.v13_quote_update import UpdateResultTimeout
+
+    first, browser = adapter()
+    first.open_quote_input()
+    old = browser.contexts[0].pages[-1]
+    first.click_update_quote()
+    old.popup = None
+    with pytest.raises(UpdateResultTimeout):
+        first.read_update_result()
+    first.close()
+    old.confirmed = old.started = old.settled = True
+    old.script_running = False
+    next_order = GoogleQuotationUpdateActions(browser_handle=first._handle, location=location())
+    next_order.open_quote_input()
+    assert next_order._page is not old and old.closed
+    assert old.clicks == ["更新报价"]
+    next_order.close()
+    assert not browser.contexts[0].pages[0].closed
+
+
+def test_delayed_result_dialog_within_fifteen_seconds_is_not_closed_or_reclicked(monkeypatch):
+    actions, browser = adapter()
+    actions.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    actions.click_update_quote()
+    page.popup = None  # The simulated result has not appeared yet.
+    original = Locator.wait_for
+    def delayed_dialog(locator, **kwargs):
+        if locator.role == "dialog":
+            assert kwargs["timeout"] >= 15000
+            assert not page.closed and page.clicks == ["更新报价"]
+            page.popup = "报价更新完成\n成功填入：1行"
+        return original(locator, **kwargs)
+    monkeypatch.setattr(Locator, "wait_for", delayed_dialog)
+
+    assert actions.read_update_result() == "报价更新完成\n成功填入：1行"
+    assert page.result_waits == [60000] and page.clicks == ["更新报价"]
+    assert not page.closed

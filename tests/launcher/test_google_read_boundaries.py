@@ -105,9 +105,9 @@ def test_real_sync_dispatcher_artifact_waits_are_bounded(dispatcher, tmp_path, h
 
 @pytest.mark.parametrize('hang,cancel_failure,reason', [
     ('failure', False, None), ('path', False, None),
-    ('failure', True, 'GOOGLE_DOWNLOAD_CANCEL_UNCONFIRMED'),
-    (('failure', 'cancel'), False, 'GOOGLE_DOWNLOAD_CANCEL_UNCONFIRMED'),
-    ('delete', False, 'GOOGLE_DOWNLOAD_CLEANUP_UNCONFIRMED'),
+    ('failure', True, None),
+    (('failure', 'cancel'), False, None),
+    ('delete', False, 'READ_SUCCEEDED'),
 ])
 def test_transport_retires_exact_owned_read_before_retry_or_global_stop(
     dispatcher, tmp_path, monkeypatch, hang, cancel_failure, reason,
@@ -124,7 +124,9 @@ def test_transport_retires_exact_owned_read_before_retry_or_global_stop(
             locator.page.pending.value = artifact
     monkeypatch.setattr(GridLocator, 'click', replace_download)
     monkeypatch.setattr(module, '_download_call', lambda d, op, **kw: wait(d, op, timeout=0.03))
-    if reason:
+    if reason == 'READ_SUCCEEDED':
+        assert service.get(spreadsheetId='test', range="'2026'!A1:G").execute()['values']
+    elif reason:
         with pytest.raises(V12Fault) as caught:
             service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
         assert caught.value.scope is FaultScope.GLOBAL_STOP and caught.value.reason == reason

@@ -112,7 +112,7 @@ from .browser_bootstrap import (
     acquire_cdp_browser,
     park_shared_cdp,
 )
-from .diagnostics import log_step
+from .diagnostics import log_purchase_login_failure, log_step
 from .google_quote_update import (
     GoogleReadTargetUnavailable,
     build_v13_quotation_updater,
@@ -266,11 +266,9 @@ class _LivePurchaseDraftWriter:
     next one -- which is how one order ended up selecting two purchasers.
 
     ``session_guard_factory`` is what keeps a dead login from being reported as
-    a missing control. It is consulted before the ERP is touched, and again when
-    the draft fails: only a session that is *proven* to have expired is worth
-    retrying, because then the ERP provably never rendered the row and nothing
-    can be duplicated. A healthy session leaves the failure exactly as it was,
-    and a guard that cannot be prepared at all leaves the flow untouched.
+    a missing control. It is consulted before the ERP is touched and again after
+    a draft failure for diagnosis. A restored session cannot prove whether the
+    prior hand-off occurred, so the draft is not replayed.
     """
 
     def __init__(self, access, *, session_guard_factory=None, login_problem=None,
@@ -286,7 +284,8 @@ class _LivePurchaseDraftWriter:
             return None
         try:
             return self._session_guard_factory()
-        except Exception:
+        except Exception as exc:
+            log_step("purchase-guard-create", cause=exc)
             # No guard is the pre-existing behaviour, so a launcher that cannot
             # build one must keep working exactly as it did before.
             log.warning("the INSO session guard could not be prepared", exc_info=True)
@@ -304,26 +303,33 @@ class _LivePurchaseDraftWriter:
             # never discovered halfway through building a draft.
             status = guard.ensure_authenticated(force_login=True)
             if status.outcome is InsoSessionOutcome.DEAD:
-                return self._session_stale(command, status)
-        result = self._prepare_once(command)
+                return self._session_stale(command, status, phase="before")
+        try:
+            result = self._prepare_once(command)
+        except Exception as exc:
+            log_step("purchase-prepare", cause=exc, inquiry_id=command.inquiry_id)
+            raise
         if guard is None or result.outcome is not PurchaseOutcome.VALIDATION_FAILED:
             return result
-        # A retry cannot duplicate anything: ``ai_appendRow`` is the ERP's own
-        # client-side row hand-off, and a session that is *proven* gone means
-        # that hand-off never ran. This call deliberately does not force a
-        # login: it has to be able to answer "was it the session?" honestly, so
-        # a healthy session must not be re-logged-in into looking recovered.
+        # Diagnose the current session without replaying a possibly handed-off row.
+        # The first authentication re-leases the session and invalidates the
+        # old guard's captured lease. Diagnose against the current session.
+        guard = self._guard()
+        if guard is None:
+            return result
         status = guard.ensure_authenticated()
         if status.outcome is not InsoSessionOutcome.RESTORED:
             if status.outcome is InsoSessionOutcome.DEAD:
-                return self._session_stale(command, status)
+                self._session_stale(command, status, phase="after")  # Preserve original failure.
             return result
-        log.warning("the INSO session had expired and was restored; retrying the draft")
-        return self._prepare_once(command)
+        # Authentication recovery does not prove the prior hand-off did not happen.
+        log.warning("the INSO session was restored; preserving the draft failure without retry")
+        return result
 
-    def _session_stale(self, command, status):
+    def _session_stale(self, command, status, *, phase):
         """Report an unrecoverable login loss as itself, not as a lost control."""
 
+        log_purchase_login_failure(phase, status.reason_code, inquiry_id=command.inquiry_id)
         log.warning(
             "the INSO session expired and could not be restored (%s)",
             status.reason_code,
@@ -342,10 +348,10 @@ class _LivePurchaseDraftWriter:
         try:
             return self._prepare_on_page(command, access)
         finally:
-            if self._store is not None and any(
-                event.event_type is EventType.SAVE_DISPATCH_ARMED
-                for event in self._store.event_history(command.inquiry_id)
-            ):
+            if (self._store is not None
+                    and any(event.event_type is EventType.SAVE_DISPATCH_ARMED
+                            for event in self._store.event_history(command.inquiry_id))
+                    and self._store.purchase_state(command.inquiry_id) is PurchaseOutcome.SAVED):
                 try:
                     access.close_owned_operation_tab()
                 except (sqlite3.Error, V12DatabaseError):
@@ -508,15 +514,36 @@ def _website_failure(exc):
     reasons = {getattr(e, "reason", "") for e in chain}
     if reasons & {"SHEETS_SCHEMA_UNAVAILABLE", "QUOTE_INPUT_LOCATION_INVALID",
                   "QUOTE_INPUT_LOCATION_BINDING_MISMATCH", "QUOTE_INPUT_METADATA_INVALID",
-                  "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED", "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"}:
+                  "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED", "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED",
+                  "GOOGLE_TAB_IDENTITY_UNCONFIRMED", "GOOGLE_DOWNLOAD_CANCEL_UNCONFIRMED",
+                  "GOOGLE_DOWNLOAD_CLEANUP_UNCONFIRMED", "GOOGLE_DOWNLOAD_FAILURE_UNCLASSIFIED"}:
         return None
     if ("INSO_AUTHENTICATION_REQUIRED" in reasons or "INSO_QUERY_RETRIES_EXHAUSTED" in reasons
             or any(isinstance(e, InsoAuthenticationError) for e in chain)):
         return "INSO"
-    if (reasons & {"SHEETS_READ_UNAVAILABLE", "SHEETS_AUTH_UNAVAILABLE", "GOOGLE_SHEETS_UNAVAILABLE",
-                   "GOOGLE_AUTHENTICATION_REQUIRED", "GOOGLE_SPREADSHEET_UNAVAILABLE",
-                   "GOOGLE_SHEET_UNCONFIRMED", "QUOTE_INPUT_METADATA_UNAVAILABLE"}
-            or any(type(e).__name__ in {"GoogleSheetsReadError", "GoogleSheetsReadUnavailable", "GoogleReadTargetUnavailable"} for e in chain)):
+    from src.sheets.google_reader import (
+        TEMPORARY_READ_NETWORK_CODES,
+        GoogleSheetsReadError,
+    )
+    read_error = any(isinstance(e, GoogleSheetsReadError) for e in chain)
+    if read_error:
+        from ssl import SSLError
+        for item in chain:
+            if isinstance(item, SSLError):
+                return None
+            if type(item).__module__.startswith("playwright") and type(item).__name__ != "TimeoutError":
+                codes = re.findall(r"net::(ERR_[A-Z_]+)", str(item))
+                if not codes or any(code not in TEMPORARY_READ_NETWORK_CODES for code in codes):
+                    return None  # A nested certificate/unknown failure wins over generic wrappers.
+    explicit_google = reasons & {"SHEETS_AUTH_UNAVAILABLE", "GOOGLE_SHEETS_UNAVAILABLE",
+                                 "GOOGLE_AUTHENTICATION_REQUIRED", "GOOGLE_SPREADSHEET_UNAVAILABLE",
+                                 "GOOGLE_SHEET_UNCONFIRMED", "QUOTE_INPUT_METADATA_UNAVAILABLE"}
+    if read_error and not explicit_google:
+        from src.workflow.v13_integration import is_isolated_source_read_error
+        if not is_isolated_source_read_error(chain[0]):
+            return None  # Invalid/certificate/unknown reads are not an outage.
+    if (explicit_google or "SHEETS_READ_UNAVAILABLE" in reasons
+            or read_error or any(type(e).__name__ == "GoogleReadTargetUnavailable" for e in chain)):
         return "Google Sheets"
     if "IC_NET_UNAVAILABLE" in reasons:
         return "IC.net"
@@ -552,6 +579,17 @@ class ProductionBackend(GuiBackend):
         self._page_admission = PageResourceAdmission()
         self._background_research_budget = ResearchBudget()
         self._mail_research_service = None
+        self._mail_research_prepared = None
+        self._mail_prepare_phase = "NOT_STARTED"
+        self._mail_initial_start_consumed = False
+        self._mail_initial_quiescence_lost = False
+        self._mail_start_retry_lock = threading.RLock()
+        self._mail_phase_lock = threading.Lock()
+        self._closing_intent = threading.Event()
+        self._mail_start_retry_thread = None
+        self._mail_start_retry_at = 0.0
+        self._mail_start_busy_log_at = 0.0
+        self._mail_start_failed = False
         from src.workflow.mail_research import InquiryCatalog
         self._research_catalog = InquiryCatalog()
         self._browser_handle: BrowserHandle | None = None
@@ -661,19 +699,90 @@ class ProductionBackend(GuiBackend):
             self._load_local_view()
 
     def start_process_services(self):
-        """Called once by the process entry; never coupled to business buttons."""
-        if self._mail_research_service is not None:
-            return
-        local = self._local_view_thread
-        if local is not None:
-            local.join()
-        try:
-            from .mail_research_composition import build_mail_research
-            self._mail_research_service = build_mail_research(self)
-            self._mail_research_service.start()
-        except Exception as error:  # noqa: BLE001 - isolate independent service startup
-            self._append_log("WARNING", "独立邮件调研尚未就绪，请检查本地配置和授权提示。")
-            log.warning("Independent mail research startup unavailable; class=%s", type(error).__name__)
+        """Start before business workers, serialized with process shutdown."""
+        with self._mail_start_retry_lock:
+            with self._lock:
+                if (self._closed or self._closing_intent.is_set() or self._mail_initial_start_consumed
+                        or self._mail_initial_quiescence_lost or self._mail_research_service is not None
+                        or self._thread is not None and self._thread.is_alive()):
+                    return
+                self._mail_initial_start_consumed = True
+            local = self._local_view_thread
+            if local is not None:
+                local.join()
+            if self._closing_intent.is_set():
+                return
+            try:
+                from .mail_research_composition import build_mail_research
+                self._mail_research_service = build_mail_research(self)
+                if not self._closing_intent.is_set():
+                    self._mail_research_service.start()
+            except Exception as error:  # noqa: BLE001 - isolate independent service startup
+                self._mail_start_failed = (self._mail_research_service is not None
+                                           or self._mail_research_prepared is not None
+                                           or self._mail_prepare_phase == "CONFIG")
+                self._mail_start_retry_at = monotonic()+60
+                self._append_log("WARNING", "独立邮件调研尚未就绪，请检查本地配置和授权提示。")
+                log.warning("Independent mail research startup unavailable; class=%s", type(error).__name__)
+
+    def retry_failed_process_service(self):
+        """Retry a pristine config read, completed preparation, or a drained owner."""
+        with self._lock:
+            service = self._mail_research_service
+            prior = self._mail_start_retry_thread
+            if (self._closed or self._closing_intent.is_set() or not self._mail_start_failed
+                    or (service is None and self._mail_research_prepared is None
+                        and (self._mail_prepare_phase != "CONFIG" or self._mail_initial_quiescence_lost))
+                    or monotonic() < self._mail_start_retry_at
+                    or prior is not None and prior.is_alive()):
+                return
+            self._mail_start_retry_at = monotonic()+60
+            def retry(service=service):
+                with self._mail_start_retry_lock:
+                    with self._lock:
+                        if self._closed or self._closing_intent.is_set() or self._mail_research_service is not service:
+                            return
+                        if (service is None and self._mail_research_prepared is None
+                                and (self._mail_prepare_phase != "CONFIG" or self._mail_initial_quiescence_lost)):
+                            return
+                    try:
+                        if self._mail_research_prepared is not None:
+                            from .mail_research_composition import (
+                                verify_prepared_configuration,
+                            )
+                            verify_prepared_configuration(self)
+                        if service is None:
+                            from .mail_research_composition import build_mail_research
+                            # A prepared tuple avoids all migration. A CONFIG-only
+                            # failure may retry only before any business owner starts.
+                            service = build_mail_research(self)
+                            with self._lock:
+                                self._mail_research_service = service
+                        else:
+                            if any(thread.ident is None or thread.is_alive() for thread in service.threads):
+                                return  # An uncertain former owner is never replaced.
+                            service.threads.clear()
+                            service.stop_event.clear()
+                            service.wake.clear()
+                        if self._closing_intent.is_set():
+                            service.stop_event.set()
+                            return
+                        service.start()
+                    except Exception as error:  # noqa: BLE001 - isolated retry boundary
+                        if self._mail_research_prepared is None and self._mail_prepare_phase != "CONFIG":
+                            self._mail_start_failed = False  # DB state is uncertain; never auto-repeat.
+                        if type(error) is ValueError and str(error) == "MAIL_RESEARCH_CONFIG_CHANGED_RESTART_REQUIRED":
+                            self._append_log("WARNING", "独立调研配置已变更，请正常退出并重新启动程序。")
+                        log.warning("Independent mail research retry unavailable; class=%s", type(error).__name__)
+                        return
+                    with self._lock:
+                        self._mail_start_failed = False
+            thread = threading.Thread(target=retry, name="mail-research-start-retry")
+            self._mail_start_retry_thread = thread
+            try:
+                thread.start()
+            except RuntimeError:
+                self._mail_start_retry_thread = None
 
     def _remember_detailed_report(self, order, result, now):
         if self._mail_research_service is not None:
@@ -681,6 +790,113 @@ class ProductionBackend(GuiBackend):
                 self._mail_research_service.remember_report(order, result, now)
             except Exception:  # noqa: BLE001 - optional cache cannot affect TP business result
                 log.warning("Detailed report cache unavailable; TP result preserved")
+
+    def _supplement_delivery_guard(self, command, *, at=None, clock=None):
+        """Bounded change token for the original order, without holding a transaction."""
+        from time import monotonic
+
+        if self._v12_store is None or self._store is None:
+            raise ValueError("SUPPLEMENT_GUARD_UNAVAILABLE")
+        connection = sqlite3.connect(self._v12_store.database_path.resolve().as_uri()+"?mode=ro",
+                                     uri=True, timeout=0.1)
+        def database_signature(inquiry, original_id, supplement_id):
+            """Bounded target facts; unrelated ledger writes do not invalidate them."""
+            queries = (
+                ("SELECT * FROM workflow_items WHERE inquiry_id=?", (inquiry,)),
+                ("SELECT * FROM workflow_v12_inquiry_state WHERE inquiry_id=?", (inquiry,)),
+                ("SELECT * FROM workflow_v12_purchase_state WHERE inquiry_id=?", (inquiry,)),
+                ("SELECT * FROM workflow_v12_notification_commands WHERE command_id IN (?,?) ORDER BY command_id", (original_id, supplement_id)),
+                ("SELECT * FROM workflow_v12_notification_recipients WHERE command_id IN (?,?) ORDER BY command_id,recipient_id LIMIT 65", (original_id, supplement_id)),
+                ("SELECT * FROM workflow_mail_research WHERE task_id=?", (original_id,)),
+                ("SELECT * FROM workflow_v12_events WHERE inquiry_id=? AND event_type='NOTIFICATION_DELIVERY_SUCCEEDED' ORDER BY event_id LIMIT 257", (inquiry,)),
+            )
+            result = []
+            for index, (sql, args) in enumerate(queries):
+                rows = connection.execute(sql, args).fetchall()
+                if len(rows) > (64 if index == 4 else 256):
+                    raise ValueError("SUPPLEMENT_EVIDENCE_TOO_LARGE")
+                result.append(tuple(tuple(row) for row in rows))
+            exists = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='workflow_v13_purchase_follow_up_episodes'").fetchone()
+            episodes = connection.execute(
+                "SELECT * FROM workflow_v13_purchase_follow_up_episodes WHERE inquiry_id=? ORDER BY rowid LIMIT 257", (inquiry,)).fetchall() if exists else None
+            if episodes is not None and len(episodes) > 256:
+                raise ValueError("SUPPLEMENT_EPISODES_TOO_LARGE")
+            result.append(None if episodes is None else tuple(tuple(row) for row in episodes))
+            return tuple(result)
+
+        def projection_token(source):
+            if not projection._revision_lock.acquire(blocking=False):
+                raise ValueError("SUPPLEMENT_SOURCE_BUSY")
+            try:
+                return projection._sheet_revisions.get(source, 0), projection.rows.get(source), projection.guardable.get(source, False) and projection._observation_sequence.get(source) not in projection._updating.get(source, ())
+            finally:
+                projection._revision_lock.release()
+
+        def brief_token(spreadsheet):
+            if brief is None:
+                return (0, None)
+            peek = getattr(getattr(brief, "service", None), "peek_brief_token", None)
+            if not callable(peek):
+                raise ValueError("SUPPLEMENT_BRIEF_UNAVAILABLE")  # noqa: TRY004 - unavailable proof is a value failure
+            return peek(spreadsheet)
+
+        def same_brief(first, second):
+            return first[0] == second[0] and first[1] is second[1]
+
+        try:
+            from src.workflow.automatic_admission import SHANGHAI
+            projection, brief = self._source_projection, self._mail_brief
+            initial_day = at.astimezone(SHANGHAI).date() if at is not None else None
+            connection.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, 1048576)
+            connection.execute("PRAGMA query_only=ON")
+            deadline = monotonic()+0.1
+            connection.set_progress_handler(lambda: int(monotonic() >= deadline), 1000)
+            original_id = json.loads(command.review or "{}").get("business_supplement", {}).get("original", command.command_id)
+            version = connection.execute("PRAGMA data_version").fetchone()[0]
+            database_value = database_signature(command.inquiry_id, original_id, command.command_id)
+            if connection.execute("PRAGMA data_version").fetchone()[0] != version or monotonic() >= deadline:
+                raise ValueError("SUPPLEMENT_LEDGER_CHANGED")
+            item = self._store.get_by_inquiry_id(command.inquiry_id, timeout=0.1, deadline=monotonic()+0.1)
+            source = item.record_identity.worksheet
+            revision, entry, guardable = projection_token(source)  # Entry holds immutable copied rows.
+            if entry is None or not guardable:
+                raise ValueError("SUPPLEMENT_SOURCE_UNCONFIRMED")
+            brief_value = brief_token(source.spreadsheet)
+        except Exception:
+            connection.close()
+            raise
+
+        class Guard:
+            def __call__(self):
+                try:
+                    if (self_backend._closed or self_backend._owner_stop_requested
+                            or self_backend._stop.is_set() or self_backend._mail_brief is not brief):
+                        return False
+                    deadline = monotonic()+0.1
+                    connection.set_progress_handler(lambda: int(monotonic() >= deadline), 1000)
+                    current_revision, current, current_guardable = projection_token(source)
+                    current_version = connection.execute("PRAGMA data_version").fetchone()[0]
+                    database_valid = True
+                    if current_version != version:
+                        database_valid = (database_signature(command.inquiry_id, original_id, command.command_id) == database_value
+                                          and connection.execute("PRAGMA data_version").fetchone()[0] == current_version)
+                    valid = (current_revision == revision and current is entry and current_guardable
+                             and same_brief(brief_token(source.spreadsheet), brief_value)
+                             and database_valid and monotonic() < deadline)
+                    if not (valid and self_backend._mail_brief is brief
+                            and same_brief(brief_token(source.spreadsheet), brief_value)
+                            and not self_backend._closed and not self_backend._owner_stop_requested
+                            and not self_backend._stop.is_set() and monotonic() < deadline
+                            and (initial_day is None or clock is not None and clock().astimezone(SHANGHAI).date() == initial_day)):
+                        return False
+                    last_revision, last_entry, last_guardable = projection_token(source)
+                    return last_revision == revision and last_entry is entry and last_guardable
+                except Exception:  # noqa: BLE001 - uncertain proof must defer the send
+                    return False
+            def close(self):
+                connection.close()
+        self_backend = self
+        return Guard()
 
     def _prepare_business_mail(self, command, now):
         from .mail_research_composition import prepare_business_report
@@ -731,9 +947,22 @@ class ProductionBackend(GuiBackend):
             return self._run_id
 
     def start(self):
+        if not self._mail_start_retry_lock.acquire(blocking=False):
+            if monotonic() >= self._mail_start_busy_log_at:
+                self._mail_start_busy_log_at = monotonic()+60
+                self._append_log("WARNING", "独立服务正在初始化，业务启动暂时等待。")
+            return False
+        try:
+            self._start_with_service_gate()
+            return True
+        finally:
+            self._mail_start_retry_lock.release()
+
+    def _start_with_service_gate(self):
         with self._lock:
             if (
                 self._closed
+                or self._closing_intent.is_set()
                 or self._market_actors is not None
                 or self._view_loading
                 or self._state in (RunState.RUNNING, RunState.QUOTATION_RUNNING, RunState.STOPPING_AFTER_CYCLE)
@@ -774,6 +1003,7 @@ class ProductionBackend(GuiBackend):
             self._poll_idle.set()
             self._login_alert_run_id = None
             self._state = RunState.RUNNING
+            self._mail_initial_quiescence_lost = True
             self._thread = threading.Thread(
                 target=self._run, name="production-launcher", daemon=False
             )
@@ -811,6 +1041,9 @@ class ProductionBackend(GuiBackend):
                     "production.json requires spreadsheet_id and worksheet_titles"
                 )
             rc = load_runtime_config(self.config_path)
+            prepared = self._mail_research_prepared
+            if prepared is not None and (cfg != prepared[0] or rc != prepared[1]):
+                raise V12DatabaseError("workflow configuration changed; restart required")
             if not rc.excel_output_path.is_absolute():
                 rc = replace(rc, excel_output_path=resolve_app_path(rc.excel_output_path, root=self.root))
             # Credential configuration can be checked before polling, while the
@@ -826,9 +1059,10 @@ class ProductionBackend(GuiBackend):
                 rc.cdp.cdp_url, provider=lambda: self._google_playwright_provider(rc, cfg),
                 on_read_success=lambda: self._site_recovered("Google Sheets"),
                 read_guard=self._page_admission.require_open,
-                stop_requested=self._immediate_stop_requested)
+                stop_requested=self._immediate_stop_requested, page_admission=self._page_admission)
             reader = GoogleSheetsRowReader(web_service, retry_wait=self._stop.wait,
                                           on_observation=self._observe_source_rows,
+                                          on_observation_start=self._source_projection.begin_update,
                                           on_live_observation=self._observe_catalog_rows)
             worksheets = tuple(
                 WorksheetIdentity(cfg["spreadsheet_id"], title)
@@ -841,15 +1075,18 @@ class ProductionBackend(GuiBackend):
                 if rc.excel_output_path.is_absolute()
                 else resolve_app_path(rc.excel_output_path, root=self.root)
             )
-            if (self._mail_research_service is not None
-                    and self._mail_research_service.store.path.resolve() != db.resolve()):
+            prepared = self._mail_research_prepared
+            prepared_path = prepared[3].path if prepared is not None else None
+            if ((self._mail_research_service is not None
+                    and self._mail_research_service.store.path.resolve() != db.resolve())
+                    or (prepared_path is not None and prepared_path.resolve() != db.resolve())):
                 raise V12DatabaseError("workflow database configuration changed while process service is active")
             self._store = WorkflowStateStore(db)
             # The V1.2 release owns this startup boundary before any worker is
             # started.  The existing migration makes a verified timestamped
             # backup and only adds V1.2 schema; a clean V1.1 database therefore
             # never requires hand preparation.
-            if self._mail_research_service is None:
+            if self._mail_research_service is None and prepared is None:
                 migrate_v12(db, db.parent / "backups", quiesce=lambda: nullcontext())
             # Otherwise process startup already completed this quiesced migration.
             # Do not repeat a quiescence assertion while independent SMTP runs.
@@ -965,6 +1202,7 @@ class ProductionBackend(GuiBackend):
                     brief_snapshot=lambda ws: self._inquiry_brief_snapshot(admission_brief, ws),
                     clock=utc_now, notification_review=self._review_current_mail,
                     notification_prepare=self._prepare_business_mail,
+                    notification_guard=self._supplement_delivery_guard,
                 )
                 self._v12_composition.coordinator.initialize_run_state(now=utc_now())
             else:
@@ -1489,6 +1727,8 @@ class ProductionBackend(GuiBackend):
                 reason = f"等待{site}恢复"
                 since = self._site_outages.get(site, monotonic())
                 if site in {"Google Sheets", "INSO"} and recoverable_read:
+                    if site == "Google Sheets":
+                        reason = "表格读取未完成，等待下一轮重试"
                     # Keep the configured module cadence, bounded read attempts,
                     # and other modules alive even after hours of read failures.
                     # No permanent pause or source-wide outage claim is proved.
@@ -2132,7 +2372,7 @@ class ProductionBackend(GuiBackend):
 
     def _complete_inquiry(self, result):
         """Settle each row before starting the next; never defer to batch drain."""
-        preserve = False
+        preserve = True  # An exception before settlement must retain the surface.
         self._observe_stage("inquiry", "核验采购处理与邮件状态", order_ref=result.inquiry_id)
         try:
             log.warning("combined cycle result", extra={"cycle_id":getattr(self,"_cycle_id",None),
@@ -2140,6 +2380,7 @@ class ProductionBackend(GuiBackend):
                 "reason":getattr(getattr(result,"business_state",None),"value","UNKNOWN")})
             self._seen(result.inquiry_id)
             settled = self._purchase_completion.process(result, at=utc_now())
+            preserve = settled is not True
             self._v12_composition.coordinator.run_notifications(now=utc_now())
             self._invalidate_order_view(result.inquiry_id)
             if settled is False:
@@ -2503,9 +2744,11 @@ class ProductionBackend(GuiBackend):
             detail = ("等待人工完成登录或验证，程序会自动检查恢复；不会自动重复提交。"
                       if site in self._site_manual_wait else
                       "必要操作暂未成功，等待下一轮恢复；不会自动重复提交。")
+            overall = ("表格读取未完成，等待下一轮重试"
+                       if site == "Google Sheets" and recoverable_read else f"等待{site}恢复")
             self._health = HealthReport(tuple(
                 HealthItem(name, "等待恢复" if name == site or name == "Research" else "待命", detail)
-                for name in self._components()), f"等待{site}恢复")
+                for name in self._components()), overall)
         # Keep the existing read-exhaustion message/dedup contract.
         if notify and site == "Google Sheets" and self._defer_google_read_poll(exc, interval):
             return True
@@ -2981,25 +3224,31 @@ class ProductionBackend(GuiBackend):
             log.warning("Inquiry date source unavailable; exact existing intake fallback only")
             return ()
 
-    def _current_mail_source(self, inquiry_id, now, *, module="quotation", manual=False, persistent=False):
+    def _current_mail_source(self, inquiry_id, now, *, module="quotation", manual=False, persistent=False, deadline=None):
         from src.sheets.worksheet_schema import worksheet_schema
         from src.workflow.automatic_admission import age_reason, source_date
         if self._store is None or inquiry_id is None:
             return None
         try:
-            item = self._store.get_by_inquiry_id(inquiry_id)
+            item = (self._store.get_by_inquiry_id(inquiry_id) if deadline is None else
+                    self._store.get_by_inquiry_id(inquiry_id, timeout=0.1, deadline=deadline))
         except KeyError:
             return None
-        observed = self._source_projection.rows.get(item.record_identity.worksheet)
+        observed = self._source_projection.snapshot(item.record_identity.worksheet, blocking=deadline is None)
         if observed is None or (not timedelta(0) <= now-observed[1] <= timedelta(minutes=15)):
             return None
         rows = observed[0]
         from src.workflow.v13_quotation import expected_source_brand
         schema = worksheet_schema(item.record_identity.worksheet.worksheet)
-        matches = [r for r in rows if r.row_position == item.record_identity.row_position
-                   and r.cells.get(schema.model_column) == item.mpn
-                   and r.cells.get(schema.quantity_column) == item.quantity
-                   and r.cells.get(schema.brand_column) == expected_source_brand(item)]
+        matches = []
+        for row in rows:
+            if deadline is not None and monotonic() >= deadline:
+                return None
+            if (row.row_position == item.record_identity.row_position
+                    and row.cells.get(schema.model_column) == item.mpn
+                    and row.cells.get(schema.quantity_column) == item.quantity
+                    and row.cells.get(schema.brand_column) == expected_source_brand(item)):
+                matches.append(row)
         if len(matches) != 1:
             return None
         row = matches[0]
@@ -3007,9 +3256,17 @@ class ProductionBackend(GuiBackend):
             return None
         # Cached Brief was obtained through the original source owner only.
         brief = getattr(self, "_mail_brief", None)
-        lines = brief.cached_lines(item.record_identity.worksheet.spreadsheet) if brief else ()
+        if brief and deadline is not None:
+            bounded = getattr(brief, "cached_lines_bounded", None)
+            if not callable(bounded):
+                return None
+            lines = bounded(item.record_identity.worksheet.spreadsheet, deadline=deadline)
+        else:
+            lines = brief.cached_lines(item.record_identity.worksheet.spreadsheet) if brief else ()
         value, origin = source_date(item.record_identity, row, lines, lambda: item.created_at,
                                     recorded_source_date=getattr(item, "source_order_date", None), as_of=now)
+        if deadline is not None and monotonic() >= deadline:
+            return None
         if not manual and age_reason(value, now, module=module):
             return None
         return item, row, observed[1], origin, value
@@ -3185,15 +3442,33 @@ class ProductionBackend(GuiBackend):
 
     def _notify_quotation(self, result, key, episode, *, at):
         reason = result.row_error_reason.value if result.row_error_reason else None
-        proof = self._fault_evidence(result.inquiry_id, reason, at=at,
-                    event=f"{key}:{episode}", module="quotation") if reason in {
-                    "UPDATE_RESULT_UNCONFIRMED", "SOURCE_STATUS_NOT_UPDATED"} else None
+        event = f"{key}:{episode}"
+        is_popup_timeout = (reason == "UPDATE_RESULT_UNCONFIRMED"
+                            and getattr(result, "popup_timeout", False))
+        proof = (self._fault_evidence(result.inquiry_id, reason, at=at,
+                    event=event, module="quotation") if not is_popup_timeout and reason in {
+                    "UPDATE_RESULT_UNCONFIRMED", "SOURCE_STATUS_NOT_UPDATED"} else None)
+        if (is_popup_timeout
+                and getattr(result, "effect_uncertain", False) and result.inquiry_id
+                and self._v12_store.quotation_event_active(result.inquiry_id, event, reason)
+                and self._v12_store.unknown_write_active(result.inquiry_id, event)):
+            proof = {"incident_key": f"quotation:{result.inquiry_id}:{reason}:{event}",
+                     "category": "unknown_write", "inquiry_id": result.inquiry_id,
+                     "module": "quotation", "reason_code": reason, "active": True,
+                     "current_business": True, "needs_owner": True, "verified": True,
+                     "verified_at": at.isoformat(), "original_event": event,
+                     "quote_popup_timeout": True,
+                     "action": "核对该笔报价更新结果，不要重复提交。",
+                     "uncertainty": "点击更新后等待一分钟仍未出现结果弹窗。"}
         if proof is not None:
             proof["legacy_commands"] = [f"v13:{key}:{episode}:{reason}"]
         notify_quotation(self._v12_store, result, key, episode, at=at, evidence=proof)
 
     def _review_current_mail(self, command, now):
         import json
+        if (command.command_id.startswith("business-supplement:")
+                or json.loads(command.review or "{}").get("business_supplement")):
+            return "BUSINESS_SUPPLEMENT_DISABLED"
         if command.command_id.startswith("mail-research:") or json.loads(command.review or "{}").get("module") == "mail_research":
             return "CURRENT_REVIEW_PENDING"
         allowed = {"linan229@qq.com", "shawn@inso-hk.com"}
@@ -3241,7 +3516,7 @@ class ProductionBackend(GuiBackend):
             from src.sheets import WorksheetIdentity
             from src.sheets.tp_brief import bind_tp_order
             source = WorksheetIdentity(order.spreadsheet, order.sheet)
-            snapshot = self._source_projection.rows.get(source)
+            snapshot = self._source_projection.snapshot(source)
             if snapshot is None or not timedelta(0) <= now-snapshot[1] <= timedelta(minutes=15):
                 return "CURRENT_REVIEW_PENDING"
             lines = [line for line in self._tp.brief.cached_lines(order.spreadsheet)
@@ -3252,6 +3527,14 @@ class ProductionBackend(GuiBackend):
             return None if bind_tp_order(lines[0], order.spreadsheet, snapshot[0]) == order else "TP_SOURCE_CHANGED"
         proof = json.loads(command.review) if command.review else {}
         module = proof.get("business_module", proof.get("module", "quotation"))
+        if proof.get("quote_popup_timeout") is True:
+            if (proof.get("category") != "unknown_write" or proof.get("module") != "quotation"
+                    or proof.get("reason_code") != "UPDATE_RESULT_UNCONFIRMED"
+                    or {r.address.strip().casefold() for r in command.recipients} != {"linan229@qq.com"}
+                    or not self._v12_store.quotation_event_active(command.inquiry_id, proof.get("original_event"), "UPDATE_RESULT_UNCONFIRMED")
+                    or not self._v12_store.unknown_write_active(command.inquiry_id, proof.get("original_event"))):
+                return "EVENT_RECOVERED"
+            return None
         if proof.get("category") == "persistent_stop":
             item = self._store.get_by_inquiry_id(command.inquiry_id)
             from src.workflow.automatic_admission import age_reason, binding_key
@@ -3409,22 +3692,35 @@ class ProductionBackend(GuiBackend):
             items = self._store.all_items() if self._store else ()
             self._catalog_source(worksheet, rows, items, observed_at=started_at)
         except Exception:  # noqa: BLE001 - optional enrichment cannot affect business safety
-            self._research_catalog.invalidate(worksheet)
+            self._research_catalog.invalidate(worksheet, observed_at=started_at)
             log.warning("Detailed research order catalog unavailable")
 
-    def _observe_source_rows(self, worksheet, rows, failed):
+    def _observe_source_rows(self, worksheet, rows, failed, *, ticket=None, observed_at=None, cached=False):
+        if ticket is None:
+            ticket = self._source_projection.begin_update(worksheet)
+        completed = False
         try:
             items = self._store.all_items() if self._store else ()
-            self._source_projection.observe(worksheet, rows, items, at=utc_now(), failed=failed)
-            self._research_catalog.invalidate(worksheet)
+            accepted = self._source_projection.observe(worksheet, rows, items, at=observed_at or utc_now(), failed=failed, ticket=ticket)
+            if not accepted:
+                completed = True
+                return False
+            if failed or not cached:
+                self._research_catalog.invalidate(worksheet, observed_at=observed_at)
             if self._v12_store is not None:
                 self._quotation_unknown_ids = self._v12_store.quotation_unknown_ids()
             for item in items:
                 if item.record_identity.worksheet == worksheet:
                     self._invalidate_order_view(item.inquiry_id)
             self._view_last_refresh = 0
+            completed = True
+            return True
         except Exception:  # noqa: BLE001 - observation never controls business execution
+            self._research_catalog.invalidate(worksheet, observed_at=observed_at)
             log.warning("Source observation unavailable; display remains unverified")
+            return False
+        finally:
+            self._source_projection.end_update(worksheet, failed=not completed, ticket=ticket)
 
     def get_v12_order_state(self, inquiry_id):
         dto = self._v13_states.get(inquiry_id)
@@ -3519,11 +3815,21 @@ class ProductionBackend(GuiBackend):
         self._idle_login_since = utc_now()  # New idle window begins after the sweep finishes.
 
     def start_order_mail_check(self) -> bool:
+        if not self._mail_start_retry_lock.acquire(blocking=False):
+            return False
+        try:
+            return self._start_order_mail_check_guarded()
+        finally:
+            self._mail_start_retry_lock.release()
+
+    def _start_order_mail_check_guarded(self) -> bool:
         with self._lock:
-            if self._closed or (self._order_mail_thread and self._order_mail_thread.is_alive()):
+            if (self._closed or self._closing_intent.is_set()
+                    or (self._order_mail_thread and self._order_mail_thread.is_alive())):
                 return False
             self._order_mail_report = None
             self._order_mail_stage = "RUNNING"
+            self._mail_initial_quiescence_lost = True
             self._order_mail_thread = threading.Thread(
                 target=self._order_mail_worker, name="sales-header-owner-review", daemon=True,
             )
@@ -3569,6 +3875,15 @@ class ProductionBackend(GuiBackend):
             self._order_mail_report = text
 
     def start_login_all_sites(self) -> None:
+        if not self._mail_start_retry_lock.acquire(blocking=False):
+            self._append_log("WARNING", "独立服务正在初始化，请稍后再执行登录检查。")
+            return
+        try:
+            self._start_login_all_sites_guarded()
+        finally:
+            self._mail_start_retry_lock.release()
+
+    def _start_login_all_sites_guarded(self) -> None:
         """Walk every site once, in one background thread, and report back.
 
         Non-blocking on purpose: the dashboard button must stay responsive
@@ -3578,7 +3893,7 @@ class ProductionBackend(GuiBackend):
         """
 
         with self._lock:
-            if self._closed:
+            if self._closed or self._closing_intent.is_set():
                 return
             if self._login_all_thread is not None and self._login_all_thread.is_alive():
                 return
@@ -3587,6 +3902,7 @@ class ProductionBackend(GuiBackend):
                     "WARNING", "正在询价，请先等待本轮结束再执行一键登录"
                 )
                 return
+            self._mail_initial_quiescence_lost = True
             self._login_all_thread = threading.Thread(
                 target=self._login_all_worker,
                 name="production-login-all-sites",
@@ -3787,13 +4103,37 @@ class ProductionBackend(GuiBackend):
             elif callback not in self._log_callbacks:
                 self._log_callbacks.append(callback)
 
+    def request_process_service_stop(self):
+        """Nonblocking exit intent; final shutdown still owns all joins."""
+        with self._mail_phase_lock:
+            self._closing_intent.set()
+        service = self._mail_research_service
+        if service is not None:
+            stop = getattr(service, "stop_event", None)
+            wake = getattr(service, "wake", None)
+            if stop is not None:
+                stop.set()
+            if wake is not None:
+                wake.set()
+
     def shutdown(self):
-        with self._lock:
+        self.request_process_service_stop()
+        # A retry and the CLOSED transition share one lifecycle gate: no retry
+        # can pass its closed check and then start after shutdown is published.
+        with self._mail_start_retry_lock, self._lock:
             if self._closed:
                 return
             self._closed = True
             with self._poll_gate:
                 self._stop.set()
+            service = self._mail_research_service
+            if service is not None:
+                stop = getattr(service, "stop_event", None)
+                wake = getattr(service, "wake", None)
+                if stop is not None:
+                    stop.set()
+                if wake is not None:
+                    wake.set()
             thread = self._thread
             login_thread = self._login_all_thread
             mail_thread = self._order_mail_thread
@@ -3803,8 +4143,13 @@ class ProductionBackend(GuiBackend):
             login_thread.join()
         if mail_thread and mail_thread is not threading.current_thread():
             mail_thread.join()
-        if self._mail_research_service is not None:
-            self._mail_research_service.close()
+        # Serialize shutdown with a retry that has already passed its closed check.
+        with self._mail_start_retry_lock:
+            if self._mail_research_service is not None:
+                self._mail_research_service.close()
+        retry_thread = self._mail_start_retry_thread
+        if retry_thread and retry_thread is not threading.current_thread():
+            retry_thread.join()
         local_thread = self._local_view_thread
         if local_thread and local_thread is not threading.current_thread():
             local_thread.join()
@@ -3886,6 +4231,7 @@ class ProductionBackend(GuiBackend):
                 if received is not None:
                     merged[key] = replace(order, received_at=received)
             orders, states = [], []
+            projection_now = utc_now()
             for order in newest_orders(merged.values())[:1000]:
                 key = order.inquiry_id
                 if key in self._source_overrides:
@@ -3907,6 +4253,9 @@ class ProductionBackend(GuiBackend):
                     self._view_state_cache[key] = (order, dto)
                 dto = self._view_state_cache[key][1]
                 if dto is not None:
+                    # Re-evaluate freshness and in-progress source reads even
+                    # when local order/ledger data remain cached.
+                    dto = self._source_projection.project(dto, now=projection_now)
                     # Bound timeline/control count; absence is never success.
                     dto = replace(dto, event_history=dto.event_history[-30:])
                     states.append(dto)

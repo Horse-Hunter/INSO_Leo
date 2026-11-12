@@ -493,9 +493,9 @@ class V12Store:
             )
         return alert_id
 
-    def notification_command(self, command_id):
+    def notification_command(self, command_id, *, timeout=30, deadline=None):
         """Read an original command without claiming, reopening or editing it."""
-        with _connect(self.database_path) as db:
+        with _connect(self.database_path, timeout=timeout, deadline=deadline) as db:
             row = db.execute("SELECT * FROM workflow_v12_notification_commands WHERE command_id=?", (command_id,)).fetchone()
             if row is None:
                 raise KeyError(command_id)
@@ -510,12 +510,49 @@ class V12Store:
             return tuple(row[0] for row in db.execute(
                 "SELECT outcome FROM workflow_v12_notification_recipients WHERE command_id=? ORDER BY recipient_id", (command_id,)))
 
+    def notification_received_basic(self, command_id, recipient_id, address, *, timeout=30, deadline=None):
+        """Require one exact, same-attempt SENT evidence record; legacy is unknown."""
+        import hashlib
+
+        recipient_digest = hashlib.sha256(json.dumps(
+            [command_id, recipient_id, address], ensure_ascii=False,
+            separators=(",", ":")).encode("utf-8")).hexdigest()
+        with _connect(self.database_path, timeout=timeout, deadline=deadline) as db:
+            row = db.execute(
+                "SELECT r.address,r.outcome,r.attempt_count,c.inquiry_id "
+                "FROM workflow_v12_notification_recipients r JOIN workflow_v12_notification_commands c USING(command_id) "
+                "WHERE r.command_id=? AND r.recipient_id=?", (command_id, recipient_id)).fetchone()
+            if row is None or row["address"] != address or row["outcome"] != "SENT" or row["inquiry_id"] is None:
+                return False
+            events = db.execute(
+                "SELECT payload_json FROM workflow_v12_events WHERE inquiry_id=? AND event_type=? "
+                "AND source_module='notification' AND attempt=? LIMIT 257", (row["inquiry_id"],
+                    EventType.NOTIFICATION_DELIVERY_SUCCEEDED.value, row["attempt_count"])).fetchall()
+        if len(events) > 256:
+            return False
+        matching = []
+        for event in events:
+            try:
+                proof = json.loads(event[0]).get("notification_content")
+                if (isinstance(proof, dict) and proof.get("command_id") == command_id
+                        and proof.get("recipient_digest") == recipient_digest):
+                    matching.append(proof)
+            except (ValueError, TypeError, AttributeError):
+                continue
+        if len(matching) != 1:
+            return False
+        proof = matching[0]
+        return (type(proof.get("version")) is int and proof["version"] == 1
+                and type(proof.get("attempt")) is int and proof["attempt"] == row["attempt_count"]
+                and proof.get("kind") == "basic" and isinstance(proof.get("content_sha256"), str)
+                and re.fullmatch(r"[0-9a-f]{64}", proof["content_sha256"]) is not None)
+
     def notification_already_created(
         self, command_id: str, inquiry_id: str, kind: NotificationKind,
-        recipients: tuple[NotificationRecipient, ...],
+        recipients: tuple[NotificationRecipient, ...], *, timeout=30, deadline=None,
     ) -> bool:
         """Keep an existing inquiry/kind command immutable; worker owns retries."""
-        with _connect(self.database_path) as connection:
+        with _connect(self.database_path, timeout=timeout, deadline=deadline) as connection:
             command = connection.execute(
                 "SELECT inquiry_id,kind FROM workflow_v12_notification_commands "
                 "WHERE command_id=?", (command_id,),
@@ -531,19 +568,21 @@ class V12Store:
             == {item.recipient_id: item.address for item in recipients}
         )
 
-    def enqueue_notification(self, command: NotificationCommand) -> None:
+    def enqueue_notification(self, command: NotificationCommand, *, timeout=30, deadline=None, defer_stale_review=False) -> None:
         if not command.recipients:
             raise ValueError("notification requires at least one recipient")
         if command.created_at.tzinfo is None:
             raise ValueError("notification timestamp must be timezone-aware")
         from .notification_review import review_reason
         suppression = review_reason(command, command.created_at)
+        if defer_stale_review and suppression == "EVIDENCE_STALE":
+            suppression = None  # Dispatch still requires the original current review.
         event = WorkflowEvent(
             _new_id("evt"), command.inquiry_id,
             EventType.NOTIFICATION_COMMAND_CREATED,
             command.created_at, "workflow",
         )
-        with _transaction(self.database_path) as connection:
+        with _transaction(self.database_path, timeout=timeout, deadline=deadline) as connection:
             if _legacy_notice_protected(connection, command.review):
                 suppression = "INCIDENT_ALREADY_NOTIFIED"
             cursor = connection.execute(
@@ -639,10 +678,11 @@ class V12Store:
                 "(coalesce(CASE WHEN json_valid(c.review_json) THEN json_extract(c.review_json,'$.module') END,'')='mail_research'))) "
                 "OR (?='business' AND c.command_id NOT LIKE 'mail-research:%' AND "
                 "NOT (coalesce(CASE WHEN json_valid(c.review_json) THEN json_extract(c.review_json,'$.module') END,'')='mail_research'))) "
-                "ORDER BY r.next_attempt_at, r.command_id, r.recipient_id LIMIT ?",
+                "ORDER BY CASE WHEN c.command_id LIKE 'business-supplement:%' THEN 1 ELSE 0 END, "
+                "r.next_attempt_at, r.command_id, r.recipient_id LIMIT ?",
                 (_time_text(now), scope, scope, scope, limit),
             ).fetchall()
-            grouped: dict[str, tuple[sqlite3.Row, list[NotificationRecipient]]] = {}
+            grouped: dict[str, tuple[sqlite3.Row, list[NotificationRecipient], list[tuple[str, int]]]] = {}
             for row in rows:
                 connection.execute(
                     "UPDATE workflow_v12_notification_recipients "
@@ -654,17 +694,19 @@ class V12Store:
                 )
                 command_id = row["command_id"]
                 if command_id not in grouped:
-                    grouped[command_id] = (row, [])
+                    grouped[command_id] = (row, [], [])
                 grouped[command_id][1].append(
                     NotificationRecipient(row["recipient_id"], row["address"])
                 )
-            for row, recipients in grouped.values():
+                grouped[command_id][2].append((row["recipient_id"], int(row["attempt_count"]) + 1))
+            for row, recipients, attempts in grouped.values():
                 claimed.append(
                     NotificationCommand(
                         row["command_id"], row["inquiry_id"],
                         NotificationKind(row["kind"]), tuple(recipients),
                         row["subject"], row["text_body"], row["html_body"],
                         _parse_time(row["created_at"]), row["payload_version"], row["review_json"],
+                        delivery_attempts=tuple(attempts),
                     )
                 )
         return tuple(claimed)
@@ -714,12 +756,12 @@ class V12Store:
                     return True
         return False
 
-    def defer_notification_review(self, command_id, recipient_id):
+    def defer_notification_review(self, command_id, recipient_id, *, not_before=None):
         with _transaction(self.database_path) as db:
             db.execute("UPDATE workflow_v12_notification_recipients SET outcome=CASE WHEN outcome='OPERATIONAL_SENDING' "
-                       "THEN 'OPERATIONAL_PENDING' ELSE 'PENDING' END, attempt_count=attempt_count-1 "
+                       "THEN 'OPERATIONAL_PENDING' ELSE 'PENDING' END, attempt_count=attempt_count-1, next_attempt_at=? "
                        "WHERE command_id=? AND recipient_id=? AND outcome IN ('SENDING','OPERATIONAL_SENDING')",
-                       (command_id, recipient_id))
+                       (_time_text(not_before), command_id, recipient_id))
             db.execute("UPDATE workflow_v12_notification_commands SET suppression_reason='CURRENT_REVIEW_PENDING' WHERE command_id=?", (command_id,))
 
     def refresh_notification_review(self, command_id, proof):
@@ -831,6 +873,9 @@ class V12Store:
         outcome: DeliveryOutcome,
         at: datetime,
         reason_code: ReasonCode | None = None,
+        content_command: NotificationCommand | None = None,
+        recipient_address: str | None = None,
+        expected_attempt: int | None = None,
     ) -> RecipientDeliveryResult:
         if outcome not in {
             DeliveryOutcome.SENT,
@@ -843,7 +888,7 @@ class V12Store:
         result: RecipientDeliveryResult
         with _transaction(self.database_path) as connection:
             row = connection.execute(
-                "SELECT r.attempt_count, r.outcome, c.inquiry_id "
+                "SELECT r.attempt_count, r.outcome, c.inquiry_id, r.address "
                 "FROM workflow_v12_notification_recipients r "
                 "JOIN workflow_v12_notification_commands c USING(command_id) "
                 "WHERE command_id=? AND recipient_id=?",
@@ -854,6 +899,8 @@ class V12Store:
             if row["outcome"] not in {DeliveryOutcome.SENDING.value,"OPERATIONAL_SENDING"}:
                 raise V12DatabaseError("recipient is not in a sending attempt")
             attempt = int(row["attempt_count"])
+            if expected_attempt is not None and attempt != expected_attempt:
+                raise V12DatabaseError("notification attempt identity changed")
             next_at: datetime | None = None
             persisted_outcome = outcome
             if outcome is DeliveryOutcome.RETRYABLE_FAILURE:
@@ -889,7 +936,27 @@ class V12Store:
                 _new_id("evt"), inquiry_id, event_type, at, "notification",
                 reason_code=reason_code, attempt=attempt,
             )
-            _insert_event(connection, event)
+            content_evidence = None
+            if persisted_outcome is DeliveryOutcome.SENT and content_command is not None:
+                import hashlib
+                if (type(expected_attempt) is not int or expected_attempt <= 0
+                        or dict(content_command.delivery_attempts).get(recipient_id) != expected_attempt
+                        or content_command.command_id != command_id or content_command.inquiry_id != row["inquiry_id"]
+                        or recipient_address != row["address"]
+                        or content_command.delivery_content_kind not in {"basic", "detailed"}
+                        or not any(r.recipient_id == recipient_id and r.address == recipient_address
+                                   for r in content_command.recipients)):
+                    raise V12DatabaseError("notification content evidence mismatch")
+                digest = hashlib.sha256(json.dumps(
+                    [content_command.subject, content_command.text_body, content_command.html_body],
+                    ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+                recipient_digest = hashlib.sha256(json.dumps(
+                    [command_id, recipient_id, recipient_address],
+                    ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+                content_evidence = {"version": 1, "command_id": command_id, "recipient_digest": recipient_digest,
+                                    "attempt": attempt, "kind": content_command.delivery_content_kind,
+                                    "content_sha256": digest}
+            _insert_event(connection, event, content_evidence=content_evidence)
             if inquiry_id is not None and persisted_outcome is not DeliveryOutcome.SENT:
                 alert_to_raise = (
                     _new_id("alt"), inquiry_id, AlertType.NOTIFICATION_FAILED,
@@ -1660,7 +1727,7 @@ def _verify_v12_schema(connection: sqlite3.Connection) -> None:
         raise V12SchemaMismatch("V1.2 migration record is missing")
 
 
-def _insert_event(connection: sqlite3.Connection, event: WorkflowEvent) -> None:
+def _insert_event(connection: sqlite3.Connection, event: WorkflowEvent, *, content_evidence=None) -> None:
     if event.inquiry_id is None:
         return  # Operational notifications have no fabricated business inquiry.
     if event.occurred_at.tzinfo is None:
@@ -1679,6 +1746,8 @@ def _insert_event(connection: sqlite3.Connection, event: WorkflowEvent) -> None:
         "attempt": event.attempt,
         "evidence_ref": evidence_ref,
     }
+    if content_evidence is not None:
+        safe_payload["notification_content"] = content_evidence
     connection.execute(
         "INSERT INTO workflow_v12_events "
         "(event_id, inquiry_id, event_type, occurred_at, source_module, schema_version, "
@@ -1764,8 +1833,8 @@ def _all_recipients_sent(connection: sqlite3.Connection, command_id: str) -> boo
     return bool(row[0]) and row[0] == row[1]
 
 
-def _transaction(database_path: Path):
-    connection = _connect(database_path)
+def _transaction(database_path: Path, *, timeout=30, deadline=None):
+    connection = _connect(database_path, timeout=timeout, deadline=deadline)
 
     class Transaction:
         def __enter__(self) -> sqlite3.Connection:
@@ -1788,7 +1857,7 @@ def _transaction(database_path: Path):
     return Transaction()
 
 
-def _connect(path: Path, *, read_only: bool = False) -> sqlite3.Connection:
+def _connect(path: Path, *, read_only: bool = False, timeout=30, deadline=None) -> sqlite3.Connection:
     class ClosingConnection(sqlite3.Connection):
         def __exit__(self, exc_type, exc_value, traceback):
             try:
@@ -1801,8 +1870,11 @@ def _connect(path: Path, *, read_only: bool = False) -> sqlite3.Connection:
             f"{path.resolve().as_uri()}?mode=ro", uri=True, factory=ClosingConnection
         )
     else:
-        connection = sqlite3.connect(path, timeout=30, factory=ClosingConnection)
+        connection = sqlite3.connect(path, timeout=timeout, factory=ClosingConnection)
     connection.row_factory = sqlite3.Row
+    if deadline is not None:
+        from time import monotonic
+        connection.set_progress_handler(lambda: int(monotonic() >= deadline), 1000)
     connection.execute("PRAGMA foreign_keys=ON")
     return connection
 

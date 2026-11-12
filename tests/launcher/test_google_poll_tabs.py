@@ -78,6 +78,9 @@ def test_prior_orphans_do_not_block_or_get_adopted_by_retained_slot(web):
 def test_timeout_busy_read_retires_only_after_settlement_and_keeps_auth_check(
     web, monkeypatch, expires_auth,
 ):
+    from src.launcher.google_quote_update import GoogleQuotationUpdateActions
+    monkeypatch.setattr(GoogleQuotationUpdateActions, "close_temporary_failed_read", lambda self: False)
+
     from playwright.sync_api import TimeoutError as PageTimeout
 
     from src.sheets import WorksheetIdentity
@@ -96,11 +99,8 @@ def test_timeout_busy_read_retires_only_after_settlement_and_keeps_auth_check(
 
     def wait(seconds):
         waits.append(seconds)
-        if len(waits) == 2:
-            if expires_auth:
-                failed[0].login_markers.add('登录')
-            else:
-                failed[0].popup = ''
+        if len(waits) == 1 and expires_auth:
+            failed[0].login_markers.add('登录')
         return False
 
     monkeypatch.setattr(service, '_download', read)
@@ -112,8 +112,9 @@ def test_timeout_busy_read_retires_only_after_settlement_and_keeps_auth_check(
             assert not failed[0].closed and len(browser.contexts[0].pages) == 2
         else:
             assert reader.read_rows(WorksheetIdentity('test', '2026'))
-            assert failed[0].closed and len(browser.contexts[0].pages) == 3
-    assert waits == [2, 4]
+            # Recovery preserves the original potentially human-adopted page.
+            assert not failed[0].closed and len(browser.contexts[0].pages) == 3
+    assert waits == [2]
 
 
 def test_uncertain_write_is_neither_read_tagged_nor_closed_as_recovered_read(web):

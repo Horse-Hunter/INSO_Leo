@@ -128,9 +128,54 @@ def test_real_adapter_and_updater_preserve_native_safety_and_partial_input(web,m
             assert result.outcome is QuotationOutcome.ROW_FAILED
         else:
             with pytest.raises(V12Fault) as caught:updater.update_one(found())
-            assert caught.value.reason==('GOOGLE_AUTHENTICATION_REQUIRED' if fault=='auth' else 'GOOGLE_SPREADSHEET_UNAVAILABLE')
+            assert caught.value.reason==('GOOGLE_AUTHENTICATION_REQUIRED' if fault=='auth' else 'GOOGLE_TAB_IDENTITY_UNCONFIRMED')
     assert actions.clicks==0 and not human.closed
     page=browser.contexts[0].pages[-1]
     assert len(page.typed)==(1 if fault=='keyboard' else 0)
     if fault in {'keyboard','document'}:assert not page.closed
 
+
+
+@pytest.mark.parametrize("change", ["native_title", "native_gid"])
+def test_native_sheet_drift_before_typing_does_not_write_any_cell(web, monkeypatch, change):
+    from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
+
+    service, browser, _rows, human = web
+    wait = GridPage.wait_for_function
+    evaluate = GridPage.evaluate
+    state = {"drift": False}
+    def settle(page, script, **kwargs):
+        result = wait(page, script, **kwargs)
+        if "#t-name-box" in script and "document.activeElement" in script:
+            state["drift"] = True
+        return result
+    def observe(page, script, arg=None):
+        value = evaluate(page, script, arg)
+        if state["drift"] and "docs-sheet-active-tab" in script:
+            value = dict(value)
+            value["title" if change == "native_title" else "fragment"] = (
+                "OTHER" if change == "native_title" else "#gid=999")
+        return value
+    monkeypatch.setattr(GridPage, "wait_for_function", settle)
+    monkeypatch.setattr(GridPage, "evaluate", observe)
+    with service.poll_scope(), pytest.raises(UpdateAttemptUnconfirmed):
+        payload(service)
+    assert not browser.contexts[0].pages[-1].typed and not human.closed
+
+
+@pytest.mark.parametrize("change", ["native_title", "native_gid"])
+def test_native_sheet_drift_after_writes_does_not_confirm_readback(web, monkeypatch, change):
+    service, browser, _rows, human = web
+    evaluate = GridPage.evaluate
+    def observe(page, script, arg=None):
+        value = evaluate(page, script, arg)
+        if page.typed and "docs-sheet-active-tab" in script:
+            value = dict(value)
+            value["title" if change == "native_title" else "fragment"] = (
+                "OTHER" if change == "native_title" else "#gid=999")
+        return value
+    monkeypatch.setattr(GridPage, "evaluate", observe)
+    with service.poll_scope(), pytest.raises(QuotationInputUnavailable, match="GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED"):
+        payload(service)
+    page = browser.contexts[0].pages[-1]
+    assert page.typed and not page.closed and not human.closed

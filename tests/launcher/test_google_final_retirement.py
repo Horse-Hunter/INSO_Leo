@@ -50,7 +50,7 @@ def test_final_stop_preserves_unsettled_or_manually_changed_pages(web, problem, 
     elif problem == 'worksheet': page.title = 'SHAHAB'
     else:
         key = next(iter(service._retained_pages))
-        native, _, reopenable = service._retained_pages[key]
+        native, _, reopenable = service._retained_pages[key][:3]
         service._retained_pages[key] = (native, True, reopenable)
     service.release_retained_pages()
     assert not page.closed and pages[1].closed
@@ -109,7 +109,8 @@ def test_retire_factory_never_calls_business_bootstrap_provider(web, monkeypatch
     supplied = []
     browser = web[1]
     fake = SimpleNamespace(chromium=SimpleNamespace(connect_over_cdp=lambda *a, **kw: browser))
-    def factory(provider):
+    def factory(provider, *, admission=None):
+        assert admission is None
         supplied.append(provider)
         return lambda: nullcontext(fake)
     monkeypatch.setattr(google_web, 'shared_playwright_factory', factory)

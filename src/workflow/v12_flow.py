@@ -847,7 +847,7 @@ class V12WorkflowCoordinator:
                 raise
             result = PurchaseDraftResult(command_id, PurchaseOutcome.VALIDATION_FAILED, now,
                 reason_code=ReasonCode.CONTROL_NOT_FOUND)
-        if result.command_id != command_id or result.outcome not in {
+        supported_results = {
             PurchaseOutcome.AI_RECOGNIZED,
             PurchaseOutcome.VALIDATION_FAILED,
             PurchaseOutcome.SAVED,
@@ -855,18 +855,29 @@ class V12WorkflowCoordinator:
             PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED,
             PurchaseOutcome.MANUAL_REVIEW,
             PurchaseOutcome.SUBMIT_UNCONFIRMED,
-        }:
-            result = PurchaseDraftResult(
-                command_id, PurchaseOutcome.VALIDATION_FAILED, now,
-                reason_code=ReasonCode.AI_RECOGNITION_MISMATCH,
-            )
+        }
+        unbound = (not isinstance(result, PurchaseDraftResult)
+                   or result.command_id != command_id or not isinstance(result.outcome, PurchaseOutcome)
+                   or result.outcome not in supported_results)
+        undurable = (not unbound
+                     and result.outcome not in {PurchaseOutcome.AI_RECOGNIZED, PurchaseOutcome.VALIDATION_FAILED}
+                     and self._v12_store.purchase_state(inquiry_id) is not result.outcome)
+        if unbound or undurable:
+            # An unbound or undurable result cannot prove that no external hand-off occurred.
+            # Persist the conservative business hold before stopping; do not
+            # fabricate a dispatch event or overwrite an existing purchase state.
+            self._set_state(inquiry_id, BusinessState.INTERRUPTED_POSSIBLY_SENT,
+                EventType.SECURITY_CHECK_FAILED, now, ReasonCode.UNKNOWN_EXTERNAL_FAILURE)
+            self._workflow_store.mark_interrupted(
+                self._workflow_store.get_by_inquiry_id(inquiry_id).id, now=now)
+            raise V12Fault(FaultScope.GLOBAL_STOP, "PURCHASE_RESULT_UNCONFIRMED")
+        if result.outcome is PurchaseOutcome.VALIDATION_FAILED and result.reason_code is None:
+            result = replace(result, reason_code=ReasonCode.UNKNOWN_EXTERNAL_FAILURE)
         if result.outcome in {PurchaseOutcome.AI_RECOGNIZED, PurchaseOutcome.VALIDATION_FAILED}:
             self._v12_store.set_purchase_state(
                 inquiry_id, command_id, result.outcome,
                 at=result.completed_at, reason_code=result.reason_code,
             )
-        elif self._v12_store.purchase_state(inquiry_id) is not result.outcome:
-            raise ValueError("submission outcome is not durably recorded")
         if result.outcome is PurchaseOutcome.SAVED:
             self._set_state(
                 inquiry_id, BusinessState.PURCHASE_RECORDED,
@@ -887,7 +898,7 @@ class V12WorkflowCoordinator:
                 BusinessState.PURCHASE_EXCEPTION,
                 EventType.AI_RECOGNITION_MISMATCH,
                 result.completed_at,
-                ReasonCode.AI_RECOGNITION_MISMATCH,
+                result.reason_code or ReasonCode.UNKNOWN_EXTERNAL_FAILURE,
             )
         return self._result(
             inquiry_id,

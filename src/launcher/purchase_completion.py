@@ -42,7 +42,11 @@ class PurchaseCompletionActions:
 
     def process(self, result, *, at):
         item = self.workflow_store.get_by_inquiry_id(result.inquiry_id)
-        if self.v12_store.business_state(item.inquiry_id) is BusinessState.STATUS_WRITE_PENDING:
+        state = self.v12_store.business_state(item.inquiry_id)
+        if state is BusinessState.INTERRUPTED_POSSIBLY_SENT:
+            # The caller uses False to retain the unresolved INSO surface.
+            return False
+        if state is BusinessState.STATUS_WRITE_PENDING:
             return True
         if result.purchase_outcome in {PurchaseOutcome.SAVED, PurchaseOutcome.SUBMIT_UNCONFIRMED}:
             if self.v12_store.purchase_state(item.inquiry_id) is not result.purchase_outcome:
@@ -51,6 +55,8 @@ class PurchaseCompletionActions:
                 if not self.v12_store.submit_click_proven(item.inquiry_id):
                     raise ValueError("unconfirmed submit has no durable click proof")
                 self.notify(item.inquiry_id, "PURCHASE", "SAVE_OUTCOME_UNKNOWN", at=at)
+                self._write_back(item, at=at)
+                return False  # Preserve the original surface until the outcome is verified.
             return self._write_back(item, at=at)
         if result.business_state is BusinessState.PURCHASE_EXCEPTION:
             code = next((e.reason_code.value for e in reversed(self.v12_store.event_history(item.inquiry_id))
@@ -94,17 +100,23 @@ class PurchaseCompletionActions:
 
     def retry_saved_statuses(self, *, at):
         for item in self.workflow_store.all_items():
+            try:
+                business_state = self.v12_store.business_state(item.inquiry_id)
+            except KeyError:
+                continue  # No V1.2 state exists to reconcile.
+            if business_state is BusinessState.INTERRUPTED_POSSIBLY_SENT:
+                continue
             if not self._automatic_admission(item.inquiry_id, at):
                 continue
             if (item.status.value == "FAILED" and item.last_error == "NO_MATCHING_PRODUCT"
-                    and self.v12_store.business_state(item.inquiry_id) is BusinessState.RESEARCH_FAILED):
+                    and business_state is BusinessState.RESEARCH_FAILED):
                 # Reconcile a still-current unresolved business notice through
                 # the original queue; never rerun research or procurement.
                 self.notify(item.inquiry_id, "RESEARCH", "NO_MATCHING_PRODUCT", at=at)
                 continue
             if item.inquiry_id in self._settled_status_ids:
                 continue
-            pending = self.v12_store.business_state(item.inquiry_id) is BusinessState.STATUS_WRITE_PENDING
+            pending = business_state is BusinessState.STATUS_WRITE_PENDING
             try:
                 saved = self.v12_store.purchase_state(item.inquiry_id) is PurchaseOutcome.SAVED
             except KeyError:

@@ -3,7 +3,7 @@
 No business modules, files, websites, timers or threads are accessed here.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from math import ceil
 from time import monotonic
 from tkinter import ttk
@@ -12,7 +12,7 @@ import customtkinter as ctk
 
 from src.core.app_paths import application_name
 
-from .contracts import OrderStatus, RunState
+from .contracts import OrderStatus, RunState, V12BusinessLabel, V12ReasonCode
 from .state import newest_orders
 
 BG, NAV, CARD, LINE = "#141b23", "#10161e", "#1c2733", "#2b3949"
@@ -100,15 +100,57 @@ def scheduling(snapshot, now=None, tick=None):
     )
 
 
-def order_status(order):
+_STATUS_ISSUES = {
+    V12BusinessLabel.DUPLICATE_ORDER: "重复订单",
+    V12BusinessLabel.PURCHASE_EXCEPTION: "采购异常",
+    V12BusinessLabel.RESEARCH_EXCEPTION: "调研异常",
+    V12BusinessLabel.QUOTATION_FAILED: "报价异常",
+    V12BusinessLabel.SKIPPED_INVALID_INPUT: "资料异常",
+}
+_REVIEW_STATES = {
+    V12BusinessLabel.SUBMIT_UNCONFIRMED, V12BusinessLabel.INTERRUPTED_POSSIBLY_SENT,
+    V12BusinessLabel.STATUS_WRITE_PENDING, V12BusinessLabel.QUOTATION_STATUS_PENDING,
+    V12BusinessLabel.INTERRUPTED_UNSENT, V12BusinessLabel.SOURCE_CHANGED,
+}
+
+
+def _source_is_fresh(state, now=None):
+    at = state.source_verified_at
+    if not state.source_fresh or at is None or at.tzinfo is None or at.utcoffset() is None:
+        return False
+    return timedelta(0) <= (now or datetime.now(timezone.utc)) - at <= timedelta(minutes=15)
+
+
+def _state_needs_review(state):
+    return bool(state.active_alerts or state.latest_active_alert) or state.business_label in (
+        _REVIEW_STATES | _STATUS_ISSUES.keys()
+    ) or "待核对" in (state.waiting_label or "") or "待人工核对" in (state.waiting_label or "")
+
+
+def order_status(order, state=None):
     if order.delivery_status == "UNKNOWN":
-        return "邮件结果待核对"
+        write_unconfirmed = state is not None and (
+            state.business_label in {
+                V12BusinessLabel.SUBMIT_UNCONFIRMED, V12BusinessLabel.INTERRUPTED_POSSIBLY_SENT,
+                V12BusinessLabel.STATUS_WRITE_PENDING, V12BusinessLabel.QUOTATION_STATUS_PENDING,
+            } or "原报价写入待人工核对" in (state.waiting_label or "")
+              or "原写入待核对" in (state.waiting_label or "")
+              or any(alert is not None and alert.reason_code in {
+                  V12ReasonCode.SAVE_OUTCOME_UNKNOWN, V12ReasonCode.RECONCILIATION_AMBIGUOUS,
+                  V12ReasonCode.RECONCILIATION_UNREADABLE,
+              } for alert in (*state.active_alerts, state.latest_active_alert)))
+        return "邮件及写入待核对" if write_unconfirmed else "邮件结果待核对"
     if order.delivery_status in {"PENDING", "SENDING", "RETRYABLE_FAILURE"}:
         return "邮件待确认"
     if order.delivery_status == "PERMANENT_FAILURE":
         return "邮件发送失败"
     if order.delivery_status == "SENT":
         return "调研邮件已发送"
+    if state is not None:
+        source = state.source_status if _source_is_fresh(state) and isinstance(state.source_status, str) else None
+        label = source.strip() if source and source.strip() else "状态待同步"
+        issue = _STATUS_ISSUES.get(state.business_label)
+        return label + (" · " + (issue or "待核对") if _state_needs_review(state) else "")
     return (
         order.business_status
         or {
@@ -129,26 +171,40 @@ def select_orders(
     status="全部状态",
     source="全部来源",
     scope="全部记录",
+    states=None,
 ):
     query = query.strip().casefold()
 
     def keep(o):
+        state = (states or {}).get(o.inquiry_id)
+        if state is not None and o.delivery_status is None:
+            if not _source_is_fresh(state) or _state_needs_review(state) or o.status is OrderStatus.ERROR:
+                category = "需核对"
+            elif state.source_status == "已报价给客户":
+                category = "已完成"
+            elif state.source_status in {"未发", "发给采购", "采购已报价"}:
+                category = "待处理"
+            else:
+                category = "需核对"
+        else:
+            category = None
         modules = getattr(o, "modules", ()) or (o.module_id,)
         return (
             (not query or query in o.model.casefold())
             and (module == "全部模块" or module in [NAMES.get(m, m) for m in modules])
             and (
                 status == "全部状态"
+                or (category is not None and status == category)
                 or (
-                    status == "需核对"
+                    category is None and status == "需核对"
                     and (
                         o.status in {OrderStatus.ERROR, OrderStatus.UNKNOWN}
                         or o.delivery_status in {"UNKNOWN", "PERMANENT_FAILURE"}
                     )
                 )
-                or (status == "待处理" and o.status is OrderStatus.PENDING)
+                or (category is None and status == "待处理" and o.status is OrderStatus.PENDING)
                 or (
-                    status == "已完成"
+                    category is None and status == "已完成"
                     and o.status in {OrderStatus.COMPLETED, OrderStatus.PARTIAL}
                     and o.delivery_status
                     not in {
@@ -171,7 +227,7 @@ def select_orders(
     return tuple(o for o in orders if keep(o))
 
 
-def sort_orders(orders, key, *, reverse=False):
+def sort_orders(orders, key, *, reverse=False, states=None):
     """Keep missing values last and compare numbers/dates in their own types."""
     if key in {"price", "quantity", "processed"}:
         field = {
@@ -191,7 +247,7 @@ def sort_orders(orders, key, *, reverse=False):
     def value(order):
         return str(
             {
-                "status": order_status(order),
+                "status": order_status(order, (states or {}).get(order.inquiry_id)),
                 "source": order.source_sheet or "",
                 "module": NAMES.get(order.module_id, ""),
             }.get(key, getattr(order, key, ""))
@@ -210,6 +266,7 @@ class WorkbenchView:
         self._manual_counts = dict.fromkeys(NAMES, 0)
         self.snapshot = None
         self.page_index, self.page_size, self.sort_desc = 0, 200, False
+        self._last_source_refresh = 0.0
         self._filter_after = None
         self._detail_signature = self._notice_signature = self._log_signature = None
         self._values = {}
@@ -650,11 +707,12 @@ class WorkbenchView:
         selected = select_orders(
             self.orders,
             query=self.search.get(),
+            states=self.states,
             **{k: v.get() for k, v in self.filters.items()},
         )
         key = getattr(self, "sort_key", None)
         if key:
-            selected = sort_orders(selected, key, reverse=self.sort_desc)
+            selected = sort_orders(selected, key, reverse=self.sort_desc, states=self.states)
         else:
             selected = newest_orders(selected)
         pages = max(1, (len(selected) + self.page_size - 1) // self.page_size)
@@ -669,6 +727,8 @@ class WorkbenchView:
                 tree.delete(iid)
                 del self._row_values[iid]
         for position, o in enumerate(visible):
+            state = self.states.get(o.inquiry_id)
+            status_text = order_status(o, state)
             source = (
                 f"{o.source_sheet} · {o.source_row}"
                 if o.source_sheet and o.source_row
@@ -681,7 +741,7 @@ class WorkbenchView:
                 o.quantity,
                 source,
                 " · ".join(NAMES.get(m, m) for m in modules),
-                order_status(o),
+                status_text,
                 stamp(o.processed_at),
                 str(o.min_reference_price)
                 if o.min_reference_price is not None
@@ -691,6 +751,8 @@ class WorkbenchView:
                 "error"
                 if o.status is OrderStatus.ERROR
                 or o.delivery_status in {"UNKNOWN", "PERMANENT_FAILURE"}
+                else "warning" if state is not None and (
+                    not _source_is_fresh(state) or _state_needs_review(state))
                 else "recent"
             )
             if self._row_values.get(o.inquiry_id) != (values, tag):
@@ -762,7 +824,12 @@ class WorkbenchView:
             f"来源：{order.source_sheet or '未载入'} / {order.source_row or '行号未载入'}",
             MUTED,
         )
-        line("业务状态：" + order_status(order))
+        line("业务状态：" + order_status(order, state))
+        if state and state.waiting_label:
+            history = state.waiting_label
+            if state.source_fresh and not _source_is_fresh(state):
+                history = "状态待同步；处理历史：" + (state.processing_history or state.waiting_label or state.business_label.value)
+            line("来源及处理记录：" + history, MUTED)
         if unknown_mail(order, state):
             line(MAIL_UNKNOWN, AMBER)
         if order.module_id == "tp" and not order.sources:
@@ -869,6 +936,13 @@ class WorkbenchView:
                 if current is not None:
                     self.app._selected_order = current
                     self.render_detail(current)
+        tick = monotonic()
+        if self.page == "任务中心" and tick - self._last_source_refresh >= 15:
+            self._last_source_refresh = tick
+            self.render_orders()  # Expire cached source observations without local I/O.
+            if self.app._selected_order is not None and self.detail.winfo_ismapped():
+                self._detail_signature = None
+                self.render_detail(self.app._selected_order)
         self.configure(self.footer, text=scheduling(snapshot))
         self.configure(
             self.app._status_badge,

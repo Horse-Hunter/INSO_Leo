@@ -272,3 +272,137 @@ def test_stop_during_backoff_does_not_continue_reading():
     with pytest.raises(GoogleSheetsReadUnavailable):
         GoogleSheetsRowReader(service, retry_wait=lambda _: True).read_rows(worksheet())
     assert len(service.values_resource.get_calls) == 1
+
+
+def test_concurrent_reader_old_result_cannot_replace_new_source(monkeypatch):
+    from threading import Event, Thread, current_thread
+
+    import src.sheets.google_reader as module
+    from src.launcher.source_status import SourceStatusProjection
+
+    entered, release = Event(), Event()
+    projection = SourceStatusProjection()
+    convert = module._to_worksheet_rows
+    def slow_convert(values, *, first_row):
+        if values[0][0] == "old":
+            entered.set()
+            release.wait(3)
+        return convert(values, first_row=first_row)
+    monkeypatch.setattr(module, "_to_worksheet_rows", slow_convert)
+    class Values:
+        def get(self, **kwargs):
+            value = "old" if current_thread().name == "old-reader" else "new"
+            return FakeRequest({"values": [[value]]})
+    class Service:
+        def spreadsheets(self): return self
+        def values(self): return Values()
+    def publish(sheet, rows, failed, *, ticket, observed_at, cached=False):
+        try:
+            return projection.observe(sheet, rows, (), at=observed_at, failed=failed, ticket=ticket)
+        finally:
+            projection.end_update(sheet, ticket=ticket)
+    reader = GoogleSheetsRowReader(Service(), on_observation_start=projection.begin_update,
+                                   on_observation=publish)
+    outcomes = []
+    def old_reader():
+        from src.sheets.google_reader import GoogleSheetsReadUnavailable
+        try:
+            reader.read_rows(worksheet())
+        except GoogleSheetsReadUnavailable:
+            outcomes.append("superseded")
+    thread = Thread(target=old_reader, name="old-reader")
+    thread.start()
+    try:
+        assert entered.wait(2)
+        reader.read_rows(worksheet())
+        assert projection.snapshot(worksheet())[0][0].cells["A"] == "new"
+    finally:
+        release.set()
+        thread.join(3)
+    assert not thread.is_alive()
+    assert outcomes == ["superseded"]
+    assert projection.snapshot(worksheet())[0][0].cells["A"] == "new"
+
+def test_cancelled_live_read_invalidates_and_releases_ticket():
+    import pytest
+
+    from src.launcher.source_status import SourceStatusProjection
+    from src.sheets import WorksheetRow
+    projection = SourceStatusProjection()
+    projection.observe(worksheet(), (WorksheetRow(1, {"A": "old"}),), (), at=None)
+    class Cancelled(BaseException): pass
+    class Request:
+        def execute(self): raise Cancelled()
+    class Service:
+        def spreadsheets(self): return self
+        def values(self): return self
+        def get(self, **kwargs): return Request()
+    def publish(sheet, rows, failed, *, ticket, observed_at, cached=False):
+        try:
+            return projection.observe(sheet, rows, (), at=observed_at, failed=failed, ticket=ticket)
+        finally:
+            projection.end_update(sheet, ticket=ticket)
+    reader = GoogleSheetsRowReader(Service(), on_observation_start=projection.begin_update, on_observation=publish)
+    with pytest.raises(Cancelled):
+        reader.read_rows(worksheet())
+    assert projection.snapshot(worksheet()) is None
+    assert worksheet() not in projection._updating
+
+
+def test_discovery_cache_does_not_publish_authoritative_source():
+    service = FakeSheetsService({"values": [["cached"]]})
+    service.values_resource.get_discovery = service.values_resource.get
+    service.get_discovery = service.values_resource.get
+    observations = []
+    reader = GoogleSheetsRowReader(service, on_observation=lambda *args: observations.append(args))
+    assert reader.read_discovery_rows(worksheet())[0].cells["A"] == "cached"
+    assert observations == []
+
+
+def test_reader_publication_follows_actual_acquisition_order():
+    from threading import Event, Thread, current_thread
+
+    from src.launcher.source_status import SourceStatusProjection
+    projection = SourceStatusProjection()
+    entered, release = Event(), Event()
+    class Values:
+        def get(self, **kwargs):
+            value = "fresh" if current_thread().name == "late-reader" else "earlier"
+            return FakeRequest({"values": [[value]]})
+    class Service:
+        def spreadsheets(self): return self
+        def values(self): return Values()
+    def publish(sheet, rows, failed, *, ticket, observed_at, cached=False):
+        try:
+            return projection.observe(sheet, rows, (), at=observed_at, failed=failed, ticket=ticket)
+        finally:
+            projection.end_update(sheet, ticket=ticket)
+    reader = GoogleSheetsRowReader(Service(), on_observation_start=projection.begin_update, on_observation=publish)
+    def delayed():
+        entered.set()
+        release.wait(3)
+        reader.read_rows(worksheet())
+    thread = Thread(target=delayed, name="late-reader")
+    thread.start()
+    try:
+        assert entered.wait(2)
+        assert reader.read_rows(worksheet())[0].cells["A"] == "earlier"
+    finally:
+        release.set()
+        thread.join(3)
+    assert not thread.is_alive()
+    assert projection.snapshot(worksheet())[0][0].cells["A"] == "fresh"
+
+def test_cancelled_lock_acquisition_does_not_release_another_owner():
+    import pytest
+    class Cancelled(BaseException): pass
+    class OtherOwnersLock:
+        def __init__(self): self.released = False
+        def acquire(self, timeout): raise Cancelled()
+        def release(self): self.released = True
+    lock = OtherOwnersLock()
+    reader = GoogleSheetsRowReader(FakeSheetsService(), on_observation_start=lambda _: 1)
+    reader._acquisition_locks[worksheet()] = lock
+    with pytest.raises(Cancelled):
+        reader.read_rows(worksheet())
+    assert not lock.released

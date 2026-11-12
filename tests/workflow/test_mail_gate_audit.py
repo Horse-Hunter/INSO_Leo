@@ -267,3 +267,42 @@ def test_unrelated_malformed_legacy_proof_cannot_crash_verified_login_dispatch(t
         worker,smtp=real_fake_smtp(backend._v12_store,now=NOW,review_current=backend._review_current_mail)
         assert worker.run_due(now=NOW)==1 and smtp.send_attempts==1
     finally:backend.shutdown()
+
+
+@pytest.mark.parametrize("reason", ["SESSION_STALE", "CONTROL_NOT_FOUND", None])
+def test_non_ai_purchase_failure_does_not_emit_false_ai_mismatch_mail(tmp_path, reason):
+    from decimal import Decimal
+    from types import SimpleNamespace
+
+    from src.launcher.backend import ProductionBackend
+    from src.launcher.purchase_completion import PurchaseCompletionActions
+    from src.workflow.v12_contracts import (
+        PurchaseDraftResult,
+        PurchaseOutcome,
+        ReasonCode,
+    )
+    from tests.workflow.test_v12_flow import (
+        SHEET,
+        FakeSheetsReader,
+        ResearchBusinessFacts,
+        _make_flow,
+    )
+
+    flow, queue, ledger, _research, _checker, _provider, writer, _worker = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("synthetic", Decimal(10), Decimal(2)))
+    writer.prepare = lambda command: PurchaseDraftResult(command.command_id,
+        PurchaseOutcome.VALIDATION_FAILED, NOW, reason_code=ReasonCode(reason) if reason else None)
+    reader = FakeSheetsReader(tier="C")
+    result, = flow.poll_and_process(reader, SHEET, now=NOW)
+    backend = ProductionBackend(root=tmp_path)
+    backend._store, backend._v12_store = queue, ledger
+    backend._mail_brief = SimpleNamespace(cached_lines=lambda _: ())
+    backend._source_projection.observe(SHEET, (reader.row,), queue.all_items(), at=NOW)
+    try:
+        actions = PurchaseCompletionActions(workflow_store=queue, v12_store=ledger, reader=reader,
+            writer_factory=lambda: None, mail_evidence=backend._fault_evidence)
+        actions.process(result, at=NOW)
+        worker, smtp = real_fake_smtp(ledger, now=NOW, review_current=backend._review_current_mail)
+        assert worker.run_due(now=NOW) == 0 and smtp.send_attempts == 0
+    finally:
+        backend.shutdown()

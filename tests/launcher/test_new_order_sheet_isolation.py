@@ -46,7 +46,7 @@ def test_actual_backend_keeps_healthy_sheet_processing_when_optional_or_one_shee
 
 
 @pytest.mark.parametrize("reason",["GOOGLE_AUTHENTICATION_REQUIRED","SHEETS_SCHEMA_UNAVAILABLE",
-    "GOOGLE_TAB_IDENTITY_UNCONFIRMED","GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED","WORKFLOW_LEDGER_UNAVAILABLE"])
+    "GOOGLE_SPREADSHEET_UNAVAILABLE", "GOOGLE_TAB_IDENTITY_UNCONFIRMED","GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED","WORKFLOW_LEDGER_UNAVAILABLE"])
 def test_shared_safety_cause_never_becomes_an_isolated_sheet_failure(reason):
     from src.workflow.v12_faults import FaultScope, V12Fault
     from src.workflow.v13_integration import is_isolated_source_read_error
@@ -142,7 +142,7 @@ def test_wrapped_safe_navigation_read_keeps_polling_after_three_hours(tmp_path,m
     from src.workflow.v12_faults import FaultScope, V12Fault
     backend,runtime,_clock=prepared(tmp_path,monkeypatch)
     error=GoogleSheetsReadUnavailable("synthetic read")
-    error.__cause__=V12Fault(FaultScope.GLOBAL_STOP,"GOOGLE_SPREADSHEET_UNAVAILABLE")
+    error.__cause__=TimeoutError("synthetic verified temporary read")
     if quotation_wrapper:
         outer=V12Fault(FaultScope.GLOBAL_STOP,"SHEETS_READ_UNAVAILABLE");outer.__cause__=error;error=outer
     backend._module_execute=lambda _:(_ for _ in ()).throw(error)
@@ -153,6 +153,7 @@ def test_wrapped_safe_navigation_read_keeps_polling_after_three_hours(tmp_path,m
         backend._run_independent_job("inquiry")
         assert runtime.module_plans()["inquiry"][0]==900
         assert runtime.module_plans()["inquiry"][2] is False
+        assert backend._module_failures["inquiry"][1] == "表格读取未完成，等待下一轮重试"
     finally:backend.shutdown()
 
 
@@ -183,7 +184,10 @@ def test_native_sheet_title_drift_rejects_wrong_export_and_retries_locally(web,m
     with service.poll_scope():
         reader=GoogleSheetsRowReader(service,retry_wait=lambda _:False)
         if persistent:
-            with pytest.raises(GoogleSheetsReadUnavailable):reader.read_rows(WorksheetIdentity("test","SHAHAB"))
+            with pytest.raises(GoogleSheetsReadUnavailable) as caught:
+                reader.read_rows(WorksheetIdentity("test","SHAHAB"))
+            from src.workflow.v13_integration import is_isolated_source_read_error
+            assert is_isolated_source_read_error(caught.value)
             assert len(calls)==5
         else:
             assert reader.read_rows(WorksheetIdentity("test","SHAHAB")) and len(calls)==2
@@ -274,3 +278,185 @@ def test_safe_quote_timeout_then_three_new_shahab_orders_enter_original_flow_onc
         assert len(quote_calls)>=2 and clock.tick>=1800
         assert not human.closed and browser.connected
     finally:backend.shutdown()
+
+
+def test_wrapped_google_identity_fault_is_not_reported_as_website_outage():
+    from src.launcher.backend import _website_failure
+    from src.sheets.google_reader import GoogleSheetsReadError
+    from src.workflow.v12_faults import FaultScope, V12Fault
+
+    error = GoogleSheetsReadError("synthetic read")
+    error.__cause__ = V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
+    assert _website_failure(error) is None
+
+
+@pytest.mark.parametrize("code,isolated", [("ERR_CONNECTION_RESET", True), ("ERR_CERT_AUTHORITY_INVALID", False)])
+def test_native_navigation_cause_chain_preserves_safe_retry_and_certificate_stop(web, monkeypatch, code, isolated):
+    from playwright.sync_api import Error as PageError
+
+    from src.sheets.google_reader import GoogleSheetsReadError, GoogleSheetsRowReader
+    from src.workflow.v13_integration import is_isolated_source_read_error
+    from tests.launcher.test_google_web import GridPage
+
+    service, browser, _, human = web
+    def goto(page, url, **kwargs):
+        page.url = "chrome-error://chromewebdata/"
+        raise PageError("net::"+code+" synthetic failure")
+    monkeypatch.setattr(GridPage, "goto", goto)
+    with service.poll_scope(), pytest.raises(GoogleSheetsReadError) as caught:
+        GoogleSheetsRowReader(service, retry_wait=lambda _: False).read_rows(WorksheetIdentity("test", "2026"))
+    assert is_isolated_source_read_error(caught.value) is isolated
+    from src.launcher.backend import _website_failure
+    assert _website_failure(caught.value) == ("Google Sheets" if isolated else None)
+    assert not human.closed and browser.is_connected()
+
+
+@pytest.mark.parametrize("cancel_fails", [False, True])
+def test_native_async_download_timeout_requires_successful_cancel_and_cleanup(web, monkeypatch, cancel_fails):
+    import asyncio
+
+    import src.launcher.google_web as google
+    from src.sheets.google_reader import (
+        GoogleDownloadReadTimeout,
+        GoogleSheetsReadError,
+        GoogleSheetsRowReader,
+    )
+    from src.workflow.v13_integration import is_isolated_source_read_error
+
+    service, _, _, human = web
+    original = google._download_call
+    operations = []
+    def call(download, operation, *, timeout):
+        operations.append(operation)
+        if operation == "failure":
+            async def expire():
+                await asyncio.wait_for(asyncio.sleep(1), timeout=0.001)
+            try:
+                asyncio.run(expire())
+            except TimeoutError:
+                raise GoogleDownloadReadTimeout("GOOGLE_WEB_READ_DOWNLOAD_TIMEOUT") from None
+        if operation == "cancel":
+            if cancel_fails:
+                raise RuntimeError("synthetic cancellation failure")
+            return None
+        return original(download, operation, timeout=timeout)
+    monkeypatch.setattr(google, "_download_call", call)
+    with service.poll_scope(), pytest.raises(GoogleSheetsReadError) as caught:
+        GoogleSheetsRowReader(service, retry_wait=lambda _: False).read_rows(WorksheetIdentity("test", "2026"))
+    assert is_isolated_source_read_error(caught.value)
+    assert "cancel" in operations and "delete" in operations
+    assert not human.closed
+
+
+def test_unrelated_async_cancellation_is_not_a_safe_read_failure():
+    from asyncio import CancelledError
+
+    from src.workflow.v13_integration import is_isolated_source_read_error
+    error = GoogleSheetsReadUnavailable("synthetic")
+    error.__cause__ = CancelledError()
+    assert not is_isolated_source_read_error(error)
+
+
+def test_artifact_loss_message_alone_does_not_authorize_retry():
+    from src.workflow.v13_integration import is_isolated_source_read_error
+
+    error = GoogleSheetsReadUnavailable("synthetic")
+    timeout = TimeoutError("GOOGLE_WEB_READ_ARTIFACT_LOST")
+    timeout.__cause__ = FileNotFoundError("unverified file")
+    error.__cause__ = timeout
+    assert not is_isolated_source_read_error(error)
+
+
+@pytest.mark.parametrize("failure", [ConnectionError, RuntimeError])
+def test_failed_owned_download_cleanup_preserves_successful_read(web, monkeypatch, failure):
+    import src.launcher.google_web as google
+    from src.sheets.google_reader import GoogleSheetsRowReader
+
+    service, _, _, human = web
+    original = google._download_call
+    operations = []
+    def call(download, operation, *, timeout):
+        operations.append(operation)
+        if operation == "delete":
+            raise failure("synthetic cleanup failure")
+        return original(download, operation, timeout=timeout)
+    monkeypatch.setattr(google, "_download_call", call)
+    with service.poll_scope():
+        rows = GoogleSheetsRowReader(service, retry_wait=lambda _: False).read_rows(WorksheetIdentity("test", "2026"))
+    assert rows and "delete" in operations and not human.closed
+
+
+def test_cleanup_failure_does_not_mask_download_timeout(web, monkeypatch):
+    import src.launcher.google_web as google
+    from src.sheets.google_reader import GoogleDownloadReadTimeout
+
+    service, _, _, human = web
+    original = google._download_call
+    def call(download, operation, *, timeout):
+        if operation == "failure":
+            raise GoogleDownloadReadTimeout("GOOGLE_WEB_READ_DOWNLOAD_TIMEOUT")
+        if operation == "delete":
+            raise RuntimeError("synthetic cleanup failure")
+        if operation == "cancel":
+            return None
+        return original(download, operation, timeout=timeout)
+    monkeypatch.setattr(google, "_download_call", call)
+    with service.poll_scope(), pytest.raises(TimeoutError):
+        service.get(spreadsheetId="test", range="'2026'!A1:G").execute()
+    assert not human.closed
+
+
+def test_certificate_failure_inside_generic_google_fault_never_becomes_outage():
+    from playwright.sync_api import Error as PageError
+
+    from src.launcher.backend import _website_failure
+    from src.sheets.google_reader import GoogleSheetsReadError
+    from src.workflow.v12_faults import FaultScope, V12Fault
+
+    error = GoogleSheetsReadError("synthetic read")
+    fault = V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SPREADSHEET_UNAVAILABLE")
+    fault.__cause__ = PageError("net::ERR_CERT_AUTHORITY_INVALID synthetic")
+    error.__cause__ = fault
+    assert _website_failure(error) is None
+
+
+@pytest.mark.parametrize("failure,isolated", [
+    ("net::ERR_CONNECTION_RESET", True),
+    ("net::ERR_CERT_AUTHORITY_INVALID", False),
+    ("unrecognized private failure", False),
+    ("net::ERR_CONNECTION_RESET plus unknown", False),
+])
+def test_native_download_failure_requires_explicit_transient_code(web, monkeypatch, failure, isolated):
+    from src.launcher.backend import _website_failure
+    from src.sheets.google_reader import GoogleSheetsReadError, GoogleSheetsRowReader
+    from src.workflow.v13_integration import is_isolated_source_read_error
+    from tests.launcher.test_google_web import Download
+
+    service, _, _, human = web
+    deletes = []
+    original_delete = Download.delete
+    monkeypatch.setattr(Download, "failure", lambda _: failure)
+    def delete(download):
+        deletes.append(True)
+        return original_delete(download)
+    monkeypatch.setattr(Download, "delete", delete)
+    with service.poll_scope(), pytest.raises(GoogleSheetsReadError) as caught:
+        GoogleSheetsRowReader(service, retry_wait=lambda _: False).read_rows(WorksheetIdentity("test", "2026"))
+    assert is_isolated_source_read_error(caught.value) is isolated
+    assert _website_failure(caught.value) == ("Google Sheets" if isolated else None)
+    assert len(deletes) == (5 if isolated else 1)
+    assert not human.closed
+
+
+def test_nested_tls_failure_has_priority_over_generic_google_fault():
+    from ssl import SSLError
+
+    from src.launcher.backend import _website_failure
+    from src.sheets.google_reader import GoogleSheetsReadError
+    from src.workflow.v12_faults import FaultScope, V12Fault
+
+    error = GoogleSheetsReadError("synthetic")
+    fault = V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SPREADSHEET_UNAVAILABLE")
+    fault.__cause__ = SSLError("synthetic")
+    error.__cause__ = fault
+    assert _website_failure(error) is None

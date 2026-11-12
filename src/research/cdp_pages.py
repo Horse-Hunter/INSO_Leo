@@ -71,6 +71,17 @@ class PageResourceAdmission:
         with self._lock:
             return self._failure is not None
 
+    def is_open_nonblocking(self):
+        """Fail closed if admission or its lock cannot be inspected immediately."""
+        if self._parent is not None and not self._parent.is_open_nonblocking():
+            return False
+        if not self._lock.acquire(blocking=False):
+            return False
+        try:
+            return self._failure is None
+        finally:
+            self._lock.release()
+
     def require_open(self):
         if self._parent is not None:
             self._parent.require_open()

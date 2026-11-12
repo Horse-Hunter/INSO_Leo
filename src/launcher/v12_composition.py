@@ -300,16 +300,20 @@ class CoordinatorPurchaseDraftWriter:
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def prepare(self, command: PurchaseDraftCommand) -> PurchaseDraftResult:
-        try:
-            self._actions.new_draft()
-            self._actions.set_customer("Win Source Elec. Tech. Ltd")
-            self._actions.set_quotation_type(command.quotation_type)
-            self._actions.set_purchaser(command.purchaser)
-            self._actions.open_ai_entry()
-            self._actions.set_ai_input(command.ai_input)
-            self._actions.run_ai_recognition()
-        except Exception as exc:  # noqa: BLE001 - every control failure maps to an explicit reason code
-            return self._failed(command, ReasonCode.CONTROL_NOT_FOUND, step="prepare", error=exc)
+        steps = (
+            ("prepare-new-draft", self._actions.new_draft, ()),
+            ("prepare-customer", self._actions.set_customer, ("Win Source Elec. Tech. Ltd",)),
+            ("prepare-quote-type", self._actions.set_quotation_type, (command.quotation_type,)),
+            ("prepare-purchaser", self._actions.set_purchaser, (command.purchaser,)),
+            ("prepare-ai-open", self._actions.open_ai_entry, ()),
+            ("prepare-ai-input", self._actions.set_ai_input, (command.ai_input,)),
+            ("prepare-ai-run", self._actions.run_ai_recognition, ()),
+        )
+        for step, action, args in steps:
+            try:
+                action(*args)
+            except Exception as exc:  # noqa: BLE001 - log only fixed step and exception class
+                return self._failed(command, ReasonCode.CONTROL_NOT_FOUND, step=step, error=exc)
 
         try:
             preview = self._actions.read_ai_result()
@@ -526,12 +530,12 @@ def compose_v12_production(
     brand_updater=None,
     brief_snapshot=lambda worksheet: (),
     clock=None,
-    notification_review=None, notification_prepare=None,
+    notification_review=None, notification_prepare=None, notification_guard=None,
 ) -> V12ProductionComposition:
     """Build the real seams only when every required adapter is explicit."""
 
     notification_worker = V12NotificationWorker(
-        v12_store, adapters.notification_transport, review_current=notification_review, prepare_content=notification_prepare, scope="business"
+        v12_store, adapters.notification_transport, review_current=notification_review, prepare_content=notification_prepare, guard_factory=notification_guard, clock=clock, scope="business"
     )
     coordinator = V12WorkflowCoordinator(
         workflow_store,

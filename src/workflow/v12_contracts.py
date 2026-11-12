@@ -6,6 +6,7 @@ External error text is intentionally not represented in any V1.2 result/event.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -271,6 +272,12 @@ class NotificationCommand:
     created_at: datetime
     payload_version: int = 1
     review: str | None = None
+    delivery_content_kind: str | None = None
+    delivery_report_completed_at: str | None = None
+    delivery_report_reference_at: str | None = None
+    delivery_source_observed_at: str | None = None
+    delivery_revision_guard: Callable[[], bool] | None = None
+    delivery_attempts: tuple[tuple[str, int], ...] = ()
 
     def __post_init__(self) -> None:
         if self.created_at.tzinfo is None:
@@ -307,8 +314,11 @@ class NotificationTransportResult:
 
     outcome: DeliveryOutcome
     reason_code: ReasonCode
+    deferred_without_send: bool = False
 
     def __post_init__(self) -> None:
+        if self.deferred_without_send and self.outcome is not DeliveryOutcome.RETRYABLE_FAILURE:
+            raise ValueError("deferred transport must be unsent and retryable")
         if not isinstance(self.outcome, DeliveryOutcome) or self.outcome not in {
             DeliveryOutcome.SENT,
             DeliveryOutcome.RETRYABLE_FAILURE,

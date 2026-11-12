@@ -338,3 +338,173 @@ def test_reenqueue_with_different_content_is_still_a_conflict(tmp_path: Path) ->
                 NOW,
             )
         )
+
+
+def test_each_recipient_starts_with_original_notification_body(tmp_path):
+    from dataclasses import replace
+
+    store = prepared_store(tmp_path)
+    store.enqueue_notification(command())
+    bodies = []
+
+    class CapturingTransport(FakeNotificationTransport):
+        def send_one(self, cmd, recipient):
+            bodies.append(cmd.text_body)
+            return super().send_one(cmd, recipient)
+
+    transport = CapturingTransport({
+        "a": (DeliveryOutcome.SENT,), "b": (DeliveryOutcome.SENT,),
+    })
+    worker = V12NotificationWorker(
+        store, transport,
+        prepare_content=lambda cmd, now: replace(cmd, text_body=cmd.text_body + " report"),
+    )
+    assert worker.run_due(now=NOW) == 2
+    assert bodies == ["text report", "text report"]
+
+def test_sent_content_evidence_is_scoped_to_exact_recipient_attempt(tmp_path):
+    import json
+    from dataclasses import replace
+
+    store = prepared_store(tmp_path)
+    store.enqueue_notification(command())
+    transport = FakeNotificationTransport({
+        "a": (DeliveryOutcome.SENT,), "b": (DeliveryOutcome.UNKNOWN,),
+    })
+    worker = V12NotificationWorker(store, transport,
+        prepare_content=lambda cmd, now: replace(cmd, text_body="base", delivery_content_kind="basic"))
+    assert worker.run_due(now=NOW) == 2
+    with sqlite3.connect(store.database_path) as db:
+        rows = db.execute("SELECT event_type,attempt,payload_json FROM workflow_v12_events WHERE event_type LIKE 'NOTIFICATION_DELIVERY_%' ORDER BY rowid").fetchall()
+    evidence = [json.loads(payload).get("notification_content") for _, _, payload in rows]
+    assert len(evidence) == 2 and sum(item is not None for item in evidence) == 1
+    sent = next(item for item in evidence if item is not None)
+    assert sent["version"] == 1 and sent["kind"] == "basic" and sent["attempt"] == 1
+    import hashlib
+    expected = lambda obj: hashlib.sha256(json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+    assert sent["command_id"] == command().command_id
+    assert sent["content_sha256"] == expected(["subject", "base", None])
+    assert sent["recipient_digest"] == expected([command().command_id, "a", "a@example.invalid"])
+
+
+def test_content_evidence_failure_rolls_back_sent_to_unknown_after_recovery(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    import src.workflow.v12_store as store_module
+
+    store = prepared_store(tmp_path)
+    cmd = replace(command(), recipients=(RECIPIENTS[0],))
+    store.enqueue_notification(cmd)
+    transport = FakeNotificationTransport({"a": (DeliveryOutcome.SENT,)})
+    worker = V12NotificationWorker(store, transport,
+        prepare_content=lambda item, now: replace(item, delivery_content_kind="basic"))
+    original = store_module._insert_event
+    def fail_on_content(db, event, *, content_evidence=None):
+        if content_evidence:
+            raise RuntimeError("synthetic persistence failure")
+        return original(db, event)
+    monkeypatch.setattr(store_module, "_insert_event", fail_on_content)
+    with pytest.raises(RuntimeError):
+        worker.run_due(now=NOW)
+    assert store.notification_delivery_states(cmd.command_id) == ("SENDING",)
+    store.recover_abandoned_notification_attempts(at=NOW)
+    assert store.notification_delivery_states(cmd.command_id) == ("UNKNOWN",)
+    assert worker.run_due(now=NOW) == 0 and len(transport.calls) == 1
+
+@pytest.mark.parametrize("field,value", [("command_id", "other"), ("inquiry_id", "other"),
+    ("recipients", (NotificationRecipient("x", "x@example.invalid"),))])
+def test_prepared_identity_change_never_reaches_transport(tmp_path, field, value):
+    from dataclasses import replace
+    store = prepared_store(tmp_path)
+    store.enqueue_notification(command())
+    transport = FakeNotificationTransport()
+    worker = V12NotificationWorker(store, transport,
+        prepare_content=lambda cmd, now: replace(cmd, **{field: value}))
+    assert worker.run_due(now=NOW) == 0
+    assert transport.calls == []
+    assert store.notification_delivery_states(command().command_id) == ("PENDING", "PENDING")
+
+def test_result_rejects_attempt_other_than_claimed_attempt(tmp_path):
+    store = prepared_store(tmp_path)
+    store.enqueue_notification(command())
+    claimed, = store.claim_due_notifications(now=NOW)
+    assert dict(claimed.delivery_attempts) == {"a": 1, "b": 1}
+    with pytest.raises(V12DatabaseError):
+        store.record_notification_result(command_id=claimed.command_id, recipient_id="a",
+            outcome=DeliveryOutcome.SENT, at=NOW, expected_attempt=2)
+    assert store.notification_delivery_states(claimed.command_id) == ("SENDING", "SENDING")
+
+def test_success_evidence_uses_successful_retry_attempt(tmp_path):
+    import json
+    from dataclasses import replace
+    store = prepared_store(tmp_path)
+    cmd = replace(command(), recipients=(RECIPIENTS[0],))
+    store.enqueue_notification(cmd)
+    transport = FakeNotificationTransport({"a": (DeliveryOutcome.RETRYABLE_FAILURE, DeliveryOutcome.SENT)})
+    worker = V12NotificationWorker(store, transport,
+        prepare_content=lambda item, now: replace(item, delivery_content_kind="basic"))
+    assert worker.run_due(now=NOW) == 1
+    assert worker.run_due(now=NOW + timedelta(minutes=1)) == 1
+    with sqlite3.connect(store.database_path) as db:
+        payload, = db.execute("SELECT payload_json FROM workflow_v12_events WHERE event_type='NOTIFICATION_DELIVERY_SUCCEEDED'").fetchone()
+    assert json.loads(payload)["notification_content"]["attempt"] == 2
+
+@pytest.mark.parametrize("kind,outcome,expected", [
+    ("basic", DeliveryOutcome.SENT, True), ("detailed", DeliveryOutcome.SENT, False),
+    (None, DeliveryOutcome.SENT, False), ("basic", DeliveryOutcome.UNKNOWN, False),
+])
+def test_basic_delivery_proof_requires_exact_sent_recipient(tmp_path, kind, outcome, expected):
+    from dataclasses import replace
+    store = prepared_store(tmp_path)
+    cmd = replace(command(), recipients=(RECIPIENTS[0],))
+    store.enqueue_notification(cmd)
+    transport = FakeNotificationTransport({"a": (outcome,)})
+    transport.supports_delivery_preflight = True  # This test isolates ledger evidence.
+    worker = V12NotificationWorker(store, transport,
+        prepare_content=lambda item, now: replace(item, delivery_content_kind=kind))
+    assert worker.run_due(now=NOW) == 1
+    assert store.notification_received_basic(cmd.command_id, "a", "a@example.invalid") is expected
+    assert not store.notification_received_basic(cmd.command_id, "a", "other@example.invalid")
+
+def test_conflicting_or_duplicate_basic_evidence_is_rejected(tmp_path):
+    from dataclasses import replace
+    store = prepared_store(tmp_path)
+    cmd = replace(command(), recipients=(RECIPIENTS[0],))
+    store.enqueue_notification(cmd)
+    worker = V12NotificationWorker(store, FakeNotificationTransport({"a": (DeliveryOutcome.SENT,)}),
+        prepare_content=lambda item, now: replace(item, delivery_content_kind="basic"))
+    assert worker.run_due(now=NOW) == 1
+    assert store.notification_received_basic(cmd.command_id, "a", "a@example.invalid")
+    assert any(event.event_type is EventType.NOTIFICATION_DELIVERY_SUCCEEDED for event in store.event_history(INQUIRY))
+    with sqlite3.connect(store.database_path) as db:
+        db.execute("INSERT INTO workflow_v12_events SELECT 'duplicate-test-event',inquiry_id,event_type,occurred_at,source_module,schema_version,reason_code,attempt,evidence_ref,payload_json FROM workflow_v12_events WHERE event_type='NOTIFICATION_DELIVERY_SUCCEEDED'")
+    assert not store.notification_received_basic(cmd.command_id, "a", "a@example.invalid")
+
+
+def test_content_evidence_without_claimed_attempt_never_commits_sent(tmp_path):
+    from dataclasses import replace
+    store = prepared_store(tmp_path)
+    cmd = replace(command(), recipients=(RECIPIENTS[0],))
+    store.enqueue_notification(cmd)
+    claimed, = store.claim_due_notifications(now=NOW)
+    with pytest.raises(V12DatabaseError):
+        store.record_notification_result(command_id=cmd.command_id, recipient_id="a", outcome=DeliveryOutcome.SENT,
+            at=NOW, content_command=replace(claimed, delivery_content_kind="basic"),
+            recipient_address="a@example.invalid")
+    assert store.notification_delivery_states(cmd.command_id) == ("SENDING",)
+
+def test_waiting_supplements_cannot_starve_original_notice(tmp_path):
+    from dataclasses import replace
+    store = prepared_store(tmp_path)
+    for index in range(16):
+        item = replace(command(), command_id=f"business-supplement:{index:02}", recipients=(RECIPIENTS[0],))
+        store.enqueue_notification(item)
+    original = replace(command(), command_id="zzz-original", recipients=(RECIPIENTS[0],))
+    store.enqueue_notification(original)
+    transport = FakeNotificationTransport({"a": (DeliveryOutcome.SENT,)})
+    worker = V12NotificationWorker(store, transport,
+        prepare_content=lambda item, now: None if item.command_id.startswith("business-supplement:") else item)
+    assert worker.run_due(now=NOW, limit=16) == 1
+    assert transport.calls == [("zzz-original", "a")]
+    assert store.notification_delivery_states("zzz-original") == ("SENT",)
+    assert worker.run_due(now=NOW, limit=16) == 0

@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import replace
 from datetime import UTC, datetime
+from threading import Lock
 from types import MappingProxyType
 from typing import Any, Protocol
 
@@ -17,6 +18,14 @@ TEMPORARY_READ_NETWORK_CODES = frozenset({
     "ERR_NAME_NOT_RESOLVED", "ERR_NETWORK_CHANGED", "ERR_INTERNET_DISCONNECTED",
     "ERR_PROXY_CONNECTION_FAILED", "ERR_TUNNEL_CONNECTION_FAILED",
 })
+
+
+class GoogleReadArtifactLost(TimeoutError):
+    """An exact owned read-only export artifact is no longer present."""
+
+
+class GoogleDownloadReadTimeout(TimeoutError):
+    """Timeout waiting for an owned read-only download artifact."""
 
 
 class GoogleSheetsReadError(RuntimeError):
@@ -74,12 +83,15 @@ class GoogleSheetsRowReader:
         first_row: int = 1,
         retry_wait=None,
         on_observation=lambda worksheet, rows, failed: None,
+        on_observation_start=None,
         on_live_observation=lambda worksheet, rows, started_at: None,
     ) -> None:
         if first_row < 1:
             raise ValueError("first_row must be a positive Google Sheet row number")
         self._on_live_observation = on_live_observation
         self._on_observation = on_observation
+        self._on_observation_start = on_observation_start
+        self._acquisition_locks, self._acquisition_locks_guard = {}, Lock()
         self._service = service
         self._first_row = first_row
         self._retry_wait = retry_wait or (lambda _seconds: False)
@@ -123,17 +135,46 @@ class GoogleSheetsRowReader:
         return self._read_rows(worksheet, discovery=False)
 
     def _read_rows(self, worksheet, *, discovery):
-        started_at = datetime.now(UTC)
-        read_range = _a1_range(worksheet.worksheet, self._first_row)
+        started_at, ticket, notified, acquired = None, None, False, None
+        observed_discovery = discovery and self._on_observation_start is not None and callable(getattr(self._service, "get_discovery_observed", None))
+        tracked = not discovery or observed_discovery
+        cache_hit = False
+
+        def notify(rows, failed):
+            if self._on_observation_start is None:
+                return self._on_observation(worksheet, rows, failed)
+            return self._on_observation(worksheet, rows, failed, ticket=ticket, observed_at=started_at, cached=cache_hit)
+
         try:
-            resource = self._service.spreadsheets().values()
-            get = resource.get_discovery if discovery else resource.get
-            response = execute_google_read(
-                lambda: get(
-                    spreadsheetId=worksheet.spreadsheet,
-                    range=read_range, majorDimension="ROWS",
-                    valueRenderOption="UNFORMATTED_VALUE",
-                ).execute(), retry_wait=self._retry_wait)
+            read_range = _a1_range(worksheet.worksheet, self._first_row)
+            if tracked and self._on_observation_start is not None:
+                with self._acquisition_locks_guard:
+                    candidate = self._acquisition_locks.setdefault(worksheet, Lock())
+                if not candidate.acquire(timeout=30):
+                    raise GoogleSheetsReadUnavailable("Source acquisition is busy")
+                acquired = candidate
+                started_at = datetime.now(UTC)
+                ticket = self._on_observation_start(worksheet)
+            else:
+                started_at = datetime.now(UTC)
+            try:
+                resource = self._service.spreadsheets().values()
+                get = resource.get_discovery_observed if observed_discovery else resource.get_discovery if discovery else resource.get
+                response = execute_google_read(
+                    lambda: get(
+                        spreadsheetId=worksheet.spreadsheet,
+                        range=read_range, majorDimension="ROWS",
+                        valueRenderOption="UNFORMATTED_VALUE",
+                    ).execute(), retry_wait=self._retry_wait)
+            finally:
+                if acquired is not None:
+                    acquired.release()
+                    acquired = None
+            if observed_discovery:
+                started_at = datetime.fromisoformat(response["_inso_source_observed_at"])
+                if started_at.tzinfo is None or type(response.get("_inso_source_cache_hit")) is not bool:
+                    raise GoogleSheetsReadError("Discovery observation time is unverified")
+                cache_hit = response["_inso_source_cache_hit"]
             values = response.get("values", [])
             rows = _to_worksheet_rows(values, first_row=self._first_row)
             evidence = response.get("source_order_dates")
@@ -162,20 +203,28 @@ class GoogleSheetsRowReader:
                 cache[worksheet] = tuple(
                     replace(row, cells=MappingProxyType(dict(row.cells))) for row in rows
                 )
-            self._on_observation(worksheet, rows, False)
-            if not discovery and self._first_row == 1:
+            accepted = None
+            if tracked:
+                notified = True
+                accepted = notify(rows, False)
+                if accepted is False:
+                    raise GoogleSheetsReadUnavailable("Source observation was superseded")
+            if tracked and not cache_hit and self._first_row == 1 and accepted is not False:
                 self._on_live_observation(worksheet, rows, started_at)
             return rows
-        except GoogleSheetsReadError:
-            self._on_observation(worksheet, (), True)
+        except BaseException as exc:
+            if tracked and not notified and (self._on_observation_start is None or ticket is not None):
+                notified = True
+                notify((), True)
             self._invalidate_discovery(worksheet)
-            raise
-        except Exception as exc:
-            self._on_observation(worksheet, (), True)
-            self._invalidate_discovery(worksheet)
+            if isinstance(exc, GoogleSheetsReadError) or not isinstance(exc, Exception):
+                raise
             raise GoogleSheetsReadError(
                 f"Unable to read worksheet {worksheet.worksheet!r}"
             ) from exc
+        finally:
+            if acquired is not None:
+                acquired.release()
 
     def _invalidate_discovery(self, worksheet):
         cache = self._discovery.get()

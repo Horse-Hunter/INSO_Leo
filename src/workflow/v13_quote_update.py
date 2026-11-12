@@ -56,6 +56,10 @@ class UpdateAttemptUnconfirmed(RuntimeError):
     """Unconfirmed UI step; only pre-dispatch operations may be repeated."""
 
 
+class UpdateResultTimeout(UpdateAttemptUnconfirmed):
+    """The dispatched update did not show a result within the configured wait."""
+
+
 class UpdateClickUnconfirmed(UpdateAttemptUnconfirmed):
     """Native update click was dispatched; delivery/result cannot be confirmed."""
 
@@ -73,7 +77,6 @@ class QuotationInput(Protocol):
     worksheet: object
     def validate_schema(self) -> None: ...
     def write_payload(self, payload: tuple[str, ...]) -> None: ...
-    def read_payload(self) -> tuple[str, ...]: ...
 
 
 class WorkflowQuotationSource:
@@ -188,6 +191,13 @@ class V13QuotationUpdater:
         self._dispatch_token = None
         self._native_confirmation = None
         final = self._update_one(result)
+        if (self._dispatch_token is not None and self._native_confirmation is None
+                and not final.effect_uncertain):
+            # Once dispatch is armed, no later row error may overwrite the
+            # durable unknown-write hold without a confirmed native result.
+            final = replace(final, outcome=QuotationOutcome.ROW_FAILED,
+                            row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED,
+                            effect_uncertain=True)
         if (self._dispatch_token is not None and not final.effect_uncertain
                 and self._native_confirmation is not None):
             self._confirm_dispatch(self._dispatch_token, self._native_confirmation)
@@ -245,15 +255,9 @@ class V13QuotationUpdater:
                         self._input.validate_schema()
                         try:
                             self._input.write_payload(payload)
-                            write_reason = RowErrorReason.QUOTE_INPUT_READBACK_MISMATCH
-                            if self._input.read_payload() != payload:
-                                continue
-                            # Source is still this order; final exact input read occurs
-                            # immediately before the only submit action (no write in between).
+                            # Reconfirm the source order immediately before dispatch.
                             if self._require_mode(result, refresh, expected_model=payload[1]) == "采购已报价" and not refresh:
                                 return self._success(result, UpdatePopupOutcome.ALREADY_EXISTS)
-                            if self._input.read_payload() != payload:
-                                continue
                             break
                         except QuotationInputBusy:
                             return result  # Quote remains eligible next poll, no Hold or baseline write.
@@ -280,6 +284,10 @@ class V13QuotationUpdater:
                         popup = parse_update_popup(self._actions.read_update_result())
                     except (sqlite3.Error, V12DatabaseError):
                         raise
+                    except UpdateResultTimeout:
+                        if refresh:
+                            return self._uncertain_refresh(result, baseline, price, popup_timeout=True)
+                        return replace(self._unconfirmed_initial(result), popup_timeout=True)
                     except Exception:  # noqa: BLE001 - dispatched update is never clicked again
                         if refresh:
                             return self._uncertain_refresh(result, baseline, price)
@@ -346,9 +354,10 @@ class V13QuotationUpdater:
         if self._persist_uncertain is None:
             self._persist_uncertain = guard
 
-    def _uncertain_refresh(self, result, old, new):
+    def _uncertain_refresh(self, result, old, new, *, popup_timeout=False):
         uncertain = replace(result, outcome=QuotationOutcome.BASELINE_RECORDED,
-                            row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED, effect_uncertain=True)
+                            row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED, effect_uncertain=True,
+                            popup_timeout=popup_timeout)
         # Only a committed native hold authorizes advancing the baseline. Mail
         # credentials/evidence are not the authority for unknown-write protection.
         if self._persist_uncertain is None:

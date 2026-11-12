@@ -55,9 +55,10 @@ class FakeNotificationTransport:
 class V12NotificationWorker:
     """Claim/deliver one recipient at a time; delivery never controls purchase."""
 
-    def __init__(self, store: V12Store, transport: NotificationTransport, *, review_current=None, prepare_content=None, scope="all") -> None:
+    def __init__(self, store: V12Store, transport: NotificationTransport, *, review_current=None, prepare_content=None, guard_factory=None, clock=None, scope="all") -> None:
         self._review_current = review_current
         self._prepare_content, self._scope = prepare_content, scope
+        self._clock, self._guard_factory = clock, guard_factory
         self._store = store
         self._transport = transport
         self._dispatch_lock = Lock()
@@ -80,58 +81,143 @@ class V12NotificationWorker:
         with self._dispatch_lock:
             if self._deferred and self._dispatch_owner != get_ident():
                 return 0  # No network on the shared browser actor.
+        from datetime import timedelta
+
+        def defer(command, recipient, at):
+            next_at = at + timedelta(seconds=15) if command.command_id.startswith("business-supplement:") else None
+            self._store.defer_notification_review(command.command_id, recipient.recipient_id, not_before=next_at)
+
         commands = self._store.claim_due_notifications(now=now, limit=limit, scope=self._scope)
         sent_attempts = 0
-        for command in commands:
-            for recipient in command.recipients:
-                from .notification_review import review_reason
-                command = replace(command, review=self._store.notification_review(command.command_id))
-                prior_reason = ("INCIDENT_ALREADY_NOTIFIED" if self._store.previous_incident_delivery_protected(command.review)
-                                else review_reason(command, now))
-                reason = prior_reason if prior_reason not in {None, "EVIDENCE_STALE"} else None
-                if reason is None and self._review_current is not None:
-                    try:
-                        reason = self._review_current(command, now)
-                        if reason is None and command.review:
-                            import json
-                            proof = json.loads(command.review)
-                            proof["verified_at"] = now.isoformat()
-                            command = replace(command, review=json.dumps(proof, sort_keys=True))
-                            self._store.refresh_notification_review(command.command_id, command.review)
-                    except Exception:  # noqa: BLE001 - an unavailable review never permits sending
-                        reason = "CURRENT_REVIEW_PENDING"
-                if reason is None and self._prepare_content is not None:
-                    try:
-                        prepared = self._prepare_content(command, now)
-                        if prepared is None:
-                            reason = "CURRENT_REVIEW_PENDING"
-                        else:
-                            command = prepared
-                    except Exception:  # noqa: BLE001 - unavailable content defers without SMTP
-                        reason = "CURRENT_REVIEW_PENDING"
-                if reason is None:
-                    reason = review_reason(command, now)
-                if reason == "CURRENT_REVIEW_PENDING":
-                    self._store.defer_notification_review(command.command_id, recipient.recipient_id)
-                    continue
-                if reason is not None:
-                    self._store.suppress_notification(command.command_id, recipient.recipient_id, reason, at=now)
-                    continue
+        for original_command in commands:
+            for recipient in original_command.recipients:
+                guard = None
                 try:
-                    result = self._transport.send_one(command, recipient)
-                    if not isinstance(result, NotificationTransportResult):
+                    command = original_command
+                    expected_attempt = dict(original_command.delivery_attempts).get(recipient.recipient_id)
+                    if type(expected_attempt) is not int or expected_attempt <= 0:
+                        defer(command, recipient, self._clock() if self._clock is not None else now)
+                        continue
+                    from .notification_review import review_reason
+                    command = replace(command, review=self._store.notification_review(command.command_id))
+                    prior_reason = ("INCIDENT_ALREADY_NOTIFIED" if self._store.previous_incident_delivery_protected(command.review)
+                                    else review_reason(command, now))
+                    reason = prior_reason if prior_reason not in {None, "EVIDENCE_STALE"} else None
+                    if reason is None and self._review_current is not None:
+                        try:
+                            reason = self._review_current(command, now)
+                            if reason is None and command.review:
+                                import json
+                                proof = json.loads(command.review)
+                                proof["verified_at"] = now.isoformat()
+                                command = replace(command, review=json.dumps(proof, sort_keys=True))
+                                self._store.refresh_notification_review(command.command_id, command.review)
+                        except Exception:  # noqa: BLE001 - an unavailable review never permits sending
+                            reason = "CURRENT_REVIEW_PENDING"
+                    if reason is None and self._prepare_content is not None:
+                        try:
+                            prepared = self._prepare_content(command, now)
+                            if prepared is None or (not isinstance(prepared, NotificationCommand)
+                                  or prepared.command_id != original_command.command_id
+                                  or prepared.inquiry_id != original_command.inquiry_id
+                                  or prepared.kind != original_command.kind
+                                  or prepared.created_at != command.created_at
+                                  or prepared.payload_version != command.payload_version
+                                  or prepared.review != command.review
+                                  or prepared.recipients != original_command.recipients
+                                  or prepared.delivery_attempts != original_command.delivery_attempts
+                                  or prepared.delivery_content_kind not in {None, "basic", "detailed"}):
+                                reason = "CURRENT_REVIEW_PENDING"
+                            else:
+                                command = prepared
+                        except Exception:  # noqa: BLE001 - unavailable content defers without SMTP
+                            reason = "CURRENT_REVIEW_PENDING"
+                    if reason is None:
+                        reason = review_reason(command, now)
+                    if reason == "CURRENT_REVIEW_PENDING":
+                        defer(command, recipient, self._clock() if self._clock is not None else now)
+                        continue
+                    if reason is not None:
+                        self._store.suppress_notification(command.command_id, recipient.recipient_id, reason, at=now)
+                        continue
+                    # Supplements re-prove live eligibility and report freshness immediately
+                    # before SMTP, using the actual injectable dispatch clock.
+                    import json
+                    dispatch_at = self._clock() if self._clock is not None else now
+                    if json.loads(command.review or "{}").get("business_supplement"):
+                        try:
+                            reason = self._review_current(command, dispatch_at) if self._review_current else "CURRENT_REVIEW_PENDING"
+                            if reason is None:
+                                proof = json.loads(command.review)
+                                proof["verified_at"] = dispatch_at.isoformat()
+                                command = replace(command, review=json.dumps(proof, sort_keys=True))
+                                self._store.refresh_notification_review(command.command_id, command.review)
+                                guard = self._guard_factory(command, at=dispatch_at, clock=self._clock or (lambda: now)) if self._guard_factory is not None else None
+                                if guard is None or self._review_current(command, dispatch_at) is not None:
+                                    raise ValueError("SUPPLEMENT_GUARD_UNAVAILABLE")
+                                base = replace(original_command, review=command.review)
+                                prepared = self._prepare_content(base, dispatch_at) if self._prepare_content else None
+                                if (not isinstance(prepared, NotificationCommand)
+                                        or prepared.command_id != command.command_id
+                                        or prepared.inquiry_id != command.inquiry_id or prepared.kind != command.kind
+                                        or prepared.created_at != command.created_at
+                                        or prepared.payload_version != command.payload_version
+                                        or prepared.review != command.review or prepared.recipients != command.recipients
+                                        or prepared.delivery_attempts != command.delivery_attempts
+                                        or prepared.delivery_content_kind != "detailed"):
+                                    reason = "CURRENT_REVIEW_PENDING"
+                                else:
+                                    command = replace(prepared, delivery_revision_guard=guard)
+                                    reason = review_reason(command, dispatch_at)
+                        except Exception:  # noqa: BLE001 - no SMTP if last recheck is unavailable
+                            reason = "CURRENT_REVIEW_PENDING"
+                        if reason == "CURRENT_REVIEW_PENDING":
+                            defer(command, recipient, self._clock() if self._clock is not None else now)
+                            continue
+                        if reason is not None:
+                            self._store.suppress_notification(command.command_id, recipient.recipient_id, reason, at=dispatch_at)
+                            continue
+                        try:
+                            from datetime import datetime, timedelta
+                            final_at = self._clock() if self._clock is not None else dispatch_at
+                            completed = datetime.fromisoformat(command.delivery_report_completed_at)
+                            reference = datetime.fromisoformat(command.delivery_report_reference_at)
+                            if (not timedelta(0) <= final_at-dispatch_at <= timedelta(seconds=1)
+                                    or not timedelta(0) <= final_at-completed <= timedelta(minutes=15)
+                                    or not timedelta(0) <= final_at-reference <= timedelta(minutes=15)):
+                                raise ValueError("SUPPLEMENT_FRESHNESS_UNCONFIRMED")
+                            dispatch_at = final_at
+                        except (TypeError, ValueError, OverflowError):
+                            defer(command, recipient, self._clock() if self._clock is not None else now)
+                            continue
+                    if command.delivery_content_kind == "detailed" and not getattr(self._transport, "supports_delivery_preflight", False):
+                        defer(command, recipient, self._clock() if self._clock is not None else now)
+                        continue
+                    try:
+                        result = self._transport.send_one(command, recipient)
+                        if not isinstance(result, NotificationTransportResult):
+                            result = _transport_result(DeliveryOutcome.UNKNOWN)
+                    except Exception:  # noqa: BLE001 - unexpected adapter errors are UNKNOWN
+                        # Only the transport adapter can classify provider-specific errors.
                         result = _transport_result(DeliveryOutcome.UNKNOWN)
-                except Exception:  # noqa: BLE001 - unexpected adapter errors are UNKNOWN
-                    # Only the transport adapter can classify provider-specific errors.
-                    result = _transport_result(DeliveryOutcome.UNKNOWN)
-                self._store.record_notification_result(
-                    command_id=command.command_id,
-                    recipient_id=recipient.recipient_id,
-                    outcome=result.outcome,
-                    at=now,
-                    reason_code=result.reason_code,
-                )
-                sent_attempts += 1
+                    finished_at = self._clock() if self._clock is not None else now
+                    if result.deferred_without_send:
+                        defer(command, recipient, finished_at)
+                        continue
+                    self._store.record_notification_result(
+                        command_id=command.command_id,
+                        recipient_id=recipient.recipient_id,
+                        outcome=result.outcome,
+                        at=finished_at,
+                        reason_code=result.reason_code,
+                        content_command=command if command.delivery_content_kind else None,
+                        recipient_address=recipient.address,
+                        expected_attempt=expected_attempt,
+                    )
+                    sent_attempts += 1
+                finally:
+                    if guard is not None:
+                        guard.close()
         return sent_attempts
 
 

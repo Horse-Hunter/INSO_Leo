@@ -548,3 +548,90 @@ def test_catalog_reuses_canonical_quantity_without_truncation(tmp_path, raw, exp
     order = backend._research_catalog.match(record.model, now=NOW)
     assert (order.quantity if order else None) == expected
     backend.shutdown()
+
+
+@pytest.mark.parametrize("unavailable", [False, True])
+def test_business_report_persists_machine_readable_availability(tmp_path, unavailable):
+    from tests.workflow.test_v12_notifications import command
+    service, _, _, _, clock, _ = scene(tmp_path)
+    if unavailable:
+        def broken(*args):
+            raise TimeoutError("synthetic outage")
+        service.source_reader = broken
+    cmd = command()
+    assert service.store.request_business(cmd, DetailedOrder("MPN-1"), clock[0])
+    for _ in range(3 if unavailable else 1):
+        assert service.run_one()
+        clock[0] += timedelta(seconds=120)
+    row = service.store.get(cmd.command_id)
+    assert row["state"] == "READY"
+    assert json.loads(row["report"])["usable"] is (not unavailable)
+
+def test_inquiry_catalog_rejects_older_observation_finishing_last():
+    catalog = InquiryCatalog()
+    source = "synthetic-sheet"
+    later = NOW + timedelta(seconds=1)
+    catalog.observe(source, (("new", DetailedOrder("MPN"), later),), observed_at=later)
+    catalog.observe(source, (("old", DetailedOrder("MPN"), NOW),), observed_at=NOW)
+    assert catalog.sources[source][0][0] == "new"
+
+@pytest.mark.parametrize("failed_start", [1, 2])
+def test_partial_start_keeps_only_started_threads_and_closes_safely(tmp_path, monkeypatch, failed_start):
+    service, *_ = scene(tmp_path)
+    created = []
+    class FakeThread:
+        def __init__(self, **kwargs):
+            self.number = len(created)+1
+            self.joins = []
+            self.ident = None
+            created.append(self)
+        def start(self):
+            if self.number == failed_start:
+                raise RuntimeError("synthetic start failure")
+            self.ident = self.number
+        def is_alive(self):
+            return False
+        def join(self, timeout=None):
+            self.joins.append(timeout)
+    monkeypatch.setattr(threading, "Thread", FakeThread)
+    with pytest.raises(RuntimeError):
+        service.start()
+    assert service.stop_event.is_set()
+    assert service.threads == created[:failed_start]
+    service.close()
+    if failed_start == 2:
+        assert created[0].joins == [1, None]
+
+
+def test_start_exception_after_native_thread_start_remains_tracked(tmp_path, monkeypatch):
+    service, *_ = scene(tmp_path)
+    actual_thread = threading.Thread
+    service._receive = service.stop_event.wait
+    class StartsThenRaises:
+        def __init__(self, **kwargs):
+            self.inner = actual_thread(**kwargs)
+        @property
+        def ident(self):
+            return self.inner.ident
+        def is_alive(self):
+            return self.inner.is_alive()
+        def start(self):
+            self.inner.start()
+            raise RuntimeError("synthetic failure after starting")
+        def join(self, timeout=None):
+            self.inner.join(timeout=timeout)
+    monkeypatch.setattr(threading, "Thread", StartsThenRaises)
+    with pytest.raises(RuntimeError):
+        service.start()
+    assert len(service.threads) == 1 and service.threads[0].ident is not None
+    assert not service.threads[0].is_alive()
+    service.close()
+
+
+def test_exit_during_research_does_not_begin_notification_dispatch(tmp_path):
+    service, *_ = scene(tmp_path)
+    dispatches = []
+    service.run_one = lambda: service.stop_event.set()
+    service.worker.run_due = lambda **kwargs: dispatches.append(True)
+    service._work()
+    assert dispatches == []

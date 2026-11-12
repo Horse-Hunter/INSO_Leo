@@ -142,7 +142,7 @@ def test_confirmed_popup_and_source_quoted_success_once(popup, outcome):
     result = updater.update_one(upstream)
     assert result.outcome is outcome
     assert result.record_identity is upstream.record_identity and result.inquiry_id == upstream.inquiry_id
-    assert io.writes == [upstream.quotation.payload] and io.reads == 2
+    assert io.writes == [upstream.quotation.payload] and io.reads == 0
     assert actions.opened == actions.closed == actions.clicks == 1 and waits == []
 
 
@@ -156,30 +156,20 @@ def test_raw_payload_business_mismatch_odd_empty_values_never_revalidated():
     assert io.writes == [raw]
 
 
-@pytest.mark.parametrize("failure_kind", ["write", "readback", "stale"])
-def test_full_write_readback_retries_recover_and_only_then_click(failure_kind):
+def test_write_failure_retries_then_clicks_without_readback():
     updater, _, io, actions, _ = service()
-    if failure_kind == "write":
-        io.write_failures = [QuotationInputAttemptFailed("QUOTE_INPUT_WRITE_FAILED"), None]
-    elif failure_kind == "readback":
-        io.readbacks = [("wrong",)*14]
-    else:
-        io.readbacks = [found().quotation.payload, ("overwritten",)*14]
+    io.write_failures = [QuotationInputAttemptFailed("QUOTE_INPUT_WRITE_FAILED"), None]
+    io.read_payload = lambda: pytest.fail("quotation input must not be read back")
     assert updater.update_one(found()).outcome is QuotationOutcome.UPDATED_INSERTED
-    assert len(io.writes) == 2 and all(len(payload) == 14 for payload in io.writes)
-    assert actions.clicks == 1
+    assert len(io.writes) == 2 and actions.clicks == 1
 
 
-@pytest.mark.parametrize("failure_kind,reason", [("write", RowErrorReason.QUOTE_INPUT_WRITE_FAILED),
-                                                 ("readback", RowErrorReason.QUOTE_INPUT_READBACK_MISMATCH)])
-def test_four_input_failures_are_row_failed_without_click(failure_kind, reason):
+def test_four_input_write_failures_stop_without_click():
     updater, _, io, actions, waits = service()
-    if failure_kind == "write":
-        io.write_failures = [QuotationInputAttemptFailed("private detail")]*4
-    else:
-        io.readbacks = [("wrong",)*14]*4
+    io.write_failures = [QuotationInputAttemptFailed("private detail")] * 4
     result = updater.update_one(found())
-    assert result.outcome is QuotationOutcome.ROW_FAILED and result.row_error_reason is reason
+    assert result.outcome is QuotationOutcome.ROW_FAILED
+    assert result.row_error_reason is RowErrorReason.QUOTE_INPUT_WRITE_FAILED
     assert len(io.writes) == 4 and actions.clicks == 0 and actions.closed == 1 and waits == []
 
 
@@ -192,7 +182,7 @@ def test_unconfirmed_update_only_polls_source_without_rewriting_or_reclicking(fi
     result = updater.update_one(found())
     assert result.row_error_reason is RowErrorReason.UPDATE_RESULT_UNCONFIRMED and result.effect_uncertain
     assert actions.opened == actions.closed == actions.clicks == 1
-    assert len(io.writes) == 1 and io.reads == 2 and waits == []
+    assert len(io.writes) == 1 and io.reads == 0 and waits == []
 
 
 def test_popup_missing_but_prior_script_status_closed_prevents_second_click():
@@ -203,6 +193,31 @@ def test_popup_missing_but_prior_script_status_closed_prevents_second_click():
     assert actions.clicks == actions.opened == actions.closed == 1 and len(io.writes) == 1 and waits == []
 
 
+def test_popup_timeout_skips_current_order_without_reclicking():
+    from src.workflow.v13_quote_update import UpdateResultTimeout
+
+    updater, _, io, actions, _ = service()
+    actions.popups = [UpdateResultTimeout("synthetic timeout")]
+    result = updater.update_one(found())
+    assert result.row_error_reason is RowErrorReason.UPDATE_RESULT_UNCONFIRMED
+    assert result.effect_uncertain and result.popup_timeout
+    assert actions.clicks == actions.opened == actions.closed == 1
+    assert len(io.writes) == 1
+
+
+def test_popup_timeout_does_not_stop_following_order():
+    from src.workflow.v13_quote_update import UpdateResultTimeout
+
+    updater, source, _, actions, _ = service()
+    actions.popups = [UpdateResultTimeout("synthetic timeout"), POPUP]
+    source.read_state = lambda row: ("采购已报价" if row.source_row_position == 3 and actions.clicks >= 2
+                                     else "发给采购", row.queried_mpn)
+    first, second = updater.run([found(2), found(3)])
+    assert first.popup_timeout and first.effect_uncertain
+    assert second.outcome is QuotationOutcome.UPDATED_INSERTED
+    assert actions.clicks == 2
+
+
 def test_unconfirmed_update_exhausts_read_only_checks_without_any_second_write():
     updater, src, io, actions, waits = service()
     src.after = ["发给采购"]
@@ -210,7 +225,7 @@ def test_unconfirmed_update_exhausts_read_only_checks_without_any_second_write()
     result = updater.update_one(found())
     assert result.row_error_reason is RowErrorReason.UPDATE_RESULT_UNCONFIRMED
     assert actions.opened == actions.closed == actions.clicks == 1
-    assert len(io.writes) == 1 and io.reads == 2 and waits == []
+    assert len(io.writes) == 1 and io.reads == 0 and waits == []
 
 
 def test_confirmed_popup_only_polls_source_and_never_resubmits():
@@ -535,14 +550,14 @@ def test_source_model_b_actual_quote_model_l_and_notice_once_on_retries(remarks,
     upstream = replace(upstream, quotation=replace(upstream.quotation, payload=tuple(values)))
     notices = []
     updater._notify_model_difference = lambda result, model: notices.append((result, model))
-    io.readbacks = [("stale",) * 14]
+    io.read_payload = lambda: pytest.fail("quotation input must not be read back")
     actions.popups = [popup]
     result = updater.update_one(upstream)
     expected = list(values)
     expected[1] = " WGI210IT "
     expected[11] = (remarks + "\n" if remarks else "") + "报价实际型号：WGI210IT S LJXS"
     assert result.outcome in {QuotationOutcome.UPDATED_INSERTED, QuotationOutcome.UPDATED_ALREADY_EXISTS}
-    assert io.writes == [tuple(expected)] * 2
+    assert io.writes == [tuple(expected)]
     assert notices == [(upstream, " WGI210IT ")]
     assert upstream.quotation.payload == tuple(values) and result.quotation is upstream.quotation
     assert actions.clicks == 1
@@ -597,3 +612,147 @@ def test_verified_source_state_projects_physical_raw_model_without_cleaning(work
     result = replace(found(), inquiry_id=original.inquiry_id, record_identity=identity, queried_mpn=raw)
     verifier = WorkflowQuotationSource(reader=reader, store=Store([original]))
     assert verifier.read_state(result) == (cells[status_column], cells[model_column])
+
+
+def test_post_click_input_settlement_failure_retains_uncertain_dispatch():
+    updater, _source, _input, actions, _waits = service()
+    tokens, confirmations = [], []
+    updater.bind_dispatch_guard(lambda pending: tokens.append(pending) or ("synthetic", 1),
+                                lambda *args: confirmations.append(args))
+    actions.dismiss_error = QuotationInputUnavailable("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+
+    result = updater.update_one(found())
+    assert actions.clicks == 1 and len(tokens) == 1 and not confirmations
+    assert result.row_error_reason is RowErrorReason.UPDATE_RESULT_UNCONFIRMED
+    assert result.effect_uncertain is True
+
+
+def test_post_click_failure_cannot_replace_the_durable_unknown_hold(tmp_path):
+    from src.workflow.v13_integration import V13HoldStore, restore_result
+
+    database = tmp_path / "synthetic.sqlite3"
+    with sqlite3.connect(database) as db:
+        db.execute("CREATE TABLE workflow_v13_holds (hold_key TEXT PRIMARY KEY, result_json TEXT NOT NULL, "
+                   "observed_identity TEXT NOT NULL, reason TEXT NOT NULL, episode INTEGER NOT NULL, active INTEGER NOT NULL)")
+    holds = V13HoldStore(database)
+    updater, _source, _input, actions, _waits = service()
+    result = found()
+    updater.bind_dispatch_guard(lambda pending: holds.begin_dispatch(pending, result.record_identity),
+                                holds.confirm_dispatch)
+    actions.dismiss_error = QuotationInputUnavailable("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+
+    final = updater.update_one(result)
+    holds.hold(replace(final, quotation=None), result.record_identity)
+    key, payload, _identity, reason, episode = holds.active()[0]
+    assert key == result.inquiry_id and reason == "UPDATE_RESULT_UNCONFIRMED" and episode == 1
+    assert restore_result(payload).effect_uncertain is True
+    assert holds.blocks_inquiry_retry(result.inquiry_id, result.record_identity)
+    assert actions.clicks == 1
+
+
+def test_active_unknown_quote_hold_cannot_be_overwritten_by_later_input_error(tmp_path):
+    from src.workflow.v13_integration import V13HoldStore, restore_result
+
+    database = tmp_path / "synthetic.sqlite3"
+    with sqlite3.connect(database) as db:
+        db.execute("CREATE TABLE workflow_v13_holds (hold_key TEXT PRIMARY KEY, result_json TEXT NOT NULL, "
+                   "observed_identity TEXT NOT NULL, reason TEXT NOT NULL, episode INTEGER NOT NULL, active INTEGER NOT NULL)")
+    holds = V13HoldStore(database)
+    original = found()
+    uncertain = replace(original, quotation=None, outcome=QuotationOutcome.ROW_FAILED,
+                        row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED, effect_uncertain=True)
+    token = holds.begin_dispatch(uncertain, original.record_identity)
+    later = replace(original, quotation=None, outcome=QuotationOutcome.ROW_FAILED,
+                    row_error_reason=RowErrorReason.QUOTE_INPUT_WRITE_FAILED)
+    with pytest.raises(V12Fault, match="UNKNOWN_QUOTATION_PROTECTED"):
+        holds.hold(later, original.record_identity)
+    key, payload, _identity, reason, episode = holds.active()[0]
+    assert (key, episode) == token and reason == "UPDATE_RESULT_UNCONFIRMED"
+    assert restore_result(payload).effect_uncertain is True
+    assert holds.blocks_inquiry_retry(original.inquiry_id, original.record_identity)
+
+
+@pytest.mark.parametrize("corrupt", ["not-json", "{}", '{"quotation":"invalid"}'])
+def test_invalid_unknown_hold_cannot_be_replaced(tmp_path, corrupt):
+    from src.workflow.v13_integration import V13HoldStore
+
+    database = tmp_path / "synthetic.sqlite3"
+    with sqlite3.connect(database) as db:
+        db.execute("CREATE TABLE workflow_v13_holds (hold_key TEXT PRIMARY KEY, result_json TEXT NOT NULL, "
+                   "observed_identity TEXT NOT NULL, reason TEXT NOT NULL, episode INTEGER NOT NULL, active INTEGER NOT NULL)")
+    holds = V13HoldStore(database)
+    original = found()
+    uncertain = replace(original, quotation=None, outcome=QuotationOutcome.ROW_FAILED,
+                        row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED, effect_uncertain=True)
+    holds.begin_dispatch(uncertain, original.record_identity)
+    with sqlite3.connect(database) as db:
+        db.execute("UPDATE workflow_v13_holds SET result_json=?", (corrupt,))
+    later = replace(original, quotation=None, outcome=QuotationOutcome.ROW_FAILED,
+                    row_error_reason=RowErrorReason.QUOTE_INPUT_WRITE_FAILED)
+    with pytest.raises(V12Fault, match="WORKFLOW_LEDGER_UNAVAILABLE"):
+        holds.hold(later, original.record_identity)
+    assert holds.active()[0][3:] == ("UPDATE_RESULT_UNCONFIRMED", 1)
+
+
+def test_unconfirmed_preclick_hold_can_record_a_later_different_failure(tmp_path):
+    from src.workflow.v13_integration import V13HoldStore
+
+    database = tmp_path / "synthetic.sqlite3"
+    with sqlite3.connect(database) as db:
+        db.execute("CREATE TABLE workflow_v13_holds (hold_key TEXT PRIMARY KEY, result_json TEXT NOT NULL, "
+                   "observed_identity TEXT NOT NULL, reason TEXT NOT NULL, episode INTEGER NOT NULL, active INTEGER NOT NULL)")
+    holds = V13HoldStore(database)
+    original = found()
+    before_click = replace(original, quotation=None, outcome=QuotationOutcome.ROW_FAILED,
+                           row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED, effect_uncertain=False)
+    holds.hold(before_click, original.record_identity)
+    later = replace(original, quotation=None, outcome=QuotationOutcome.ROW_FAILED,
+                    row_error_reason=RowErrorReason.QUOTE_INPUT_WRITE_FAILED)
+    assert holds.hold(later, original.record_identity)[1] == 2
+    assert holds.active()[0][3] == "QUOTE_INPUT_WRITE_FAILED"
+
+
+def test_conflicting_later_result_cannot_notify_confirmed_update_over_unknown_hold(tmp_path):
+    from src.workflow.v13_integration import V13HoldStore, V13IntegratedCycle
+
+    database = tmp_path / "synthetic.sqlite3"
+    with sqlite3.connect(database) as db:
+        db.execute("CREATE TABLE workflow_v13_holds (hold_key TEXT PRIMARY KEY, result_json TEXT NOT NULL, "
+                   "observed_identity TEXT NOT NULL, reason TEXT NOT NULL, episode INTEGER NOT NULL, active INTEGER NOT NULL)")
+    holds = V13HoldStore(database)
+    original = found()
+    uncertain = replace(original, quotation=None, outcome=QuotationOutcome.ROW_FAILED,
+                        row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED, effect_uncertain=True)
+    holds.begin_dispatch(uncertain, original.record_identity)
+    later = replace(original, quotation=None, outcome=QuotationOutcome.ROW_FAILED,
+                    row_error_reason=RowErrorReason.SOURCE_STATUS_NOT_UPDATED)
+    notices = []
+    cycle = V13IntegratedCycle(reader=None, store=None, holds=holds, cycle=None,
+                               updater_factory=lambda: None, notify=lambda *args: notices.append(args),
+                               observe=lambda *_args: None)
+    with pytest.raises(V12Fault, match="UNKNOWN_QUOTATION_PROTECTED"):
+        cycle.settle_result(later, ())
+    assert notices == []
+    assert holds.active()[0][3:] == ("UPDATE_RESULT_UNCONFIRMED", 1)
+
+
+def test_unknown_quote_hold_requires_same_original_identity(tmp_path):
+    from src.workflow.v13_integration import V13HoldStore
+
+    database = tmp_path / "synthetic.sqlite3"
+    with sqlite3.connect(database) as db:
+        db.execute("CREATE TABLE workflow_v13_holds (hold_key TEXT PRIMARY KEY, result_json TEXT NOT NULL, "
+                   "observed_identity TEXT NOT NULL, reason TEXT NOT NULL, episode INTEGER NOT NULL, active INTEGER NOT NULL)")
+    holds = V13HoldStore(database)
+    original = found()
+    uncertain = replace(original, quotation=None, outcome=QuotationOutcome.ROW_FAILED,
+                        row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED, effect_uncertain=True)
+    token = holds.begin_dispatch(uncertain, original.record_identity)
+    assert holds.hold(uncertain, original.record_identity) == token
+    changed_status = replace(original.record_identity, identifying_snapshot=replace(
+        original.record_identity.identifying_snapshot, status="采购已报价"))
+    assert holds.hold(uncertain, changed_status) == token
+    moved = replace(original.record_identity, row_position=original.record_identity.row_position + 1)
+    with pytest.raises(V12Fault, match="UNKNOWN_QUOTATION_PROTECTED"):
+        holds.hold(uncertain, moved)
+    assert holds.active()[0][3:] == ("UPDATE_RESULT_UNCONFIRMED", 1)

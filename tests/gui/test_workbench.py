@@ -186,7 +186,10 @@ def _check_cached_tk_workbench(monkeypatch):
     app = InsoDashboardApp(backend)
     try:
         starts = []
-        backend.start = lambda: starts.append(True)
+        def start_after_busy():
+            starts.append(True)
+            return len(starts) > 1
+        backend.start = start_after_busy
         app._start_on_ready = True
         app._view.show_page("任务中心")
         app._root.update_idletasks()
@@ -208,7 +211,7 @@ def _check_cached_tk_workbench(monkeypatch):
             app._root.after_cancel(app._after_id)
             app._tick_workbench()
         assert app._tree.selection() == ("0",)
-        assert starts == [True]
+        assert starts == [True, True]  # Busy startup remains pending for the next tick.
         app._view.render_detail(orders[0])
         detail_text = "\n".join(
             str(w.cget("text"))
@@ -326,3 +329,90 @@ def _check_detail_contention(app, backend, selected):
             assert not worker.is_alive()
             real._store = None
             real.shutdown()
+
+
+def test_compact_order_status_keeps_source_and_unconfirmed_write_visible():
+    from src.gui.contracts import V12BusinessLabel, V12OrderStateDTO
+
+    item = order("synthetic-inquiry", business_status="冗长的来源和历史记录")
+    fresh = V12OrderStateDTO(item.inquiry_id, V12BusinessLabel.PURCHASE_SENT, None,
+        waiting_label="已报价给客户；采购/处理历史：已发采购单",
+        source_status="已报价给客户", source_fresh=True, source_verified_at=datetime.now(UTC))
+    assert order_status(item, fresh) == "已报价给客户"
+    held = replace(fresh, business_label=V12BusinessLabel.INTERRUPTED_POSSIBLY_SENT,
+                   waiting_label="已报价给客户；原写入待人工核对，不会自动重做")
+    assert order_status(item, held) == "已报价给客户 · 待核对"
+    stale = replace(held, source_fresh=False)
+    assert order_status(item, stale) == "状态待同步 · 待核对"
+    assert held.waiting_label.endswith("不会自动重做")
+
+
+def test_task_filters_use_fresh_source_status_and_preserve_holds():
+    from src.gui.contracts import V12BusinessLabel, V12OrderStateDTO
+
+    pending = order("pending")
+    quoted = order("quoted")
+    held = order("held")
+    stale = order("stale")
+    states = {
+        "pending": V12OrderStateDTO("pending", V12BusinessLabel.PURCHASE_SENT, None,
+                                    source_status="发给采购", source_fresh=True, source_verified_at=datetime.now(UTC)),
+        "quoted": V12OrderStateDTO("quoted", V12BusinessLabel.PURCHASE_SENT, None,
+                                   source_status="已报价给客户", source_fresh=True, source_verified_at=datetime.now(UTC)),
+        "held": V12OrderStateDTO("held", V12BusinessLabel.INTERRUPTED_POSSIBLY_SENT, None,
+                                 source_status="已报价给客户", source_fresh=True, source_verified_at=datetime.now(UTC)),
+        "stale": V12OrderStateDTO("stale", V12BusinessLabel.PURCHASE_SENT, None,
+                                  source_status="已报价给客户", source_fresh=False),
+    }
+    items = (pending, quoted, held, stale)
+    assert select_orders(items, status="待处理", states=states) == (pending,)
+    assert select_orders(items, status="已完成", states=states) == (quoted,)
+    assert select_orders(items, status="需核对", states=states) == (held, stale)
+    assert sort_orders(items, "status", states=states)[0] is pending
+
+
+def test_status_expires_without_snapshot_change_and_preserves_issue(monkeypatch):
+    from src.gui import workbench
+    from src.gui.contracts import V12BusinessLabel, V12OrderStateDTO
+
+    now = datetime.now(UTC)
+    item = order("synthetic")
+    state = V12OrderStateDTO(item.inquiry_id, V12BusinessLabel.DUPLICATE_ORDER, None,
+        source_status="未发", source_fresh=True, source_verified_at=now)
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now + timedelta(minutes=16)
+    monkeypatch.setattr(workbench, "datetime", Clock)
+    assert order_status(item, state) == "状态待同步 · 重复订单"
+    assert select_orders((item,), status="需核对", states={item.inquiry_id: state}) == (item,)
+
+
+def test_unknown_mail_does_not_hide_an_uncertain_purchase_or_quote_write():
+    from src.gui.contracts import V12BusinessLabel, V12OrderStateDTO
+
+    item = order("synthetic", delivery_status="UNKNOWN")
+    state = V12OrderStateDTO(item.inquiry_id, V12BusinessLabel.INTERRUPTED_POSSIBLY_SENT, None)
+    assert order_status(item, state) == "邮件及写入待核对"
+    quoted = replace(state, business_label=V12BusinessLabel.PURCHASE_SENT,
+                     waiting_label="原报价写入待人工核对，不会自动重做")
+    assert order_status(item, quoted) == "邮件及写入待核对"
+    mail_only = replace(state, business_label=V12BusinessLabel.PURCHASE_SENT)
+    assert order_status(item, mail_only) == "邮件结果待核对"
+
+
+def test_unknown_mail_does_not_hide_durable_purchase_alert_under_quotation_state():
+    from src.gui.contracts import (
+        OrderAlertDTO,
+        V12AlertCode,
+        V12BusinessLabel,
+        V12OrderStateDTO,
+        V12ReasonCode,
+    )
+
+    item = order("synthetic", delivery_status="UNKNOWN")
+    alert = OrderAlertDTO("synthetic-alert", V12AlertCode.PURCHASE_EXCEPTION,
+                          V12ReasonCode.SAVE_OUTCOME_UNKNOWN, datetime.now(UTC), True)
+    state = V12OrderStateDTO(item.inquiry_id, V12BusinessLabel.QUOTATION_COMPLETED,
+                             alert, active_alerts=(alert,))
+    assert order_status(item, state) == "邮件及写入待核对"

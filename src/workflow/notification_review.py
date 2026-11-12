@@ -21,7 +21,12 @@ def review_reason(command, now):
         if not isinstance(proof, dict):
             return "EVIDENCE_MISSING"
         verified = datetime.fromisoformat(proof["verified_at"])
-        if verified.tzinfo is None or not timedelta(0) <= now-verified <= timedelta(minutes=15):
+        quote_timeout = (proof.get("quote_popup_timeout") is True
+                         and proof.get("category") == "unknown_write"
+                         and proof.get("module") == "quotation"
+                         and proof.get("reason_code") == "UPDATE_RESULT_UNCONFIRMED")
+        if (verified.tzinfo is None or now < verified
+                or not quote_timeout and now-verified > timedelta(minutes=15)):
             return "EVIDENCE_STALE"
         if not all(proof.get(k) is True for k in ("active", "current_business", "needs_owner", "verified")):
             return "EVENT_NOT_CURRENT"
@@ -71,7 +76,7 @@ def review_reason(command, now):
                     or command.inquiry_id is not None):
                 return "RUNTIME_STOP_UNVERIFIED"
             return None
-        if not proof.get("manual") and age_reason(proof.get("inquiry_day"), now, module=proof.get("business_module", "quotation")):
+        if not proof.get("manual") and not quote_timeout and age_reason(proof.get("inquiry_day"), now, module=proof.get("business_module", "quotation")):
             return "ORDER_AGE_EXCLUDED"
         if category == "persistent_stop":
             if not proof.get("retries_exhausted") or proof.get("completed_cycles", 0) < 3:

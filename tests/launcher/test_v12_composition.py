@@ -261,6 +261,25 @@ def _purchase_writer(actions=None, parent=None):
     )
 
 
+@pytest.mark.parametrize("method,label", [
+    ("new_draft", "prepare-new-draft"), ("set_customer", "prepare-customer"),
+    ("set_quotation_type", "prepare-quote-type"), ("set_purchaser", "prepare-purchaser"),
+    ("open_ai_entry", "prepare-ai-open"), ("set_ai_input", "prepare-ai-input"),
+    ("run_ai_recognition", "prepare-ai-run"),
+])
+def test_prepare_failure_reports_fixed_step_without_sensitive_exception(monkeypatch, method, label):
+    import src.launcher.v12_composition as composition
+    actions = _PrepareActions()
+    def fail(*args):
+        raise ValueError("sensitive detail")
+    monkeypatch.setattr(actions, method, fail)
+    captured = []
+    monkeypatch.setattr(composition, "log_step", lambda step, **kwargs: captured.append(step))
+    result = _purchase_writer(actions=actions).prepare(_command())
+    assert result.outcome is PurchaseOutcome.VALIDATION_FAILED
+    assert captured == [label]
+
+
 def test_v12_production_composition_uses_explicit_live_seams() -> None:
     workflow_store = object()
     v12_store = object()

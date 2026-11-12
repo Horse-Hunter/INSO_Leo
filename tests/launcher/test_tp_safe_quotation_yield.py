@@ -99,7 +99,8 @@ def assembly(tmp_path, monkeypatch, *, mode='normal', duration=10):
             actions.popups = [RuntimeError('synthetic unconfirmed response')]
             actions.source.after = ['发给采购'] * 50
         elif reason == 'QUOTE_INPUT_READBACK_MISMATCH':
-            io.readbacks = [('bad',)] * 8
+            from src.sheets.quotation_input import QuotationInputAttemptFailed
+            io.write_failures = [QuotationInputAttemptFailed('QUOTE_INPUT_READBACK_MISMATCH')] * 4
         elif reason == 'SOURCE_STATUS_NOT_UPDATED':
             actions.source.after = ['发给采购'] * 50
         integrated.updater_factory = lambda: updater

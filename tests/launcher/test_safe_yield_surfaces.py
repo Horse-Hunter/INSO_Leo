@@ -1,4 +1,6 @@
 """Existing native page guard/cleanup at the optional same-Owner checkpoint."""
+from contextlib import nullcontext
+
 import pytest
 
 from src.launcher.google_quote_update import google_operations_idle
@@ -20,7 +22,8 @@ from tests.launcher.test_v13_quotation_operations import (
 def test_existing_google_guard_certifies_idle_and_retains_pages(tmp_path, monkeypatch, problem):
     service, browser, _, original = web_fixture.__wrapped__(tmp_path)
     service._retained_pages = {}
-    with service.poll_scope():
+    exit_guard = pytest.raises(V12Fault, match="GOOGLE_TAB_IDENTITY_UNCONFIRMED") if problem == "target" else nullcontext()
+    with exit_guard, service.poll_scope():
         service.get(spreadsheetId='test', range="'2026'!A1:G").execute()
         page = browser.contexts[0].pages[-1]
         if problem == 'pending':
@@ -43,6 +46,8 @@ def test_existing_google_guard_certifies_idle_and_retains_pages(tmp_path, monkey
             assert service.operations_idle() is (problem == 'none')
         assert not page.closed and not original.closed
     assert not page.closed and not original.closed
+    if problem == "target":
+        assert next(iter(service._retained_pages.values()))[1:] == (True, False, False)
 
 
 @pytest.mark.parametrize('state', ['closed', 'active', 'protected', 'failed_close', 'expired_auth', 'lost_owner'])

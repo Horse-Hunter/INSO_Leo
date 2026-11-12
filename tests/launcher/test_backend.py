@@ -1151,7 +1151,53 @@ def test_a_failed_draft_is_not_retried_when_the_session_was_never_gone(
     assert guard.force_logins == [True, False]
 
 
-def test_a_proven_expiry_is_logged_in_and_retried_once(monkeypatch) -> None:
+def test_draft_failure_diagnosis_uses_current_session_guard(monkeypatch) -> None:
+    attempts = _install_coordinator(monkeypatch, [_failed_draft])
+    first = _StubSessionGuard(InsoSessionOutcome.AUTHENTICATED)
+    current = _StubSessionGuard(InsoSessionOutcome.AUTHENTICATED)
+    guards = iter((first, current))
+    writer = launcher._LivePurchaseDraftWriter(
+        lambda: SimpleNamespace(operation_page=lambda: nullcontext(_StubOperationPage())),
+        session_guard_factory=lambda: next(guards),
+    )
+    result = writer.prepare(_purchase_command())
+    assert attempts == ["prepare"]
+    assert result.reason_code is ReasonCode.CONTROL_NOT_FOUND
+    assert first.force_logins == [True]
+    assert current.force_logins == [False]
+
+
+def test_real_guard_factory_rebinds_after_lease_replacement(monkeypatch) -> None:
+    attempts = _install_coordinator(monkeypatch, [_failed_draft])
+    pages = [_StubOperationPage(), _StubOperationPage(), _StubOperationPage()]
+    class Session:
+        owns_operation_page = False
+        def __init__(self, page):
+            self.page, self.valid = page, True
+        def operation_access(self):
+            assert self.valid, "obsolete lease used"
+            return SimpleNamespace(operation_page=lambda: SimpleNamespace(page=self.page))
+    backend = object.__new__(ProductionBackend)
+    backend._inso_session, backend._inso_guard = Session(pages[0]), None
+    monkeypatch.setattr(launcher, "CoreLoginBridge", lambda: SimpleNamespace(
+        login=lambda _: SimpleNamespace(username="test", password="test")))
+    monkeypatch.setattr(launcher.InsoSessionGuard, "_log_in", lambda self, page: False)
+    monkeypatch.setattr(launcher.InsoSessionGuard, "_prove", lambda self, page: True)
+    def replace_session(**kwargs):
+        old = backend._inso_session
+        old.valid = False
+        backend._inso_session = Session(pages[1])
+        backend._inso_guard = None
+    monkeypatch.setattr(backend, "_reattach_inso_session", replace_session)
+    writer = launcher._LivePurchaseDraftWriter(
+        lambda: SimpleNamespace(operation_page=lambda: nullcontext(pages[2])),
+        session_guard_factory=backend._inso_purchase_session_guard)
+    result = writer.prepare(_purchase_command())
+    assert attempts == ["prepare"]
+    assert result.reason_code is ReasonCode.CONTROL_NOT_FOUND
+
+
+def test_restored_session_does_not_replay_failed_draft(monkeypatch) -> None:
     attempts = _install_coordinator(
         monkeypatch, [_failed_draft, _recognized_draft]
     )
@@ -1163,13 +1209,13 @@ def test_a_proven_expiry_is_logged_in_and_retried_once(monkeypatch) -> None:
         _purchase_command()
     )
 
-    assert attempts == ["prepare", "prepare"]
-    assert result.outcome is PurchaseOutcome.AI_RECOGNIZED
+    assert attempts == ["prepare"]
+    assert result.outcome is PurchaseOutcome.VALIDATION_FAILED
     assert guard.calls == 2
     assert guard.force_logins == [True, False]
 
 
-def test_a_session_that_cannot_be_restored_is_reported_as_stale(monkeypatch) -> None:
+def test_later_session_loss_preserves_original_failure(monkeypatch) -> None:
     attempts = _install_coordinator(monkeypatch, [_failed_draft])
     guard = _StubSessionGuard(InsoSessionOutcome.AUTHENTICATED, InsoSessionOutcome.DEAD)
 
@@ -1179,7 +1225,7 @@ def test_a_session_that_cannot_be_restored_is_reported_as_stale(monkeypatch) -> 
 
     assert attempts == ["prepare"]
     assert result.outcome is PurchaseOutcome.VALIDATION_FAILED
-    assert result.reason_code is ReasonCode.SESSION_STALE
+    assert result.reason_code is ReasonCode.CONTROL_NOT_FOUND
 
 
 def test_a_dead_session_stops_before_the_erp_is_touched(monkeypatch) -> None:
@@ -1208,6 +1254,41 @@ def test_purchase_session_loss_notifies_the_same_run_stop_callback(monkeypatch):
     result = writer.prepare(_purchase_command())
     assert result.reason_code is ReasonCode.SESSION_STALE
     assert calls == [("inq-live-1", "INSO：登录不可用")]
+
+
+def test_purchase_prepare_exception_writes_actionable_safe_diagnostic(monkeypatch, caplog):
+    from src.gui.main import _sanitized_line
+    from src.inso.session import SecurityViolation
+
+    writer = launcher._LivePurchaseDraftWriter(lambda: None)
+    def fail(_command):
+        raise SecurityViolation("session lease is not active")
+    monkeypatch.setattr(writer, "_prepare_once", fail)
+    with caplog.at_level("WARNING"), pytest.raises(SecurityViolation):
+        writer.prepare(_purchase_command())
+    lines = [_sanitized_line(r) for r in caplog.records if r.name == "inso.diagnostics"]
+    assert any("purchase-prepare" in line and "detail=SESSION_LEASE_INACTIVE" in line for line in lines)
+
+
+@pytest.mark.parametrize("phase", ["before", "after"])
+def test_purchase_login_failure_records_phase_and_reason(monkeypatch, caplog, phase):
+    from src.gui.main import _sanitized_line
+
+    statuses = ([InsoSessionStatus(InsoSessionOutcome.DEAD, "BROWSER_TIMEOUT")] if phase == "before" else
+                [InsoSessionStatus(InsoSessionOutcome.AUTHENTICATED),
+                 InsoSessionStatus(InsoSessionOutcome.DEAD, "SESSION_IDENTITY_UNVERIFIED")])
+    class Guard:
+        def ensure_authenticated(self, **_kwargs):
+            return statuses.pop(0)
+    guard = Guard()
+    writer = launcher._LivePurchaseDraftWriter(lambda: None, session_guard_factory=lambda: guard)
+    monkeypatch.setattr(writer, "_prepare_once", _failed_draft)
+    with caplog.at_level("WARNING"):
+        result = writer.prepare(_purchase_command())
+    assert result.outcome is PurchaseOutcome.VALIDATION_FAILED
+    lines = [_sanitized_line(r) for r in caplog.records if r.name == "inso.diagnostics"]
+    expected = "BROWSER_TIMEOUT" if phase == "before" else "SESSION_IDENTITY_UNVERIFIED"
+    assert f"purchase login phase={phase} reason={expected}" in lines
 
 
 def test_a_guard_that_cannot_be_built_leaves_the_flow_alone(monkeypatch) -> None:
@@ -1767,3 +1848,106 @@ def test_google_defer_does_not_hide_permanent_or_other_global_failures():
     for reason in ["SHEETS_SCHEMA_UNAVAILABLE", "WORKFLOW_LEDGER_UNAVAILABLE", "INSO_AUTHENTICATION_REQUIRED"]:
         assert not backend._defer_google_read_poll(V12Fault(FaultScope.GLOBAL_STOP, reason), timedelta(minutes=15))
     backend.shutdown()
+
+
+@pytest.mark.parametrize("failure", ["none", "exception"])
+def test_second_guard_unavailable_preserves_original_draft_failure(monkeypatch, failure):
+    attempts = _install_coordinator(monkeypatch, [_failed_draft])
+    first = _StubSessionGuard(InsoSessionOutcome.AUTHENTICATED)
+    count = 0
+    def factory():
+        nonlocal count
+        count += 1
+        if count == 1:
+            return first
+        if failure == "exception":
+            raise RuntimeError("synthetic factory failure")
+        return None
+    writer = launcher._LivePurchaseDraftWriter(
+        lambda: SimpleNamespace(operation_page=lambda: nullcontext(_StubOperationPage())),
+        session_guard_factory=factory,
+    )
+    result = writer.prepare(_purchase_command())
+    assert attempts == ["prepare"]
+    assert result.reason_code is ReasonCode.CONTROL_NOT_FOUND
+
+@pytest.mark.parametrize("failure", ["completion", "notifications"])
+def test_completion_exception_keeps_unresolved_inso_surface(tmp_path, failure):
+    backend = ProductionBackend(root=tmp_path)
+    backend._state = RunState.RUNNING
+    def process(*_args, **_kwargs):
+        if failure == "completion":
+            raise ValueError("synthetic")
+        return False
+    def notifications(**_kwargs):
+        if failure == "notifications":
+            raise ValueError("synthetic")
+    backend._purchase_completion = SimpleNamespace(process=process)
+    backend._v12_composition = SimpleNamespace(coordinator=SimpleNamespace(run_notifications=notifications))
+    calls = []
+    page = SimpleNamespace()
+    backend._inso_session = SimpleNamespace(close_owned_operation_tab=lambda: calls.append("close"),
+        operation_access=lambda: SimpleNamespace(operation_page=lambda: SimpleNamespace(page=page)))
+    backend._protect_keepalive_pages = lambda pages: calls.append("protect")
+    with pytest.raises(ValueError, match="synthetic"):
+        backend._complete_inquiry(SimpleNamespace(inquiry_id="synthetic-inquiry"))
+    assert calls == ["protect"]
+
+
+@pytest.mark.parametrize("outcome,closed", [
+    (PurchaseOutcome.SAVED, True),
+    (PurchaseOutcome.SUBMIT_UNCONFIRMED, False),
+    (PurchaseOutcome.UNKNOWN_WRITE_OUTCOME, False),
+    (PurchaseOutcome.MANUAL_REVIEW, False),
+])
+def test_writer_closes_dispatched_tab_only_after_confirmed_save(outcome, closed):
+    from src.workflow.v12_contracts import EventType
+
+    calls = []
+    access = SimpleNamespace(close_owned_operation_tab=lambda: calls.append("close"))
+    store = SimpleNamespace(purchase_state=lambda _id: outcome,
+        event_history=lambda _id: [SimpleNamespace(event_type=EventType.SAVE_DISPATCH_ARMED)])
+    writer = launcher._LivePurchaseDraftWriter(lambda: access, store=store)
+    writer._prepare_on_page = lambda _command, _access: "synthetic-result"
+    assert writer._prepare_once(_purchase_command()) == "synthetic-result"
+    assert bool(calls) is closed
+
+
+def test_google_resource_startup_restores_existing_hold_and_reuses_store(tmp_path):
+    from src.workflow.google_resource_holds import GoogleResourceHoldStore
+    from tests.workflow.test_google_resource_holds import DOC, prepare_v12
+
+    from src.launcher.google_quote_update import google_resource_barrier
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    path = tmp_path / "workflow.sqlite3"
+    prepare_v12(path)
+    persisted = GoogleResourceHoldStore(path)
+    persisted.migrate()
+    persisted.arm(DOC, "synthetic-target", "WRITE_ARMED")
+    backend = ProductionBackend(root=tmp_path)
+    try:
+        restored = backend._prepare_google_resource_store(path)
+        assert backend._prepare_google_resource_store(path) is restored
+        barrier = google_resource_barrier(backend._page_admission)
+        with pytest.raises(QuotationInputBusy):
+            barrier.begin_write(("https", "docs.google.com", "/spreadsheets/d/synthetic/edit"))
+    finally:
+        backend.shutdown()
+
+
+def test_google_resource_startup_failure_permanently_blocks_writer(tmp_path):
+    from src.launcher.google_quote_update import google_resource_barrier
+    from src.workflow.v12_faults import V12Fault
+
+    backend = ProductionBackend(root=tmp_path)
+    try:
+        with pytest.raises(V12Fault, match="WORKFLOW_LEDGER_UNAVAILABLE"):
+            backend._prepare_google_resource_store(tmp_path / "missing.sqlite3")
+        barrier = google_resource_barrier(backend._page_admission)
+        with pytest.raises(V12Fault, match="WORKFLOW_LEDGER_UNAVAILABLE"):
+            barrier.begin_write(("https", "docs.google.com", "/spreadsheets/d/synthetic/edit"))
+        with pytest.raises(V12Fault, match="WORKFLOW_LEDGER_UNAVAILABLE"):
+            backend._prepare_google_resource_store(tmp_path / "missing.sqlite3")
+    finally:
+        backend.shutdown()

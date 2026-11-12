@@ -17,6 +17,11 @@ from pathlib import Path
 
 from src.core.app_paths import app_root
 from src.launcher import ProductionBackend
+from src.launcher.diagnostics import (
+    DIAGNOSTIC_ORIGIN_MODULES,
+    LOGIN_FAILURE_REASONS,
+    SECURITY_DETAIL_CODES,
+)
 from src.launcher.single_instance import SingleInstanceGuard
 
 from .app import InsoDashboardApp
@@ -96,6 +101,14 @@ def _sanitized_line(record: logging.LogRecord) -> str:
             and (inquiry is None or isinstance(inquiry,str) and re.fullmatch(r"inq_[a-f0-9]{24,32}",inquiry))
             and isinstance(reason,str) and re.fullmatch(r"[A-Z_]{1,64}",reason)):
         return f"cycle={cycle} module={module} inquiry={inquiry or 'UNKNOWN'} stage={stage} result={reason}"
+    diagnostic_inquiry = getattr(record, "diagnostic_inquiry", None)
+    inquiry_suffix = (f" inquiry={diagnostic_inquiry}" if isinstance(diagnostic_inquiry, str)
+                      and re.fullmatch(r"inq_[a-f0-9]{24,32}", diagnostic_inquiry) else "")
+    login_phase = getattr(record, "inso_login_phase", None)
+    login_reason = getattr(record, "inso_login_reason", None)
+    if (isinstance(login_phase, str) and login_phase in {"before", "after"}
+            and isinstance(login_reason, str) and login_reason in LOGIN_FAILURE_REASONS):
+        return f"purchase login phase={login_phase} reason={login_reason}{inquiry_suffix}"
     step = getattr(record, "inso_step", None)
     if not isinstance(step, str) or _STEP_LABEL.fullmatch(step) is None:
         return f"launcher event ({record.levelname})"
@@ -105,7 +118,15 @@ def _sanitized_line(record: logging.LogRecord) -> str:
         if isinstance(cause, str) and _CAUSE_NAME.fullmatch(cause) is not None
         else ""
     )
-    return f"workflow step failed at {step}{suffix}"
+    detail = getattr(record, "inso_detail", None)
+    origin = getattr(record, "inso_origin", None)
+    extra = f" detail={detail}" if isinstance(detail, str) and detail in SECURITY_DETAIL_CODES else ""
+    if isinstance(origin, str):
+        origin_module, separator, line = origin.rpartition(":")
+        if (separator and origin_module in DIAGNOSTIC_ORIGIN_MODULES
+                and re.fullmatch(r"[1-9][0-9]{0,3}", line)):
+            extra += f" origin={origin}"
+    return f"workflow step failed at {step}{suffix}{extra}{inquiry_suffix}"
 
 
 def _configure_startup_log(root: Path) -> Path:

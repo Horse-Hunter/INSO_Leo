@@ -71,8 +71,9 @@ def setup(monkeypatch):
     return phases,notifications,grid
 
 
-def run(notifications):
-    return service.run_sales_header_check(config_path='unused',production_path='unused',root='unused',notify=lambda **kw:notifications.append(kw))
+def run(notifications, admission=None):
+    return service.run_sales_header_check(config_path='unused', production_path='unused', root='unused',
+        notify=lambda **kw: notifications.append(kw))
 
 
 def test_all_packages_complete_before_sales_and_success_no_notify(monkeypatch):
@@ -184,8 +185,10 @@ def test_new_sales_owner_every_click_old_review_page_not_borrowed(monkeypatch):
         return SimpleNamespace(disconnect=lambda:None),kwargs['page'],False
     monkeypatch.setattr(service,'acquire_sales_tab',acquire)
     monkeypatch.setattr(service,'prepare_sales_rows',lambda *a:expected(3))
-    assert run(notes)[0]=='WAITING_OWNER'
-    assert run(notes)[0]=='WAITING_OWNER'
+    from src.research.cdp_pages import PageResourceAdmission
+    admission = PageResourceAdmission()
+    assert run(notes, admission)[0]=='WAITING_OWNER'
+    assert run(notes, admission)[0]=='WAITING_OWNER'
     assert len(owners)==2 and owners[0]!=owners[1] and all(o.startswith('v14-sales-') for o in owners)
 
 
@@ -246,3 +249,42 @@ def test_list_load_failure_report_identifies_page_stage(monkeypatch):
     stage,report=run(notes)
     assert stage=='STOPPED' and '销售订单列表加载' in report
     assert 'SALES_LIST_UNCONFIRMED' not in report and 'mark' not in phases and 'upload' not in phases
+
+
+def test_sales_browser_binds_shared_admission_before_creating_page(monkeypatch):
+    from src.research.cdp_pages import PageResourceAdmission
+
+    config = SimpleNamespace(cdp=SimpleNamespace(cdp_url="http://127.0.0.1:9222"))
+    monkeypatch.setattr(service, "sales_config", lambda *_: (config, {}))
+    browser = SimpleNamespace(contexts=[SimpleNamespace(pages=[])])
+    handle = SimpleNamespace(owned=False, browser=browser, disconnect=lambda: None)
+    monkeypatch.setattr(service, "acquire_cdp_browser", lambda *_: handle)
+    admission = PageResourceAdmission()
+    service.google_resource_barrier(admission).restore(SimpleNamespace(active=lambda: ()))
+    observed = []
+    def stop_at_new_page(actual, *_args, **_kwargs):
+        observed.append(actual._inso_page_admission is admission)
+        raise OrderError("INSO")
+    monkeypatch.setattr(service, "new_background_page", stop_at_new_page)
+    result = service.run_sales_header_check(config_path="unused", production_path="unused", root="unused",
+                                           page_admission=admission)
+    assert result[0] == "STOPPED" and observed == [True]
+
+
+def test_sales_without_admission_stops_before_browser_acquisition(monkeypatch):
+    config = SimpleNamespace(cdp=SimpleNamespace(cdp_url="http://127.0.0.1:9222"))
+    monkeypatch.setattr(service, "sales_config", lambda *_: (config, {}))
+    monkeypatch.setattr(service, "acquire_cdp_browser", lambda *_: pytest.fail("unexpected browser acquisition"))
+    assert service.run_sales_header_check(config_path="unused", production_path="unused", root="unused")[0] == "STOPPED"
+
+
+def test_sales_stops_before_browser_when_resource_ledger_unready(monkeypatch):
+    from src.research.cdp_pages import PageResourceAdmission
+
+    config = SimpleNamespace(cdp=SimpleNamespace(cdp_url="http://127.0.0.1:9222"))
+    monkeypatch.setattr(service, "sales_config", lambda *_: (config, {}))
+    monkeypatch.setattr(service, "acquire_cdp_browser", lambda *_: pytest.fail("unexpected browser acquisition"))
+    admission = PageResourceAdmission()
+    service.google_resource_barrier(admission).require_restore()
+    assert service.run_sales_header_check(config_path="unused", production_path="unused", root="unused",
+                                          page_admission=admission)[0] == "STOPPED"

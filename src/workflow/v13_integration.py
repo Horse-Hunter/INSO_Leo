@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import sqlite3
+from contextlib import closing
 from dataclasses import asdict, replace
 from hashlib import sha256
 
@@ -34,7 +35,7 @@ class V13HoldStore:
 
     def migrate(self):
         try:
-            with sqlite3.connect(self.path) as db:
+            with closing(sqlite3.connect(self.path)) as db, db:
                 present = db.execute(
                     "SELECT 1 FROM sqlite_master WHERE name='workflow_v13_holds'"
                 ).fetchone()
@@ -42,7 +43,7 @@ class V13HoldStore:
                 create_verified_backup(
                     self.path, self.path.parent / "backups" / "v13-upgrade"
                 )
-            with sqlite3.connect(self.path) as db:
+            with closing(sqlite3.connect(self.path)) as db, db:
                 db.execute("BEGIN IMMEDIATE")
                 # Extend the same mailbox ledger to unbound row/global alerts.
                 info = tuple(
@@ -86,7 +87,7 @@ class V13HoldStore:
     def blocks_inquiry_retry(self, inquiry_id, identity):
         """Read existing barriers without installing or clearing any V13 schema."""
         try:
-            with sqlite3.connect(self.path) as db:
+            with closing(sqlite3.connect(self.path)) as db, db:
                 if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='workflow_v13_holds'").fetchone():
                     return False
             for key, _payload, observed_json, _reason, _episode in self.active():
@@ -103,7 +104,7 @@ class V13HoldStore:
 
     def active(self):
         try:
-            with sqlite3.connect(self.path) as db:
+            with closing(sqlite3.connect(self.path)) as db, db:
                 return tuple(
                     db.execute(
                         "SELECT hold_key,result_json,observed_identity,reason,episode FROM workflow_v13_holds WHERE active=1"
@@ -125,14 +126,51 @@ class V13HoldStore:
         payload = json.dumps(data, ensure_ascii=False)
         reason = result.row_error_reason.value
         try:
-            with sqlite3.connect(self.path) as db:
+            with closing(sqlite3.connect(self.path)) as db, db:
                 db.execute("BEGIN IMMEDIATE")
                 previous = db.execute(
-                    "SELECT reason,episode,active FROM workflow_v13_holds WHERE hold_key=?",
+                    "SELECT reason,episode,active,result_json,observed_identity FROM workflow_v13_holds WHERE hold_key=?",
                     (key,),
                 ).fetchone()
                 if dispatch and previous and previous[0] == "UPDATE_RESULT_UNCONFIRMED" and previous[2]:
                     raise V12Fault(FaultScope.GLOBAL_STOP, "UNKNOWN_QUOTATION_PROTECTED")
+                if previous and previous[0] == "UPDATE_RESULT_UNCONFIRMED" and previous[2]:
+                    try:
+                        old_payload = json.loads(previous[3])
+                        if not isinstance(old_payload, dict) or "quotation" not in old_payload:
+                            raise ValueError("invalid hold payload")
+                        old_marker = old_payload["quotation"]
+                        if old_marker is not None and not (
+                                isinstance(old_marker, dict) and old_marker.get("effect_uncertain") is True):
+                            raise ValueError("invalid hold marker")
+                    except (TypeError, ValueError):
+                        raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
+                    if old_marker is not None:
+                        # A source status may legitimately change while the same
+                        # order is observed; it is not part of identity proof.
+                        try:
+                            old_identity = json.loads(previous[4])
+                            new_identity = asdict(observed)
+                            if not isinstance(old_identity, dict) or not isinstance(old_identity.get("identifying_snapshot"), dict):
+                                raise TypeError("invalid hold identity")
+                            old_snapshot = dict(old_identity["identifying_snapshot"])
+                            new_snapshot = dict(new_identity["identifying_snapshot"])
+                            old_snapshot.pop("status", None)
+                            new_snapshot.pop("status", None)
+                            old_identity["identifying_snapshot"] = old_snapshot
+                            new_identity["identifying_snapshot"] = new_snapshot
+                        except (TypeError, ValueError, KeyError):
+                            raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
+                        # A conflicting row result must not replace the hold or
+                        # trigger a false confirmation notice for that hold.
+                        if (reason != "UPDATE_RESULT_UNCONFIRMED" or not effect_uncertain
+                                or old_identity != new_identity):
+                            raise V12Fault(FaultScope.GLOBAL_STOP, "UNKNOWN_QUOTATION_PROTECTED")
+                        if getattr(result, "popup_timeout", False) and not old_payload.get("popup_timeout"):
+                            old_payload["popup_timeout"] = True
+                            db.execute("UPDATE workflow_v13_holds SET result_json=? WHERE hold_key=?",
+                                       (json.dumps(old_payload, ensure_ascii=False), key))
+                        return key, previous[1]
                 episode = (
                     (previous[1] + int(previous[0] != reason or not previous[2]))
                     if previous
@@ -158,7 +196,7 @@ class V13HoldStore:
             raise ValueError("NATIVE_CONFIRMATION_REQUIRED")
         key, episode = token
         try:
-            with sqlite3.connect(self.path) as db:
+            with closing(sqlite3.connect(self.path)) as db, db:
                 changed = db.execute("UPDATE workflow_v13_holds SET active=0 WHERE hold_key=? AND episode=? AND active=1 AND reason='UPDATE_RESULT_UNCONFIRMED'", (key, episode)).rowcount
                 if changed != 1:
                     raise V12Fault(FaultScope.GLOBAL_STOP, "QUOTATION_DISPATCH_PROTECTION_CHANGED")
@@ -167,7 +205,7 @@ class V13HoldStore:
 
     def close(self, key):
         try:
-            with sqlite3.connect(self.path) as db:
+            with closing(sqlite3.connect(self.path)) as db, db:
                 db.execute(
                     "UPDATE workflow_v13_holds SET active=0 WHERE hold_key=? AND reason != 'UPDATE_RESULT_UNCONFIRMED'", (key,)
                 )
@@ -179,7 +217,7 @@ class V13HoldStore:
     def close_many(self, keys):
         """Atomically settle selected old barriers after an explicit manual attempt."""
         try:
-            with sqlite3.connect(self.path) as db:
+            with closing(sqlite3.connect(self.path)) as db, db:
                 db.executemany("UPDATE workflow_v13_holds SET active=0 WHERE hold_key=? AND reason != 'UPDATE_RESULT_UNCONFIRMED'",
                     ((key,) for key in keys))
         except sqlite3.Error:
@@ -502,11 +540,17 @@ class QuotationOrderContinuation:
 
 def is_isolated_source_read_error(error):
     """Only a source read may defer one sheet; shared safety failures propagate."""
+    from asyncio import CancelledError
+
     from src.sheets.google_reader import (
         TEMPORARY_READ_NETWORK_CODES,
+        GoogleDownloadReadTimeout,
+        GoogleReadArtifactLost,
         GoogleSheetsReadError,
         GoogleSheetsReadUnavailable,
     )
+    from src.sheets.quotation_input import QuotationInputBusy
+    from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
     # The quotation coordinator wraps an actual reader failure at its boundary.
     # Accept only that exact wrapper with a reader cause, never arbitrary faults.
     while isinstance(error, V12Fault) and error.reason == "SHEETS_READ_UNAVAILABLE":
@@ -518,13 +562,25 @@ def is_isolated_source_read_error(error):
         return False
     allowed = isinstance(error, GoogleSheetsReadUnavailable)
     seen = set()
-    cause = error
+    cause, previous, earlier = error, None, None
     while cause is not None and id(cause) not in seen:
         seen.add(id(cause))
         if isinstance(cause, V12Fault):
-            if cause.reason != "GOOGLE_SPREADSHEET_UNAVAILABLE":
-                return False
-            allowed = True  # Read rejected its own navigation; no data admitted.
+            # This reason also covers document/ownership mismatches. A generic
+            # fault is not evidence that only a safe transient read failed.
+            return False
+        elif (isinstance(cause, CancelledError) and isinstance(previous, TimeoutError)
+              and isinstance(earlier, GoogleDownloadReadTimeout)):
+            pass  # Exact asyncio.wait_for cancellation inside the owned download wait.
+        elif isinstance(cause, FileNotFoundError) and isinstance(previous, GoogleReadArtifactLost):
+            pass  # Only the exact owned read artifact was already absent.
+        elif isinstance(cause, UpdateAttemptUnconfirmed) and str(cause) in {
+            "UPDATE_RESULT_UNCONFIRMED", "GOOGLE_NAVIGATION_FAILED",
+            "GOOGLE_OPERATION_SURFACE_UNAVAILABLE", "GOOGLE_OPERATION_SURFACE_UNCONFIRMED",
+        }:
+            pass  # Exact read-side wrappers still require every nested cause to pass.
+        elif isinstance(cause, QuotationInputBusy) and str(cause) == "GOOGLE_QUOTATION_INPUT_BUSY":
+            pass
         elif type(cause).__module__.startswith("playwright"):
             if type(cause).__name__ != "TimeoutError":
                 codes = re.findall(r"net::(ERR_[A-Z_]+)", str(cause))
@@ -532,7 +588,7 @@ def is_isolated_source_read_error(error):
                     return False
         elif not isinstance(cause, (GoogleSheetsReadError, TimeoutError, ConnectionError)):
             return False  # DB, authentication, ownership, TLS and unknown faults stay closed.
-        cause = cause.__cause__ or cause.__context__
+        earlier, previous, cause = previous, cause, cause.__cause__ or cause.__context__
     return allowed and cause is None
 
 

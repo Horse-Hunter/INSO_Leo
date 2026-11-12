@@ -73,13 +73,16 @@ def notify_quotation(store, result, key, episode, *, at, old_price=None, new_pri
     if result.row_error_reason.value == "UPDATE_RESULT_UNCONFIRMED" and not getattr(result, "effect_uncertain", False):
         return  # A pre-click timeout cannot claim an unknown external write.
     status_pending = result.row_error_reason.value == "SOURCE_STATUS_NOT_UPDATED"
+    popup_timeout = bool(getattr(result, "popup_timeout", False))
     command = NotificationCommand("review-pending", result.inquiry_id,
         NotificationKind.PURCHASE_EXCEPTION,
         (NotificationRecipient("owner", "linan229@qq.com"),),
-        "【需要处理】报价源表状态待核对" if status_pending else "【需要处理】报价写入待人工核对",
+        "【需要处理】报价源表状态待核对" if status_pending else
+        "【需要处理】报价弹窗等待超时" if popup_timeout else "【需要处理】报价写入待人工核对",
         f"型号：{result.queried_mpn or '尚未核实'}\n"
         f"位置：{result.source_worksheet.worksheet if result.source_worksheet else '尚未核实'}，第{result.source_row_position}行\n"
         + ("情况：报价更新已确认，原表状态仍待核对；不要重复更新报价。\n" if status_pending else
+         "情况：点击更新报价后等待一分钟仍未出现弹窗，本笔已跳过，结果待人工核实。\n" if popup_timeout else
          "情况：写入结果待人工核实；原订单被保护，不会自动重做。\n")
         + "处理：请在原Google表格核对报价结果，勿直接重发或重复更新。\n"
         + ("请保持已确认的报价结果，只核对原表状态。" if status_pending else "尚不能确认此次写入成功或失败。"), None, at)

@@ -33,20 +33,34 @@ class InquiryCatalog:
 
     def __init__(self):
         self.lock, self.sources, self.observed = threading.RLock(), {}, {}
+        self._last_started = {}
         self.expected = frozenset()
 
     def configure_sources(self, sources):
         with self.lock:
             self.expected = frozenset(sources)
             self.observed.clear()  # Startup/configuration is never live evidence.
+            self._last_started.clear()
 
     def observe(self, source, entries, *, observed_at=None):
         with self.lock:
+            previous = self._last_started.get(source)
+            if (previous is not None and observed_at is not None
+                    and observed_at.tzinfo is not None and previous.tzinfo is not None and observed_at < previous):
+                return
+            if observed_at is not None:
+                self._last_started[source] = observed_at
             self.sources[source] = tuple(entries)
             self.observed[source] = observed_at
 
-    def invalidate(self, source):
+    def invalidate(self, source, *, observed_at=None):
         with self.lock:
+            previous = self._last_started.get(source)
+            if (previous is not None and observed_at is not None
+                    and observed_at.tzinfo is not None and previous.tzinfo is not None and observed_at < previous):
+                return
+            if observed_at is not None:
+                self._last_started[source] = observed_at
             self.observed.pop(source, None)
 
     def is_current(self, *, now, not_before):
@@ -78,11 +92,12 @@ class InquiryCatalog:
 class MailResearchService:
     def __init__(self, *, store, inbox_factory, source_reader, fx_provider, catalog,
                  outbox, worker, clock=lambda: datetime.now(UTC), timer=monotonic,
-                 admit=lambda: True, refresh_catalog=None):
+                 admit=lambda: True, refresh_catalog=None, recover_business=None, review_business_job=None):
         self.store, self.inbox_factory, self.source_reader = store, inbox_factory, source_reader
         self.fx_provider, self.catalog, self.outbox, self.worker = fx_provider, catalog, outbox, worker
         self.clock, self.timer, self.admit = clock, timer, admit
-        self.refresh_catalog = refresh_catalog
+        self.refresh_catalog, self.recover_business = refresh_catalog, recover_business
+        self.review_business_job = review_business_job
         self.stop_event, self.wake = threading.Event(), threading.Event()
         self.threads, self.next_poll, self.health = [], 0.0, "INITIALIZING"
         self._failures = 0
@@ -99,7 +114,8 @@ class MailResearchService:
         if not any(s.outcome is not SourceOutcome.SOURCE_UNAVAILABLE for s in result.sources):
             return
         text, html = render_market_report(order, result, target=False)
-        report = {"text": text, "html": html, "completed_at": now.isoformat()}
+        reference = min(s.evidence.captured_at for s in result.sources)
+        report = {"text": text, "html": html, "completed_at": now.isoformat(), "reference_at": reference.isoformat(), "usable": True}
         self.remember_rendered(order, report)
 
     def remember_rendered(self, order, report):
@@ -113,7 +129,7 @@ class MailResearchService:
     def cached_report(self, order, now):
         with self._report_lock:
             report = self._report_cache.get(self._report_key(order))
-        if report and timedelta(0) <= now-datetime.fromisoformat(report["completed_at"]) <= timedelta(minutes=15):
+        if report and all(timedelta(0) <= now-datetime.fromisoformat(report[key]) <= timedelta(minutes=15) for key in ("completed_at", "reference_at")):
             return dict(report)
         return None
 
@@ -250,6 +266,12 @@ class MailResearchService:
                 fx.quote = UsdRmbQuote(Decimal(progress["fx_rate"]), reference, "saved task FX")
                 fx.hkd = Decimal(progress["hkd"]) if progress.get("hkd") else None
             for source in PRICE_SOURCES:
+                if (job["origin"] == "business" and self.review_business_job is not None
+                        and not self.review_business_job(job, payload, self.clock())):
+                    # Missing freshness/lock proof is not evidence that the order closed.
+                    # Preserve facts; the existing 15-minute freshness gate reacquires stale ones.
+                    self.store.finish(key, state="PENDING", next_at=self.clock()+timedelta(seconds=60))
+                    return False
                 if source.value in progress:
                     continue
                 if self.stop_event.is_set() or not self.admit():
@@ -295,7 +317,8 @@ class MailResearchService:
                 context = (*context, "六来源详细调研暂未完成；未取得有效报价不代表市场无报价。")
                 LOG.warning("Detailed research unavailable; original business notice retained; task=%s", key[-12:])
             text, html = render_market_report(order, result, target=False, context=context)
-            report = {"text": text, "html": html, "completed_at": self.clock().isoformat()}
+            earliest = min([reference, *(s.evidence.captured_at for s in results)])
+            report = {"text": text, "html": html, "completed_at": self.clock().isoformat(), "reference_at": earliest.isoformat(), "usable": not all_unavailable}
             if job["origin"] == "business" and not all_unavailable:
                 self.remember_rendered(order, report)
             self.store.finish(key, state="READY", report=report)
@@ -341,6 +364,8 @@ class MailResearchService:
         return self.outbox.observe_incident(command, proof, occurrence=str(self._failures) if code == "IMAP_AUTH_REQUIRED" else now.isoformat())
 
     def review_mail(self, command, now):
+        if self.stop_event.is_set():
+            return "CURRENT_REVIEW_PENDING"
         if command.kind is NotificationKind.PURCHASE_EXCEPTION:
             proof = json.loads(command.review or "{}")
             if proof.get("module") != "mail_research" or any(r.address != "linan229@qq.com" for r in command.recipients):
@@ -422,28 +447,49 @@ class MailResearchService:
                 with self.store.connect() as db:
                     rows = db.execute("SELECT task_id,report FROM workflow_mail_research WHERE origin='imap' AND state='READY' AND CASE WHEN json_valid(payload) THEN json_extract(payload,'$.trigger_policy') END='subject-only-v1' AND task_id NOT IN (SELECT command_id FROM workflow_v12_notification_commands) LIMIT 16").fetchall()
                 for row in rows:
+                    if self.stop_event.is_set():
+                        break
                     if not self.outbox.notification_already_created(row[0], None, NotificationKind.TP_RESEARCH,
                             (NotificationRecipient("ops", "shawn@inso-hk.com"),)):
                         self.enqueue_report(row[0], json.loads(row[1]), self.clock())
                 self.run_one()
+                if self.stop_event.is_set():
+                    break
                 self.worker.run_due(now=self.clock())
                 self.audit_delivery()
+                if not self.stop_event.is_set() and self.recover_business is not None:
+                    self.recover_business(self.clock())
             except Exception as error:  # noqa: BLE001 - isolated service boundary; sanitized class only
                 LOG.warning("Independent research protected wait; class=%s", type(error).__name__)
             self.wake.wait(1)
             self.wake.clear()
 
     def start(self):
+        if self.stop_event.is_set():
+            raise RuntimeError("MAIL_RESEARCH_SERVICE_STOPPED")
         if self.threads:
             return
-        self.threads = [threading.Thread(target=fn, name=name) for fn, name in
-                        ((self._receive, "mail-research-imap"), (self._work, "mail-research-worker"))]
-        for thread in self.threads:
-            thread.start()
+        candidates = [threading.Thread(target=fn, name=name) for fn, name in
+                      ((self._receive, "mail-research-imap"), (self._work, "mail-research-worker"))]
+        try:
+            for thread in candidates:
+                self.threads.append(thread)  # Track before start can have effects.
+                # Missing identity after failure does not prove the OS thread
+                # cannot start later; retain it as an unconfirmed owner.
+                thread.start()
+        except BaseException:
+            self.stop_event.set()
+            self.wake.set()
+            for thread in self.threads:
+                if thread is not threading.current_thread() and thread.ident is not None:
+                    thread.join(timeout=1)
+            # Keep references, even to stopped threads, until the owner closes;
+            # no new service may be constructed while exit is uncertain.
+            raise
 
     def close(self):
         self.stop_event.set()
         self.wake.set()
         for thread in self.threads:
-            if thread is not threading.current_thread():
+            if thread is not threading.current_thread() and thread.ident is not None:
                 thread.join()  # Network adapters have bounded timeouts; release only on owner thread.

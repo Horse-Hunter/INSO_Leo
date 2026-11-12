@@ -137,7 +137,8 @@ def test_unique_click_receipt_is_required_for_unconfirmed_status(tmp_path):
 
 def test_unconfirmed_submission_attempts_status_and_owner_command_only():
     handler, sheet, vs = actions(PurchaseOutcome.SUBMIT_UNCONFIRMED)
-    assert handler.process(completion_result(PurchaseOutcome.SUBMIT_UNCONFIRMED), at=NOW)
+    # False retains the review page; the unique click still permits source write-back.
+    assert handler.process(completion_result(PurchaseOutcome.SUBMIT_UNCONFIRMED), at=NOW) is False
     assert sheet.calls == 1 and len(vs.commands) == 0
     assert vs.commands == {}
     vs.submit_click_proven = lambda _i: False
@@ -373,13 +374,17 @@ def test_owned_tab_cleanup_error_cannot_lose_post_dispatch_result(monkeypatch):
     from src.launcher.backend import _LivePurchaseDraftWriter
     from src.workflow.v12_contracts import PurchaseDraftResult
     from tests.launcher.test_backend import _purchase_command
+    attempts = []
     def close():
+        attempts.append(True)
         raise TimeoutError("synthetic cleanup")
     writer = _LivePurchaseDraftWriter(lambda: SimpleNamespace(close_owned_operation_tab=close),
-        store=SimpleNamespace(event_history=lambda _iid: [SimpleNamespace(event_type=EventType.SAVE_DISPATCH_ARMED)]))
-    expected = PurchaseDraftResult("synthetic", PurchaseOutcome.SUBMIT_UNCONFIRMED, NOW)
+        store=SimpleNamespace(event_history=lambda _iid: [SimpleNamespace(event_type=EventType.SAVE_DISPATCH_ARMED)],
+                              purchase_state=lambda _iid: PurchaseOutcome.SAVED))
+    expected = PurchaseDraftResult("synthetic", PurchaseOutcome.SAVED, NOW)
     monkeypatch.setattr(writer, "_prepare_on_page", lambda *_a: expected)
     assert writer._prepare_once(_purchase_command()) is expected
+    assert attempts == [True]
 
 
 def test_surface_cleanup_error_cannot_lose_completed_draft(monkeypatch):

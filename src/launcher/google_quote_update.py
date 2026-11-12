@@ -4,6 +4,7 @@ Named button or Owner-verified sole visible drawing. Configured geometry/gid is 
 this module never discovers credentials, launches a browser, or calls Script URLs.
 """
 import re
+import threading
 from contextlib import ExitStack, contextmanager, nullcontext
 from contextvars import ContextVar
 from types import SimpleNamespace
@@ -13,7 +14,6 @@ from src.inso.quotation_read import QUOTATION_COLUMNS
 from src.research.cdp_pages import (
     PageTargetOwnershipError,
     bounded_browser_call,
-    mark_owned_page,
     native_page_owner,
     new_background_page,
     page_owner,
@@ -27,6 +27,7 @@ from src.workflow.v12_faults import FaultScope, V12Fault
 from src.workflow.v13_quote_update import (
     UpdateAttemptUnconfirmed,
     UpdateClickUnconfirmed,
+    UpdateResultTimeout,
     V13QuotationUpdater,
     WorkflowQuotationSource,
 )
@@ -68,6 +69,7 @@ _SCRIPT_SETTLEMENT_LATCH = """button => {
 _REFRESH_INPUT_IDLE = """() => {
     const visible = e => e.getClientRects().length &&
         getComputedStyle(e).visibility !== 'hidden' && getComputedStyle(e).display !== 'none';
+    if (!window.__insoQuoteSettlement) return false;
     const busy = [...document.querySelectorAll('[role="dialog"]')].some(visible) ||
         window.__insoQuoteSettlement?.isRunning() ||
         (window.__insoQuoteSettlement?.initial && !window.__insoQuoteSettlement.settled);
@@ -78,6 +80,8 @@ _REFRESH_INPUT_IDLE = """() => {
 
 
 _POLL_GOOGLE_PAGES = ContextVar("poll_google_pages", default=None)
+_ACTIVE_QUOTE_TARGETS = {}
+_ACTIVE_QUOTE_LOCK = threading.Lock()
 _UNSAFE_POLL_PAGE = """() => window.__insoRefreshPending === true ||
     [...document.querySelectorAll('[role="dialog"]')].some(e => e.getClientRects().length &&
         getComputedStyle(e).visibility !== 'hidden' && getComputedStyle(e).display !== 'none') ||
@@ -99,10 +103,16 @@ def google_operation_scope(*, retained=None, lock=None):
             for key, entry in pages.items():
                 if retained is not None:
                     if entry["page"].is_closed():
-                        if entry["protected"] and not entry.get("reopenable", False):
-                            previous = retained.get(key)
+                        previous = retained.get(key)
+                        mismatch = previous is not None and previous[0] != entry.get("target_id")
+                        pure_read = (len(key) == 4 and previous is not None and not mismatch
+                                     and len(previous) >= 4 and previous[3] is True
+                                     and entry.get("read_only") is True
+                                     and not entry["actions"]._script_pending)
+                        if mismatch or (entry["protected"] and not entry.get("reopenable", False)
+                                        and not pure_read):
                             if previous is not None:
-                                retained[key] = (previous[0], True, False)
+                                retained[key] = (previous[0], True, False, False)
                         else:
                             retained.pop(key, None)
                         continue
@@ -134,9 +144,12 @@ def google_operations_idle():
     if scope is None or scope[1] is None:
         return False
     pages, retained = scope
-    if any(protected for _, protected, _ in retained.values()):
+    if any(value[1] for key, value in retained.items()
+           if not (len(key) >= 5 and key[4] == "quarantine" and len(value) >= 4 and value[3])):
         return False
     for key, entry in tuple(pages.items()):
+        if len(key) >= 5 and key[4] == "quarantine" and entry.get("read_only") is True:
+            continue
         page, actions = entry['page'], entry['actions']
         if entry['protected'] or page.is_closed():
             return False
@@ -263,11 +276,25 @@ def _retain_google_entry(key, entry, retained):
         # identity for a later fresh proof, not permission to use this Page.
         lease = getattr(entry["page"], "_inso_native_page_owner", None)
         if key not in retained and lease is not None:
-            retained[key] = (lease[0], False, False)
+            retained[key] = (lease[0], False, False, False)
         raise GoogleReadTargetUnavailable("GOOGLE_READ_TARGET_UNAVAILABLE")
     previous = retained.get(key)
+    if previous and previous[0] != target_id:
+        # Preserve the old target as a hard hold before reporting mismatch.
+        retained[key] = (previous[0], True, False, False)
+        raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
+    entry["target_id"] = target_id
     protected = entry["protected"] or bool(previous and previous[0] == target_id and previous[1])
-    retained[key] = (target_id, protected, entry.get("reopenable", False))
+    # Missing or mismatched history cannot establish that this target was only read.
+    prior_read_only = (previous is None or previous[0] != target_id
+                       or len(previous) >= 4 and previous[3] is True)
+    read_only = entry.get("read_only") is True and prior_read_only
+    prior_hard_hold = bool(previous and previous[0] == target_id and previous[1] and not previous[2])
+    reopenable = entry.get("reopenable", False) and read_only and not prior_hard_hold
+    record = (target_id, protected, reopenable, read_only)
+    if entry.get("recoverable_read") is True and read_only and protected:
+        record += (True, entry.get("failed_url"))
+    retained[key] = record
 
 
 def _same_read_sheet_selection(actual, expected):
@@ -294,7 +321,8 @@ def _same_read_sheet_selection(actual, expected):
 class GoogleQuotationUpdateActions:
     def __init__(self, *, browser_handle, location: QuotationInputLocation,
                  timeout_ms: int = 10000, readiness_timeout_ms: int = 30000,
-                 result_timeout_ms: int = 30000, page_role="google-operation"):
+                 result_timeout_ms: int = 30000, popup_timeout_ms: int = 60000,
+                 page_role="google-operation"):
         if page_role not in {"google-operation", "google-mail-read"}:
             raise ValueError("GOOGLE_PAGE_ROLE_INVALID")
         self._page_role = page_role
@@ -303,11 +331,13 @@ class GoogleQuotationUpdateActions:
         self._handle, self._location, self._timeout = browser_handle, location, timeout_ms
         self._ready_timeout = readiness_timeout_ms
         self._result_timeout = result_timeout_ms
+        self._popup_timeout = popup_timeout_ms
         self._page, self._protected = None, False
         self._script_pending = False
         self._price_refresh = False
         self._poll_entry = None
         self._read_only = False
+        self._active_quote_target = None
 
     def prepare_price_refresh(self):
         self._price_refresh = True
@@ -323,13 +353,23 @@ class GoogleQuotationUpdateActions:
                 actual = urlsplit(page.url)
                 if page.is_closed() or (actual.hostname, actual.path) != (expected.hostname, expected.path):
                     continue
-                if page_owner(page) != self._page_role:
+                lease = getattr(page, "_inso_native_page_owner", None)
+                owner = page_owner(page)
+                if owner != self._page_role:
+                    if lease is not None and native_page_owner(page) == self._page_role:
+                        raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
                     continue
                 if not bounded_browser_call(page, "evaluate", "() => window.__insoRefreshPending === true"):
-                    if bounded_browser_call(page, "evaluate", _UNSAFE_POLL_PAGE):
-                        log_step("google-busy-refresh-surface")
-                        raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
                     continue
+                if getattr(page, "_inso_active_quote_action", None) is not None:
+                    raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
+                def require_owner(page=page):
+                    if (getattr(page, "_inso_native_page_owner", None) is None
+                            or native_page_owner(page) != self._page_role or page_owner(page) != self._page_role):
+                        raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
+                require_owner()
+                if not bounded_browser_call(page, "evaluate", "() => !!window.__insoQuoteSettlement"):
+                    raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
                 recovery = GoogleQuotationUpdateActions(browser_handle=self._handle,
                     location=SimpleNamespace(url=page.url), result_timeout_ms=self._result_timeout, page_role=self._page_role)
                 recovery._page, recovery._script_pending = page, True
@@ -337,17 +377,35 @@ class GoogleQuotationUpdateActions:
                 recovery._guard()  # Authentication/CDP failures retain their existing boundaries.
                 try:
                     if bounded_browser_call(recovery._result_dialog(), "count") == 1:
+                        require_owner()
                         recovery.dismiss_result()  # Confirm result dialog only, never re-click update.
                     else:
                         bounded_browser_call(page, "wait_for_function", _REFRESH_INPUT_IDLE, timeout=self._result_timeout, timeout_ms=(self._result_timeout)+1000)
                         recovery._guard()
+                        require_owner()
                         bounded_browser_call(page, "evaluate", "() => { window.__insoRefreshPending = false; }")
                         recovery._script_pending = False
-                except Exception:  # noqa: BLE001 - occupied/uncertain input defers only this attempt
+                except V12Fault:
+                    raise  # Shared identity or settlement uncertainty is never a local busy read.
+                except Exception:  # noqa: BLE001 - unknown local wait remains protected
                     recovery._guard()
                     log_step("google-busy-refresh-uncertain")
                     raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from None
+                require_owner()
                 recovery.close()
+                if not page.is_closed():
+                    require_owner()  # The Owner may have adopted the page during close.
+
+    def _require_owned_page(self):
+        try:
+            owned = (self._page is not None and native_page_owner(self._page) == self._page_role
+                     and page_owner(self._page) == self._page_role)
+        except BaseException:
+            self._protected = True
+            raise
+        if not owned:
+            self._protected = True
+            raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
 
     def _guard(self, *, read_selection=False):
         browser = self._handle.browser
@@ -373,7 +431,9 @@ class GoogleQuotationUpdateActions:
                     else "google-document-host-mismatch" if parsed.scheme != "https" or parsed.hostname != expected.hostname
                     else "google-document-path-mismatch")
             log_step(step)
-            raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SPREADSHEET_UNAVAILABLE")
+            reason = ("GOOGLE_SPREADSHEET_UNAVAILABLE" if self._page.url == "chrome-error://chromewebdata/"
+                      else "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
+            raise V12Fault(FaultScope.GLOBAL_STOP, reason)
         if parsed.fragment != expected.fragment and not (
                 read_selection and _same_read_sheet_selection(parsed.fragment, expected.fragment)):
             log_step("google-read-fragment-drift" if read_selection
@@ -383,10 +443,12 @@ class GoogleQuotationUpdateActions:
     def open_quote_input(self):
         self.ensure_refresh_input_idle()
         self.open_sheet()
-        self._ready_control()  # Prove readiness/uniqueness before any input write.
+        self._ready_control()
 
     def open_sheet(self, *, select_worksheet=False, worksheet="报价输入"):
-        """Shared Google navigation/auth/ownership boundary, without running a script."""
+        return self._open_sheet(select_worksheet=select_worksheet, worksheet=worksheet)
+
+    def _open_sheet(self, *, select_worksheet=False, worksheet="报价输入"):
         if self._script_pending:
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED")
         if self._protected:
@@ -396,8 +458,62 @@ class GoogleQuotationUpdateActions:
         browser = self._handle.browser
         if browser is None or not browser.is_connected() or len(browser.contexts) != 1:
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")
-        # Retire only explicitly failed READ surfaces that are now settled. The
-        # marker survives a poll/client ending; uncertain writes never get it.
+        if not self._read_only:
+            target = urlsplit(self._location.url)
+            for existing in tuple(browser.contexts[0].pages):
+                actual = urlsplit(existing.url)
+                if (existing.is_closed() or (actual.scheme, actual.hostname, actual.path) !=
+                        (target.scheme, target.hostname, target.path)):
+                    continue
+                if getattr(existing, "_inso_active_quote_action", None) is not None:
+                    raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
+                try:
+                    pending = bounded_browser_call(existing, "evaluate", "() => window.__insoRefreshPending === true")
+                except Exception:  # noqa: BLE001 - optional probe cannot classify unrelated read failure
+                    with _ACTIVE_QUOTE_LOCK:
+                        active_same_document = any(
+                            (urlsplit(action._location.url).scheme, urlsplit(action._location.url).hostname,
+                             urlsplit(action._location.url).path) == (target.scheme, target.hostname, target.path)
+                            for action in _ACTIVE_QUOTE_TARGETS.values())
+                    if active_same_document:
+                        raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from None
+                    log_step("google-optional-refresh-probe")
+                    continue
+                if pending:
+                    try:
+                        native_target = _google_target_id(existing)
+                    except V12Fault:
+                        native_target = None
+                    with _ACTIVE_QUOTE_LOCK:
+                        active = native_target is not None and native_target in _ACTIVE_QUOTE_TARGETS
+                        if native_target is None:
+                            active = any(
+                                (urlsplit(action._location.url).scheme, urlsplit(action._location.url).hostname,
+                                 urlsplit(action._location.url).path) == (target.scheme, target.hostname, target.path)
+                                for action in _ACTIVE_QUOTE_TARGETS.values())
+                    if active:
+                        raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
+                    if getattr(existing, "_inso_native_page_owner", None) is None:
+                        # A pending script survived the client that started it.
+                        # Do not replay it or adopt its page without ownership proof.
+                        raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
+                    self.ensure_refresh_input_idle()
+                    break
+        # A document marker alone cannot carry permission across clients. Only
+        # this scope's exact, safely retired read entry is eligible for cleanup.
+        scope = _POLL_GOOGLE_PAGES.get()
+        pool, retained = scope if scope is not None else (None, None)
+        if retained is not None:
+            for old_key, record in tuple(retained.items()):
+                if not (len(old_key) >= 5 and old_key[4] == "quarantine"
+                        and len(record) >= 4 and record[3] is True):
+                    continue
+                try:
+                    matches = _retained_google_matches(browser.contexts[0].pages, record[0], read_only=True)
+                except (GoogleReadTargetUnavailable, V12Fault):
+                    continue  # Optional cleanup never turns an uncertain probe into a stop.
+                if not matches:
+                    retained.pop(old_key, None)
         expected_document = urlsplit(self._location.url)
         for old in tuple(browser.contexts[0].pages):
             actual = urlsplit(old.url)
@@ -405,7 +521,29 @@ class GoogleQuotationUpdateActions:
                     expected_document.scheme, expected_document.hostname, expected_document.path
             ) and actual.hostname != "accounts.google.com"):
                 continue  # Do not evaluate unrelated manual/INSO/other-document pages.
-            if page_owner(old) != self._page_role:
+            # A stale document marker or native lease cannot override a
+            # protected entry or prove the Owner did not move to another tab.
+            if (actual.hostname == "accounts.google.com"
+                    and getattr(old, "_inso_native_page_owner", None) is not None
+                    and native_page_owner(old) == self._page_role and page_owner(old) == self._page_role):
+                # Preserve the owned login surface and avoid opening a new tab
+                # on each poll; inspection does not transfer ownership.
+                recovery = GoogleQuotationUpdateActions(browser_handle=self._handle,
+                    location=SimpleNamespace(url=old.url), page_role=self._page_role)
+                recovery._page = old
+                recovery._guard()
+            entries = [(key, entry) for key, entry in (pool or {}).items()
+                       if entry.get("page") is old and entry.get("read_only") is True
+                       and entry.get("reopenable") is True
+                       and entry.get("failed_url") == old.url]
+            if len(entries) != 1 or getattr(old, "_inso_native_page_owner", None) is None:
+                continue
+            key, entry = entries[0]
+            if native_page_owner(old) != self._page_role or page_owner(old) != self._page_role:
+                continue
+            native = _google_target_id(old)
+            prior = retained.get(key) if retained is not None else None
+            if retained is not None and (prior is None or prior[0] != native or prior[1] and not prior[2]):
                 continue
             if not bounded_browser_call(old, "evaluate", "() => window.__insoGoogleReadFailed === true"):
                 continue
@@ -415,44 +553,123 @@ class GoogleQuotationUpdateActions:
             recovery._guard()
             if not bounded_browser_call(old, "evaluate", _UNSAFE_POLL_PAGE):
                 recovery.close()
-        scope = _POLL_GOOGLE_PAGES.get()
-        pool, retained = scope if scope is not None else (None, None)
         target = urlsplit(self._location.url)
         document_key = (target.scheme, target.hostname, target.path)
         if worksheet not in {"2026", "SHAHAB", "RFQ_BRIEF", "报价输入"}:
             raise ValueError("GOOGLE_SHEET_UNCONFIRMED")
         key = (*document_key, worksheet)
+        quarantine_key = (*key, "quarantine")
         entry = pool.get(key) if pool is not None else None
         if entry is None and retained is not None and key in retained:
-            target_id, protected, reopenable = retained[key]
+            retained_entry = retained[key]
+            target_id, protected, reopenable = retained_entry[:3]
+            retained_read_only = len(retained_entry) >= 4 and retained_entry[3] is True
             matches = _retained_google_matches(browser.contexts[0].pages, target_id,
                 read_only=self._read_only and not (protected and not reopenable))
             if len(matches) > 1:
                 raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
             if matches:
                 entry = {"page": matches[0], "actions": self, "protected": protected,
-                         "reopenable": reopenable, "read_only": self._read_only and not protected}
+                         "reopenable": reopenable, "target_id": target_id,
+                         "read_only": retained_read_only,
+                         "recoverable_read": len(retained_entry) >= 6 and retained_entry[4] is True,
+                         "failed_url": retained_entry[5] if len(retained_entry) >= 6 else None}
                 pool[key] = entry
             else:
                 # An exactly known target disappeared (Owner closed it). Reopen
                 # only this sheet on demand; never adopt another visible page.
-                if protected and not reopenable:
+                if protected and not reopenable and not retained_read_only:
                     raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+                # Exact native target absence plus retained read-only history
+                # cannot represent a program-dispatched write.
                 del retained[key]
         if entry is not None and entry["page"].is_closed():
-            if retained is not None and entry["protected"] and not entry.get("reopenable", False):
-                raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+            if retained is not None and entry["protected"]:
+                prior = retained.get(key)
+                exact_read = (entry.get("read_only") is True and prior is not None
+                              and prior[0] == entry.get("target_id") and len(prior) >= 4
+                              and prior[3] is True and not entry["actions"]._script_pending)
+                if not exact_read:
+                    raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+                # The exact same known read-only page was safely retired; only
+                # now can a replacement get a new registry identity.
+                del retained[key]
+            elif retained is not None and key in retained:
+                prior = retained[key]
+                if prior[0] != entry.get("target_id") or prior[1]:
+                    raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
+                del retained[key]
             del pool[key]
             entry = None
+        if (entry is not None and not entry["protected"] and self._read_only
+                and entry.get("read_only") is True
+                and entry["page"].url == "chrome-error://chromewebdata/"
+                and native_page_owner(entry["page"]) == self._page_role):
+            # Preserve the failed target. A browser error page cannot prove
+            # the previous document state and must never be closed or reused.
+            native = _google_target_id(entry["page"])
+            prior = retained.get(key) if retained is not None else None
+            if retained is None or (prior is not None and prior[0] == native
+                                    and len(prior) >= 4 and prior[3] is True):
+                entry.update(protected=True, recoverable_read=True,
+                             failed_url=entry["page"].url, error_page=True)
+                if retained is not None:
+                    _retain_google_entry(key, entry, retained)
         if entry is not None and entry["protected"]:
             # A busy READ must not conceal authentication/document failure.
             previous = entry["actions"]
-            previous._page = entry["page"]
-            previous._guard()
-            log_step("google-busy-protected-entry")
-            raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
+            borrowed_page, borrowed_location = previous._page, previous._location
+            try:
+                previous._page = entry["page"]
+                if not (entry.get("error_page") is True and self._read_only
+                        and entry["page"].url == "chrome-error://chromewebdata/"):
+                    failed_url = entry.get("failed_url")
+                    failed = urlsplit(failed_url) if isinstance(failed_url, str) else None
+                    if (entry.get("recoverable_read") is True and failed_url == entry["page"].url
+                            and failed is not None
+                            and (failed.scheme, failed.hostname, failed.path) == document_key):
+                        previous._location = SimpleNamespace(url=failed_url)
+                    previous._guard()
+            finally:
+                previous._location = borrowed_location
+                # This is inspection only. In particular, a reattached entry
+                # can use self as its inspector; never hand its protected page
+                # to the caller's failure cleanup as a newly owned surface.
+                previous._page = borrowed_page
+            # Only a failed, provably read-only operation in this same scope
+            # can use one independent recovery surface. Keep the old surface
+            # quarantined; its owner may have adopted it without changing URL.
+            can_isolate = (entry.get("recoverable_read") is True
+                           and entry.get("read_only") is True and pool is not None
+                           and entry.get("failed_url") == entry["page"].url)
+            if not can_isolate:
+                log_step("google-busy-protected-entry")
+                raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
+            old = retained.get(key) if retained is not None else None
+            if retained is not None and (old is None or len(old) < 4
+                    or old[0] != _google_target_id(entry["page"]) or not old[1] or not old[3]):
+                raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
+            quarantined_target = _google_target_id(entry["page"])
+            entry["target_id"] = quarantined_target
+            quarantine_key = (*key, "quarantine", quarantined_target)
+            if retained is not None:
+                retained[quarantine_key] = old
+                del retained[key]
+            # The quarantined and replacement slots must not share mutable
+            # controller state when scope cleanup revisits both entries.
+            quarantined = GoogleQuotationUpdateActions(browser_handle=self._handle,
+                location=SimpleNamespace(url=entry["page"].url), page_role=self._page_role)
+            quarantined._read_only = True
+            quarantined._protected = True
+            entry["actions"] = quarantined
+            pool[quarantine_key] = entry
+            del pool[key]
+            entry = None
         if entry is not None and not entry["protected"]:
             entry["read_only"] = entry.get("read_only", False) and self._read_only
+            if retained is not None and not entry["read_only"]:
+                # Publish loss of read-only provenance before any write can start.
+                _retain_google_entry(key, entry, retained)
             self._page, self._poll_entry = entry["page"], entry
             # Prove the current document/authentication BEFORE navigating away.
             expected = self._location
@@ -464,7 +681,7 @@ class GoogleQuotationUpdateActions:
                     log_step("google-pooled-document-mismatch" if
                              (actual.scheme, actual.hostname, actual.path) != document_key
                              else "google-tab-ownership-lost")
-                    raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SPREADSHEET_UNAVAILABLE")
+                    raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
                 if bounded_browser_call(self._page, "evaluate", _UNSAFE_POLL_PAGE):
                     log_step("google-busy-pooled-unsafe")
                     raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
@@ -492,15 +709,19 @@ class GoogleQuotationUpdateActions:
                                              owner=self._page_role)
         except Exception:  # noqa: BLE001 - shared context cannot create the owned operation
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE") from None
-        self._attempt(lambda: bounded_browser_call(self._page, "goto", self._location.url, wait_until="domcontentloaded", timeout=self._timeout, timeout_ms=(self._timeout)+1000))
-        self._guard()
-        mark_owned_page(self._page, self._page_role)
+        # Record the exact native target before navigation can fail. Otherwise
+        # an uncertain initial page can be leaked and replaced on every poll.
         if pool is not None:
             self._poll_entry = {"page": self._page, "actions": self, "protected": False,
                                 "read_only": self._read_only}
             pool[key] = self._poll_entry
             if retained is not None:
                 _retain_google_entry(key, self._poll_entry, retained)
+        self._attempt(lambda: bounded_browser_call(self._page, "goto", self._location.url, wait_until="domcontentloaded", timeout=self._timeout, timeout_ms=(self._timeout)+1000))
+        self._guard()
+        # Navigation may have handed the surface to the Owner. Never repair an
+        # ownership marker by overwriting it after control has been yielded.
+        self._require_owned_page()
         return self._page
 
     def _ready_control(self):
@@ -551,6 +772,12 @@ class GoogleQuotationUpdateActions:
             bounded_browser_call(button, "evaluate", _SCRIPT_SETTLEMENT_LATCH, timeout=self._timeout)
             bounded_browser_call(self._page, "evaluate", "() => { window.__insoRefreshPending = true; }")
             self._script_pending = True
+            self._page._inso_active_quote_action = self
+            lease = getattr(self._page, "_inso_native_page_owner", None)
+            if lease is not None and isinstance(lease[0], str):
+                self._active_quote_target = lease[0]
+                with _ACTIVE_QUOTE_LOCK:
+                    _ACTIVE_QUOTE_TARGETS[self._active_quote_target] = self
             try:
                 bounded_browser_call(button, "click", timeout=self._timeout, timeout_ms=(self._timeout)+1000)
             except Exception:  # noqa: BLE001 - do not retry a possibly delivered refresh click
@@ -559,6 +786,12 @@ class GoogleQuotationUpdateActions:
             self._attempt(lambda: bounded_browser_call(button, "evaluate", _SCRIPT_SETTLEMENT_LATCH, timeout=self._timeout))
             self._attempt(lambda: bounded_browser_call(self._page, "evaluate", "() => { window.__insoQuoteSettlement.initial = true; window.__insoRefreshPending = true; }"))
             self._script_pending = True
+            self._page._inso_active_quote_action = self
+            lease = getattr(self._page, "_inso_native_page_owner", None)
+            if lease is not None and isinstance(lease[0], str):
+                self._active_quote_target = lease[0]
+                with _ACTIVE_QUOTE_LOCK:
+                    _ACTIVE_QUOTE_TARGETS[self._active_quote_target] = self
             try:
                 bounded_browser_call(button, "click", timeout=self._timeout, timeout_ms=(self._timeout)+1000)
             except Exception:  # noqa: BLE001 - native click may already have executed
@@ -567,7 +800,16 @@ class GoogleQuotationUpdateActions:
     def read_update_result(self):
         self._guard()
         dialog = self._result_dialog()
-        self._attempt(lambda: bounded_browser_call(dialog, "wait_for", state="visible", timeout=self._result_timeout, timeout_ms=(self._result_timeout)+1000))
+        try:
+            bounded_browser_call(dialog, "wait_for", state="visible", timeout=self._popup_timeout, timeout_ms=(self._popup_timeout)+1000)
+        except Exception as exc:
+            if isinstance(exc, TimeoutError) or (type(exc).__name__ == "TimeoutError"
+                    and type(exc).__module__.startswith("playwright")):
+                # The click already happened. Report the actual timeout immediately;
+                # the page and the order remain unresolved and are not reused here.
+                raise UpdateResultTimeout("UPDATE_RESULT_POPUP_TIMEOUT") from exc
+            self._guard()
+            raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from exc
         if bounded_browser_call(dialog, "count") != 1:
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED")
         return self._attempt(lambda: bounded_browser_call(dialog, "inner_text", timeout=self._timeout, timeout_ms=(self._timeout)+1000))
@@ -584,7 +826,10 @@ class GoogleQuotationUpdateActions:
         # this observed execution ends; never clear the shared input ourselves.
         self._script_pending = True
         try:
+            self._require_owned_page()
             bounded_browser_call(button, "evaluate", _SCRIPT_SETTLEMENT_LATCH, timeout=self._timeout)
+            self._guard()
+            self._require_owned_page()
             bounded_browser_call(button, "click", timeout=self._timeout, timeout_ms=(self._timeout)+1000)
             bounded_browser_call(self._page, "wait_for_function",
                 "() => window.__insoQuoteSettlement?.confirmed && window.__insoQuoteSettlement.started",
@@ -593,7 +838,10 @@ class GoogleQuotationUpdateActions:
                 "() => window.__insoQuoteSettlement?.started && window.__insoQuoteSettlement.settled",
                 timeout=self._result_timeout, timeout_ms=(self._result_timeout)+1000)
             self._guard()
+            self._require_owned_page()
             bounded_browser_call(self._page, "evaluate", "() => window.__insoQuoteSettlement.observer.disconnect()")
+            self._guard()
+            self._require_owned_page()
             bounded_browser_call(self._page, "evaluate", "() => { window.__insoRefreshPending = false; }")
         except Exception:  # noqa: BLE001 - any settlement uncertainty preserves the operation page
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED") from None
@@ -612,16 +860,44 @@ class GoogleQuotationUpdateActions:
             self._guard()
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from None
 
+    def close_temporary_failed_read(self):
+        """Close only this client's proven read-only failed page, never a write surface."""
+        page = self._page
+        entry = self._poll_entry
+        if (not self._read_only or self._script_pending or self._protected or page is None
+                or page.is_closed() or (entry is not None and entry.get("read_only") is not True)):
+            return False
+        try:
+            self._require_owned_page()
+            self._guard(read_selection=True)
+            target_id = _google_target_id(page)
+            if entry is not None and entry.get("target_id") not in (None, target_id):
+                return False
+            if not any(other is not page and not other.is_closed() for other in page.context.pages):
+                return False  # Do not close the browser's last page.
+            bounded_browser_call(page, "close")
+            return page.is_closed()
+        except Exception:  # noqa: BLE001 - retain anything whose ownership cannot be proved
+            return False
+
     def retire_failed_page(self, *, read_only=False):
         """Never pass a failed phase's page to another phase/retry."""
         if read_only and self._page is not None and not self._page.is_closed():
             try:
-                mark_owned_page(self._page, self._page_role)
-                bounded_browser_call(self._page, "evaluate", "() => { window.__insoGoogleReadFailed = true; }")
-            except Exception:  # noqa: BLE001 - inability to tag never makes a page safe
+                # Never restore or overwrite a marker after ownership changed:
+                # the Owner may have adopted this exact native page.
+                if (getattr(self._page, "_inso_native_page_owner", None) is None
+                        or native_page_owner(self._page) != self._page_role
+                        or page_owner(self._page) != self._page_role):
+                    self._protected = True
+                else:
+                    bounded_browser_call(self._page, "evaluate", "() => { window.__insoGoogleReadFailed = true; }")
+            except Exception:  # noqa: BLE001 - inability to prove ownership stays protected
                 self._protected = True
         if self._poll_entry is None:
             return
+        recoverable_read = (read_only and self._poll_entry.get("read_only") is True
+                            and not self._protected and not self._script_pending)
         self._poll_entry["protected"] = True
         self._poll_entry["actions"] = self
         failed_entry = self._poll_entry
@@ -631,7 +907,13 @@ class GoogleQuotationUpdateActions:
             self._protected |= bool(bounded_browser_call(self._page, "evaluate", _UNSAFE_POLL_PAGE))
         except Exception:  # noqa: BLE001 - uncertain old surface is retained
             self._protected = True
-        failed_entry["reopenable"] = read_only and not self._protected and not self._script_pending
+        # A later read cannot erase this slot's prior write history.
+        failed_entry["reopenable"] = (read_only and failed_entry.get("read_only") is True
+                                      and not self._protected and not self._script_pending)
+        if read_only and not failed_entry["reopenable"]:
+            self._protected = True  # The subsequent close must preserve the quarantined page.
+        failed_entry["recoverable_read"] = recoverable_read
+        failed_entry["failed_url"] = self._page.url if recoverable_read else None
         scope = _POLL_GOOGLE_PAGES.get()
         if scope is not None and scope[1] is not None and not failed_entry["page"].is_closed():
             for key, entry in scope[0].items():
@@ -640,6 +922,14 @@ class GoogleQuotationUpdateActions:
                     break
 
     def close(self):
+        if self._active_quote_target is not None:
+            with _ACTIVE_QUOTE_LOCK:
+                if _ACTIVE_QUOTE_TARGETS.get(self._active_quote_target) is self:
+                    del _ACTIVE_QUOTE_TARGETS[self._active_quote_target]
+            self._active_quote_target = None
+        if (self._page is not None and
+                getattr(self._page, "_inso_active_quote_action", None) is self):
+            self._page._inso_active_quote_action = None
         if self._poll_entry is not None:
             entry, self._poll_entry = self._poll_entry, None
             entry["protected"] |= self._protected or self._script_pending
@@ -662,6 +952,7 @@ class GoogleQuotationUpdateActions:
                 finally:
                     self._location = expected
             entry["actions"] = self
+            self._protected |= entry["protected"]
             scope = _POLL_GOOGLE_PAGES.get()
             if scope is not None and scope[1] is not None and not entry["page"].is_closed():
                 for key, candidate in scope[0].items():

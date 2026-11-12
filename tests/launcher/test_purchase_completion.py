@@ -294,3 +294,56 @@ def test_owner_fuzzy_brand_rule_does_not_create_quoted_status_alarm(source_brand
     handler.retry_saved_statuses(at=NOW)
     assert state.state is BusinessState.PURCHASE_RECORDED
     assert sheet.calls == 0 and not state.commands and handler.follow_up_store.records == []
+
+
+def test_uncertain_purchase_hold_never_writes_or_reconciles_saved_status():
+    handler, sheet, state = actions(PurchaseOutcome.SAVED)
+    item = handler.workflow_store.get_by_inquiry_id("synthetic-inquiry")
+    handler.workflow_store.all_items = lambda: [item]
+    state.state = BusinessState.INTERRUPTED_POSSIBLY_SENT
+
+    assert handler.process(flow(PurchaseOutcome.SAVED), at=NOW) is False
+    handler.retry_saved_statuses(at=NOW)
+
+    assert sheet.calls == 0
+    assert state.state is BusinessState.INTERRUPTED_POSSIBLY_SENT
+    assert state.outcome is PurchaseOutcome.SAVED
+    assert state.commands == {}
+    assert handler.follow_up_store.records == []
+
+
+def test_held_purchase_does_not_invoke_automatic_admission():
+    handler, sheet, state = actions(PurchaseOutcome.SAVED)
+    item = handler.workflow_store.get_by_inquiry_id("synthetic-inquiry")
+    handler.workflow_store.all_items = lambda: [item]
+    state.state = BusinessState.INTERRUPTED_POSSIBLY_SENT
+    def unexpected(*args):
+        pytest.fail("a protected purchase must not enter automatic admission")
+    handler._automatic_admission = unexpected
+
+    handler.retry_saved_statuses(at=NOW)
+    assert sheet.calls == 0
+    assert state.outcome is PurchaseOutcome.SAVED
+    assert state.state is BusinessState.INTERRUPTED_POSSIBLY_SENT
+
+
+def test_item_without_v12_state_does_not_enter_reconciliation():
+    handler, sheet, state = actions(PurchaseOutcome.SAVED)
+    item = handler.workflow_store.get_by_inquiry_id("synthetic-inquiry")
+    handler.workflow_store.all_items = lambda: [item]
+    def missing(_iid):
+        raise KeyError("missing")
+    def unexpected(*args):
+        pytest.fail("an uninitialized purchase must not enter reconciliation")
+    state.business_state = missing
+    handler._automatic_admission = unexpected
+
+    handler.retry_saved_statuses(at=NOW)
+    assert sheet.calls == 0
+
+
+def test_submit_unconfirmed_keeps_surface_for_review():
+    handler, sheet, state = actions(PurchaseOutcome.SUBMIT_UNCONFIRMED)
+    assert handler.process(flow(PurchaseOutcome.SUBMIT_UNCONFIRMED), at=NOW) is False
+    assert state.outcome is PurchaseOutcome.SUBMIT_UNCONFIRMED
+    assert sheet.calls == 1  # Existing click-proven status behavior is unchanged.

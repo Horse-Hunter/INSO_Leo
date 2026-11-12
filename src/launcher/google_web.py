@@ -15,6 +15,7 @@ from collections import OrderedDict
 from contextlib import ExitStack, contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from time import monotonic
@@ -25,7 +26,11 @@ from src.research.cdp_pages import (
     page_owner,
     shared_playwright_factory,
 )
-from src.sheets.google_reader import TEMPORARY_READ_NETWORK_CODES
+from src.sheets.google_reader import (
+    TEMPORARY_READ_NETWORK_CODES,
+    GoogleDownloadReadTimeout,
+    GoogleReadArtifactLost,
+)
 from src.sheets.quotation_input import QuotationInputBusy, QuotationInputUnavailable
 from src.sheets.worksheet_schema import worksheet_schema
 from src.workflow.v12_faults import FaultScope, V12Fault
@@ -47,8 +52,7 @@ _GOOGLE_GRID_LOCK = threading.RLock()
 _TITLES = ("2026", "SHAHAB", "报价输入")
 
 
-class _GoogleDownloadWaitTimeout(TimeoutError):
-    """Only a timed-out wait on this exact native READ artifact."""
+_GoogleDownloadWaitTimeout = GoogleDownloadReadTimeout
 
 
 def _download_call(download, operation, *, timeout):
@@ -166,10 +170,26 @@ def _source_values(rows, title, first, start, last, end):
     return answer
 
 
+def _readback_mismatch_code(confirmed, expected, first):
+    """Only fixed column letters may leave the process; never include cell values."""
+    if len(confirmed) != 1 or len(expected) != 1:
+        return "GOOGLE_READBACK_ROW_UNCONFIRMED"
+    actual, wanted = confirmed[0], expected[0]
+    if len(actual) != len(wanted):
+        return "GOOGLE_READBACK_SHAPE_UNCONFIRMED"
+    columns = [_column(first + i) for i, (left, right) in enumerate(zip(actual, wanted, strict=True))
+               if left != right]
+    return "GOOGLE_READBACK_DIFF_" + "_".join(columns) if columns else "GOOGLE_READBACK_SHAPE_UNCONFIRMED"
+
+
+def _no_read_guard():
+    return None
+
+
 class GoogleSheetsWebService:
     """One thread-safe transport injected into existing readers and writers."""
     def __init__(self, session, *, actions_factory=GoogleQuotationUpdateActions, on_read_success=lambda: None,
-                 timer=monotonic, read_guard=lambda: None, stop_requested=lambda: False,
+                 timer=monotonic, read_guard=_no_read_guard, stop_requested=lambda: False,
                  retain_pages=False, retire_session=None, isolated_read=False):
         self._session, self._actions_factory = session, actions_factory
         self._isolated_read = isolated_read
@@ -182,6 +202,7 @@ class GoogleSheetsWebService:
         self._timer, self._read_guard, self._stop_requested = timer, read_guard, stop_requested
         # One bounded process-service cache; no pages, files or caller-mutable rows.
         self._snapshots = OrderedDict()
+        self._brief_revisions = {}
         self._live_read_revision = 0
         self._retained_pages = {} if retain_pages else None
         self._poll_handle = ContextVar("google_web_poll_handle", default=None)
@@ -209,7 +230,8 @@ class GoogleSheetsWebService:
                 if handle.owned or browser is None or not browser.is_connected() or len(browser.contexts) != 1:
                     raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")
                 pages = tuple(browser.contexts[0].pages)
-                for key, (native, protected, _reopenable) in tuple(self._retained_pages.items()):
+                for key, retained_entry in tuple(self._retained_pages.items()):
+                    native, protected, _reopenable = retained_entry[:3]
                     if protected:
                         continue
                     self._read_guard()
@@ -231,13 +253,13 @@ class GoogleSheetsWebService:
                         state = bounded_browser_call(page, "evaluate", """() => ({title: document.querySelector(
                             '.docs-sheet-active-tab .docs-sheet-tab-name')?.textContent})""")
                         if state.get("title") != key[3] or bounded_browser_call(page, "evaluate", _UNSAFE_POLL_PAGE):
-                            self._retained_pages[key] = (native, True, False)
+                            self._retained_pages[key] = (native, True, False, False)
                             continue
                         actions.close()  # Original native close and last-tab protection.
                         if not page.is_closed():
                             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_OPERATION_NOT_CLOSED")
                     except BaseException:
-                        self._retained_pages[key] = (native, True, False)
+                        self._retained_pages[key] = (native, True, False, False)
                         raise
                     self._retained_pages.pop(key, None)
 
@@ -334,6 +356,27 @@ class GoogleSheetsWebService:
         """Explicit ordinary discovery only; get() remains mandatory live I/O."""
         return _Request(lambda: self._execute(kwargs, write=False, discovery=True))
 
+    def get_discovery_observed(self, **kwargs):
+        """Discovery response with its actual source acquisition time."""
+        return _Request(lambda: self._execute(kwargs, write=False, discovery=True, include_observation=True))
+
+    def peek_brief_token(self, spreadsheet):
+        """Nonblocking identity token for the existing unexpired immutable snapshot."""
+        if not self._grid_lock.acquire(blocking=False):
+            raise TimeoutError("GOOGLE_BRIEF_SNAPSHOT_BUSY")
+        try:
+            if self._stop_requested():
+                raise TimeoutError("GOOGLE_BRIEF_SNAPSHOT_STOPPED")
+            owner = getattr(self._read_guard, "__self__", None)
+            check = getattr(owner, "is_open_nonblocking", None)
+            if not (self._read_guard is _no_read_guard or callable(check) and check()):
+                raise TimeoutError("GOOGLE_BRIEF_ADMISSION_UNCONFIRMED")
+            entry = self._snapshots.get((spreadsheet, "RFQ_BRIEF"))
+            live = entry if entry is not None and 0 <= self._timer()-entry[0] < 60.0 else None
+            return self._brief_revisions.get(spreadsheet, 0), live
+        finally:
+            self._grid_lock.release()
+
     def peek_brief_snapshot(self, spreadsheet):
         """Optional ordinary-read hint only. Never attaches, refreshes or downloads."""
         with self._grid_lock:
@@ -357,7 +400,7 @@ class GoogleSheetsWebService:
         """Dedicated exact-sheet read. No range/get/update whitelist is extended."""
         return self._execute({"spreadsheetId": spreadsheet}, write=False, brief_read=True)
 
-    def _execute(self, options, *, write, brief_read=False, discovery=False):
+    def _execute(self, options, *, write, brief_read=False, discovery=False, include_observation=False):
         if write and self._isolated_read:
             raise ValueError("GOOGLE_MAIL_READ_ONLY")
         # Reuse the canonical UI lock for hit/miss/write invalidation and single
@@ -375,12 +418,12 @@ class GoogleSheetsWebService:
                             _range(options["range"]) if "range" in options else None)
                 key = (spreadsheet, geometry[0]) if geometry else None
                 if write and key:
-                    self._snapshots.pop(key, None)  # Before ANY attempted effect.
+                    self._forget_snapshot(key)  # Before ANY attempted effect.
                 if not discovery:
                     # A mandatory live check must invalidate old discoveries even
                     # when it fails. It never consumes or certifies cached data.
                     if key:
-                        self._snapshots.pop(key, None)
+                        self._forget_snapshot(key)
                     # Mandatory checks still perform native I/O. Their complete
                     # verified download may seed ordinary discovery afterwards.
                     seed = (not write and geometry is not None and
@@ -388,6 +431,7 @@ class GoogleSheetsWebService:
                     request = dict(options)
                     if seed and not brief_read:
                         request["range"] = f"'{geometry[0]}'!A1:G"
+                    read_started = datetime.now(UTC)
                     result = self._execute_live(request, write=write, brief_read=brief_read)
                     if not write:
                         self._read_guard()
@@ -396,7 +440,7 @@ class GoogleSheetsWebService:
                             raise V13Stopped()
                         self._live_read_revision += 1
                     if seed:
-                        self._remember(key, result["values"], result.get("source_order_dates"))
+                        self._remember(key, result["values"], result.get("source_order_dates"), observed_at=read_started)
                         _, first, start, last, end = geometry
                         return self._source_response(result["values"], first, start, last, end, result.get("source_order_dates"))
                     return result
@@ -404,11 +448,13 @@ class GoogleSheetsWebService:
                         or (not brief_read and geometry[3] > 7)):
                     raise ValueError("GOOGLE_DISCOVERY_UNCONFIRMED")
                 entry = self._snapshots.get(key)
-                if entry is None or not 0 <= self._timer() - entry[0] < 60.0:
-                    self._snapshots.pop(key, None)
+                cache_hit = entry is not None and 0 <= self._timer() - entry[0] < 60.0
+                if not cache_hit:
+                    self._forget_snapshot(key)
                     request = dict(options)
                     if not brief_read:
                         request["range"] = f"'{geometry[0]}'!A1:G"
+                    read_started = datetime.now(UTC)
                     result = self._execute_live(request, write=False, brief_read=brief_read)
                     self._read_guard()
                     if self._stop_requested():
@@ -417,16 +463,20 @@ class GoogleSheetsWebService:
                     # Native download and header/worksheet/gid validation have
                     # completed; TTL starts now, never at navigation start.
                     values = tuple(tuple(row) for row in result["values"])
-                    entry = self._remember(key, values, result.get("source_order_dates"))
+                    entry = self._remember(key, values, result.get("source_order_dates"), observed_at=read_started)
                     self._live_read_revision += 1
                     self._on_read_success()  # Real acquisition ONLY, never a hit.
                 self._snapshots.move_to_end(key)
                 _, first, start, last, end = geometry
-                return self._source_response(entry[1], first, start, last, end, entry[2] if len(entry) > 2 else None)
+                response = self._source_response(entry[1], first, start, last, end, entry[2] if len(entry) > 2 else None)
+                if include_observation:
+                    response["_inso_source_observed_at"] = entry[3].isoformat()
+                    response["_inso_source_cache_hit"] = cache_hit
+                return response
             except BaseException:
                 # Includes Stop/cancellation, metadata/auth/Busy/schema failures.
                 # A session fault cannot be hidden behind another sheet's cache.
-                self._snapshots.clear()
+                self._clear_snapshots()
                 raise
 
     @staticmethod
@@ -437,14 +487,30 @@ class GoogleSheetsWebService:
                 "rows": [list(row) for row in evidence["rows"]]}
         return result
 
-    def _remember(self, key, rows, evidence=None):
+    def _mark_brief_change(self, key):
+        if key is not None and key[1] == "RFQ_BRIEF":
+            self._brief_revisions[key[0]] = self._brief_revisions.get(key[0], 0)+1
+
+    def _forget_snapshot(self, key):
+        if key in self._snapshots:
+            self._mark_brief_change(key)
+        self._snapshots.pop(key, None)
+
+    def _clear_snapshots(self):
+        for key in self._snapshots:
+            self._mark_brief_change(key)
+        self._snapshots.clear()
+
+    def _remember(self, key, rows, evidence=None, *, observed_at=None):
         frozen = None if evidence is None else {"column": evidence.get("column"), "header": evidence.get("header"),
                                                "rows": tuple(tuple(row) for row in evidence["rows"])}
-        entry = (self._timer(), tuple(tuple(row) for row in rows), frozen)
+        entry = (self._timer(), tuple(tuple(row) for row in rows), frozen, observed_at or datetime.now(UTC))
+        self._mark_brief_change(key)
         self._snapshots[key] = entry
         self._snapshots.move_to_end(key)
         if len(self._snapshots) > 6:
-            self._snapshots.popitem(last=False)
+            evicted, _ = self._snapshots.popitem(last=False)
+            self._mark_brief_change(evicted)
         return entry
 
     def _execute_live(self, options, *, write, brief_read=False):
@@ -486,8 +552,10 @@ class GoogleSheetsWebService:
                 title, first, start, last, end = geometry
                 stage = "google-select-sheet"
                 self._select(page, actions, title)
+                # Use native title and gid for both read and write readbacks;
+                # a cached browser URL can lag the actual selected worksheet.
+                actions._native_read_title = title
                 if not write:
-                    actions._native_read_title = title
                     stage = "google-download-read"
                     rows = self._download(page, actions)
                     self._headers(rows, title)
@@ -536,6 +604,7 @@ class GoogleSheetsWebService:
                     if bounded_browser_call(box, "evaluate", "element => element === document.activeElement"):
                         raise ValueError("GOOGLE_SELECTION_UNCONFIRMED")
                     actions._guard()
+                    self._prove_active_sheet(page, actions, title, "write")
                     if page_owner(page) != actions._page_role:
                         actions._protected = True
                         raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
@@ -554,14 +623,22 @@ class GoogleSheetsWebService:
                 bounded_browser_call(page, "wait_for_function",
                     '() => document.querySelector("#docs-save-indicator-badge")?.getAttribute("aria-label") === "文档状态：已保存到云端硬盘。"',
                     timeout=30000, timeout_ms=(30000)+1000)
-                stage = "google-write-readback"
-                confirmed = _source_values(self._download(page, actions), title, first, start, last, end)
-                if confirmed != values:
-                    raise ValueError("GOOGLE_WRITE_READBACK_MISMATCH")
+                if title != "报价输入":
+                    stage = "google-write-readback"
+                    confirmed = _source_values(self._download(page, actions), title, first, start, last, end)
+                    if confirmed != values:
+                        logging.getLogger("inso.diagnostics").warning("Google readback differs", extra={
+                            "runtime_reason": _readback_mismatch_code(confirmed, values, first),
+                            "runtime_cause": "ReadbackMismatch",
+                        })
+                        raise ValueError("GOOGLE_WRITE_READBACK_MISMATCH")
                 dirty = False
                 return {"updatedCells": len(values[0])}
             except Exception as exc:
-                actions.retire_failed_page(read_only=not write)
+                closed_read = (not write and _temporary_web_read_failure(exc)
+                               and actions.close_temporary_failed_read())
+                if not closed_read:
+                    actions.retire_failed_page(read_only=not write)
                 if write:
                     log_step(stage, cause=exc)
                     reason = str(exc) if str(exc) in {
@@ -682,21 +759,33 @@ class GoogleSheetsWebService:
         return int(gid[0])
 
     @staticmethod
+    def _prove_active_sheet(page, actions, title, phase):
+        try:
+            actions._guard(read_selection=True)
+        except UpdateAttemptUnconfirmed:
+            log_step("google-"+phase+"-guard")
+            raise
+        observed = bounded_browser_call(page, "evaluate", """() => ({
+            title: document.querySelector('.docs-sheet-active-tab .docs-sheet-tab-name')?.textContent,
+            fragment: location.hash})""")
+        if not isinstance(observed, dict) or observed.get("title") != title:
+            log_step("google-"+phase+"-title")
+            raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
+        fragment = observed.get("fragment")
+        expected = urlsplit(actions._location.url).fragment
+        if (not isinstance(fragment, str)
+                or not _same_read_sheet_selection(fragment.removeprefix("#"), expected)):
+            log_step("google-"+phase+"-fragment")
+            raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
+
+    @staticmethod
     def _download(page, actions):
         def prove_selection(phase):
-            try:
-                actions._guard(read_selection=True)
-            except UpdateAttemptUnconfirmed:
-                log_step("google-read-"+phase+"-guard")
-                raise
             expected = getattr(actions, "_native_read_title", None)
-            if expected is not None:
-                observed = bounded_browser_call(page, "evaluate", """() => ({
-                    title: document.querySelector('.docs-sheet-active-tab .docs-sheet-tab-name')?.textContent,
-                    fragment: location.hash})""")
-                if not isinstance(observed, dict) or observed.get("title") != expected:
-                    log_step("google-read-"+phase+"-title")
-                    raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
+            if expected is None:
+                actions._guard(read_selection=True)
+            else:
+                GoogleSheetsWebService._prove_active_sheet(page, actions, expected, "read-"+phase)
         prove_selection("pre")
         bounded_browser_call(page.get_by_role("menuitem", name="文件", exact=True), "click", timeout=10000, timeout_ms=(10000)+1000)
         bounded_browser_call(page.get_by_role("menuitem", name=re.compile("^下载")), "click", timeout=10000, timeout_ms=(10000)+1000)
@@ -706,6 +795,9 @@ class GoogleSheetsWebService:
         try:
             failure = _download_call(download, "failure", timeout=60)
             if failure:
+                matched = re.fullmatch(r"(?:net::)?(ERR_[A-Z_]+)", failure.strip()) if isinstance(failure, str) else None
+                if matched is None or matched.group(1) not in TEMPORARY_READ_NETWORK_CODES:
+                    raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_DOWNLOAD_FAILURE_UNCLASSIFIED")
                 raise TimeoutError("GOOGLE_WEB_READ_UNAVAILABLE")
             try:
                 path = Path(_download_call(download, "path", timeout=10))
@@ -715,7 +807,7 @@ class GoogleSheetsWebService:
             except FileNotFoundError:
                 # Only this owned export artifact is recoverable. A missing
                 # configuration/credential or other unknown file still stops.
-                raise TimeoutError("GOOGLE_WEB_READ_ARTIFACT_LOST") from None
+                raise GoogleReadArtifactLost("GOOGLE_WEB_READ_ARTIFACT_LOST") from None
             rows = list(csv.reader(io.StringIO(content), delimiter="\t"))
             if len(rows) > 100000:
                 raise ValueError("GOOGLE_WEB_READ_TOO_LARGE")
@@ -724,24 +816,29 @@ class GoogleSheetsWebService:
         except _GoogleDownloadWaitTimeout:
             try:
                 _download_call(download, "cancel", timeout=10)
-            except Exception as exc:  # exact owned artifact could not be retired
-                raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_DOWNLOAD_CANCEL_UNCONFIRMED") from exc
+            except Exception as exc:  # noqa: BLE001 - preserve the original read timeout
+                logging.getLogger("inso.diagnostics").warning(
+                    "Google read export cancellation failed", extra={"runtime_cause": type(exc).__name__})
             raise
         finally:
             try:
                 _download_call(download, "delete", timeout=10)
             except FileNotFoundError:
                 pass  # Already removed; never mask a completed read/its real failure.
-            except _GoogleDownloadWaitTimeout as exc:
-                raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_DOWNLOAD_CLEANUP_UNCONFIRMED") from exc
+            except Exception as exc:  # noqa: BLE001 - cleanup cannot invalidate a completed read
+                logging.getLogger("inso.diagnostics").warning(
+                    "Google read export cleanup failed", extra={"runtime_cause": type(exc).__name__})
 
 
 def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, browser_handle=None,
-                             on_read_success=lambda: None, read_guard=lambda: None,
-                             stop_requested=lambda: False, isolated_read=False):
+                             on_read_success=lambda: None, read_guard=_no_read_guard,
+                             stop_requested=lambda: False, isolated_read=False, page_admission=None):
     """Reuse the existing shared Playwright provider; attach only, never launch/login."""
     if cdp_url.rstrip("/") != "http://127.0.0.1:9222":
         raise ValueError("CANONICAL_CDP_REQUIRED")
+
+    if page_admission is None and browser_handle is not None:
+        page_admission = getattr(browser_handle.browser, "_inso_page_admission", None)
 
     def shared():
         if browser_handle is not None:
@@ -753,7 +850,7 @@ def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, 
     @contextmanager
     def session(*, retire=False):
         # Final cleanup must never bootstrap Chrome through the business provider.
-        with shared_playwright_factory(None if retire else shared)() as playwright:
+        with shared_playwright_factory(None if retire else shared, admission=page_admission)() as playwright:
             browser = playwright.chromium.connect_over_cdp(cdp_url, timeout=10000)
             if not browser.is_connected() or len(browser.contexts) != 1:
                 raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE")

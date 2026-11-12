@@ -104,6 +104,7 @@ class V13QuotationResult:
     source_row_position: int | None = None
     source_status: str = "发给采购"
     effect_uncertain: bool = False
+    popup_timeout: bool = False
 
 
 def _read_source_rows(reader, worksheet, *, discovery=False):

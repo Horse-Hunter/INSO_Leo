@@ -66,3 +66,18 @@ def test_sales_worker_does_not_pause_parallel_inquiry(tmp_path, monkeypatch):
         release.set()
         inquiry_release.set()
         inquiry.join(2)
+
+
+def test_order_mail_worker_passes_shared_runtime_admission(tmp_path, monkeypatch):
+    observed = []
+    backend = ProductionBackend(root=tmp_path)
+    def check(**kwargs):
+        observed.append(kwargs.get("page_admission") is backend._page_admission)
+        return "NO_ORDER", "synthetic"
+    monkeypatch.setattr(sales_header, "run_sales_header_check", check)
+    try:
+        assert backend.start_order_mail_check()
+        backend._order_mail_thread.join(5)
+        assert observed == [True]
+    finally:
+        backend.shutdown()

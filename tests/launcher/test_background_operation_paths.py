@@ -21,6 +21,7 @@ def background_spy(monkeypatch, module, browser, context):
         page = Page(context)
         if owner is not None:
             page.owner_name = "INSO_OWNER_TAB:" + owner
+            page._inso_native_page_owner = (str(id(page)), owner, context, browser)
         context.pages.append(page)
         return page
     monkeypatch.setattr(module, "new_background_page", create)

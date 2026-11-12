@@ -6,6 +6,7 @@ import hashlib
 import json
 import sqlite3
 from collections.abc import Sequence
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -35,13 +36,16 @@ class WorkflowStateStore:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.database_path, timeout=30)
+    def _connect(self, *, timeout=30, deadline=None) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.database_path, timeout=timeout)
+        if deadline is not None:
+            from time import monotonic
+            connection.set_progress_handler(lambda: int(monotonic() >= deadline), 1000)
         connection.row_factory = sqlite3.Row
         return connection
 
     def _initialize(self) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.execute(
                 """
@@ -91,7 +95,7 @@ class WorkflowStateStore:
     ) -> bool:
         observed_at = _as_utc(now or datetime.now(UTC))
         identity = record.record_identity
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             cursor = connection.execute(
                 """
                 INSERT OR IGNORE INTO workflow_items (
@@ -168,7 +172,7 @@ class WorkflowStateStore:
             connection.close()
 
     def researching_items(self) -> tuple[WorkItem, ...]:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             rows = connection.execute(
                 "SELECT * FROM workflow_items WHERE status = 'RESEARCHING' ORDER BY id"
             ).fetchall()
@@ -210,7 +214,7 @@ class WorkflowStateStore:
                 research_status=result.status.value,
                 resolved_brand=result.resolved_brand,
             )
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """
                 UPDATE workflow_items
@@ -247,7 +251,7 @@ class WorkflowStateStore:
         else:
             target = WorkflowStatus.FAILED
             next_attempt_at = None
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """
                 UPDATE workflow_items
@@ -277,7 +281,7 @@ class WorkflowStateStore:
         """Undo a claim when launcher setup failed before Research executed."""
 
         changed_at = _as_utc(now or datetime.now(UTC))
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """
                 UPDATE workflow_items
@@ -309,7 +313,7 @@ class WorkflowStateStore:
         """
 
         changed_at = _as_utc(now or datetime.now(UTC))
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """
                 UPDATE workflow_items
@@ -334,7 +338,7 @@ class WorkflowStateStore:
         """
 
         changed_at = _as_utc(now or datetime.now(UTC))
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             cursor = connection.execute(
                 """
                 UPDATE workflow_items
@@ -358,13 +362,13 @@ class WorkflowStateStore:
         return self._mark_held(item_id, now=now)
 
     def mark_interrupted(self, item_id: int, *, now: datetime | None = None) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute("UPDATE workflow_items SET status='MANUAL_REVIEW', "
                 "next_attempt_at=NULL,last_error='INTERRUPTED',updated_at=? WHERE id=?",
                 (_time_to_text(_as_utc(now or datetime.now(UTC))), item_id))
 
     def finish_row_failure(self, item_id: int, reason: str, *, now: datetime) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute("UPDATE workflow_items SET status='FAILED',next_attempt_at=NULL,"
                 "last_error=?,updated_at=? WHERE id=?",
                 (reason, _time_to_text(_as_utc(now)), item_id))
@@ -381,7 +385,7 @@ class WorkflowStateStore:
         """
 
         changed_at = _as_utc(now or datetime.now(UTC))
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             cursor = connection.execute(
                 """
                 UPDATE workflow_items
@@ -413,7 +417,7 @@ class WorkflowStateStore:
         """
 
         changed_at = _as_utc(now or datetime.now(UTC))
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             original = connection.execute("SELECT record_identity_json FROM workflow_items WHERE id = ?", (item_id,)).fetchone()
             if original is None:
                 return False
@@ -451,7 +455,7 @@ class WorkflowStateStore:
         now: datetime | None = None,
     ) -> None:
         changed_at = _as_utc(now or datetime.now(UTC))
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """
                 UPDATE workflow_items
@@ -468,7 +472,7 @@ class WorkflowStateStore:
             )
 
     def get(self, item_id: int) -> WorkItem:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             row = connection.execute(
                 "SELECT * FROM workflow_items WHERE id = ?", (item_id,)
             ).fetchone()
@@ -476,8 +480,8 @@ class WorkflowStateStore:
             raise KeyError(item_id)
         return _row_to_item(row)
 
-    def get_by_inquiry_id(self, inquiry_id: str) -> WorkItem:
-        with self._connect() as connection:
+    def get_by_inquiry_id(self, inquiry_id: str, *, timeout=30, deadline=None) -> WorkItem:
+        with closing(self._connect(timeout=timeout, deadline=deadline)) as connection, connection:
             row = connection.execute(
                 "SELECT * FROM workflow_items WHERE inquiry_id = ?", (inquiry_id,)
             ).fetchone()
@@ -487,14 +491,14 @@ class WorkflowStateStore:
 
     def inquiry_intake_at(self, inquiry_id: str) -> datetime | None:
         """Immutable local intake proxy, NOT customer quotation-send time."""
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             row = connection.execute(
                 "SELECT created_at FROM workflow_items WHERE inquiry_id = ?", (inquiry_id,)
             ).fetchone()
         return None if row is None else _intake_time(row[0])
 
     def all_items(self) -> tuple[WorkItem, ...]:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             rows = connection.execute(
                 "SELECT * FROM workflow_items ORDER BY id"
             ).fetchall()

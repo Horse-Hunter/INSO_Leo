@@ -18,7 +18,7 @@ import smtplib
 import ssl
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 from typing import Protocol
 
@@ -70,6 +70,9 @@ _SENT = NotificationTransportResult(DeliveryOutcome.SENT, ReasonCode.NOTIFICATIO
 _RETRYABLE = NotificationTransportResult(
     DeliveryOutcome.RETRYABLE_FAILURE, ReasonCode.NOTIFICATION_TRANSIENT
 )
+_DEFERRED = NotificationTransportResult(
+    DeliveryOutcome.RETRYABLE_FAILURE, ReasonCode.NOTIFICATION_TRANSIENT, deferred_without_send=True
+)
 _PERMANENT = NotificationTransportResult(
     DeliveryOutcome.PERMANENT_FAILURE, ReasonCode.NOTIFICATION_PERMANENT
 )
@@ -93,6 +96,7 @@ class QQSMTPTransport:
 
     Satisfies the Workflow ``NotificationTransport`` protocol.
     """
+    supports_delivery_preflight = True
 
     def __init__(
         self,
@@ -136,7 +140,7 @@ class QQSMTPTransport:
             return _UNKNOWN
 
         try:
-            return self._deliver(client, message)
+            return self._deliver(client, message, command=command)
         finally:
             _close(client)
 
@@ -180,6 +184,7 @@ class QQSMTPTransport:
         self,
         client: _SMTPClient,
         message: EmailMessage,
+        *, command: NotificationCommand,
     ) -> NotificationTransportResult:
         try:
             login = self._get_login()
@@ -201,6 +206,27 @@ class QQSMTPTransport:
         finally:
             del login
 
+        if command.delivery_content_kind == "detailed":
+            try:
+                at = self._clock()
+                stamps = (command.delivery_report_completed_at, command.delivery_report_reference_at,
+                          command.delivery_source_observed_at)
+                if not all(timedelta(0) <= at-datetime.fromisoformat(stamp) <= timedelta(minutes=15)
+                           for stamp in stamps):
+                    return _DEFERRED
+            except Exception:  # noqa: BLE001 - no envelope was sent; retry safely
+                return _DEFERRED
+        if command.delivery_revision_guard is not None:
+            try:
+                if command.delivery_revision_guard() is not True:
+                    return _DEFERRED
+                at = self._clock()
+                if not all(timedelta(0) <= at-datetime.fromisoformat(stamp) <= timedelta(minutes=15)
+                           for stamp in (command.delivery_report_completed_at, command.delivery_report_reference_at,
+                                         command.delivery_source_observed_at)):
+                    return _DEFERRED
+            except Exception:  # noqa: BLE001 - no envelope was sent
+                return _DEFERRED
         try:
             client.send_message(message)
         except smtplib.SMTPRecipientsRefused as exc:

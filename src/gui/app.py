@@ -282,6 +282,9 @@ class InsoDashboardApp:
         """Drain backend events and refresh changing dashboard state on Tk thread."""
         if self._closing:
             return
+        retry = getattr(self._backend, "retry_failed_process_service", None)
+        if callable(retry):
+            retry()
         if hasattr(self, "_view"):
             self._tick_workbench()
             return
@@ -325,9 +328,9 @@ class InsoDashboardApp:
                          ModuleSnapshot("quotation", "报价跟进"),
                          ModuleSnapshot("tp", "目标价调研")), logs=self._backend.get_logs()[-300:])
         self._snapshot, self._status = snapshot, snapshot.session
-        if getattr(self, "_start_on_ready", False) and not snapshot.local_loading:
+        if (getattr(self, "_start_on_ready", False) and not snapshot.local_loading
+                and self._backend.start() is not False):
             self._start_on_ready = False
-            self._backend.start()
         if not self._hidden:
             self._update_status(snapshot.session)
             self._view.render(snapshot)
@@ -788,6 +791,9 @@ class InsoDashboardApp:
         if diagnostics is not None:
             diagnostics.request_exit()
         self._closing = True
+        stop_service = getattr(self._backend, "request_process_service_stop", None)
+        if callable(stop_service):
+            stop_service()
         self._cancel_after(self._after_id)
         self._after_id = None
 
