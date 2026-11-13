@@ -20,7 +20,7 @@
 | 磁盘上确有 2 份授权缓存（2026-10-17 21:35 / 21:37），另有一份 `…79545c71….bin.recovery-backup-20261009_134759` | `%LOCALAPPDATA%\INSO_Leo` 目录清单（仅文件名/大小/时间） |
 | OAuth 客户端文件自 2026-09-21 22:25 起**未被修改**（400 字节，单文件） | `stat` 元数据，未读内容 |
 | 当前 V1.6 日志（11-06～11-13，约 3.3 MB）中 **0 条** oauth / authoriz / invalid_grant / refresh token 文本 | `grep -i` 于 `dist/INSO_V1.6/runtime/logs/*.log` |
-| 冻结包已自带 `googleapiclient` / `google_auth_oauthlib` / `google` | `dist/INSO_V1.6/_internal/` 目录 |
+| ~~冻结包已自带 Google API 运行依赖~~ **已被第二阶段验证推翻（见第 11 节）** | 见第 11 节：冻结包缺 `google/oauth2`、`google/api_core`、`requests`、`urllib3` |
 | 仓库内**没有**任何 service account 代码或文档 | `grep -rni "service_account|服务账号" src docs control-room tasks` 为空 |
 | 生产配置键已含 `client_secret_file`（值=`D:\Program_Leo\secrets\google-sheets-oauth-client.json`） | `dist/INSO_V1.6/runtime/production.json`（仅键名与路径） |
 
@@ -85,7 +85,7 @@
 
 改为 API 后建议的次序（**不恢复已取消的 14 格回读**）：
 
-1. `write_payload` 走 API：`values.update` 写 `'报价输入'!<col><row>:<col+13><row>`，`RAW`；以响应 `updatedRange/updatedRows/updatedCells` 作为**写入已提交**证据（服务端确认，强于页面保存指示）。写后 `read_payload` 读回仍是既有逻辑，不是“点前 14 格回读”。
+1. `write_payload` 走 API：`values.update` 写 `'报价输入'!<col><row>:<col+13><row>`，`RAW`；以响应 `updatedRange/updatedRows/updatedCells` 作为**写入已提交**证据（服务端确认，强于页面保存指示）。**更正（CEO P0-1）**：`GoogleQuotationInput.read_payload` 在生产报价链路中**从未被调用**（`v13_quote_update.py:249-290` 只调 `write_payload`；`tests/launcher/test_google_web.py:1650` 还断言它不应被调用），因此 `v13_quote_update.py:268` 的 `QUOTE_INPUT_READBACK_MISMATCH` 分支在报价流程中当前不可达。现有“写后确认”只存在于 CDP transport 内部（键入后 TSV 读回所写单元格），**不得**据此恢复点前 14 格回读。
 2. **新增且仅新增一步**：写完后把该 target 页面重新导航到同一 gid，使页面 client model 与服务器一致（旧闩随刷新销毁）。
 3. 重新布防结算闩 → 点“更新报价” → 60 秒弹窗 → 结果判定。
 4. 结果/后续读回继续用 API；UNKNOWN 语义、durable hold、不重复点击全部不变。
@@ -152,3 +152,91 @@
 - **回退**：`google_transport=cdp` 一键回退，行为与本批之前完全一致。
 
 `COMPUTER_USE_NOT_USED`
+
+---
+
+# 第二阶段：Service Account 长期授权验证（2026-11-13，离线 + 阻塞项）
+
+**状态标签：** `VERIFIED`（本机实际验证）／`OFFLINE_VERIFIED`（合成凭据、模拟 HTTP、测试替身）／`NOT_VERIFIED`（未验证）／`BLOCKED_OWNER_SETUP`（等待 Owner 准备测试环境）。
+**边界：** 未修改任何生产业务源码（本轮只新增一个测试文件与本文档）；未创建/下载真实服务账号私钥；未改表格共享；未连 CDP 9222；未读写生产表格；未部署/打包/重启；未在任何聊天或文件里放置私钥。
+**代码：** 新增 `tests/sheets/test_service_account_auth.py`（20 项，全部通过）。
+
+## 11. 结论摘要
+
+| 问题 | 结论 | 标签 |
+| --- | --- | --- |
+| 宿主环境是否具备 SA 认证能力 | google-auth 2.58.0 / google-api-python-client 2.200.0 / httplib2 0.32.0 / cryptography 50.0.1 均可用，`google.oauth2.service_account` 可导入 | `VERIFIED` |
+| **当前冻结包能否跑 SA/API** | **不能。** 冻结包 `google/` 只有 `auth/`；`google/oauth2`、`google/api_core`、`requests`、`urllib3` 全部缺失 | `OFFLINE_VERIFIED`（见 §12，含导入实测） |
+| SA 是否绕开七天规则 | 机制上绕开：SA 用本地私钥签 JWT 换 1 小时 access token，**全程没有 refresh token**，Testing/External 的七天到期对象不存在 | `OFFLINE_VERIFIED` |
+| 进程重启后是否无交互 | 是：只需私钥文件；子进程实测无需任何缓存/提示即可换到新 token | `OFFLINE_VERIFIED`（真实子进程） |
+| 私钥能否安全落盘 | 可用现有 `protected_local_store`（CurrentUser DPAPI）加密，密文不含明文 PEM，同用户可还原 | `VERIFIED`（真实 DPAPI 调用） |
+| 401/403/429/5xx/超时分类是否已适配 SA/API | **部分不适配**：429/5xx 在共享分类器里还没被认成“可延迟的读取”，会落到模块级 `_runtime_error` | `OFFLINE_VERIFIED`（见 §14） |
+| 真实测试表格读取 | **未做**：仓库与 `D:\Program_Leo\secrets\` 中都没有 Owner 批准的测试表格或测试服务账号 | `BLOCKED_OWNER_SETUP` |
+| 连续 8 天无人工授权 | **未做**，需按 §15 第 5 条安排 | `NOT_VERIFIED` |
+
+## 12. 运行条件核查（A）
+
+**宿主 Python（本机）** `VERIFIED`：`google.oauth2.service_account`、`google.auth.transport.requests`、`googleapiclient.discovery`、`httplib2`、`cryptography` 均可导入；`google-auth 2.58.0`、`google-api-python-client 2.200.0`、`cryptography 50.0.1`。
+
+**已安装的 V1.6 冻结包** `OFFLINE_VERIFIED` —— **本轮最重要的新发现，推翻了第一阶段“无需改打包”的判断**：
+- `dist/INSO_V1.6/_internal/google/` 只有 `auth/` 一个子包；`google/oauth2`、`google/api_core`、`requests`、`urllib3` **均不存在**（`googleapiclient/`、`google_auth_oauthlib/`、`certifi/` 目录存在但依赖缺失）。
+- 用一个**不含 site-packages** 的解释器把该目录加入 `sys.path` 实测：`google.auth` 可导入；`google.oauth2` → `ModuleNotFoundError`；`googleapiclient.discovery` → `ModuleNotFoundError: google.api_core`；`google_auth_oauthlib.flow` → `ImportError: requests`。
+- 原因在 `packaging/INSO_V1.1.spec:22-31`：`release_packages` 只收集 `customtkinter / googleapiclient / google_auth_oauthlib / google.auth / openpyxl / playwright`，`collect_all` 不会带上它们的依赖（`google.api_core`、`google.oauth2`、`requests`、`urllib3`）。
+- 结论：**SA/API 通道必须先做一次打包变更并重新出包**，这属于发布动作，本轮禁止；在现有安装版上直接启用 API 会 `ImportError`。
+
+**Cloud 项目条件** `NOT_VERIFIED`（无法离线核实，需 Owner 在控制台确认）：Sheets API 是否启用；项目/组织是否允许创建服务账号密钥（`iam.disableServiceAccountKeyCreation` 等策略可能直接禁止）；SA 能否拿到测试表格的共享；是否存在 Workspace 外部共享限制。
+
+**CredentialVault 适配性** `VERIFIED`（代码事实）：现有 Vault 是“站点 → 用户名/密码”的 PowerShell + DPAPI 存储（`src/core/credential_provider.py`、`CredentialVault.psm1`），不是通用二进制容器。把 SA 私钥塞进 Vault 需要改它的结构，没有必要；现有 `src/core/protected_local_store.py` 的 DPAPI 边界与 OAuth 令牌缓存同一套，更适合放单文件私钥（见 §15 第 4 问）。
+
+## 13. 离线验证结果（B）
+
+`tests/sheets/test_service_account_auth.py`，20 项全部通过（`pytest tests/sheets/test_service_account_auth.py -q` → `20 passed`；`tests/sheets` 全目录 `179 passed`；`ruff check src tests` 通过）。合成密钥在运行时用 `cryptography` 现场生成、随测试丢弃，测试里没有任何真实密钥材料。
+
+| 要求 | 覆盖它的测试 | 验证了什么 |
+| --- | --- | --- |
+| B1 认证对象创建与失败分类 | `test_service_account_credentials_carry_no_user_grant_and_no_consent_step`、`test_authorization_object_failure_is_labelled_and_never_claims_google_is_down` | 对象可从私钥材料构建；无 token 时 `valid=False`；`GoogleSheetsAuthorizationError` 被现有分类器判为“共享/基础设施失败”，且**不被**当成 Google 全站故障 |
+| B2 Access Token 到期自动重取 | `test_expired_access_token_is_re_exchanged_automatically` | 过期后自动重新换 token，两次都是 JWT-bearer，**没有 refresh_token** |
+| B2' 换取方式本身 | `test_access_token_comes_from_a_signed_jwt_not_a_refresh_token` | 请求体为 `grant_type=…jwt-bearer` + `assertion`；JWT 的 `iss/aud/scope/exp-iat=3600` 正确 |
+| B3 退出、重启后无交互 | `test_new_process_authenticates_from_the_key_file_without_any_stored_token` | **真实子进程**只用私钥文件即可换到 token；子进程目录里除私钥外没有产生任何缓存文件 |
+| B4 401/403/429/5xx/超时分类 | `test_bounded_read_retry_accepts_only_quota_and_server_faults`、`test_missing_or_insufficient_credentials_are_shared_failures_not_retries`、`test_transport_interruptions_stay_retryable`、`test_api_transport_transients_are_not_yet_shared_site_failures` | 内层 5 次重试只接受 429/5xx/超时，401/403 不重试；**但共享分类器尚不认识 `HttpError`**（见 §14） |
+| B5 身份失效不导致全局崩溃 | `test_authorization_object_failure_is_labelled_and_never_claims_google_is_down` | 读取路径上授权失败不会变成“Google 全站不可用”；模块边界才决定暂停（现状差距见 §14） |
+| B6 不输出/不缓存明文私钥 | `test_dpapi_protection_hides_the_private_key_without_losing_it`、`test_no_private_key_material_is_committed_anywhere` | 真实 DPAPI 加密后密文不含 `PRIVATE KEY`/`private_key`，同用户可还原；仓库 `src/docs/control-room/tests` 内不存在私钥标记（防未来误贴） |
+| 密钥被拒（非“用户授权”） | `test_rejected_signing_key_surfaces_as_refresh_error_without_a_consent_screen` | token 端点 400 `invalid_grant` → `RefreshError`；该路径**没有任何弹浏览器/要人工同意的可能** |
+
+**不能据此声称：** 真实 Google 授权成功、真实表格可读、真实配额可用、真实 8 天稳定。以上全部是合成凭据与假端点。
+
+## 14. 现有错误分类的实测差距（`OFFLINE_VERIFIED`，需后续批次修）
+
+用 `httplib2.Response` 构造真实 `googleapiclient.errors.HttpError` 喂给现有分类器（详见测试中的 pinned 断言）：
+
+| HTTP 结果 | 内层 5 次重试 | `is_isolated_source_read_error` | `_website_failure` | 现状后果 |
+| --- | --- | --- | --- | --- |
+| 429 / 500 / 503 | **会重试**（读 `resp.status`） | `False` | `None` | 重试耗尽后不被认作“可延迟的读取”，落到 `_runtime_error`：**模块暂停 + 技术通知**，而不是 batch-1 的“下一轮再试、不发邮件” |
+| 401 / 403 | 不重试 | `False` | `None` | 同上，且通知文案是内部故障而非“凭据/共享” |
+| 超时 / 连接失败 | 会重试 | — | — | 与 CDP 路径一致（可延迟） |
+| 授权对象构造失败 | 不重试 | `False` | `None` | 读取侧不会全局停止（好），但通知不准确；**报价写入侧** `get_write_service()` 失败仍走 `GLOBAL_STOP`（`backend.py:1254`） |
+
+原因：`_website_failure` / `is_isolated_source_read_error` 的“瞬时读取”词汇表是围绕 CDP 异常写的，`HttpError` 不在其中。API 迁移必须与“把 429/5xx 的 `HttpError` 纳入瞬时读取、把 401/403 变成准确的凭据/共享通知”同批完成，否则会重演 Owner 最反感的“假故障邮件 / 假暂停”。
+
+## 15. 长期稳定性判断（D）
+
+1. **是否彻底避开个人 OAuth 七天规则？** 机制上是。七天规则作用于 Testing/External 的用户 refresh token；SA 没有 refresh token（§13 B2 实测请求体里根本没有这个字段），access token 1 小时一换、由私钥签名自动获取。但这只解决“授权到期”，不解决“密钥被停用 / 共享被撤 / 配额 / 网络”。
+2. **还有哪些情形会让 SA 失效？**（按可能性排序）密钥被删除/停用/轮换；服务账号被禁用或删除；项目被禁用或 Sheets API 被关闭；组织策略禁止创建密钥或禁止对外共享；表格被取消共享、移入回收站或更换所有者；配额 429；本机时钟偏差 > 5 分钟（JWT 被拒）；网络/DNS/代理；以及**与 SA 无关的**“更新报价”按钮仍依赖 CDP 里 Owner 的 Google 网页登录。
+3. **能否不重启 INSO、不重复授权自动恢复？** access token 过期、429、5xx、超时**可以**（进程内自动重取/重试，无需重启、无需人工）。私钥被替换或权限被改**不能**自动恢复：需要重新读取凭据，当前没有热加载路径，最省事的是 Owner 替换文件后重启一次。授权失效**不得**让进程崩溃——读取侧今天已经不会全局停，但报价写入侧仍会，这条要在后续批次改。
+4. **私钥与 DPAPI/Vault 怎么结合最省？** 用现有 `protected_local_store.protect_bytes/unprotect_bytes` 把 SA JSON 存成 `%LOCALAPPDATA%\INSO_Leo\sheets-sa-<hash>.key`（与 OAuth 缓存同一机制、同一目录、同样“仓库外 + 当前用户”边界），进程启动时解密到内存、用完即弃明文；**不进 Vault**（Vault 是站点账号密码结构，改它属于无谓结构变更），不进 Git，不进日志，不进报告。
+5. **8 天无人工授权怎么安排？** 独立、不碰生产：Owner 建/指一份合成测试表 → 以只读共享给测试 SA → 交付一个**独立只读探针脚本**（不是正式程序，不连 CDP、不写表），每天跑一次，把“日期 / 是否成功换到 token / HTTP 状态 / 错误类别 / 是否出现任何人工步骤”追加到本地记录；连续 8 个自然日 8/8 成功且 0 次人工介入才算通过。**一次成功不等于八天正常**，本报告不作此声明。
+
+## 16. 需要 Owner 完成的最小步骤（`BLOCKED_OWNER_SETUP`）
+
+已核查：仓库记录、`D:\Program_Leo\secrets\` 与现有配置中**都没有** Owner 批准的测试表格或测试服务账号，因此本节全部为阻塞项；本轮未创建任何真实授权、未改任何共享。
+
+1. 在现有 Cloud 项目确认 **Sheets API 已启用**、组织策略**允许创建服务账号密钥**。
+2. 创建一个只用于验证的服务账号；生成 JSON 私钥后**自行保存到仓库外**（例如 `D:\Program_Leo\secrets\`），**不要把 JSON 内容贴到聊天、Git 或报告里**；只需告知 Executor 文件**路径**与 SA 邮箱。
+3. 建一份**合成测试表格**（可复制真实表结构但用假数据），把该表格**只读共享**给 SA 邮箱（验证读取；写入验证留到后续批次另行授权）。
+4. 告知 Executor：测试表格 ID、工作表标题、期望读取范围。
+5. 顺带确认 OAuth 同意屏的 Publishing status / User type（用于结案历史七天问题）。
+6. 若要推进落地，还需批准一次**打包变更 + 重新出包**（§12 的依赖缺口），以及后续“API 只读候选 + 默认关闭开关”的独立批次。
+
+## 17. 本轮不做什么
+
+不实现 API/CDP 混合版；不改 `src/`；不改 `production.json`；不建服务账号；不下载私钥；不改表格共享；不动 CDP 9222 / Profile / 生产 SQLite / OAuth 缓存；不打包、不部署、不重启；不把模拟通过写成真实授权成功。`COMPUTER_USE_NOT_USED`
