@@ -74,3 +74,33 @@ Review RFQ-016 第一批：Google 稳定性整改
 
 你接下来需要做什么：
 Review RFQ-016 — 第一阶段 Google API 全面迁移
+
+---
+
+# RFQ-016 第一阶段集中修正 — 2026-11-13（CEO CHANGES_REQUESTED 后）
+
+正在实现什么：
+按 CEO 复审意见，在第一阶段范围内做一轮集中修正：让 API 读到的数据与旧浏览器读取的“人看到的文本”一致，让 API 写入的不确定情况不再盲目重试、不再点按钮，并把旧传输层的写入白名单、回执校验、W 表头唯一性补回来。
+
+理想变化是什么：
+同一条业务代码，无论数据来自浏览器还是 API，拿到的字段类型、身份值、日期文本都完全一样；任何“可能已经写进去、但没拿到确认”的情况一律停下来交给既有持久保护，绝不再点一次「更新报价」。
+
+以前是什么：
+我的上一版用 `UNFORMATTED_VALUE` 只把型号列转成文本——W 列证据里仍留着数字型号，和 A:G 的 `"123"` 对不上，正式读取会报“来源订单日期身份已变”；真实日期会以序列号返回，而 `inquiry_day` 只接受日期/字符串，年龄门槛会全线失效；`RFQ_BRIEF` 的数字字段不满足 `BriefReader` 的“全字符串”要求。写入侧则沿用旧报价流程的重试：超时/回执缺失会被当成普通失败再写四次，5xx/429 还可能升级成全局停止；回执只检查“是不是字符串/整数”，`updatedCells=0` 或写错列也会被判成功；旧的“可写工作表/可写列/14 格范围”限制丢失；W 表头唯一性被放宽。
+
+现在是什么：
+- **显示口径统一**：所有读取改用 `FORMATTED_VALUE`（日期永远以显示文本返回，不会变序列号），再按固定列契约转换——源表只有数量列是数字（空→`None`，`1,000`/`12.5`→数字），型号列仅在 `123`/`123.0` 精确回环时转文本、文本前导零原样返回，其余列为显示文本；14 格报价行与 `RFQ_BRIEF` 全文本。W 列证据与 A:G 用**同一份**转换后的行计算，身份比对逐字一致。
+- **不确定写入停手**：API 的 `GoogleSheetsWriteUnconfirmed`、5xx、超时/连接重置 → `QuotationInputWriteUncertain`（仅 API 传输），工作流据此写既有持久挂起（`QUOTE_INPUT_WRITE_FAILED` + `effect_uncertain`）并返回，**不重试、不点按钮**；429 属确定拒绝走有界重试；401/403/404 仍按共享条件处理；确定失败仍会重试四次后判该行失败且不点击。CDP 传输的重试语义完全未改。
+- **回执必须自证**：`updatedRange` 必须解析出同一工作表、同一列区间、同一行（带引号/不带引号/`F9:F9` 都接受），`updatedCells` 必须等于期望格数，返回的 `spreadsheetId` 必须一致；0 格、部分、错列、错行、错表、非区间、缺失一律 `GoogleSheetsWriteUnconfirmed`。
+- **白名单恢复**：读仅允许 `2026`/`SHAHAB` 的 `A:G`、`报价输入` 的 14 格；写仅允许 `报价输入` 单行 14 格，或源表 schema 认可的单格列（状态/型号/品牌/数量/重要程度）。越界在发出任何 API 调用之前即被拒绝。
+- **W 表头恢复唯一性**：`quote_date` 必须在表头行恰好出现一次且位于 W，否则 `GOOGLE_ORDER_DATE_HEADER_AMBIGUOUS`。
+- 架构、默认关闭开关、Reader/Writer 接口、状态机、采购/邮件/调度逻辑全部保持原样；**没有**恢复点前 14 格回读。
+
+做完了什么：
+改动 5 个文件（`google_api_service.py`、`quotation_input.py`、`v13_quote_update.py`、`google_quote_update.py` 仅新增测试所需的既有动作接口不动、`docs/modules/SHEETS.md`）与 4 个测试文件：`test_google_api_service.py` 重写为真实 API 形态（40 项）、`test_quotation_input.py` +11（写入分类）、`test_quote_api_handoff.py` +3（持久挂起/不点击/不重试）、`test_google_quote_update.py` +4（刷新动作只重载同一页面、不新开标签、脚本未结算拒绝、登录失效 fail closed）。
+
+测试结果：
+`tests/sheets` 230 全通过、`ruff check src tests` 与 `git diff --check` 干净。完整离线套件在本提交上连续跑两次：**4036 通过 / 30 失败 / 1 跳过**（431 秒）与 **4036 通过 / 30 失败 / 1 跳过**（442 秒）。对照：基线 `4d3c3493` 3932 通过 / 30 失败 / 1 跳过；上一轮 `1ce2a184` 4000 通过 / 29 失败 / 1 跳过。**原有失败一条未消失**；每次多出来的 ID 只落在已知受负载影响的 `test_backend` / `test_release_infrastructure` / `test_tp_integration` 上，且**同一提交两次运行的额外 ID 并不相同**（`empty_poll`、`production_composition[False|True]`、`release_infrastructure[False]`、`tp_integration[shared]`），逐个单独运行均通过（7 passed）。未删除、未跳过、未弱化任何测试。以上全部为离线验证：未对生产或合成表格做真实 API 读写、未连 CDP、未发邮件、未部署，开关保持关闭。
+
+你接下来需要做什么：
+Review RFQ-016 — 第一阶段集中修正

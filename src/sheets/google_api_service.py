@@ -9,6 +9,11 @@ adapter, ledger, scheduler or browser manager is duplicated.
 
 Only the container-bound "更新报价" button stays on CDP; it is a Sheets script
 that the API cannot trigger.
+
+The native transport returned TSV display text and a numeric quantity. This one
+reproduces that typing explicitly per column (``FORMATTED_VALUE`` + a fixed
+per-column contract) instead of leaking raw JSON numbers, so dates never arrive
+as serial numbers and identifiers never lose their leading zeros.
 """
 
 import json
@@ -17,6 +22,7 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from threading import RLock
 from time import monotonic
@@ -35,7 +41,11 @@ from .worksheet_schema import worksheet_schema
 SOURCE_ORDER_COLUMN = "W"
 SOURCE_ORDER_HEADER = "quote_date"
 QUOTE_DATE_INDEX = 22  # Column W is the 23rd column of the 2026 source sheet.
-_IDENTITY_WORKSHEETS = frozenset({"2026", "SHAHAB"})
+SOURCE_TITLES = frozenset({"2026", "SHAHAB"})
+QUOTE_INPUT_TITLE = "报价输入"
+READ_TITLES = SOURCE_TITLES | {QUOTE_INPUT_TITLE}
+SOURCE_WIDTH = 7
+QUOTE_INPUT_WIDTH = 14
 SNAPSHOT_TTL_SECONDS = 60.0
 DEFAULT_HTTP_TIMEOUT_SECONDS = 30
 
@@ -43,12 +53,16 @@ DEFAULT_HTTP_TIMEOUT_SECONDS = 30
 # from A:G to A:W. Nothing else may read beyond column G.
 _SOURCE_RANGE = re.compile(r"^'((?:[^']|'')+)'!A(\d+):G$")
 _FIXED_RANGE = re.compile(r"^'((?:[^']|'')+)'!([A-Z]{1,2})(\d*)(?::([A-Z]{1,2})(\d*))?$")
+_RECEIPT_RANGE = re.compile(
+    r"^(?:'((?:[^']|'')+)'|([^!']+))!([A-Z]{1,2})(\d+)(?::([A-Z]{1,2})(\d+))?$")
 _BRIEF_RANGE = "RFQ_BRIEF!A1:Q"
+_BRIEF_TITLE = "RFQ_BRIEF"
 _BRIEF_WIDTH = 17
+_QUANTITY_NUMBER = re.compile(r"(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?")
 
 
 class GoogleSheetsWriteUnconfirmed(RuntimeError):
-    """The API answered but did not confirm the written range."""
+    """The API may have applied an external write; never retried blindly."""
 
 
 @dataclass(frozen=True)
@@ -69,6 +83,50 @@ def _column_number(letters: str) -> int:
 def _pad(row: list, width: int) -> list:
     """A1 responses trim trailing empties; the CDP transport never did."""
     return list(row) + [""] * (width - len(row)) if len(row) < width else list(row[:width])
+
+
+def _text_cell(value):
+    """The display text of the same cell, never a guessed or re-padded identity.
+
+    A JSON number only round-trips when it is an exact integer the native
+    download would have printed without exponent notation. Anything else is
+    returned untouched so the existing row-level identity checks reject it
+    rather than the transport inventing a model name.
+    """
+    if isinstance(value, str) or value is None:
+        return "" if value is None else value
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float) and value.is_integer() and abs(value) < 1e15:
+        return str(int(value))
+    return value
+
+
+def _display_text(value):
+    """The cell's display text for every non-identity column (price, date, note)."""
+    if isinstance(value, str) or value is None:
+        return "" if value is None else value
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() and abs(value) < 1e15 else repr(value)
+    return value
+
+
+def _quantity_cell(value):
+    """Exactly the old TSV quantity rule: blank → None, number → int/float."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str) and _QUANTITY_NUMBER.fullmatch(value):
+        number = Decimal(value.replace(",", ""))
+        return int(number) if number == number.to_integral_value() else float(number)
+    return value
 
 
 def load_service_account_info(source: str | Path) -> dict:
@@ -197,9 +255,12 @@ class GoogleApiSheetsService:
         with self._lock:
             response = self._call(lambda: self._service.spreadsheets().values().get(
                 spreadsheetId=spreadsheet, range=_BRIEF_RANGE,
-                majorDimension="ROWS", valueRenderOption="UNFORMATTED_VALUE",
+                majorDimension="ROWS", valueRenderOption="FORMATTED_VALUE",
             ).execute())
-            rows = tuple(tuple(_pad(row, _BRIEF_WIDTH)) for row in response.get("values", []) or ())
+            rows = tuple(
+                tuple(_text_cell(value) for value in _pad(list(row), _BRIEF_WIDTH))
+                for row in response.get("values", []) or ()
+            )
             self._remember(spreadsheet, rows)
             return {"values": [list(row) for row in rows]}
 
@@ -228,58 +289,38 @@ class GoogleApiSheetsService:
         range_name = options.get("range")
         if not isinstance(spreadsheet, str) or not isinstance(range_name, str):
             raise ValueError("GOOGLE_RANGE_UNCONFIRMED")  # noqa: TRY004 - transport contract
-        title, first_column, last_column = _parse_range(range_name)
-        width = last_column - first_column + 1
-        requested = range_name
-        match = _SOURCE_RANGE.fullmatch(range_name)
-        widen = match is not None and match.group(1).replace("''", "'") == "2026"
-        if widen:
-            # The native transport always downloaded from A1 (A:G) and sliced the
-            # requested rows afterwards, so the quote-date column comes from the
-            # same complete read. Keep that exact geometry here.
-            requested = f"'2026'!A1:{SOURCE_ORDER_COLUMN}"
+        title, first_column, first_row, last_column = _parse_range(range_name)
+        _require_read_target(title, first_column, last_column)
+        # The native transport always downloaded from A1 (A:G) and sliced the
+        # requested rows afterwards, so the quote-date column comes from the
+        # same complete read. Keep that exact geometry here.
+        widen = title == "2026" and first_column == 1 and last_column == SOURCE_WIDTH
+        requested = f"'2026'!A1:{SOURCE_ORDER_COLUMN}" if widen else range_name
         response = self._call(lambda: self._service.spreadsheets().values().get(
             spreadsheetId=spreadsheet, range=requested,
             majorDimension=options.get("majorDimension", "ROWS"),
-            valueRenderOption=options.get("valueRenderOption", "UNFORMATTED_VALUE"),
+            # Display parity with the TSV download: dates are never raw serials.
+            valueRenderOption="FORMATTED_VALUE",
         ).execute())
         if not isinstance(response, dict):
             raise ValueError("GOOGLE_RESPONSE_UNCONFIRMED")  # noqa: TRY004 - transport contract
         rows = response.get("values", []) or ()
-        start = int(match.group(2)) if widen else 1
-        values = [_pad(list(row), width) for row in rows[start - 1:]]
-        _normalise_model_column(values, title, first_column, last_column)
-        answer = {"range": range_name, "majorDimension": "ROWS", "values": values}
         if widen:
-            evidence = self._order_date_evidence(rows, 1)
-            if evidence is not None:
-                answer["source_order_dates"] = evidence
+            # One contract over A..W keeps the W proof and the A:G identity
+            # cells literally the same values.
+            full = _apply_contract(rows, title, 1, QUOTE_DATE_INDEX + 1)
+            values = [row[:SOURCE_WIDTH] for row in full[first_row - 1:]]
+            evidence = _order_date_evidence(full)
+        else:
+            values = _apply_contract(rows[first_row - 1:], title, first_column, last_column)
+            evidence = None
+        answer = {"range": range_name, "majorDimension": "ROWS", "values": values}
+        if evidence is not None:
+            answer["source_order_dates"] = evidence
         with self._lock:
             self._live_read_revision += 1
         self._on_read_success()
         return answer
-
-    @staticmethod
-    def _order_date_evidence(rows, first_row):
-        """Exactly the CDP proof: unique quote_date header plus per-row identity."""
-        if not rows:
-            return None
-        header = list(rows[0])
-        if len(header) > QUOTE_DATE_INDEX and header[QUOTE_DATE_INDEX] == SOURCE_ORDER_HEADER:
-            pass
-        elif SOURCE_ORDER_HEADER in header:
-            raise ValueError("GOOGLE_ORDER_DATE_HEADER_AMBIGUOUS")
-        else:
-            return None
-        proofs = []
-        for offset, raw in enumerate(rows):
-            row = list(raw)
-            if offset == 0 or len(row) <= 4 or not row[4]:
-                continue
-            proofs.append((first_row + offset, row[4], row[5] if len(row) > 5 else "",
-                           row[6] if len(row) > 6 else "",
-                           row[QUOTE_DATE_INDEX] if len(row) > QUOTE_DATE_INDEX else ""))
-        return {"column": SOURCE_ORDER_COLUMN, "header": SOURCE_ORDER_HEADER, "rows": proofs}
 
     def _write_range(self, options):
         spreadsheet = options.get("spreadsheetId")
@@ -291,18 +332,17 @@ class GoogleApiSheetsService:
                 or not isinstance(values, list) or len(values) != 1
                 or not isinstance(values[0], list) or not values[0]
                 or any(isinstance(value, bool) or not isinstance(value, (str, int, float))
-                       for value in values[0])
-                or len(values[0]) != _range_width(range_name)):
+                       for value in values[0])):
             raise ValueError("GOOGLE_WRITE_UNCONFIRMED")
+        title, first_column, first_row, last_column = _parse_range(range_name)
+        _require_write_target(title, first_column, first_row, last_column, len(values[0]))
         # A write changes whatever snapshot this transport may still hold.
         self._clear_snapshots()
         response = self._call(lambda: self._service.spreadsheets().values().update(
             spreadsheetId=spreadsheet, range=range_name, valueInputOption="RAW",
             body={"majorDimension": "ROWS", "values": values},
         ).execute())
-        if (not isinstance(response, dict) or not isinstance(response.get("updatedRange"), str)
-                or not isinstance(response.get("updatedCells"), int)):
-            raise GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+        _verify_write_receipt(response, spreadsheet, title, first_column, first_row, last_column)
         return response
 
     def _unexpired(self, spreadsheet):
@@ -344,47 +384,124 @@ def _parse_range(range_name: str):
         raise ValueError("GOOGLE_RANGE_UNCONFIRMED")
     first = _column_number(match.group(2))
     last = _column_number(match.group(4)) if match.group(4) else first
+    first_row = int(match.group(3)) if match.group(3) else 1
     if last < first:
         raise ValueError("GOOGLE_RANGE_UNCONFIRMED")
-    return match.group(1).replace("''", "'"), first, last
+    return match.group(1).replace("''", "'"), first, first_row, last
 
 
-def _range_width(range_name: str) -> int:
-    _title, first, last = _parse_range(range_name)
-    return last - first + 1
+def _require_read_target(title, first_column, last_column):
+    """The old read whitelist: known titles, source A:G, 14-cell input row."""
+    if title not in READ_TITLES:
+        raise ValueError("GOOGLE_SHEET_UNCONFIRMED")
+    if title in SOURCE_TITLES:
+        if (first_column, last_column) != (1, SOURCE_WIDTH):
+            raise ValueError("GOOGLE_RANGE_UNCONFIRMED")
+        return
+    if last_column - first_column + 1 != QUOTE_INPUT_WIDTH:
+        raise ValueError("GOOGLE_RANGE_UNCONFIRMED")
 
 
-def _identity_text(value):
-    """The TSV display of the same cell, never a guessed or re-padded identity.
-
-    A JSON number only round-trips when it is an exact integer in the range the
-    native download would have printed without exponent notation. Anything else
-    is returned untouched so the existing row-level identity checks reject it
-    rather than the transport inventing a model name.
-    """
-    if isinstance(value, str) or value is None:
-        return "" if value is None else value
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, float) and value.is_integer() and abs(value) < 1e15:
-        return str(int(value))
-    return value
-
-
-def _normalise_model_column(rows, title, first, last):
-    """Only a source worksheet's model column is a business identity here.
-
-    `worksheet_schema` falls back to the standard mapping for any other title,
-    so the whitelist must be explicit: the 14-cell quotation input row and
-    RFQ_BRIEF are payload text, never an identity to reinterpret.
-    """
-    if title not in _IDENTITY_WORKSHEETS:
+def _require_write_target(title, first_column, first_row, last_column, width):
+    """The old write whitelist: one raw14 row, else one schema-approved cell."""
+    if title not in READ_TITLES:
+        raise ValueError("GOOGLE_SHEET_UNCONFIRMED")
+    if width != last_column - first_column + 1:
+        raise ValueError("GOOGLE_WRITE_UNCONFIRMED")
+    if title == QUOTE_INPUT_TITLE:
+        if width != QUOTE_INPUT_WIDTH:
+            raise ValueError("GOOGLE_WRITE_UNCONFIRMED")
         return
     schema = worksheet_schema(title)
-    index = _column_number(schema.model_column) - first
-    if not 0 <= index < last - first + 1:
-        return
-    for row in rows:
-        row[index] = _identity_text(row[index])
+    allowed = {schema.status_column, schema.model_column, schema.brand_column,
+               schema.quantity_column, schema.importance_column}
+    if first_column != last_column or width != 1:
+        raise ValueError("GOOGLE_WRITE_UNCONFIRMED")
+    if _column_letter(first_column) not in allowed:
+        raise ValueError("GOOGLE_WRITE_UNCONFIRMED")
+    if first_row < 1:
+        raise ValueError("GOOGLE_WRITE_UNCONFIRMED")
+
+
+def _column_letter(number: int) -> str:
+    result = ""
+    while number:
+        number, remainder = divmod(number - 1, 26)
+        result = chr(65 + remainder) + result
+    return result
+
+
+def _apply_contract(rows, title, first_column, last_column):
+    """FORMATTED_VALUE rows plus the exact CDP-era per-column typing.
+
+    Source sheets keep one numeric column (quantity) and text everywhere else;
+    the 14-cell quotation row and RFQ_BRIEF are text only.
+    """
+    width = last_column - first_column + 1
+    padded = [_pad(list(row), width) for row in rows]
+    quantity_index = model_index = None
+    if title in SOURCE_TITLES:
+        schema = worksheet_schema(title)
+        quantity_index = _column_number(schema.quantity_column) - first_column
+        model_index = _column_number(schema.model_column) - first_column
+    for row in padded:
+        for index in range(width):
+            if index == quantity_index:
+                row[index] = _quantity_cell(row[index])
+            elif index == model_index:
+                # An identifier is never re-padded or guessed.
+                row[index] = _text_cell(row[index])
+            else:
+                row[index] = _display_text(row[index])
+    return padded
+
+
+def _order_date_evidence(rows):
+    """Exactly the CDP proof: unique W header plus per-row E/F/G identity."""
+    if not rows:
+        return None
+    header = list(rows[0])
+    if SOURCE_ORDER_HEADER not in header:
+        return None
+    if (len(header) <= QUOTE_DATE_INDEX or header[QUOTE_DATE_INDEX] != SOURCE_ORDER_HEADER
+            or header.count(SOURCE_ORDER_HEADER) != 1):
+        raise ValueError("GOOGLE_ORDER_DATE_HEADER_AMBIGUOUS")
+    proofs = []
+    for offset, row in enumerate(rows):
+        if offset == 0 or len(row) <= 4 or not row[4]:
+            continue
+        proofs.append((offset + 1, row[4],
+                       row[5] if len(row) > 5 else "",
+                       row[6] if len(row) > 6 else "",
+                       row[QUOTE_DATE_INDEX] if len(row) > QUOTE_DATE_INDEX else ""))
+    return {"column": SOURCE_ORDER_COLUMN, "header": SOURCE_ORDER_HEADER, "rows": proofs}
+
+
+def _verify_write_receipt(response, spreadsheet, title, first_column, first_row, last_column):
+    """Require the server to confirm exactly the requested target and cell count."""
+    if not isinstance(response, dict):
+        raise GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+    reported = response.get("spreadsheetId")
+    if isinstance(reported, str) and reported != spreadsheet:
+        raise GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+    updated_range = response.get("updatedRange")
+    updated_cells = response.get("updatedCells")
+    if not isinstance(updated_cells, int) or isinstance(updated_cells, bool):
+        raise GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+    expected_cells = last_column - first_column + 1
+    if updated_cells != expected_cells:
+        raise GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+    if not isinstance(updated_range, str):
+        raise GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+    match = _RECEIPT_RANGE.fullmatch(updated_range)
+    if match is None:
+        raise GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+    receipt_title = (match.group(1) or match.group(2) or "").replace("''", "'")
+    receipt_first = _column_number(match.group(3))
+    receipt_row = int(match.group(4))
+    receipt_last = _column_number(match.group(5)) if match.group(5) else receipt_first
+    receipt_last_row = int(match.group(6)) if match.group(6) else receipt_row
+    if (receipt_title.casefold() != title.casefold()
+            or receipt_first != first_column or receipt_last != last_column
+            or receipt_row != first_row or receipt_last_row != first_row):
+        raise GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")

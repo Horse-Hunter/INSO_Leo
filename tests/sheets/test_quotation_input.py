@@ -149,3 +149,60 @@ def test_zero_is_a_valid_sheet_id_and_requires_exact_gid_text():
     writer, values = adapter(gid="027")
     with pytest.raises(QuotationInputUnavailable):
         writer.validate_schema()
+
+
+# --- external (API) write ambiguity: never a blind retry, never a global stop --
+import httplib2
+from googleapiclient.errors import HttpError
+
+from src.sheets.google_api_service import GoogleSheetsWriteUnconfirmed
+from src.sheets.quotation_input import QuotationInputWriteUncertain
+
+
+def _http(status):
+    body = f'{{"error": {{"code": {status}, "message": "synthetic"}}}}'.encode()
+    return HttpError(httplib2.Response({"status": status, "reason": "synthetic"}), body)
+
+
+def api_adapter():
+    writer, values = adapter()
+    writer.external_write = True  # exactly what the API transport sets
+    return writer, values
+
+
+@pytest.mark.parametrize("error", [
+    GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED"),
+    TimeoutError("read timed out"),
+    ConnectionError("reset by peer"),
+    _http(500),
+    _http(503),
+])
+def test_ambiguous_api_write_stops_before_any_retry(error):
+    writer, values = api_adapter()
+    values.write_error = error
+    with pytest.raises(QuotationInputWriteUncertain):
+        writer.write_payload(RAW)
+    assert len([call for call in values.calls if call[0] == "update"]) == 1
+
+
+def test_rejected_api_write_is_still_a_bounded_attempt():
+    writer, values = api_adapter()
+    values.write_error = _http(429)  # Definite rejection: nothing was written.
+    with pytest.raises(QuotationInputAttemptFailed):
+        writer.write_payload(RAW)
+
+
+@pytest.mark.parametrize("status", [401, 403, 404, 400])
+def test_refused_api_write_is_a_shared_condition(status):
+    writer, values = api_adapter()
+    values.write_error = _http(status)
+    with pytest.raises(QuotationInputUnavailable):
+        writer.write_payload(RAW)
+
+
+def test_cdp_transport_keeps_its_original_retry_semantics():
+    writer, values = adapter()  # external_write false: the native transport
+    assert writer.external_write is False
+    values.write_error = TimeoutError("read timed out")
+    with pytest.raises(QuotationInputAttemptFailed):
+        writer.write_payload(RAW)

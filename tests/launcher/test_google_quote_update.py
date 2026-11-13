@@ -81,6 +81,7 @@ class Page:
         self.result_waits = []
         self.script_running, self.script_stuck, self.script_waits = True, False, []
         self.armed = self.confirmed = self.started = self.settled = False
+        self.reloads, self.reload_error = 0, None
         self.script_never_starts = False
     def wait_for_function(self, script, **kwargs):
         if "__insoRefreshQuietSince" in script:
@@ -128,6 +129,10 @@ class Page:
             assert self.started and self.settled
     def goto(self, url, **kwargs):
         self.url = url
+    def reload(self, **kwargs):
+        if self.reload_error is not None:
+            raise self.reload_error
+        self.reloads += 1
     def get_by_role(self, role, *, name=None, exact=None):
         assert role in {"button", "dialog"}
         return Locator(self, role, name)
@@ -1447,3 +1452,62 @@ def test_delayed_result_dialog_within_fifteen_seconds_is_not_closed_or_reclicked
     assert actions.read_update_result() == "报价更新完成\n成功填入：1行"
     assert page.result_waits == [60000] and page.clicks == ["更新报价"]
     assert not page.closed
+
+
+# --- RFQ-016 phase 1: reload the owned page between an API write and the click --
+def test_external_write_reload_keeps_the_same_page_and_script_ready_surface():
+    actions, browser = adapter()
+    actions.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    url = page.url
+
+    actions.refresh_after_external_write()
+
+    assert page.reloads == 1 and page.url == url  # Same document, same gid.
+    assert not page.closed and actions._page is page
+    assert actions._script_pending is False  # Nothing was dispatched yet.
+
+
+def test_external_write_reload_refuses_a_pending_script():
+    actions, browser = adapter()
+    actions.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    actions._script_pending = True
+
+    with pytest.raises(V12Fault) as raised:
+        actions.refresh_after_external_write()
+
+    assert raised.value.reason == "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED"
+    assert raised.value.scope is FaultScope.GLOBAL_STOP
+    assert page.reloads == 0
+
+
+def test_external_write_reload_surfaces_a_lost_surface_not_a_new_tab():
+    actions, browser = adapter()
+    actions.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    page.reload_error = TimeoutError("synthetic reload timeout")
+    pages_before = len(browser.contexts[0].pages)
+
+    with pytest.raises(UpdateAttemptUnconfirmed):
+        actions.refresh_after_external_write()
+
+    assert len(browser.contexts[0].pages) == pages_before  # Never opens a replacement.
+
+
+def test_external_write_reload_still_fails_closed_on_a_login_surface():
+    actions, browser = adapter()
+    actions.open_quote_input()
+    page = browser.contexts[0].pages[-1]
+    original = page.reload
+
+    def reload_and_lose_login(**kwargs):
+        original(**kwargs)
+        page.url = "https://accounts.google.com/signin"
+
+    page.reload = reload_and_lose_login
+    with pytest.raises(V12Fault) as raised:
+        actions.refresh_after_external_write()
+
+    assert raised.value.reason == "GOOGLE_AUTHENTICATION_REQUIRED"
+    assert actions._protected is True

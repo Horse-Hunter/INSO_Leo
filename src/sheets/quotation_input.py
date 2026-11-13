@@ -1,7 +1,9 @@
 """Narrow raw fourteen-cell quotation input adapter over the existing Sheets API."""
 import re
 from dataclasses import dataclass
+from socket import timeout as SocketTimeout
 
+from .google_api_service import GoogleSheetsWriteUnconfirmed
 from .google_oauth import GoogleSheetsAuthorizationError
 from .google_reader import GoogleSheetsReadUnavailable, execute_google_read
 from .pending import WorksheetIdentity
@@ -20,6 +22,29 @@ class QuotationInputAttemptFailed(RuntimeError):
 
 class QuotationInputBusy(QuotationInputAttemptFailed):
     """A prior owned script still uses shared input; defer, never quarantine."""
+
+
+class QuotationInputWriteUncertain(RuntimeError):
+    """An external input-row write may have been applied.
+
+    Never retried and never followed by the native button: the caller owns a
+    durable per-order hold instead. Distinct from a rejection (the write
+    certainly did not happen) and from a busy input surface.
+    """
+
+
+def _ambiguous_write(error):
+    """API transport outcomes that cannot prove whether the write was applied."""
+    if isinstance(error, GoogleSheetsWriteUnconfirmed):
+        return True
+    status = getattr(getattr(error, "resp", None), "status", None)
+    if type(status) is int:
+        return 500 <= status < 600
+    return isinstance(error, (TimeoutError, ConnectionError, SocketTimeout))
+
+
+def _rate_limited(error):
+    return getattr(getattr(error, "resp", None), "status", None) == 429
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +162,14 @@ class GoogleQuotationInput:
         except Exception as exc:
             if isinstance(exc, (QuotationInputBusy, QuotationInputUnavailable)):
                 raise
+            if self.external_write and _ambiguous_write(exc):
+                # The API could have applied part of this row. Stop here: the
+                # caller persists the durable hold and must not click.
+                raise QuotationInputWriteUncertain("QUOTE_INPUT_WRITE_UNCERTAIN") from exc
+            if self.external_write and _rate_limited(exc):
+                # A 429 is a definite rejection: nothing was written, one more
+                # attempt is safe and does not need the shared stop.
+                raise QuotationInputAttemptFailed("QUOTE_INPUT_WRITE_FAILED") from exc
             if _shared_error(exc):
                 raise QuotationInputUnavailable() from exc
             raise QuotationInputAttemptFailed("QUOTE_INPUT_WRITE_FAILED") from exc

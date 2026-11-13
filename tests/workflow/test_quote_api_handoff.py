@@ -129,3 +129,47 @@ def test_payload_is_identical_for_both_transports(external):
     actions.popups = [POPUP]
     updater.update_one(found())
     assert io.writes == [found().quotation.payload]
+
+
+# --- ambiguous API input write: durable hold, never a retry, never a click ----
+from src.sheets.quotation_input import (
+    QuotationInputAttemptFailed,
+    QuotationInputWriteUncertain,
+)
+
+
+def test_ambiguous_api_write_holds_the_order_and_never_clicks():
+    updater, src, io, actions = build(external=True)
+    held = []
+    updater._persist_uncertain = held.append
+    io.write_failures = [QuotationInputWriteUncertain("QUOTE_INPUT_WRITE_UNCERTAIN")]
+
+    result = updater.update_one(found())
+
+    assert result.outcome is QuotationOutcome.ROW_FAILED
+    assert result.effect_uncertain is True
+    assert len(io.writes) == 1          # No four-attempt blind retry.
+    assert src.clicks == 0 and actions.order == ["open"]
+    assert held and held[0].effect_uncertain is True
+
+
+def test_ambiguous_api_write_without_a_hold_is_still_not_clicked():
+    updater, src, io, _actions = build(external=True)
+    updater._persist_uncertain = None
+    io.write_failures = [QuotationInputWriteUncertain("QUOTE_INPUT_WRITE_UNCERTAIN")]
+
+    result = updater.update_one(found())
+
+    assert result.effect_uncertain is True and src.clicks == 0
+    assert len(io.writes) == 1
+
+
+def test_definite_api_write_rejection_still_retries_then_fails_without_click():
+    updater, src, io, _actions = build(external=True)
+    io.write_failures = [QuotationInputAttemptFailed("QUOTE_INPUT_WRITE_FAILED")] * 4
+
+    result = updater.update_one(found())
+
+    assert result.outcome is QuotationOutcome.ROW_FAILED
+    assert result.effect_uncertain is False   # Nothing was written, nothing clicked.
+    assert len(io.writes) == 4 and src.clicks == 0

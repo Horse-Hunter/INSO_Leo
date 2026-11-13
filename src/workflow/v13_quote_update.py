@@ -18,6 +18,7 @@ from src.sheets.quotation_input import (
     QuotationInputAttemptFailed,
     QuotationInputBusy,
     QuotationInputUnavailable,
+    QuotationInputWriteUncertain,
 )
 from src.sheets.worksheet_schema import worksheet_schema
 
@@ -261,6 +262,11 @@ class V13QuotationUpdater:
                             break
                         except QuotationInputBusy:
                             return result  # Quote remains eligible next poll, no Hold or baseline write.
+                        except QuotationInputWriteUncertain:
+                            # An external write that may already be applied: the
+                            # existing durable hold protects the order, and the
+                            # native button is never dispatched afterwards.
+                            return self._uncertain_input_write(result)
                         except QuotationInputAttemptFailed as exc:
                             safety = _boundary_safety_fault(exc)
                             if safety is not None:
@@ -349,6 +355,16 @@ class V13QuotationUpdater:
             if safety is not None:
                 raise safety
             raise V12Fault(FaultScope.GLOBAL_STOP, exc.reason) from exc
+
+    def _uncertain_input_write(self, result):
+        """Ambiguous input-row write: durable hold, no retry, no native click."""
+        uncertain = replace(result, outcome=QuotationOutcome.ROW_FAILED,
+                            row_error_reason=RowErrorReason.QUOTE_INPUT_WRITE_FAILED,
+                            effect_uncertain=True)
+        if self._persist_uncertain is None:
+            return uncertain
+        self._persist_uncertain(uncertain)
+        return uncertain
 
     def _unconfirmed_initial(self, result):
         """A Sheet status can be edited by a human; it is not click-outcome proof."""
