@@ -352,3 +352,46 @@
 **顺带一条判断（推断，未验证）：** 该账号是个人 Google 账号、项目很可能**不属于任何组织**，因此 `iam.serviceAccountKeyExpiryHours`、`iam.disableServiceAccountKeyCreation` 这类组织策略**大概率不适用**（无组织即无组织策略）；但要看控制台“组织策略”页面才能确认，本轮没看到。
 
 `COMPUTER_USE_USED`（仅限本次授权的控制台只读复检：三次页面加载、零点击、零输入、无凭据读取；自建标签页已关闭）
+
+---
+
+## 21. 2SV 解除后的六项核查（2026-11-13 18:36–18:55，全部读到）
+
+**授权与边界：** 沿用 Owner 授权，只新建后台标签页、只做只读页面访问与截图；**零点击、零输入、未创建/删除任何资源、未改任何设置、未启用或停用任何 API、未改表格共享、未新建项目、未读任何密钥**。收尾只关闭本自建控制台标签页（5→3 后为 4→2 个 console 页），Owner 的两个账号页、报价表格页、blank 均未动；未重启 Chrome/CDP。
+
+### 结果
+
+| # | 项目 | 结论 | 证据（控制台原文） | 状态 |
+| --- | --- | --- | --- | --- |
+| 1 | 项目身份与访问权 | **存在且可访问**：名称 `INSO`，Project ID `inso-509314`；当前账号在该项目 IAM 中为 **Owner (Legacy)**；资源层级根为 **No organization**（项目直接挂在“无组织”下） | 信息中心“项目信息 / 项目名称 INSO / 项目 ID inso-509314”；IAM 一行主体，角色 Owner (Legacy)；资源管理器树 “No organization → INSO” | `VERIFIED` |
+| 2 | Google Sheets API | **已启用** | `apis/library/sheets.googleapis.com`：“Google Sheets API / **API 已启用** / 管理” | `VERIFIED` |
+| 3 | 历史 OAuth 应用 | **外部 + 测试**：发布状态=**测试**，用户类型=**外部**，测试用户 1 个（本人 qq.com 账号，已掩码）；页面提示“如需发布应用，您必须在品牌页面中完成配置”；项目内仅 1 个 OAuth 客户端：`INSO Leo Sheets Readonly Desktop`（**桌面设备**，创建 2026-09-21） | Google Auth Platform → 受众 / 客户端 | `VERIFIED` |
+| 4 | 既有 Service Account | **没有**：项目“INSO”的服务账号列表为“**没有可显示的行**”，无可复用账号 | `iam-admin/serviceaccounts` 表格空行提示 | `VERIFIED` |
+| 5 | 密钥创建与有效期策略 | **允许创建密钥**：`iam.managed.disableServiceAccountKeyCreation`、`…disableServiceAccountCreation`、`…disableServiceAccountKeyUpload` 均为“**无效**（继承父资源的政策）”；**没有** `iam.serviceAccountKeyExpiryHours` 条目；因项目**无组织**，组织级自定义约束不可能生效 | `iam-admin/orgpolicies/list` 表格 + 资源管理器层级 | `VERIFIED`（控制台列表与层级；未逐条打开策略详情） |
+| 6 | 能否在原项目内用 SA 长期访问 Sheets | **可以**：同一项目内 Sheets API 已启用、SA 创建未被禁止、无密钥策略限制、无组织策略、当前账号为 Owner；SA 走“私钥签 JWT→1 小时 access token”，**与 OAuth Testing 的七天 refresh token 完全无关** | 上述 1–5 组合 | `VERIFIED`（机制与前置条件）；真实创建/读取仍待 Owner 授权 |
+
+### 对历史七天问题的结论
+
+控制台状态是 **External + Testing**，且应用未发布。Google 对“外部 + 测试”状态的用户 refresh token 规定 **7 天失效**，这与 Owner 体验到的“每周重新授权”完全吻合，也与“2026-10-18 改用 CDP 后症状消失”的时间线一致。**原因确认为 External + Testing 的 7 天刷新令牌到期**（机制来自代码 + 控制台状态 + 时间线三方面吻合；唯一未做的是等 7 天实测一次过期）。
+
+### 因此，原项目可直接复用，不需要
+
+- 新建 Google Cloud 项目；
+- 重建 OAuth 客户端（现有 1 个桌面客户端完好）；
+- 重新做个人 OAuth 授权（SA 与此无关）；
+- 修改 OAuth 发布状态（保持 Testing 不影响 SA 路线）。
+
+### Owner 最少需要做的动作（按顺序，均需你明确授权后再做）
+
+1. 在项目 `inso-509314` 内**创建一个只用于验证的服务账号**（不需要给它项目级 IAM 角色，Sheet 共享即可授权访问；命名建议带 `rfq016-` 前缀以便识别）。
+2. 为它**生成一个 JSON 密钥**，保存到仓库外（如 `D:\Program_Leo\secrets\`），**不要把内容贴进聊天/Git/报告**；只需告诉我**文件路径**与 **SA 邮箱**。
+3. 建一份**合成测试表格**（假数据、与真实表结构一致），把它**只读（查看者）**共享给该 SA 邮箱。
+4. 告我：测试表格 ID + 工作表标题 + 期望读取范围。
+
+拿到以上四项后，我下一步只做“独立只读探针”：用该密钥换 token、读一次测试表、重启进程再读一次，验证 token 自动重取与无人工介入；**不碰生产表、不连 CDP 业务、不写任何单元格**。
+
+### 安全提示（本轮新发现）
+
+项目**没有组织**，因此**无法用组织策略强制服务账号密钥有效期**（Google 提供的 `iam.serviceAccountKeyExpiryHours` 需要组织层级）。这意味着密钥长期有效只能靠**人工轮换纪律**：建议 90 天轮换一次，密钥文件放仓库外并继续走 CurrentUser DPAPI，泄露即删除该密钥并重建。
+
+`COMPUTER_USE_USED`（仅限本轮授权的只读控制台核查：若干次页面加载与截图、零点击、零输入、无凭据读取；自建标签页已关闭）
