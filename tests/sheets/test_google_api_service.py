@@ -74,8 +74,8 @@ class FakeApi:
 
 
 def header_2026():
-    """A real 2026 header row: A..G populated, W is quote_date."""
-    row = ["rfq_date", "importance", "customer", "", "mpn", "mfr", "qty"]
+    """A real 2026 header row: the exact labels the CDP transport required."""
+    row = ["STATUS", "", "CLASS", "", "MPN", "MFR", "Qty"]
     row += [None] * (WIDTH_2026 - len(row) - 1)
     row.append("quote_date")
     return row
@@ -165,13 +165,38 @@ def test_duplicate_quote_date_header_is_still_refused():
 
 
 def test_shahab_keeps_the_native_column_contract():
-    api = FakeApi([{"values": [["2026/10/07", "发给采购", "", "MPN1", "TI", 1000]]}])
+    header = ["", "STATUS", "", "Part Number", "Brand", "QTY", ""]
+    data = ["2026/10/07", "发给采购", "", "MPN1", "TI", 1000]
+    api = FakeApi([{"values": [["stale pre-header row"], header, data]}])
     response = GoogleApiSheetsService(api).get(
         spreadsheetId=SHEET, range="'SHAHAB'!A1:G").execute()
+    # Read from row 1 like the native download; the requested slice starts at row 1.
     assert api.calls[0][1]["range"] == "'SHAHAB'!A1:G"
     assert api.calls[0][1]["valueRenderOption"] == "FORMATTED_VALUE"
-    # D is the model, F the quantity: text stays text, quantity becomes numeric.
-    assert response["values"] == [["2026/10/07", "发给采购", "", "MPN1", "TI", 1000, ""]]
+    assert response["values"][2] == ["2026/10/07", "发给采购", "", "MPN1", "TI", 1000, ""]
+
+
+def test_source_header_mismatch_fails_closed_like_the_native_download():
+    """The 21:50 production stop class: worksheet identity is never assumed."""
+    from src.workflow.v12_faults import FaultScope, V12Fault
+
+    for bad in ([["STATUS", "", "CLASS", "", "PART", "MFR", "Qty"]],
+                [["STATUS", "", "", "", "MPN", "MFR", "Qty"]],
+                []):
+        with pytest.raises(V12Fault) as caught:
+            read({"values": bad})
+        assert caught.value.reason == "SHEETS_SCHEMA_UNAVAILABLE"
+        assert caught.value.scope is FaultScope.GLOBAL_STOP
+
+
+def test_shahab_header_must_be_on_the_second_row():
+    from src.workflow.v12_faults import V12Fault
+
+    with pytest.raises(V12Fault) as caught:
+        GoogleApiSheetsService(FakeApi([{"values": [
+            ["", "STATUS", "", "Part Number", "Brand", "QTY"]]}])).get(
+            spreadsheetId=SHEET, range="'SHAHAB'!A1:G").execute()
+    assert caught.value.reason == "SHEETS_SCHEMA_UNAVAILABLE"
 
 
 def test_quotation_input_row_is_text_only():

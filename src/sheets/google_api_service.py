@@ -55,6 +55,11 @@ _SOURCE_RANGE = re.compile(r"^'((?:[^']|'')+)'!A(\d+):G$")
 _FIXED_RANGE = re.compile(r"^'((?:[^']|'')+)'!([A-Z]{1,2})(\d*)(?::([A-Z]{1,2})(\d*))?$")
 _RECEIPT_RANGE = re.compile(
     r"^(?:'((?:[^']|'')+)'|([^!']+))!([A-Z]{1,2})(\d+)(?::([A-Z]{1,2})(\d+))?$")
+# Same worksheet-identity proof the retired TSV transport applied to its download.
+SOURCE_HEADERS = {
+    "2026": (0, {0: "STATUS", 2: "CLASS", 4: "MPN", 5: "MFR", 6: "Qty"}),
+    "SHAHAB": (1, {1: "STATUS", 3: "Part Number", 4: "Brand", 5: "QTY"}),
+}
 _BRIEF_RANGE = "RFQ_BRIEF!A1:Q"
 _BRIEF_TITLE = "RFQ_BRIEF"
 _BRIEF_WIDTH = 17
@@ -295,7 +300,11 @@ class GoogleApiSheetsService:
         # requested rows afterwards, so the quote-date column comes from the
         # same complete read. Keep that exact geometry here.
         widen = title == "2026" and first_column == 1 and last_column == SOURCE_WIDTH
-        requested = f"'2026'!A1:{SOURCE_ORDER_COLUMN}" if widen else range_name
+        # Source sheets are always read from row 1, exactly like the native
+        # download, so the header proof and the requested slice share one read.
+        source_read = title in SOURCE_TITLES
+        requested = (f"'2026'!A1:{SOURCE_ORDER_COLUMN}" if widen
+                     else f"'{_escaped(title)}'!A1:G" if source_read else range_name)
         response = self._call(lambda: self._service.spreadsheets().values().get(
             spreadsheetId=spreadsheet, range=requested,
             majorDimension=options.get("majorDimension", "ROWS"),
@@ -305,12 +314,14 @@ class GoogleApiSheetsService:
         if not isinstance(response, dict):
             raise ValueError("GOOGLE_RESPONSE_UNCONFIRMED")  # noqa: TRY004 - transport contract
         rows = response.get("values", []) or ()
-        if widen:
-            # One contract over A..W keeps the W proof and the A:G identity
-            # cells literally the same values.
-            full = _apply_contract(rows, title, 1, QUOTE_DATE_INDEX + 1)
+        if source_read:
+            # One contract over A..W keeps the header proof, the W evidence and
+            # the A:G identity cells literally the same values.
+            full = _apply_contract(rows, title, 1,
+                                   QUOTE_DATE_INDEX + 1 if widen else SOURCE_WIDTH)
+            _require_source_header(full, title)
             values = [row[:SOURCE_WIDTH] for row in full[first_row - 1:]]
-            evidence = _order_date_evidence(full)
+            evidence = _order_date_evidence(full) if widen else None
         else:
             values = _apply_contract(rows[first_row - 1:], title, first_column, last_column)
             evidence = None
@@ -454,6 +465,23 @@ def _apply_contract(rows, title, first_column, last_column):
             else:
                 row[index] = _display_text(row[index])
     return padded
+
+
+def _escaped(title: str) -> str:
+    return title.replace("'", "''")
+
+
+def _require_source_header(rows, title):
+    """The exact worksheet identity the retired TSV download required."""
+    position, expected = SOURCE_HEADERS[title]
+    if position >= len(rows) or any(
+            index >= len(rows[position]) or rows[position][index] != label
+            for index, label in expected.items()):
+        # Same fault type/reason the CDP transport raised; imported lazily so this
+        # transport stays importable without the workflow package.
+        from src.workflow.v12_faults import FaultScope, V12Fault
+
+        raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_SCHEMA_UNAVAILABLE")
 
 
 def _order_date_evidence(rows):
