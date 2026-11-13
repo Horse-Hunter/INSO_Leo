@@ -173,3 +173,31 @@ def test_definite_api_write_rejection_still_retries_then_fails_without_click():
     assert result.outcome is QuotationOutcome.ROW_FAILED
     assert result.effect_uncertain is False   # Nothing was written, nothing clicked.
     assert len(io.writes) == 4 and src.clicks == 0
+
+
+def test_unclassified_error_after_dispatch_gives_one_attempt_one_hold_no_click():
+    """Server may have applied the row; the client raised an unknown fault.
+
+    First half uses the real adapter over a fake service (one update attempt),
+    second half feeds the same exception class to the real updater.
+    """
+    from tests.sheets.test_quotation_input import RAW
+    from tests.sheets.test_quotation_input import adapter as input_adapter
+
+    writer, values = input_adapter()
+    writer.external_write = True
+    values.write_error = RuntimeError("response lost after the server applied it")
+    with pytest.raises(QuotationInputWriteUncertain):
+        writer.write_payload(RAW)
+    assert len([call for call in values.calls if call[0] == "update"]) == 1
+
+    updater, src, io, actions = build(external=True)
+    held = []
+    updater._persist_uncertain = held.append
+    io.write_failures = [QuotationInputWriteUncertain("QUOTE_INPUT_WRITE_UNCERTAIN")]
+
+    result = updater.update_one(found())
+
+    assert result.effect_uncertain is True and result.outcome is QuotationOutcome.ROW_FAILED
+    assert len(io.writes) == 1 and len(held) == 1
+    assert src.clicks == 0 and actions.order == ["open"]

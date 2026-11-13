@@ -206,3 +206,19 @@ def test_cdp_transport_keeps_its_original_retry_semantics():
     values.write_error = TimeoutError("read timed out")
     with pytest.raises(QuotationInputAttemptFailed):
         writer.write_payload(RAW)
+
+
+def test_unknown_external_write_error_is_never_retried():
+    """Anything after dispatch that is not a proven rejection is unknown."""
+    writer, values = api_adapter()
+    values.write_error = RuntimeError("client closed before response")
+    with pytest.raises(QuotationInputWriteUncertain):
+        writer.write_payload(RAW)
+    assert len([call for call in values.calls if call[0] == "update"]) == 1
+
+
+def test_unknown_error_on_the_native_transport_keeps_the_old_retry():
+    writer, values = adapter()  # external_write false
+    values.write_error = RuntimeError("native grid input failed")
+    with pytest.raises(QuotationInputAttemptFailed):
+        writer.write_payload(RAW)

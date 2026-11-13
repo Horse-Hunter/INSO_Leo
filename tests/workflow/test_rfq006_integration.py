@@ -628,3 +628,62 @@ def test_model_difference_mail_reuses_durable_outbox_two_recipients_restart_and_
     notify_quotation_model_difference(ledger, replace(result, quotation=quote(model="MPN")), "MPN", at=NOW, evidence=evidence)
     with sqlite3.connect(db) as c:
         assert c.execute("SELECT count(*) FROM workflow_v12_notification_commands").fetchone()[0] == 1
+
+
+# --- RFQ-016 phase 1: an unknown external input write stays held ---------------
+def _uncertain_input_write(result):
+    return replace(result, outcome=QuotationOutcome.ROW_FAILED,
+                   row_error_reason=RowErrorReason.QUOTE_INPUT_WRITE_FAILED,
+                   effect_uncertain=True)
+
+
+def test_uncertain_input_write_hold_survives_restart_and_a_status_change(tmp_path):
+    """Real store + coordinator: held across restart, status change and next poll."""
+    from tests.inso.test_v13_quotation_read import quote
+
+    db, _store, sheets, holds, _ledger, quotes, make, observed = fixture(
+        tmp_path, [(quote(),)]
+    )
+    make(_uncertain_input_write).run(WS)
+    assert len(holds.active()) == 1
+
+    reopened = V13HoldStore(db)
+    reopened.migrate()  # process restart against the same SQLite file
+    assert len(reopened.active()) == 1
+    make().run(WS)  # next poll
+    assert len(V13HoldStore(db).active()) == 1
+    assert len(quotes.calls) == 1  # the order is never re-queried or re-clicked
+
+    sheets.rows = [source(2, "采购已报价")]  # a human moves the source status
+    make().run(WS)
+    assert len(V13HoldStore(db).active()) == 1
+    assert all(result.outcome is not QuotationOutcome.UPDATED_ALREADY_EXISTS
+               for result, _key in observed)
+    assert len(quotes.calls) == 1
+    with sqlite3.connect(db) as c:
+        # No new mail is invented for this marker; the hold is the protection.
+        assert c.execute(
+            "SELECT count(*) FROM workflow_v12_notification_commands").fetchone()[0] == 0
+
+
+def test_close_cannot_clear_an_uncertain_input_write_hold(tmp_path):
+    from tests.inso.test_v13_quotation_read import quote
+
+    _db, _store, _sheets, holds, _ledger, _quotes, make, _ = fixture(tmp_path, [(quote(),)])
+    make(_uncertain_input_write).run(WS)
+    key = holds.active()[0][0]
+    holds.close(key)
+    assert len(holds.active()) == 1
+    holds.close_many([key])
+    assert len(holds.active()) == 1
+
+
+def test_close_still_releases_an_ordinary_input_write_failure(tmp_path):
+    from tests.inso.test_v13_quotation_read import quote
+
+    _db, _store, _sheets, holds, _ledger, _quotes, make, _ = fixture(tmp_path, [(quote(),)])
+    make(lambda result: replace(result, outcome=QuotationOutcome.ROW_FAILED,
+                                row_error_reason=RowErrorReason.QUOTE_INPUT_WRITE_FAILED)).run(WS)
+    key = holds.active()[0][0]
+    holds.close(key)
+    assert holds.active() == ()

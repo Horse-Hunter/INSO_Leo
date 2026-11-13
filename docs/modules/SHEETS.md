@@ -286,18 +286,25 @@ writer, quotation-input, brief or business adapter was duplicated: `GoogleSheets
   call. Writes: `报价输入` exactly 14 cells in one row; other sheets exactly one
   cell in a schema-approved column (status/model/brand/quantity/importance) —
   the same boundary the CDP transport enforced.
-- **Write receipts (corrected).** A write is only "done" when the server's
-  `updatedRange` names the requested sheet, columns and row (quoted or bare A1,
-  single-cell or `F9:F9`) **and** `updatedCells` equals the expected count, with
-  any returned `spreadsheetId` matching. Zero/partial/mismatched/missing receipts
-  raise `GoogleSheetsWriteUnconfirmed`.
-- **Ambiguous writes never retry and never click.** `GoogleQuotationInput` maps
-  `GoogleSheetsWriteUnconfirmed`, API 5xx and transport timeouts/connection
-  resets to `QuotationInputWriteUncertain` **only when the transport is the API**
-  (`external_write`), so the CDP behaviour is untouched. `V13QuotationUpdater`
-  then persists the existing durable per-order hold (`QUOTE_INPUT_WRITE_FAILED`
-  + `effect_uncertain`) and returns without dispatching the button. A 429 is a
-  definite rejection (bounded retry), 401/403/404 remain shared conditions.
+- **Write receipts.** A write is only "done" when the server's `updatedRange`
+  names the requested sheet, columns and row (quoted or bare A1, single-cell or
+  `F9:F9`), `updatedCells` equals the expected count **and** `spreadsheetId` is
+  present, a string, and the requested document. Zero/partial/mismatched/missing
+  receipts, a wrong or non-string document id, and any incomplete body raise
+  `GoogleSheetsWriteUnconfirmed`.
+- **Ambiguous writes never retry and never click.** The transport converts **any**
+  post-dispatch write exception into `GoogleSheetsWriteUnconfirmed` unless the
+  server answered with a structured 4xx rejection (400/401/403/404/429), and the
+  adapter maps that (plus 5xx/timeouts for other implementations) to
+  `QuotationInputWriteUncertain` **only when the transport is the API**
+  (`external_write`), so the CDP retry contract is untouched. `V13QuotationUpdater`
+  then persists the existing durable per-order hold (`QUOTE_INPUT_WRITE_FAILED` +
+  `effect_uncertain`) and returns without dispatching the button. 429 stays a
+  bounded retry, 401/403/404 remain shared conditions. Effect-uncertain holds are
+  never auto-closed by source-status reconciliation (`V13HoldStore.close`,
+  `close_many`, `V13IntegratedCycle.prepare_run`), so a later `采购已报价` cannot
+  release the barrier or report a spurious "already exists"; ordinary
+  `QUOTE_INPUT_WRITE_FAILED` holds without the marker keep their old lifecycle.
 - **Quotation handoff.** Only the container-bound `更新报价` button stays on CDP.
   `V13QuotationUpdater` calls `GoogleQuotationUpdateActions.refresh_after_external_write()`
   between an API write and the single click, reloading the same already-proved

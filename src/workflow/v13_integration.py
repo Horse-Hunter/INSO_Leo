@@ -27,6 +27,16 @@ from .v13_quotation import (
 log = logging.getLogger(__name__)
 
 
+def _payload_is_effect_uncertain(payload):
+    """Any hold that recorded an unknown external effect is never auto-closed."""
+    try:
+        data = json.loads(payload)
+    except (TypeError, ValueError):
+        return True  # Unreadable marker: keep the barrier rather than release it.
+    marker = data.get("quotation") if isinstance(data, dict) else None
+    return isinstance(marker, dict) and marker.get("effect_uncertain") is True
+
+
 class V13HoldStore:
     """One additive table in the existing DB; V1.2 user_version is unchanged."""
 
@@ -206,6 +216,13 @@ class V13HoldStore:
     def close(self, key):
         try:
             with closing(sqlite3.connect(self.path)) as db, db:
+                row = db.execute(
+                    "SELECT reason,result_json FROM workflow_v13_holds WHERE hold_key=? AND active=1",
+                    (key,),
+                ).fetchone()
+                if row is not None and (row[0] == "UPDATE_RESULT_UNCONFIRMED"
+                                        or _payload_is_effect_uncertain(row[1])):
+                    return  # Unknown external effect: only a reviewed resolution clears it.
                 db.execute(
                     "UPDATE workflow_v13_holds SET active=0 WHERE hold_key=? AND reason != 'UPDATE_RESULT_UNCONFIRMED'", (key,)
                 )
@@ -218,8 +235,14 @@ class V13HoldStore:
         """Atomically settle selected old barriers after an explicit manual attempt."""
         try:
             with closing(sqlite3.connect(self.path)) as db, db:
+                protected = {
+                    key for key, reason, payload in db.execute(
+                        "SELECT hold_key,reason,result_json FROM workflow_v13_holds WHERE active=1"
+                    )
+                    if reason == "UPDATE_RESULT_UNCONFIRMED" or _payload_is_effect_uncertain(payload)
+                }
                 db.executemany("UPDATE workflow_v13_holds SET active=0 WHERE hold_key=? AND reason != 'UPDATE_RESULT_UNCONFIRMED'",
-                    ((key,) for key in keys))
+                    ((key,) for key in keys if key not in protected))
         except sqlite3.Error:
             raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
 
@@ -329,6 +352,7 @@ class V13IntegratedCycle:
                 located.cells.get(worksheet_schema(worksheet.worksheet).status_column)
                 == "采购已报价" and result.source_status == "发给采购"
                 and result.row_error_reason is not RowErrorReason.UPDATE_RESULT_UNCONFIRMED
+                and not result.effect_uncertain
             ):
                 self.holds.close(key)
                 # Do not re-query a just-settled initial hold in this same pass.

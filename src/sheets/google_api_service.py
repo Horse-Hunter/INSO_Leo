@@ -349,10 +349,19 @@ class GoogleApiSheetsService:
         _require_write_target(title, first_column, first_row, last_column, len(values[0]))
         # A write changes whatever snapshot this transport may still hold.
         self._clear_snapshots()
-        response = self._call(lambda: self._service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet, range=range_name, valueInputOption="RAW",
-            body={"majorDimension": "ROWS", "values": values},
-        ).execute())
+        try:
+            response = self._call(lambda: self._service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet, range=range_name, valueInputOption="RAW",
+                body={"majorDimension": "ROWS", "values": values},
+            ).execute())
+        except Exception as exc:
+            # The request may already have been delivered. Only a server rejection
+            # that provably applied nothing may propagate as a normal failure;
+            # everything else (5xx, timeouts, unknown client faults) is an unknown
+            # external effect and must never be retried automatically.
+            if _definite_write_rejection(exc):
+                raise
+            raise GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED") from exc
         _verify_write_receipt(response, spreadsheet, title, first_column, first_row, last_column)
         return response
 
@@ -464,6 +473,12 @@ def _apply_contract(rows, title, first_column, last_column):
                 row[index] = _text_cell(row[index])
             else:
                 row[index] = _display_text(row[index])
+            if title in SOURCE_TITLES and index < SOURCE_WIDTH and not row[index]:
+                # The frozen TSV transport turned EVERY blank A:G source cell into
+                # None (the `if not value` test preceded its quantity check), and
+                # the identity/status comparisons use raw equality. Keep exactly
+                # that; the W quote_date proof stays display text.
+                row[index] = None
     return padded
 
 
@@ -505,12 +520,20 @@ def _order_date_evidence(rows):
     return {"column": SOURCE_ORDER_COLUMN, "header": SOURCE_ORDER_HEADER, "rows": proofs}
 
 
+def _definite_write_rejection(exc):
+    """Only a 4xx structured rejection proves that nothing was written."""
+    status = getattr(getattr(exc, "resp", None), "status", None)
+    return type(status) is int and status in {400, 401, 403, 404, 429}
+
+
 def _verify_write_receipt(response, spreadsheet, title, first_column, first_row, last_column):
     """Require the server to confirm exactly the requested target and cell count."""
     if not isinstance(response, dict):
         raise GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
     reported = response.get("spreadsheetId")
-    if isinstance(reported, str) and reported != spreadsheet:
+    if not isinstance(reported, str) or reported != spreadsheet:
+        # Every UpdateValuesResponse carries the spreadsheet id; a missing or
+        # non-string value is an incomplete receipt, not a success.
         raise GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
     updated_range = response.get("updatedRange")
     updated_cells = response.get("updatedCells")

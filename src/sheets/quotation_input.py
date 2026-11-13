@@ -47,6 +47,12 @@ def _rate_limited(error):
     return getattr(getattr(error, "resp", None), "status", None) == 429
 
 
+def _definite_rejection(error):
+    """A 4xx structured rejection: the server refused, so nothing was written."""
+    status = getattr(getattr(error, "resp", None), "status", None)
+    return type(status) is int and status in {400, 401, 403, 404, 429}
+
+
 @dataclass(frozen=True, slots=True)
 class QuotationInputLocation:
     worksheet: WorksheetIdentity
@@ -162,9 +168,12 @@ class GoogleQuotationInput:
         except Exception as exc:
             if isinstance(exc, (QuotationInputBusy, QuotationInputUnavailable)):
                 raise
-            if self.external_write and _ambiguous_write(exc):
-                # The API could have applied part of this row. Stop here: the
-                # caller persists the durable hold and must not click.
+            if self.external_write and (
+                    _ambiguous_write(exc) or not _definite_rejection(exc)):
+                # An external write was attempted and this outcome does not prove
+                # that nothing was applied. Fail closed for ANY such exception
+                # (unknown client/transport faults included): the caller persists
+                # the durable hold and never clicks.
                 raise QuotationInputWriteUncertain("QUOTE_INPUT_WRITE_UNCERTAIN") from exc
             if self.external_write and _rate_limited(exc):
                 # A 429 is a definite rejection: nothing was written, one more

@@ -106,7 +106,8 @@ def test_source_read_is_formatted_and_widened_to_the_quote_date_column():
     assert api.calls[0][1]["range"] == "'2026'!A1:W"
     assert api.calls[0][1]["valueRenderOption"] == "FORMATTED_VALUE"
     assert all(len(row) == 7 for row in response["values"])
-    assert response["values"][1] == ["2026/10/07", "高", "客户A", "", "000123", "TI", 100]
+    # Blank source cells are None exactly like the frozen TSV transport.
+    assert response["values"][1] == ["2026/10/07", "高", "客户A", None, "000123", "TI", 100]
 
 
 def test_quote_date_evidence_uses_the_same_values_as_the_row():
@@ -142,7 +143,7 @@ def test_blank_and_quoted_source_cells_keep_their_meaning():
     row[3] = "'000456"  # A user-typed leading apostrophe is display text, not a number.
     response = read({"values": [header_2026(), row]})
     values = response["values"][1]
-    assert values[1] == "" and values[3] == "'000456"
+    assert values[1] is None and values[3] == "'000456"
     assert values[6] is None  # Blank quantity keeps the old TSV→None contract.
     assert response["source_order_dates"]["rows"] == []
 
@@ -173,7 +174,7 @@ def test_shahab_keeps_the_native_column_contract():
     # Read from row 1 like the native download; the requested slice starts at row 1.
     assert api.calls[0][1]["range"] == "'SHAHAB'!A1:G"
     assert api.calls[0][1]["valueRenderOption"] == "FORMATTED_VALUE"
-    assert response["values"][2] == ["2026/10/07", "发给采购", "", "MPN1", "TI", 1000, ""]
+    assert response["values"][2] == ["2026/10/07", "发给采购", None, "MPN1", "TI", 1000, None]
 
 
 def test_source_header_mismatch_fails_closed_like_the_native_download():
@@ -224,7 +225,7 @@ def test_brief_read_makes_every_cell_text_like_the_native_read():
 def test_brief_snapshot_caches_for_a_minute_and_write_invalidates():
     clock = [0.0]
     api = FakeApi([{"values": [["rfq_line_id"], ["x", "2026"]]},
-                   {"updatedRange": "'2026'!F9", "updatedCells": 1}])
+                   {"spreadsheetId": SHEET, "updatedRange": "'2026'!F9", "updatedCells": 1}])
     transport = GoogleApiSheetsService(api, timer=lambda: clock[0])
     transport.read_brief(SHEET)
     revision, entry = transport.peek_brief_token(SHEET)
@@ -241,7 +242,8 @@ def test_brief_snapshot_caches_for_a_minute_and_write_invalidates():
 
 # --- writes: target whitelist and receipt proof ------------------------------
 def test_raw14_write_is_confirmed_by_its_exact_receipt():
-    api = FakeApi([{"updatedRange": "'报价输入'!B5:O5", "updatedRows": 1, "updatedCells": 14}])
+    api = FakeApi([{"spreadsheetId": SHEET, "updatedRange": "'报价输入'!B5:O5",
+                    "updatedRows": 1, "updatedCells": 14}])
     payload = [f"v{index}" for index in range(14)]
     response = GoogleApiSheetsService(api).update(
         spreadsheetId=SHEET, range="'报价输入'!B5:O5", valueInputOption="RAW",
@@ -252,7 +254,8 @@ def test_raw14_write_is_confirmed_by_its_exact_receipt():
 
 def test_single_cell_write_accepts_quoted_or_bare_receipts():
     for receipt_range in ("'2026'!F9", "2026!F9", "'2026'!F9:F9"):
-        api = FakeApi([{"updatedRange": receipt_range, "updatedCells": 1}])
+        api = FakeApi([{"spreadsheetId": SHEET, "updatedRange": receipt_range,
+                        "updatedCells": 1}])
         GoogleApiSheetsService(api).update(
             spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
             body={"values": [["TI"]]}).execute()
@@ -276,8 +279,14 @@ def test_write_receipt_must_prove_the_exact_target_and_count(receipt):
             body={"values": [["TI"]]}).execute()
 
 
-def test_write_receipt_rejects_a_different_spreadsheet():
-    api = FakeApi([{"spreadsheetId": "other", "updatedRange": "'2026'!F9", "updatedCells": 1}])
+@pytest.mark.parametrize("receipt", [
+    {"spreadsheetId": "other", "updatedRange": "'2026'!F9", "updatedCells": 1},
+    {"spreadsheetId": 12345, "updatedRange": "'2026'!F9", "updatedCells": 1},
+    {"spreadsheetId": None, "updatedRange": "'2026'!F9", "updatedCells": 1},
+    {"updatedRange": "'2026'!F9", "updatedCells": 1},
+])
+def test_write_receipt_must_carry_the_matching_spreadsheet_identity(receipt):
+    api = FakeApi([receipt])
     with pytest.raises(GoogleSheetsWriteUnconfirmed):
         GoogleApiSheetsService(api).update(
             spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
@@ -387,3 +396,102 @@ def test_unsupported_scope_is_refused_before_any_client_is_built(tmp_path):
     with pytest.raises(ValueError, match="GOOGLE_API_SCOPE_UNSUPPORTED"):
         build_service_account_sheets_service(tmp_path / "missing.json", scope="drive")
     assert READ_ONLY_SCOPE != "drive"
+
+
+# --- differential parity with the frozen CDP value contract -------------------
+def _tsv_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() and abs(value) < 1e15 else repr(value)
+    return value
+
+
+def _tsv_rows(rows):
+    """The same data as the native TSV download would have displayed it."""
+    return [[_tsv_text(cell) for cell in row] for row in rows]
+
+
+def _cdp_quote_dates(tsv_rows):
+    """The retired transport's own W-column proof, rebuilt from its A:G read."""
+    from src.launcher.google_web import _source_values
+
+    basic = _source_values(tsv_rows, "2026", 1, 1, 7, None)
+    return [(number, basic[number - 1][4], basic[number - 1][5], basic[number - 1][6],
+             row[22] if len(row) > 22 else "")
+            for number, row in enumerate(tsv_rows, 1)
+            if number > 1 and len(row) > 4 and row[4]]
+
+
+SOURCE_SAMPLE = [
+    ["2026/10/07", "高", "客户A", "", "000123", "TI", 1000, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "2026/10/01"],
+    ["2026/10/08", "", "", "", "MPN-2", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+]
+
+
+@pytest.mark.parametrize("title, prefix", [
+    ("2026", []),
+    ("SHAHAB", [["pre-header"] * 7]),
+])
+def test_source_values_match_the_frozen_cdp_a_to_g_contract(title, prefix):
+    """Old `_source_values` and the new transport agree cell-for-cell."""
+    from src.launcher.google_web import _source_values
+
+    header = (["STATUS", "", "CLASS", "", "MPN", "MFR", "Qty"] if title == "2026"
+              else ["", "STATUS", "", "Part Number", "Brand", "QTY"])
+    api_rows = prefix + [header, *[row[:7] for row in SOURCE_SAMPLE]]
+    response = GoogleApiSheetsService(FakeApi([{"values": api_rows}])).get(
+        spreadsheetId=SHEET, range=f"'{title}'!A1:G").execute()
+
+    expected = _source_values(_tsv_rows(api_rows), title, 1, 1, 7, None)
+    assert response["values"] == expected
+    # Every blank A:G source cell is None, never "".
+    assert response["values"][-1] == [None] * 7
+
+
+def test_quote_date_proof_matches_the_frozen_cdp_payload():
+    api_rows = [["STATUS", "", "CLASS", "", "MPN", "MFR", "Qty"] + [""] * 15 + ["quote_date"],
+                *SOURCE_SAMPLE]
+    response = GoogleApiSheetsService(FakeApi([{"values": api_rows}])).get(
+        spreadsheetId=SHEET, range="'2026'!A1:G").execute()
+
+    assert response["source_order_dates"]["rows"] == _cdp_quote_dates(_tsv_rows(api_rows))
+    # The proof identities are the same objects the reader sees in A:G.
+    first = response["source_order_dates"]["rows"][0]
+    assert tuple(response["values"][first[0] - 1][index] for index in (4, 5, 6)) == first[1:4]
+    # A blank W stays an empty display string in the proof, not None.
+    assert first[4] == "2026/10/01"
+
+
+# --- post-dispatch write outcomes: only a rejection may be retried ------------
+def test_unknown_post_dispatch_write_error_is_an_unknown_effect():
+    api = FakeApi([RuntimeError("client socket closed mid-response")])
+    with pytest.raises(GoogleSheetsWriteUnconfirmed):
+        GoogleApiSheetsService(api).update(
+            spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
+            body={"values": [["TI"]]}).execute()
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 429])
+def test_a_server_rejection_propagates_as_a_definite_rejection(status):
+    import httplib2
+    from googleapiclient.errors import HttpError
+
+    body = f'{{"error": {{"code": {status}, "message": "synthetic"}}}}'.encode()
+    error = HttpError(httplib2.Response({"status": status, "reason": "synthetic"}), body)
+    with pytest.raises(HttpError):
+        GoogleApiSheetsService(FakeApi([error])).update(
+            spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
+            body={"values": [["TI"]]}).execute()
+
+
+def test_transport_timeout_is_an_unknown_effect():
+    with pytest.raises(GoogleSheetsWriteUnconfirmed):
+        GoogleApiSheetsService(FakeApi([TimeoutError("read timed out")])).update(
+            spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
+            body={"values": [["TI"]]}).execute()
