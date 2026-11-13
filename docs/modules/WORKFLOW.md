@@ -1,5 +1,12 @@
 # Workflow 模块
 
+## Owner override (2026-11-13): quote update and Google recovery
+
+This later Owner instruction overrides historical RFQ-005 text below that required pre-click readback of the 14-cell quotation input. The current V1.6 workflow intentionally **does not** perform that pre-click readback; do not restore it merely to satisfy older tests. Exact source/status/binding, Google cloud-save confirmation, bounded submit, native result/unknown-effect holds and purchase/mail dedup protections remain mandatory.
+
+A transient Google UI read/download timeout or temporary page failure must not automatically become a website-wide outage, business-wide stop or human-action alert. Reuse bounded recovery and isolate read-side failures where safely possible, while retaining strict failsafe boundaries for uncertain external effects and CDP/page ownership. The detailed trigger/Owner/Executor procedure, evidence, retirement and CEO enforcement live in `docs/modules/SHEETS.md`, “Owner correction (2026-11-13)”. In RFQ-016 review, classify actual fault paths and do not alter production code or deploy without separate authorization.
+
+
 ## V1.5 requirement-scoped TP tasks (offline, REVIEW_REQUIRED)
 
 `workflow.tp_research` adds workflow_requirements to the existing SQLite file,
