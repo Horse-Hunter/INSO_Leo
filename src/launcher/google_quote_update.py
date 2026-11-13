@@ -427,11 +427,18 @@ class GoogleQuotationUpdateActions:
             raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNCONFIRMED")
         expected = urlsplit(self._location.url)
         if parsed.scheme != "https" or parsed.hostname != expected.hostname or parsed.path != expected.path:
-            step = ("google-navigation-error-page" if self._page.url == "chrome-error://chromewebdata/"
+            error_page = self._page.url == "chrome-error://chromewebdata/"
+            step = ("google-navigation-error-page" if error_page
                     else "google-document-host-mismatch" if parsed.scheme != "https" or parsed.hostname != expected.hostname
                     else "google-document-path-mismatch")
             log_step(step)
-            reason = ("GOOGLE_SPREADSHEET_UNAVAILABLE" if self._page.url == "chrome-error://chromewebdata/"
+            if error_page and self._read_only and not self._protected:
+                # Chrome's own error page has no document to prove and no Owner
+                # state to preserve; only this owned pure-read attempt failed.
+                # A write, an uncertain ownership or a protected surface keeps
+                # the established global stop below.
+                raise GoogleReadTargetUnavailable("GOOGLE_READ_TARGET_UNAVAILABLE")
+            reason = ("GOOGLE_SPREADSHEET_UNAVAILABLE" if error_page
                       else "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
             raise V12Fault(FaultScope.GLOBAL_STOP, reason)
         if parsed.fragment != expected.fragment and not (
@@ -685,9 +692,12 @@ class GoogleQuotationUpdateActions:
                 if bounded_browser_call(self._page, "evaluate", _UNSAFE_POLL_PAGE):
                     log_step("google-busy-pooled-unsafe")
                     raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
-            except Exception:
+            except Exception as failure:
                 # Preserve genuine unfinished work without repeatedly adding tabs.
-                entry["protected"] = True
+                # A pure-read page that only lost its document (Chrome's error
+                # page) carries no work to preserve, so leave it recoverable and
+                # let the reviewed error-page isolation path above replace it.
+                entry["protected"] = not (self._read_only and isinstance(failure, GoogleReadTargetUnavailable))
                 self._page, self._poll_entry, self._protected = None, None, False
                 raise
             finally:
@@ -868,11 +878,25 @@ class GoogleQuotationUpdateActions:
                 or page.is_closed() or (entry is not None and entry.get("read_only") is not True)):
             return False
         try:
-            self._require_owned_page()
-            self._guard(read_selection=True)
-            target_id = _google_target_id(page)
-            if entry is not None and entry.get("target_id") not in (None, target_id):
-                return False
+            if page.url == "chrome-error://chromewebdata/":
+                # Chrome's error page exposes no document, so the ordinary
+                # window.name/document proof cannot run there. Native target
+                # identity is the same proof the write path accepts, and this
+                # client created the target: release only that exact pure-read
+                # page instead of leaving an unusable tab behind.
+                lease = getattr(page, "_inso_native_page_owner", None)
+                if lease is None or native_page_owner(page) != self._page_role:
+                    return False
+                if entry is not None and entry.get("target_id") not in (None, lease[0]):
+                    return False
+                if self._handle.browser is None or not self._handle.browser.is_connected():
+                    return False
+            else:
+                self._require_owned_page()
+                self._guard(read_selection=True)
+                target_id = _google_target_id(page)
+                if entry is not None and entry.get("target_id") not in (None, target_id):
+                    return False
             if not any(other is not page and not other.is_closed() for other in page.context.pages):
                 return False  # Do not close the browser's last page.
             bounded_browser_call(page, "close")
@@ -985,7 +1009,10 @@ class GoogleQuotationUpdateActions:
         except V12Fault:
             if self._protected:
                 return
-        except UpdateAttemptUnconfirmed:
+        except (UpdateAttemptUnconfirmed, GoogleReadTargetUnavailable):
+            # An unprovable surface or a pure-read page that only lost its
+            # document cannot certify its contents; both still close below
+            # under the native-owner proof taken immediately above.
             pass
         try:
             # Keep the protected browser alive if this has become its last tab.

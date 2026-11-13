@@ -2723,6 +2723,15 @@ class ProductionBackend(GuiBackend):
         site = _website_failure(exc)
         if site is None:
             return False
+        if site == "Google Sheets" and not recoverable_read:
+            # Reuse the canonical source-read classifier instead of adding one.
+            # A bounded read attempt that is provably read-side only (owned page
+            # loss, download/transport timeout) is not a Google-wide outage: it
+            # keeps its normal cadence, never mails a technical fault and never
+            # grows into a permanent pause.
+            from src.workflow.v13_integration import is_isolated_source_read_error
+            recoverable_read = (isinstance(exc, GoogleReadTargetUnavailable)
+                                or is_isolated_source_read_error(exc))
         with self._lock:
             if self._stop.is_set():
                 return True  # Explicit Owner stop always wins over automatic recovery.
@@ -2750,7 +2759,7 @@ class ProductionBackend(GuiBackend):
                 HealthItem(name, "等待恢复" if name == site or name == "Research" else "待命", detail)
                 for name in self._components()), overall)
         # Keep the existing read-exhaustion message/dedup contract.
-        if notify and site == "Google Sheets" and self._defer_google_read_poll(exc, interval):
+        if notify and not recoverable_read and site == "Google Sheets" and self._defer_google_read_poll(exc, interval):
             return True
         reason = {"INSO": "INSO_WAITING_RECOVERY", "Google Sheets": "GOOGLE_WAITING_RECOVERY",
                   "IC.net": "IC_NET_WAITING_RECOVERY", "Browser/CDP": "BROWSER_WAITING_RECOVERY",
@@ -2759,9 +2768,9 @@ class ProductionBackend(GuiBackend):
                   "正能量": "BOM_AI_WAITING_RECOVERY"}[site]
         log.warning("Website recovery deferred", extra={
             "runtime_reason": reason, "runtime_cause": type(exc).__name__})
-        if notify and self._v13_ledger_ready:
+        if notify and not recoverable_read and self._v13_ledger_ready:
             self._notify_runtime_fault( f"{self._run_id or 'run'}:{site}:{since}", reason, at=utc_now())
-        elif notify:
+        elif notify and not recoverable_read:
             self._alert_owner_of_login(stop_reason=f"{site}等待恢复；程序未停止")
         self._notify()
         return True
