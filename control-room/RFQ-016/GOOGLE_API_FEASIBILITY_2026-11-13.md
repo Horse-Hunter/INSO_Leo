@@ -421,7 +421,7 @@ CEO 在 `ecf02266` 中要求先由 Owner 确认“控制台用的到底是哪一
 | 测试服务账号 | `rfq016-sheets-test@inso-509314.iam.gserviceaccount.com`（显示名 `RFQ016 Sheets Test`） |
 | 项目级 IAM 角色 | **无**（IAM 页面主体列表仍只有 Owner 本人；SA 未获任何 role） |
 | 密钥 | **1 份**，用户管理型 JSON，键 ID `0ccdaede103f…`，创建 2026-11-13，状态 Active，**失效日期 `10000年1月1日`（Google 的“永不过期”哨兵值）** |
-| 密钥存放 | `D:\Program_Leo\secrets\inso-rfq016-sheets-test.json`（仓库外）；ACL 已去继承，仅 `LEO229\Leo:(F)`；**未进 Git、未进日志、未进本记录**；`Downloads` 无本次残留（该目录里一个 2026-11-01 的旧 `.crdownload` 与本轮无关，未删除） |
+| 密钥存放 | `D:/Program_Leo/secrets/inso-rfq016-<已脱敏>.json`（仓库外）；ACL 已去继承，仅 `LEO229\Leo:(F)`；**未进 Git、未进日志、未进本记录**；`Downloads` 无本次残留（该目录里一个 2026-11-01 的旧 `.crdownload` 与本轮无关，未删除） |
 | 测试表格 | 名称 `RFQ016-SA-Test-Synthetic`，ID `10IFY1v5wLHsJWMcKk1JDb3vnzeg7J0WY7JreZCp5eo4`，工作表 `工作表1`，A1:D3 共 3 行合成数据 |
 | 共享 | 仅该 SA，角色**查看者**；常规访问权限=受限；名单里只有“Owner 本人 + 该 SA” |
 
