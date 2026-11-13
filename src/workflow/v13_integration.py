@@ -538,6 +538,12 @@ class QuotationOrderContinuation:
         return result
 
 
+def _retryable_api_fault(exc):
+    """Only the API's own rate-limit/server status is a transient read."""
+    status = getattr(getattr(exc, "resp", None), "status", None)
+    return type(status) is int and (status == 429 or 500 <= status < 600)
+
+
 def is_isolated_source_read_error(error):
     """Only a source read may defer one sheet; shared safety failures propagate."""
     from asyncio import CancelledError
@@ -580,6 +586,10 @@ def is_isolated_source_read_error(error):
         }:
             pass  # Exact read-side wrappers still require every nested cause to pass.
         elif isinstance(cause, QuotationInputBusy) and str(cause) == "GOOGLE_QUOTATION_INPUT_BUSY":
+            pass
+        elif _retryable_api_fault(cause):
+            # Sheets API 429/5xx is the API form of the same bounded read retry.
+            # It is still read-only evidence: no write, auth or identity claim.
             pass
         elif type(cause).__module__.startswith("playwright"):
             if type(cause).__name__ != "TimeoutError":

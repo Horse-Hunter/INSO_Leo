@@ -497,6 +497,12 @@ class _PreparedDuplicateChecker:
         return result
 
 
+def _api_permission_fault(exc):
+    """A rejected credential/permission/document on the Sheets API."""
+    status = getattr(getattr(exc, "resp", None), "status", None)
+    return type(status) is int and status in {401, 403, 404}
+
+
 def _website_failure(exc):
     """Identify a failed dependency without treating local data errors as outages."""
     from .market_continuation import MarketContinuationFault
@@ -538,6 +544,13 @@ def _website_failure(exc):
     explicit_google = reasons & {"SHEETS_AUTH_UNAVAILABLE", "GOOGLE_SHEETS_UNAVAILABLE",
                                  "GOOGLE_AUTHENTICATION_REQUIRED", "GOOGLE_SPREADSHEET_UNAVAILABLE",
                                  "GOOGLE_SHEET_UNCONFIRMED", "QUOTE_INPUT_METADATA_UNAVAILABLE"}
+    if read_error and ("GOOGLE_AUTHORIZATION_REQUIRED" in reasons
+                       or any(_api_permission_fault(item) for item in chain)):
+        # A rejected credential/permission on a READ is an accurate, human-actionable
+        # Google Sheets condition: it must not present as a Google-wide outage, and
+        # it must not crash the whole run. The shared deferral owns the single
+        # notice and the bounded three-hour escalation.
+        return "Google Sheets"
     if read_error and not explicit_google:
         from src.workflow.v13_integration import is_isolated_source_read_error
         if not is_isolated_source_read_error(chain[0]):
@@ -606,6 +619,7 @@ class ProductionBackend(GuiBackend):
         self._manual_busy = False
         self._manual_result = None
         self._manual_reader = self._manual_write_service = self._manual_quote = None
+        self._manual_page_service = None
         self._tp = None  # opt-in only; ordinary V1.4 composition is unchanged
         self._module_runtime = None
         self._module_execute = None
@@ -1060,7 +1074,10 @@ class ProductionBackend(GuiBackend):
                 on_read_success=lambda: self._site_recovered("Google Sheets"),
                 read_guard=self._page_admission.require_open,
                 stop_requested=self._immediate_stop_requested, page_admission=self._page_admission)
-            reader = GoogleSheetsRowReader(web_service, retry_wait=self._stop.wait,
+            # ONE default-off switch. The CDP transport stays the fallback and keeps
+            # owning the protected browser pages and the native 更新报价 button.
+            sheet_service = self._sheet_service_for(cfg, web_service)
+            reader = GoogleSheetsRowReader(sheet_service, retry_wait=self._stop.wait,
                                           on_observation=self._observe_source_rows,
                                           on_observation_start=self._source_projection.begin_update,
                                           on_live_observation=self._observe_catalog_rows)
@@ -1097,11 +1114,11 @@ class ProductionBackend(GuiBackend):
                 follow_up_store = V13PurchaseFollowUpStore(db)
                 follow_up_store.migrate()
             status_writer = None
-            write_service = web_service
+            write_service = sheet_service
 
             self._manual_reader = reader
             from src.sheets.tp_brief import BriefReader
-            admission_brief = BriefReader(web_service, retry_wait=self._stop.wait)
+            admission_brief = BriefReader(sheet_service, retry_wait=self._stop.wait)
             self._mail_brief = admission_brief
 
             def get_write_service():
@@ -1237,7 +1254,7 @@ class ProductionBackend(GuiBackend):
                     active_store = source_store or self._store
                     active_holds = hold_store or holds
                     from src.sheets.tp_brief import BriefReader
-                    cached_brief = BriefReader(web_service)
+                    cached_brief = BriefReader(sheet_service)
                     cycle = V13QuotationCycle(reader=active_reader, store=active_store,
                         operations=self._v13_operations(rc, cfg), clock=utc_now,
                         wait=(self._closed_retry_wait if self._continuation_pump is not None else self._stop.wait),
@@ -1296,13 +1313,16 @@ class ProductionBackend(GuiBackend):
                     run_quotation, on_pause=self._pause_v12,
                     stop_requested=self._stop.is_set)
             self._manual_write_service = get_write_service
+            # Page lifetime/ownership always belongs to the CDP transport,
+            # even when reads and writes use the API transport.
+            self._manual_page_service = web_service
             self._tp = None
             if cfg.get("tp_enabled") is True:
                 from .tp_composition import build_tp_cycle
                 def prepare_tp(key):
                     self._begin_inso_inquiry(key)
                     prepare_research()
-                self._tp = build_tp_cycle(path=db, web=web_service, reader=reader,
+                self._tp = build_tp_cycle(path=db, web=sheet_service, reader=reader,
                     research=research, outbox=self._v12_store,
                     worker=self._v12_composition.notification_worker, now=utc_now(),
                     prepare=prepare_tp, stop_requested=self._stop.is_set,
@@ -1495,6 +1515,48 @@ class ProductionBackend(GuiBackend):
                 self._cache_workbench(force=True)
                 self._notify()
 
+    def _page_service(self):
+        """Pages always belong to the CDP transport, even with the API enabled."""
+        service = self._manual_page_service
+        if service is not None:
+            return service
+        return self._manual_write_service() if self._manual_write_service is not None else None
+
+    def _sheet_service_for(self, cfg, web_service):
+        """ONE default-off switch; the CDP transport stays the fallback."""
+        section = cfg.get("google_api")
+        if isinstance(section, dict) and section.get("enabled") is True:
+            return self._google_api_service(cfg)
+        return web_service
+
+    def _google_api_service(self, cfg):
+        """Build the one Service-Account transport the Owner may enable.
+
+        The key file stays outside the repository and may be plain JSON or a
+        DPAPI-protected copy of it. Failure to authorize is a configuration/
+        credential condition, so it stops before any business runs, exactly like
+        the existing cached write-service boundary.
+        """
+        section = cfg.get("google_api")
+        path = section.get("service_account_file") if isinstance(section, dict) else None
+        if not isinstance(path, str) or not path.strip():
+            raise ProductionConfigurationError(
+                "google_api.service_account_file is required when google_api.enabled is true"
+            )
+        resolved = Path(path)
+        if not resolved.is_absolute():
+            resolved = resolve_app_path(resolved, root=self.root)
+        from src.sheets.google_api_service import build_service_account_sheets_service
+        from src.sheets.google_oauth import (
+            GoogleSheetsAuthorizationError,
+            GoogleSheetsDependencyError,
+        )
+        try:
+            return build_service_account_sheets_service(
+                resolved, on_read_success=lambda: self._site_recovered("Google Sheets"))
+        except (GoogleSheetsAuthorizationError, GoogleSheetsDependencyError) as exc:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_AUTH_UNAVAILABLE") from exc
+
     def _retire_google_pages(self, web_service):
         """Called on the original poller only after all module scopes unwind."""
         retire = getattr(web_service, "release_retained_pages", None)
@@ -1615,7 +1677,8 @@ class ProductionBackend(GuiBackend):
                 'UPDATE_RESULT_UNCONFIRMED', 'SOURCE_STATUS_NOT_UPDATED',
         } for row in self._manual_quote[1].active()):
             return
-        if not settle_quotation_operations() or not self._manual_write_service().operations_idle():
+        page_service = self._page_service()
+        if page_service is None or not settle_quotation_operations() or not page_service.operations_idle():
             return
         self._page_admission.require_open()
         if self._stop.is_set() or self._module_pause_requested is not None:
@@ -1626,7 +1689,7 @@ class ProductionBackend(GuiBackend):
         try:
             # A completed quote may lend the Owner, not its live Google Page
             # wrappers. TP/session recovery can replace the shared CDP client.
-            with self._manual_write_service().suspend_idle_poll():
+            with self._page_service().suspend_idle_poll():
                 with self._poll_gate:
                     module = (None if self._stop.is_set() else
                               runtime.claim_due_module(exclude=('quotation', 'inquiry')))

@@ -270,6 +270,13 @@ class V13QuotationUpdater:
                                             else RowErrorReason.QUOTE_INPUT_WRITE_FAILED)
                     else:
                         return self._failed(result, write_reason)
+                    if getattr(self._input, "external_write", False):
+                        # The input row was written outside this browser page (API).
+                        # Reload that same owned page so the bound script reads the
+                        # current row; no cell readback is added or re-enabled.
+                        reload_page = getattr(self._actions, "refresh_after_external_write", None)
+                        if callable(reload_page):
+                            reload_page()
                     if self._protect_dispatch is not None:
                         pending = replace(result, quotation=None, outcome=QuotationOutcome.ROW_FAILED,
                             row_error_reason=RowErrorReason.UPDATE_RESULT_UNCONFIRMED, effect_uncertain=True)

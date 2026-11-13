@@ -452,6 +452,27 @@ class GoogleQuotationUpdateActions:
         self.open_sheet()
         self._ready_control()
 
+    def refresh_after_external_write(self):
+        """Reload this owned input page so the bound script sees an API-written row.
+
+        Only the container-bound script (and its menu) still needs the browser;
+        when the input row was written through the Sheets API the page's client
+        model is stale. Reloading the exact already-proved URL keeps the same
+        document/gid, and re-proves ownership before and after the reload. No
+        cell value is compared here: the cancelled 14-cell readback stays gone.
+        """
+        if self._script_pending:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED")
+        self._guard()
+        if self._page is None or self._page.is_closed():
+            raise UpdateAttemptUnconfirmed("GOOGLE_OPERATION_SURFACE_UNAVAILABLE")
+        self._attempt(lambda: bounded_browser_call(
+            self._page, "reload", wait_until="domcontentloaded",
+            timeout=self._timeout, timeout_ms=(self._timeout) + 1000))
+        self._guard()
+        self._require_owned_page()
+        self.wait_for_script_menu()
+
     def open_sheet(self, *, select_worksheet=False, worksheet="报价输入"):
         return self._open_sheet(select_worksheet=select_worksheet, worksheet=worksheet)
 

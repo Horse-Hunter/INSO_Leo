@@ -24,6 +24,10 @@ class GoogleSheetsDependencyError(RuntimeError):
 class GoogleSheetsAuthorizationError(RuntimeError):
     """OAuth authorization or Google Sheets service construction failed."""
 
+    # Accurate, non-alarming classification for the shared read boundary: this is
+    # a credential/permission problem, never evidence that Google itself is down.
+    reason = "GOOGLE_AUTHORIZATION_REQUIRED"
+
 
 def build_read_only_google_sheets_service(
     client_secret_file: str | Path,

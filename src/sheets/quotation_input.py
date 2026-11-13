@@ -88,6 +88,9 @@ class GoogleQuotationInput:
         self.location, self.worksheet = location, location.worksheet
         self._service, self._columns = service, expected_columns
         self._retry_wait = retry_wait or (lambda _seconds: False)
+        # A transport that writes outside the browser page must let the caller
+        # reload that page before the native script reads the input row.
+        self.external_write = getattr(service, "external_write", False) is True
 
     def validate_schema(self):
         """Validate the headerless raw14 contract and live metadata binding."""

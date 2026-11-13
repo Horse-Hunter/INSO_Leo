@@ -249,3 +249,47 @@ the original runtime safety handler. No normal poll is changed: four slots still
 survive between polls. Force termination/crash cannot run this cleanup; old-run
 unknown pages are deliberately not adopted. Candidate is offline-tested, NOT
 installed solely to reduce old tab counts; current production b40467e7 unchanged.
+
+
+## Service-Account Sheets API transport (RFQ-016 phase 1, 2026-11-13)
+
+`src/sheets/google_api_service.py` supplies the *same* duck-typed service object
+that `launcher.google_web.GoogleSheetsWebService` already supplies, so no reader,
+writer, quotation-input, brief or business adapter was duplicated: `GoogleSheetsRowReader`,
+`GoogleSheetsBrandWriter`, `GoogleSheetsPurchaseStatusWriter`,
+`GoogleSheetsIntentStatusWriter`, `GoogleQuotationInput`, `BriefReader` and
+`SafeSheetsBrandUpdater` are reused unchanged.
+
+- **One default-off switch.** `production.json` `google_api.enabled` (default
+  absent/false) plus `google_api.service_account_file` (repository-external; plain
+  JSON or a DPAPI-protected copy of it). `ProductionBackend._sheet_service_for`
+  returns the CDP transport unless the switch is exactly `true`; enabling it
+  without a readable key fails closed as `SHEETS_AUTH_UNAVAILABLE` before any
+  business runs. There is no second OAuth client, project, scheduler or ledger.
+- **Reads.** `values.get` with `UNFORMATTED_VALUE`; `2026` source reads keep the
+  native geometry (`A1:W`, sliced to A:G) so the existing `source_order_dates` /
+  `W`=`quote_date` proof and every row/identity check work unchanged. Trailing
+  empties are padded with `""` like the TSV read. Only the configured model column
+  of `2026`/`SHAHAB` is turned into text, and only when the JSON number round-trips
+  exactly (`123`, `123.0` → `123`); text keeps its leading zeros and anything else
+  is left untouched so existing row-level identity checks reject it. The 14-cell
+  quotation input row and `RFQ_BRIEF` are never reinterpreted.
+- **Writes.** One RAW `values.update` per existing single-cell/raw14 writer, and
+  the response must confirm `updatedRange`/`updatedCells`; otherwise
+  `GoogleSheetsWriteUnconfirmed`. A value-set write is content-idempotent, so the
+  existing bounded attempt budget cannot duplicate an external effect, and the
+  native click is still dispatched at most once.
+- **Quotation handoff.** Only the container-bound `更新报价` button stays on CDP.
+  Because the input row is now written outside the page, `V13QuotationUpdater`
+  calls the new `GoogleQuotationUpdateActions.refresh_after_external_write()`
+  between the write and the single click when
+  `GoogleQuotationInput.external_write` is true. It reloads the same already-proved
+  URL, re-proves ownership/settlement gates, and adds **no** cell readback: the
+  cancelled pre-click 14-cell readback stays cancelled.
+- **Failure policy (unchanged rule, API vocabulary).** `HttpError` 429/5xx joins
+  the canonical transient-read vocabulary (`is_isolated_source_read_error`), so an
+  exhausted retry keeps the module cadence, sends no technical mail and does not
+  stop the run. A read rejected with 401/403/404 or an unusable credential object
+  is named as an accurate Google Sheets condition (deferral + bounded three-hour
+  escalation), never as "Google is down" and never as a crash. Everything else
+  (e.g. 400 contract defects) still fails closed through `_runtime_error`.

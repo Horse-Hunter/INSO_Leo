@@ -32,7 +32,11 @@ from googleapiclient.errors import HttpError
 
 from src.launcher.backend import _website_failure
 from src.sheets.google_oauth import GoogleSheetsAuthorizationError
-from src.sheets.google_reader import GoogleSheetsReadError, _temporary_read_failure
+from src.sheets.google_reader import (
+    GoogleSheetsReadError,
+    GoogleSheetsReadUnavailable,
+    _temporary_read_failure,
+)
 from src.sheets.quotation_input import QuotationInputUnavailable, _shared_error
 from src.workflow.v13_integration import is_isolated_source_read_error
 
@@ -242,20 +246,18 @@ def test_bounded_read_retry_accepts_only_quota_and_server_faults(status, retryab
 
 
 @pytest.mark.parametrize("status", [429, 500, 503])
-def test_api_transport_transients_are_not_yet_shared_site_failures(status):
-    """PINNED BASELINE, not a desired end state.
+def test_api_transport_transients_are_a_deferred_read_not_a_stop(status):
+    """The API form of the batch-1 rule: bounded read, next poll, no mail.
 
-    `_website_failure`/`is_isolated_source_read_error` were written when the only
-    transport was CDP; a `googleapiclient.errors.HttpError` is not in their
-    transient vocabulary. Today an exhausted 429/5xx read therefore falls through
-    to the module-level `_runtime_error` path (module pause + technical notice)
-    instead of the batch-1 "defer, no mail" path. The API migration must extend
-    that classifier in the same increment that introduces the API transport;
-    until then this test records the exact current behaviour.
+    `HttpError` 429/5xx is now part of the canonical read vocabulary, so an
+    exhausted retry defers the module instead of reaching `_runtime_error`.
     """
-    error = _http_error(status)
-    assert is_isolated_source_read_error(_read_failure(error)) is False
-    assert _website_failure(_read_failure(error)) is None
+    # The real reader shape after `execute_google_read` exhausts its budget:
+    # `_read_rows` re-raises the existing GoogleSheetsReadUnavailable unchanged.
+    failure = GoogleSheetsReadUnavailable("Google read retry exhausted")
+    failure.__cause__ = _http_error(status)
+    assert is_isolated_source_read_error(failure) is True
+    assert _website_failure(failure) == "Google Sheets"
 
 
 @pytest.mark.parametrize("status", [401, 403])
@@ -263,15 +265,20 @@ def test_missing_or_insufficient_credentials_are_shared_failures_not_retries(sta
     error = _http_error(status)
     assert _shared_error(error) is True          # quotation adapter: infrastructure
     assert _temporary_read_failure(error) is False
-    assert _website_failure(_read_failure(error)) is None
+    # Never retried, and never reported as a Google-wide outage; the read is
+    # named as an accurate Google Sheets credential/permission condition so the
+    # existing deferral (one notice, bounded three-hour escalation) owns it.
+    assert is_isolated_source_read_error(_read_failure(error)) is False
+    assert _website_failure(_read_failure(error)) == "Google Sheets"
 
 
 def test_authorization_object_failure_is_labelled_and_never_claims_google_is_down():
     error = GoogleSheetsAuthorizationError("Unable to authorize read-only Google Sheets access")
     assert _shared_error(error) is True
     assert _temporary_read_failure(error) is False
-    # Reads: no site-wide claim and no retry; the module boundary decides the pause.
-    assert _website_failure(_read_failure(error)) is None
+    # Reads: no retry, no "Google is down" claim, and an accurate named condition.
+    assert is_isolated_source_read_error(_read_failure(error)) is False
+    assert _website_failure(_read_failure(error)) == "Google Sheets"
     # The metadata path is the one place that still names Google Sheets.
     assert _website_failure(QuotationInputUnavailable("QUOTE_INPUT_METADATA_UNAVAILABLE")) == "Google Sheets"
     assert _website_failure(QuotationInputUnavailable("QUOTE_INPUT_INFRASTRUCTURE_UNAVAILABLE")) is None
