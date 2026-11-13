@@ -273,3 +273,109 @@ def test_manual_quote_busy_before_dispatch_retains_hold_without_pausing_backend(
     assert holds.active() == before
     assert actions.clicks == actions.dismissed == 0
     assert io.writes == []
+
+
+# --- RFQ-016 phase 1: an unknown INPUT write blocks the manual one-order retry --
+from src.launcher.manual_order import ManualRetryHolds
+
+
+def _uncertain_hold(tmp_path, monkeypatch):
+    """A real SQLite hold whose payload records an unknown external effect."""
+    backend, store, source, inquiry, record, holds, key = setup_hold(tmp_path, monkeypatch)
+    holds.close(key)  # the ordinary QUOTE_INPUT_WRITE_FAILED hold is releasable
+    assert holds.active() == ()
+    observed = record.record_identity
+    uncertain = V13QuotationResult(
+        inquiry, observed, "", QuotationOutcome.ROW_FAILED, None,
+        RowErrorReason.QUOTE_INPUT_WRITE_FAILED, source_worksheet=SHEET,
+        source_row_position=3, effect_uncertain=True)
+    key, _ = holds.hold(uncertain, observed)
+    calls = []
+    backend._manual_quote = (lambda *args, **kwargs: calls.append((args, kwargs)), holds)
+    return backend, store, source, inquiry, record, holds, key, calls
+
+
+def test_manual_quotation_retry_is_refused_while_an_unknown_input_write_is_open(
+        tmp_path, monkeypatch):
+    backend, _store, _source, inquiry, _record, holds, _key, calls = _uncertain_hold(
+        tmp_path, monkeypatch)
+    before = holds.active()
+
+    assert backend.can_order_action(inquiry, "quotation") is False
+    message = backend.request_order_action(inquiry, "quotation")
+    assert message and "核对" in message and "重跑" in message
+
+    backend._execute_order_action(("request", inquiry, "quotation", None, None))
+    assert backend.get_manual_order_result().success is False
+    assert calls == []                 # no runner: no API write, no button click
+    assert holds.active() == before    # the evidence is byte-identical
+
+
+def test_a_new_result_cannot_replace_an_active_unknown_effect_hold(tmp_path, monkeypatch):
+    _backend, _store, _source, _inquiry, record, holds, key, _calls = _uncertain_hold(
+        tmp_path, monkeypatch)
+    before = holds.active()
+
+    # Same inquiry, different reason or without the marker: never overwrite.
+    for replacement in (
+            replace(_result_for(holds, key), row_error_reason=RowErrorReason.SOURCE_CHANGED),
+            replace(_result_for(holds, key), effect_uncertain=False)):
+        with pytest.raises(V12Fault) as caught:
+            holds.hold(replacement, record.record_identity)
+        assert caught.value.reason == "UNKNOWN_QUOTATION_PROTECTED"
+        assert holds.active() == before
+
+    # A dispatch attempt on the same order is refused too (no button).
+    with pytest.raises(V12Fault) as caught:
+        holds.begin_dispatch(_result_for(holds, key), record.record_identity)
+    assert caught.value.reason == "UNKNOWN_QUOTATION_PROTECTED"
+    assert holds.active() == before
+
+
+def test_an_identical_restatement_keeps_the_original_evidence(tmp_path, monkeypatch):
+    _backend, _store, _source, _inquiry, record, holds, key, _calls = _uncertain_hold(
+        tmp_path, monkeypatch)
+    before = holds.active()
+    same = _result_for(holds, key)
+    repeated_key, episode = holds.hold(same, record.record_identity)
+    assert repeated_key == key and episode == before[0][4]
+    assert holds.active() == before
+
+
+def test_ordinary_input_write_failure_still_allows_the_reviewed_manual_flow(
+        tmp_path, monkeypatch):
+    backend, _store, _source, inquiry, record, holds, _key = setup_hold(tmp_path, monkeypatch)
+    assert holds.active() != ()  # a plain QUOTE_INPUT_WRITE_FAILED hold
+    backend._manual_quote = (lambda *a, **k: (), holds)
+
+    assert backend.can_order_action(inquiry, "quotation") is True
+    ManualRetryHolds(holds, inquiry, record.record_identity)  # old flow still admitted
+    holds.close(holds.active()[0][0])
+    assert holds.active() == ()
+
+
+def test_unknown_effect_protection_survives_restart_and_status_change(tmp_path, monkeypatch):
+    backend, _store, source, inquiry, _record, holds, key, _calls = _uncertain_hold(
+        tmp_path, monkeypatch)
+    before = holds.active()
+
+    reopened = V13HoldStore(holds.path)
+    reopened.migrate()
+    assert reopened.active() == before
+    reopened.close(key)
+    reopened.close_many([key])
+    assert reopened.active() == before
+
+    source.rows[0] = WorksheetRow(3, {**source.rows[0].cells, "A": "采购已报价"})
+    _moved, _ = current_record(source, SHEET, 3)
+    backend._manual_quote = (lambda *a, **k: (), reopened)
+    assert backend.can_order_action(inquiry, "quotation") is False
+    assert reopened.active() == before
+
+
+def _result_for(holds, key):
+    """Rebuild the stored result so a test can attempt an overwrite."""
+    from src.workflow.v13_integration import restore_result
+
+    payload = next(row[1] for row in holds.active() if row[0] == key)
+    return replace(restore_result(payload), inquiry_id=key)

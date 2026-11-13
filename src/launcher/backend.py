@@ -2005,6 +2005,17 @@ class ProductionBackend(GuiBackend):
     def request_order_action(self, inquiry_id, action, *, field=None, value=None):
         with self._manual_condition:
             if not self.can_order_action(inquiry_id, action):
+                if action == "quotation" and self._manual_quote is not None:
+                    # Reuse the canonical admission gate only to explain why the
+                    # one-order retry is refused; nothing is executed here.
+                    try:
+                        ManualRetryHolds(
+                            self._manual_quote[1], inquiry_id,
+                            self._store.get_by_inquiry_id(inquiry_id).record_identity)
+                    except ValueError as exc:
+                        return str(exc)
+                    except (KeyError, sqlite3.Error, V12DatabaseError):
+                        pass
                 return "仅能在倒计时期间操作可定位的订单；已发送或结果不明的采购不能重发。"
             try:
                 if action == "edit":

@@ -139,3 +139,31 @@ Review RFQ-016 — 第一阶段集中修正
 
 你接下来需要做什么：
 Review RFQ-016 — 第一阶段最终源码复审
+
+---
+
+# RFQ-016 第一阶段最终整体验收 — 2026-11-13（CEO 0b70339c 后收尾）
+
+正在实现什么：
+一次性收口第一阶段：堵住人工重跑绕过未知写入的最后一个 P0，给出"真实适配器 + 真实台账 + 真实 SQLite"的完整链路证明，并整理发布前检查、受控试运行前置条件和历史停机台账。
+
+理想变化是什么：
+任何一种"可能已经写进去、但没拿到确认"的报价操作，无论自动轮询、程序重启、表格状态变化还是人工点重跑，都只能停在同一条持久挂起上等人工核对；而这些结论都能用仓库里真实的组件、而不是假对象，被离线地重复验证。
+
+以前是什么：
+`ManualRetryHolds` 只拦 `UPDATE_RESULT_UNCONFIRMED`，所以一条 `QUOTE_INPUT_WRITE_FAILED + effect_uncertain` 的挂起在 GUI 里仍可点"报价重跑"，执行入口会真的发起一次新的 API 行写入并可能点按钮；`V13HoldStore.hold` 也只对 `UPDATE_RESULT_UNCONFIRMED` 做覆盖保护，同 key 的新结果可以把未知写入的标记覆盖成普通失败，随后再被正常结案。链路测试则是"真适配器"和"假 updater"分两段写的，没有一条从 API 读到持久挂起全用真件的证明。
+
+现在是什么：
+- **人工重跑门禁**：`ManualRetryHolds` 现在读取持久化标记，任何匹配到的 `effect_uncertain` 挂起（不论 reason）都会拒绝本次单笔重跑；`can_order_action` 因此返回 False、`_execute_order_action` 在选 runner 之前就退出，`request_order_action` 直接返回"待人工核对"的具体原因。普通、确定失败的 `QUOTE_INPUT_WRITE_FAILED` 挂起的老人工流程完全不变。
+- **不可覆盖**：`V13HoldStore.hold` 在原有 upsert 之前新增保护——已激活的 `effect_uncertain` 挂起只接受"同一个标记的原样重述"（返回原 episode、不改动已存证据），换 reason、丢标记或试图 `begin_dispatch` 一律 `UNKNOWN_QUOTATION_PROTECTED`；负载不可解析按受保护处理。
+- **链路证明**：新增一条从 `GoogleApiSheetsService` → RowReader → Brand/Status Writer → QuotationInput → V13QuotationUpdater → V13HoldStore（真 SQLite）的全真链路测试，唯一模拟的是表格端点和浏览器。
+- **发布准备**：新增 `RELEASE_READINESS.md`，含验证等级表、装配审计、受控试运行步骤/停止条件/回退方式、以及 03:32 / 18:33–18:48 / 21:44–21:46 / 21:50+21:52 停机台账的分类。
+
+做完了什么：
+改 3 个源文件（`manual_order.py`、`v13_integration.py`、`backend.py` 仅 11 行拒绝提示），新增 2 个测试文件/追加 5 项测试（共 12 项新回归），新增 1 份发布准备文档；两处负向对照证明新测试确实能抓住旧缺陷（去掉门禁 → 人工重跑测试失败；关掉覆盖保护 → 覆盖测试失败）。A2 对品牌写入、采购状态回写、手工单格编辑逐条核对：均有"写前重读/写后读回/blank-only 保护"，未发现需要改动的源码证据，因此未改。
+
+测试结果：
+完整离线套件在同一提交上连跑两次：**4070 通过 / 29 失败 / 1 跳过**（385 秒）与 **4070 通过 / 29 失败 / 1 跳过**（381 秒）。第二次的失败 ID 集合是基线 `4d3c3493`（3932/30F）的**真子集**；第一次只多出已知受负载影响的 `test_production_composition_builds_real_seams_without_network[True]`（单独运行通过）。`ruff check src tests`、`git diff --check` 干净。没有删除、跳过或弱化任何测试；全程未对生产/合成表格做真实 API 写入、未连 CDP、未发邮件、未部署，开关保持关闭。
+
+你接下来需要做什么：
+Review RFQ-016 — 第一阶段最终整体验收

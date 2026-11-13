@@ -27,14 +27,35 @@ from .v13_quotation import (
 log = logging.getLogger(__name__)
 
 
-def _payload_is_effect_uncertain(payload):
-    """Any hold that recorded an unknown external effect is never auto-closed."""
+def hold_payload_is_effect_uncertain(payload):
+    """Any hold that recorded an unknown external effect.
+
+    Unreadable payloads count as protected: a barrier is never released on the
+    strength of content we could not parse.
+    """
     try:
         data = json.loads(payload)
     except (TypeError, ValueError):
-        return True  # Unreadable marker: keep the barrier rather than release it.
+        return True
     marker = data.get("quotation") if isinstance(data, dict) else None
     return isinstance(marker, dict) and marker.get("effect_uncertain") is True
+
+
+def same_observation(identity_json, observed):
+    """Same order/row/snapshot; the mutable source status is not identity."""
+    try:
+        old_identity = json.loads(identity_json)
+        new_identity = asdict(observed)
+        if (not isinstance(old_identity, dict)
+                or not isinstance(old_identity.get("identifying_snapshot"), dict)):
+            raise TypeError("invalid hold identity")
+        for item in (old_identity, new_identity):
+            snapshot = dict(item["identifying_snapshot"])
+            snapshot.pop("status", None)
+            item["identifying_snapshot"] = snapshot
+    except (TypeError, ValueError, KeyError):
+        raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
+    return old_identity == new_identity
 
 
 class V13HoldStore:
@@ -158,29 +179,26 @@ class V13HoldStore:
                     if old_marker is not None:
                         # A source status may legitimately change while the same
                         # order is observed; it is not part of identity proof.
-                        try:
-                            old_identity = json.loads(previous[4])
-                            new_identity = asdict(observed)
-                            if not isinstance(old_identity, dict) or not isinstance(old_identity.get("identifying_snapshot"), dict):
-                                raise TypeError("invalid hold identity")
-                            old_snapshot = dict(old_identity["identifying_snapshot"])
-                            new_snapshot = dict(new_identity["identifying_snapshot"])
-                            old_snapshot.pop("status", None)
-                            new_snapshot.pop("status", None)
-                            old_identity["identifying_snapshot"] = old_snapshot
-                            new_identity["identifying_snapshot"] = new_snapshot
-                        except (TypeError, ValueError, KeyError):
-                            raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
                         # A conflicting row result must not replace the hold or
                         # trigger a false confirmation notice for that hold.
                         if (reason != "UPDATE_RESULT_UNCONFIRMED" or not effect_uncertain
-                                or old_identity != new_identity):
+                                or not same_observation(previous[4], observed)):
                             raise V12Fault(FaultScope.GLOBAL_STOP, "UNKNOWN_QUOTATION_PROTECTED")
                         if getattr(result, "popup_timeout", False) and not old_payload.get("popup_timeout"):
                             old_payload["popup_timeout"] = True
                             db.execute("UPDATE workflow_v13_holds SET result_json=? WHERE hold_key=?",
                                        (json.dumps(old_payload, ensure_ascii=False), key))
                         return key, previous[1]
+                if (previous and previous[2] and previous[0] != "UPDATE_RESULT_UNCONFIRMED"
+                        and hold_payload_is_effect_uncertain(previous[3])):
+                    # An unresolved external effect must never be relabelled by a
+                    # later automatic, manual or concurrent attempt. Only an
+                    # identical restatement of the same marker is accepted, and it
+                    # leaves the stored evidence untouched.
+                    if (reason != previous[0] or not effect_uncertain or dispatch
+                            or not same_observation(previous[4], observed)):
+                        raise V12Fault(FaultScope.GLOBAL_STOP, "UNKNOWN_QUOTATION_PROTECTED")
+                    return key, previous[1]
                 episode = (
                     (previous[1] + int(previous[0] != reason or not previous[2]))
                     if previous
@@ -221,7 +239,7 @@ class V13HoldStore:
                     (key,),
                 ).fetchone()
                 if row is not None and (row[0] == "UPDATE_RESULT_UNCONFIRMED"
-                                        or _payload_is_effect_uncertain(row[1])):
+                                        or hold_payload_is_effect_uncertain(row[1])):
                     return  # Unknown external effect: only a reviewed resolution clears it.
                 db.execute(
                     "UPDATE workflow_v13_holds SET active=0 WHERE hold_key=? AND reason != 'UPDATE_RESULT_UNCONFIRMED'", (key,)
@@ -239,7 +257,7 @@ class V13HoldStore:
                     key for key, reason, payload in db.execute(
                         "SELECT hold_key,reason,result_json FROM workflow_v13_holds WHERE active=1"
                     )
-                    if reason == "UPDATE_RESULT_UNCONFIRMED" or _payload_is_effect_uncertain(payload)
+                    if reason == "UPDATE_RESULT_UNCONFIRMED" or hold_payload_is_effect_uncertain(payload)
                 }
                 db.executemany("UPDATE workflow_v13_holds SET active=0 WHERE hold_key=? AND reason != 'UPDATE_RESULT_UNCONFIRMED'",
                     ((key,) for key in keys if key not in protected))

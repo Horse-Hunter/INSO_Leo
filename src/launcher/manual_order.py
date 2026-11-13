@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 from src.sheets import query_pending_records
 from src.sheets.worksheet_schema import worksheet_schema
 from src.workflow.v12_faults import FaultScope, V12Fault
+from src.workflow.v13_integration import hold_payload_is_effect_uncertain
 from src.workflow.v13_quotation import QuotationOutcome
 
 
@@ -86,8 +87,16 @@ class ManualRetryHolds:
                     raise V12Fault(FaultScope.GLOBAL_STOP, "WORKFLOW_LEDGER_UNAVAILABLE") from None
             if matched:
                 self.matched_old.append(row)
-        if any(row[3] == "UPDATE_RESULT_UNCONFIRMED" for row in self.matched_old):
-            raise ValueError("报价写入结果待人工核对，原保护保留；不能通过单笔重跑来确认或覆盖未知写入。")
+        # An unresolved external effect - a click whose result is unknown, or an
+        # input row written outside the page whose outcome is unknown - is never
+        # settled by an ordinary one-order retry. Reading the persisted marker
+        # also covers holds whose reason is not UPDATE_RESULT_UNCONFIRMED.
+        if any(row[3] == "UPDATE_RESULT_UNCONFIRMED" or hold_payload_is_effect_uncertain(row[1])
+               for row in self.matched_old):
+            raise ValueError(
+                "报价写入结果待人工核对（含本次报价输入是否已写入）：原保护保留，"
+                "本次单笔重跑不执行；请在原表格核对后人工处理，"
+                "不能通过重跑确认或覆盖未知写入。")
         self.matched_old_keys = {row[0] for row in self.matched_old}
 
     def active(self):
