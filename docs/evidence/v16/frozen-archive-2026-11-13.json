@@ -1,0 +1,200 @@
+{
+  "rfq": "RFQ-016",
+  "evidence_kind": "pyinstaller_frozen_archive_inventory",
+  "executor": "WorkBuddy DeepSeek V4.1 Flash",
+  "date": "2026-11-13",
+  "artifact": {
+    "path": "dist/INSO_V1.6/INSO_V1.6.exe",
+    "sha256": "00ac7d68d88e1a27eb52e3b7457b4192b699211df1b1f5e3efe0be406eef30bd",
+    "inspected_copy": "%TEMP%/rfq016_pkg_check/INSO_V1.6.exe (byte-identical, same sha256)"
+  },
+  "tool": {
+    "pyinstaller": "6.16.0",
+    "reader": "PyInstaller.archive.readers.CArchiveReader"
+  },
+  "carchive_entries": [
+    "PYZ.pyz",
+    "pyi_rth__tkinter",
+    "pyi_rth_cryptography_openssl",
+    "pyi_rth_inspect",
+    "pyi_rth_multiprocessing",
+    "pyi_rth_pkgutil",
+    "pyiboot01_bootstrap",
+    "pyimod01_archive",
+    "pyimod02_importers",
+    "pyimod03_ctypes",
+    "pyimod04_pywin32",
+    "struct",
+    "windows_release_entry"
+  ],
+  "pyz": {
+    "name": "PYZ.pyz",
+    "module_entries": 1198,
+    "top_level_packages": 130
+  },
+  "targets": {
+    "google.oauth2": {
+      "count": 16,
+      "present": true,
+      "modules": [
+        "google.oauth2",
+        "google.oauth2._client",
+        "google.oauth2._client_async",
+        "google.oauth2._credentials_async",
+        "google.oauth2._reauth_async",
+        "google.oauth2._service_account_async",
+        "google.oauth2.challenges",
+        "google.oauth2.credentials",
+        "google.oauth2.gdch_credentials",
+        "google.oauth2.reauth"
+      ]
+    },
+    "google.oauth2.service_account": {
+      "count": 1,
+      "present": true,
+      "modules": [
+        "google.oauth2.service_account"
+      ]
+    },
+    "google.api_core": {
+      "count": 8,
+      "present": true,
+      "modules": [
+        "google.api_core",
+        "google.api_core._python_package_support",
+        "google.api_core._python_version_support",
+        "google.api_core.client_options",
+        "google.api_core.general_helpers",
+        "google.api_core.universe",
+        "google.api_core.version",
+        "google.api_core.version_header"
+      ]
+    },
+    "googleapiclient": {
+      "count": 16,
+      "present": true,
+      "modules": [
+        "googleapiclient",
+        "googleapiclient._auth",
+        "googleapiclient._helpers",
+        "googleapiclient.channel",
+        "googleapiclient.discovery",
+        "googleapiclient.discovery_cache",
+        "googleapiclient.discovery_cache.appengine_memcache",
+        "googleapiclient.discovery_cache.base",
+        "googleapiclient.discovery_cache.file_cache",
+        "googleapiclient.errors"
+      ]
+    },
+    "googleapiclient.discovery": {
+      "count": 1,
+      "present": true,
+      "modules": [
+        "googleapiclient.discovery"
+      ]
+    },
+    "requests": {
+      "count": 18,
+      "present": true,
+      "modules": [
+        "requests",
+        "requests.__version__",
+        "requests._internal_utils",
+        "requests._types",
+        "requests.adapters",
+        "requests.api",
+        "requests.auth",
+        "requests.certs",
+        "requests.compat",
+        "requests.cookies"
+      ]
+    },
+    "urllib3": {
+      "count": 36,
+      "present": true,
+      "modules": [
+        "urllib3",
+        "urllib3._base_connection",
+        "urllib3._collections",
+        "urllib3._request_methods",
+        "urllib3._version",
+        "urllib3.connection",
+        "urllib3.connectionpool",
+        "urllib3.contrib",
+        "urllib3.contrib.emscripten",
+        "urllib3.contrib.emscripten.connection"
+      ]
+    },
+    "httplib2": {
+      "count": 6,
+      "present": true,
+      "modules": [
+        "httplib2",
+        "httplib2.auth",
+        "httplib2.certs",
+        "httplib2.decode",
+        "httplib2.error",
+        "httplib2.iri2uri"
+      ]
+    },
+    "google_auth_httplib2": {
+      "count": 1,
+      "present": true,
+      "modules": [
+        "google_auth_httplib2"
+      ]
+    },
+    "uritemplate": {
+      "count": 5,
+      "present": true,
+      "modules": [
+        "uritemplate",
+        "uritemplate.api",
+        "uritemplate.orderedset",
+        "uritemplate.template",
+        "uritemplate.variable"
+      ]
+    },
+    "cryptography": {
+      "count": 54,
+      "present": true,
+      "modules": [
+        "cryptography",
+        "cryptography.__about__",
+        "cryptography.exceptions",
+        "cryptography.hazmat",
+        "cryptography.hazmat._oid",
+        "cryptography.hazmat.backends",
+        "cryptography.hazmat.backends.openssl",
+        "cryptography.hazmat.backends.openssl.backend",
+        "cryptography.hazmat.bindings",
+        "cryptography.hazmat.bindings.openssl"
+      ]
+    },
+    "cachetools": {
+      "count": 0,
+      "present": false,
+      "modules": []
+    },
+    "oauth2client": {
+      "count": 0,
+      "present": false,
+      "modules": []
+    },
+    "rsa": {
+      "count": 0,
+      "present": false,
+      "modules": []
+    }
+  },
+  "not_present_but_optional": {
+    "oauth2client": "guarded by HAS_OAUTH2CLIENT try/except in googleapiclient._auth",
+    "rsa": "fallback signer only when cryptography is unavailable; cryptography present",
+    "cachetools": "imported by no archived google module"
+  },
+  "method_limits": [
+    "Archive inventory and import-name resolution only.",
+    "The installed EXE was not executed, so a frozen-runtime import remains NOT_VERIFIED.",
+    "Standard-library names (os, io, re, collections, functools, time) come from the interpreter/frozen bootstrap, not the PYZ."
+  ]
+}

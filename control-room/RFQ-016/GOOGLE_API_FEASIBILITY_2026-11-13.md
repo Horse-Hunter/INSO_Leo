@@ -20,7 +20,7 @@
 | 磁盘上确有 2 份授权缓存（2026-10-17 21:35 / 21:37），另有一份 `…79545c71….bin.recovery-backup-20261009_134759` | `%LOCALAPPDATA%\INSO_Leo` 目录清单（仅文件名/大小/时间） |
 | OAuth 客户端文件自 2026-09-21 22:25 起**未被修改**（400 字节，单文件） | `stat` 元数据，未读内容 |
 | 当前 V1.6 日志（11-06～11-13，约 3.3 MB）中 **0 条** oauth / authoriz / invalid_grant / refresh token 文本 | `grep -i` 于 `dist/INSO_V1.6/runtime/logs/*.log` |
-| ~~冻结包已自带 Google API 运行依赖~~ **已被第二阶段验证推翻（见第 11 节）** | 见第 11 节：冻结包缺 `google/oauth2`、`google/api_core`、`requests`、`urllib3` |
+| 冻结包**已自带** Google API 运行依赖（在 EXE 内嵌的 PYZ 归档里，不是 `_internal/` 目录里） | 第三阶段归档核查（§18）；第二阶段曾据目录清单误判为“缺失”，已由其自身推翻 |
 | 仓库内**没有**任何 service account 代码或文档 | `grep -rni "service_account|服务账号" src docs control-room tasks` 为空 |
 | 生产配置键已含 `client_secret_file`（值=`D:\Program_Leo\secrets\google-sheets-oauth-client.json`） | `dist/INSO_V1.6/runtime/production.json`（仅键名与路径） |
 
@@ -166,7 +166,7 @@
 | 问题 | 结论 | 标签 |
 | --- | --- | --- |
 | 宿主环境是否具备 SA 认证能力 | google-auth 2.58.0 / google-api-python-client 2.200.0 / httplib2 0.32.0 / cryptography 50.0.1 均可用，`google.oauth2.service_account` 可导入 | `VERIFIED` |
-| **当前冻结包能否跑 SA/API** | **不能。** 冻结包 `google/` 只有 `auth/`；`google/oauth2`、`google/api_core`、`requests`、`urllib3` 全部缺失 | `OFFLINE_VERIFIED`（见 §12，含导入实测） |
+| **当前冻结包能否跑 SA/API** | **依赖已存在**：`google.oauth2.service_account`、`google.api_core`、`requests`、`urllib3`、`googleapiclient.discovery`、`httplib2`、`cryptography` 均在 EXE 内嵌 PYZ 中，其导入闭包可解析。第二阶段的“缺失”结论已作废 | `OFFLINE_VERIFIED`（归档清单，§18）；**冻结运行期导入仍 `NOT_VERIFIED`** |
 | SA 是否绕开七天规则 | 机制上绕开：SA 用本地私钥签 JWT 换 1 小时 access token，**全程没有 refresh token**，Testing/External 的七天到期对象不存在 | `OFFLINE_VERIFIED` |
 | 进程重启后是否无交互 | 是：只需私钥文件；子进程实测无需任何缓存/提示即可换到新 token | `OFFLINE_VERIFIED`（真实子进程） |
 | 私钥能否安全落盘 | 可用现有 `protected_local_store`（CurrentUser DPAPI）加密，密文不含明文 PEM，同用户可还原 | `VERIFIED`（真实 DPAPI 调用） |
@@ -178,11 +178,11 @@
 
 **宿主 Python（本机）** `VERIFIED`：`google.oauth2.service_account`、`google.auth.transport.requests`、`googleapiclient.discovery`、`httplib2`、`cryptography` 均可导入；`google-auth 2.58.0`、`google-api-python-client 2.200.0`、`cryptography 50.0.1`。
 
-**已安装的 V1.6 冻结包** `OFFLINE_VERIFIED` —— **本轮最重要的新发现，推翻了第一阶段“无需改打包”的判断**：
-- `dist/INSO_V1.6/_internal/google/` 只有 `auth/` 一个子包；`google/oauth2`、`google/api_core`、`requests`、`urllib3` **均不存在**（`googleapiclient/`、`google_auth_oauthlib/`、`certifi/` 目录存在但依赖缺失）。
-- 用一个**不含 site-packages** 的解释器把该目录加入 `sys.path` 实测：`google.auth` 可导入；`google.oauth2` → `ModuleNotFoundError`；`googleapiclient.discovery` → `ModuleNotFoundError: google.api_core`；`google_auth_oauthlib.flow` → `ImportError: requests`。
-- 原因在 `packaging/INSO_V1.1.spec:22-31`：`release_packages` 只收集 `customtkinter / googleapiclient / google_auth_oauthlib / google.auth / openpyxl / playwright`，`collect_all` 不会带上它们的依赖（`google.api_core`、`google.oauth2`、`requests`、`urllib3`）。
-- 结论：**SA/API 通道必须先做一次打包变更并重新出包**，这属于发布动作，本轮禁止；在现有安装版上直接启用 API 会 `ImportError`。
+**已安装的 V1.6 冻结包** —— 第二阶段曾判为“缺依赖”，**该结论已作废**；第三阶段按 CEO 要求用 PyInstaller 归档工具核查后确认**依赖已存在**（`OFFLINE_VERIFIED`，证据见 §18）：
+- 第二阶段的两条证据都不成立：`_internal/google/` 只有 `auth/`，是因为 `collect_all("google.auth")` 把该包的**源码作为数据文件**摊在磁盘上，而其余纯 Python 包在 **EXE 内嵌的 `PYZ.pyz`** 里；用一个普通解释器把 `_internal` 放到 `sys.path` 上导入失败，根本不构成对冻结运行期的检验（PyInstaller 的冻结导入器从 PYZ 装载，不读 site-packages）。
+- 归档实测：`INSO_V1.6.exe`（sha256 `00ac7d68…f30bd`）CArchive 13 项，其中 `PYZ.pyz` 未压缩 8 056 112 字节、**1198 个模块**；`google.oauth2.service_account`、`google.oauth2.credentials`、`google.auth.transport.requests`、`google.auth.jwt`、`googleapiclient.discovery`、`googleapiclient.http`、`googleapiclient.errors`、`requests`、`urllib3`、`httplib2`、`cryptography`、`google.api_core.client_options`、`google_auth_httplib2`、`uritemplate` 全部在其中，且这些模块自身 `IMPORT_NAME` 的目标逐个可解析。
+- 只有三个**可选/冗余**依赖不在归档里，且均不影响 SA 读取路径：`oauth2client`（`googleapiclient._auth` 里有 `HAS_OAUTH2CLIENT` 的 try/except 保护）、`rsa`（仅在缺 `cryptography` 时才走的备用签名实现，而 `cryptography` 有 54 个模块在包里）、`cachetools`（该包内没有任何 google 模块导入它）。
+- 结论：**依赖缺口不成立，不需要为此改 spec**。剩下的只是“冻结运行期真正 import 一次”尚未验证（不能启动正式 EXE），标 `NOT_VERIFIED`。
 
 **Cloud 项目条件** `NOT_VERIFIED`（无法离线核实，需 Owner 在控制台确认）：Sheets API 是否启用；项目/组织是否允许创建服务账号密钥（`iam.disableServiceAccountKeyCreation` 等策略可能直接禁止）；SA 能否拿到测试表格的共享；是否存在 Workspace 外部共享限制。
 
@@ -235,8 +235,66 @@
 3. 建一份**合成测试表格**（可复制真实表结构但用假数据），把该表格**只读共享**给 SA 邮箱（验证读取；写入验证留到后续批次另行授权）。
 4. 告知 Executor：测试表格 ID、工作表标题、期望读取范围。
 5. 顺带确认 OAuth 同意屏的 Publishing status / User type（用于结案历史七天问题）。
-6. 若要推进落地，还需批准一次**打包变更 + 重新出包**（§12 的依赖缺口），以及后续“API 只读候选 + 默认关闭开关”的独立批次。
+6. 若要推进落地，**不需要**为依赖改 spec（§18 已证依赖在包内）；只需批准后续“API 只读候选 + 默认关闭开关”的独立批次，以及一次**隔离验证**：在正式 EXE 之外的隔离副本/独立小脚本里真正 import 一次冻结运行期，把 §18 剩余的 `NOT_VERIFIED` 补成实测。
 
 ## 17. 本轮不做什么
 
 不实现 API/CDP 混合版；不改 `src/`；不改 `production.json`；不建服务账号；不下载私钥；不改表格共享；不动 CDP 9222 / Profile / 生产 SQLite / OAuth 缓存；不打包、不部署、不重启；不把模拟通过写成真实授权成功。`COMPUTER_USE_NOT_USED`
+
+---
+
+## 18. 第三阶段：冻结包依赖归档核查（2026-11-13，CEO 要求，只读）
+
+**目的：** 核实第二阶段“已安装 EXE 缺 API 依赖、必须改打包”的结论。CEO 指出该结论证据不足：PyInstaller 的模块可能在 EXE 内嵌的 PYZ 归档里，`_internal/` 目录清单与普通解释器的 `sys.path` 导入都不能代表冻结运行期。**结论：第二阶段的判断是错的，依赖确实在包内。**
+
+### 18.1 方法与隔离
+
+- 隔离副本：把 `dist/INSO_V1.6/INSO_V1.6.exe` **只读复制**到 `%TEMP%\rfq016_pkg_check\`，两份 sha256 均为 `00ac7d68d88e1a27eb52e3b7457b4192b699211df1b1f5e3efe0be406eef30bd`（与已知已安装哈希一致），此后只对副本操作。正式目录未被写入、未被运行。
+- 工具：PyInstaller **6.16.0**（来自 `.worktrees/v1-2-design/.venv-release`）的 `pyi-archive_viewer` 与 `PyInstaller.archive.readers.CArchiveReader` / `ZlibArchiveReader`；只解出模块字节码做导入名分析，不执行 EXE、不加载业务、不连 CDP、不访问网络。
+- 边界：未改 spec、未构建、未覆盖正式版、未改业务源码、未使用任何真实凭据。
+
+### 18.2 归档实物清单
+
+| 项目 | 实测值 |
+| --- | --- |
+| CArchive 顶层条目 | 13（`struct`、`pyimod01..04`、4 个 `pyi_rth_*`、`windows_release_entry`、`PYZ.pyz`） |
+| `PYZ.pyz` | 未压缩 8 056 112 字节，**1198 个模块条目**，130 个顶层包 |
+| `_internal/base_library.zip` | 存在（1 331 373 字节，155 项） |
+| `_internal` 磁盘形态 | 运行时 DLL/PYD + 被 `collect_all` 摊成数据文件的包（`google/auth/*.py` 因此可见），**不能据此判断 PYZ 内容** |
+
+### 18.3 关键依赖逐项核对（PYZ 内）
+
+| 依赖 | 条目数 | 结论 |
+| --- | --- | --- |
+| `google.oauth2.service_account` | 1（`google.oauth2` 子包共 16 项，含 `credentials`、`reauth`、`sts`） | **已存在** |
+| `google.auth.*`（`transport.requests`、`jwt`、`crypt.rsa`、`_service_account_info`） | 存在 | **已存在** |
+| `google.api_core` | 8 项（`client_options`、`general_helpers`、`universe`、`version*` 等） | **已存在**（`googleapiclient.discovery` 只用到 `client_options`，已解析） |
+| `googleapiclient` | 16 项（含 `discovery`、`http`、`errors`、`model`、`_auth`） | **已存在** |
+| `requests` / `urllib3` / `httplib2` | 18 / 36 / 6 项 | **已存在** |
+| `google_auth_httplib2` / `uritemplate` / `certifi` | 1 / 5 / 2 项 | **已存在** |
+| `cryptography` | 54 项（含 `hazmat.primitives.asymmetric.rsa`） | **已存在** |
+| `idna` / `charset_normalizer` / `pyasn1` / `pyasn1_modules` | 6 / 7 / 26 / 5 项 | **已存在** |
+
+### 18.4 导入闭包与“缺失”的真实含义
+
+逐个解析归档模块自身的 `IMPORT_NAME` 目标（含嵌套代码对象）：
+
+- `google.oauth2.service_account` → 无未解析项。
+- `google.auth.transport.requests` → 未解析项仅 `functools`、`time`，属解释器自带的标准库/冻结模块（`json`、`logging`、`ssl`、`socket`、`datetime` 等在 PYZ 内），不是缺口。
+- `googleapiclient.discovery` → 未解析项仅 `collections`、`io`、`os`、`re`、`keyword`（同上，标准库）；`google.api_core`、`google.api_core.client_options`、`google_auth_httplib2`、`httplib2`、`uritemplate` 全部在 PYZ 内。
+- 三个**真实不在归档里**的包，均不影响 SA 读取路径：
+  - `oauth2client`：被 `googleapiclient._auth` 引用，但字节码里带 `HAS_OAUTH2CLIENT` 的 try/except 保护（旧版兼容分支）；
+  - `rsa`：只被 `google.auth.crypt._python_rsa` 使用，是“没有 `cryptography` 时”的备用签名实现，而 `cryptography` 在包内；
+  - `cachetools`：**包内没有任何 google 模块导入它**（被 `_oauth2client`/`impersonated_credentials` 等未打包模块使用）。
+
+### 18.5 证据等级
+
+- `OFFLINE_VERIFIED`：上述依赖**确实在**已安装产物的内嵌 PYZ 中，且这些模块的导入目标在包内可解析；第二阶段的“缺失、必须改打包”结论**撤销**。
+- `NOT_VERIFIED`：冻结运行期**真正 import 一次**。本轮不能启动正式 EXE（会启动业务），因此不宣称“已实测可运行”；补证方式见 §16 第 6 条。
+- 仍然成立、与本议题无关的既有结论：`HttpError` 分类差距（§14）、真实测试表读取 `BLOCKED_OWNER_SETUP`、8 天稳定性 `NOT_VERIFIED`。
+
+### 18.6 最小打包方案（仅在日后确需时）
+
+当前**无需**为 API/SA 依赖修改 `packaging/INSO_V1.1.spec`。若将来确有模块在冻结运行期报 `ModuleNotFoundError`（例如用到 `cachetools` 的 Google 认证扩展路径），最小改法是在 `release_packages` 追加缺失包名（`collect_all` 会连带其数据与子模块），并**在独立目录构建新候选包**验证后再谈覆盖安装；本轮不执行。
+
+`COMPUTER_USE_NOT_USED`
