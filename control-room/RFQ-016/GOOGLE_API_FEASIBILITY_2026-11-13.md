@@ -298,3 +298,26 @@
 当前**无需**为 API/SA 依赖修改 `packaging/INSO_V1.1.spec`。若将来确有模块在冻结运行期报 `ModuleNotFoundError`（例如用到 `cachetools` 的 Google 认证扩展路径），最小改法是在 `release_packages` 追加缺失包名（`collect_all` 会连带其数据与子模块），并**在独立目录构建新候选包**验证后再谈覆盖安装；本轮不执行。
 
 `COMPUTER_USE_NOT_USED`
+
+---
+
+## 19. Cloud Console 现场核实（2026-11-13，Owner 授权 CDP；**被 2SV 拦截**）
+
+**授权与边界：** Owner 本轮明确授权为本次配置检查使用现有唯一 CDP（127.0.0.1:9222）。实际执行：只**新建一个**后台标签页访问 `console.cloud.google.com`，结束后把它关掉；13 个报价表格页、2 个 INSO 登录页、1 个 findchips 页**未被导航、未被关闭、未被切走**（收尾复核：17 页，13 Sheets + 2 INSO + 1 findchips + 1 blank，与开工时同量）。未新建 Profile、未重启 Chrome、未输入/读取任何密码、验证码、Cookie 或令牌。
+
+**结果：Cloud Console 当前无法读取任何项目配置。**
+
+- 访问 `console.cloud.google.com` 的任何路径（`/welcome`、`/apis/dashboard`、`/apis/library/sheets.googleapis.com`）都被重定向到 `enable-mfa`，页面原文：**“自 2026年10月6日起，Google Cloud 开始强制执行两步验证 (2SV)…请前往安全设置，开启两步验证”**与“无法访问 Google Cloud”。
+- 唯一可读到的项目线索来自该重定向参数与控制台标题：项目**存在**，名称为 `INSO`，**Project ID = `inso-509314`**（`?project=inso-509314`）。这是控制台自己给出的当前项目，但**没有**在完整加载的项目页面上二次确认。
+- 按 Owner 指示，随后把设置页交回人工（`myaccount.google.com/signinoptions/twosv`），该页又要求**密码重新验证**，且页面标题显示“尝试的失败次数过多”。因此**立即停止**自动化、未做任何输入，并把该标签页关掉。
+- 因此以下各项本轮**全部为 `NOT_VERIFIED`**，不是“未启用”也不是“不存在”：Sheets API 是否仍启用；OAuth 应用的 User type / Publishing status；项目内既有 Service Account 清单；是否允许创建密钥；`iam.serviceAccountKeyExpiryHours` 与 `iam.disableServiceAccountKeyCreation` 等策略。
+
+**为什么这条对项目重要：** 2026-10-06 起 Cloud 强制 2SV。这不影响已登录的 Google 表格读写会话（表格页仍正常），但**任何**后续“去控制台改配置/建服务账号/查发布状态”的动作都会先撞到这道门。服务账号方案本身不需要个人 OAuth 授权，但**创建服务账号和下载密钥必须在控制台完成**，所以 2SV 是这条路的硬前置。
+
+**Owner 最小动作（按顺序）：**
+
+1. **由本人**在自己的浏览器里打开 Google 账号 → 安全性 → 两步验证并完成开启（需要密码与手机/验证器；Executor 不得代做）。若提示“尝试的失败次数过多”，先等待冷却，不要在自动化页面里反复尝试。
+2. 完成后告我一声；我再开一个新标签页复核（只读）这六项：项目存活与名称/ID、Sheets API 状态、OAuth 同意屏 User type + Publishing status、既有服务账号、密钥创建策略与 `serviceAccountKeyExpiryHours`、是否可在原项目内建长期 SA。
+3. 复核通过后，才讨论“在原项目内建一个专用 SA、只读共享一份合成测试表”的具体动作；**建 SA、下载密钥、改共享仍需 Owner 明确逐步授权**，本轮与下一轮都不自动做。
+
+`COMPUTER_USE_USED`（仅限本轮 Owner 授权的控制台只读检查：一个新标签页、无输入、无凭据读取、无业务操作；已关闭该标签页）
