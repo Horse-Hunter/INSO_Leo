@@ -1,5 +1,16 @@
 # Sheets 模块
 
+## Owner correction (2026-11-13): Google false-unavailable and quotation readback
+
+**Trigger:** every Google Sheets read, quoted-price input/update, page recovery, technical alert, and related Executor/CEO Review. **Authority:** Owner's 2026-11-13 instruction, superseding earlier RFQ-005 text requiring a pre-click raw-14 readback. **Source of truth:** this section plus `control-room/RFQ-016/REVIEW.md`; current application code remains the deployed 2026-11-12 candidate until a later authorized release.
+
+1. **No 14-cell readback before quotation click.** Owner intentionally removed this step for efficiency/reliability. An Executor MUST NOT reintroduce it as a fix for old tests or a purported regression. Preserve exact spreadsheet/gid/title/source-row identity, expected status, schema, safe one-attempt effect gates, cloud-save evidence, native popup/result verification, and durable UNKNOWN protection. This exception applies ONLY to the pre-click 14-cell comparison; it does not waive single-cell status-write identity/readback or purchase safety.
+2. **Transient Google reads are not a site outage.** A stalled download, temporary read page, slow network or one failed poll is a program-side operation issue until proven otherwise. Classify precisely; prefer bounded local retry, owned read-page cleanup and per-task/module deferral. A successfully recovered read is not a human intervention or email alert. Do not turn guessed website unavailability into GLOBAL_STOP or a persistent nuisance email.
+3. **Safety floor remains unchanged.** Any uncertain external write, uncertain click, wrong workbook/gid/row, unknown ownership, unresolved script effect, cross-client conflict, shared Chrome/CDP profile uncertainty, or durable SENT/UNKNOWN must fail closed as the appropriate protected action. Never blindly repeat a purchase, quotation update, status write or mail send to improve liveness. If a shared resource really cannot be owned safely, preserve its hold and report the exact reason rather than labeling Google as globally down.
+4. **Implementation/verification:** the single active Executor traces each error source→classification→module/owner effect→GUI/mail outcome, proves transient read recovery and cross-module continuity with fake-browser/fake-Sheets deterministic regressions, and preserves original irreversibility/dedup tests. Record observed cause and bounded timing separately from external-site claims. No new browser, profile, scheduler, ledger or workaround; retire only task-owned disposable test artifacts, never existing CDP/runtime/unknown work.
+5. **CEO enforcement:** CHANGES_REQUESTED for reinstated pre-click 14-cell readback, undifferentiated transient-read global stops or alerts, weakened write-effect/identity gates, test deletion, or unverified live acceptance. **Evidence:** code diff, tests including temporary read→recovery and real write UNKNOWN scenarios, per-failure classification, source/report links and exact commit; production only after separate Owner authorization.
+
+
 ## Owner four-surface lifetime amendment (2026-10-28, isolated / REVIEW_REQUIRED)
 
 Canonical build_google_web_service retains one existing pool slot per exact
