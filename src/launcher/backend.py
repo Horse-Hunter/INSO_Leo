@@ -2181,6 +2181,10 @@ class ProductionBackend(GuiBackend):
                           EventType.HUMAN_RESOLUTION_RECORDED, now, "workflow"),
         )
         self._v12_store.recover_stale_alerts(item.inquiry_id, at=now)
+        with self._lock:
+            # The quotation observation for this order described the old state.
+            self._v13_states.pop(item.inquiry_id, None)
+            self._v13_unbound.pop(item.inquiry_id, None)
         return f"已按表格恢复：当前状态「{status}」，该订单已结案。"
 
     @foreground_resources
@@ -3887,6 +3891,15 @@ class ProductionBackend(GuiBackend):
 
     def get_v12_order_state(self, inquiry_id):
         dto = self._v13_states.get(inquiry_id)
+        if dto is not None and self._v12_store is not None:
+            # A closed order must not keep a quotation observation alive: the Owner
+            # finished that line in the sheet, so "quote failed / status not synced"
+            # would colour a finished order for the rest of the session.
+            try:
+                if self._v12_store.business_state(inquiry_id) is BusinessState.HUMAN_COMPLETED:
+                    dto = None
+            except KeyError:
+                pass
         if dto is None:
             if self._v12_store is None:
                 preview = self._startup_interruptions.get(inquiry_id)
