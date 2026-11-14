@@ -1,47 +1,52 @@
-# RFQ-018 — CEO 第一轮独立 Review（2026-11-14）
+# RFQ-018 — CEO 第二轮独立 Review（2026-11-14）
 
-**Review 结论：`CHANGES_REQUESTED / P0-A_P0-B_P1-C / NOT_DEPLOYED / NO_VERSION_PROMOTION`.**
+**结论：`PASS_SOURCE_SAFETY_SCOPE / RELEASE_HOLD / NOT_DEPLOYED / NOT_MERGED`。** RFQ-018 指定安全修复的**源码/离线测试证据审核通过**，但**不是生产 EXE 验收、自动部署或现版晋升授权**。
 
-本次 **GitHub 源码静态审核** 针对 Executor 在 `workbuddy/v16-rfq016-stabilization` 提交的 `446d090998e8e2845aae2b23d9cae59f465a789c`；参考 [任务说明](TASK_SPEC.md)、[执行检查点](EXECUTION_LOG.md)、[原 26 用例映射](TEST_MAPPING.md)、[执行者报告](FINAL_REPORT.md)、[机器可读证据](../../docs/evidence/rfq018/rfq018-test-audit-2026-11-14.json)。CEO **没有**在 Executor Windows 上独立运行 pytest、操作受保护 Chrome、连接 Google/INSO/SMTP 或检查生产现场。本轮审核后仍不可宣称实机验收或批准部署。
+本轮独立审核对象：原 Executor 分支 `workbuddy/v16-rfq016-stabilization` 固定源码提交 [`25894eface6ea622153d1573c19d0ca6b9ad72aa`](https://github.com/Horse-Hunter/INSO_Leo/commit/25894eface6ea622153d1573c19d0ca6b9ad72aa)，前轮 CEO Review [`67f2a283`](https://github.com/Horse-Hunter/INSO_Leo/blob/67f2a283fb5db1254361c12cbed420e192b8a634/control-room/RFQ-018/REVIEW.md)。CEO 使用连接的 GitHub **实际审读**改动、关键完整源码、测试函数、[Executor 执行记录](EXECUTION_LOG.md)、[最终报告](FINAL_REPORT.md)、[机器可读证据](../../docs/evidence/rfq018/rfq018-test-audit-2026-11-14.json)。**未在 Windows 亲自运行 pytest、操作真实 Chrome/Google/INSO/SMTP，也未实机核对旧 EXE 进程。**
 
-## 认可的实际工作（请保留，不重新大改）
+## 结论依据：三项补修全部接受
 
-- `src/research/cdp_pages.py` 确实新增 root/child 文档级 hold 机制；`google_quote_update.py`、`google_web.py` 和 `google_api_service.py` 接入共享保护；`sales_header.py` 增加缺失/失效准入时在 browser acquisition 前 STOPPED，`backend.py` 显式传递 `page_admission`。不是只修改文档。
-- RFQ-017 原 **26 个 nodeid** 与 RFQ-018 证据中 `original_26[].nodeid` 已由 CEO 逐项比较，**完全相同、同序**：6 项未改，20 项改写；`TEST_MAPPING.md` 有逐项去向。
-- Executor 报告了新 16 项、部分先红后绿、相关 426 项通过，以及全树 `4176 collected / 4175 passed / 1 skipped / 0 failed`；源码和 JSON 数据相符。**执行者报告的测试全绿不等于 CEO 独立运行，更不能覆盖下面未被测试到的危险条件。**
-- 原 RFQ-016 的指定自动结案/来源身份/告警修复仍为 `PASS_SOURCE_SAFETY_SCOPE`；RFQ-018 本次问题只针对新增共享安全逻辑，不重新开启 RFQ-016。
+### P0-A — 未确认写入 hold 不因页面关闭而消失：**PASS**
 
-## 必须定点修复的源码问题
+- `src/research/cdp_pages.py:228-242` 的 `document_hold()` 已删除以 `page.is_closed()` 为条件自动 `pop(owner)` 的代码；保留的 hold 仅走指定 `release_document(document, owner)`。
+- `src/launcher/google_quote_update.py` 原 click/result/受保护页面未确认路径仍发布 shared hold；恢复流程要求已观测结算并经过 owner 核查后才走 release。原有 owner-adoption/来源不明拦截仍保留。
+- 新增完整页面已关闭却继续阻断 root/child、同文档跨 sheet 的回归（`tests/research/test_shared_document_admission.py::test_unconfirmed_write_hold_survives_the_held_page_closing`、`tests/launcher/test_rfq018_shared_safety.py`）。页面关闭不再等同于业务写入结算证据。
+- **剩余已知边界**：`allow_closed=True` 的成功结算+关闭路径属于专用 owner 恢复；真实浏览器中并发人工作业/归属变化未实测。不得把离线 PASS 写作外部系统行为已证明。
 
-### P0-A — 已关闭页面会自动清除尚未确认写入的共享 hold
+### P0-B — Sheets API 真实写入必须共享/有效 admission：**PASS**
 
-**实际代码**：`src/research/cdp_pages.py:143-155,169-197` 的 `hold_document(...,page=page)` 保存 page；`document_hold` 执行 `if callable(is_closed) and is_closed() is True: holds.pop(owner, None)`。与此同时 `src/launcher/google_quote_update.py:369-385,1061-1066` 的未确认点击/结果/受保护写入会用当前页面发布同文档 hold。
+- `src/sheets/google_api_service.py:211-219,359-403` 不再自动给缺失 admission 的可写客户端创建私有 root；实际 `_write_range()` 在 API 请求前检查非空共享 admission、`require_open()` 以及文档保护和新 atomic write lease。
+- `src/launcher/backend.py:_google_api_service` 注入 `self._page_admission`。新增/更新 `tests/sheets/test_google_api_service.py` 的无 admission、失效 admission negative，明确断言 `FakeApi.calls == []`，同 root hold 可阻断写入。
+- 直接构造的只读/假客户端不因此自动取得生产写入许可；其他非标准生产构造路径必须在真实发布评估中重新核实，不可自动宣称都已实机覆盖。
 
-**可成立的危险序列**：报价点击已经发出但结果 UNKNOWN → hold 记录仍开启的 page → Owner/Chrome/异常关闭该页面 → 新客户端查询 `require_document_writable` → `document_hold` 仅因 `page.is_closed()==True` 清掉 hold → 新写入被允许。**“页面关闭”不是“外部 Google 写入已证实结算/未发生”。** 原 V13 per-order 持久 hold 不能代替同文档跨服务 hold，其他订单/其他写入仍可能被放行。这与 RFQ-018 的“不确定写入不得被其他客户端绕过”合同冲突。
+### P1-C — 同文档原子在途写入互斥：**PASS**
 
-**最低修复要求**：任何由可能已发出写入/结果未确认/受保护页面产生的 hold **绝不能仅因 `page.is_closed()` 而自动解除**；必须通过明确、有来源身份及写入结算证据的路径仅解除该 owner 的 hold。区分纯只读页面清理和已派发写入，不能把页面生命周期当业务结算收据。新增至少一条真实 root/child + quote writer/页面关闭后的否定回归，断言保留 hold、第二客户端对同文档及另一 sheet 的写入均被阻止，同时不误伤其他文档的读取；禁止清真实 V13 hold。
+- `src/research/cdp_pages.py:184-227` 新增 root-admission 原子 `begin_document_write/end_document_write`，同 owner 有界重入，其他 owner 在同文档在途时得到 `DocumentWriteBusy`；busy 不被伪装为 UNKNOWN。
+- `src/sheets/google_api_service.py` 覆盖整个 API request/response receipt 确认期；`src/launcher/google_web.py` 覆盖 fallback 写入期；`src/launcher/google_quote_update.py` 在 native 报价 click dispatch 前取得 lease，结算或关闭时释放。未确认写在释放 lease 之前先发布 shared hold。
+- 旧 `tests/launcher/test_google_quote_update.py::test_document_write_admission_serializes_threads_but_allows_same_owner_nesting` 已恢复成真正的双线程 `Event` 竞争；`tests/research/test_shared_document_admission.py`、`tests/sheets/test_google_api_service.py`、`tests/launcher/test_google_web.py` 有竞争 writer / in-flight HTTP fake 负向测试，第二个请求在第一请求完成之前未发送；其他文档不被误阻断。
+- 原 21 项测试接口/语义治理记录保留在 [TEST_MAPPING](TEST_MAPPING.md)；纯只读失败可有界隔离，**未确认写入必须先 hold** 的两类处理不可混淆。原 26 nodeid 仍逐一可追溯。
 
-### P0-B — Sheets API 写入未通过全局失效准入；无共享根会自动创建私有根
+## 测试证据、适用边界
 
-**实际代码**：`src/sheets/google_api_service.py:211-218` 在 `page_admission=None` 时使用 `PageResourceAdmission()`，包括可写的 `build_service_account_sheets_service(..., scope=READ_WRITE_SCOPE, page_admission=None)`（`164-203`）；`_write_range:347-389` 写前仅调用 `self._page_admission.require_document_writable(document)`，但 `src/research/cdp_pages.py:193-197` 该方法 **没有 `require_open()`**。因此一个 admission 已 `invalidate()` 但没有同文档 hold 时，仍可发起 Google API update；未注入共享根的可写 API 构造还会用独立根绕过别的客户端 hold。
+| 对象 | Executor 报告、CEO 核对 |
+| --- | --- |
+| 原 RFQ-017 26 项 nodeid | **26/26 PASS**，原列表全部保留（6 原样、20 依据当前机制改写） |
+| 本 RFQ 新增保护性测试 | 合计 **28 项**（首轮16 + 本轮12），报告全部通过 |
+| 相关测试 | **478 PASS / 0 FAIL** |
+| 全树 `python -m pytest tests -q --tb=short -p no:cacheprovider` | **4188 collected、4187 passed、1 skipped、0 failed，341.54 秒**；没有 deselect；既有 Windows symlink 权限 1 SKIP |
+| 风险限制 | **仅离线 fake/synthetic**；没有执行真实 Google、原生 INSO、SMTP 或已安装 EXE 的完整回归 |
 
-**最低修复要求**：所有**真实可写 API 写入**必须先验证和使用统一共享 admission，且 `require_open()` 失效时在 `values().update` 前停止；缺失共享根时 **fail closed**，不得自动把私有 admission 当成生产写入许可。允许明确只读客户端和隔离 fake 测试用受控构造方案，但不能让真实可写构造落到 private-root 兜底。补负向测试：失效 admission 时 update fake 调用次数为 0；A 在 root 挂起后 B 未注入共享 root 不能绕过写入；同一 root 挂起正常生效；正常已批准共享 root 的写入仍能成功。不要误把“一个独立新 root”当有效恢复。
+CEO 静态审核确认 `25894efa` 相对上一轮仅改指定安全路径、保护性测试及本 RFQ 文档/JSON；**无需继续针对 P0-A/P0-B/P1-C 追加 RFQ-018 补丁**。未来新证据可另作有界缺陷任务，不能拿本轮 PASS 作零风险保证。
 
-### P1-C — 同文档在途并发写入没有原子准入/占用证明，旧线程测试被减弱
+## 独立生产发布闸门仍 HOLD
 
-**实际代码**：`src/research/cdp_pages.py:193-197` 的 `require_document_writable` 只检查当前 hold、不原子地登记一个在途 writer；`src/sheets/google_api_service.py:361-389` 先查 hold 再调用 `values().update().execute()`，只有出错/收据不符才登记 hold。**两个线程/服务可在第一笔 API 请求仍在途、尚未设 hold 时都通过检查并启动同一文档写入**。原 RFQ-017 的 `tests/launcher/test_google_quote_update.py::test_document_write_admission_serializes_threads_but_allows_same_owner_nesting` 曾真正启动竞争线程；RFQ-018 改写后的同名用例 `1017-1029` 仅手工 `hold_document` 再测试一次拒绝，**没有线程或在途写入**。这不能证明“并发写串行化”，也不满足“等价或更严格测试”的承诺。
+1. **进程内共享 hold 有边界。** 新文档 hold 与在途 lease 不持久化，重启可解除页面层保护；已存在的 per-order 持久 V13 hold 保留但不等于所有跨服务 Google 写入 UNKNOWN 的持久阻断。发布前必须制定 **断电/重启/中断 UNKNOWN 清单与隔离恢复方案**，不能以重启清内存 hold 为“已经结算”的证明。
+2. **真实部署与版本追溯尚未完成。** 当前 Executor 分支上的 `25894efa` 源码尚未合并 `develop`，未打包/安装对应候选 EXE，缺少源码 SHA→构建文件 SHA→配置→回滚包→实际启动的证据。最近 Executor 只读快照旧 EXE `E9E3DA33…` app PID38948/watcher34304，Chrome 9222 PID24164；不是本次 CEO 实时观察。任何停止/覆盖旧 EXE 需 Owner 单独批准及安全运行窗口。
+3. **旧业务 UNKNOWN 不因测试全绿消失。** Google/INSO SHAHAB 第 115 行 `inq_99275e8e72b43fd6616fd686` purchase `MANUAL_REVIEW / RECONCILIATION_UNREADABLE`、无 `saved_record_ref`，原生 INSO 收据 `NOT_VERIFIED`，旧版曾清告警；不可重放或冒称已采购。221 行 SAVED 原生 `rec_440fafd372440ecf9dacabf660dd155d` 不得重复下单。3 条 V13 报价 hold 保留。
+4. **旧 GUI 及操作稳定性**：报价重试拒绝原因、`inq_d65be9df…` 持续失败、GUI 停刷、退出挂起、Chrome 残留页面等仍是独立验收风险。未获真实试运行/生产发布授权，`main` 仍历史 V1.1、`release/previous` 不动。
 
-**最低修复要求**：明确并实现根 admission 下按文档的**原子写前获取/写后有证据释放**或等价的写入占用机制，至少覆盖 API write 与浏览器 fallback / quote 同文档竞争的共同入口；in-flight 的另一写者应在实际 dispatch 前停止或等待，UNKNOWN 必须转换为不可自行释放的 hold。复核同 owner 重入语义，不要单纯把 busy 当 UNKNOWN。把原同名测试恢复为真正两线程有界同步验证（非 sleep/flaky），新增 API fake 在途写与另一客户端竞争的否定测试，证明第二请求未发出；其他文档允许执行、确认结束后恢复可写，异常未确认仍阻断。不能通过简单删测、改名称或模拟预先放置 hold 达成全绿。
+## 下一步：发布准备评估，而不是继续无限修 RFQ-018
 
-## 其余测试契约及证据
+进入**单独发布准备与恢复策略评估**（建议 `RFQ-019`，先只读/离线）：锁定固定源码 SHA、隔离重启未知效果的恢复要求、真实 EXE/配置/运行中进程/Chrome/SQLite/WAL-SHM 的切换和回滚计划、非业务效果的候选构建验证及 GUI 已知问题风险评估。提出清晰的 Owner 授权清单后才允许集成 `develop`、部署试运行或恢复真实外部写入，**不自动连锁批准**。
 
-- `TEST_MAPPING.md` 中 #11 原“在途 writer 下读恢复及新 writer 拦截”现在变为“后续 writer 可打开新页、但不复用旧页”；#16/#17/#19 原读隔离时全局写拦截被改为“独立新页可写”。这未必全是错误（纯只读失败未必应冻结无关写），但**不能仅凭 test name/原 nodeid 保留就断言安全强度不减**。请提供最简解释及一两条真实整合负向测试，证明**未确认写入**仍严格阻断、**纯只读失败**仅进行有界隔离，不会误把写入历史当纯读。不要扩大到重做全部 20 项。
-- `docs/evidence/rfq018/rfq018-test-audit-2026-11-14.json` 是 Executor 的有结构测试结论，不包含 CEO 亲自执行记录；本轮仅在源代码、测试覆盖及其承诺之间做独立静态审查。
-
-## 现场和下一步
-
-**`CHANGES_REQUESTED`，仅需原 Executor 在现有工作树做上述三项最小补修和明确的负向回归，不重写整体架构。** 代码及新测试先红后绿；重跑 RFQ-017 原 26 项、RFQ-018 原 16 项和全量 `tests`，提供新增/失败/跳过完整对照。完成后请求 `Review RFQ-018`，不要开始另一个 RFQ 逃避本轮安全审查。
-
-**严格保留**最近 Executor 报告的旧 EXE `E9E3DA33…` app PID38948/watch34304、受保护 Chrome9222/PID24164（都是执行者历史快照，CEO 未实时核实）；221 行 INSO `rec_440fafd372440ecf9dacabf660dd155d` 不重放；SHAHAB/115 的 `MANUAL_REVIEW/RECONCILIATION_UNREADABLE` 仍为 UNKNOWN、原生 INSO `NOT_VERIFIED`；3 条 V13 报价挂起不清；不改生产 SQLite/WAL/SHM、不发送邮件、不点击报价、不做 Google/INSO 写入、不停止/覆盖 EXE、不合并 `develop`、不晋升 `main` 或 `release/previous`。任何真实试运行须 Owner 另行授权。
-
-[Task Spec](TASK_SPEC.md) · [Execution Log](EXECUTION_LOG.md) · [Test Mapping](TEST_MAPPING.md) · [Final Report](FINAL_REPORT.md)。
+**最终裁决：`PASS_SOURCE_SAFETY_SCOPE / RELEASE_HOLD / NO_AUTOMATIC_DEPLOYMENT / OWNER_APPROVAL_REQUIRED`.**
