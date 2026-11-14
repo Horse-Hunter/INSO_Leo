@@ -1,79 +1,14 @@
-# Project Baseline
+# Project Baseline — live rules
 
-## Operating model
+Owner intent → canonical RFQ Task Spec → reuse existing stable product → minimum safe change → real evidence → CEO Review. **Process exists to deliver, not replace delivery.**
 
-- Work is RFQ-driven. The complete current requirement lives in Control Room, not chat.
-- Any executor must be able to start from only `执行 RFQ-XXX`.
-- Review is owned by CEO: Owner returns to the CEO conversation and says only `Review RFQ-XXX`.
-- Git/code/tests/evidence are implementation truth; Task Spec is requirement truth; `COORDINATION.md` is status truth.
-- CEO instructions must stay requirement-progress focused: business outcome, acceptance, relevant source docs, Safety boundary. No hundreds-line implementation manuals.
-- If progress is slow, reread the RFQ and workflow rules and reduce scope to the shortest path that advances acceptance.
-- Repeated failures become shared code/contracts/regression tests rather than repeated Owner guidance.
-- Owner is not a technical message bus.
+- **Owner** decides business permissions. **CEO** owns Task Spec, architecture, independent Review and concise current-state docs. **Executor** owns implementation, testing, production evidence, exact commit and safe cleanup. Only one production Executor.
+- Requirements: `control-room/RFQ-XXX/TASK_SPEC.md`; status: `COORDINATION.md`; active execution checkpoint: `EXECUTION_LOG.md`; CEO result: `REVIEW.md`. No chat-only state. Any session must be replaceable from these plus live systems.
+- **Interruptibility:** checkpoint before potentially irreversible effects and after each observed result; never assume a previous window's process stopped; new window independently reconciles process, worktree, logs, database and external effect. No second writer for an UNKNOWN effect. Full procedure: [AGENTS](../AGENTS.md).
+- Reuse existing production code, config, migration, CDP/session, runtime, adapters, tests and release path. No redundant second scheduler/ledger/API/browser/SMTP or new handoff framework. Explain a necessary non-reuse in the existing execution log.
+- A durable Owner rule must give trigger, responsible role, procedure, authoritative source, evidence, cleanup and Review enforcement; CEO mirrors **generic** rules into `templates/lean-ai-baseline/`.
+- One suitable active worktree/RFQ; preserve unknown dirty/unique files and commits. Retire proven task-owned disposable build/staging copies in the same work cycle, even on failure; never remove shared runtime, CDP/profile, SQLite/WAL/SHM, secrets, rollback or unknown assets.
+- Production permission, writes and safety are controlled by [SAFETY](SAFETY.md) and [CDP policy](CDP_SESSION_POLICY.md). Computer Use is project-allowed if supported, not a blanket real-write grant.
+- Historical decisions and obsolete instructions must be read **by pinned commit** only when investigating; never promote historical `NOT_DEPLOYED` or `BUSINESS_RUNNING` to current state. [History](HISTORY.md).
 
-## Reuse contract
-
-**Reuse First is a project invariant.**
-
-- V1.1 is the working inheritance baseline for V1.2. V1.2 extends it; it does not independently recreate it.
-- Unless a requirement explicitly changes them, V1.2 must reuse the V1.1 production configuration model, Sheets/OAuth integration, Research runtime, Workflow foundation, Chrome/CDP lifecycle, Core Vault, GUI shell, filesystem/app-root conventions, release safety checks and packaging infrastructure.
-- Existing working code/config/scripts/tests/contracts are authoritative candidates for extension before any new implementation is considered.
-- No duplicate production launcher, duplicate runtime config format, duplicate credential path, duplicate browser/session stack, duplicate migration path, duplicate release pipeline or equivalent parallel infrastructure may be introduced without explicit CEO/Task Spec approval.
-- A stable decision or solved discovery question is not reopened unless requirements changed or new evidence invalidates it.
-- Temporary discovery/live-verification helpers are allowed only as temporary evidence tools. Before release they must either be removed/retired or feed the same canonical production code path.
-- Any unavoidable non-reuse must be documented in the RFQ Execution Log with the inspected existing solution, incompatibility evidence and minimum replacement scope.
-- If the project contains multiple implementations of the same responsibility, consolidation is preferred over adding more code.
-
-## Roles
-
-- Owner: final business authorization.
-- CEO: requirement clarification, Task Spec, business rules, architecture boundary, Safety/Write Gate, reuse governance, and independent RFQ review.
-- Executor: reuse audit, implementation, debugging, tests, live verification, evidence, execution log, final report, commit/push.
-- CEO Review: independently verifies implementation evidence and reuse discipline and returns only PASS / CHANGES_REQUESTED; does not implement fixes inside the review.
-
-## Stable project anchors
-
-- V1.1 Research Stability: CLOSED, `release/v1.1 = 44cd4a4cdb05fc069189801d24c4710bfd9445f3`.
-- V1.2 branch: `feature/v1-2`.
-- Production browser: Chrome only.
-- Credential source: Core Vault only.
-- INSO runtime readiness is a shared capability; ordinary runtime/session recovery is not an Owner blocker.
-- V1.2 Production Write Gate: CLOSED.
-
-## Rule operationalization invariant
-
-- Durable Owner process instructions must be operationalized by CEO in repository rules; chat acknowledgement alone has no standing.
-- Every durable rule must name its trigger, responsible role, procedure, canonical state, completion evidence, cleanup and Review enforcement.
-- Reusable governance changes must be mirrored into `templates/lean-ai-baseline/` in the same change.
-- Executor is responsible for executing the rule; Reviewer/CEO is responsible for enforcement. Owner is not responsible for reminding either role.
-
-## Workspace / handoff invariant
-
-- Default is one active implementation worktree per active version/RFQ.
-- Outgoing Executor preserves the live workspace and may leave one minimal temporary handoff only for a real agent switch.
-- Incoming Executor owns takeover cleanup: inspect current Git/worktrees, verify handoff claims, move durable facts to canonical records, delete the handoff, preserve unique work, safely remove stale worktrees, and prune.
-- Unknown dirty worktrees are never force-deleted.
-- Handoff files are never canonical and expire after takeover.
-- `EXECUTION_LOG.md` may preserve history but obsolete current blocker/next-step statements must be marked resolved/superseded.
-- Review requires cleanup evidence and rejects expired handoffs, stale current-state text or unexplained duplicate active worktrees.
-
-## Artifact lifecycle (binding)
-
-**Trigger/owner:** every build, frozen test, deployment scan, handoff and release (success **or** failure); the generating **Executor** owns cleanup in the same task.
-
-1. Reuse canonical build/test/staging paths; avoid unnecessary complete frozen copies. Every new large temporary asset needs a purpose, owner and retirement point.
-2. Once its purpose ends, retire only **known task-owned disposable** builds, scan copies and staging; keep small essential evidence. Retain active releases and the minimum verified, approved rollback set.
-3. Protect CDP/profile, shared runtime/data, Vault/OAuth, Git, unique evidence and dirty worktrees. Never follow/delete reparse-point targets, force file locks or alter permissions. Skip **specific proven risks**, not all cleanup merely because global Windows file-handle inspection is unavailable.
-
-**Source:** this baseline and `docs/WINDOWS_RELEASE.md`. **Evidence:** brief retained/retired items and reason for large exceptions in RFQ `EXECUTION_LOG.md` (non-RFQ: final chat). **Enforcement:** CEO Review rejects unexplained duplicate artifacts or unsafe deletion. No extra cleanup framework or Owner ceremony.
-
-## Delivery-first invariant
-
-- The project's primary objective is correct, working delivery of Owner requirements. Governance serves that objective and must not compete with it.
-- Priority is: Owner intent → canonical requirement → reuse → necessary safety/data integrity/reversibility → minimal process.
-- CEO must not create additional gates, reports, boundaries or acceptance burdens unless they are required by the requirement itself, a real safety/data-loss risk, or a demonstrated recurring failure.
-- When Owner corrects a process/design issue, CEO is responsible for identifying and fixing the obvious adjacent implications so Owner does not have to issue multiple follow-up corrections.
-- Reuse enforcement should reduce work: inspect relevant existing capability, reuse it, and only document non-reuse when a plausible reusable path is deliberately rejected.
-- Housekeeping should be done in-line and must not become an artificial blocker to implementation or live verification.
-- Any rule that adds recurring effort without improving correctness, safety, recoverability or delivery speed should be simplified or removed.
-
+Full previous baseline: [archive](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/docs/PROJECT_BASELINE.md).

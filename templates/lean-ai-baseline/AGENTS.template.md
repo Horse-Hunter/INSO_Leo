@@ -1,71 +1,17 @@
-# Agent Entry
+# Agent Entry — reusable baseline
 
-Start with `AI_START_HERE.md`.
+Read `AI_START_HERE.md`. Roles: Owner authorizes business effects; CEO owns Task Spec, independent Review and governance; **one Executor** owns implementation and live execution. Source of truth: `control-room/COORDINATION.md`, active RFQ `TASK_SPEC.md`, `EXECUTION_LOG.md`, `REVIEW.md` and Git evidence.
 
-- **Every new window/task:** read `AI_START_HERE.md`; final Owner-facing **chat reply** and RFQ `FINAL_REPORT.md` use the exact seven headings in `docs/REPORTING.md`.
-- **Artifact hygiene:** reuse canonical builds; retire owned disposable frozen/staging/scan copies **in the generating task** (success/failure). Preserve active/rollback packages, runtime, CDP, secrets, Git and dirty work. See `docs/PROJECT_BASELINE.md`.
+## Interruption-safe takeover (generic Owner rule)
 
-- Owner + CEO discuss requirements; CEO creates/completes the RFQ Task Spec.
-- Owner opens any implementation agent (Codex / Claude / WorkBuddy or equivalent) and says only `执行 RFQ-XXX`.
-- `Review RFQ-XXX` belongs to CEO/Architect/Safety.
-- Task requirements come from Control Room, not copied chat context.
-- Executor owns ordinary implementation/debug/test/live/evidence/commit work to acceptance.
-- CEO owns independent RFQ review.
-- Anything shown directly to Owner must be plain business language: what happened, what it affects, what happens next.
-- Precise technical details belong only in Executor-facing records such as execution logs, technical review findings, Git/tests/evidence.
-- Owner is involved only for true business/Safety/human-verification/destructive-Git/major-architecture/release decisions.
-- Never persist secrets.
+**Trigger:** any new window, handoff, meaningful progress, **before** and **after** external effects. **Owner:** current CEO/Executor. **Procedure:** inspect active branch/HEAD/dirty diff/worktrees and live process/database/external outcomes; read last canonical checkpoint; record intended effect and existing durable idempotency guard before dispatch; record confirmed receipt/UNKNOWN and next action after. Commit/push safe checkpoints. On unplanned session loss, next window **reconciles** the live operation rather than starting a duplicate; never infer a process stopped because chat ended. One active Executor only.
 
-## Mandatory Codex / Executor ban on Computer Use
+**Source:** `AGENTS.md`, `AI_START_HERE.md`, existing RFQ record. **Evidence:** recoverable task status, pre-/post-effect records, live reconciliation, exact Git refs. **Cleanup:** retire task-owned temporary handoff/test/build artifacts while preserving dirty work, runtime, secrets, history and rollback. **Review:** CEO fails unsafe replay, untraceable state or stale handoffs. No separate permanent handoff mechanism.
 
-**Trigger:** Every Codex/Executor task and tool selection. **Owner:** Executor. **Rule:** Do not invoke agent Computer Use, desktop screenshot/click/type UI control, or a custom GUI automation substitute to evade it. Continue to permit existing product/browser runtime automation implemented in application code under the ordinary reviewed safety rules; that is not agent Computer Use.
+## Safeguards and reuse
 
-**Ordered alternative:** Read this rule at task start; use existing CLI/PowerShell/Python, OS/process APIs, Git, tests or approved purpose-built connectors to perform authorized work. If a required operation cannot be performed without the banned agent UI capability, stop the step as `BLOCKED / NOT_VERIFIED`, report the exact manual-only dependency and do not fake completion or silently switch tools. A release/production authorization never overrides this ban.
-
-**Source of truth:** The copied project `AGENTS.md` plus `AI_START_HERE.md`. **Completion evidence:** final Executor report says `COMPUTER_USE_NOT_USED` and records the real programmatic method or blocked step. **Cleanup:** do not retain new task-owned Computer Use helpers/screenshots; clean owned disposable attempts by normal safe lifecycle rules, preserving protected files/runtime. **CEO Review enforcement:** any agent Computer Use invocation is `CHANGES_REQUESTED` without a newer explicit Owner exception.
-
-## Mandatory Reuse-First Rule
-
-- Existing working capability is the default solution; inspect and reuse it before designing new code.
-- Search current implementation, stable/release versions, module contracts, runtime config, migrations, tests, scripts and packaging before coding.
-- New versions inherit stable infrastructure unless requirements explicitly change it.
-- Do not reopen solved decisions without changed requirements or new invalidating evidence.
-- Do not create parallel production paths, duplicate adapters/configs/migrations/release pipelines for an existing responsibility.
-- If reuse is impossible, document inspected alternatives and the minimum necessary replacement in the Execution Log before implementing it.
-- Temporary discovery/verification paths must converge back into the single canonical production path before delivery.
-- Repeated failures become shared capability/contracts/tests, not repeated reasoning or repeated implementations.
-
-## Rule Operationalization
-
-A chat acknowledgement is not a rule change. Durable Owner workflow/governance instructions must be persisted and made executable.
-
-Every durable rule must define: trigger, owner, ordered procedure, source of truth, completion evidence, cleanup/retirement and Review enforcement.
-
-- CEO owns operationalizing the rule and mirroring reusable rules into the baseline templates.
-- Executor owns applying it and recording evidence.
-- Reviewer/CEO owns enforcement.
-- Owner must not be required to repeat or remind the team about an already-stated rule.
-
-A “must/should” rule without owner/procedure/evidence/cleanup is incomplete.
-
-## Handoff / Worktree Lifecycle
-
-- Outgoing Executor leaves one minimal temporary handoff only for a real switch and preserves the live workspace.
-- Incoming Executor owns takeover cleanup: inspect Git/worktrees, verify handoff facts, merge durable facts into canonical records, delete the handoff in the same work cycle.
-- Active Executor reuses before creating; default one active implementation worktree per active version/RFQ.
-- Preserve unique work before safe worktree removal; never force-delete unknown dirty state; prune afterward.
-- Mark obsolete blockers/next steps resolved or superseded.
-- Review rejects expired handoffs or unexplained duplicate active worktrees.
-
-## Delivery-First Principle
-
-The project exists to deliver the Owner's required outcome, not to maximize process.
-
-Priority: Owner intent → canonical requirement → reuse → necessary safety/data integrity → minimal process.
-
-- Do not invent extra gates, reports, approvals, abstractions or boundaries without a real requirement/safety/data-loss/recurring-failure reason.
-- Process must not replace implementation or become an artificial blocker.
-- When Owner corrects one issue, CEO also handles obvious adjacent ownership/lifecycle/reuse implications so Owner need not enumerate them.
-- Reuse checks stay lightweight; document only deliberate non-reuse of a plausible existing capability.
-- Governance should reduce future work, not add routine burden.
-
+- Agent Computer Use permission is **project-specific** and must follow its Owner-approved rules. Never infer a blanket GUI ban or permission from a generic template; tool access does not itself permit external purchase/write/mail/release.
+- Reuse existing stable code, config, migrations, browser, ledger, adapters, tests and packaging. No unnecessary duplicate production implementation.
+- Do not expose secrets or clear unknown external effects. Owner receives plain business summaries; technical evidence belongs in RFQ logs.
+- Final Executor response and `FINAL_REPORT.md` use [seven headings](docs/REPORTING.md). CEO gives independent PASS/CHANGES_REQUESTED.
+- Durable rules: CEO encodes trigger/owner/procedure/source/evidence/cleanup/Review, and copies general rules into template source. Keep live docs short, archive history by immutable commit link.

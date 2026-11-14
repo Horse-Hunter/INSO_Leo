@@ -1,90 +1,30 @@
-# Agent Entry
+# INSO LEO — Agent Rules (current)
 
-Start with `AI_START_HERE.md`.
+Read [AI_START_HERE.md](AI_START_HERE.md). **Current rules here outrank historic task notes.** Original pre-compaction rules: [pinned archive](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/AGENTS.md).
 
-- **Every new Executor window:** read `AI_START_HERE.md`. For any completed task, use the exact seven headings from `docs/REPORTING.md` in the **final chat reply** (and RFQ `FINAL_REPORT.md`); state true tests and next Owner action.
-- **Every build/test/deploy task:** reuse canonical paths and retire owned disposable frozen/staging/scan copies **in the same task**, including on failure. Keep required rollback, runtime, CDP, secrets, Git and unknown dirty work. See `docs/PROJECT_BASELINE.md` and `docs/WINDOWS_RELEASE.md`.
+## Ownership and source of truth
 
-- Owner + CEO discuss requirements; CEO creates/completes the RFQ Task Spec.
-- Owner may open any implementation-agent session (Codex / Claude / WorkBuddy or equivalent) and say only `执行 RFQ-XXX`.
-- `Review RFQ-XXX` belongs to CEO/Architect/Safety, not the implementation agent.
-- Task requirements live in `control-room/RFQ-XXX/TASK_SPEC.md`; RFQ status lives in `control-room/COORDINATION.md`.
-- Read `docs/MODULE_INDEX.md` and only the module docs/code relevant to the RFQ.
-- Executor owns ordinary implementation, debugging, tests, live verification, evidence, execution records and commit/push until acceptance.
-- CEO owns independent Review and final PASS / CHANGES_REQUESTED verdict.
-- **Anything shown directly to Owner must be plain business language.** It must answer: what happened, what it affects, and what happens next. Do not expose class names, selectors, method names, pagination details, stack traces, runtime internals, or similar implementation jargon unless Owner explicitly asks.
-- **Technical findings are for Executor-facing records only.** Put precise implementation terms and repair instructions in RFQ `REVIEW.md` technical findings, `EXECUTION_LOG.md`, Git/tests/evidence, not in the Owner-facing summary.
-- Owner is involved only for genuine business decisions, explicit Safety/Write Gate authorization, human security challenges, destructive Git, major architecture, or release/merge decisions.
-- Never persist secrets in Git, logs, fixtures, evidence or reports.
+- **Owner** sets business intent, grants real external-effect/production permissions, decides release; **CEO** owns requirements, architecture, independent Review; **one Executor** owns implementation, tests, deployment and live business evidence.
+- Requirements: `control-room/RFQ-XXX/TASK_SPEC.md`; current status: `control-room/COORDINATION.md`; handover: `control-room/CEO_HANDOVER.md`; technical record: existing `EXECUTION_LOG.md`; independent verdict: `REVIEW.md`.
+- A new Executor can receive just `执行 RFQ-XXX`; a CEO can receive `Review RFQ-XXX`. Neither asks Owner to repeat context already committed.
 
-## Agent Computer Use permission (Owner reversal — 2026-11-14)
+## Interrupt-anytime / replace-any-window (Owner rule 2026-11-14)
 
-**Trigger and scope:** Effective immediately for INSO LEO CEO/Executor development, diagnosis, verification, deployment and existing Windows production operations, the Owner explicitly **reverses the 2026-10-28 blanket prohibition** on agent Computer Use. Agent-operated desktop GUI screen reading, clicking and typing are **permitted**, not mandatory, when the connected environment/tool actually supports them. Existing CLI/PowerShell/Python, Git, purpose-built APIs/connectors and application-owned CDP/Playwright remain permitted and should be preferred where they give clearer, safer, auditable evidence. This is an INSO-specific Owner policy, not an authorization to perform arbitrary external business effects.
+**Trigger:** start, every task/role transfer, before/after real effects, after meaningful progress, and whenever interruption is possible. Applies equally to CEO and Executor. **Goal:** a replacement window needs only repo + live evidence, never old chat memory.
 
-**Owner / procedure:** The active single Executor (or CEO for independent read-only review) must: (1) verify current live process, Git/worktree, production configuration and durable business state before touching production; (2) choose an available supported tool, GUI or programmatic, without inventing unsupported capability; (3) preserve the sole production Chrome 9222/profile, SQLite/WAL/SHM, in-flight work, rollback, credentials, unknown-effect holds and single-Executor exclusivity; (4) use the original safe Stop/Exit/release process, never blind force-kill, double-run or duplicate order effects; (5) obtain the existing explicit Safety/Write Gate authorization for real Google writes, INSO purchases, quote-button effects, mail, release or whole-workbook permission changes; (6) stop/fail closed on an uncertain external result and keep the original audit evidence. GUI permission alone does not relax row identity, age, source status, SENT/UNKNOWN or scoped single-order admission.
+1. **Before work** read the active documents; inspect actual branch/HEAD, `git status --short`, `git diff`, `git worktree list --porcelain`; for production check running processes, config, SQLite, logs, Sheet/INSO/SMTP truth. Reuse the existing worktree; preserve uncommitted/unknown files. An expired model window does **not** imply its program stopped.
+2. **Checkpoint before irreversible actions:** in the **existing** RFQ `EXECUTION_LOG.md` record exact target/scope, pre-state, authorization, live process, planned action, and potential unknown outcome; persist the original business guard/hold before dispatch. Record CEO decisions in existing `REVIEW.md` or Task Spec; update `COORDINATION.md` only for real state changes. Commit/push bounded coherent checkpoints when safe; never replace native SQLite safety with Git documentation.
+3. **After each real response** reconcile the external system, record request/receipt/actual observed outcome (`DONE / NOT_DONE / UNKNOWN / WAITING_OWNER`), next single action and blockers. A request/timeout is not success. Preserve uncertain holds and stop further effects for that order.
+4. **On takeover** reconcile local dirty state + live processes + all external records against last checkpoint; do not assume the last chat text, Git HEAD, old EXE hash or dated report is live proof. Confirm prior Executor is no longer initiating actions and no in-flight operation survives **before** any second start or replay. One active Executor; CEO may review independently without executing business.
+5. **At interruption** no last-minute message is required for safety: pre-action durable guard + existing log checkpoint + on-site audit must suffice. Do not claim continuous monitoring after window ends. Temporary `HANDOFF*.md` only if necessary for one transfer; fold into existing record, then retire it.
 
-**Source of truth / completion evidence:** This `AGENTS.md`, `AI_START_HERE.md`, `docs/SAFETY.md`, `docs/CDP_SESSION_POLICY.md` and the current RFQ Task Spec. The Executor records actual tools/methods used, pre/post business evidence, any blocked operations and `COMPUTER_USE_USED` or `COMPUTER_USE_NOT_USED` truthfully in the existing `EXECUTION_LOG.md` / final report; no requirement to claim non-use. **Cleanup:** retire only task-owned disposable captures/helpers under normal lifecycle; never delete protected assets or unknown work. **CEO enforcement:** Computer Use by itself is no longer a Review failure; missing real-effect authorization, unsafe duplicate execution, secret exposure, false completion claims, or bypass of original runtime/business protections remain `CHANGES_REQUESTED`. Historical records of the former prohibition are retained as historical evidence, not current operating instructions.
+**Enforcement:** CEO fails Review for missing recoverable state, duplicate/unknown external effects, or stale instructions presented as current. **Cleanup:** retire only owned disposable files; never force-delete unknown dirty worktrees, protected runtime, Chrome/CDP, SQLite/WAL/SHM, secrets, rollback or evidence. This rule is also in reusable templates.
 
-## Mandatory Reuse-First Rule
+## Safe execution and reuse
 
-- Existing working capability is the default solution. Reuse it before designing anything new.
-- Before coding, search the current codebase, stable/release branches, module contracts, runtime configuration, migrations, tests, scripts, packaging and prior RFQ decisions for an existing solution.
-- A newer version inherits the previous stable version's working infrastructure unless the Task Spec explicitly changes it. Do not rebuild configuration, credentials, Sheets, Research, Workflow, browser/session, GUI shell, database migration, packaging or release plumbing merely because the version changed.
-- Do not reopen settled technical decisions or repeat discovery unless requirements changed or new evidence proves the old decision invalid.
-- Do not create parallel implementations, duplicate adapters, duplicate launch paths, duplicate configuration formats, duplicate migration paths or temporary replacements when an existing path can be extended.
-- New implementation is allowed only for a real capability gap. The Executor must record in `EXECUTION_LOG.md` what existing capability was inspected, why it could not be reused, and why the new code is the minimum necessary delta.
-- Temporary discovery/verification code must converge back into the single canonical production path before delivery. Long-lived parallel production paths are prohibited unless explicitly approved by CEO/Task Spec.
-- Repeated technical problems must become one shared capability/contract/regression test, not another implementation or another round of chat reasoning.
-- If two usable implementations exist for the same responsibility, stop and consolidate rather than adding a third.
-
-## Rule Operationalization — mandatory
-
-A chat acknowledgement is **not** a rule change.
-
-When Owner gives a durable workflow/governance instruction, CEO must operationalize it in the repository in the same work cycle. A rule is not complete until all are explicit: **trigger, owner, ordered procedure, source of truth, completion evidence, cleanup/retirement, Review enforcement**.
-
-- **CEO** owns converting Owner policy into executable repository rules and deciding project-only vs reusable. Reusable rules must also update `templates/lean-ai-baseline/` in the same change.
-- **Executor** owns applying the operational rule and recording evidence.
-- **Reviewer/CEO** owns enforcing it during Review.
-- **Owner must not be the reminder mechanism** for a rule already stated.
-
-A rule that only says “must/should” but does not define who acts, when, how, evidence and cleanup is incomplete.
-
-## Handoff and Worktree Lifecycle
-
-**Trigger:** a real Executor switch, or stale/duplicate worktrees are discovered.
-
-- **Outgoing Executor:** create/update at most one concise temporary `HANDOFF*.md` only if needed; stop unsafe/live activity if necessary; preserve the live worktree and uncommitted state. Do not create another worktree just for handoff.
-- **Incoming Executor:** owns takeover cleanup. First inspect branch, `git status`, diff and `git worktree list --porcelain`; read the handoff once; verify it against current Git/runtime; merge durable facts into `EXECUTION_LOG.md` or the correct canonical doc; delete the consumed handoff in the same work cycle.
-- **Active Executor:** owns worktree hygiene. Reuse an existing suitable worktree before creating one. Default: one active implementation worktree per active version/RFQ.
-- Before removing a worktree, preserve unique commits/files in traceable Git history. Never force-delete unknown dirty state. After safe removal run `git worktree prune`.
-- `TASK_SPEC.md` remains Owner/CEO-owned requirement meaning. `COORDINATION.md` contains current RFQ status. `EXECUTION_LOG.md` may preserve history, but obsolete blockers/next steps must be marked `RESOLVED` or `SUPERSEDED`.
-- Handoff files are temporary transport only. After successful takeover no expired handoff, obsolete worktree path, or stale “current blocker” instruction may remain.
-
-**Completion evidence:** Executor records surviving active worktree(s), consumed/deleted handoff, preserved commits and prune result in `EXECUTION_LOG.md`.
-
-**Enforcement:** Review fails if stale handoffs, unexplained duplicate active worktrees, or obsolete current-state instructions remain.
-
-## Delivery-First Principle
-
-The repository exists to deliver the Owner's required product, not to maximize process.
-
-Priority order:
-1. Owner's current business intent and canonical requirements;
-2. reuse of already-working capability;
-3. necessary safety, data-integrity and reversibility controls;
-4. process/documentation only when it directly supports 1–3.
-
-Rules:
-- Do not invent extra gates, reports, approvals, test ceremonies, abstractions or boundaries unless required by the Task Spec, real safety/data-loss risk, or a demonstrated recurring failure.
-- Process must never become a substitute for implementation. If a housekeeping issue can be fixed immediately, fix it without stopping delivery.
-- When Owner gives a correction, CEO must also check the nearby implications (ownership, lifecycle, stale state, reuse, handoff, release) so Owner does not have to point out each consequence separately.
-- Prefer one short executable rule over many procedural requirements. Any governance change should reduce future work, not add routine burden.
-- Reuse checks are lightweight: inspect only the relevant existing implementation/history. Extra documentation is required only when choosing not to reuse a plausible existing solution.
-- Owner-facing instructions should contain only the minimum actions needed to move delivery forward.
-
-
-
-## Owner completion audit before ending a turn (2026-10-30)
-
-Trigger: every Executor task completion or proposed stop. Owner: active Executor. Before ending, re-read the original objective and latest steering, check implementation AND the requested actual outcome, inspect outstanding operations/tests/deployment/business verification and task-owned cleanup, then check the remaining-work list a second time against actual evidence. Finish all authorized feasible work; do not silently stop at analysis, code, tests, packaging or status reports when the requested outcome remains pending. If blocked by safety, unavailable capability or missing external evidence, state the exact unfinished action and evidence, preserve the scene and continue unaffected work; never bypass business protections, invent success or imply hidden background progress. Record completed/pending/blocked items in the existing canonical task/evidence. Reviewer enforces this audit; Owner must not repeatedly ask the Executor to continue. This rule does not authorize unbounded work, unsafe side effects or concealing a genuine blocker.
+- **Computer Use permitted** by Owner 2026-11-14, including supported desktop GUI inspection/click/type. CLI, PowerShell/Python, API and existing app-owned CDP remain permitted; actual use is recorded truthfully. Tool permission **does not** grant purchase, Google Editor, quotation button, SMTP, release or other real effects. See [SAFETY](docs/SAFETY.md).
+- One protected browser: profile `D:\\Program_Leo\\INSO_CDP\\chrome-profile`, port `9222`; never reset/force-kill or clone it. See [CDP policy](docs/CDP_SESSION_POLICY.md).
+- Guard exact source identity, dates, status, purchase/quote/mail dedup, durable `SENT/UNKNOWN`; no blind retry or clearing holds. Before running a single order, prove other modules cannot simultaneously cause effects.
+- Reuse existing stable paths, adapters, config, migrations, packaging and tests; no duplicate production implementations. Implement only proven gaps; document justified non-reuse in `EXECUTION_LOG.md`.
+- No secrets in Git, report, chat or fixtures. Owner sees plain business language. Completed Executor reports use exact [seven headings](docs/REPORTING.md); CEO Review uses the short CEO format.
+- Durable policy changes: CEO supplies trigger/owner/procedure/source/evidence/cleanup/enforcement in canonical docs; **project-generic** rules also update `templates/lean-ai-baseline/`. Review enforces them, not Owner reminders.

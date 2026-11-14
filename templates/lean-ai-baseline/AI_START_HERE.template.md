@@ -1,66 +1,9 @@
-# AI START HERE
+# AI START HERE — reusable template
 
-This project is RFQ-driven.
+Every new CEO/Executor window starts with `AGENTS.md`, `control-room/COORDINATION.md`, active RFQ `TASK_SPEC.md`, `EXECUTION_LOG.md`, latest `REVIEW.md`, relevant module index and **actual** Git/worktree state. Do not require predecessor chat memory.
 
-**New window:** read `AGENTS.md`. Retire task-owned disposable artifacts per `docs/PROJECT_BASELINE.md`; apply `docs/REPORTING.md` seven headings in final chat and RFQ `FINAL_REPORT.md`.
-
-## Owner ban: Codex Computer Use
-
-From task start, the Executor must not invoke agent Computer Use or visual desktop screenshot/click/type UI automation. Prefer approved CLI/PowerShell/Python, operating-system APIs, Git, tests and purpose-built connectors; existing application runtime browser automation remains subject to its own normal safety contract and is not this banned agent capability. If no safe programmatic path exists, mark the specific action `BLOCKED / NOT_VERIFIED` and leave it undone, without creating a GUI-control workaround. The final report confirms `COMPUTER_USE_NOT_USED`. This ban persists through approved releases unless Owner explicitly reverses it; see `AGENTS.md` for owner, full workflow, evidence, cleanup and CEO enforcement.
-
-## 执行 RFQ-XXX
-
-Owner may open any implementation agent (Codex / Claude / WorkBuddy or equivalent) and say only `执行 RFQ-XXX`.
-
-Executor reads Control Room, Module Index, relevant code/docs and Git state.
-
-Before design or coding, Executor performs a mandatory Reuse Audit across:
-- current production implementation;
-- stable/release versions;
-- module contracts and adapters;
-- runtime configuration and migrations;
-- tests/evidence;
-- build/packaging/release scripts;
-- prior RFQ decisions.
-
-Existing capability must be reused when it satisfies the requirement. Implement only the minimum incremental gap.
-
-Executor retires owned disposable build/test/deploy copies during the task; records needed retained assets; writes reuse decisions, any justified non-reuse, execution log/tests/evidence/commit references and the exact seven-heading final report **and chat reply**; then sets `REVIEW_REQUIRED` or `DONE`.
-
-Ordinary technical problems stay inside the implementation session. Do not solve slow progress by creating a second architecture or duplicate implementation.
-
-## Review RFQ-XXX
-
-Owner returns to the CEO/Architect/Safety conversation and says only `Review RFQ-XXX`.
-
-CEO independently reads Task Spec, Execution Log, Final Report, Git diff/commits, current code, tests and runtime evidence, and verifies that unnecessary reimplementation or parallel production paths were not introduced.
-
-CEO writes `REVIEW.md`:
-- PASS → `REVIEWED_DONE`
-- FAIL → `CHANGES_REQUESTED`
-
-## Durable rules and takeover
-
-Durable Owner governance instructions must be operationalized, not merely acknowledged. Every rule must define trigger, owner, procedure, source of truth, evidence, cleanup and enforcement.
-
-When taking over:
-1. Reuse the existing active worktree; do not create another by default.
-2. Inspect Git status/diff and `git worktree list --porcelain`.
-3. Read and verify the single temporary handoff if present.
-4. Move durable facts into canonical records.
-5. Delete the consumed handoff in the same work cycle.
-6. Preserve unique work before safely removing stale worktrees; never force-delete unknown dirty state; prune afterward.
-7. Mark obsolete blockers/next steps resolved or superseded.
-
-Incoming Executor owns cleanup; outgoing Executor only prepares the minimal handoff and preserves the workspace.
-
-## Delivery first
-
-Take the shortest safe path from Owner intent and canonical requirements to a working result.
-
-Reuse existing working capability. Do not create extra process around reuse unless a plausible reusable path is being rejected.
-
-Do not add gates/reports/approval steps unless required by the task, real safety/data-loss risk, or a proven recurring failure.
-
-When Owner corrects one workflow problem, address the obvious adjacent ownership/lifecycle/stale-state implications in the same change.
-
+- **Executor `执行 RFQ-XXX`**: verify active process/credentials/ledgers/external effects, reuse current worktree and stable components, checkpoint intended irreversible effects **before** dispatch, reconcile outcomes and UNKNOWN **after**, persist safe progress and final seven-heading report. Never overlap another live worker.
+- **CEO `Review RFQ-XXX`**: independently read Task Spec, diff, evidence and real outcome; update Review and authoritative status, not only chat. CEO does not start a second production executor.
+- **Interrupted at any moment?** First check live process, uncommitted files, last stored checkpoint and external side effects; absence of agent/chat is not proof the application has stopped. No automatic replay, no clearing unknown effects.
+- **Tools**: honor the **project Owner's actual Computer Use policy** and external write permissions. A GUI permission and a business-effect permission are separate.
+- Clean owned disposable artifacts; preserve protected runtime/data/secrets/rollback/unknown dirty work. Do not create repeated permanent handoff files.
