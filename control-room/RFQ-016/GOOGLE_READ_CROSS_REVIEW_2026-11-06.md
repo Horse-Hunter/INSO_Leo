@@ -1,56 +1,10 @@
-# Google表格读取全链路交叉复审 — 2026-11-06
+# RFQ-016 — GOOGLE READ CROSS REVIEW 2026 11 06 — 历史参考索引
 
-范围：对 cd4d53141c31edbcdd62b572dcfb1b2fbb7f4789 及最小修复增量进行独立交叉复查。原 Executor 保留实现和发布责任；两名内部复审者只读源码并使用合成离线依赖，未开新生产客户端、未接生产CDP、未读凭据、未操作浏览器。COMPUTER_USE_NOT_USED。此报告不是CEO最终验收，也不是生产恢复证明。
+**2026-11-14 文档瘦身：** 完整原文保存在下方固定 Git 版本中，现行分支只保留定位信息。没有删除 Git 历史、业务源码或持久化证据。
 
-## 已确认缺陷及最小修复
+早期 Google 读取、来源匹配、报价与邮件关系交叉复核。结论是历史证据，不是当前生产状态。
 
-|风险|依据与触发|修复及验证|
-|---|---|---|
-|P1|research/cdp_pages.mark_owned_page、new_background_page 与 launcher/google_quote_update 的失败页标记/恢复仍有无协议截止时间的元数据操作；单次卡住可阻塞轮询/退出。|复用原Owner线程上的 bounded_browser_call，保留目标身份证明、未知创建和清理保护。原SDK/真实线程20ms测试旧版失败，新版通过。历史现场究竟卡在哪个调用仍NOT_VERIFIED。|
-|P1|launcher/google_web._execute_live 的普通读取无条件等报价自定义菜单；菜单未加载时，标准下载可用也读取失败。|只读使用原生名称框准备、唯一工作表选择、导出前后文档/gid/活动标题核对；写操作保留菜单等待。独立复现原版5次失败/0下载；修复版1次下载/0菜单等待。工作表漂移拒绝数据并本地重试，不能升级成Google整站故障。|
-|P1|workflow/automatic_admission.admit 只持久化W列日期，遗漏SHAHAB A日期和RFQ_BRIEF日期；重启挂起、历史临时失败无法正常恢复。|保存所有明确且已绑定的原始日期；历史缺失日期仅允许从当前匹配原表证明，在原事务内补齐。保留原登记时间、尝试次数、日期上限、采购和报价UNKNOWN。SHAHAB重启与历史恢复均先红后绿。|
-|P1|workflow/v12_flow.settle_research 在调研已持久完成后再读表失败；后续轮询跳过 COMPLETED/RESEARCHING，可能永久漏处理。|复用原持久调研及后续路由，仅保留已证明无外部提交的完成态，重启后仍须当前身份/状态/日期审核；连续再次读失败也能恢复。不重跑调研。复审补出重启和ROUTING二次失败两处边界，2×2用例覆盖。|
-|P1|launcher/backend._run_independent_job_scoped 把所有嵌套V12Fault排除为不可恢复，包括原共享分类器已认可的安全导航拒绝；三小时后仍永久暂停。报价外层读失败包装同类。|复用同一安全读失败分类器识别明确的读取包装；认证、证书、数据库、身份和未知写入仍拒绝降级。实际Backend离线时间轴先复现错误永久暂停，再验证正常周期继续。|
+- **完整原文：** [打开固定版本](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/control-room/RFQ-016/GOOGLE_READ_CROSS_REVIEW_2026-11-06.md)
+- **当前事实入口：** [CEO 交接](https://github.com/Horse-Hunter/INSO_Leo/blob/workbuddy/v16-rfq016-stabilization/control-room/CEO_HANDOVER.md) · [RFQ-016 执行检查点](https://github.com/Horse-Hunter/INSO_Leo/blob/workbuddy/v16-rfq016-stabilization/control-room/RFQ-016/EXECUTION_LOG.md) · [历史总索引](https://github.com/Horse-Hunter/INSO_Leo/blob/workbuddy/v16-rfq016-stabilization/docs/HISTORY.md)
 
-## 复审结论与限制
-
-读取复审者独立复跑缺菜单、活动标题漂移、原SDK截止时间共8项通过，并复核失败页不会获得不安全重用许可、清理仅针对已知创建目标。流程复审者独立复现日期丢失、完成调研后漏路由、三小时永久暂停；修复后再次检查并指出缺失历史业务状态的兼容问题，原Executor已增加已有状态短路，不改变历史中断处理。最终本范围未发现未关闭P0/P1；不代表所有外部服务未来永不故障。
-
-缓存按工作簿/工作表绑定、读取完成后计时、强制新鲜读取清旧快照、失败清缓存、唯一quote_date表头和逐行型号/品牌/数量绑定的原保护保留。误报样本仍使用原队列/假SMTP；不以延长间隔掩盖故障。脚本结算告警名单的静态疑点未证明真实逃逸路径，标NOT_VERIFIED，未据此扩大业务改动。
-
-原20项旧读取故障用例的注入点从已移除的报价菜单依赖迁移到真实原生准备步骤；认证、证书、未知错误、第二次正常轮询、原页面保护和零SMTP断言保持。3项详细报告断言改为已核实的原表日期，禁止继续显示成近似登记日期。
-
-专项148项通过；最终完整离线回归3623项通过、1项原系统符号链接权限跳过，252.28秒；原生Windows凭据隔离测试均通过，源码/测试指纹在全量前后相同。正式程序已由Owner正常退出，前一候选包曾只替换文件、尚未启动；必须由最新测试通过构建替换后再验证，不能把旧候选或启动成功冒充业务恢复。最终SHA、全量结果和发布回执以原任务TEST_REPORT.json和V16_RELEASE_REPORT.md最新记录为准。
-
-
-## 生产观察后重新打开的问题：SDK缓存地址滞后
-
-e4db已安装运行后，询价/报价仍发生导出阶段的SURFACE_UNCONFIRMED，TP正常完成；没有生产全部恢复证据。Root仅使用原日志、无局部变量只读线程栈、已授权9222元数据查询，返回固定工作表/就绪/布尔状态，不导航、输入、创建或关闭标签页，不输出或留存客户内容。
-读取复审者又独立复现：原生JS已是SHAHAB/gid17，SDK Page.url仍暂时为gid0；_select用旧地址绑定后，正确页面随缓存更新反被拒绝，5次新页面重复失败。新增原夹具用例先红后绿。最小补修：选择后读取原生活动标题/hash，沿用原hash语法和文档校验，有界等SDK同步到同一已证实工作表再绑定。复审要求显式domcontentloaded，避免默认完整load引入无关等待。126专项通过；最终全量3624PASS/1原系统权限SKIP，255.76s，原生Windows隔离测试通过；Ruff/diffcheck和测试前后源码指纹一致。该源码缝隙已证明，是否解释现场每一次失败仍NOT_VERIFIED。
-同时将超31字符而被原脱敏过滤器丢弃的固定步骤缩短，并区分导出前/后guard和title失败；不扩大日志可接受内容、不记录原表数据。一次性新页面onOpen重置导致重复失败也可离线构造，但未证明实际发生；本轮先采用更小且已复现的地址同步补修，不引入泛化同页重试或改变写保护。
-
-
-## 最后覆盖前核对：安全退回队列也须保留原重试预算
-
-Owner再次正常退出前，目标新单经下一次真实读取已经绑定原日期并从历史FAILED恢复；原Worker准备阶段安全释放为QUEUED，保留先前attempt_count=1，没有采购或SAVE事件。原initialize_run_state只接受QUEUED且attempt0，会在本次重启时再次错误挂起。使用原协调器/Worker真实释放序列离线复现1FAIL，然后最小增加：仅RETRYABLE_FAILURE、精确原释放原因、剩余原尝试预算的QUEUED可进入已有安全分支；原业务状态、原表日期、登记年龄、无采购/SAVE及报价hold条件全部保留。不重设尝试次数、不改生产记录。正例及非标准释放/耗尽预算/UNKNOWN采购反例25PASS，较大专项154PASS；流程复审者再次只读确认无新高风险。最终完整回归3628PASS/1原系统权限SKIP，253.97s；源码/测试指纹在最终测试前后相同，Ruff/diffcheck通过。
-
-Owner正常托盘退出已验证run69e11b61ad3d48b28998590c12e8b503 completed=true/owner_exit/application_exit_code0，无正式进程；不再等待Owner退出。完成最终测试与重新构建后直接沿用原备份/程序替换/启动/真实跟单授权。
-
-
-## 2026-11-06 生产写入与重要通知整包复审（发布前）
-实际前版run378正常退出，非进程崩溃：询价已完成、目标新单保存和源状态经原对账确认；报价停在选择输入单元格未完成确认，TP完成。发现代码只立即检查名称框值及焦点，未有界等真实切换；修复为每格有界等待后再次核对文档、身份及所有权再输入。部分输入先标记dirty，超时保留原未知保护，不重复键入或报价提交。
-完整追查发现：Sheets适配器抹掉typed unavailable及因果；Updater未识别原生页面资源故障；Locator/Keyboard/部分原生元数据未受客户端期限约束；失败清理可能关闭已移动文档页。整包保留异常类型/因果，原Owner线程有界调用，移动页/丢失所有权页保留。新增实际Web→GoogleQuotationInput→Updater合成链覆盖认证、错误文档及部分键入，0脚本点击。真实SDK同步包装/异步Owner-loop验证20ms截止。
-独立复审又发现public wait_until与原impl waitUntil不兼容，fake可全绿而真实接口会TypeError；已在唯一native调用边界转换，fake端口保持public约定。真实NativePage+syncPage+strictframe回归2项及deadline共7项通过；复审者独立再次7PASS0.78s，确认阻断关闭，其余参数逐项核对无新增差异。这一发现纳入后续集成门，不能把仅有宽松fake的全绿当真实SDK兼容证明。
-原重要邮件金额缺失已证实为调研开始前poll时间被用作新命令created_at；调研超过120秒，入队时立即降级，未请求详细报告。改用真正入队时钟，冻结有限正数金额、数量、来源、真实记录时间及绑定身份；降级仅保留明确标记的历史分流依据，不伪称当前六源数据可用。未知金额继续不编造。Owner明确授权本单一次金额补充；复用原队列与SMTP，原SENT/UNKNOWN不可改，新确定性更正ID及发送前当前身份/状态/年龄/收件人/重要规则校验。13项金额专项通过；完成/超期/改量/依据改变/未来时间/未授权/原通知未终结/缺原始依据均拒绝，重启及UNKNOWN不重发、不重复采购。
-业务实际停止不能继续依附最后订单再被订单异常过滤器丢弃。独立真实Backend+原队列/QQSMTP假服务器重现报价基础故障有当前订单时stop=true且0邮件；修复以真实已停止状态生成原runtime_stop通知，非已知资源原因准确写内部原因待核对，不声称Google整体不可用或订单失败。Owner停止、关闭、恢复、原因或run改变最终审核0邮件；重复/重启同事件1次，人工登录路径优先保留。复审者独立确认以上正反例，未发现剩余具体阻断。
-两名内部复审仅只读源码/合成依赖，未操作生产、未改源码；非CEO最终PASS。当前专项317PASS16.76s；后续新增真实SDK参数及2项金额反例另通过。首次全量运行期间发现并修正SDK阻断，必须标PRELIMINARY，不可用作最终冻结证据；最终完整回归和发布/自然业务/金额补发结果待写原任务最新记录。COMPUTER_USE_NOT_USED。
-
-最终整包全量3667PASS/1原系统符号链接权限SKIP，255.12s，真实Windows隔离测试通过；测试前后源码/测试逐文件指纹一致。静态检查通过。首次全量3项旧断言迁移为真实停止才Owner通知1次、临时等待0且不归咎历史订单；其余行为保留。尚待原正式流程打包部署、自然业务及授权金额补发，不把源码通过当生产验收。
-
-
-## Owner2026-11-09 三单漏处理事件：跨站读取与无返回保护复审
-新现场表明此前Google读取范围复审不等于完整跨站业务稳定：原报价调用Nov8挂起后，唯一浏览器Actor无法继续询价/TP，GUI/独立IMAP线程仍在。Google专属页即时响应且标准只读导出证实三笔当前未发；精确待返回的SDK命令仍NOT_VERIFIED，不声称Google故障。
-两名内部只读复审者独立真实SDK+greenlet原Ownerloop复现：原helper只列Page等类型，Frame.evaluate和Response.json走fallback而忽略20ms预算；实际报价显示捕获、响应正文、身份检查、eval_on_selector(_all)及ownedclose未完整接入。原单Actor调度真实线程复现一个quotation等待阻塞后续due模块，既不抛错也不报警；原SMTP收尾先等poll_drained，进一步无声。
-修复复用唯一协议helper到Core公共基础能力，原Research入口兼容，无反向模块依赖、新线程/浏览器/调度/发信系统。显式接入读调用与45秒整体预算；原身份退出独立10秒预留；读取预算已过期不禁掉安全收口。Native读超时不invalidate或伪报认证，真正身份冲突仍保护。未知close失败不能标lease已released。原重复查询四次/120秒等待保持；已安全关闭的只读耗尽按原模块周期继续恢复，经过三小时也不永久漏单。
-被动进展只借用原refresh循环、原SMTPowner：同token/generation持续过期两阶段复核，排除Owner退出、恢复、OS休眠及正常嵌套/120秒等待；异常只停止新admission，不假装取消在途动作或放租约。准确历史事实通知在发送前重核run/stop/generation/Owner状态，SENT/UNKNOWN不重复。SMTP等待poller收尾期间仍处理原已证实停止通知；不造第二个邮件线程。旧Actor未结束时Start门仍拒绝，新run正常Start后重置被动tracker。真实Playwright.stop保留原客户端生命周期，不机械包装私有空实现，不宣称已为其提供通用取消。
-新增实际Web原Reader→Combined→原queue/fakepurchase闭环：旧报价四次查询失败安全收口、3x120等待、下一900秒出现三SHAHAB新单各入队采购一次、再900秒不重复、TP继续。另实际Backend.start+原SMTP线程验证原Actor或收尾仍存活时发一次真实停止通知，最后才合成release；未伪造drain。原SDK红2FAIL后绿，独立最新416PASS9.96s；最终全量3687PASS/1原系统权限SKIP421.16s，前后字节指纹一致，Ruff/diffPASS。当前只代表源码及离线门，生产仍待原受控发布和三条真实订单观察。COMPUTER_USE_NOT_USED。
+任何新 CEO/Executor 会话中断后，均须从当前仓库检查点**加上真实进程、SQLite、Google、INSO 和邮件记录**恢复，不能把本文件的历史状态视作实时结果。
