@@ -1,0 +1,171 @@
+{
+  "rfq": "RFQ-020",
+  "title": "Isolated candidate build and release self-check",
+  "generated_at": "2026-11-14T23:00:00+08:00",
+  "status": "PASS_BUILD_AND_SELF_CHECK",
+  "flags": {
+    "installed": false,
+    "deployed": false,
+    "merged": false,
+    "normal_gui_started": false,
+    "business_start": false,
+    "production_modified": false,
+    "chrome_9222_touched": false,
+    "source_or_test_modified": false,
+    "full_suite_rerun": false
+  },
+  "source": {
+    "branch": "workbuddy/v16-rfq016-stabilization",
+    "worktree": "D:\\Program_Leo\\INSO_Leo\\.worktrees\\v16-rfq016-stabilization",
+    "fixed_source_sha": "25894eface6ea622153d1573c19d0ca6b9ad72aa",
+    "worktree_head": "505d9590a2726c0ec27f2c090d28616e528a6470",
+    "fixed_source_is_ancestor_of_head": true,
+    "diff_fixed_to_head_src_tests_scripts_packaging_lock": [],
+    "diff_fixed_to_head_files": [
+      "control-room/CEO_HANDOVER.md",
+      "control-room/COORDINATION.md",
+      "control-room/RFQ-018/RELEASE_READINESS.md",
+      "control-room/RFQ-018/REVIEW.md",
+      "control-room/RFQ-019/EXECUTION_LOG.md",
+      "control-room/RFQ-019/FINAL_REPORT.md",
+      "control-room/RFQ-019/RELEASE_PREP_REPORT.md",
+      "control-room/RFQ-019/RELEASE_READINESS.md",
+      "control-room/RFQ-019/RISK_REGISTER.md",
+      "control-room/RFQ-019/TASK_SPEC.md",
+      "docs/evidence/rfq019/rfq019-release-prep-2026-11-14.json"
+    ],
+    "worktree_clean_before_work": true
+  },
+  "build_environment": {
+    "venv_path": "D:\\Program_Leo\\INSO_Leo\\.worktrees\\v16-rfq016-stabilization\\.venv-release",
+    "isolated_from_production": true,
+    "gitignored": true,
+    "base_interpreter": "C:\\Users\\Leo\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+    "python_version": "3.12.10",
+    "tcl_tk": "8.6.15",
+    "pyinstaller": "6.16.0",
+    "pyinstaller_hooks_contrib": "2026.7",
+    "packages_installed": 42,
+    "pip_check": "No broken requirements found.",
+    "lock_file_modified": false
+  },
+  "build_inputs_sha256": {
+    "scripts/build_windows_release.ps1": "ab35565ab9d42fd831eb6c59461f745400d14872145a3e60cec7d0d7b24cbdf1",
+    "requirements-windows-release.lock": "3dc5d7a5dae4387f156b4589259e899e887c607349b111a599911735dc2494ec",
+    "packaging/INSO_V1.1.spec": "d7574c2011917ff2c81007dc2271fd6d62d769d783d21d3098355a2d56d6e80c",
+    "packaging/assets/inso-v1.1.ico": "8f0e07dc4a78f982c58015430029a8c901b2705a4869ebbcc6d8a0f24e4e2028",
+    "scripts/scan_release_artifact.py": "f251734088b2506aaec21088a8c31d6c62f201fb277b232ed6e06e60fb883e29",
+    "scripts/windows_release_entry.py": "abd9f0186fd554fbb65a66df8a16caf044ac5f2e4d85abd958f3e1f4368abb5f"
+  },
+  "build": {
+    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\build_windows_release.ps1 -BuildOnly -Version 1.6 -PythonExecutable .venv-release\\Scripts\\python.exe",
+    "exit_code": 0,
+    "duration_seconds": 93,
+    "stage_path": "build/windows-release-stage-1.6",
+    "stage_existed_before_build": false,
+    "unknown_staging_content": false,
+    "forced_cleanup_performed": false,
+    "production_dist_touched": false,
+    "script_internal_self_check": "exit 0",
+    "script_internal_scan": "RELEASE_SCAN_OK"
+  },
+  "candidate": {
+    "exe_path": "build/windows-release-stage-1.6/dist/INSO_V1.6/INSO_V1.6.exe",
+    "exe_size_bytes": 8436056,
+    "exe_sha256": "b358f68715f9e1dadeae19d5ad5b0f517664756105ebf1fcea1b843dc482d29c",
+    "file_count": 2872,
+    "tree_size_mb": 261,
+    "runtime_dir_present": false,
+    "manifest_path": "docs/evidence/rfq020/INSO_V1.6-artifact-manifest.sha256",
+    "manifest_lines": 2872,
+    "manifest_sha256": "c8806aea1b4d9f3df1d39261bc4aa81a213ab3ea9c335b4a40970f12c57d5b65",
+    "internal_vs_running_program": {
+      "prod_only_files": 0,
+      "candidate_only_files": ["_internal/tzdata-2026.4.dist-info/REQUESTED"]
+    }
+  },
+  "self_checks": {
+    "self_check": {"exit_code": 0, "writes_files": false, "network": false},
+    "idle_self_check": {
+      "exit_code": 0,
+      "duration_seconds": 3,
+      "timeout_bound_seconds": 120,
+      "process_left_behind": false,
+      "report": {
+        "title": "INSO LEO V1.6 — Procurement Automation Control Center",
+        "state": "已停止",
+        "business_thread_started": false,
+        "order_thread_started": false,
+        "order_action": "自动订单录单",
+        "gui_rendered": true,
+        "start_action": "开始运行"
+      },
+      "wrote_only": "build/windows-release-stage-1.6/dist/INSO_V1.6/runtime/logs/v13-idle-self-check.json",
+      "byproduct_removed_inside_staging": true
+    },
+    "artifact_scan": {"result": "RELEASE_SCAN_OK", "exit_code": 0, "rerun_independently": true},
+    "api_self_check": "NOT_RUN_OUT_OF_SCOPE",
+    "cdp_self_check": "NOT_RUN_PROTECTED_CDP"
+  },
+  "production_invariance": {
+    "exe_sha256_before": "e9e3da33417414abac53f8a88a67d9f053bcdaeab9730eae9ad8bd7870dffad0",
+    "exe_sha256_after": "e9e3da33417414abac53f8a88a67d9f053bcdaeab9730eae9ad8bd7870dffad0",
+    "processes_before": [38948, 34304],
+    "processes_after": [38948, 34304],
+    "sqlite_size_bytes": 1191936,
+    "sqlite_mtime_epoch_before": 1794667137,
+    "sqlite_mtime_epoch_after": 1794667137,
+    "wal_shm_present": false,
+    "chrome_9222_pages_before": 15,
+    "chrome_9222_pages_after": 15,
+    "invariance_scope": "self-check window 22:38-22:45 only",
+    "later_observation": {
+      "at": "2026-11-14T23:00:00+08:00",
+      "sqlite_mtime_epoch": 1794667251,
+      "chrome_9222_pages": 14,
+      "cause": "live production program still running its own business session; not caused by this RFQ (no CDP attach, no page open/close, no DB write)"
+    }
+  },
+  "rollback_assets_readonly": {
+    "snapshot_created": false,
+    "running_program_internal_files": 2870,
+    "running_program_internal_size_mb": 253,
+    "config_sha256": {
+      "dist/INSO_V1.4/runtime/production.json": "65658fbaec79074cc93df9c50f1c73c3fa1aac44936c9e38e4899b64ed0f733d",
+      "dist/INSO_V1.4/runtime/production.json.bak-20261114T1030": "e6fd95e8e51cfab3a1403084aa20110902520a34008c4a9007d5f2377b006d5d",
+      "dist/INSO_V1.4/runtime/research.json": "bdd15f429045596568f6f7a5467f31768375fc26b928d7989709b65232cdd498"
+    },
+    "live_sqlite_file_sha256_identity_only": "ab7574f646988d44203fb152eb03c26cfc02ab8fc7a372d85a82ef7c002d59ce",
+    "runtime_junction_target": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.4\\runtime",
+    "internal_prev_dirs": 16,
+    "internal_prev_dirs_note": "RFQ-019 reported 17; difference is pre-existing and was not modified by this RFQ",
+    "backups": [
+      {"name": "INSO_V1.6-header-block-20261114T021508Z", "files": 2875, "size_mb": 262, "exe_sha256": "00ac7d68d88e1a27eb52e3b7457b4192b699211df1b1f5e3efe0be406eef30bd"},
+      {"name": "INSO_V1.6-customer-20261114T113817Z", "files": 1, "exe_sha256": "b357889d48e5abe6ec6504eddd610442c877e438018f156c4c932477070814f6"},
+      {"name": "INSO_V1.6-before-diagnostics-20261112T212500", "files": 5759, "size_mb": 524},
+      {"name": "INSO_V1.6-shahab-liveness-20261109T061911Z", "files": 2993, "size_mb": 269}
+    ],
+    "complete_rollback_snapshot_of_running_version": false
+  },
+  "reused_test_evidence": {
+    "rfq": "RFQ-018",
+    "collected": 4188,
+    "passed": 4187,
+    "skipped": 1,
+    "failed": 0,
+    "rerun_in_this_rfq": false
+  },
+  "not_verified": [
+    "candidate installed or launched as production program",
+    "normal GUI startup side effects (B7: DB migration, IMAP, SMTP outbox)",
+    "Stop/Exit timing and GUI refresh behaviour of the candidate",
+    "bit-reproducibility of the PyInstaller build",
+    "source lineage of the running EXE E9E3DA33",
+    "business UNKNOWN state (221, SHAHAB/115, 3 V13 holds) unchanged but unresolved",
+    "api-self-check and cdp-self-check not run by scope"
+  ],
+  "documentation_gaps_observed": [
+    "docs/BRANCH_POLICY.md does not exist on this branch",
+    "control-room/RFQ-019/REVIEW.md does not exist"
+  ]
+}

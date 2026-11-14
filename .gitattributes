@@ -1,0 +1,3 @@
+# Hash manifests must remain byte-identical: Git EOL normalization would change
+# the manifest's own digest and break the recorded evidence traceability.
+docs/evidence/**/*.sha256 -text
