@@ -1,0 +1,31 @@
+{
+  "rfq": "RFQ-016",
+  "phase": 3,
+  "evidence_kind": "candidate_build_after_cdp_protocol_fix",
+  "date": "2026-11-14",
+  "commit": "a600216126a52e3cee96283c1e1fc00d976fd6ec",
+  "build": {
+    "spec": "packaging/INSO_V1.1.spec",
+    "command": "INSO_BUILD_VERSION=1.6 python -m PyInstaller --noconfirm --clean --distpath build/rfq016-candidate/r4 --workpath build/rfq016-candidate/w4 packaging/INSO_V1.1.spec",
+    "pyinstaller": "6.16.0",
+    "python": "3.12.10",
+    "exe_sha256": "f171e81709addea7288161fc238925e31037379a132ff4628da6718410abdff3",
+    "repo_path": "build/rfq016-candidate/r4/INSO_V1.6/",
+    "install_copy": "D:\\Program_Leo\\INSO_candidate_V16_RFQ016"
+  },
+  "gates": {
+    "self_check": 0,
+    "api_self_check": {"exit": 0, "outcome": "TRANSPORT_READY", "transport_built": true},
+    "idle_self_check": {"exit": 0, "state": "\u5df2\u505c\u6b62", "business_thread_started": false,
+                        "order_thread_started": false, "gui_rendered": true}
+  },
+  "production": {
+    "replaced": false,
+    "reason": "the production '2026' worksheet no longer carries the required header on row 1, so any build stops with SHEETS_SCHEMA_UNAVAILABLE on the first read",
+    "program_untouched": {"exe_sha256": "00ac7d68d88e1a27eb52e3b7457b4192b699211df1b1f5e3efe0be406eef30bd",
+                          "bytes": 8389717, "mtime": "2026-11-12 21:19:14"},
+    "config_untouched": {"bytes": 1048, "mtime": "2026-10-27 09:54:11", "google_api_key_present": false},
+    "database_untouched": {"path": "dist/INSO_V1.2/runtime/production/workflow.sqlite3",
+                           "bytes": 1138688, "mtime": "2026-11-13 21:52:48"}
+  }
+}

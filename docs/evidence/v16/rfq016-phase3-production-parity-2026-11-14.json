@@ -1,0 +1,66 @@
+{
+  "rfq": "RFQ-016",
+  "phase": 3,
+  "evidence_kind": "production_read_only_parity",
+  "executor": "WorkBuddy DeepSeek V4.1 Flash",
+  "date": "2026-11-14",
+  "principal": {
+    "service_account": "rfq016-sheets-test@inso-509314.iam.gserviceaccount.com",
+    "production_role": "viewer (granted through the normal share dialog for the production workbook only)",
+    "proof": {
+      "read": "spreadsheets.get / values.get succeed",
+      "write": "an editor-only no-op call answers HttpError 403"
+    }
+  },
+  "workbook": {
+    "id": "12bRXbKGBVIG09LWcLrxdg68J1kmem4UXjJzpfwboO9k",
+    "title": "INSO_QUOTE",
+    "worksheets": [
+      {"title": "2026", "rows": 221, "state": "HEADER_MOVED"},
+      {"title": "SHAHAB", "rows": 140, "state": "COMPATIBLE"},
+      {"title": "\u62a5\u4ef7\u8f93\u5165", "gid": "489913321", "state": "COMPATIBLE"},
+      {"title": "RFQ_BRIEF", "rows": 100, "state": "COMPATIBLE"}
+    ]
+  },
+  "findings": {
+    "2026": {
+      "expected_header": "row 1 = STATUS / (B) / CLASS / (D) / MPN / MFR / Qty",
+      "actual_row_1": ["Model", "", "Brand", "", "MPN", "MFR", "Qty", "...", "quote_date (W1)"],
+      "actual_rows_2_4": "three model rows with quantities (no status)",
+      "actual_row_5": ["STATUS", "", "CLASS", "", "MPN", "MFR", "Qty"],
+      "rows_with_literal_STATUS_in_A": 73,
+      "quote_date_column": "W; header at row 1, dates at row 101..221 only (69 cells)",
+      "consequence": "both transports raise SHEETS_SCHEMA_UNAVAILABLE (V12Fault, GLOBAL_STOP) before any business step",
+      "matches_production_incident": "2026-11-13 21:50:59 and 21:52:45 both report SHEETS_SCHEMA_UNAVAILABLE from google-download-read"
+    },
+    "SHAHAB": {
+      "header_row": 2,
+      "labels": ["DATE", "STATUS", "Item", "Part Number", "Brand", "QTY", "UM"],
+      "read_result": "140 rows via the real GoogleSheetsRowReader; model all text, quantity numeric, blanks None",
+      "statuses_seen": ["\u5df2\u62a5\u4ef7\u7ed9\u5ba2\u6237", "\u610f\u5411\u8ba2\u5355", "\u6210\u4ea4", null],
+      "verdict": "COMPATIBLE"
+    },
+    "RFQ_BRIEF": {
+      "header": "rfq_line_id / sheet / sheet_row / rfq_date / mpn / mfr / ...",
+      "read_result": "100 rows, every row 17 cells, every cell a string",
+      "verdict": "COMPATIBLE"
+    },
+    "quotation_input": {
+      "gid_matches_config": true,
+      "row": "A1:N1",
+      "read_result": "14 cells, all strings, 10 non-empty",
+      "verdict": "COMPATIBLE"
+    }
+  },
+  "not_done": [
+    "no production cell was written",
+    "no quote button was clicked",
+    "no order, purchase or mail was executed",
+    "no production configuration, database or program file was changed"
+  ],
+  "incident_disclosure": {
+    "what": "while targeting the service-account row in the share dialog, the interaction twice hit the owner's own account row and staged a self-demotion",
+    "handling": "Google's confirmation ('\u8981\u66f4\u65b0\u6743\u9650\u5417 ... \u60a8\u5c06\u65e0\u6cd5\u518d\u5171\u4eab\u5185\u5bb9') was cancelled both times",
+    "final_state": "owner account role re-read as \u7f16\u8f91\u8005 and the sheet stayed in edit mode; no data changed"
+  }
+}

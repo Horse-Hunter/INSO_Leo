@@ -177,3 +177,69 @@ installed program. The candidate is delivered verified instead.
 Rollback at any step: restore the previous `INSO_V1.6.exe`/`_internal` from the
 recorded backup and remove the `google_api` key; the database, credentials and
 profile are never part of the rollback because they are never modified.
+
+---
+
+## 7. Production read parity (2026-11-14) and the write-test request
+
+### 7.1 What was verified
+
+The service account now holds **Viewer** on the production workbook `INSO_QUOTE`
+(id `12bRXb…fwboO9k`), granted through the normal share dialog and proven by API
+(read succeeds, an editor-only call answers `HttpError 403`). Reading with the real
+`GoogleSheetsRowReader` / `transport.read_brief` / `GoogleQuotationInput`:
+
+| Worksheet | Result |
+| --- | --- |
+| `SHAHAB` | **compatible** — header on row 2 `DATE/STATUS/Item/Part Number/Brand/QTY/UM`, 140 rows, model text, quantity numeric, blanks `None` |
+| `RFQ_BRIEF` | **compatible** — 100 rows, every row 17 cells, every cell a string |
+| `报价输入` | **compatible** — gid `489913321` matches `production.json`, `A1:N1` reads as 14 strings |
+| `2026` | **blocked: the header moved** (below) |
+
+### 7.2 `2026` — the real cause of the production stops
+
+```
+row 1  Model | … | Brand | … | MPN | MFR | Qty | … | quote_date      <- W1
+row 2  (model, qty)
+row 3  (model, qty)
+row 4  (model, qty)
+row 5  STATUS | … | CLASS | … | MPN | MFR | Qty          <- the contract header
+row 6+ …
+```
+
+221 rows; 73 of them carry the literal `STATUS` in column A; column `W` has
+`quote_date` at row 1 and dates only at rows 101–221 (69 cells). Both transports
+require the contract header on row 1 (`GoogleSheetsWebService._headers` and
+`google_api_service._require_source_header`), and both raise
+`V12Fault(GLOBAL_STOP, SHEETS_SCHEMA_UNAVAILABLE)`. That is exactly what the
+production log shows at **21:50:59 and 21:52:45** — the download was not corrupt;
+the table header was moved down by a block that appeared above it.
+
+Nothing was relaxed to make it pass, because a header-row change also moves the
+`W = quote_date` proof (its header is still on row 1, its dates belong to the rows
+from 101 down) and that would silently mis-age orders.
+
+**Owner decision required (one question):** is the `Model/Brand` block in rows 1–4
+accidental, so the contract header belongs back on row 1 (recommended, no code
+change), or is row 5 from now on the authoritative header (then a header-row
+contract plus an explicit `quote_date` alignment has to be designed and reviewed
+before any order runs)?
+
+### 7.3 The write test, ready to request
+
+Preconditions that are already met: candidate built and gated, CDP protocol fixed,
+`SHAHAB`/`RFQ_BRIEF`/`报价输入` reading correctly, Backup/rollback documented in §6.2.
+
+| Item | Plan |
+| --- | --- |
+| Document needing Editor | `INSO_QUOTE` only. **Editor is whole-file**, including the container-bound Apps Script, so this must be an explicit Owner decision for the test window and revoked afterwards. |
+| Candidate rows | `SHAHAB` 140 (`MAIL-RFQ-658`, referenced by `RFQ_BRIEF`), `2026` 217 / 219 (`MAIL-RFQ-658`, `MANUAL-RFQ-A`) — all chosen because `RFQ_BRIEF` already binds them, so identity is independent of my reading. |
+| Writes | Brand single cell (`'SHAHAB'!E{row}` / `'2026'!F{row}`), purchase status (`'SHAHAB'!B{row}` / `'2026'!A{row}`), quotation input `'报价输入'!A1:N1` (14 RAW cells). Nothing else, no new rows, no formatting. |
+| Real effects | Cell writes alone trigger nothing. The `更新报价` button runs the sheet's own script and produces a real quote; purchase submission and mail happen only if the whole cycle runs for that order. |
+| Confirmation | Pre-write snapshot of exactly those cells (read via the Viewer role), post-write `updatedRange`/`updatedCells` + read-back, byte comparison for the 14-cell row, and a diff proving no other cell changed. |
+| Restore | Original values written back from the snapshot if any step is ambiguous; the durable hold mechanism protects an uncertain write; a mismatch stops the run before the button. |
+| Stop conditions | Any receipt mismatch, any 5xx, an unexpected popup, or any unplanned cell changed. |
+
+Two authorisations are therefore outstanding: (a) the `2026` layout decision above,
+(b) an Editor grant on `INSO_QUOTE` for one named row, with the quote button and any
+purchase/mail action confirmed separately per action.
