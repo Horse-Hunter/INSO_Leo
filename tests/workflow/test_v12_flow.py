@@ -1036,6 +1036,51 @@ def test_owner_reconciliation_ignores_an_unfinished_row(tmp_path):
     assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_UNSENT
 
 
+def test_header_row_recovery_only_clears_data_quality_alerts(tmp_path):
+    """A header row is not proof that mail/security/unknown alerts were answered."""
+
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT)
+    item = flow._workflow_store.get_by_inquiry_id(inquiry_id)
+    header_identity = replace(item.record_identity, identifying_snapshot=replace(
+        item.record_identity.identifying_snapshot, model="MPN"))
+    assert flow._workflow_store.rebind_identity(item.id, header_identity)
+
+    for index, (alert_type, reason) in enumerate((
+        (AlertType.DATA_QUALITY, ReasonCode.INQUIRY_INPUT_INVALID),
+        (AlertType.NOTIFICATION_FAILED, ReasonCode.NOTIFICATION_PERMANENT),
+        (AlertType.SECURITY_EVENT, ReasonCode.UNKNOWN_EXTERNAL_FAILURE),
+    )):
+        store.raise_alert(
+            inquiry_id=inquiry_id, alert_type=alert_type, reason_code=reason,
+            event=WorkflowEvent(f"evt_header_alert_{index}", inquiry_id,
+                                EventType.SECURITY_CHECK_FAILED, NOW, "workflow"))
+
+    with sqlite3.connect(store.database_path) as db:
+        for command_id, outcome in (("header-sent", "SENT"), ("header-unknown", "UNKNOWN")):
+            db.execute(
+                "INSERT INTO workflow_v12_notification_commands "
+                "(command_id,inquiry_id,kind,subject,text_body,created_at,payload_version) "
+                "VALUES (?,?,'IMPORTANT_ORDER','header','header',?,1)",
+                (command_id, inquiry_id, NOW.isoformat()))
+            db.execute(
+                "INSERT INTO workflow_v12_notification_recipients "
+                "(command_id,recipient_id,address,outcome) "
+                "VALUES (?,'owner','owner@example.invalid',?)", (command_id, outcome))
+
+    reader = FakeSheetsReader()
+    reader.row = replace(reader.row, cells={**reader.row.cells, "A": "发给采购"})
+    flow.poll_and_process(reader, SHEET, now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.INVALID_INPUT_SKIPPED
+    assert {alert.alert_type for alert in store.active_alerts(inquiry_id)} == {
+        AlertType.NOTIFICATION_FAILED, AlertType.SECURITY_EVENT}
+    with sqlite3.connect(store.database_path) as db:
+        outcomes = [row[1] for row in db.execute(
+            "SELECT command_id, outcome FROM workflow_v12_notification_recipients "
+            "WHERE command_id IN ('header-sent','header-unknown') ORDER BY command_id")]
+    assert outcomes == ["SENT", "UNKNOWN"]
+
+
 def test_closing_a_parked_order_recovers_its_answered_data_quality_alert(tmp_path):
     flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT,
                                             alert=AlertType.DATA_QUALITY)

@@ -413,7 +413,9 @@ class V12WorkflowCoordinator:
                     in _SOURCE_HEADER_WORDS):
                 self._set_state(item.inquiry_id, BusinessState.INVALID_INPUT_SKIPPED,
                     EventType.HUMAN_RESOLUTION_RECORDED, now)
-                self._v12_store.recover_stale_alerts(item.inquiry_id, at=now)
+                self._v12_store.recover_stale_alerts(
+                    item.inquiry_id, at=now,
+                    alert_types=frozenset({AlertType.DATA_QUALITY}))
                 continue
             if (state in _OWNER_RECONCILABLE_STATES
                     and self._owner_completion_is_safe(item, state)
