@@ -323,7 +323,10 @@ class GoogleApiSheetsService:
             values = [row[:SOURCE_WIDTH] for row in full[first_row - 1:]]
             evidence = _order_date_evidence(full) if widen else None
         else:
-            values = _apply_contract(rows[first_row - 1:], title, first_column, last_column)
+            # A source read is requested from A1 and sliced locally; any other
+            # range is requested verbatim, so its response already starts at the
+            # requested row and must not be sliced again.
+            values = _apply_contract(rows, title, first_column, last_column)
             evidence = None
         answer = {"range": range_name, "majorDimension": "ROWS", "values": values}
         if evidence is not None:

@@ -1,0 +1,53 @@
+{
+  "rfq": "RFQ-016",
+  "phase": 2,
+  "evidence_kind": "live_sheets_api_write_on_synthetic_document",
+  "executor": "WorkBuddy DeepSeek V4.1 Flash",
+  "date": "2026-11-14",
+  "authorization": "Owner message of 2026-11-14: may raise the test service account to Editor on the existing synthetic document only, write synthetic data, then restore Viewer",
+  "synthetic_document": {
+    "id": "10IFY1v5wLHsJWMcKk1JDb3vnzeg7J0WY7JreZCp5eo4",
+    "title": "RFQ016-SA-Test-Synthetic",
+    "worksheets_used": [
+      {"title": "2026", "gid": "154631556", "purpose": "source-shape read + single-cell RAW write"},
+      {"title": "\u62a5\u4ef7\u8f93\u5165", "gid": "462659244", "purpose": "14-cell RAW write + readback"}
+    ],
+    "note": "The two worksheets were created inside the existing synthetic document; no new Cloud project, OAuth client or spreadsheet was created."
+  },
+  "principal": {
+    "service_account": "rfq016-sheets-test@inso-509314.iam.gserviceaccount.com",
+    "project_roles": [],
+    "credential_repository_external": true,
+    "credential_path_redacted": "D:\\Program_Leo\\secrets\\inso-rfq016-<redacted>.json"
+  },
+  "permission_change": {
+    "granted": "editor, synthetic document only (share dialog, '\u8bbf\u95ee\u6743\u9650\u5df2\u66f4\u65b0')",
+    "restored": "viewer, synthetic document only",
+    "post_restore_read": "ok (14 cells)",
+    "post_restore_write": "HttpError 403",
+    "post_restore_structural_edit": "not retried after restore (403 on the value write is the proof)"
+  },
+  "results": [
+    {"step": "read.source_header", "observed": "row 1 = STATUS/''/CLASS/''/MPN/MFR/Qty", "status": "VERIFIED"},
+    {"step": "read.source_row", "observed": {"A": "\u53d1\u7ed9\u91c7\u8d2d", "C": "TI", "D": null, "E": "000123", "G": 100}, "note": "blank cells are None, quantity is an int, model keeps its leading zeros", "status": "VERIFIED"},
+    {"step": "read.quote_date_evidence", "observed": "source_order_date = 2026/10/01 from column W", "status": "VERIFIED"},
+    {"step": "read.date_cell", "observed": {"value": "2026/10/07", "kind": "str"}, "note": "a DATE-formatted cell returns display text, never a serial number", "status": "VERIFIED"},
+    {"step": "write.single_cell", "observed": {"range": "'2026'!F2", "updatedCells": 1, "updatedRows": 1, "spreadsheetId": "matches"}, "status": "VERIFIED"},
+    {"step": "write.raw14", "observed": {"range": "'\u62a5\u4ef7\u8f93\u5165'!B5:O5", "updatedCells": 14, "seconds": 1.016}, "status": "VERIFIED"},
+    {"step": "readback.raw14", "observed": {"equal_to_payload": true, "leading_zeros_preserved": true, "date_text_preserved": true}, "status": "VERIFIED"},
+    {"step": "negative.fabricated_id", "observed": {"error_class": "HttpError", "status": 404}, "status": "VERIFIED"},
+    {"step": "browser.reload_shows_api_write", "observed": "after reloading the synthetic tab, cell F3 displays RELOAD-VISIBLE-7F3 written purely through the API", "note": "screenshot kept outside the repository", "status": "VERIFIED"}
+  ],
+  "defect_found_by_this_check": {
+    "symptom": "GoogleQuotationInput.read_payload returned 14 empty strings immediately after a successful 14-cell write",
+    "cause": "the transport sliced the A1 response by (first_row - 1) for every range, but a verbatim range like B5:O5 already starts at row 5, so the only returned row was dropped",
+    "fix": "src/sheets/google_api_service.py::_read_range slices only the source geometry that is requested from A1",
+    "regression_test": "tests/sheets/test_google_api_service.py::test_fixed_range_read_returns_the_row_it_asked_for"
+  },
+  "not_verified": [
+    "production-source read parity (the service account has no access to the production document: spreadsheet metadata returns HttpError 404)",
+    "real instance of the container-bound '\u66f4\u65b0\u62a5\u4ef7' button (the synthetic document has no such script)",
+    "quota/429 behaviour against the live API",
+    "the Google Drive API is disabled in project inso-509314 (every Drive v3 call answers 403 SERVICE_DISABLED); the Sheets API path does not need it"
+  ]
+}

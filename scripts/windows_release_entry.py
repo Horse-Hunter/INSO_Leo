@@ -103,6 +103,55 @@ def _self_check() -> int:
     return 0
 
 
+def _api_self_check() -> int:
+    """Prove the frozen build can import and construct the Sheets API transport.
+
+    Reads only the local configuration and the local key file: no spreadsheet is
+    read, no token is printed, no business module starts. Exists so the frozen
+    dependency gate can be checked on the artifact itself instead of inferring it
+    from a directory listing.
+    """
+    from src.core.app_paths import app_root, runtime_config_path
+    from src.sheets.google_api_service import (
+        GoogleApiSheetsService,
+        build_service_account_sheets_service,
+    )
+    from src.sheets.google_oauth import (
+        GoogleSheetsAuthorizationError,
+        GoogleSheetsDependencyError,
+    )
+
+    root = app_root()
+    report = {"config_present": False, "enabled": False, "outcome": "NO_CONFIG"}
+    path = runtime_config_path("production.json", root=root)
+    if path.is_file():
+        report.update(config_present=True, outcome="DISABLED")
+        try:
+            config = json.loads(path.read_text(encoding="utf-8"))
+            section = config.get("google_api")
+            enabled = isinstance(section, dict) and section.get("enabled") is True
+            report["enabled"] = enabled
+            if enabled:
+                key = section.get("service_account_file")
+                report["key_configured"] = isinstance(key, str) and bool(key)
+                service = build_service_account_sheets_service(key)
+                report["transport_built"] = isinstance(service, GoogleApiSheetsService)
+                report["outcome"] = "TRANSPORT_READY"
+        except GoogleSheetsDependencyError:
+            report["outcome"] = "DEPENDENCY_MISSING"
+        except GoogleSheetsAuthorizationError:
+            report["outcome"] = "AUTHORIZATION_REJECTED"
+        except Exception as exc:  # noqa: BLE001 - report a class name only
+            report["outcome"] = "CHECK_FAILED"
+            report["error_class"] = type(exc).__name__
+    directory = root / "runtime" / "logs"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "v16-api-self-check.json").write_text(
+        json.dumps(report, ensure_ascii=False), encoding="utf-8"
+    )
+    return 0 if report["outcome"] in {"NO_CONFIG", "DISABLED", "TRANSPORT_READY"} else 1
+
+
 def _idle_self_check() -> int:
     """Construct and render the real idle dashboard; never press Start or acquire CDP."""
     from src.core.app_paths import app_root, application_name
@@ -193,6 +242,8 @@ if __name__ == "__main__":
         raise SystemExit(_cdp_self_check())
     if sys.argv[1:] == ["--idle-self-check"]:
         raise SystemExit(_idle_self_check())
+    if sys.argv[1:] == ["--api-self-check"]:
+        raise SystemExit(_api_self_check())
     if sys.argv[1:] == ["--self-check"]:
         raise SystemExit(_self_check())
     if sys.argv[1:] == ["--diagnose-vault"]:

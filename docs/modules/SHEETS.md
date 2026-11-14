@@ -281,6 +281,18 @@ writer, quotation-input, brief or business adapter was duplicated: `GoogleSheets
   A:G, so the `W=quote_date` proof, its unique-header rule (`quote_date` exactly
   once in row 1, W included) and the per-row E/F/G identity corroboration all use
   literally the same normalized cells the reader compares — no mixed typing.
+- **Row slicing is per geometry.** A source read is always requested from row 1
+  and sliced locally (that is what the native download did). Any other range —
+  e.g. the 14-cell `'报价输入'!B5:O5` row — is requested verbatim, so its response
+  already starts at the requested row and must **not** be sliced again. The live
+  synthetic-sheet check caught the previous double-slice, which made
+  `GoogleQuotationInput.read_payload` answer 14 blanks after a successful write.
+- **Frozen-artifact diagnostic.** `INSO_V1.6.exe --api-self-check` reads only the
+  local configuration and key file, builds the transport (no spreadsheet read, no
+  token printed) and writes `runtime/logs/v16-api-self-check.json`
+  (`NO_CONFIG` / `DISABLED` / `TRANSPORT_READY` / `DEPENDENCY_MISSING` /
+  `AUTHORIZATION_REJECTED`). It exists so the frozen dependency gate is checked on
+  the artifact instead of inferred from a directory listing.
 - **Read/write whitelist (restored).** Reads: `2026`/`SHAHAB` only as A:G, the
   quotation sheet only as the 14-cell row; anything else is refused before any
   call. Writes: `报价输入` exactly 14 cells in one row; other sheets exactly one

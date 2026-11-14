@@ -1,0 +1,39 @@
+{
+  "rfq": "RFQ-016",
+  "phase": 2,
+  "evidence_kind": "isolated_candidate_build_and_frozen_gates",
+  "executor": "WorkBuddy DeepSeek V4.1 Flash",
+  "date": "2026-11-14",
+  "build": {
+    "spec": "packaging/INSO_V1.1.spec",
+    "command": "INSO_BUILD_VERSION=1.6 python -m PyInstaller --noconfirm --clean --distpath build/rfq016-candidate/final --workpath build/rfq016-candidate/workf packaging/INSO_V1.1.spec",
+    "pyinstaller": "6.16.0",
+    "python": "3.12.10",
+    "build_venv": "D:\\Program_Leo\\INSO_Leo\\.worktrees\\v1-2-design\\.venv-release (the repository's pinned release environment; no dependency was installed or upgraded for this build)",
+    "artifact_repo_path": "build/rfq016-candidate/final/INSO_V1.6/",
+    "exe": {
+      "name": "INSO_V1.6.exe",
+      "sha256": "2b6d36381df20fa5db8c5bd86b6f2365ed7d7dcf124e35ecacd267e4269fd6ef",
+      "bytes": 8414399
+    },
+    "install_copy": "D:\\Program_Leo\\INSO_candidate_V16_RFQ016 (261 MB, outside the repository)"
+  },
+  "gates": {
+    "self_check": {"command": "INSO_V1.6.exe --self-check", "exit": 0, "covers": "tkinter/Tcl, customtkinter, src.gui.main, pypdf, zoneinfo"},
+    "api_self_check_no_config": {"command": "--api-self-check", "exit": 0, "report": {"config_present": false, "enabled": false, "outcome": "NO_CONFIG"}},
+    "api_self_check_enabled": {"command": "--api-self-check", "exit": 0, "report": {"config_present": true, "enabled": true, "outcome": "TRANSPORT_READY", "key_configured": true, "transport_built": true}, "meaning": "the frozen build imports google.oauth2.service_account, googleapiclient.discovery, google_auth_httplib2, httplib2 and src.sheets.google_api_service and constructs the real service-account transport"},
+    "api_self_check_bad_key": {"command": "--api-self-check", "exit": 1, "report": {"config_present": true, "enabled": true, "outcome": "AUTHORIZATION_REJECTED"}, "meaning": "a missing key is a credential condition, not an import failure and not a crash"},
+    "idle_self_check": {"command": "--idle-self-check", "exit": 0, "report": {"title": "INSO LEO V1.6 \u2014 Procurement Automation Control Center", "state": "\u5df2\u505c\u6b62", "business_thread_started": false, "order_thread_started": false, "gui_rendered": true, "start_action": "\u5f00\u59cb\u8fd0\u884c"}, "meaning": "the dashboard renders from the frozen build, no business or order thread starts, no database is opened (the isolated sqlite path was never created)"},
+    "process_residue": "no INSO process and no additional Chrome tab remained after the gates"
+  },
+  "production_left_untouched": {
+    "program": {"path": "dist/INSO_V1.6/INSO_V1.6.exe", "sha256": "00ac7d68d88e1a27eb52e3b7457b4192b699211df1b1f5e3efe0be406eef30bd", "bytes": 8389717, "mtime": "2026-11-12 21:19:14"},
+    "config": {"path": "dist/INSO_V1.6/runtime/production.json", "bytes": 1048, "mtime": "2026-10-27 09:54:11", "google_api_key_present": false},
+    "database": {"path": "dist/INSO_V1.2/runtime/production/workflow.sqlite3", "bytes": 1138688, "mtime": "2026-11-13 21:52", "wal_or_shm_present": false},
+    "cdp": "127.0.0.1:9222 with the single profile untouched; page count unchanged after the checks"
+  },
+  "not_done": [
+    "the production program files were not replaced (see the release decision in RELEASE_READINESS.md)",
+    "no production order, purchase, mail, quote button or Google production write was executed"
+  ]
+}

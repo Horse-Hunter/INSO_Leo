@@ -503,6 +503,20 @@ def _api_permission_fault(exc):
     return type(status) is int and status in {401, 403, 404}
 
 
+def _fault_detail(exc, limit=3):
+    """The typed reason chain behind a fault, for the log line only."""
+    parts, seen, current = [], set(), exc
+    while current is not None and id(current) not in seen and len(parts) < limit:
+        seen.add(id(current))
+        try:
+            reason = str(current).strip().splitlines()[0][:80]
+        except Exception:  # noqa: BLE001 - a broken __str__ must not hide the fault
+            reason = ""
+        parts.append(f"{type(current).__name__}({reason})" if reason else type(current).__name__)
+        current = current.__cause__ or current.__context__
+    return " <- ".join(parts)
+
+
 def _website_failure(exc):
     """Identify a failed dependency without treating local data errors as outages."""
     from .market_continuation import MarketContinuationFault
@@ -2892,7 +2906,10 @@ class ProductionBackend(GuiBackend):
         self._runtime_error(error)
 
     def _runtime_error(self, exc):
-        log.warning("Production runtime worker failed (%s)", type(exc).__name__)
+        # A page-cleanup fault hides which native call failed; without the chain
+        # the next incident is undiagnosable from the log alone.
+        log.warning("Production runtime worker failed (%s: %s)",
+                    type(exc).__name__, _fault_detail(exc))
         with self._lock:
             site = _website_failure(exc)
             prolonged = (site is not None and site != "Browser/CDP"

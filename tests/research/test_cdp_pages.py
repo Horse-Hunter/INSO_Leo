@@ -536,3 +536,62 @@ def test_native_identity_does_not_override_legacy_write_marker_quarantine():
     page.owner_name = ''
     assert page_owner(page) is None  # Existing write/quarantine contract unchanged.
     assert native_page_owner(page) == 'google-operation'  # Explicit read-only capability only.
+
+
+# --- RFQ-016 phase 2: a target Chrome already removed is not a leak ----------
+def test_close_false_with_an_absent_target_is_cleanup_complete():
+    """`Target.closeTarget` answers success:false for a page that is already gone.
+
+    The old code treated that answer as an unconfirmed cleanup, which invalidated
+    the shared page admission for the rest of the process: every later module
+    then failed instantly (21:44/21:46 in the 2026-11-13 production log) until a
+    full restart. A target that no longer exists cannot be leaked.
+    """
+    from src.research.cdp_pages import PageResourceAdmission, bind_page_admission
+
+    protocol = RacingTargets(spoof=True)
+    original = protocol.send
+
+    def send(command, params):
+        if command == "Target.closeTarget":
+            protocol.calls.append((command, params))
+            protocol.closed.append(params["targetId"])
+            return {"success": False}
+        if command == "Target.getTargetInfo":
+            protocol.calls.append((command, params))
+            return {"targetInfo": {"targetType": "page"}}  # no such target any more
+        return original(command, params)
+
+    protocol.send = send
+    admission = PageResourceAdmission()
+    bind_page_admission(protocol, admission)
+
+    with pytest.raises(ValueError) as caught:
+        new_background_page(protocol, protocol, timeout_ms=1234)
+
+    # The original fault survives and the shared resources stay usable.
+    assert str(caught.value) == "TAB_TARGET_ID_MISMATCH"
+    assert admission.is_open_nonblocking() is True
+    assert not getattr(protocol, "_inso_page_resource_failed", False)
+
+
+def test_close_false_with_a_surviving_target_still_fails_closed():
+    from src.research.cdp_pages import PageTargetCleanupError
+
+    protocol = RacingTargets(spoof=True)
+    original = protocol.send
+
+    def send(command, params):
+        if command == "Target.closeTarget":
+            protocol.calls.append((command, params))
+            protocol.closed.append(params["targetId"])
+            return {"success": False}
+        if command == "Target.getTargetInfo":
+            protocol.calls.append((command, params))
+            return {"targetInfo": {"targetId": params["targetId"]}}  # still there
+        return original(command, params)
+
+    protocol.send = send
+
+    with pytest.raises(PageTargetCleanupError):
+        new_background_page(protocol, protocol, timeout_ms=1234)

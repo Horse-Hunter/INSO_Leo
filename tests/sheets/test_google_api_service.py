@@ -495,3 +495,18 @@ def test_transport_timeout_is_an_unknown_effect():
         GoogleApiSheetsService(FakeApi([TimeoutError("read timed out")])).update(
             spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
             body={"values": [["TI"]]}).execute()
+
+
+def test_fixed_range_read_returns_the_row_it_asked_for():
+    """An explicit B5:O5 response already starts at row 5; slicing loses it.
+
+    Caught by the live synthetic-sheet readback: the transport used to drop the
+    only returned row, so `GoogleQuotationInput.read_payload` always answered 14
+    blanks after a successful write.
+    """
+    payload = ["2026", "5", "MPN", "", "000123", "USD", "12.5", "", "", "", "", "", "", ""]
+    api = FakeApi([{"values": [payload]}])
+    values = GoogleApiSheetsService(api).get(
+        spreadsheetId=SHEET, range="'报价输入'!B5:O5").execute()["values"]
+    assert values == [payload]
+    assert api.calls[0][1]["range"] == "'报价输入'!B5:O5"

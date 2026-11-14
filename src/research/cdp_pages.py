@@ -342,8 +342,27 @@ def close_research_page(page):
         raise fault from failure
 
 
+def _target_is_gone(session, target_id):
+    """Chrome's own answer that the created target no longer exists."""
+    try:
+        info = bounded_browser_call(session, "send", "Target.getTargetInfo",
+                                    {"targetId": target_id})
+    except Exception:  # noqa: BLE001 - an unreadable target is not proof of absence
+        return False
+    target = info.get("targetInfo") if isinstance(info, dict) else None
+    if not isinstance(target, dict):
+        return False
+    return target.get("targetId") != target_id
+
+
 def _close_created_target(session, target_id):
     if bounded_browser_call(session, "send", "Target.closeTarget", {"targetId": target_id}).get("success") is not True:
+        # Chrome answers success:false for a target that is already gone: the page
+        # can close itself, and a navigation error tears down the document. A
+        # target that no longer exists cannot be leaked, so prove absence instead
+        # of declaring the shared page resources unusable until restart.
+        if _target_is_gone(session, target_id):
+            return
         raise RuntimeError("CDP_TARGET_CLOSE_UNCONFIRMED")
 
 

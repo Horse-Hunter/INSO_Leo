@@ -127,3 +127,53 @@ the API migration removes and which remains.
 5. An unreviewed `effect_uncertain` hold has **no** self-service release action:
    silence is not resolution. A human must verify the sheet, and a reviewed
    settlement path is still to be designed with the Owner.
+
+---
+
+## 6. Phase 2 results (2026-11-14)
+
+| Gate from §5 | Status | Evidence |
+| --- | --- | --- |
+| 1. Real API write on the synthetic sheet | **`VERIFIED`** | Editor on the synthetic document only → real `values.update` (single cell + raw14), real `UpdateValuesResponse`, readback identical, leading zeros preserved, date cell returns text; Viewer restored and a later write answers `HttpError 403`. `docs/evidence/v16/rfq016-phase2-live-write-2026-11-14.json` |
+| 2. Reload/button handoff on the protected CDP session | **`PARTIAL`** | API write → browser reload → the page displays the written value (`VERIFIED`, synthetic document). The container-bound `更新报价` button, its script menu and popup remain **`NOT_VERIFIED`**: that script exists only in the production document. |
+| 3. Frozen-runtime import of the API client | **`VERIFIED`** | `INSO_V1.6.exe --api-self-check` → `TRANSPORT_READY` on the freshly built artifact; a missing key → `AUTHORIZATION_REJECTED`, never a crash. `docs/evidence/v16/rfq016-phase2-candidate-build-2026-11-14.json` |
+| 4. `CDP_PAGE_CLEANUP_UNCONFIRMED` | **reduced, not eliminated** | A `Target.closeTarget` answer of `success:false` is now proved against `Target.getTargetInfo`: a target Chrome already removed is cleanup-complete instead of a poisoned admission. A real leak still stops the run and still needs a program restart. |
+| 5. No self-service release for an unreviewed `effect_uncertain` hold | **open** | Manual replay and overwrite are refused (phase 1); an owner-reviewed settlement path is still undesigned. |
+
+### 6.1 Replacement decision: **not replaced**
+
+Owner allowed replacing the program files once six conditions hold. Five do.
+Condition 5 — "production API permission and configuration explicitly authorized
+and sufficient for the business" — does **not** hold: the service account has no
+access to the production spreadsheet (metadata read answers `HttpError 404`), and
+granting it would mean changing production sharing, which is a separate Owner
+decision. Shipping the new program with the API switched off would run exactly
+today's CDP path, and the production stops of 2026-11-13 (18:33 drift family,
+21:50 header proof) live on that path. Replacing the binary would therefore not
+fix the reason the Owner asked for a new version, while still touching the
+installed program. The candidate is delivered verified instead.
+
+### 6.2 Shortest path to a working production version
+
+1. **Owner:** confirm the production document may be shared with
+   `rfq016-sheets-test@inso-509314.iam.gserviceaccount.com` as **Editor**
+   (write access is required for `报价输入` and the single-cell status columns).
+   If production must not be writable by a service account, say so and the API
+   path is dropped in favour of the CDP path only.
+2. **Executor:** copy the candidate over `dist/INSO_V1.6` program files only
+   (`INSO_V1.6.exe` + `_internal`), leaving `runtime/production.json`, the SQLite
+   database, `research.json`, the credentials and the Chrome profile untouched;
+   record both hashes.
+3. **Executor:** add `"google_api": {"enabled": true, "service_account_file":
+   "<repository-external key>"}` to the production configuration, plus the
+   production worksheet identifiers, and run `--api-self-check` → expect
+   `TRANSPORT_READY`.
+4. **Owner + Executor:** one controlled single order — pre-flight identity,
+   no UNKNOWN/SENT/hold, source status confirmed; purchase, sheet write and the
+   quote button each explicitly authorized for that one order.
+5. Compare Google, INSO, SQLite, quote result and notification for that order;
+   only then consider ordinary operation.
+
+Rollback at any step: restore the previous `INSO_V1.6.exe`/`_internal` from the
+recorded backup and remove the `google_api` key; the database, credentials and
+profile are never part of the rollback because they are never modified.
