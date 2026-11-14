@@ -1,6 +1,6 @@
 # INSO_Leo — CEO / Agent 无缝接管手册
 
-> **更新时间：2026-11-07。** 本文是供 GPT、WorkBuddy、Codex、Claude 等新任 CEO/架构/Review Agent 接手的**唯一长期交接索引**，不代替 `AGENTS.md`、RFQ Task Spec、实际源码或正式发布收据。与 Executor 切换时一次性使用、接管后删除的临时 `HANDOFF*.md` **不是一类文件**。
+> **生产快照基准：2026-11-07；治理授权更新：2026-11-14。** 本文是供 GPT、WorkBuddy、Codex、Claude 等新任 CEO/架构/Review Agent 接手的**唯一长期交接索引**，不代替 `AGENTS.md`、RFQ Task Spec、实际源码或正式发布收据。与 Executor 切换时一次性使用、接管后删除的临时 `HANDOFF*.md` **不是一类文件**。
 >
 > **最重要的认知**：源码HEAD、最后一次打包源码、正式EXE哈希、上次现场进程和**当前实时健康**是五种不同事实。下文的运行结果基于11月6日Executor报告，本次11月7日只访问GitHub源码/文档，**未触碰Windows现场、没有独立重跑测试、不声称现在实时在线**。
 >
@@ -17,7 +17,7 @@
 
 ### 不能直接访问GitHub时
 
-若新Agent（例如WorkBuddy）只有本地仓库访问权：打开含本文件的**现有**项目工作区，先执行 `git status --short`、`git rev-parse HEAD`、`git branch --show-current`、`git worktree list --porcelain`（CLI），再读取同目录上述文件。优先复用已存在的V1.6工作树，**不为了交接新建工作树或覆盖有未提交内容的目录**。若只能看到旧本地副本或无法访问仓库，则说明缺口，不能自行假定本手册的SHA已同步。Agent不得使用Computer Use或自行编写替代GUI控制器。
+若新Agent（例如WorkBuddy）只有本地仓库访问权：打开含本文件的**现有**项目工作区，先执行 `git status --short`、`git rev-parse HEAD`、`git branch --show-current`、`git worktree list --porcelain`（CLI），再读取同目录上述文件。优先复用已存在的V1.6工作树，**不为了交接新建工作树或覆盖有未提交内容的目录**。若只能看到旧本地副本或无法访问仓库，则说明缺口，不能自行假定本手册的SHA已同步。2026-11-14 Owner 已撤销 Agent Computer Use 的全面禁令；可使用实际可用的 GUI 工具，但仍需保留唯一执行者、真实订单防重复与现有授权边界，不能自造不受控绕行工具。
 
 ## 1. 当前版本与生产状态（2026-11-07的最新文档核验）
 
@@ -112,7 +112,7 @@
 - 读 `AGENTS.md`、相关RFQ Task Spec、模块索引与所需源码，先执行 `git status / branch / worktree list`；避免覆盖未知dirty work、重复启动业务或建立新Profile。
 - 先读共享CDP合同 `docs/CDP_SESSION_POLICY.md` 和 Windows发布规范 `docs/WINDOWS_RELEASE.md`；部署采用原单实例/受控退出/原备份/原PyInstaller流水线。涉及不可逆外部写入、真实邮件、未知状态不得自行扩大已授权范围。
 - 对源码/测试/业务/EXE四层逐级验证；所有真实发布记录必须含**实际SHA、构建源树、EXE SHA256、备份与正常退出、业务轮次和未验证的项目**。
-- Owner禁止**agent Computer Use**（截图点击、键鼠自动操作及绕行替代），允许已批准的应用自身Playwright/CDP业务运行；命令行、Git、PowerShell、Python和适用连接器按原权限。最终报告应写 `COMPUTER_USE_NOT_USED`。
+- **当前 Owner 授权（2026-11-14，覆盖旧禁令）**：Agent Computer Use 已允许用于有权限的 GUI 排查与操作，也可继续通过 CLI/API/原应用 CDP 执行。此授权不等于放宽真实采购、表格写入、报价、SMTP、安全挂起、发布及权限变更的业务门禁。记录实际是否使用 Computer Use，不再强制声称 `COMPUTER_USE_NOT_USED`。
 
 ## 8. 关键链接及后续维护规则
 

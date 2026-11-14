@@ -4,11 +4,11 @@ This repository is **RFQ-driven**. The Control Room is the task source of truth.
 
 **New window:** read `AGENTS.md`. Follow `docs/PROJECT_BASELINE.md` for same-task artifact cleanup and `docs/REPORTING.md` for the exact seven-heading final chat reply (also required in RFQ `FINAL_REPORT.md`).
 
-## Mandatory Owner ban: Codex Computer Use
+## Owner 2026-11-14: Agent Computer Use is permitted
 
-**On every task:** Codex/Executor MUST NOT invoke agent Computer Use, desktop UI screenshot/click/type control, or a substitute GUI-control workaround. Use existing CLI/PowerShell/Python, source/test tools, operating-system APIs and approved purpose-built connectors instead. This is a prohibition on **agent** UI operation, not on the already-reviewed application's own browser automation at runtime.
+The Owner has **withdrawn** the earlier blanket ban on agent Computer Use. A connected agent may use supported desktop GUI screen reading, mouse/keyboard interaction and Windows UI controls for authorized project tasks; using CLI/PowerShell/Python, Git, APIs and the established application's CDP/Playwright remains equally permitted. No tool should claim access it does not have.
 
-If required operation is possible only by agent Computer Use, stop that action as `BLOCKED / NOT_VERIFIED`, report a safe manual-only step if truly necessary, and never claim it was completed. Final report must say `COMPUTER_USE_NOT_USED`. Applies also to any ongoing authorized V1.6 production release; Owner's permission to deploy does NOT override the Computer Use ban. Full trigger/owner/procedure/evidence/cleanup/CEO enforcement are in `AGENTS.md`. Do not install an alternate GUI driver to evade this rule.
+**This is a tool-permission change, not a production write grant.** Preserve the single Chrome 9222/profile, original worktree, running process and durable SQLite/UNKNOWN/SENT state. Before any real Google write, INSO purchase, quotation button, SMTP send, permission elevation or production release, apply existing scoped Owner authorization and fail-closed protections. Do not launch a second order processor or replay uncertain effects. Actual tool usage must be stated truthfully as `COMPUTER_USE_USED` or `COMPUTER_USE_NOT_USED` in RFQ evidence, not automatically declared non-use. See `AGENTS.md`, `docs/SAFETY.md` and `docs/CDP_SESSION_POLICY.md`. Historical Computer Use bans in older reports are superseded only prospectively by this Owner decision.
 
 ## For implementation agents: 执行 RFQ-XXX
 
