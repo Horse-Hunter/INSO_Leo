@@ -231,6 +231,21 @@ def test_shifted_headers_stop_before_any_source_write(web):
     assert not browser.contexts[0].pages[-1].typed
 
 
+def test_headers_skip_the_owners_pre_program_rows_above_the_2026_block():
+    """Live 2026 shape: legacy labels in row 1, block header on row 5."""
+    legacy = ['Model', 'Qty', 'Brand', 'Note', 'MPN', 'MFR', 'Qty']
+    unstatused = ['', '', '', '', 'K4AAG165WC-BCWE', 'Samsung', '1,200']
+    rows = [legacy, unstatused, unstatused, unstatused, list(HEADERS['2026'][0])]
+    GoogleSheetsWebService._headers(rows, '2026')  # must not raise
+
+
+def test_headers_still_refuse_a_2026_window_without_the_exact_block():
+    rows = [['Model', '', 'Brand', 'Note', 'MPN', 'MFR', 'Qty']] * 11
+    with pytest.raises(V12Fault) as caught:
+        GoogleSheetsWebService._headers(rows, '2026')
+    assert caught.value.reason == 'SHEETS_SCHEMA_UNAVAILABLE'
+
+
 def test_unsaved_write_preserves_only_owned_operation_page(web):
     service, browser, _, original = web
     create = browser.contexts[0].new_page

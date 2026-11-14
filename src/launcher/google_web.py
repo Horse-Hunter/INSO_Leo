@@ -32,7 +32,7 @@ from src.sheets.google_reader import (
     GoogleReadArtifactLost,
 )
 from src.sheets.quotation_input import QuotationInputBusy, QuotationInputUnavailable
-from src.sheets.worksheet_schema import worksheet_schema
+from src.sheets.worksheet_schema import locate_source_header, worksheet_schema
 from src.workflow.v12_faults import FaultScope, V12Fault
 from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
 
@@ -698,15 +698,12 @@ class GoogleSheetsWebService:
             if not rows or tuple(rows[0]) != BRIEF_HEADERS or any(len(r) > 17 for r in rows):
                 raise TpLocalError("TP_BRIEF_SCHEMA_UNAVAILABLE")
             return
-        contracts = {
-            "2026": (0, {0: "STATUS", 2: "CLASS", 4: "MPN", 5: "MFR", 6: "Qty"}),
-            "SHAHAB": (1, {1: "STATUS", 3: "Part Number", 4: "Brand", 5: "QTY"}),
-        }
-        if title not in contracts:
+        if title not in ("2026", "SHAHAB"):
             return  # Existing quotation input is intentionally headerless.
-        position, expected = contracts[title]
-        if position >= len(rows) or any(index >= len(rows[position]) or rows[position][index] != label
-                                        for index, label in expected.items()):
+        # One shared identity proof with the API transport: the exact block
+        # header must exist in the bounded leading window, so the Owner's
+        # pre-program rows above the first block are skipped, not trusted.
+        if locate_source_header(rows, title) is None:
             raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_SCHEMA_UNAVAILABLE")
 
     @staticmethod

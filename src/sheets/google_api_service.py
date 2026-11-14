@@ -36,7 +36,7 @@ from .google_oauth import (
     GoogleSheetsAuthorizationError,
     GoogleSheetsDependencyError,
 )
-from .worksheet_schema import worksheet_schema
+from .worksheet_schema import locate_source_header, worksheet_schema
 
 SOURCE_ORDER_COLUMN = "W"
 SOURCE_ORDER_HEADER = "quote_date"
@@ -56,10 +56,6 @@ _FIXED_RANGE = re.compile(r"^'((?:[^']|'')+)'!([A-Z]{1,2})(\d*)(?::([A-Z]{1,2})(
 _RECEIPT_RANGE = re.compile(
     r"^(?:'((?:[^']|'')+)'|([^!']+))!([A-Z]{1,2})(\d+)(?::([A-Z]{1,2})(\d+))?$")
 # Same worksheet-identity proof the retired TSV transport applied to its download.
-SOURCE_HEADERS = {
-    "2026": (0, {0: "STATUS", 2: "CLASS", 4: "MPN", 5: "MFR", 6: "Qty"}),
-    "SHAHAB": (1, {1: "STATUS", 3: "Part Number", 4: "Brand", 5: "QTY"}),
-}
 _BRIEF_RANGE = "RFQ_BRIEF!A1:Q"
 _BRIEF_TITLE = "RFQ_BRIEF"
 _BRIEF_WIDTH = 17
@@ -491,10 +487,7 @@ def _escaped(title: str) -> str:
 
 def _require_source_header(rows, title):
     """The exact worksheet identity the retired TSV download required."""
-    position, expected = SOURCE_HEADERS[title]
-    if position >= len(rows) or any(
-            index >= len(rows[position]) or rows[position][index] != label
-            for index, label in expected.items()):
+    if locate_source_header(rows, title) is None:
         # Same fault type/reason the CDP transport raised; imported lazily so this
         # transport stays importable without the workflow package.
         from src.workflow.v12_faults import FaultScope, V12Fault

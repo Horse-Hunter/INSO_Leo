@@ -1,5 +1,6 @@
 """Internal physical-column mappings for supported worksheet schemas."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 
@@ -63,3 +64,44 @@ def worksheet_schema(worksheet_title: str) -> WorksheetSchema:
     if worksheet_title == "2026":
         return YEAR_2026_SCHEMA
     return STANDARD_SCHEMA
+
+
+# The exact header block each source worksheet opens its RFQ table with.  The
+# keys are physical column indexes (A=0), the values the literal label the Owner
+# keeps there.  A source read is only accepted when one such block is present:
+# this is the worksheet-identity proof both transports share.
+SOURCE_HEADER_LABELS: dict[str, dict[int, str]] = {
+    "2026": {0: "STATUS", 2: "CLASS", 4: "MPN", 5: "MFR", 6: "Qty"},
+    "SHAHAB": {1: "STATUS", 3: "Part Number", 4: "Brand", 5: "QTY"},
+}
+
+# The earliest row (0-based) the block may start on.  SHAHAB always keeps one
+# line above its block; 2026 starts at the very top.
+SOURCE_HEADER_ANCHOR_ROW = {"2026": 0, "SHAHAB": 1}
+
+# 2026 is a stack of small RFQ blocks, each opened by its own copy of the header
+# row, so the block header is a repeated structure rather than a single top row.
+# The Owner's own rows from before this program existed still sit above the
+# first well-formed block, and those rows are ordinary business noise: their
+# status cell is blank, which every status query already ignores.  Only the
+# header proof was anchored to row 1 and therefore refused the whole sheet.
+# Scanning a bounded window keeps the labels an exact match while tolerating
+# that pre-program preamble; nothing outside the window is considered.
+SOURCE_HEADER_WINDOW = 10
+
+
+def locate_source_header(rows: Sequence[Sequence[object]], title: str) -> int | None:
+    """Return the 0-based row of the exact source header block, else ``None``."""
+
+    expected = SOURCE_HEADER_LABELS.get(title)
+    if expected is None:
+        return None
+    start = SOURCE_HEADER_ANCHOR_ROW[title]
+    for index in range(start, min(len(rows), start + SOURCE_HEADER_WINDOW)):
+        row = rows[index]
+        if all(
+            column < len(row) and row[column] == label
+            for column, label in expected.items()
+        ):
+            return index
+    return None

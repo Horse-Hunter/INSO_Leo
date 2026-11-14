@@ -200,6 +200,45 @@ def test_shahab_header_must_be_on_the_second_row():
     assert caught.value.reason == "SHEETS_SCHEMA_UNAVAILABLE"
 
 
+def test_2026_read_skips_the_owners_pre_program_rows_above_the_block():
+    """Real production shape: a stale legacy header plus three unstatused rows.
+
+    Row 1 of the live sheet still carries the Owner's pre-program labels
+    (Model/Qty/Brand/Note) while W1 already holds the live ``quote_date``
+    header, so the well-formed A:G block starts on row 5.  Those leading rows
+    carry no status, which every status query already ignores; only the header
+    proof was anchored to row 1 and refused the whole sheet.
+    """
+    legacy = ["Model", "Qty", "Brand", "Note", "MPN", "MFR", "Qty"]
+    legacy += [None] * (WIDTH_2026 - len(legacy) - 1)
+    legacy.append("quote_date")
+    unstatused = row_2026("", "", "", "K4AAG165WC-BCWE", "Samsung", 1200, "")
+    values = [legacy, list(unstatused), list(unstatused), list(unstatused),
+              header_2026(), row_2026("2026/10/07", "未发", "客户A", "000123", "TI", 100, "2026/10/01")]
+
+    response = read({"values": values})
+
+    # Every row is returned with its true sheet row; no row is renumbered.
+    assert len(response["values"]) == 6
+    assert response["values"][0][0] == "Model"
+    assert response["values"][4][:7] == ["STATUS", None, "CLASS", None, "MPN", "MFR", "Qty"]
+    assert response["values"][5][4] == "000123"
+    # The W proof still hangs off the single W1 header, and binds the real row.
+    assert response["source_order_dates"]["header"] == "quote_date"
+    assert (6, "000123", "TI", 100, "2026/10/01") in response["source_order_dates"]["rows"]
+
+
+def test_2026_header_search_stays_bounded():
+    """Past the window the sheet is a different sheet: still fail closed."""
+    from src.workflow.v12_faults import V12Fault
+
+    filler = row_2026("", "", "", "", "TI", 100, "")
+    values = [filler] * 10 + [header_2026()]
+    with pytest.raises(V12Fault) as caught:
+        read({"values": values})
+    assert caught.value.reason == "SHEETS_SCHEMA_UNAVAILABLE"
+
+
 def test_quotation_input_row_is_text_only():
     payload = [2026, 5, "MPN", "", "USD", "", 12.5, "", "", "", "", "", "", ""]
     api = FakeApi([{"values": [payload]}])
