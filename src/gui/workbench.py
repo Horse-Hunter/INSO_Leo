@@ -128,11 +128,13 @@ _CALM_LABELS = _SETTLED_LABELS | {V12BusinessLabel.PURCHASE_SENT}
 
 def _settled(state) -> bool:
     return (state is not None and state.business_label in _SETTLED_LABELS
+            and not state.source_link_unproven
             and not state.active_alerts and state.latest_active_alert is None)
 
 
 def _calm(state) -> bool:
     return (state is not None and state.business_label in _CALM_LABELS
+            and not state.source_link_unproven
             and not state.active_alerts and state.latest_active_alert is None)
 
 

@@ -570,6 +570,13 @@ def _settled_not_saved_purchase(store, inquiry_id, *, now=NOW):
                              candidate_count=0, authoritative=True)), at=now)
 
 
+def _manual_review_purchase(store, inquiry_id, *, now=NOW):
+    from src.workflow.v12_store import FakeSaveReconciler
+
+    _unknown_purchase(store, inquiry_id, now=now)
+    return store.reconcile_unknown_save(inquiry_id, FakeSaveReconciler(), at=now)
+
+
 def _active_quote_hold(store, flow, inquiry_id, *, now=NOW):
     from src.workflow.v13_integration import V13HoldStore
     from src.workflow.v13_quotation import (
@@ -606,6 +613,31 @@ def test_manual_sheet_completion_never_closes_an_unconfirmed_purchase(tmp_path, 
     assert any(alert.alert_type is AlertType.PURCHASE_EXCEPTION
                for alert in store.active_alerts(inquiry_id))
     assert store.event_history(inquiry_id)[:len(before)] == before
+
+
+def test_manual_sheet_completion_never_closes_a_mismatched_unresolved_purchase(tmp_path):
+    """The guard is universal: a stale state name cannot hide a durable unknown Save."""
+
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.SOURCE_CHANGED)
+    assert _manual_review_purchase(store, inquiry_id) is PurchaseOutcome.MANUAL_REVIEW
+
+    flow.poll_and_process(_advanced_reader("已报价给客户"), SHEET,
+                          now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.SOURCE_CHANGED
+    assert any(alert.alert_type is AlertType.PURCHASE_EXCEPTION
+               for alert in store.active_alerts(inquiry_id))
+
+
+def test_armed_dispatch_event_blocks_closure_even_when_purchase_projection_is_pre_save(tmp_path):
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.RESEARCH_FAILED)
+    store.append_event(WorkflowEvent(
+        "evt_synthetic_armed", inquiry_id, EventType.SAVE_DISPATCH_ARMED, NOW, "inso"))
+
+    flow.poll_and_process(_advanced_reader("已报价给客户"), SHEET,
+                          now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.RESEARCH_FAILED
 
 
 def test_manual_sheet_completion_does_not_close_over_an_active_quote_hold(tmp_path):

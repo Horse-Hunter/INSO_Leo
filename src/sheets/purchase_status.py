@@ -90,16 +90,26 @@ def owner_resolved_status(reader: WorksheetRowReader, identity: SheetRecordIdent
         return str(candidates[0].cells[column]).strip()
 
     # Last resort: the Owner is looking at that very line. Accept it only when the
-    # physical row is unique, carries a completed status, and its model is the same
-    # article text (equal, or one completing the other) — a wholly different part in
-    # the same position still fails closed.
+    # physical row is unique, carries a completed status, has a non-empty model that
+    # is the same article text (equal, or one completing the other), and still has
+    # the same quantity/importance. A quantity or importance change is an identity
+    # change: it needs the explicit right-click recovery, never this silent path.
     anchors = [row for row in eligible if row.row_position == identity.row_position]
     if len(anchors) != 1:
         return None
-    live_model = str(anchors[0].cells.get(schema.model_column) or "").strip().casefold()
+    anchor = anchors[0]
+    live_model = str(anchor.cells.get(schema.model_column) or "").strip().casefold()
+    if not live_model:
+        return None
+    if anchor.cells.get(schema.quantity_column) != identity.identifying_snapshot.quantity:
+        return None
+    if (schema.importance_column is not None
+            and anchor.cells.get(schema.importance_column)
+            != identity.identifying_snapshot.importance_raw):
+        return None
     if stored_model not in live_model and live_model not in stored_model:
         return None
-    return str(anchors[0].cells[column]).strip()
+    return str(anchor.cells[column]).strip()
 
 
 def current_row_at_identity(reader: WorksheetRowReader, identity: SheetRecordIdentity) -> WorksheetRow | None:

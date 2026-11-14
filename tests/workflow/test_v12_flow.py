@@ -985,9 +985,9 @@ def test_owner_reconciliation_accepts_a_completed_model_text(tmp_path):
     assert store.business_state(inquiry_id) is BusinessState.HUMAN_COMPLETED
 
 
-def test_owner_reconciliation_accepts_a_quantity_correction_on_the_same_row(tmp_path):
-    """The Owner may also correct the quantity of the line they are looking at; the
-    physical row plus the related model text is what identifies that order."""
+def test_owner_reconciliation_refuses_a_quantity_correction_on_the_same_row(tmp_path):
+    """A quantity change is an identity change; it needs the explicit Owner action,
+    not a silent automatic close from the former physical position."""
 
     flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT)
     reader = _advanced_reader("已报价给客户")
@@ -995,7 +995,27 @@ def test_owner_reconciliation_accepts_a_quantity_correction_on_the_same_row(tmp_
 
     flow.poll_and_process(reader, SHEET, now=NOW + timedelta(minutes=1))
 
-    assert store.business_state(inquiry_id) is BusinessState.HUMAN_COMPLETED
+    assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_UNSENT
+
+
+def test_owner_reconciliation_refuses_a_blank_model_on_the_same_row(tmp_path):
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT)
+    reader = _advanced_reader("已报价给客户")
+    reader.row = replace(reader.row, cells={**reader.row.cells, "E": ""})
+
+    flow.poll_and_process(reader, SHEET, now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_UNSENT
+
+
+def test_owner_reconciliation_refuses_an_importance_change_on_the_same_row(tmp_path):
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT)
+    reader = _advanced_reader("已报价给客户")
+    reader.row = replace(reader.row, cells={**reader.row.cells, "C": "S"})
+
+    flow.poll_and_process(reader, SHEET, now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_UNSENT
 
 
 def test_owner_reconciliation_refuses_a_different_article_in_the_same_row(tmp_path):

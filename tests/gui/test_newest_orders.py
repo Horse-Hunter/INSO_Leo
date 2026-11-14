@@ -32,11 +32,15 @@ def test_equal_instants_across_timezones_and_missing_dates_are_deterministic():
 
 class Tree:
     def __init__(self):
-        self.rows, self.positions = {}, {}
+        self.rows, self.positions, self.tags = {}, {}, {}
     def exists(self, key): return key in self.rows
-    def insert(self, _parent, _position, *, iid, values, tags): self.rows[iid] = values
-    def item(self, key, *, values, tags): self.rows[key] = values
-    def delete(self, key): self.rows.pop(key); self.positions.pop(key, None)
+    def insert(self, _parent, _position, *, iid, values, tags):
+        self.rows[iid] = values
+        self.tags[iid] = tags[0] if tags else None
+    def item(self, key, *, values, tags):
+        self.rows[key] = values
+        self.tags[key] = tags[0] if tags else None
+    def delete(self, key): self.rows.pop(key); self.positions.pop(key, None); self.tags.pop(key, None)
     def move(self, key, _parent, position): self.positions[key] = position
 
 
@@ -87,3 +91,23 @@ def test_sort_before_display_cap_keeps_newest_across_modules():
     assert len(v.orders) == 1000
     assert v.orders[0].inquiry_id == "1004"
     assert v.orders[-1].inquiry_id == "5"
+
+
+def test_real_render_warns_an_unproven_source_but_keeps_proven_settled_grey():
+    from src.gui.contracts import V12BusinessLabel, V12OrderStateDTO
+
+    v = view()
+    unproven = order("unproven", received_at=NOW)
+    proven = order("proven", received_at=NOW-timedelta(seconds=1))
+    v.set_orders((unproven, proven), {
+        "unproven": V12OrderStateDTO(
+            "unproven", V12BusinessLabel.HUMAN_COMPLETED, None,
+            source_link_unproven=True),
+        "proven": V12OrderStateDTO(
+            "proven", V12BusinessLabel.HUMAN_COMPLETED, None,
+            source_status="已报价给客户", source_fresh=True, source_verified_at=NOW),
+    })
+    v.render_orders()
+
+    assert v.app._tree.tags["unproven"] == "warning"
+    assert v.app._tree.tags["proven"] == "legacy"

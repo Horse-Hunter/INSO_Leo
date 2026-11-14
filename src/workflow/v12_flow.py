@@ -92,6 +92,29 @@ _SETTLED_PURCHASE_OUTCOMES = frozenset({
     PurchaseOutcome.VALIDATION_FAILED,
 })
 
+# These durable outcomes prove the purchase is still unresolved.
+_UNRESOLVED_PURCHASE_OUTCOMES = frozenset({
+    PurchaseOutcome.SUBMIT_UNCONFIRMED,
+    PurchaseOutcome.UNKNOWN_WRITE_OUTCOME,
+    PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED,
+    PurchaseOutcome.MANUAL_REVIEW,
+})
+
+# A confirmation, not an unknown attempt, settles the purchase.
+_CONFIRMED_PURCHASE_OUTCOMES = frozenset({
+    PurchaseOutcome.SAVED,
+    PurchaseOutcome.CONFIRMED_NOT_SAVED,
+})
+
+# Even when the projection says pre-save, any of these events proves that an
+# external purchase attempt existed and must not be settled by a Sheet edit.
+_DISPATCH_PROOF_EVENTS = frozenset({
+    EventType.SAVE_DISPATCH_ARMED,
+    EventType.SAVE_CLICK_COMPLETED,
+    EventType.SAVE_OUTCOME_UNKNOWN,
+    EventType.PURCHASE_DATA_SAVED,
+})
+
 # A worksheet header row was once admitted as an order (``MPN`` in the model cell).
 # It can never be resolved from the sheet — its status cell holds ``STATUS`` — so the
 # ledger marks it as invalid input instead of reporting it as a business anomaly
@@ -316,19 +339,42 @@ class V12WorkflowCoordinator:
             return False
         return outcome in _SETTLED_PURCHASE_OUTCOMES
 
+    def _purchase_effect_settled(self, inquiry_id: str) -> bool:
+        """No durable purchase outcome or dispatch receipt remains unresolved.
+
+        The projection and the event log may disagree after an interrupted run or
+        an old build. A pre-save projection with an armed/clicked/unknown receipt is
+        still an external attempt; treat it as unresolved rather than trusting the
+        projection.
+        """
+
+        try:
+            outcome = self._v12_store.purchase_state(inquiry_id)
+        except KeyError:
+            outcome = None
+        if outcome in _UNRESOLVED_PURCHASE_OUTCOMES:
+            return False
+        if outcome in _CONFIRMED_PURCHASE_OUTCOMES:
+            return True
+        return not any(
+            event.event_type in _DISPATCH_PROOF_EVENTS
+            for event in self._v12_store.event_history(inquiry_id))
+
     def _owner_completion_is_safe(self, item, state: BusinessState) -> bool:
         """A manual sheet status may only settle effects the ledger already proved.
 
         A completed status is the Owner's statement about the line, not proof that
-        an earlier Save/quotation/mail actually finished. Unknown purchase outcomes,
-        pending status writes and active quotation holds therefore keep the order
-        open with its alerts until a human reconciles the real receipt.
+        an earlier Save/quotation/mail actually finished. This guard is universal:
+        every parked state, including a mismatched historical one, must pass the
+        durable purchase/dispatch check and have no active quotation hold.
         """
 
         if state in _NEVER_AUTO_CLOSED:
             return False
         if (state is BusinessState.PURCHASE_EXCEPTION
                 and not self._purchase_settled(item.inquiry_id)):
+            return False
+        if not self._purchase_effect_settled(item.inquiry_id):
             return False
         from .v13_integration import V13HoldStore
         return not V13HoldStore(self._v12_store.database_path).blocks_inquiry_retry(
@@ -362,6 +408,7 @@ class V12WorkflowCoordinator:
             # from its own status cell, so the ledger records the real reason once
             # instead of showing it as a business anomaly for ever.
             if (state in _OWNER_RECONCILABLE_STATES
+                    and self._owner_completion_is_safe(item, state)
                     and str(item.record_identity.identifying_snapshot.model or "").strip()
                     in _SOURCE_HEADER_WORDS):
                 self._set_state(item.inquiry_id, BusinessState.INVALID_INPUT_SKIPPED,

@@ -2152,45 +2152,44 @@ class ProductionBackend(GuiBackend):
     def _resync_row_matches_article(identity, row, rows) -> bool:
         """The physical line is this order only when its article still matches.
 
-        The Owner may complete the model text (``N6210`` -> ``CELERON-N6210``) or
-        correct the brand, but a wholly different part, another quantity, or a
-        duplicate line means the row cannot prove which order it belongs to.
-        Status is deliberately excluded: that is the field being recovered.
+        The explicit Owner action may correct quantity, importance, brand or complete
+        the model text. The article text must remain non-empty and match the stored
+        model (equal, or one completing the other), and the line must be the unique
+        row for that model family. A wholly different part or a duplicate line still
+        fails closed. Status is deliberately excluded: that is the field recovered.
         """
 
         from src.sheets.worksheet_schema import worksheet_schema
 
         schema = worksheet_schema(identity.worksheet.worksheet)
-        snapshot = identity.identifying_snapshot
-        stored_model = str(snapshot.model or "").strip().casefold()
+        stored_model = str(identity.identifying_snapshot.model or "").strip().casefold()
 
         def matches(candidate):
             live_model = str(candidate.cells.get(schema.model_column) or "").strip().casefold()
             if not stored_model or not live_model:
                 return False
-            if stored_model != live_model:
-                if len(stored_model) < 4 or len(live_model) < 4:
-                    return False
-                if stored_model not in live_model and live_model not in stored_model:
-                    return False
-            if candidate.cells.get(schema.quantity_column) != snapshot.quantity:
+            if stored_model == live_model:
+                return True
+            if len(stored_model) < 4 or len(live_model) < 4:
                 return False
-            return (schema.importance_column is None
-                    or candidate.cells.get(schema.importance_column)
-                    == snapshot.importance_raw)
+            return stored_model in live_model or live_model in stored_model
 
         unique = [candidate for candidate in rows if matches(candidate)]
         return len(unique) == 1 and unique[0].row_position == row.row_position
 
-    @staticmethod
-    def _resync_effects_settled(state, purchase) -> bool:
+    def _resync_effects_settled(self, inquiry_id, state, purchase) -> bool:
         """No unresolved purchase effect may be closed by a Sheet status edit.
 
-        A pre-save state (``PRE_SAVE_READY``/``AI_RECOGNIZED``) has no external
-        effect yet, so the Owner's own follow-up may close it. A possibly sent or
-        reconciled-unknown Save always stays open until the real receipt is known.
+        A saved purchase does not prove a pending Google status write or a
+        possibly-sent Save was settled; those states stay blocked until their own
+        receipts are reconciled. A pre-save projection with any dispatch receipt is
+        also treated as unresolved because the projection and events disagree.
         """
 
+        if state in {BusinessState.INTERRUPTED_POSSIBLY_SENT,
+                     BusinessState.STATUS_WRITE_PENDING,
+                     BusinessState.SUBMIT_UNCONFIRMED}:
+            return False
         unresolved = {
             PurchaseOutcome.UNKNOWN_WRITE_OUTCOME,
             PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED,
@@ -2199,19 +2198,17 @@ class ProductionBackend(GuiBackend):
         }
         if purchase in unresolved:
             return False
-        settled = {
-            PurchaseOutcome.SAVED,
-            PurchaseOutcome.CONFIRMED_NOT_SAVED,
-            PurchaseOutcome.VALIDATION_FAILED,
+        if purchase in {PurchaseOutcome.SAVED, PurchaseOutcome.CONFIRMED_NOT_SAVED}:
+            return True
+        dispatch_events = {
+            EventType.SAVE_DISPATCH_ARMED,
+            EventType.SAVE_CLICK_COMPLETED,
+            EventType.SAVE_OUTCOME_UNKNOWN,
+            EventType.PURCHASE_DATA_SAVED,
         }
-        if state in {BusinessState.INTERRUPTED_POSSIBLY_SENT,
-                     BusinessState.STATUS_WRITE_PENDING,
-                     BusinessState.SUBMIT_UNCONFIRMED}:
-            return purchase in settled
-        if state is BusinessState.PURCHASE_EXCEPTION:
-            return purchase in settled | {
-                None, PurchaseOutcome.PRE_SAVE_READY, PurchaseOutcome.AI_RECOGNIZED}
-        return True
+        return not any(
+            event.event_type in dispatch_events
+            for event in self._v12_store.event_history(inquiry_id))
 
     def _recover_order_from_sheet(self, item, identity) -> str:
         """Owner action: make this order agree with the row it currently occupies.
@@ -2249,7 +2246,7 @@ class ProductionBackend(GuiBackend):
             purchase = self._v12_store.purchase_state(item.inquiry_id)
         except KeyError:
             purchase = None
-        if not self._resync_effects_settled(state, purchase):
+        if not self._resync_effects_settled(item.inquiry_id, state, purchase):
             raise ValueError(
                 "该订单的采购结果未确认（可能已保存或仍待核实），不能按表格结案；"
                 "原保护保留，请先在 INSO 核实。")
