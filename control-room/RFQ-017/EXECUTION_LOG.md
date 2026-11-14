@@ -20,7 +20,7 @@
 
 ## 2. Reproduction of the 26 failures
 
-- Input: exact 26 nodeids from `docs/evidence/v16/rfq016-ceo-third-review-2026-11-14.json` (`final.failed_nodeids`), copied to a scratch file under `.tmp/`.
+- Input: exact 26 nodeids from `docs/evidence/v16/rfq016-ceo-third-review-2026-11-14.json` (`final.failed_nodeids`). The audit JSON stores that dotted form verbatim plus `file_nodeid` for readability; pytest was invoked with the equivalent file form (`tests/launcher/*.py::...`), which pytest resolves to the same tests.
 - Command: `python -m pytest <26 nodeids> -q --tb=short -p no:cacheprovider`
 - Result: **26 failed in 4.76 s** (26 collected, 0 passed, 0 skipped).
 - Failure classes: 7 `ImportError`, 1 `ModuleNotFoundError`, 3 `AttributeError`, 15 behavioral assertion failures.

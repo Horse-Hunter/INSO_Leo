@@ -133,6 +133,8 @@ RFQ-016 多轮修复只改了 `src/workflow/v12_flow.py`、`src/launcher/backend
 - **真实代码缺口（防御纵深）：** 当前代码确实缺少测试所要求的共享准入/跨服务 barrier；这不等于已发生外部重复效果，但属于需要单独决定是否补的防御纵深。
 - **环境问题：** 由 OS、网络、端口、时钟、权限、依赖或并发时序导致。本次 **0 项**。
 
+> 下表的“测试”列使用 pytest 文件形式（`tests/launcher/*.py::...`），便于阅读；机器可读证据中的 `nodeid` 使用 RFQ-016 证据的 dotted 形式（`tests.launcher.*::...`），两者是同一测试，`nodeid` 与 RFQ-016 逐字一致，顺序也一致。
+
 | # | 测试（文件::名称） | 类别 | 失败点/证据 | 风险 | 发布含义 |
 |---|---|---|---|---|---|
 | 1 | `test_backend.py::test_google_resource_startup_failure_permanently_blocks_writer` | 旧测试不适用（不存在 API） | ImportError: google_resource_barrier；同时 backend._prepare_google_resource_store 不存在。 | none | 不阻断 |
@@ -243,7 +245,7 @@ RFQ-016 基线（上一轮已提交证据）：3408 collected / 3381 passed / 1 
 
 ## 附录 B — 26 个 nodeid
 
-见 [`docs/evidence/rfq017/rfq017-test-audit-2026-11-14.json`](../../docs/evidence/rfq017/rfq017-test-audit-2026-11-14.json) 的 `classification[].nodeid`；与 RFQ-016 证据中的 26 项逐字一致。
+见 [`docs/evidence/rfq017/rfq017-test-audit-2026-11-14.json`](../../docs/evidence/rfq017/rfq017-test-audit-2026-11-14.json) 的 `reproduction.failed_nodeids` 与 `classification[].nodeid`。`nodeid` 使用 RFQ-016 证据的 dotted 形式，**逐字、同序等于** `final.failed_nodeids`；`classification[].file_nodeid` 是同一测试的 pytest 文件形式。
 
 ## 附录 C — 只读现场快照（2026-11-14 17:0x）
 

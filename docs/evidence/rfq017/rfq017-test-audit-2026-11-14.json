@@ -27,7 +27,36 @@
     "skipped": 0,
     "duration_seconds": 4.76,
     "deterministic": true,
-    "external_io": "none: local fakes only; no network, Chrome, SMTP, production DB or clock dependency"
+    "external_io": "none: local fakes only; no network, Chrome, SMTP, production DB or clock dependency",
+    "failed_nodeids": [
+      "tests.launcher.test_backend::test_google_resource_startup_failure_permanently_blocks_writer",
+      "tests.launcher.test_backend::test_google_resource_startup_restores_existing_hold_and_reuses_store",
+      "tests.launcher.test_google_quote_update::test_confirming_refresh_never_releases_other_unknown_or_read_hold",
+      "tests.launcher.test_google_quote_update::test_document_write_admission_serializes_threads_but_allows_same_owner_nesting",
+      "tests.launcher.test_google_quote_update::test_failed_busy_read_with_unchanged_markers_does_not_prove_owner_abandoned_it",
+      "tests.launcher.test_google_quote_update::test_failed_owned_read_navigated_to_error_page_recovers_in_same_scope",
+      "tests.launcher.test_google_quote_update::test_nested_clients_share_document_barrier",
+      "tests.launcher.test_google_quote_update::test_owner_adoption_at_refresh_close_retains_shared_hold",
+      "tests.launcher.test_google_quote_update::test_read_only_history_survives_protected_scope_reattachment",
+      "tests.launcher.test_google_quote_update::test_recovery_lease_excludes_all_writers_until_recovery_finishes",
+      "tests.launcher.test_google_quote_update::test_recovery_waits_for_inflight_writer_and_then_blocks_new_writers",
+      "tests.launcher.test_google_quote_update::test_refresh_settlement_does_not_clear_separate_identity_uncertainty",
+      "tests.launcher.test_google_quote_update::test_unconfirmed_write_keeps_cross_service_barrier_after_close[protected]",
+      "tests.launcher.test_google_quote_update::test_unconfirmed_write_keeps_cross_service_barrier_after_close[script]",
+      "tests.launcher.test_google_quote_update::test_write_surface_becoming_busy_during_close_blocks_another_client",
+      "tests.launcher.test_google_web::test_cross_scope_recovery_preserves_page_and_blocks_writes[2026]",
+      "tests.launcher.test_google_web::test_cross_scope_recovery_preserves_page_and_blocks_writes[SHAHAB]",
+      "tests.launcher.test_google_web::test_fallback_connection_inherits_shared_root_barrier",
+      "tests.launcher.test_google_web::test_quarantined_read_blocks_write_from_another_service",
+      "tests.launcher.test_google_web::test_retained_protected_read_allows_only_one_isolated_recovery",
+      "tests.launcher.test_order_mail::test_order_mail_worker_passes_shared_runtime_admission",
+      "tests.launcher.test_read_page_recovery::test_closed_read_target_never_clears_separate_unknown_write",
+      "tests.launcher.test_read_page_recovery::test_failed_target_proof_never_releases_read_quarantine",
+      "tests.launcher.test_sales_order_preflight::test_sales_browser_binds_shared_admission_before_creating_page",
+      "tests.launcher.test_sales_order_preflight::test_sales_stops_before_browser_when_resource_ledger_unready",
+      "tests.launcher.test_sales_order_preflight::test_sales_without_admission_stops_before_browser_acquisition"
+    ],
+    "nodeid_note": "nodeid uses the exact dotted form from RFQ-016 evidence; file_nodeid is the same test in pytest file form."
   },
   "full_suite_excluding_26": {
     "command": "python -m pytest tests -q --tb=short -p no:cacheprovider --deselect <26 nodeids>",
@@ -53,7 +82,8 @@
     ],
     "search": "git log --all -S '<symbol>' -- src returned no commit; git log --all -- src/workflow/google_resource_holds.py empty",
     "source_imports": "no src/*.py imports any of the missing symbols; only tests reference them",
-    "conclusion": "the 26 tests were never satisfiable against any committed source; they are not a regression introduced by the RFQ-016 P0/P1 fixes"
+    "conclusion": "the 26 tests were never satisfiable against any committed source; they are not a regression introduced by the RFQ-016 P0/P1 fixes",
+    "nodeid_identity": "classification[].nodeid == RFQ-016 final.failed_nodeids, same order and content"
   },
   "classification_summary": {
     "t1_orphaned_api": 11,
@@ -64,238 +94,264 @@
   },
   "classification": [
     {
-      "nodeid": "tests/launcher/test_backend.py::test_google_resource_startup_failure_permanently_blocks_writer",
+      "nodeid": "tests.launcher.test_backend::test_google_resource_startup_failure_permanently_blocks_writer",
       "category": "t1",
       "category_label": "旧测试不适用：引用从未提交的 API/模块",
       "risk": "none",
       "release_gate": "不阻断",
       "finding": "ImportError: google_resource_barrier；同时 backend._prepare_google_resource_store 不存在。",
-      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。"
+      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。",
+      "file_nodeid": "tests/launcher/test_backend.py::test_google_resource_startup_failure_permanently_blocks_writer"
     },
     {
-      "nodeid": "tests/launcher/test_backend.py::test_google_resource_startup_restores_existing_hold_and_reuses_store",
+      "nodeid": "tests.launcher.test_backend::test_google_resource_startup_restores_existing_hold_and_reuses_store",
       "category": "t1",
       "category_label": "旧测试不适用：引用从未提交的 API/模块",
       "risk": "none",
       "release_gate": "不阻断",
       "finding": "ModuleNotFoundError: src.workflow.google_resource_holds；辅助测试模块也不存在。",
-      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。"
+      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。",
+      "file_nodeid": "tests/launcher/test_backend.py::test_google_resource_startup_restores_existing_hold_and_reuses_store"
     },
     {
-      "nodeid": "tests/launcher/test_google_quote_update.py::test_confirming_refresh_never_releases_other_unknown_or_read_hold",
+      "nodeid": "tests.launcher.test_google_quote_update::test_confirming_refresh_never_releases_other_unknown_or_read_hold",
       "category": "t1",
       "category_label": "旧测试不适用：引用从未提交的 API/模块",
       "risk": "none",
       "release_gate": "不阻断",
       "finding": "ImportError: _GoogleDocumentBarrier。",
-      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。"
+      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。",
+      "file_nodeid": "tests/launcher/test_google_quote_update.py::test_confirming_refresh_never_releases_other_unknown_or_read_hold"
     },
     {
-      "nodeid": "tests/launcher/test_google_quote_update.py::test_document_write_admission_serializes_threads_but_allows_same_owner_nesting",
+      "nodeid": "tests.launcher.test_google_quote_update::test_document_write_admission_serializes_threads_but_allows_same_owner_nesting",
       "category": "t1",
       "category_label": "旧测试不适用：引用从未提交的 API/模块",
       "risk": "none",
       "release_gate": "不阻断",
       "finding": "ImportError: _GoogleDocumentBarrier。",
-      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。"
+      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。",
+      "file_nodeid": "tests/launcher/test_google_quote_update.py::test_document_write_admission_serializes_threads_but_allows_same_owner_nesting"
     },
     {
-      "nodeid": "tests/launcher/test_google_quote_update.py::test_failed_busy_read_with_unchanged_markers_does_not_prove_owner_abandoned_it",
+      "nodeid": "tests.launcher.test_google_quote_update::test_failed_busy_read_with_unchanged_markers_does_not_prove_owner_abandoned_it",
       "category": "t2",
       "category_label": "旧测试不适用：测试已废弃的 document barrier 设计",
       "risk": "low",
       "release_gate": "不阻断",
       "finding": "恢复一次只读页面后，写者未被 QuotationInputBusy 阻断；当前设计允许一次隔离恢复。",
-      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。"
+      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。",
+      "file_nodeid": "tests/launcher/test_google_quote_update.py::test_failed_busy_read_with_unchanged_markers_does_not_prove_owner_abandoned_it"
     },
     {
-      "nodeid": "tests/launcher/test_google_quote_update.py::test_failed_owned_read_navigated_to_error_page_recovers_in_same_scope",
+      "nodeid": "tests.launcher.test_google_quote_update::test_failed_owned_read_navigated_to_error_page_recovers_in_same_scope",
       "category": "t2",
       "category_label": "旧测试不适用：测试已废弃的 document barrier 设计",
       "risk": "low",
       "release_gate": "不阻断",
       "finding": "Chrome error page 读失败后，新写者未被阻断；当前允许新开写页面并保留旧页面。",
-      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。"
+      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。",
+      "file_nodeid": "tests/launcher/test_google_quote_update.py::test_failed_owned_read_navigated_to_error_page_recovers_in_same_scope"
     },
     {
-      "nodeid": "tests/launcher/test_google_quote_update.py::test_nested_clients_share_document_barrier",
+      "nodeid": "tests.launcher.test_google_quote_update::test_nested_clients_share_document_barrier",
       "category": "t1",
       "category_label": "旧测试不适用：引用从未提交的 API/模块",
       "risk": "none",
       "release_gate": "不阻断",
       "finding": "ImportError: _document_barrier。",
-      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。"
+      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。",
+      "file_nodeid": "tests/launcher/test_google_quote_update.py::test_nested_clients_share_document_barrier"
     },
     {
-      "nodeid": "tests/launcher/test_google_quote_update.py::test_owner_adoption_at_refresh_close_retains_shared_hold",
+      "nodeid": "tests.launcher.test_google_quote_update::test_owner_adoption_at_refresh_close_retains_shared_hold",
       "category": "t2",
       "category_label": "旧测试不适用：测试已废弃的 document barrier 设计",
       "risk": "low",
       "release_gate": "不阻断",
       "finding": "open_quote_input 已以 V12Fault 阻断；测试额外要求 open_sheet 抛 QuotationInputBusy，当前未实现。",
-      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。"
+      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。",
+      "file_nodeid": "tests/launcher/test_google_quote_update.py::test_owner_adoption_at_refresh_close_retains_shared_hold"
     },
     {
-      "nodeid": "tests/launcher/test_google_quote_update.py::test_read_only_history_survives_protected_scope_reattachment",
+      "nodeid": "tests.launcher.test_google_quote_update::test_read_only_history_survives_protected_scope_reattachment",
       "category": "t2",
       "category_label": "旧测试不适用：测试已废弃的 document barrier 设计",
       "risk": "low",
       "release_gate": "不阻断",
       "finding": "带弹窗的受保护只读页面未阻断下一次只读；当前允许一次隔离恢复。",
-      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。"
+      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。",
+      "file_nodeid": "tests/launcher/test_google_quote_update.py::test_read_only_history_survives_protected_scope_reattachment"
     },
     {
-      "nodeid": "tests/launcher/test_google_quote_update.py::test_recovery_lease_excludes_all_writers_until_recovery_finishes",
+      "nodeid": "tests.launcher.test_google_quote_update::test_recovery_lease_excludes_all_writers_until_recovery_finishes",
       "category": "t1",
       "category_label": "旧测试不适用：引用从未提交的 API/模块",
       "risk": "none",
       "release_gate": "不阻断",
       "finding": "ImportError: _GoogleDocumentBarrier。",
-      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。"
+      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。",
+      "file_nodeid": "tests/launcher/test_google_quote_update.py::test_recovery_lease_excludes_all_writers_until_recovery_finishes"
     },
     {
-      "nodeid": "tests/launcher/test_google_quote_update.py::test_recovery_waits_for_inflight_writer_and_then_blocks_new_writers",
+      "nodeid": "tests.launcher.test_google_quote_update::test_recovery_waits_for_inflight_writer_and_then_blocks_new_writers",
       "category": "t2",
       "category_label": "旧测试不适用：测试已废弃的 document barrier 设计",
       "risk": "low",
       "release_gate": "不阻断",
       "finding": "在途写者未阻断只读恢复；当前按精确 target identity 允许隔离读。",
-      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。"
+      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。",
+      "file_nodeid": "tests/launcher/test_google_quote_update.py::test_recovery_waits_for_inflight_writer_and_then_blocks_new_writers"
     },
     {
-      "nodeid": "tests/launcher/test_google_quote_update.py::test_refresh_settlement_does_not_clear_separate_identity_uncertainty",
+      "nodeid": "tests.launcher.test_google_quote_update::test_refresh_settlement_does_not_clear_separate_identity_uncertainty",
       "category": "t2",
       "category_label": "旧测试不适用：测试已废弃的 document barrier 设计",
       "risk": "low",
       "release_gate": "不阻断",
       "finding": "内存 _protected 在 close 后未形成跨客户端页面 barrier；生产以持久 V13 hold 为主。",
-      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。"
+      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。",
+      "file_nodeid": "tests/launcher/test_google_quote_update.py::test_refresh_settlement_does_not_clear_separate_identity_uncertainty"
     },
     {
-      "nodeid": "tests/launcher/test_google_quote_update.py::test_unconfirmed_write_keeps_cross_service_barrier_after_close[protected]",
+      "nodeid": "tests.launcher.test_google_quote_update::test_unconfirmed_write_keeps_cross_service_barrier_after_close[protected]",
       "category": "r",
       "category_label": "真实代码缺口：共享准入/文档 barrier 未实现（防御纵深）",
       "risk": "medium",
       "release_gate": "不阻断受控试运行；阻断“全量绿/无条件发布”结论",
       "finding": "无跨服务 document barrier；关闭后新写者可以打开同文档新页面。持久 hold 仅覆盖同一报价单，不是全局 barrier。",
-      "rationale": "未证明会造成重复下单、重复报价或邮件；现有持久业务 hold 与精确 target identity 仍是有效防线。"
+      "rationale": "未证明会造成重复下单、重复报价或邮件；现有持久业务 hold 与精确 target identity 仍是有效防线。",
+      "file_nodeid": "tests/launcher/test_google_quote_update.py::test_unconfirmed_write_keeps_cross_service_barrier_after_close[protected]"
     },
     {
-      "nodeid": "tests/launcher/test_google_quote_update.py::test_unconfirmed_write_keeps_cross_service_barrier_after_close[script]",
+      "nodeid": "tests.launcher.test_google_quote_update::test_unconfirmed_write_keeps_cross_service_barrier_after_close[script]",
       "category": "r",
       "category_label": "真实代码缺口：共享准入/文档 barrier 未实现（防御纵深）",
       "risk": "medium",
       "release_gate": "不阻断受控试运行；阻断“全量绿/无条件发布”结论",
       "finding": "同上；_script_pending 只存在于 action 对象，关闭后新客户端不可见。",
-      "rationale": "未证明会造成重复下单、重复报价或邮件；现有持久业务 hold 与精确 target identity 仍是有效防线。"
+      "rationale": "未证明会造成重复下单、重复报价或邮件；现有持久业务 hold 与精确 target identity 仍是有效防线。",
+      "file_nodeid": "tests/launcher/test_google_quote_update.py::test_unconfirmed_write_keeps_cross_service_barrier_after_close[script]"
     },
     {
-      "nodeid": "tests/launcher/test_google_quote_update.py::test_write_surface_becoming_busy_during_close_blocks_another_client",
+      "nodeid": "tests.launcher.test_google_quote_update::test_write_surface_becoming_busy_during_close_blocks_another_client",
       "category": "r",
       "category_label": "真实代码缺口：共享准入/文档 barrier 未实现（防御纵深）",
       "risk": "medium",
       "release_gate": "不阻断受控试运行；阻断“全量绿/无条件发布”结论",
       "finding": "关闭时页面变 busy，但另一个 sheet 的写者仍可打开新页面；无跨 sheet/文档 barrier。",
-      "rationale": "未证明会造成重复下单、重复报价或邮件；现有持久业务 hold 与精确 target identity 仍是有效防线。"
+      "rationale": "未证明会造成重复下单、重复报价或邮件；现有持久业务 hold 与精确 target identity 仍是有效防线。",
+      "file_nodeid": "tests/launcher/test_google_quote_update.py::test_write_surface_becoming_busy_during_close_blocks_another_client"
     },
     {
-      "nodeid": "tests/launcher/test_google_web.py::test_cross_scope_recovery_preserves_page_and_blocks_writes[2026]",
+      "nodeid": "tests.launcher.test_google_web::test_cross_scope_recovery_preserves_page_and_blocks_writes[2026]",
       "category": "t2",
       "category_label": "旧测试不适用：测试已废弃的 document barrier 设计",
       "risk": "low",
       "release_gate": "不阻断",
       "finding": "浏览器 fallback 路径：一次失败读页面保留后，写操作未被阻断；生产已启用 API 读写（google_api.enabled=true），该路径为 fallback。",
-      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。"
+      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。",
+      "file_nodeid": "tests/launcher/test_google_web.py::test_cross_scope_recovery_preserves_page_and_blocks_writes[2026]"
     },
     {
-      "nodeid": "tests/launcher/test_google_web.py::test_cross_scope_recovery_preserves_page_and_blocks_writes[SHAHAB]",
+      "nodeid": "tests.launcher.test_google_web::test_cross_scope_recovery_preserves_page_and_blocks_writes[SHAHAB]",
       "category": "t2",
       "category_label": "旧测试不适用：测试已废弃的 document barrier 设计",
       "risk": "low",
       "release_gate": "不阻断",
       "finding": "同上，SHAHAB 工作表。",
-      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。"
+      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。",
+      "file_nodeid": "tests/launcher/test_google_web.py::test_cross_scope_recovery_preserves_page_and_blocks_writes[SHAHAB]"
     },
     {
-      "nodeid": "tests/launcher/test_google_web.py::test_fallback_connection_inherits_shared_root_barrier",
+      "nodeid": "tests.launcher.test_google_web::test_fallback_connection_inherits_shared_root_barrier",
       "category": "t1",
       "category_label": "旧测试不适用：引用从未提交的 API/模块",
       "risk": "none",
       "release_gate": "不阻断",
       "finding": "ImportError: _document_barrier / google_resource_barrier。",
-      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。"
+      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。",
+      "file_nodeid": "tests/launcher/test_google_web.py::test_fallback_connection_inherits_shared_root_barrier"
     },
     {
-      "nodeid": "tests/launcher/test_google_web.py::test_quarantined_read_blocks_write_from_another_service",
+      "nodeid": "tests.launcher.test_google_web::test_quarantined_read_blocks_write_from_another_service",
       "category": "t2",
       "category_label": "旧测试不适用：测试已废弃的 document barrier 设计",
       "risk": "low",
       "release_gate": "不阻断",
       "finding": "fallback 路径：隔离读页面未阻断另一服务写；生产 API 路径不使用该浏览器写。",
-      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。"
+      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。",
+      "file_nodeid": "tests/launcher/test_google_web.py::test_quarantined_read_blocks_write_from_another_service"
     },
     {
-      "nodeid": "tests/launcher/test_google_web.py::test_retained_protected_read_allows_only_one_isolated_recovery",
+      "nodeid": "tests.launcher.test_google_web::test_retained_protected_read_allows_only_one_isolated_recovery",
       "category": "t2",
       "category_label": "旧测试不适用：测试已废弃的 document barrier 设计",
       "risk": "low",
       "release_gate": "不阻断",
       "finding": "fallback 路径：页面保留/隔离恢复数量与测试期望不同；当前按 close/retire 规则处理。",
-      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。"
+      "rationale": "当前架构以 PageResourceAdmission + retained target identity + 持久 V13 hold 提供等价或更窄的保护；该测试期望的全局 barrier 未实现。",
+      "file_nodeid": "tests/launcher/test_google_web.py::test_retained_protected_read_allows_only_one_isolated_recovery"
     },
     {
-      "nodeid": "tests/launcher/test_order_mail.py::test_order_mail_worker_passes_shared_runtime_admission",
+      "nodeid": "tests.launcher.test_order_mail::test_order_mail_worker_passes_shared_runtime_admission",
       "category": "r",
       "category_label": "真实代码缺口：共享准入/文档 barrier 未实现（防御纵深）",
       "risk": "medium",
       "release_gate": "不阻断受控试运行；阻断“全量绿/无条件发布”结论",
       "finding": "backend._order_mail_worker 未向 run_sales_header_check 传 page_admission；该函数也没有该参数。",
-      "rationale": "未证明会造成重复下单、重复报价或邮件；现有持久业务 hold 与精确 target identity 仍是有效防线。"
+      "rationale": "未证明会造成重复下单、重复报价或邮件；现有持久业务 hold 与精确 target identity 仍是有效防线。",
+      "file_nodeid": "tests/launcher/test_order_mail.py::test_order_mail_worker_passes_shared_runtime_admission"
     },
     {
-      "nodeid": "tests/launcher/test_read_page_recovery.py::test_closed_read_target_never_clears_separate_unknown_write",
+      "nodeid": "tests.launcher.test_read_page_recovery::test_closed_read_target_never_clears_separate_unknown_write",
       "category": "t1",
       "category_label": "旧测试不适用：引用从未提交的 API/模块",
       "risk": "none",
       "release_gate": "不阻断",
       "finding": "ImportError: _document_barrier。",
-      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。"
+      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。",
+      "file_nodeid": "tests/launcher/test_read_page_recovery.py::test_closed_read_target_never_clears_separate_unknown_write"
     },
     {
-      "nodeid": "tests/launcher/test_read_page_recovery.py::test_failed_target_proof_never_releases_read_quarantine",
+      "nodeid": "tests.launcher.test_read_page_recovery::test_failed_target_proof_never_releases_read_quarantine",
       "category": "t1",
       "category_label": "旧测试不适用：引用从未提交的 API/模块",
       "risk": "none",
       "release_gate": "不阻断",
       "finding": "AttributeError: module has no attribute _document_barrier。",
-      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。"
+      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。",
+      "file_nodeid": "tests/launcher/test_read_page_recovery.py::test_failed_target_proof_never_releases_read_quarantine"
     },
     {
-      "nodeid": "tests/launcher/test_sales_order_preflight.py::test_sales_browser_binds_shared_admission_before_creating_page",
+      "nodeid": "tests.launcher.test_sales_order_preflight::test_sales_browser_binds_shared_admission_before_creating_page",
       "category": "t1",
       "category_label": "旧测试不适用：引用从未提交的 API/模块",
       "risk": "none",
       "release_gate": "不阻断",
       "finding": "AttributeError: sales_header.google_resource_barrier 不存在。",
-      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。"
+      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。",
+      "file_nodeid": "tests/launcher/test_sales_order_preflight.py::test_sales_browser_binds_shared_admission_before_creating_page"
     },
     {
-      "nodeid": "tests/launcher/test_sales_order_preflight.py::test_sales_stops_before_browser_when_resource_ledger_unready",
+      "nodeid": "tests.launcher.test_sales_order_preflight::test_sales_stops_before_browser_when_resource_ledger_unready",
       "category": "t1",
       "category_label": "旧测试不适用：引用从未提交的 API/模块",
       "risk": "none",
       "release_gate": "不阻断",
       "finding": "AttributeError: sales_header.google_resource_barrier 不存在。",
-      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。"
+      "rationale": "测试导入即失败；生产源码无任何引用，不改变运行行为。",
+      "file_nodeid": "tests/launcher/test_sales_order_preflight.py::test_sales_stops_before_browser_when_resource_ledger_unready"
     },
     {
-      "nodeid": "tests/launcher/test_sales_order_preflight.py::test_sales_without_admission_stops_before_browser_acquisition",
+      "nodeid": "tests.launcher.test_sales_order_preflight::test_sales_without_admission_stops_before_browser_acquisition",
       "category": "r",
       "category_label": "真实代码缺口：共享准入/文档 barrier 未实现（防御纵深）",
       "risk": "medium",
       "release_gate": "不阻断受控试运行；阻断“全量绿/无条件发布”结论",
       "finding": "run_sales_header_check 无 page_admission 参数；无准入时仍会 acquire_cdp_browser。",
-      "rationale": "未证明会造成重复下单、重复报价或邮件；现有持久业务 hold 与精确 target identity 仍是有效防线。"
+      "rationale": "未证明会造成重复下单、重复报价或邮件；现有持久业务 hold 与精确 target identity 仍是有效防线。",
+      "file_nodeid": "tests/launcher/test_sales_order_preflight.py::test_sales_without_admission_stops_before_browser_acquisition"
     }
   ],
   "risk_assessment": {
