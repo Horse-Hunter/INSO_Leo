@@ -1,13 +1,11 @@
-# Control Room — current RFQ status (CEO Review 2026-11-14)
+# Control Room — RFQ-016 CEO second Review (2026-11-14)
 
-**Any CEO or Executor window can end abruptly.** [Entry](../AI_START_HERE.md) → [CEO takeover](CEO_HANDOVER.md) → [Review](RFQ-016/REVIEW.md) → [checkpoint](RFQ-016/EXECUTION_LOG.md). Git documents are not live Windows proof.
+**Status: `CHANGES_REQUESTED / SOURCE_SAFETY_PARTIALLY_FIXED / EXECUTOR_REPORTED_TESTS / OLD_EXE_STILL_INSTALLED`.** This is the CEO GitHub code review, not new production observation.
 
-| RFQ | Status | Business fact and required next |
-| --- | --- | --- |
-| **RFQ-016** | **CHANGES_REQUESTED / PARTIAL_REAL_ORDER_DONE_REPORTED / NO_CEO_LIVE_RUN** | Executor `41a96f0d` reports row221 procurement/Google `发给采购` + FTDI `SAVED`, no supplier quote/no mail, 60 task-centre rows/0 V12 alerts, trial EXE `E9E3DA33…` PID38948. CEO source Review found P0 safety regression risks in automatic human closure and manual resync, plus physical-row display mismatch; **must fix before full PASS**. Preserve three old quote holds and four pending issue groups; no blind retry or force stop. |
+- **Business outcome retained:** INSO row `INSO_QUOTE/2026/221` procurement `rec_440fafd372440ecf9dacabf660dd155d` SAVED + Google `发给采购`/FTDI reported; no supplier quote/0 quote button/0 email. Never rerun this order just to test.
+- **Fix submitted:** `abf95cf0`, report `66176105`; evidence JSON 3376→3397 collected, 3349→3370 passed, same 26 failed node IDs, +21 new tests. No CEO test run or deployment; Executor reported installed old `E9E3DA33…` PID38948, watcher34304.
+- **New CEO findings:** [REVIEW](RFQ-016/REVIEW.md): P0-A unknown purchase guard applies to only one business state; P0-B auto-completion row fallback may accept blank model, changed qty/importance; P0-C manual resync may clear STATUS_WRITE_PENDING on SAVED purchase without resolving status write; P1-D Workbench row colour ignores unproven source link despite 需核对 filter. **Fix narrowly before source PASS**.
+- **Historical live inconsistency:** `inq_99275e8e72b43fd6616fd686` at SHAHAB row115 has original purchase MANUAL_REVIEW/RECONCILIATION_UNREADABLE, yet old code closed it HUMAN_COMPLETED and recovered SAVE_OUTCOME_UNKNOWN alert. **Read-only native+Sheet+SQLite reconciliation is approved; no production data edits/reopen/replay without Owner decision.** Three other quotation holds remain.
+- **Branch governance:** `develop` is current CEO policy/handover. Code is only on `workbuddy/v16-rfq016-stabilization`. GitHub default `main` remains historical V1.1; DO NOT advance for installed trial. [Owner branch policy](https://github.com/Horse-Hunter/INSO_Leo/blob/develop/docs/BRANCH_POLICY.md).
 
-**Branch state:** `develop` is the governance/forward integration line; RFQ-016 new code currently only on `workbuddy/v16-rfq016-stabilization`. GitHub default `main` remains legacy V1.1, not the accepted current V1.6. `release/previous` is provisional until original current/previous versions are verified. Trial deployment/uptime **never** promotes `main` without Owner acceptance: [policy](https://github.com/Horse-Hunter/INSO_Leo/blob/develop/docs/BRANCH_POLICY.md).
-
-**Next one step:** single Executor inspects current Windows process and durable external effects without new effects, then writes 4–6 failing P0/P1 regressions and a narrow safe patch on the existing RFQ branch; CEO re-reviews. No repeat order221 purchase, no automatic quote click or mail, no restored old SQLite, no clearing `SENT/UNKNOWN`/original holds.
-
-RFQ-001–015 are previous recorded project phases, not active tasks. Historical status evidence is at [pinned pre-compaction version](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/control-room/COORDINATION.md).
+**Next single Executor:** read the [Review](RFQ-016/REVIEW.md) and [checkpoint](RFQ-016/EXECUTION_LOG.md); inspect active worktree/Windows safely; add 4–6 targeted regressions and minimal safety fix; separately record SHAHAB/115 read-only evidence, then request `Review RFQ-016`. Preserve original process, Chrome9222, protected SQLite/WAL/SHM, UNKNOWN/SENT and rollbacks. No automatic real effects or new EXE.
