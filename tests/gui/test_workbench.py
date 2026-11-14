@@ -343,7 +343,9 @@ def test_compact_order_status_keeps_source_and_unconfirmed_write_visible():
                    waiting_label="已报价给客户；原写入待人工核对，不会自动重做")
     assert order_status(item, held) == "已报价给客户 · 待核对"
     stale = replace(held, source_fresh=False)
-    assert order_status(item, stale) == "状态待同步 · 待核对"
+    # Owner 2026-11-14: the column must show the sheet's own status. An old read no
+    # longer replaces it with a staleness hint; the "待核对" issue stays visible.
+    assert order_status(item, stale) == "已报价给客户 · 待核对"
     assert held.waiting_label.endswith("不会自动重做")
 
 
@@ -372,6 +374,7 @@ def test_task_filters_use_fresh_source_status_and_preserve_holds():
 
 
 def test_status_expires_without_snapshot_change_and_preserves_issue(monkeypatch):
+    """Expiry must not hide the sheet status or the issue (Owner 2026-11-14)."""
     from src.gui import workbench
     from src.gui.contracts import V12BusinessLabel, V12OrderStateDTO
 
@@ -384,7 +387,7 @@ def test_status_expires_without_snapshot_change_and_preserves_issue(monkeypatch)
         def now(cls, tz=None):
             return now + timedelta(minutes=16)
     monkeypatch.setattr(workbench, "datetime", Clock)
-    assert order_status(item, state) == "状态待同步 · 重复订单"
+    assert order_status(item, state) == "未发 · 重复订单"
     assert select_orders((item,), status="需核对", states={item.inquiry_id: state}) == (item,)
 
 

@@ -89,6 +89,18 @@ class SourceStatusProjection:
                     if len(matches) == 1:
                         row = next(r for r in rows if r.row_position == position)
                         statuses[matches[0].inquiry_id] = (row.cells.get(worksheet_schema(worksheet.worksheet).status_column), at, True)
+                # Orders whose sheet status moved on (the Owner finished the line, or
+                # an earlier run wrote a later status) no longer relocate by the stored
+                # snapshot, so their status stayed unknown and the list could not show
+                # the sheet. For display only, fall back to the row this order still
+                # occupies: one physical position, one order.
+                column = worksheet_schema(worksheet.worksheet).status_column
+                for item in affected:
+                    if statuses.get(item.inquiry_id, (None, None, False))[0] is not None:
+                        continue
+                    anchors = [r for r in rows if r.row_position == item.record_identity.row_position]
+                    if len(anchors) == 1:
+                        statuses[item.inquiry_id] = (anchors[0].cells.get(column), at, True)
             with self._revision_lock:
                 if self._observation_sequence.get(worksheet) == ticket:
                     self.statuses.update(statuses)

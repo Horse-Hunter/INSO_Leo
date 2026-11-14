@@ -169,17 +169,16 @@ def order_status(order, state=None):
     if order.delivery_status == "SENT":
         return "调研邮件已发送"
     if state is not None:
-        if _settled(state):
-            # A finished order reports its own outcome, not a staleness hint.
+        # The Owner reads this column as "what the sheet says now", so the sheet's own
+        # status wins whenever we have one — a finished order included. Only when no
+        # source status is known at all does the order's own outcome stand in.
+        sheet_status = (state.source_status.strip()
+                        if isinstance(state.source_status, str) and state.source_status.strip()
+                        else None)
+        if sheet_status is None:
             return state.business_label.value
-        if (state.business_label is V12BusinessLabel.PURCHASE_SENT
-                and not _source_is_fresh(state)):
-            # The purchase is placed; "状态待同步" would imply an open question.
-            return state.business_label.value
-        source = state.source_status if _source_is_fresh(state) and isinstance(state.source_status, str) else None
-        label = source.strip() if source and source.strip() else "状态待同步"
         issue = _STATUS_ISSUES.get(state.business_label)
-        return label + (" · " + (issue or "待核对") if _state_needs_review(state) else "")
+        return sheet_status + (" · " + (issue or "待核对") if _state_needs_review(state) else "")
     return (
         order.business_status
         or {
