@@ -1,0 +1,116 @@
+{
+  "rfq": "RFQ-016",
+  "phase": 3,
+  "evidence_kind": "production_reads_after_the_header_block_fix",
+  "date": "2026-11-14",
+  "executor": "WorkBuddy DeepSeek V4.1 Flash",
+  "commit": "24b73be7",
+  "owner_decision": {
+    "question": "表格上方早期的部分错乱（程序开发之前的询价）是否可以忽略",
+    "answer": "允许忽略；按这个前提继续推进本阶段并交付报告",
+    "recorded_at": "2026-11-14T09:54:22+08:00"
+  },
+  "live_layout": {
+    "worksheet": "2026",
+    "row_1_actual": ["Model", "Qty", "Brand", "Note", "MPN", "MFR", "Qty", "…", "quote_date (W1)"],
+    "rows_2_4": "three model rows from before the program existed; every status cell is blank",
+    "row_5_actual": ["STATUS", "WHAT", "CLASS", "WHO", "MPN", "MFR", "Qty"],
+    "repeated_block_headers": 73,
+    "quote_date": "W1 header, dates on rows 101..221 only",
+    "why_blank_status_is_inert": "QUOTATION_STATUSES = 发给采购 / 采购已报价 / 已报价给客户 and pending = 未发; a blank status cell matches no query, so those rows can never become a quotation candidate or an order."
+  },
+  "fix": {
+    "shared_locator": "src/sheets/worksheet_schema.py::locate_source_header",
+    "rule": "exact label match inside a bounded leading window (10 rows), anchored per worksheet (2026 from row 1, SHAHAB from row 2)",
+    "transports": [
+      "src/sheets/google_api_service.py::_require_source_header",
+      "src/launcher/google_web.py::GoogleSheetsWebService._headers"
+    ],
+    "unchanged": [
+      "W = quote_date proof still anchored to row 1 (exactly one occurrence)",
+      "row numbers are never renumbered; the pre-program rows keep their true sheet row",
+      "outside the window the sheet is a different sheet and SHEETS_SCHEMA_UNAVAILABLE still stops the run"
+    ]
+  },
+  "production_read_api_transport": {
+    "principal": "rfq016-sheets-test@inso-509314.iam.gserviceaccount.com (Viewer)",
+    "scope": "spreadsheets.readonly",
+    "2026": {
+      "rows": 221,
+      "first_row_position": 1,
+      "last_row_position": 221,
+      "quote_dates_bound": 68,
+      "status_histogram": {"已报价给客户": 84, "STATUS": 73, "<blank>": 39, "采购已报价": 13, "成交": 7, "Model": 1, "DATE": 1, "收到报价": 1, "意向订单": 1, "未发": 1},
+      "pending_未发": [{"row": 221, "model": "FT2232H-56Q-REEL", "brand": null, "qty": 105, "customer": "Customer"}],
+      "quotation_candidates": 97
+    },
+    "SHAHAB": {
+      "rows": 140,
+      "status_histogram": {"已报价给客户": 89, "<blank>": 45, "意向订单": 3, "成交": 2, "STATUS": 1},
+      "quotation_candidates": 89,
+      "pending_未发": []
+    }
+  },
+  "production_read_cdp_transport": {
+    "endpoint": "http://127.0.0.1:9222 (existing profile, attach only, no login)",
+    "outcome": "READ_OK",
+    "2026": {
+      "rows": 221,
+      "row_1_read": ["Model", "Qty", "Brand", "Note", "MPN", "MFR", "Qty"],
+      "row_5_read": ["STATUS", "WHAT", "CLASS", "WHO", "MPN", "MFR", "Qty"],
+      "quote_dates_bound": 68,
+      "pending_未发": [{"row": 221, "model": "FT2232H-56Q-REEL", "qty": 105}]
+    },
+    "tabs": {
+      "before": 4,
+      "lost": [],
+      "added": "one owned operation page, retained by design (retain_pages=True); closed after the probe",
+      "after_cleanup": 4
+    },
+    "note": "Both transports now accept the same block and both report exactly one pending row, so the fix is transport-independent."
+  },
+  "regression": {
+    "command": "python -m pytest tests -q",
+    "result": "32 failed, 4076 passed, 1 skipped in 451.33s",
+    "failure_set_comparison": "the same 32 node ids run against the parent commit (changes stashed) fail 29 of 32 in isolation; with the change 28 of 32 fail in isolation and no node id is new",
+    "cause_of_the_legacy_failures": "stale removed internals (_document_barrier, _GoogleDocumentBarrier, sales_header.google_resource_barrier), MODULE_PAUSED vs STOPPED expectations and load-sensitive readiness/barrier cases; none touches header parsing",
+    "gates": {"ruff": "All checks passed!", "git diff --check": "clean"}
+  },
+  "artifact": {
+    "spec": "packaging/INSO_V1.1.spec",
+    "command": "INSO_BUILD_VERSION=1.6 python -m PyInstaller --noconfirm --clean --distpath build/rfq016-candidate/r5 --workpath build/rfq016-candidate/w5 packaging/INSO_V1.1.spec",
+    "pyinstaller": "6.16.0",
+    "python": "3.12.10",
+    "exe_sha256": "b357889d48e5abe6ec6504eddd610442c877e438018f156c4c932477070814f6",
+    "bytes": 8414556,
+    "gates": {
+      "self_check": 0,
+      "api_self_check_candidate_config": "TRANSPORT_READY",
+      "api_self_check_production_config": "DISABLED (production has no google_api section; the CDP path is the live one)",
+      "idle_self_check": "0, 已停止, no business thread, GUI rendered"
+    }
+  },
+  "deployment": {
+    "production_dir": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6",
+    "replaced": ["INSO_V1.6.exe", "_internal"],
+    "previous_exe_sha256": "00ac7d68d88e1a27eb52e3b7457b4192b699211df1b1f5e3efe0be406eef30bd",
+    "new_exe_sha256": "b357889d48e5abe6ec6504eddd610442c877e438018f156c4c932477070814f6",
+    "backup": "dist/release-backups/INSO_V1.6-header-block-20261114T021508Z (exe + _internal, 262 MB)",
+    "fast_rollback_copy": "dist/INSO_V1.6/_internal.prev-20261114T021508Z",
+    "post_replace_checks": {"self_check": 0, "api_self_check": "DISABLED"},
+    "untouched": {
+      "production_json": {"bytes": 1048, "mtime": "2026-10-27 09:54:11", "sha256": "e6fd95e8e51cfab3a1403084aa20110902520a34008c4a9007d5f2377b006d5d"},
+      "sqlite": {"bytes": 1138688, "mtime": "2026-11-13 21:52:48", "sha256": "6c27fc25be861c01c5ff1513f8851232951ccc09f2e55ce2b4b4f884474f49ea"},
+      "chrome_profile": "untouched (attach only)"
+    }
+  },
+  "not_done": [
+    "no production cell written, no 更新报价 click, no order, no purchase, no mail",
+    "google_api is still absent from the production configuration, so production keeps using the CDP transport",
+    "no Editor share granted to the service account"
+  ],
+  "remaining_before_full_acceptance": [
+    "one controlled single order (2026 row 221, FT2232H-56Q-REEL, qty 105) with the purchase, the sheet write and the quote button each authorized for that order",
+    "compare Google, INSO, SQLite, quote result and notification for that row"
+  ]
+}

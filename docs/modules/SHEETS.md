@@ -281,6 +281,18 @@ writer, quotation-input, brief or business adapter was duplicated: `GoogleSheets
   A:G, so the `W=quote_date` proof, its unique-header rule (`quote_date` exactly
   once in row 1, W included) and the per-row E/F/G identity corroboration all use
   literally the same normalized cells the reader compares — no mixed typing.
+- **The header proof is a block, not row 1.** `2026` is a stack of small RFQ
+  blocks, each opened by its own copy of the `STATUS/WHAT/CLASS/WHO/MPN/MFR/Qty`
+  header, so the repeated block is the real invariant. The Owner's own
+  pre-program rows still sit above the first well-formed block (a stale
+  `Model/Qty/Brand/Note` header in A1:D1 plus three rows whose status cell is
+  blank), and those rows are ordinary business noise: no status query ever
+  selects them. `worksheet_schema.locate_source_header` therefore accepts the
+  exact label match anywhere in a bounded window (10 rows, anchored per
+  worksheet: `2026` from row 1, `SHAHAB` from row 2) and both transports use
+  it. Row numbers are never renumbered — the pre-program rows keep their true
+  sheet row and only the header proof changed. Outside the window the sheet is
+  a different sheet and `SHEETS_SCHEMA_UNAVAILABLE` still stops the run.
 - **Row slicing is per geometry.** A source read is always requested from row 1
   and sliced locally (that is what the native download did). Any other range —
   e.g. the 14-cell `'报价输入'!B5:O5` row — is requested verbatim, so its response
