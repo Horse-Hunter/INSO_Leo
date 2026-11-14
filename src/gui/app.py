@@ -70,8 +70,14 @@ def _status_color(status: str) -> str:
     return _TEXT_SECONDARY
 
 
-def _order_row_style(
-    order: Order,
+# Business labels that describe a finished order. They are painted as history even
+# when the item row still carries an error-ish workflow status, because the outcome
+# itself is settled: "human handled it" and "skipped as invalid input" are answers,
+# not open questions waiting for the Owner.
+_SETTLED_LABELS = frozenset({"人工处理完成", "已跳过（数据异常）"})
+
+
+def _order_row_style(    order: Order,
     now: datetime | None = None,
     v12_state: V12OrderStateDTO | None = None,
 ) -> str:
@@ -87,13 +93,13 @@ def _order_row_style(
     if v12_state is not None and v12_state.latest_active_alert is not None:
         if v12_state.business_label.value in {"已发采购（待确认）", "采购已处理，表格状态待人工更新"}:
             return "warning"
-        if v12_state.business_label.value == "人工处理完成":
+        if v12_state.business_label.value in _SETTLED_LABELS:
             return "legacy"
         return "error"
     if v12_state is not None:
         if v12_state.business_label.value in {"已发采购（待确认）", "采购已处理，表格状态待人工更新"}:
             return "warning"
-        if v12_state.business_label.value == "人工处理完成":
+        if v12_state.business_label.value in _SETTLED_LABELS:
             return "legacy"
         if v12_state.business_label.value in {"处理中断（未发送）", "处理中断（可能已发送，请先核对）", "源订单已变更", "重复订单"}:
             return "error"

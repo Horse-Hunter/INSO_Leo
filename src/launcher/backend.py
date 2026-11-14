@@ -4429,9 +4429,20 @@ class ProductionBackend(GuiBackend):
                         and target.module_id == "tp" and target.model == order.model
                         and target.quantity == order.quantity else None)
                 cached = self._view_state_cache.get(key)
-                if cached is None or cached[0] != order or force:
+                # The cached observation is only valid while the durable state is
+                # unchanged: an order that the Owner (or the reconciliation) closes
+                # would otherwise keep showing its old "needs review" label and
+                # colour for the rest of the session, because the local order row
+                # itself never changes.
+                try:
+                    durable_state = (self._v12_store.business_state(key)
+                                     if self._v12_store is not None else None)
+                except (KeyError, V12DatabaseError, sqlite3.Error):
+                    durable_state = None
+                signature = (order, durable_state)
+                if cached is None or cached[0] != signature or force:
                     dto = self.get_v12_order_state(key) if not key.startswith("tp_") else None
-                    self._view_state_cache[key] = (order, dto)
+                    self._view_state_cache[key] = (signature, dto)
                 dto = self._view_state_cache[key][1]
                 if dto is not None:
                     # Re-evaluate freshness and in-progress source reads even

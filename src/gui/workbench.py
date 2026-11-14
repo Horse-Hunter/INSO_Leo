@@ -113,6 +113,28 @@ _REVIEW_STATES = {
     V12BusinessLabel.INTERRUPTED_UNSENT, V12BusinessLabel.SOURCE_CHANGED,
 }
 
+# Outcomes that are answers rather than open questions: the Owner finished the line,
+# or the row was never a real order. Those report their own outcome instead of a
+# staleness hint.
+_SETTLED_LABELS = frozenset({
+    V12BusinessLabel.HUMAN_COMPLETED,
+    V12BusinessLabel.SKIPPED_INVALID_INPUT,
+})
+
+# Labels that must never paint a row as an exception. A placed purchase waits for the
+# supplier, which is a normal business state, not something the Owner has to look at.
+_CALM_LABELS = _SETTLED_LABELS | {V12BusinessLabel.PURCHASE_SENT}
+
+
+def _settled(state) -> bool:
+    return (state is not None and state.business_label in _SETTLED_LABELS
+            and not state.active_alerts and state.latest_active_alert is None)
+
+
+def _calm(state) -> bool:
+    return (state is not None and state.business_label in _CALM_LABELS
+            and not state.active_alerts and state.latest_active_alert is None)
+
 
 def _source_is_fresh(state, now=None):
     at = state.source_verified_at
@@ -147,6 +169,13 @@ def order_status(order, state=None):
     if order.delivery_status == "SENT":
         return "调研邮件已发送"
     if state is not None:
+        if _settled(state):
+            # A finished order reports its own outcome, not a staleness hint.
+            return state.business_label.value
+        if (state.business_label is V12BusinessLabel.PURCHASE_SENT
+                and not _source_is_fresh(state)):
+            # The purchase is placed; "状态待同步" would imply an open question.
+            return state.business_label.value
         source = state.source_status if _source_is_fresh(state) and isinstance(state.source_status, str) else None
         label = source.strip() if source and source.strip() else "状态待同步"
         issue = _STATUS_ISSUES.get(state.business_label)
@@ -747,12 +776,15 @@ class WorkbenchView:
                 if o.min_reference_price is not None
                 else "暂无价格",
             )
+            settled = _calm(state)
             tag = (
                 "error"
-                if o.status is OrderStatus.ERROR
-                or o.delivery_status in {"UNKNOWN", "PERMANENT_FAILURE"}
-                else "warning" if state is not None and (
+                if not settled and (
+                    o.status is OrderStatus.ERROR
+                    or o.delivery_status in {"UNKNOWN", "PERMANENT_FAILURE"})
+                else "warning" if state is not None and not settled and (
                     not _source_is_fresh(state) or _state_needs_review(state))
+                else "legacy" if settled
                 else "recent"
             )
             if self._row_values.get(o.inquiry_id) != (values, tag):
