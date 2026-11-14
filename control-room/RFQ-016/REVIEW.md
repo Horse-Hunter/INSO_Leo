@@ -1,40 +1,31 @@
-# RFQ-016 — CEO independent Review (2026-11-14)
+# RFQ-016 — CEO Review (2026-11-14)
 
-**Verdict: `CHANGES_REQUESTED / PARTIAL_BUSINESS_EVIDENCE_ACCEPTED / PRODUCTION_TRIAL_NOT_PROMOTED`.** Reviewed source branch `workbuddy/v16-rfq016-stabilization` at **`41a96f0dd31e815065dce379fadc02aa6c0f86f8`** (13 commits after `9ad9ccb8`). This is independent **GitHub source/test-code/report inspection**, **not** a live Windows/Google/INSO/SMTP session or independently run test suite. The Executor's reported real receipt is material evidence, not a CEO-observed live fact.
+**Verdict: `CHANGES_REQUESTED / REAL_ORDER_EXECUTOR_REPORTED / NOT_PROMOTED`.** Independently inspected GitHub source/tests/reports through `41a96f0d` (13 changes since `9ad9ccb8`); **no direct Windows, Sheet, INSO or SMTP session; no CEO test run**. Full technical review with rationale: [pinned detail](https://github.com/Horse-Hunter/INSO_Leo/blob/9d9181bdd876046e055d2122b6412012c7b41cf9/control-room/RFQ-016/REVIEW.md).
 
-## Accepted as Executor evidence (not blanket production PASS)
+## What can be accepted as reported evidence
 
-1. **Row 221 business outcome reported**: `INSO_QUOTE/2026/221`, `FT2232H-56Q-REEL` qty105: exactly one native Save-and-Send, inconclusive first response then original reconciliation `RECONCILIATION_CONFIRMED_SAVED` / receipt `rec_440fafd372440ecf9dacabf660dd155d`; API `A221=发给采购`, `F221=FTDI` readback; ledger `SAVED/PURCHASE_RECORDED`. No quote available → `NO_RECENT_QUOTE`, no quotation-input write, zero quote-button clicks; no mail for this C-class order. This is a legitimate stage outcome, **not** proof of future quotation completion.
-2. Production API `google_api.enabled=true`, Service Account Editor and later deployed EXE `E9E3DA33417414ABAC53F8A88A67D9F053BCDAEAB9730EAE9AD8BD7870DFFAD0`, PID `38948` are **Executor-observed/reported** at 14:55, **not independently rechecked now**; previous `197EC23B...`/PID `26604` in the detailed log was superseded by six later rebuilds.
-3. Submitted code really contains customer ID `4526000` exact-option guard, bounded native menu retry, purchase button hint fix; task-centre reconciliation, right-click resync, source-status column and calm-row styling; related tests were added. The Executor reports **3349 pass / 1 skip / 26 fail**, but current raw JUnit/failure-ID matrix/build manifest are **not committed**: `TEST_REPORT.json` still reflects older releases, and no independent run was possible.
-4. No new real external effect was performed by the CEO Review. Original production, shared Chrome 9222, SQLite/UNKNOWN, rollback and all Git worktrees remain untouched. Agent Computer Use is now permitted; Executor reported using GUI screenshot and two task-centre clicks, not forbidden.
+- **Inquiry 2026 / row 221:** `FT2232H-56Q-REEL`, Qty105. Executor recorded one INSO Save-and-Send followed by `RECONCILIATION_CONFIRMED_SAVED` / `rec_440fafd372440ecf9dacabf660dd155d`; API `A221:未发→发给采购`, `F221:空→FTDI`, SQLite `SAVED/PURCHASE_RECORDED`. No supplier quote: `NO_RECENT_QUOTE`, **0 quote-input writes, 0 quote clicks**; no mail for this order. No reason to rerun row 221.
+- Deployed trial: Executor reports Google API enabled + production Editor, final EXE `E9E3DA33…` PID38948 and GUI 60 rows = 35 human-completed +24 purchased +1 invalid/header, 0 active V12 alerts. **3 legacy V13 quote holds remain**. These are *Executor observations*, not CEO live verification.
+- Code contains bounded exact ERP customer row (ID4526000), purchase-action hint repair, source reconciliation, manual resync, calm GUI display, status column update and related tests. Executor reports `3349 PASS / 1 SKIP / 26 FAIL`; latest raw JUnit/failure-ID baseline and final EXE↔source manifest **not committed**; `TEST_REPORT.json` concerns older runs.
 
-## Blocking code findings (Executor fixes in the existing branch, no forced live rerun)
+## P0: do not approve the new closure/recovery as safe
 
-**P0 — automatic human closure can suppress uncertain effects / real alerts.**
-- `src/workflow/v12_flow.py:65-77,306-343` includes `INTERRUPTED_POSSIBLY_SENT` and `STATUS_WRITE_PENDING` in automatic `_OWNER_RECONCILABLE_STATES`, then sets `HUMAN_COMPLETED` based on a source status. But manually changed Google status does **not** prove previous INSO/Google/quote/SMTP uncertain effects settled.
-- `src/workflow/v12_store.py:270-303` unconditionally recovers **every** `AlertType` when entering `HUMAN_COMPLETED`, including `NOTIFICATION_FAILED` and purchase/unknown alerts. Immutable events/recipient ledger remain, but the GUI warning and active incident evidence can disappear. The narrower `PURCHASE_RECORDED → DATA_QUALITY only` rule is good; the broader rule is not proven safe.
-- **Required:** preserve original durable purchase/outbox/quotation holds and unresolved effects; separate “Owner updated source sheet” from “external result reconciled”; do not auto-clear effect-unknown or notification alerts. Add deterministic UNKNOWN/SENT/failed-mail tests and keep their visible review signals. Do not clear real production historical holds to make the task centre show zero.
+1. `src/workflow/v12_flow.py:65-77,306-343`: automatic “Owner finished in Sheet” reconciliation includes **`INTERRUPTED_POSSIBLY_SENT` and `STATUS_WRITE_PENDING`**, and calls `HUMAN_COMPLETED` without independently settling the underlying purchase/quote/outbox UNKNOWN. A human Sheet status change does not establish success of an uncertain external action.
+2. `src/workflow/v12_store.py:270-303`: `HUMAN_COMPLETED` recovers **all** alert types, including `NOTIFICATION_FAILED`, regardless of ongoing real external-effect uncertainty. Historical rows remain, but active incident/GUI signal can vanish. `PURCHASE_RECORDED → DATA_QUALITY-only` is the safer pattern.
+3. `src/launcher/backend.py:2150-2188`: right-click `resync` uses old physical row+completed status to `rebind_identity` (rewrites stored model/qty), sets `HUMAN_COMPLETED`, clears all alerts; no old-identity, quote/purchase/mail UNKNOWN or atomic cross-store guard. `tests/launcher/test_manual_order.py:45-61` **explicitly expects an entirely different part (OLD→FIXED-PART) to be rebound**. Row reuse can close the wrong order or hide a held effect.
 
-**P0 — right-click resync can attach an order to another article and erase alerts.**
-- `src/launcher/backend.py:2150-2188` uses **only the old physical row position + completed status** and calls `rebind_identity`, `set_business_state(HUMAN_COMPLETED)`, `recover_stale_alerts`. It does **not** check model/quantity identity, old purchase/quote/SMTP UNKNOWN, existing holds, or atomicity of the two state stores.
-- `tests/launcher/test_manual_order.py:45-61` explicitly tests `OLD` → entirely different `FIXED-PART`/Qty7→19 and treats it as success. That is a concrete cross-order binding risk if rows shift/reuse.
-- **Required:** original identity/historical effect check, block unsafe UNKNOWN, unique exact row proof (or separate explicit high-risk Owner reconciliation without rebind), no blanket alert recovery, and a cross-row replacement + UNKNOWN regression. Never use this action to override an already dispatched purchase/quote.
+**Fix:** add focused fake-ledger regressions first: UNKNOWN purchase and uncertain quote still held with active alerts after manual Sheet edit; failed-mail alert remains visible; resync rejects different article, reused position and old effect-hold; never clear real `SENT/UNKNOWN`. Reuse native guards; do not invent a second ledger. No production replay or forced stop merely to demonstrate tests.
 
-**P1 — displayed “source status” may belong to another row.**
-- `src/launcher/source_status.py:92-103` marks a status as fresh/verified from the original physical row when exact source relocation fails, **without comparing model/quantity/identity**. A moved/reused line can display an unrelated item's status as this order's “表格真实状态”.
-- **Required:** preserve no-write separation but also use identity-aware, nonambiguous observation; when unprovable, display “来源待核对” instead of falsely assigning a sheet status; test moved/deleted/replaced/duplicate rows and stale snapshots.
+## P1: status truth and evidence
 
-**P1 — evidence and long-running reliability not yet closed.**
-- Commit current run's machine-readable failure IDs, before/after baseline comparison, frozen EXE ↔ source/changed modules manifest, last five rebuild receipts and final PID/SQLite read-only sample. Currently `FINAL_REPORT` is newer than `EXECUTION_LOG` header and `RELEASE_READINESS`, risking bad handoff.
-- Existing recorded defects remain: quotation manual refusal without reason; 12:00–12:04 GUI stale display; paused-module window close fails to drain (multiple forced stops); orphan `about:blank#INSO_CREATE`; old `inq_d65be9df…` recurring quotation input failure. Diagnose in bounded follow-up without clearing old holds/replaying writes/closing original tabs.
-- Task-centre status filter in `src/gui/workbench.py:206-216` still treats any nonfresh state as `需核对` even if settled and row colour calm; test filter/count/display consistency after 15 minutes.
+- `src/launcher/source_status.py:92-103`: after exact relocation fails, display fallback accepts **any single row at the original position** as fresh/verified without model/qty/identity proof. If source row moves/is replaced, status may belong to another order. Test moved, replaced, duplicate and missing rows; show `来源待核对` when linkage unproven. Display-only does not make a false attribution harmless.
+- `src/gui/workbench.py:206-216` still classifies settled but >15min old source as `需核对`, while its row colour can be calm; verify filter/count consistency.
+- Commit raw final test IDs/baseline comparison, EXE provenance/release receipts and latest read-only operating state. No claim that 26 failures are irrelevant until verified.
 
-## Return criteria and CEO decision
+## Residual run issues, action and governance
 
-- **Business substage:** `PURCHASE_SAVE_AND_GOOGLE_SYNC_EXECUTOR_REPORTED`; **quotation:** `NO_SUPPLIER_QUOTE / NO_CLICK_EXPECTED`; **GUI:** observed Executor screenshot; **independent live verification:** `NOT_VERIFIED`.
-- **Overall:** `CHANGES_REQUESTED`, **not** `REVIEWED_DONE`, and **not** permission to promote `develop → main`. Owner approval after trial remains mandatory under [branch policy](https://github.com/Horse-Hunter/INSO_Leo/blob/develop/docs/BRANCH_POLICY.md).
-- Single Executor should first write 4–6 focused failing regressions for the P0/P1 paths, then minimum source fix and positive/negative regressions; do not force stop the running program, release a new EXE or rerun row 221 just for Review. New live effect/release safety still requires scoped Owner authority.
-- On next request `Review RFQ-016`, independently recheck fixed diff, all focused tests and 26-failure comparison, production scope/unknown holds, review handoff and current trial. If a production fix was installed, it is **still 前瞻试运行**, never automatically main.
+Open: quotation rerun refusal reason unrecorded; 12:00–12:04 GUI stale; paused-module close hangs (forced exits); orphan Chrome blank tab; old `inq_d65be9df…` recurrent quote-input failures. Preserve old V13 holds, Chrome9222, SQLite/WAL/SHM and rollback.
 
-[Executor final report](FINAL_REPORT.md) · [recoverable checkpoint](EXECUTION_LOG.md) · [original 12:20–14:55 detailed log](https://github.com/Horse-Hunter/INSO_Leo/blob/41a96f0dd31e815065dce379fadc02aa6c0f86f8/control-room/RFQ-016/EXECUTION_LOG.md).
+**Next single Executor:** inspect live PID/effects read-only, write 4–6 negative regressions, narrowly repair P0/P1 on existing `workbuddy/v16-rfq016-stabilization`; test and provide machine-readable evidence; then request `Review RFQ-016` again. Source code is **not yet merged into `develop`**. No automatic new EXE/real effects or `develop → main`: per [Owner branch policy](https://github.com/Horse-Hunter/INSO_Leo/blob/develop/docs/BRANCH_POLICY.md), deployed/long-running trial ≠ accepted current version.
+
+[Executor report](FINAL_REPORT.md) · [live checkpoint](EXECUTION_LOG.md).
