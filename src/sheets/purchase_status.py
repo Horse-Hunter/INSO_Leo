@@ -86,9 +86,20 @@ def owner_resolved_status(reader: WorksheetRowReader, identity: SheetRecordIdent
         and (schema.importance_column is None
              or row.cells.get(schema.importance_column) == identity.identifying_snapshot.importance_raw)
     ]
-    if len(candidates) != 1:
+    if len(candidates) == 1:
+        return str(candidates[0].cells[column]).strip()
+
+    # Last resort: the Owner is looking at that very line. Accept it only when the
+    # physical row is unique, carries a completed status, and its model is the same
+    # article text (equal, or one completing the other) — a wholly different part in
+    # the same position still fails closed.
+    anchors = [row for row in eligible if row.row_position == identity.row_position]
+    if len(anchors) != 1:
         return None
-    return str(candidates[0].cells[column]).strip()
+    live_model = str(anchors[0].cells.get(schema.model_column) or "").strip().casefold()
+    if stored_model not in live_model and live_model not in stored_model:
+        return None
+    return str(anchors[0].cells[column]).strip()
 
 
 def current_row_at_identity(reader: WorksheetRowReader, identity: SheetRecordIdentity) -> WorksheetRow | None:

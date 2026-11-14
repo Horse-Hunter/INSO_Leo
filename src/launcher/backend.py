@@ -3894,9 +3894,14 @@ class ProductionBackend(GuiBackend):
         if dto is not None and self._v12_store is not None:
             # A closed order must not keep a quotation observation alive: the Owner
             # finished that line in the sheet, so "quote failed / status not synced"
-            # would colour a finished order for the rest of the session.
+            # would colour a finished order for the rest of the session. A purchased
+            # order keeps a genuine quotation failure visible, but not a "write the
+            # status back" reminder — the sheet is the authority for that.
             try:
-                if self._v12_store.business_state(inquiry_id) is BusinessState.HUMAN_COMPLETED:
+                state = self._v12_store.business_state(inquiry_id)
+                if (state is BusinessState.HUMAN_COMPLETED
+                        or (state is BusinessState.PURCHASE_RECORDED
+                            and dto.business_label is V12BusinessLabel.QUOTATION_STATUS_PENDING)):
                     dto = None
             except KeyError:
                 pass

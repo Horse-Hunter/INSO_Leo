@@ -23,6 +23,7 @@ from src.sheets import (
 )
 from src.sheets.brand_write import SheetRecordConflict
 from src.sheets.purchase_status import current_purchase_status, owner_resolved_status
+from src.sheets.worksheet_schema import SOURCE_HEADER_LABELS
 
 from .service import (
     BrandUpdater,
@@ -71,8 +72,19 @@ _OWNER_RECONCILABLE_STATES = frozenset({
     BusinessState.RESEARCH_FAILED,
     BusinessState.STATUS_WRITE_PENDING,
     BusinessState.DUPLICATE_STOPPED,
+    BusinessState.DUPLICATE_CHECK_PENDING,
     BusinessState.INVALID_INPUT_SKIPPED,
 })
+
+# A worksheet header row was once admitted as an order (``MPN`` in the model cell).
+# It can never be resolved from the sheet — its status cell holds ``STATUS`` — so the
+# ledger marks it as invalid input instead of reporting it as a business anomaly
+# forever. The sheet itself is never touched.
+_SOURCE_HEADER_WORDS = frozenset(
+    label
+    for labels in SOURCE_HEADER_LABELS.values()
+    for label in labels.values()
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,6 +315,16 @@ class V12WorkflowCoordinator:
             # order is finished and must stop being reported as an exception. The
             # locator stays strict about worksheet/row/model and returns None on
             # anything unprovable, so nothing is closed blind.
+            # A header row that was once admitted as an order can never be resolved
+            # from its own status cell, so the ledger records the real reason once
+            # instead of showing it as a business anomaly for ever.
+            if (state in _OWNER_RECONCILABLE_STATES
+                    and str(item.record_identity.identifying_snapshot.model or "").strip()
+                    in _SOURCE_HEADER_WORDS):
+                self._set_state(item.inquiry_id, BusinessState.INVALID_INPUT_SKIPPED,
+                    EventType.HUMAN_RESOLUTION_RECORDED, now)
+                self._v12_store.recover_stale_alerts(item.inquiry_id, at=now)
+                continue
             if state in _OWNER_RECONCILABLE_STATES and owner_resolved_status(
                     reader, item.record_identity) is not None:
                 self._set_state(item.inquiry_id, BusinessState.HUMAN_COMPLETED,
