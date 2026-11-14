@@ -6,7 +6,7 @@
 
 | RFQ | Status / active work | Where to resume |
 | --- | --- | --- |
-| **RFQ-016** | **CHANGES_REQUESTED / HEALTH_HOLD / REAL_ORDER_NOT_VERIFIED**. V1.6 header/API code reviewed, prior production EXE replacement **reported**, but real single-order API completion and current production health NOT VERIFIED; original Executor interrupted by quota. | [Task Spec](RFQ-016/TASK_SPEC.md) · [Execution checkpoint](RFQ-016/EXECUTION_LOG.md) · [CEO Review](RFQ-016/REVIEW.md) · [Final report](RFQ-016/FINAL_REPORT.md) |
+| **RFQ-016** | **REVIEW_REQUIRED / REAL_ORDER_PURCHASE_DONE / QUOTATION_WAITING_SUPPLIER**. 2026-11-14 11:59: the authorized single order (`2026` row 221) was purchased through the API path — INSO save+send reconciled `SAVED` (`rec_440fafd3…`), Google `A221` `未发`→`发给采购`, `F221`→`FTDI`; no mail; quotation evaluated `NO_RECENT_QUOTE` (no supplier quote yet, 0 writes, 0 button clicks). Three source fixes deployed (`197EC23B…`). Historical red/amber backlog in the task centre is unchanged and not caused by this run. | [Task Spec](RFQ-016/TASK_SPEC.md) · [Execution checkpoint](RFQ-016/EXECUTION_LOG.md) · [CEO Review](RFQ-016/REVIEW.md) · [Final report](RFQ-016/FINAL_REPORT.md) |
 
 Remote development branch: `workbuddy/v16-rfq016-stabilization` (read actual HEAD each session); production branch/report lineage also exists at `codex/v1-6-independent-scheduling`. **Do not auto-merge/deploy** from a document-only commit.
 

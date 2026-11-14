@@ -497,7 +497,7 @@ def test_prepare_lets_the_erp_fill_the_row_then_reads_it_back() -> None:
     assert parent.calls == [("wait_for_model", "LM358")]
     assert actions.calls == [
         ("new_draft",),
-        ("customer", "Win Source Elec. Tech. Ltd"),
+        ("customer", "深圳阿尔克贸易有限公司"),
         ("quotation_type", "需要问全价格"),
         ("purchaser", "颜浩坚"),
         ("open_ai",),

@@ -34,6 +34,7 @@ from src.gui.contracts import (
     SiteLoginReport,
     SiteLoginResult,
     SourceDetail,
+    V12AlertCode,
     V12BusinessLabel,
     V12ReasonCode,
     WorkbenchSnapshot,
@@ -2006,8 +2007,19 @@ class ProductionBackend(GuiBackend):
         if action == "purchase":
             cached = self._view_state_cache.get(inquiry_id)
             dto = cached[1] if cached else None
+            # A purchase exception is exactly what this one-order retry resolves:
+            # a successfully restarted purchase clears the same ``ai-recognition``
+            # scope. Blocking the hint on that very alert deadlocked the only
+            # supported entry (live 2026-11-14: a CONTROL_NOT_FOUND exception left
+            # 重跑采购流程 grey with no way to clear it). Authorisation is not
+            # relaxed here -- it stays with can_order_action, which re-reads the
+            # durable ledger and refuses every unknown/possibly-sent outcome.
+            blocking = tuple(
+                alert for alert in (dto.active_alerts if dto is not None else ())
+                if alert.alert_type is not V12AlertCode.PURCHASE_EXCEPTION
+            )
             return (self._state is RunState.RUNNING and self._v12_store is not None
-                and dto is not None and not dto.active_alerts
+                and dto is not None and not blocking
                 and dto.business_label not in {
                     V12BusinessLabel.SUBMIT_UNCONFIRMED, V12BusinessLabel.INTERRUPTED_POSSIBLY_SENT,
                     V12BusinessLabel.STATUS_WRITE_PENDING, V12BusinessLabel.PURCHASE_SENT,

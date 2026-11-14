@@ -27,8 +27,18 @@ from .write_safety import (
 
 AI_ENTRY_PATH = "/skins/etaoerp/product/Import_ai.aspx"
 _QUOTATION_TYPES = frozenset({"需要问全价格", "普通询价"})
-_CUSTOMERS = frozenset({"Win Source Elec. Tech. Ltd"})
+_CUSTOMERS = frozenset({"深圳阿尔克贸易有限公司"})
 _PURCHASERS = frozenset({"颜浩坚", "陈熙"})
+
+# The ERP now carries two separate customer records with the identical display
+# name, phone, contact and owner; only their record id differs. A name-only pick
+# is therefore ambiguous and correctly fails closed. The Owner identified the
+# intended record on 2026-11-14 (the first row of the site's own menu), and this
+# id pins that exact record so the click never depends on menu ordering: the
+# option row must carry both the allowlisted name and this id, or nothing is
+# clicked. Replace the former customer ``Win Source Elec. Tech. Ltd``, which the
+# ERP no longer offers at all (verified live, 2026-11-14 11:31).
+_CUSTOMER_ROW_MARKERS = {"深圳阿尔克贸易有限公司": "4526000"}
 
 _log = logging.getLogger("inso.purchase_writer")
 
@@ -545,7 +555,17 @@ _OPEN_SELECT_MENU = "details-menu.select-menu-modal:visible, .select-menu-modal:
 _MENU_ROW = "tr"
 _MENU_ITEM = ".select-menu-item, [data-value]"
 _MENU_CHECKBOX = 'input[type="checkbox"]'
-_MENU_WAIT_SECONDS = 6.0
+# The ERP renders the company menu from its own list call, which has been seen
+# to take several seconds, and the widget can swallow the open click: clearing
+# and focusing the input already fires its focus handler, so the following click
+# can toggle the popup back shut. Live 2026-11-14: two drafts failed here with
+# ``SELECT_OPTION_UNAVAILABLE`` after exactly the old 6 s window even though the
+# identical option was present and clickable by hand. The wait is therefore
+# longer and bounded, and a menu that never appears is re-opened a few times
+# before the step fails closed. Nothing about the pick itself is relaxed.
+_MENU_WAIT_SECONDS = 20.0
+_MENU_RECLICK_SECONDS = 2.0
+_MENU_RECLICKS = 3
 
 # The AI entry is the purchase form's own control, exactly as the Phase A
 # read-only verification recorded it: #ai_import_ ("AI录单") opens a
@@ -644,7 +664,7 @@ class _PlaywrightActionPort:
             return dialog.locator(binding.selector)
         raise SecurityViolation("unknown INSO selector scope")
 
-    def _unique_menu_option(self, menu: Any, value: str) -> Any | None:
+    def _unique_menu_option(self, menu: Any, value: str, marker: str | None = None) -> Any | None:
         """The one rendered option carrying ``value`` in one of its own cells.
 
         The ERP's menus are tables, and which column holds the name differs per
@@ -652,9 +672,15 @@ class _PlaywrightActionPort:
         leads with a blank column and puts the person's name third. Matching one
         whole cell exactly -- rather than a column position or a substring --
         keeps the click bound to a single verified option.
+
+        ``marker`` is supplied only for a field whose site data holds several
+        records under the identical visible name (the company menu currently
+        does). It must appear in a cell of the same row, so the surviving option
+        is proven by data instead of by menu position, and a row that carries the
+        name without the marker is never clicked.
         """
 
-        matches: list[Any] = []
+        matches: list[tuple[Any, list[str]]] = []
         rows = menu.locator(_MENU_ROW)
         for index in range(rows.count()):
             row = rows.nth(index)
@@ -667,16 +693,21 @@ class _PlaywrightActionPort:
             if not any(texts):
                 texts = [(row.inner_text() or "").strip()]
             if value in texts:
-                matches.append(row)
+                matches.append((row, texts))
         if not matches:
             items = menu.locator(_MENU_ITEM)
             for index in range(items.count()):
                 item = items.nth(index)
                 if (item.inner_text() or "").strip() == value:
-                    matches.append(item)
-        return matches[0] if len(matches) == 1 else None
+                    matches.append((item, []))
+        # The marker only ever breaks a tie between rows that already match the
+        # exact name, so a unique name keeps the original single-match contract.
+        # Ambiguity that the marker cannot resolve still returns ``None``.
+        if marker is not None and len(matches) > 1:
+            matches = [match for match in matches if marker in match[1]]
+        return matches[0][0] if len(matches) == 1 else None
 
-    def _pick_menu_option(self, field: Any, value: str) -> None:
+    def _pick_menu_option(self, field: Any, value: str, marker: str | None = None) -> None:
         """Select ``value`` the way the site itself does: click its own option.
 
         Filling the input alone selects nothing in this ERP and leaves the menu
@@ -693,15 +724,27 @@ class _PlaywrightActionPort:
         field.click()
         menu = page.frame_locator(_FORM_SCOPE_FRAME).locator(_OPEN_SELECT_MENU)
         deadline = time.monotonic() + _MENU_WAIT_SECONDS
+        next_click = time.monotonic() + _MENU_RECLICK_SECONDS
+        reclicks, opened = 0, False
         while time.monotonic() < deadline:
             if menu.count() == 1:
+                opened = True
                 self._clear_checked_options(menu)
-                option = self._unique_menu_option(menu, value)
+                option = self._unique_menu_option(menu, value, marker)
                 if option is not None:
                     option.click()
                     self._dismiss_select_menu()
                     return
+            elif not opened and reclicks < _MENU_RECLICKS and time.monotonic() >= next_click:
+                # A swallowed open click is retried a bounded number of times; the
+                # option still has to match exactly (and carry the marker, when the
+                # field needs one) before anything is clicked.
+                field.click()
+                reclicks += 1
+                next_click = time.monotonic() + _MENU_RECLICK_SECONDS
             page.wait_for_timeout(150)
+        if not opened:
+            raise SecurityViolation("select menu did not open")
         raise SecurityViolation("select menu option is missing or ambiguous")
 
     def _clear_checked_options(self, menu: Any) -> None:
@@ -834,7 +877,7 @@ class _PlaywrightActionPort:
         if action is WriteAction.SET_CUSTOMER:
             if value is None:
                 raise SecurityViolation("field value is required")
-            self._pick_menu_option(locator, value)
+            self._pick_menu_option(locator, value, _CUSTOMER_ROW_MARKERS.get(value))
             if locator.input_value() != value:
                 raise SecurityViolation("field read-back did not match input")
             return

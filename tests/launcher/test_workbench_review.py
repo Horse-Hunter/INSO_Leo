@@ -6,7 +6,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.gui.contracts import Order, OrderStatus, RunState
+from src.gui.contracts import (
+    Order,
+    OrderAlertDTO,
+    OrderStatus,
+    RunState,
+    V12AlertCode,
+    V12BusinessLabel,
+    V12OrderStateDTO,
+    V12ReasonCode,
+)
 from src.gui.workbench import scheduling
 from src.launcher import backend as launcher
 from src.launcher.backend import ProductionBackend
@@ -151,6 +160,49 @@ def test_request_rechecks_durable_permissions_after_positive_display_hint(tmp_pa
     assert not backend.order_action_hint(inquiry, "purchase")
     backend._manual_busy = True
     assert not backend.order_action_hint(inquiry, "edit")
+
+
+def _hint_backend(alert, action_state: str = "purchase") -> SimpleNamespace:
+    """The purchase hint's own inputs, without a database or a live worker."""
+    identity = "synthetic-exception"
+    dto = V12OrderStateDTO(
+        identity,
+        V12BusinessLabel.PURCHASE_EXCEPTION,
+        alert,
+        (alert,),
+    )
+    return SimpleNamespace(
+        _manual_idle=lambda: True,
+        _store=object(),
+        _manual_reader=object(),
+        _view_snapshot=SimpleNamespace(
+            orders=(SimpleNamespace(inquiry_id=identity, module_id="quotation",
+                                    delivery_status=None),)),
+        _view_state_cache={identity: (None, dto)},
+        _state=RunState.RUNNING,
+        _v12_store=object(),
+        _manual_quote=None,
+        _tp=None,
+        _identity=identity,
+    )
+
+
+def test_purchase_hint_is_not_blocked_by_the_exception_it_resolves() -> None:
+    # Live 2026-11-14: a CONTROL_NOT_FOUND purchase exception disabled the only
+    # menu entry that could clear it, leaving the Owner a dead grey button.
+    alert = OrderAlertDTO("alt-synthetic", V12AlertCode.PURCHASE_EXCEPTION,
+                          V12ReasonCode.CONTROL_NOT_FOUND, NOW, True)
+    backend = _hint_backend(alert)
+
+    assert ProductionBackend.order_action_hint(backend, backend._identity, "purchase")
+
+
+def test_purchase_hint_still_hides_other_active_alerts() -> None:
+    alert = OrderAlertDTO("alt-synthetic", V12AlertCode.DATA_QUALITY,
+                          V12ReasonCode.CUSTOMER_NAME_MISSING, NOW, True)
+    backend = _hint_backend(alert)
+
+    assert not ProductionBackend.order_action_hint(backend, backend._identity, "purchase")
 
 
 def test_manual_command_keeps_original_full_wait_reset_and_stop(tmp_path, monkeypatch):
