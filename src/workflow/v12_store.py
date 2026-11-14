@@ -294,6 +294,13 @@ class V12Store:
                         event.occurred_at, scope_key="ai-recognition")
                     _recover_alerts(connection, inquiry_id, AlertType.DUPLICATE_ORDER, event,
                         event.occurred_at, scope_key="")
+            elif state is BusinessState.HUMAN_COMPLETED and event.event_type is EventType.HUMAN_RESOLUTION_RECORDED:
+                # The order was closed because the Owner finished it in the sheet
+                # itself. Every alert that was asking for that human decision is now
+                # answered, so none of them may keep the row on the exception list.
+                # The append-only events and the alert rows stay for the audit trail.
+                for alert_type in AlertType:
+                    _recover_alerts(connection, inquiry_id, alert_type, event, event.occurred_at)
 
     def record_missing_customer(self, inquiry_id: str, at: datetime) -> None:
         event = WorkflowEvent(
@@ -492,6 +499,40 @@ class V12Store:
                 at=event.occurred_at,
             )
         return alert_id
+
+    def recover_stale_alerts(
+        self,
+        inquiry_id: str,
+        *,
+        at: datetime,
+        alert_types: frozenset[AlertType] | None = None,
+    ) -> tuple[AlertType, ...]:
+        """Close alerts a finished order can no longer act on.
+
+        A completed order keeps whatever alerts were raised while it was still in
+        flight, and nothing else ever clears them, so a done order can stay on the
+        exception list forever. Only the caller decides which alert kinds became
+        moot (never a blanket clear), and the append-only rows are preserved.
+        """
+
+        with _transaction(self.database_path) as connection:
+            rows = connection.execute(
+                "SELECT DISTINCT alert_type FROM workflow_v12_active_alerts "
+                "WHERE inquiry_id=? AND active=1",
+                (inquiry_id,),
+            ).fetchall()
+            stale = {AlertType(row["alert_type"]) for row in rows}
+            if alert_types is not None:
+                stale &= set(alert_types)
+            if not stale:
+                return ()
+            event = WorkflowEvent(
+                _new_id("evt"), inquiry_id, EventType.ALERT_RECOVERED, at, "workflow"
+            )
+            _insert_event(connection, event)
+            for alert_type in sorted(stale):
+                _recover_alerts(connection, inquiry_id, alert_type, event, at)
+        return tuple(sorted(stale))
 
     def notification_command(self, command_id, *, timeout=30, deadline=None):
         """Read an original command without claiming, reopening or editing it."""

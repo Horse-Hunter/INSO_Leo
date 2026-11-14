@@ -27,6 +27,47 @@ def current_purchase_status(reader: WorksheetRowReader, identity: SheetRecordIde
     return str(actual.cells[column])
 
 
+def owner_resolved_status(reader: WorksheetRowReader, identity: SheetRecordIdentity) -> str | None:
+    """The row's status when the Owner has already carried this order forward by hand.
+
+    A stale order stays on the review list until something proves the human did the
+    work. The Owner's own status cell is that proof, but the existing
+    :func:`current_purchase_status` cannot be reused for it: that one accepts only
+    ``未发``/``发给采购`` and refuses any brand change, which is exactly what a manual
+    follow-up produces.
+
+    So this narrows the worksheet to the completed-status rows, restores the status
+    cell to the stored one, and then reuses the canonical relocation (which already
+    ignores Brand and matches one unique importance/model/quantity snapshot). That
+    tolerates the two fields the Owner legitimately edits — status and brand — and a
+    row that moved, while staying strict about the article. No unique match, no
+    completed status, or no row at all returns ``None`` and nothing is closed.
+    """
+
+    rows = tuple(reader.read_rows(identity.worksheet))
+    schema = worksheet_schema(identity.worksheet.worksheet)
+    column = schema.status_column
+    eligible = [
+        row for row in rows
+        if isinstance(row.cells.get(column), str)
+        and str(row.cells[column]).strip() in PURCHASE_COMPLETED_STATUSES
+    ]
+    if not eligible:
+        return None
+    stored_status = identity.identifying_snapshot.status
+    normalized = [
+        replace(row, cells={**row.cells, column: stored_status}) for row in eligible
+    ]
+    try:
+        relocated = relocate_record(identity, normalized)
+    except SheetRecordConflict:
+        return None
+    actual = [row for row in eligible if row.row_position == relocated.row_position]
+    if len(actual) != 1:
+        return None
+    return str(actual[0].cells[column]).strip()
+
+
 def _locate_purchase_record(reader, identity, expected_brand, brand_match=None):
     if identity.identifying_snapshot.status != "未发":
         raise SheetRecordConflict("original purchase status must be pending")

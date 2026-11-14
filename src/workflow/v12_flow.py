@@ -22,7 +22,7 @@ from src.sheets import (
     usable_brand,
 )
 from src.sheets.brand_write import SheetRecordConflict
-from src.sheets.purchase_status import current_purchase_status
+from src.sheets.purchase_status import current_purchase_status, owner_resolved_status
 
 from .service import (
     BrandUpdater,
@@ -33,6 +33,7 @@ from .service import (
 from .store import DEFAULT_RETRY_DELAYS, WorkflowStateStore
 from .v12_contracts import (
     EXECUTION_EVENT_TYPES,
+    AlertType,
     BusinessState,
     DuplicateCheckResult,
     DuplicateOutcome,
@@ -59,6 +60,19 @@ from .v12_rules import (
     validate_ai_recognition,
 )
 from .v12_store import V12DatabaseError, V12Store
+
+# Orders parked for a human decision. Each one is closed by the same proof: the
+# Owner already moved that row to a completed status in the sheet itself.
+_OWNER_RECONCILABLE_STATES = frozenset({
+    BusinessState.INTERRUPTED_UNSENT,
+    BusinessState.INTERRUPTED_POSSIBLY_SENT,
+    BusinessState.PURCHASE_EXCEPTION,
+    BusinessState.SOURCE_CHANGED,
+    BusinessState.RESEARCH_FAILED,
+    BusinessState.STATUS_WRITE_PENDING,
+    BusinessState.DUPLICATE_STOPPED,
+    BusinessState.INVALID_INPUT_SKIPPED,
+})
 
 
 @dataclass(frozen=True, slots=True)
@@ -284,13 +298,27 @@ class V12WorkflowCoordinator:
                 state = self._v12_store.business_state(item.inquiry_id)
             except KeyError:
                 continue
-            if state in {BusinessState.INTERRUPTED_UNSENT, BusinessState.INTERRUPTED_POSSIBLY_SENT}:
-                try:
-                    if current_purchase_status(reader, item.record_identity) == "发给采购":
-                        self._set_state(item.inquiry_id, BusinessState.HUMAN_COMPLETED,
-                            EventType.HUMAN_RESOLUTION_RECORDED, now)
-                except SheetRecordConflict:
-                    pass
+            # One rule for every order parked for a human decision: when the Owner
+            # has already moved that exact row to a completed status by hand, the
+            # order is finished and must stop being reported as an exception. The
+            # locator stays strict about worksheet/row/model and returns None on
+            # anything unprovable, so nothing is closed blind.
+            if state in _OWNER_RECONCILABLE_STATES and owner_resolved_status(
+                    reader, item.record_identity) is not None:
+                self._set_state(item.inquiry_id, BusinessState.HUMAN_COMPLETED,
+                    EventType.HUMAN_RESOLUTION_RECORDED, now)
+                state = BusinessState.HUMAN_COMPLETED
+            # A finished order keeps every alert raised while it was in flight and
+            # nothing else ever clears them, so a done row can stay red forever.
+            # Only alerts that became moot are cleared: a human-completed order has
+            # no open question left, and a recorded purchase has already passed the
+            # data-quality gate. Mail/notification alerts are never touched here.
+            if state is BusinessState.HUMAN_COMPLETED:
+                self._v12_store.recover_stale_alerts(item.inquiry_id, at=now)
+            elif state is BusinessState.PURCHASE_RECORDED:
+                self._v12_store.recover_stale_alerts(
+                    item.inquiry_id, at=now,
+                    alert_types=frozenset({AlertType.DATA_QUALITY}))
         # Row movement preserves the existing inquiry_id, never creates another purchase.
         existing = self._workflow_store.all_items()
         normalized = []

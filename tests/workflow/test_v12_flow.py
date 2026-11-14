@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from contextlib import nullcontext
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -17,14 +18,17 @@ from src.workflow import (
     WorkflowStatus,
 )
 from src.workflow.v12_contracts import (
+    AlertType,
     BusinessState,
     DeliveryOutcome,
     DuplicateCheckResult,
     DuplicateOutcome,
+    EventType,
     NotificationKind,
     NotificationRecipient,
     NotificationTransportResult,
     ReasonCode,
+    WorkflowEvent,
 )
 from src.workflow.v12_flow import (
     FakePurchaseDraftWriter,
@@ -919,3 +923,102 @@ def test_unhashable_purchase_outcome_is_held(tmp_path):
     inquiry_id = workflow.all_items()[0].inquiry_id
     assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_POSSIBLY_SENT
     assert not store.manual_purchase_retry_allowed(inquiry_id)
+
+
+def _parked_order(tmp_path, state: BusinessState, alert: AlertType | None = None):
+    """One order left exactly where an Owner hand-off parks it."""
+
+    flow, _workflow, store, _research, _checker, _facts, _writer, _worker = _make_flow(
+        tmp_path, facts=ResearchBusinessFacts("synthetic", Decimal(60001), Decimal(2)))
+    result, = flow.poll_and_process(FakeSheetsReader(), SHEET, now=NOW)
+    inquiry_id = result.inquiry_id
+    event = WorkflowEvent("evt_synthetic_park", inquiry_id, EventType.HUMAN_RESOLUTION_RECORDED, NOW, "workflow")
+    if alert is not None:
+        store.raise_alert(inquiry_id=inquiry_id, alert_type=alert,
+                          reason_code=ReasonCode.SAVE_OUTCOME_UNKNOWN, event=event)
+    store.set_business_state(inquiry_id, state,
+        WorkflowEvent("evt_synthetic_state", inquiry_id, EventType.SECURITY_CHECK_FAILED, NOW, "workflow"))
+    return flow, store, inquiry_id
+
+
+def _advanced_reader(status: str, **kwargs) -> FakeSheetsReader:
+    reader = FakeSheetsReader(**kwargs)
+    reader.row = replace(reader.row, cells={**reader.row.cells, "A": status})
+    return reader
+
+
+@pytest.mark.parametrize("status", ["发给采购", "采购已报价", "已报价给客户", "成交"])
+def test_owner_finished_in_the_sheet_closes_a_parked_order(tmp_path, status):
+    """Live 2026-11-14: 32 of 36 review rows were already advanced by the Owner in
+    the sheet, yet none cleared — the old rule demanded exactly ``发给采购`` and an
+    unchanged brand, so a manual follow-up could never resolve its own row."""
+
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.PURCHASE_EXCEPTION)
+
+    # The Owner also filled the brand by hand, which the old rule treated as a conflict.
+    flow.poll_and_process(_advanced_reader(status, brand="Brand-Y"), SHEET,
+                          now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.HUMAN_COMPLETED
+
+
+def test_owner_reconciliation_keeps_a_row_whose_article_changed(tmp_path):
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT)
+    reader = _advanced_reader("已报价给客户")
+    reader.row = replace(reader.row, cells={**reader.row.cells, "E": "Mpn-other"})
+
+    flow.poll_and_process(reader, SHEET, now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_UNSENT
+
+
+def test_owner_reconciliation_ignores_an_unfinished_row(tmp_path):
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT)
+
+    flow.poll_and_process(_advanced_reader("未发"), SHEET, now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_UNSENT
+
+
+def test_closing_a_parked_order_recovers_its_alerts(tmp_path):
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.PURCHASE_EXCEPTION,
+                                            alert=AlertType.PURCHASE_EXCEPTION)
+    assert store.active_alerts(inquiry_id)
+
+    flow.poll_and_process(_advanced_reader("发给采购"), SHEET, now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.HUMAN_COMPLETED
+    assert not store.active_alerts(inquiry_id)
+    event_types = [event.event_type.value for event in store.event_history(inquiry_id)]
+    assert "ALERT_RECOVERED" in event_types
+
+
+def test_a_recorded_purchase_drops_only_the_data_quality_alert(tmp_path):
+    """Live 2026-11-14: three purchased rows stayed red on alerts raised before the
+    purchase, because nothing ever cleared an alert once the order advanced."""
+
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.PURCHASE_RECORDED,
+                                            alert=AlertType.DATA_QUALITY)
+    store.raise_alert(
+        inquiry_id=inquiry_id, alert_type=AlertType.NOTIFICATION_FAILED,
+        reason_code=ReasonCode.NOTIFICATION_PERMANENT,
+        event=WorkflowEvent("evt_notification", inquiry_id,
+                            EventType.NOTIFICATION_DELIVERY_FAILED, NOW, "workflow"),
+    )
+    assert {a.alert_type for a in store.active_alerts(inquiry_id)} == {
+        AlertType.DATA_QUALITY, AlertType.NOTIFICATION_FAILED}
+
+    flow.poll_and_process(_advanced_reader("发给采购"), SHEET, now=NOW + timedelta(minutes=1))
+
+    # A failed mail is a real outstanding question; a stale input complaint is not.
+    assert {a.alert_type for a in store.active_alerts(inquiry_id)} == {AlertType.NOTIFICATION_FAILED}
+
+
+def test_a_human_completed_order_keeps_no_alert_open(tmp_path):
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.HUMAN_COMPLETED,
+                                            alert=AlertType.PURCHASE_EXCEPTION)
+    assert store.active_alerts(inquiry_id)
+
+    flow.poll_and_process(_advanced_reader("成交"), SHEET, now=NOW + timedelta(minutes=1))
+
+    assert not store.active_alerts(inquiry_id)
