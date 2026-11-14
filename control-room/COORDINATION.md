@@ -2,6 +2,8 @@
 
 **最新状态：`RFQ018_PASS_SOURCE_SAFETY_SCOPE / RFQ017_AUDIT_PASS / RFQ016_SOURCE_PASS / RELEASE_HOLD / NOT_DEPLOYED / NOT_MERGED`。** 先读 [RFQ-018 CEO Review](RFQ-018/REVIEW.md)、[RFQ-018 Release Readiness](RFQ-018/RELEASE_READINESS.md) 与 [接管入口](CEO_HANDOVER.md)。
 
+**RFQ-019 发布准备：`BLOCKED`（正常 GUI / 业务试运行）；仅候选构建 + `--self-check`/`--idle-self-check` + 完整回滚快照可继续。** 详见 [RELEASE_READINESS](RFQ-019/RELEASE_READINESS.md)、[RISK_REGISTER](RFQ-019/RISK_REGISTER.md)。
+
 - **指定安全修复 PASS**：Executor 提交 `25894eface6ea622153d1573c19d0ca6b9ad72aa`。CEO GitHub 源码静态复核接受 P0-A 页面关闭不自动清 UNKNOWN 文档 hold、P0-B Sheets API 写入强制共享/有效 admission、P1-C 同文档在途原子写 lease + 真实线程及 API/browser 竞争测试。原 26 个 nodeid 保留并 PASS；Executor 报告全树 4188 collected = 4187 pass + 1 skipped + 0 failed，未 deselect；CEO 未独立跑 Windows pytest/实机业务。
 - **源码 PASS ≠ 生产 PASS**：全新共享 document hold 是**进程内保护**，重启后会消失，只有 per-order V13 hold 持久；真实中断、重启后跨服务 UNKNOWN 的恢复隔离方案未验证。旧 EXE 仍是修复前版本，尚无新候选 build/install/hash/running evidence。代码在原 `workbuddy/v16-rfq016-stabilization`，未合入 `develop` 或覆盖生产 EXE。
 - **保留业务 UNKNOWN**：221 行已 SAVED `rec_440fafd372440ecf9dacabf660dd155d` 不重下；SHAHAB/115 `MANUAL_REVIEW/RECONCILIATION_UNREADABLE` 无原生收据，`NOT_VERIFIED` 不重新购买/清历史；3 条历史 V13 报价 hold 保留。`inq_d65be9df…` 报价循环失败、GUI 停刷/退出、Chrome 残留页另有发布风险。

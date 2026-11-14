@@ -1,0 +1,170 @@
+{
+  "task": "RFQ-019 — 快速发布准备与最终风险评估",
+  "captured_at": "2026-11-14T21:40:00+08:00",
+  "branch": "workbuddy/v16-rfq016-stabilization",
+  "fixed_source": "25894eface6ea622153d1573c19d0ca6b9ad72aa",
+  "document_head": "45621923",
+  "source_diff_fixed_to_head": "empty for src/ and tests/",
+  "test_evidence_reused": {
+    "collected": 4188,
+    "passed": 4187,
+    "failed": 0,
+    "skipped": 1,
+    "duration_seconds": 341.54,
+    "note": "RFQ-018 CEO-accepted evidence; not rerun for RFQ-019"
+  },
+  "live_snapshot": {
+    "exe_path": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6\\INSO_V1.6.exe",
+    "exe_sha256": "E9E3DA33417414ABAC53F8A88A67D9F053BCDAEAB9730EAE9AD8BD7870DFFAD0",
+    "exe_size": 8422619,
+    "processes": [
+      {
+        "pid": 38948,
+        "role": "app",
+        "command": "--start-inquiry"
+      },
+      {
+        "pid": 34304,
+        "role": "watcher"
+      }
+    ],
+    "runtime_state": "phase=gui / gui_ready / completed=false; modules still completing near 21:34",
+    "chrome_cdp": {
+      "port": 9222,
+      "owner_pid": 24164,
+      "touched": false
+    },
+    "sqlite": {
+      "path": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.2\\runtime\\production\\workflow.sqlite3",
+      "size": 1191936,
+      "quick_check": "ok",
+      "active_v12_alerts": 0,
+      "active_v13_holds": 3,
+      "purchase_states": {
+        "SAVED": 26,
+        "VALIDATION_FAILED": 7,
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1
+      }
+    },
+    "row_221": {
+      "business_state": "PURCHASE_RECORDED",
+      "purchase": "SAVED",
+      "receipt": "rec_440fafd372440ecf9dacabf660dd155d"
+    },
+    "shahab_115": {
+      "business_state": "HUMAN_COMPLETED",
+      "purchase": "MANUAL_REVIEW",
+      "reason": "RECONCILIATION_UNREADABLE",
+      "native_inso": "NOT_VERIFIED"
+    }
+  },
+  "build_readiness": {
+    "venv_release_exists": false,
+    "global_pyinstaller": "not installed",
+    "build_script": "scripts\\build_windows_release.ps1",
+    "build_script_sha256": "AB35565AB9D42FD831EB6C59461F745400D14872145A3E60CEC7D0D7B24CBDF1",
+    "lock_sha256": "3DC5D7A5DAE4387F156B4589259E899E887C607349B111A599911735DC2494EC",
+    "spec_sha256": "D7574C2011917FF2C81007DC2271FD6D62D769D783D21D3098355A2D56D6E80C",
+    "candidate_staging_exists": true,
+    "candidate_staging": "D:\\Program_Leo\\INSO_candidate_V16_RFQ016 (EXE 8,414,556, source not proven)"
+  },
+  "backups": [
+    {
+      "path": "dist/release-backups/INSO_V1.6-header-block-20261114T021508Z",
+      "kind": "full _internal + EXE",
+      "exe_sha256": "00AC7D68D88E1A27EB52E3B7457B4192B699211DF1B1F5E3EFE0BE406EEF30BD",
+      "note": "older 10:15 version"
+    },
+    {
+      "path": "dist/release-backups/INSO_V1.6-customer-20261114T113817Z",
+      "kind": "EXE only",
+      "exe_sha256": "B357889D48E5ABE6EC6504EDDD610442C877E438018F156C4C932477070814F6",
+      "note": "not a full program/config/DB rollback"
+    },
+    {
+      "path": "dist/INSO_V1.6/_internal.prev-*",
+      "kind": "program remnants",
+      "note": "17 dirs; not a complete hashed rollback set"
+    }
+  ],
+  "risk_summary": {
+    "blocking": [
+      {
+        "id": "B1",
+        "item": "release build environment missing (.venv-release; no PyInstaller)"
+      },
+      {
+        "id": "B2",
+        "item": "no candidate EXE/hash from 25894efa; old EXE source NOT_VERIFIED"
+      },
+      {
+        "id": "B3",
+        "item": "no complete current-version program+config+DB rollback snapshot"
+      },
+      {
+        "id": "B4",
+        "item": "old EXE actively running business; no authorized clean Stop/no-inflight proof"
+      },
+      {
+        "id": "B5",
+        "item": "no controlled single-order/write-disabled Start; full Start can process other modules/rows"
+      },
+      {
+        "id": "B6",
+        "item": "new process does not inherit cross-service document hold; restart is not settlement"
+      },
+      {
+        "id": "B7",
+        "item": "normal GUI launch starts process services: DB migration/recovery + IMAP + SMTP outbox; no read-only GUI launch switch"
+      }
+    ],
+    "non_blocking_observe": [
+      {
+        "id": "N1",
+        "item": "GUI refresh/freeze"
+      },
+      {
+        "id": "N2",
+        "item": "exit hang/process not exiting"
+      },
+      {
+        "id": "N3",
+        "item": "Chrome residual/unowned pages"
+      },
+      {
+        "id": "N4",
+        "item": "inq_d65be9df quote loop failure/rejection reason"
+      },
+      {
+        "id": "N5",
+        "item": "SHAHAB/115 historical purchase UNKNOWN"
+      },
+      {
+        "id": "N6",
+        "item": "old EXE provenance mismatch"
+      }
+    ]
+  },
+  "conclusion": "BLOCKED_FOR_NORMAL_GUI_AND_BUSINESS_TRIAL; SAFE_PREP_CONTINUE (candidate build + --self-check/--idle-self-check + full rollback snapshot only)",
+  "minimum_owner_actions": [
+    "Choose B7 route: self-check/idle-self-check only, accept IMAP/SMTP/DB-migration side effects, or add a no-side-effect GUI launch flag in a separate task.",
+    "Authorize creation of .venv-release and candidate build from 25894efa.",
+    "Authorize a complete rollback snapshot of the current old EXE + _internal + config + consistent SQLite backup.",
+    "Authorize a bounded maintenance window for a clean GUI Stop; abort if stop is uncertain.",
+    "Decide business Start scope separately (B5/B6); no full Start is approved."
+  ],
+  "preserved_effects": [
+    "row 221 receipt rec_440fafd372440ecf9dacabf660dd155d",
+    "3 active V13 quotation holds",
+    "SHAHAB/115 MANUAL_REVIEW / RECONCILIATION_UNREADABLE remains isolated",
+    "running old EXE/PIDs and Chrome 9222 untouched",
+    "no deployment, stop, Chrome attach, SQLite write, Google/INSO/SMTP write or merge"
+  ],
+  "limitations": [
+    "No candidate EXE was built; no self-check/idle-self-check was run in this task.",
+    "No live Stop/Exit timing or GUI freeze reproduction was performed.",
+    "Old EXE source mapping remains NOT_VERIFIED.",
+    "No real Google/INSO/SMTP/Chrome/production DB write occurred."
+  ]
+}
