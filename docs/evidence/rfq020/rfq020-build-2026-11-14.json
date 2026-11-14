@@ -117,7 +117,14 @@
     "sqlite_mtime_epoch_after": 1794667137,
     "wal_shm_present": false,
     "chrome_9222_pages_before": 15,
-    "chrome_9222_pages_after": 15
+    "chrome_9222_pages_after": 15,
+    "invariance_scope": "self-check window 22:38-22:45 only",
+    "later_observation": {
+      "at": "2026-11-14T23:00:00+08:00",
+      "sqlite_mtime_epoch": 1794667251,
+      "chrome_9222_pages": 14,
+      "cause": "live production program still running its own business session; not caused by this RFQ (no CDP attach, no page open/close, no DB write)"
+    }
   },
   "rollback_assets_readonly": {
     "snapshot_created": false,

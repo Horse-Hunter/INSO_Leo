@@ -102,6 +102,8 @@ The idle check created `<staging>/runtime/logs/v13-idle-self-check.json`. Its co
 | WAL/SHM | none | none |
 | Chrome 9222 pages | 15 | 15 |
 
+**Later observation (23:00, after the checks, for honesty):** the running production program kept working, so at the final re-read the production SQLite mtime had advanced to epoch `1794667251` and Chrome 9222 showed **14** pages. Both movements are the live program's own activity during a still-running business session — this RFQ never attached to CDP, never opened/closed a page, and never wrote to the database. The before/after equality above is therefore scoped to the self-check window (22:38–22:45), not to the whole evening.
+
 ## 7. Read-only rollback asset inventory (no backup taken, no DB touched)
 
 | Asset | Read-only observation |
