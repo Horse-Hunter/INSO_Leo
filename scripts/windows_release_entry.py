@@ -152,6 +152,83 @@ def _api_self_check() -> int:
     return 0 if report["outcome"] in {"NO_CONFIG", "DISABLED", "TRANSPORT_READY"} else 1
 
 
+def _preview_self_check() -> int:
+    """Prove the packaged GUI opens, closes and reopens in safe preview.
+
+    RFQ-021 acceptance: the release build must render the dashboard with no
+    business thread, no mail service, no process-service start and a disabled
+    Start, and it must survive a second launch (the single-instance guard and
+    the Tk teardown both have to be clean).
+    """
+    from pathlib import Path as _Path
+    import sys as _sys
+
+    _repo = _Path(__file__).resolve().parents[1]
+    if str(_repo) not in _sys.path:  # source-mode run; the frozen build has pathex
+        _sys.path.insert(0, str(_repo))
+
+    from src.gui.app import InsoDashboardApp
+    from src.launcher.backend import ProductionBackend
+    from src.launcher.single_instance import PREVIEW_MUTEX_NAME, SingleInstanceGuard
+
+    rounds = []
+    for index in range(2):
+        guard = SingleInstanceGuard(name=PREVIEW_MUTEX_NAME)
+        if not guard.acquire():
+            rounds.append({"round": index + 1, "acquired": False})
+            return _write_preview_report(rounds, ok=False)
+        backend = ProductionBackend(preview_mode=True, enforce_scope=True)
+        app = None
+        try:
+            app = InsoDashboardApp(backend)
+            app._root.withdraw()
+            app._root.update_idletasks()
+            app._root.update()
+            rounds.append({
+                "round": index + 1,
+                "acquired": True,
+                "title": app._root.title(),
+                "blockers": list(backend.scope_blockers()),
+                "start_button": app._action_button.cget("text"),
+                "start_state": str(app._action_button.cget("state")),
+                "business_thread_started": backend._thread is not None,
+                "order_thread_started": backend._order_mail_thread is not None,
+                "mail_service_started": backend._mail_research_service is not None,
+                "process_services_consumed": backend._mail_initial_start_consumed,
+                "state": backend.get_status().state.value,
+            })
+        finally:
+            if app is not None:
+                app._finish_close()
+            backend.shutdown()
+            guard.release()
+    ok = len(rounds) == 2 and all(
+        item.get("acquired") is True
+        and item.get("blockers") == ["PREVIEW_ONLY"]
+        and item.get("start_state") == "disabled"
+        and item.get("business_thread_started") is False
+        and item.get("order_thread_started") is False
+        and item.get("mail_service_started") is False
+        and item.get("process_services_consumed") is False
+        for item in rounds
+    )
+    return _write_preview_report(rounds, ok=ok)
+
+
+def _write_preview_report(rounds, *, ok: bool) -> int:
+    import json as _json
+
+    from src.core.app_paths import app_root
+
+    directory = app_root() / "runtime" / "logs"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "v16-preview-self-check.json").write_text(
+        _json.dumps({"ok": ok, "rounds": rounds}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return 0 if ok else 1
+
+
 def _idle_self_check() -> int:
     """Construct and render the real idle dashboard; never press Start or acquire CDP."""
     from src.core.app_paths import app_root, application_name
@@ -240,6 +317,8 @@ if __name__ == "__main__":
         raise SystemExit(watch_runtime(int(sys.argv[2]), sys.argv[3], sys.argv[4]))
     if sys.argv[1:] == ["--cdp-self-check"]:
         raise SystemExit(_cdp_self_check())
+    if sys.argv[1:] == ["--preview-self-check"]:
+        raise SystemExit(_preview_self_check())
     if sys.argv[1:] == ["--idle-self-check"]:
         raise SystemExit(_idle_self_check())
     if sys.argv[1:] == ["--api-self-check"]:

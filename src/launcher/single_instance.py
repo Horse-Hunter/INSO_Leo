@@ -9,6 +9,9 @@ from dataclasses import dataclass
 
 ERROR_ALREADY_EXISTS = 183
 MUTEX_NAME = r"Local\INSO_V1.2"
+#: A safe preview may run beside the business instance: it starts nothing, and
+#: refusing it would block exactly the read-only inspection it exists for.
+PREVIEW_MUTEX_NAME = MUTEX_NAME + "-preview"
 
 
 @dataclass
@@ -17,6 +20,7 @@ class SingleInstanceGuard:
     release_fn: object | None = None
     is_windows: bool | None = None
     api: object | None = None
+    name: str = MUTEX_NAME
 
     def acquire(self) -> bool:
         if (os.name == "nt") if self.is_windows is None else self.is_windows:
@@ -41,7 +45,7 @@ class SingleInstanceGuard:
         if self.api is None:
             return True
         ctypes.set_last_error(0)
-        handle = kernel32.create_mutex(MUTEX_NAME) if hasattr(kernel32, "create_mutex") else kernel32.CreateMutexW(None, True, MUTEX_NAME)
+        handle = kernel32.create_mutex(self.name) if hasattr(kernel32, "create_mutex") else kernel32.CreateMutexW(None, True, self.name)
         if not handle:
             raise OSError(ctypes.get_last_error(), "CreateMutexW failed")
         self.handle = handle

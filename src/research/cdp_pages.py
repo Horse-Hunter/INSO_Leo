@@ -79,6 +79,18 @@ class DocumentWriteBusy(RuntimeError):
         self.failure_classes: tuple[str, ...] = ()
 
 
+class DocumentWriteBlocked(DocumentWriteHeld):
+    """A write that the approved run scope, or the durable ledger, forbids.
+
+    Deliberately a ``DocumentWriteHeld``: every existing caller already treats a
+    hold as "do not dispatch, do not retry", which is exactly right here. The
+    reason distinguishes a policy refusal from a business uncertainty.
+    """
+
+    def __init__(self, reason: str, document) -> None:
+        super().__init__(reason or "EXTERNAL_WRITE_NOT_IN_SCOPE", document)
+
+
 def google_document_key(url: str) -> tuple[str, str, str]:
     """Exact Google document identity shared by quote/browser/API writers."""
     if not isinstance(url, str):
@@ -97,6 +109,11 @@ def google_document_key_for_spreadsheet(spreadsheet_id: str) -> tuple[str, str, 
     return ("https", "docs.google.com", f"/spreadsheets/d/{spreadsheet_id}/edit")
 
 
+def _intent_document_key(document) -> str:
+    """Stable text key for the durable journal; never contains field values."""
+    return "|".join(str(part) for part in document)
+
+
 class PageResourceAdmission:
     """One injected, fail-closed admission shared by attached clients.
 
@@ -104,7 +121,7 @@ class PageResourceAdmission:
     cannot clear uncertainty. Reconciliation requires a new reviewed lifecycle.
     """
 
-    def __init__(self, *, parent=None):
+    def __init__(self, *, parent=None, write_policy=None):
         self._parent = parent
         self._lock = threading.Lock()
         self._failure = None
@@ -113,6 +130,65 @@ class PageResourceAdmission:
         self._document_holds = {}
         # Document key -> {owner token: reentrant in-flight write count}.
         self._document_writers = {}
+        # Root-only: approved-scope gate for every Google write (RFQ-021 B5).
+        self._write_policy = write_policy
+        # Root-only: durable write-intent journal (RFQ-021 B6). Optional so the
+        # in-memory admission keeps working where no database exists.
+        self._write_journal = None
+        # Document key + owner -> intent id, so a hold can open the intent.
+        self._write_intents = {}
+
+    def attach_write_journal(self, journal):
+        """Attach the durable ledger on the root admission, before any write."""
+        root = self._document_root()
+        with root._lock:
+            root._write_journal = journal
+
+    def _journal(self):
+        root = self._document_root()
+        return root._write_journal
+
+    def _require_write_allowed(self, key):
+        """Refuse before any dispatch when the approved scope forbids writes."""
+        root = self._document_root()
+        policy = root._write_policy
+        if policy is None or policy.allows("google"):
+            return
+        raise DocumentWriteBlocked(policy.denial_reason("google"), key)
+
+    def _begin_write_intent(self, key, kind):
+        """Persist the intent before the caller can dispatch anything."""
+        journal = self._journal()
+        if journal is None:
+            return None
+        try:
+            reason = journal.open_reason(_intent_document_key(key))
+            if reason:
+                raise DocumentWriteHeld(reason, key)
+            return journal.begin(_intent_document_key(key), kind)
+        except DocumentWriteHeld:
+            raise
+        except Exception:  # noqa: BLE001 - an unreadable ledger must block writes
+            raise DocumentWriteHeld("WRITE_LEDGER_UNAVAILABLE", key) from None
+
+    def _end_write_intent(self, key, intent_id, *, held_reason=None):
+        """Settle or keep the intent open.
+
+        A settlement failure is deliberately *not* raised: the row simply stays
+        PENDING/UNKNOWN, which is exactly the fail-closed state a later process
+        must see. Raising here would also mask whatever the caller was already
+        handling when the lease ended.
+        """
+        journal = self._journal()
+        if journal is None or intent_id is None:
+            return
+        try:
+            if held_reason:
+                journal.mark_unknown(intent_id, held_reason)
+            else:
+                journal.settle(intent_id)
+        except Exception:  # noqa: BLE001 - an unsettled row keeps blocking writes
+            return
 
     def invalidate(self, error):
         with self._lock:
@@ -169,6 +245,12 @@ class PageResourceAdmission:
         with root._lock:
             holds = root._document_holds.setdefault(key, {})
             holds.setdefault(owner, (str(reason), page))
+            # The durable intent must say UNKNOWN even if this process dies
+            # between publishing the hold and releasing the lease. Pop it so a
+            # later lease release cannot settle what just became uncertain.
+            intent_id = root._write_intents.pop((key, owner), None)
+        if intent_id is not None:
+            self._end_write_intent(key, intent_id, held_reason=str(reason))
 
     def release_document(self, document, owner):
         """Release only this owner's hold; never clear another uncertainty."""
@@ -182,15 +264,20 @@ class PageResourceAdmission:
             if not holds:
                 root._document_holds.pop(key, None)
 
-    def begin_document_write(self, document, owner):
+    def begin_document_write(self, document, owner, *, kind="GOOGLE_WRITE"):
         """Atomically claim the one in-flight write lease for this document.
 
         Same-owner reentry is allowed. A competing owner gets
         ``DocumentWriteBusy`` before any page/API dispatch. An unresolved hold
         is still a hard ``DocumentWriteHeld``. The claim is released only by
         ``end_document_write``; it is never a durable UNKNOWN by itself.
+
+        With a journal attached, the intent row is committed here -- before the
+        caller can dispatch -- and a document left open by an earlier process
+        refuses this write instead of quietly retrying over it.
         """
         key = tuple(document)
+        self._require_write_allowed(key)
         root = self._document_root()
         with root._lock:
             holds = root._document_holds.get(key)
@@ -202,21 +289,34 @@ class PageResourceAdmission:
                 return
             if writers:
                 raise DocumentWriteBusy(key)
+            intent_id = self._begin_write_intent(key, kind)
             writers[owner] = 1
+            if intent_id is not None:
+                root._write_intents[(key, owner)] = intent_id
 
     def end_document_write(self, document, owner):
         """Release this owner's in-flight write lease (idempotent)."""
         key = tuple(document)
         root = self._document_root()
+        held_reason = None
         with root._lock:
             writers = root._document_writers.get(key)
             if not writers or owner not in writers:
                 return
             writers[owner] -= 1
-            if writers[owner] <= 0:
+            settled = writers[owner] <= 0
+            if settled:
                 writers.pop(owner, None)
             if not writers:
                 root._document_writers.pop(key, None)
+            intent_id = root._write_intents.pop((key, owner), None) if settled else None
+            holds = root._document_holds.get(key)
+            if holds:
+                held_reason = next(iter(holds.values()))[0]
+        if intent_id is not None:
+            # A document that still carries a hold must keep its intent open;
+            # that is the only thing a restarted process can see.
+            self._end_write_intent(key, intent_id, held_reason=held_reason)
 
     def document_hold(self, document):
         """Return the sanitized reason when this document has any active hold."""
@@ -234,7 +334,14 @@ class PageResourceAdmission:
                     # settled. Only release_document(owner) may clear this.
                     return next(iter(holds.values()))[0]
             node = node._parent
-        return None
+        # A write left in flight by an earlier process is only visible here.
+        journal = self._document_root()._write_journal
+        if journal is None:
+            return None
+        try:
+            return journal.open_reason(_intent_document_key(key))
+        except Exception:  # noqa: BLE001 - an unreadable ledger must block writes
+            return "WRITE_LEDGER_UNAVAILABLE"
 
     def require_document_writable(self, document):
         """Fail closed before any page creation or cell write on this document."""

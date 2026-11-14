@@ -45,6 +45,7 @@ from src.inso.purchase_writer import InsoPurchaseWriter, PlaywrightParentProduct
 from src.inso.session import SecurityViolation
 from src.inso.write_safety import OwnerAuthorizedSaveAndSendGate
 from src.launcher.purchase_completion import PurchaseCompletionActions
+from src.launcher.run_scope import ExternalWritePolicy, ScopedInsoWriteGate
 from src.research import ResearchInput, ResearchResult
 from src.research.cdp_pages import (
     PageResourceAdmission,
@@ -109,6 +110,7 @@ from src.workflow.v13_follow_up_store import V13PurchaseFollowUpStore
 from src.workflow.v13_integration import CombinedCycle, V13HoldStore, V13IntegratedCycle
 from src.workflow.v13_price_store import ProcurementPriceStore
 from src.workflow.v13_quotation import V13QuotationCycle, V13Stopped
+from src.workflow.write_intents import SqliteWriteIntentJournal
 
 from .browser_bootstrap import (
     BrowserBootstrapError,
@@ -276,12 +278,22 @@ class _LivePurchaseDraftWriter:
     """
 
     def __init__(self, access, *, session_guard_factory=None, login_problem=None,
-                 store: V12Store | None = None, observe=None) -> None:
+                 store: V12Store | None = None, observe=None, write_policy=None) -> None:
         self._access = access
         self._session_guard_factory = session_guard_factory
         self._login_problem = login_problem
         self._store = store
         self._observe = observe
+        self._write_policy = write_policy
+
+    def _purchase_write_gate(self):
+        """Existing Owner exception, narrowed to the approved scope when enforced."""
+        if self._store is None:
+            return None
+        gate = OwnerAuthorizedSaveAndSendGate()
+        if self._write_policy is None or not self._write_policy.enforced:
+            return gate
+        return ScopedInsoWriteGate(gate, self._write_policy, "inso")
 
     def _guard(self):
         if self._session_guard_factory is None:
@@ -367,7 +379,7 @@ class _LivePurchaseDraftWriter:
         with access.operation_page() as form:
             writer = InsoPurchaseWriter(
                 form_page=form,
-                gate=OwnerAuthorizedSaveAndSendGate() if self._store is not None else None,
+                gate=self._purchase_write_gate(),
             )
             # A crashed or interrupted run can skip the close below, so the
             # surface is also cleared here, before this order touches the form.
@@ -600,14 +612,23 @@ class ProductionBackend(GuiBackend):
         defer_local_view: bool = False,
         inquiry_ids: frozenset[str] | None = None,
         market_actor_factory=None,
+        run_scope=None,
+        enforce_scope: bool = False,
+        preview_mode: bool = False,
     ):
         self.root = Path(root) if root is not None else app_root()
         self._inquiry_scope = inquiry_ids
+        # RFQ-021: a packaged release never starts without an explicit scope,
+        # and it can render a read-only preview without any process service.
+        self._run_scope = run_scope
+        self._enforce_scope = bool(enforce_scope)
+        self._preview_mode = bool(preview_mode)
+        self._write_policy = ExternalWritePolicy(run_scope, enforced=self._enforce_scope)
         self.config_path = Path(config_path) if config_path is not None else runtime_config_path("research.json", root=self.root)
         self.production_path = Path(production_config_path) if production_config_path is not None else runtime_config_path("production.json", root=self.root)
         self.cdp_probe = cdp_probe
         self._browser_acquirer = browser_acquirer
-        self._page_admission = PageResourceAdmission()
+        self._page_admission = PageResourceAdmission(write_policy=self._write_policy)
         self._background_research_budget = ResearchBudget()
         self._mail_research_service = None
         self._mail_research_prepared = None
@@ -732,6 +753,10 @@ class ProductionBackend(GuiBackend):
 
     def start_process_services(self):
         """Start before business workers, serialized with process shutdown."""
+        if self._preview_mode:
+            # Safety preview renders the dashboard and nothing else: no mail
+            # preparation, no DB migration, no IMAP/SMTP worker.
+            return
         with self._mail_start_retry_lock:
             with self._lock:
                 if (self._closed or self._closing_intent.is_set() or self._mail_initial_start_consumed
@@ -978,7 +1003,73 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             return self._run_id
 
+    @property
+    def preview_mode(self) -> bool:
+        """Read-only preview: render status, never start a process service."""
+        return self._preview_mode
+
+    @property
+    def run_scope(self):
+        return self._run_scope
+
+    def scope_blockers(self) -> tuple[str, ...]:
+        """Why Start would be refused right now (empty means allowed)."""
+        if self._preview_mode:
+            return ("PREVIEW_ONLY",)
+        if not self._enforce_scope:
+            return ()
+        if self._run_scope is None:
+            return ("SCOPE_MISSING",)
+        return ()
+
+    def _module_allowed(self, name: str) -> bool:
+        """Scope narrowing for optional modules; never widens the config."""
+        if not self._enforce_scope:
+            return True
+        scope = self._run_scope
+        return scope is not None and scope.allows_module(name)
+
+    def _run_notifications(self, now):
+        """Single dispatch choke point: no SMTP outside the approved scope."""
+        composition = self._v12_composition
+        if composition is None:
+            return 0
+        if not self._module_allowed("notification") or not self._write_policy.allows("smtp"):
+            return 0
+        return composition.coordinator.run_notifications(now=now)
+
+    def _attach_write_journal(self, db_path) -> None:
+        """Load the durable write-intent ledger before any business work.
+
+        A ledger that cannot be opened, created or read is a safety failure, not
+        a warning: every external write is blocked for that reason until it is
+        repaired. Nothing is cleared automatically.
+        """
+        try:
+            if not Path(db_path).is_file():
+                raise FileNotFoundError("workflow database is not initialised")
+            journal = SqliteWriteIntentJournal(db_path)
+            journal.migrate()
+            pending = journal.open_documents()
+        except Exception as exc:  # noqa: BLE001 - fail closed on any ledger failure
+            self._write_policy.block_all_writes("WRITE_LEDGER_UNAVAILABLE")
+            self._append_log("ERROR", "写入意图账本不可用，已禁止全部外部写入。")
+            log.warning("write intent ledger unavailable; class=%s", type(exc).__name__)
+            return
+        self._page_admission.attach_write_journal(journal)
+        if pending:
+            self._append_log(
+                "WARNING",
+                f"存在 {len(pending)} 个未结算写入意图，相关文档的写入保持阻断。",
+            )
+
     def start(self):
+        if self._preview_mode:
+            self._append_log("WARNING", "安全预览模式不启动业务。")
+            return False
+        if self._enforce_scope and self._run_scope is None:
+            self._append_log("ERROR", "未配置受控试运行范围，已拒绝启动业务。")
+            return False
         if not self._mail_start_retry_lock.acquire(blocking=False):
             if monotonic() >= self._mail_start_busy_log_at:
                 self._mail_start_busy_log_at = monotonic()+60
@@ -1126,6 +1217,11 @@ class ProductionBackend(GuiBackend):
             # Otherwise process startup already completed this quiesced migration.
             # Do not repeat a quiescence assertion while independent SMTP runs.
             self._v12_store = V12Store(db)
+            # RFQ-021: the durable write ledger is attached only after the V1.2
+            # migration has created/validated this database. Creating the table
+            # earlier would produce an empty file that the V1.1 baseline check
+            # would (correctly) reject as a schema mismatch.
+            self._attach_write_journal(db)
             follow_up_store = None
             if cfg.get("v13_enabled") is True or (
                     getattr(sys, "frozen", False) and Path(sys.executable).stem == "INSO_V1.3"):
@@ -1202,6 +1298,7 @@ class ProductionBackend(GuiBackend):
                         login_problem=self._manual_review,
                         store=self._v12_store,
                         observe=self._observe_stage,
+                        write_policy=self._write_policy,
                     ),
                     smtp_config=QQSMTPConfig(sender_address="1069599116@qq.com"),
                     recipients=(
@@ -1253,8 +1350,10 @@ class ProductionBackend(GuiBackend):
                 WorkflowWorker(self._store, research_observer, brand_updater=None),
                 worksheets,
             )
-            self._v13_enabled = cfg.get("v13_enabled") is True or (
-                getattr(sys, "frozen", False) and Path(sys.executable).stem == "INSO_V1.3")
+            self._v13_enabled = (
+                cfg.get("v13_enabled") is True
+                or (getattr(sys, "frozen", False) and Path(sys.executable).stem == "INSO_V1.3")
+            ) and self._module_allowed("quotation")
             self._observation.enable(quotation=self._v13_enabled, tp=cfg.get("tp_enabled") is True)
             if self._v13_enabled:
                 holds = V13HoldStore(db)
@@ -1335,7 +1434,7 @@ class ProductionBackend(GuiBackend):
             # even when reads and writes use the API transport.
             self._manual_page_service = web_service
             self._tp = None
-            if cfg.get("tp_enabled") is True:
+            if cfg.get("tp_enabled") is True and self._module_allowed("tp"):
                 from .tp_composition import build_tp_cycle
                 def prepare_tp(key):
                     self._begin_inso_inquiry(key)
@@ -1409,9 +1508,7 @@ class ProductionBackend(GuiBackend):
                                 if self._immediate_stop_requested():
                                     return
                                 self._purchase_completion.retry_saved_statuses(at=utc_now())
-                                self._v12_composition.coordinator.run_notifications(
-                                    now=utc_now()
-                                )
+                                self._run_notifications(utc_now())
                                 browser_state = "已连接" if self._research_ready else "待命"
                                 if not self._site_outages:
                                     self._set_health(("正常", browser_state, "正常", "正常"), "正常")
@@ -1465,14 +1562,14 @@ class ProductionBackend(GuiBackend):
 
             def worker_loop():
                 try:
-                    if independent:
+                    if independent and self._module_allowed("notification") and self._write_policy.allows("smtp"):
                         self._v12_composition.notification_worker.bind_delivery_thread()
                     while not self._stop.is_set():
                         try:
                             BrowserHandle.drain_deferred_stops()
                             self._refresh()
                             if self._v12_composition is not None:
-                                self._v12_composition.coordinator.run_notifications(now=utc_now())
+                                self._run_notifications(utc_now())
                             self._release_idle_browser()
                         except Exception as exc:
                             if not self._defer_website_poll(exc, runtime.poll_interval):
@@ -1489,12 +1586,12 @@ class ProductionBackend(GuiBackend):
                         # this never pretends the browser owner has drained.
                         if self._runtime_stop_reason and self._v12_composition is not None:
                             try:
-                                self._v12_composition.coordinator.run_notifications(now=utc_now())
+                                self._run_notifications(utc_now())
                             except Exception as error:  # noqa: BLE001 - original outbox owns retry/UNKNOWN
                                 log.warning("Pending drain notification unavailable; class=%s", type(error).__name__)
                     try:
                         if self._runtime_stop_reason and self._v12_composition is not None:
-                            self._v12_composition.coordinator.run_notifications(now=utc_now())
+                            self._run_notifications(utc_now())
                     except Exception as error:  # noqa: BLE001 - preserve original durable retry/UNKNOWN
                         log.warning("Final notification pass unavailable; class=%s", type(error).__name__)
                     finally:
@@ -2628,7 +2725,7 @@ class ProductionBackend(GuiBackend):
             self._seen(result.inquiry_id)
             settled = self._purchase_completion.process(result, at=utc_now())
             preserve = settled is not True
-            self._v12_composition.coordinator.run_notifications(now=utc_now())
+            self._run_notifications(utc_now())
             self._invalidate_order_view(result.inquiry_id)
             if settled is False:
                 preserve = True
@@ -3186,7 +3283,7 @@ class ProductionBackend(GuiBackend):
         if (shared_fault or fault_inquiry is None) and self._v13_ledger_ready:
             try:
                 self._notify_runtime_fault(self._run_id or "run",reason,at=utc_now())
-                self._v12_composition.coordinator.run_notifications(now=utc_now())
+                self._run_notifications(utc_now())
             except (sqlite3.Error,V12DatabaseError):
                 self._alert_owner_of_login(stop_reason=reason)
         elif self._purchase_completion is None or fault_inquiry is None:
@@ -3200,7 +3297,7 @@ class ProductionBackend(GuiBackend):
         try:
             self._purchase_completion.notify(inquiry_id, phase, reason, at=utc_now())
             if self._v12_composition is not None:
-                self._v12_composition.coordinator.run_notifications(now=utc_now())
+                self._run_notifications(utc_now())
         except (sqlite3.Error, V12DatabaseError):
             self._state = RunState.MODULE_PAUSED
             self._stop.set()

@@ -57,6 +57,22 @@ _FONT_SMALL = ("Microsoft YaHei UI", 10)
 _FONT_NUMBER = ("Microsoft YaHei UI", 20, "bold")
 
 
+def _scope_button(blockers) -> dict[str, str] | None:
+    """Disabled Start presentation for a preview or an unscoped launch.
+
+    Pure so the release contract can be asserted without a window: ``None``
+    means Start behaves normally, anything else means it must stay disabled.
+    """
+    if not blockers:
+        return None
+    preview = tuple(blockers) == ("PREVIEW_ONLY",)
+    return {
+        "text": "安全预览（不启动业务）" if preview else "未配置受控试运行范围",
+        "state": "disabled",
+        "fg_color": _GRAY,
+    }
+
+
 def _status_color(status: str) -> str:
     status_l = status.lower()
     if status_l == "全局基础设施故障":
@@ -474,6 +490,12 @@ class InsoDashboardApp:
         self._assert_main_thread()
         self._status = status
         if hasattr(self, "_view"):
+            scope_button = _scope_button(getattr(self._backend, "scope_blockers", lambda: ())())
+            if scope_button is not None:
+                # RFQ-021: a preview or an unscoped release build must never
+                # present a clickable Start that would silently do nothing.
+                self._view.configure(self._action_button, **scope_button)
+                return
             running = status.state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}
             stopping = status.state is RunState.STOPPING_AFTER_CYCLE
             self._view.configure(self._action_button,
