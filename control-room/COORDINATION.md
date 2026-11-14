@@ -1,24 +1,13 @@
-# Control Room — current status (2026-11-14)
+# Control Room — current RFQ status (CEO Review 2026-11-14)
 
-**Status is an operational pointer, not live proof.** Owner/CEO own requirement meaning; active Executor updates actual execution status; CEO independently reviews. A disappeared agent is not proof the Windows process stopped. New windows start at [AI_START_HERE](../AI_START_HERE.md) and [CEO handover](CEO_HANDOVER.md).
+**Any CEO or Executor window can end abruptly.** [Entry](../AI_START_HERE.md) → [CEO takeover](CEO_HANDOVER.md) → [Review](RFQ-016/REVIEW.md) → [checkpoint](RFQ-016/EXECUTION_LOG.md). Git documents are not live Windows proof.
 
-## Active
-
-| RFQ | Status / active work | Where to resume |
+| RFQ | Status | Business fact and required next |
 | --- | --- | --- |
-| **RFQ-016** | **REVIEW_REQUIRED / REAL_ORDER_PURCHASE_DONE / TASK_CENTRE_CLEARED / QUOTATION_WAITING_SUPPLIER**. 2026-11-14: the authorized single order (`2026` row 221) was purchased through the API path — INSO save+send reconciled `SAVED` (`rec_440fafd3…`), Google `A221` `未发`→`发给采购`, `F221`→`FTDI`; no mail; quotation `NO_RECENT_QUOTE` (0 writes, 0 button clicks). Task centre reconciled to 60 orders / **0 exceptions / 0 active alerts**, status column now shows the sheet's own status; new Owner action 「按表格恢复状态」; six rebuilds deployed, current EXE `E9E3DA33…` with full rollback. Four known non-blocking defects recorded in the checkpoint. | [Task Spec](RFQ-016/TASK_SPEC.md) · [Execution checkpoint](RFQ-016/EXECUTION_LOG.md) · [CEO Review](RFQ-016/REVIEW.md) · [Final report](RFQ-016/FINAL_REPORT.md) |
+| **RFQ-016** | **CHANGES_REQUESTED / PARTIAL_REAL_ORDER_DONE_REPORTED / NO_CEO_LIVE_RUN** | Executor `41a96f0d` reports row221 procurement/Google `发给采购` + FTDI `SAVED`, no supplier quote/no mail, 60 task-centre rows/0 V12 alerts, trial EXE `E9E3DA33…` PID38948. CEO source Review found P0 safety regression risks in automatic human closure and manual resync, plus physical-row display mismatch; **must fix before full PASS**. Preserve three old quote holds and four pending issue groups; no blind retry or force stop. |
 
-Remote development branch: `workbuddy/v16-rfq016-stabilization` (read actual HEAD each session); production branch/report lineage also exists at `codex/v1-6-independent-scheduling`. **Do not auto-merge/deploy** from a document-only commit.
+**Branch state:** `develop` is the governance/forward integration line; RFQ-016 new code currently only on `workbuddy/v16-rfq016-stabilization`. GitHub default `main` remains legacy V1.1, not the accepted current V1.6. `release/previous` is provisional until original current/previous versions are verified. Trial deployment/uptime **never** promotes `main` without Owner acceptance: [policy](https://github.com/Horse-Hunter/INSO_Leo/blob/develop/docs/BRANCH_POLICY.md).
 
-**Next safe work:** identify old Windows worker/process + its in-flight effects, production config/API + Sheet Editor, row `INSO_QUOTE/2026/221` identity/date/holds/INSO/mail, and a genuinely bounded one-order entry. Only then resume within explicit real-effect authorization. No unattended full Start as a stand-in for one-order proof.
+**Next one step:** single Executor inspects current Windows process and durable external effects without new effects, then writes 4–6 failing P0/P1 regressions and a narrow safe patch on the existing RFQ branch; CEO re-reviews. No repeat order221 purchase, no automatic quote click or mail, no restored old SQLite, no clearing `SENT/UNKNOWN`/original holds.
 
-## Completed historical RFQs
-
-| RFQs | Last recorded classification | Read on demand |
-| --- | --- | --- |
-| RFQ-001–014 | `REVIEWED_DONE` (separate historical decisions and approvals) | `control-room/RFQ-XXX/{TASK_SPEC,REVIEW,FINAL_REPORT,EXECUTION_LOG}.md` |
-| RFQ-015 | `DEPLOYED` historical V1.4 release | `control-room/RFQ-015/` |
-
-Past release/source holds are **historical**, not instructions to automatically roll back current binaries; the current RFQ-016 Review controls acceptance. Owner 2026-11-14 permits Agent Computer Use, but business write/purchase/quote/mail authorization remains separate. No previous historic report may be used as present live status.
-
-[Full pre-cleanup coordination history](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/control-room/COORDINATION.md) · [Archive index](../docs/HISTORY.md).
+RFQ-001–015 are previous recorded project phases, not active tasks. Historical status evidence is at [pinned pre-compaction version](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/control-room/COORDINATION.md).
