@@ -76,6 +76,22 @@ _OWNER_RECONCILABLE_STATES = frozenset({
     BusinessState.INVALID_INPUT_SKIPPED,
 })
 
+# These states mean an effect may already have left the program, or the program's
+# own status write is still pending. A human changing the sheet status cannot prove
+# either outcome, so they are never settled by the sheet alone.
+_NEVER_AUTO_CLOSED = frozenset({
+    BusinessState.INTERRUPTED_POSSIBLY_SENT,
+    BusinessState.STATUS_WRITE_PENDING,
+    BusinessState.SUBMIT_UNCONFIRMED,
+})
+
+# A purchase record in one of these outcomes has no unresolved external effect.
+_SETTLED_PURCHASE_OUTCOMES = frozenset({
+    PurchaseOutcome.SAVED,
+    PurchaseOutcome.CONFIRMED_NOT_SAVED,
+    PurchaseOutcome.VALIDATION_FAILED,
+})
+
 # A worksheet header row was once admitted as an order (``MPN`` in the model cell).
 # It can never be resolved from the sheet — its status cell holds ``STATUS`` — so the
 # ledger marks it as invalid input instead of reporting it as a business anomaly
@@ -291,6 +307,33 @@ class V12WorkflowCoordinator:
     def poll_and_process(self, reader, worksheet, *, now):
         return self.process_pending(self.discover_pending(reader, worksheet, now=now), now=now)
 
+    def _purchase_settled(self, inquiry_id: str) -> bool:
+        """The durable purchase record proves there is no unknown Save in flight."""
+
+        try:
+            outcome = self._v12_store.purchase_state(inquiry_id)
+        except KeyError:
+            return False
+        return outcome in _SETTLED_PURCHASE_OUTCOMES
+
+    def _owner_completion_is_safe(self, item, state: BusinessState) -> bool:
+        """A manual sheet status may only settle effects the ledger already proved.
+
+        A completed status is the Owner's statement about the line, not proof that
+        an earlier Save/quotation/mail actually finished. Unknown purchase outcomes,
+        pending status writes and active quotation holds therefore keep the order
+        open with its alerts until a human reconciles the real receipt.
+        """
+
+        if state in _NEVER_AUTO_CLOSED:
+            return False
+        if (state is BusinessState.PURCHASE_EXCEPTION
+                and not self._purchase_settled(item.inquiry_id)):
+            return False
+        from .v13_integration import V13HoldStore
+        return not V13HoldStore(self._v12_store.database_path).blocks_inquiry_retry(
+            item.inquiry_id, item.record_identity)
+
     def discover_pending(
         self,
         reader: WorksheetRowReader,
@@ -312,9 +355,9 @@ class V12WorkflowCoordinator:
                 continue
             # One rule for every order parked for a human decision: when the Owner
             # has already moved that exact row to a completed status by hand, the
-            # order is finished and must stop being reported as an exception. The
-            # locator stays strict about worksheet/row/model and returns None on
-            # anything unprovable, so nothing is closed blind.
+            # order may be finished only when the ledger proves no external effect
+            # is still unresolved. The locator stays strict about worksheet/row/model
+            # and returns None on anything unprovable, so nothing is closed blind.
             # A header row that was once admitted as an order can never be resolved
             # from its own status cell, so the ledger records the real reason once
             # instead of showing it as a business anomaly for ever.
@@ -325,22 +368,30 @@ class V12WorkflowCoordinator:
                     EventType.HUMAN_RESOLUTION_RECORDED, now)
                 self._v12_store.recover_stale_alerts(item.inquiry_id, at=now)
                 continue
-            if state in _OWNER_RECONCILABLE_STATES and owner_resolved_status(
-                    reader, item.record_identity) is not None:
+            if (state in _OWNER_RECONCILABLE_STATES
+                    and self._owner_completion_is_safe(item, state)
+                    and owner_resolved_status(
+                        reader, item.record_identity) is not None):
                 self._set_state(item.inquiry_id, BusinessState.HUMAN_COMPLETED,
                     EventType.HUMAN_RESOLUTION_RECORDED, now)
                 state = BusinessState.HUMAN_COMPLETED
             # A finished order keeps every alert raised while it was in flight and
             # nothing else ever clears them, so a done row can stay red forever.
             # Only alerts that became moot are cleared: a human-completed order has
-            # no open question left, and a recorded purchase has already passed the
-            # data-quality gate. Mail/notification alerts are never touched here.
-            if state is BusinessState.HUMAN_COMPLETED:
-                self._v12_store.recover_stale_alerts(item.inquiry_id, at=now)
-            elif state is BusinessState.PURCHASE_RECORDED:
+            # no open data-quality question left, and a recorded purchase has already
+            # passed the same gate. Mail/notification and security alerts are never
+            # touched here; a purchase alert is cleared only when its outcome is
+            # settled. A sheet status edit does not settle an unknown effect.
+            if state in {BusinessState.HUMAN_COMPLETED, BusinessState.PURCHASE_RECORDED}:
+                recoverable = {AlertType.DATA_QUALITY}
+                if (state is BusinessState.HUMAN_COMPLETED
+                        and self._purchase_settled(item.inquiry_id)):
+                    # A purchase alert on a proven-saved/not-saved outcome is
+                    # answered; an unknown or possibly-sent one is not.
+                    recoverable.add(AlertType.PURCHASE_EXCEPTION)
                 self._v12_store.recover_stale_alerts(
                     item.inquiry_id, at=now,
-                    alert_types=frozenset({AlertType.DATA_QUALITY}))
+                    alert_types=frozenset(recoverable))
         # Row movement preserves the existing inquiry_id, never creates another purchase.
         existing = self._workflow_store.all_items()
         normalized = []

@@ -356,6 +356,7 @@ def test_task_filters_use_fresh_source_status_and_preserve_holds():
     quoted = order("quoted")
     held = order("held")
     stale = order("stale")
+    unproven = order("unproven")
     states = {
         "pending": V12OrderStateDTO("pending", V12BusinessLabel.PURCHASE_SENT, None,
                                     source_status="发给采购", source_fresh=True, source_verified_at=datetime.now(UTC)),
@@ -365,11 +366,16 @@ def test_task_filters_use_fresh_source_status_and_preserve_holds():
                                  source_status="已报价给客户", source_fresh=True, source_verified_at=datetime.now(UTC)),
         "stale": V12OrderStateDTO("stale", V12BusinessLabel.PURCHASE_SENT, None,
                                   source_status="已报价给客户", source_fresh=False),
+        "unproven": V12OrderStateDTO("unproven", V12BusinessLabel.HUMAN_COMPLETED, None,
+                                     source_status=None, source_link_unproven=True),
     }
-    items = (pending, quoted, held, stale)
+    items = (pending, quoted, held, stale, unproven)
     assert select_orders(items, status="待处理", states=states) == (pending,)
-    assert select_orders(items, status="已完成", states=states) == (quoted,)
-    assert select_orders(items, status="需核对", states=states) == (held, stale)
+    # A calm order's source can be older than 15 minutes between cycles; it is not
+    # a review item merely because the last successful read aged. An unproven
+    # source link still is.
+    assert select_orders(items, status="已完成", states=states) == (quoted, stale)
+    assert select_orders(items, status="需核对", states=states) == (held, unproven)
     assert sort_orders(items, "status", states=states)[0] is pending
 
 

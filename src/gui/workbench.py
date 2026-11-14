@@ -144,7 +144,7 @@ def _source_is_fresh(state, now=None):
 
 
 def _state_needs_review(state):
-    return bool(state.active_alerts or state.latest_active_alert) or state.business_label in (
+    return bool(state.active_alerts or state.latest_active_alert or state.source_link_unproven) or state.business_label in (
         _REVIEW_STATES | _STATUS_ISSUES.keys()
     ) or "待核对" in (state.waiting_label or "") or "待人工核对" in (state.waiting_label or "")
 
@@ -171,7 +171,11 @@ def order_status(order, state=None):
     if state is not None:
         # The Owner reads this column as "what the sheet says now", so the sheet's own
         # status wins whenever we have one — a finished order included. Only when no
-        # source status is known at all does the order's own outcome stand in.
+        # source status is known at all does the order's own outcome stand in. A row
+        # that can no longer be proven to belong to this order never borrows another
+        # order's status.
+        if state.source_link_unproven:
+            return "来源待核对"
         sheet_status = (state.source_status.strip()
                         if isinstance(state.source_status, str) and state.source_status.strip()
                         else None)
@@ -206,7 +210,17 @@ def select_orders(
     def keep(o):
         state = (states or {}).get(o.inquiry_id)
         if state is not None and o.delivery_status is None:
-            if not _source_is_fresh(state) or _state_needs_review(state) or o.status is OrderStatus.ERROR:
+            if state.source_link_unproven or _state_needs_review(state):
+                category = "需核对"
+            elif _calm(state):
+                # Between cycles a calm order's last source read is often older than
+                # 15 minutes. That is not a review item, and the row is already
+                # painted calm; the filter must agree with the colour.
+                category = ("已完成" if state.source_status == "已报价给客户"
+                            else "待处理" if state.source_status in {
+                                "未发", "发给采购", "采购已报价"}
+                            else "需核对")
+            elif not _source_is_fresh(state) or o.status is OrderStatus.ERROR:
                 category = "需核对"
             elif state.source_status == "已报价给客户":
                 category = "已完成"

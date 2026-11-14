@@ -42,37 +42,143 @@ def prepared(tmp_path, monkeypatch):
     return backend, flow, store, ledger, source, research, writer, result.inquiry_id
 
 
-def test_recover_from_sheet_closes_an_order_the_owner_finished_by_hand(tmp_path, monkeypatch):
-    """Owner request 2026-11-14: a purchase may have failed, but if the row already
-    says it was quoted to the customer, one right-click must accept that and close
-    the order — no need to walk the skipped steps."""
+def test_recover_from_sheet_closes_an_unsubmitted_order_the_owner_finished_by_hand(tmp_path, monkeypatch):
+    """Owner request 2026-11-14: a purchase that never left can be closed once the
+    row itself says the Owner carried it forward. No external effect was possible."""
 
     backend, _, store, ledger, source, _, _, inquiry = prepared(tmp_path, monkeypatch)
-    ledger.set_business_state(inquiry, BusinessState.PURCHASE_EXCEPTION,
-        WorkflowEvent("evt_parked", inquiry, EventType.AI_RECOGNITION_MISMATCH, NOW, "workflow"))
+    ledger.set_business_state(inquiry, BusinessState.INTERRUPTED_UNSENT,
+        WorkflowEvent("evt_parked", inquiry, EventType.HUMAN_RESOLUTION_RECORDED, NOW, "workflow"))
     source.rows[0] = WorksheetRow(3, {"A": "已报价给客户", "C": "A", "D": "Customer",
-                                      "E": "FIXED-PART", "F": "NewBrand", "G": 19})
+                                      "E": "OLD", "F": "NewBrand", "G": 7})
 
     backend._execute_order_action(("request", inquiry, "resync", None, None))
 
     result = backend.get_manual_order_result()
     assert result.success and "已报价给客户" in result.message
     assert ledger.business_state(inquiry) is BusinessState.HUMAN_COMPLETED
-    assert store.get_by_inquiry_id(inquiry).record_identity.identifying_snapshot.model == "FIXED-PART"
+    assert store.get_by_inquiry_id(inquiry).record_identity.identifying_snapshot.model == "OLD"
 
 
-def test_recover_from_sheet_refuses_a_row_that_is_not_completed(tmp_path, monkeypatch):
-    backend, _, _, ledger, source, _, _, inquiry = prepared(tmp_path, monkeypatch)
-    ledger.set_business_state(inquiry, BusinessState.PURCHASE_EXCEPTION,
-        WorkflowEvent("evt_parked", inquiry, EventType.AI_RECOGNITION_MISMATCH, NOW, "workflow"))
-    source.rows[0] = WorksheetRow(3, {"A": "未发", "C": "A", "D": "Customer",
+def test_recover_from_sheet_refuses_a_replaced_row(tmp_path, monkeypatch):
+    backend, _, store, ledger, source, _, _, inquiry = prepared(tmp_path, monkeypatch)
+    ledger.set_business_state(inquiry, BusinessState.INTERRUPTED_UNSENT,
+        WorkflowEvent("evt_parked", inquiry, EventType.HUMAN_RESOLUTION_RECORDED, NOW, "workflow"))
+    before = store.get_by_inquiry_id(inquiry)
+    source.rows[0] = WorksheetRow(3, {"A": "已报价给客户", "C": "A", "D": "Customer",
                                       "E": "FIXED-PART", "F": "NewBrand", "G": 19})
 
     backend._execute_order_action(("request", inquiry, "resync", None, None))
 
     result = backend.get_manual_order_result()
+    assert not result.success and "不是该订单" in result.message
+    assert ledger.business_state(inquiry) is BusinessState.INTERRUPTED_UNSENT
+    assert store.get_by_inquiry_id(inquiry) == before
+
+
+def test_recover_from_sheet_allows_a_pre_save_exception(tmp_path, monkeypatch):
+    backend, _, _, ledger, source, _, _, inquiry = prepared(tmp_path, monkeypatch)
+    ledger.set_business_state(inquiry, BusinessState.PURCHASE_EXCEPTION,
+        WorkflowEvent("evt_parked", inquiry, EventType.AI_RECOGNITION_MISMATCH, NOW, "workflow"))
+    source.rows[0] = WorksheetRow(3, {"A": "已报价给客户", "C": "A", "D": "Customer",
+                                      "E": "OLD", "F": "NewBrand", "G": 7})
+
+    backend._execute_order_action(("request", inquiry, "resync", None, None))
+
+    assert backend.get_manual_order_result().success
+    assert ledger.business_state(inquiry) is BusinessState.HUMAN_COMPLETED
+
+
+def test_recover_from_sheet_refuses_an_unconfirmed_purchase(tmp_path, monkeypatch):
+    from src.workflow.v12_contracts import PurchaseOutcome
+
+    backend, _, store, ledger, source, _, _, inquiry = prepared(tmp_path, monkeypatch)
+    try:
+        purchase = ledger.purchase_state(inquiry)
+    except KeyError:
+        ledger.set_purchase_state(inquiry, "synthetic", PurchaseOutcome.PRE_SAVE_READY, at=NOW)
+        purchase = PurchaseOutcome.PRE_SAVE_READY
+    if purchase is PurchaseOutcome.PRE_SAVE_READY:
+        ledger.set_purchase_state(inquiry, "synthetic", PurchaseOutcome.AI_RECOGNIZED, at=NOW)
+        purchase = PurchaseOutcome.AI_RECOGNIZED
+    assert purchase is PurchaseOutcome.AI_RECOGNIZED
+    ledger.begin_save_dispatch(inquiry, at=NOW, save_and_send=True)
+    ledger.set_business_state(inquiry, BusinessState.INTERRUPTED_POSSIBLY_SENT,
+        WorkflowEvent("evt_parked", inquiry, EventType.HUMAN_RESOLUTION_RECORDED, NOW, "workflow"))
+    before = store.get_by_inquiry_id(inquiry)
+    source.rows[0] = WorksheetRow(3, {"A": "已报价给客户", "C": "A", "D": "Customer",
+                                      "E": "OLD", "F": "NewBrand", "G": 7})
+
+    backend._execute_order_action(("request", inquiry, "resync", None, None))
+
+    result = backend.get_manual_order_result()
+    assert not result.success and "未确认" in result.message
+    assert ledger.business_state(inquiry) is BusinessState.INTERRUPTED_POSSIBLY_SENT
+    assert store.get_by_inquiry_id(inquiry) == before
+
+
+def test_recover_from_sheet_refuses_an_active_quote_hold(tmp_path, monkeypatch):
+    from src.workflow.v13_integration import V13HoldStore
+    from src.workflow.v13_quotation import (
+        QuotationOutcome,
+        RowErrorReason,
+        V13QuotationResult,
+    )
+
+    backend, _, store, ledger, source, _, _, inquiry = prepared(tmp_path, monkeypatch)
+    ledger.set_business_state(inquiry, BusinessState.INTERRUPTED_UNSENT,
+        WorkflowEvent("evt_parked", inquiry, EventType.HUMAN_RESOLUTION_RECORDED, NOW, "workflow"))
+    identity = store.get_by_inquiry_id(inquiry).record_identity
+    holds = V13HoldStore(ledger.database_path)
+    holds.migrate()
+    holds.hold(V13QuotationResult(
+        inquiry, identity, "OLD", QuotationOutcome.ROW_FAILED, None,
+        RowErrorReason.UPDATE_RESULT_UNCONFIRMED, identity.worksheet,
+        identity.row_position, effect_uncertain=True), identity)
+    source.rows[0] = WorksheetRow(3, {"A": "已报价给客户", "C": "A", "D": "Customer",
+                                      "E": "OLD", "F": "NewBrand", "G": 7})
+
+    backend._execute_order_action(("request", inquiry, "resync", None, None))
+
+    result = backend.get_manual_order_result()
+    assert not result.success and "未结算" in result.message
+    assert ledger.business_state(inquiry) is BusinessState.INTERRUPTED_UNSENT
+    assert holds.active()
+
+
+def test_recover_from_sheet_keeps_a_failed_mail_alert(tmp_path, monkeypatch):
+    from src.workflow.v12_contracts import AlertType, ReasonCode
+
+    backend, _, _, ledger, source, _, _, inquiry = prepared(tmp_path, monkeypatch)
+    ledger.set_business_state(inquiry, BusinessState.INTERRUPTED_UNSENT,
+        WorkflowEvent("evt_parked", inquiry, EventType.HUMAN_RESOLUTION_RECORDED, NOW, "workflow"))
+    ledger.raise_alert(inquiry_id=inquiry, alert_type=AlertType.NOTIFICATION_FAILED,
+        reason_code=ReasonCode.NOTIFICATION_PERMANENT,
+        event=WorkflowEvent("evt_notification", inquiry, EventType.NOTIFICATION_DELIVERY_FAILED,
+                            NOW, "workflow"))
+    source.rows[0] = WorksheetRow(3, {"A": "已报价给客户", "C": "A", "D": "Customer",
+                                      "E": "OLD", "F": "NewBrand", "G": 7})
+
+    backend._execute_order_action(("request", inquiry, "resync", None, None))
+
+    assert backend.get_manual_order_result().success
+    assert ledger.business_state(inquiry) is BusinessState.HUMAN_COMPLETED
+    assert [alert.alert_type for alert in ledger.active_alerts(inquiry)] == [
+        AlertType.NOTIFICATION_FAILED]
+
+
+def test_recover_from_sheet_refuses_a_row_that_is_not_completed(tmp_path, monkeypatch):
+    backend, _, _, ledger, source, _, _, inquiry = prepared(tmp_path, monkeypatch)
+    ledger.set_business_state(inquiry, BusinessState.INTERRUPTED_UNSENT,
+        WorkflowEvent("evt_parked", inquiry, EventType.HUMAN_RESOLUTION_RECORDED, NOW, "workflow"))
+    source.rows[0] = WorksheetRow(3, {"A": "未发", "C": "A", "D": "Customer",
+                                      "E": "OLD", "F": "NewBrand", "G": 7})
+
+    backend._execute_order_action(("request", inquiry, "resync", None, None))
+
+    result = backend.get_manual_order_result()
     assert not result.success and "未发" in result.message
-    assert ledger.business_state(inquiry) is BusinessState.PURCHASE_EXCEPTION
+    assert ledger.business_state(inquiry) is BusinessState.INTERRUPTED_UNSENT
 
 
 def test_purchase_retry_rereads_changed_fields_reuses_coordinator_and_same_inquiry(tmp_path, monkeypatch):

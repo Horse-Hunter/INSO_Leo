@@ -949,11 +949,11 @@ def _advanced_reader(status: str, **kwargs) -> FakeSheetsReader:
 
 @pytest.mark.parametrize("status", ["发给采购", "采购已报价", "已报价给客户", "成交"])
 def test_owner_finished_in_the_sheet_closes_a_parked_order(tmp_path, status):
-    """Live 2026-11-14: 32 of 36 review rows were already advanced by the Owner in
-    the sheet, yet none cleared — the old rule demanded exactly ``发给采购`` and an
-    unchanged brand, so a manual follow-up could never resolve its own row."""
+    """Owner 2026-11-14: a completed sheet row closes a parked order that has no
+    unresolved external effect. The unsafe states are proved separately in
+    ``test_rfq016_regressions``."""
 
-    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.PURCHASE_EXCEPTION)
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT)
 
     # The Owner also filled the brand by hand, which the old rule treated as a conflict.
     flow.poll_and_process(_advanced_reader(status, brand="Brand-Y"), SHEET,
@@ -976,7 +976,7 @@ def test_owner_reconciliation_accepts_a_completed_model_text(tmp_path):
     """Live 2026-11-14: three rows stayed open only because the Owner completed the
     model text later (``N6210`` → ``CELERON-N6210``). Same quantity, same class."""
 
-    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.STATUS_WRITE_PENDING)
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT)
     reader = _advanced_reader("已报价给客户")
     reader.row = replace(reader.row, cells={**reader.row.cells, "E": "CELERON-Mpn-1"})
 
@@ -989,7 +989,7 @@ def test_owner_reconciliation_accepts_a_quantity_correction_on_the_same_row(tmp_
     """The Owner may also correct the quantity of the line they are looking at; the
     physical row plus the related model text is what identifies that order."""
 
-    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.STATUS_WRITE_PENDING)
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT)
     reader = _advanced_reader("已报价给客户")
     reader.row = replace(reader.row, cells={**reader.row.cells, "E": "CELERON-Mpn-1", "G": 99})
 
@@ -999,13 +999,13 @@ def test_owner_reconciliation_accepts_a_quantity_correction_on_the_same_row(tmp_
 
 
 def test_owner_reconciliation_refuses_a_different_article_in_the_same_row(tmp_path):
-    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.STATUS_WRITE_PENDING)
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT)
     reader = _advanced_reader("已报价给客户")
     reader.row = replace(reader.row, cells={**reader.row.cells, "E": "Completely-other-part"})
 
     flow.poll_and_process(reader, SHEET, now=NOW + timedelta(minutes=1))
 
-    assert store.business_state(inquiry_id) is BusinessState.STATUS_WRITE_PENDING
+    assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_UNSENT
 
 
 def test_owner_reconciliation_ignores_an_unfinished_row(tmp_path):
@@ -1016,9 +1016,9 @@ def test_owner_reconciliation_ignores_an_unfinished_row(tmp_path):
     assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_UNSENT
 
 
-def test_closing_a_parked_order_recovers_its_alerts(tmp_path):
-    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.PURCHASE_EXCEPTION,
-                                            alert=AlertType.PURCHASE_EXCEPTION)
+def test_closing_a_parked_order_recovers_its_answered_data_quality_alert(tmp_path):
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT,
+                                            alert=AlertType.DATA_QUALITY)
     assert store.active_alerts(inquiry_id)
 
     flow.poll_and_process(_advanced_reader("发给采购"), SHEET, now=NOW + timedelta(minutes=1))
@@ -1050,9 +1050,9 @@ def test_a_recorded_purchase_drops_only_the_data_quality_alert(tmp_path):
     assert {a.alert_type for a in store.active_alerts(inquiry_id)} == {AlertType.NOTIFICATION_FAILED}
 
 
-def test_a_human_completed_order_keeps_no_alert_open(tmp_path):
+def test_a_human_completed_order_keeps_no_answered_alert_open(tmp_path):
     flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.HUMAN_COMPLETED,
-                                            alert=AlertType.PURCHASE_EXCEPTION)
+                                            alert=AlertType.DATA_QUALITY)
     assert store.active_alerts(inquiry_id)
 
     flow.poll_and_process(_advanced_reader("成交"), SHEET, now=NOW + timedelta(minutes=1))

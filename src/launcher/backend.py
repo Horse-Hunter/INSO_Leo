@@ -81,6 +81,7 @@ from src.workflow.inso_query import run_inso_query
 from src.workflow.purchase_follow_up import PurchaseFollowUp
 from src.workflow.service import OrderResourceOwnershipError
 from src.workflow.v12_contracts import (
+    AlertType,
     BusinessState,
     DeliveryOutcome,  # noqa: F401 - compatibility injection seam
     EventType,
@@ -2147,30 +2148,117 @@ class ProductionBackend(GuiBackend):
         finally:
             self._owner_single_order = previous
 
+    @staticmethod
+    def _resync_row_matches_article(identity, row, rows) -> bool:
+        """The physical line is this order only when its article still matches.
+
+        The Owner may complete the model text (``N6210`` -> ``CELERON-N6210``) or
+        correct the brand, but a wholly different part, another quantity, or a
+        duplicate line means the row cannot prove which order it belongs to.
+        Status is deliberately excluded: that is the field being recovered.
+        """
+
+        from src.sheets.worksheet_schema import worksheet_schema
+
+        schema = worksheet_schema(identity.worksheet.worksheet)
+        snapshot = identity.identifying_snapshot
+        stored_model = str(snapshot.model or "").strip().casefold()
+
+        def matches(candidate):
+            live_model = str(candidate.cells.get(schema.model_column) or "").strip().casefold()
+            if not stored_model or not live_model:
+                return False
+            if stored_model != live_model:
+                if len(stored_model) < 4 or len(live_model) < 4:
+                    return False
+                if stored_model not in live_model and live_model not in stored_model:
+                    return False
+            if candidate.cells.get(schema.quantity_column) != snapshot.quantity:
+                return False
+            return (schema.importance_column is None
+                    or candidate.cells.get(schema.importance_column)
+                    == snapshot.importance_raw)
+
+        unique = [candidate for candidate in rows if matches(candidate)]
+        return len(unique) == 1 and unique[0].row_position == row.row_position
+
+    @staticmethod
+    def _resync_effects_settled(state, purchase) -> bool:
+        """No unresolved purchase effect may be closed by a Sheet status edit.
+
+        A pre-save state (``PRE_SAVE_READY``/``AI_RECOGNIZED``) has no external
+        effect yet, so the Owner's own follow-up may close it. A possibly sent or
+        reconciled-unknown Save always stays open until the real receipt is known.
+        """
+
+        unresolved = {
+            PurchaseOutcome.UNKNOWN_WRITE_OUTCOME,
+            PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED,
+            PurchaseOutcome.MANUAL_REVIEW,
+            PurchaseOutcome.SUBMIT_UNCONFIRMED,
+        }
+        if purchase in unresolved:
+            return False
+        settled = {
+            PurchaseOutcome.SAVED,
+            PurchaseOutcome.CONFIRMED_NOT_SAVED,
+            PurchaseOutcome.VALIDATION_FAILED,
+        }
+        if state in {BusinessState.INTERRUPTED_POSSIBLY_SENT,
+                     BusinessState.STATUS_WRITE_PENDING,
+                     BusinessState.SUBMIT_UNCONFIRMED}:
+            return purchase in settled
+        if state is BusinessState.PURCHASE_EXCEPTION:
+            return purchase in settled | {
+                None, PurchaseOutcome.PRE_SAVE_READY, PurchaseOutcome.AI_RECOGNIZED}
+        return True
+
     def _recover_order_from_sheet(self, item, identity) -> str:
         """Owner action: make this order agree with the row it currently occupies.
 
         The human right-clicks the line they can see, so the physical row is the
-        binding. Only a completed sheet status is accepted — anything else is
-        reported back rather than invented — and the ledger is re-pointed at the
-        observed cells so later reads stop disagreeing with the sheet.
+        binding. The action stays fail-closed: a completed status is accepted only
+        when the row still identifies the same article, the durable purchase is
+        settled, and no quotation effect is held. It then re-points the ledger at
+        the observed cells and closes only alerts that settled outcome answers; a
+        possibly sent Save, failed mail or unknown quote stays visible and protected.
         """
 
         from src.sheets.pending import identify_worksheet_row
-        from src.sheets.purchase_status import (
-            PURCHASE_COMPLETED_STATUSES,
-            current_row_at_identity,
-        )
+        from src.sheets.purchase_status import PURCHASE_COMPLETED_STATUSES
         from src.sheets.worksheet_schema import worksheet_schema
 
-        row = current_row_at_identity(self._manual_reader, identity)
-        if row is None:
-            raise ValueError("表格里找不到这一行（可能已删除），未做任何修改。")
         schema = worksheet_schema(identity.worksheet.worksheet)
+        rows = tuple(self._manual_reader.read_rows(identity.worksheet))
+        anchors = [row for row in rows if row.row_position == identity.row_position]
+        if len(anchors) != 1:
+            raise ValueError("表格里找不到这一行（可能已删除），未做任何修改。")
+        row = anchors[0]
         observed = row.cells.get(schema.status_column)
         status = observed.strip() if isinstance(observed, str) else ""
         if status not in PURCHASE_COMPLETED_STATUSES:
             raise ValueError(f"该行当前状态是「{status or '空'}」，不是已完成状态，未做任何修改。")
+        if not self._resync_row_matches_article(identity, row, rows):
+            raise ValueError("这一行已不是该订单（型号或数量不符，或存在重复行），未做任何修改。")
+
+        try:
+            state = self._v12_store.business_state(item.inquiry_id)
+        except KeyError:
+            state = None
+        try:
+            purchase = self._v12_store.purchase_state(item.inquiry_id)
+        except KeyError:
+            purchase = None
+        if not self._resync_effects_settled(state, purchase):
+            raise ValueError(
+                "该订单的采购结果未确认（可能已保存或仍待核实），不能按表格结案；"
+                "原保护保留，请先在 INSO 核实。")
+        if V13HoldStore(self._v12_store.database_path).blocks_inquiry_retry(
+                item.inquiry_id, identity):
+            raise ValueError(
+                "该订单还有未结算的报价保护，不能按表格结案；"
+                "请先核对原报价结果。")
+
         refreshed = identify_worksheet_row(identity.worksheet, row)
         if not self._store.rebind_identity(item.id, refreshed):
             raise ValueError("订单记录未能更新，未做任何修改。")
@@ -2180,7 +2268,13 @@ class ProductionBackend(GuiBackend):
             WorkflowEvent(f"evt_{uuid.uuid4().hex}", item.inquiry_id,
                           EventType.HUMAN_RESOLUTION_RECORDED, now, "workflow"),
         )
-        self._v12_store.recover_stale_alerts(item.inquiry_id, at=now)
+        recoverable = {AlertType.DATA_QUALITY}
+        if purchase in {PurchaseOutcome.SAVED, PurchaseOutcome.CONFIRMED_NOT_SAVED,
+                        PurchaseOutcome.VALIDATION_FAILED,
+                        PurchaseOutcome.PRE_SAVE_READY, PurchaseOutcome.AI_RECOGNIZED}:
+            recoverable.add(AlertType.PURCHASE_EXCEPTION)
+        self._v12_store.recover_stale_alerts(
+            item.inquiry_id, at=now, alert_types=frozenset(recoverable))
         with self._lock:
             # The quotation observation for this order described the old state.
             self._v13_states.pop(item.inquiry_id, None)

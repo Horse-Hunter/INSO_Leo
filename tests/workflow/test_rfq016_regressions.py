@@ -5,9 +5,12 @@ from datetime import timedelta
 from src.launcher.v13_integration import notify_runtime_fault
 from src.sheets.pending import query_pending_records
 from src.workflow.v12_contracts import (
+    AlertType,
     BusinessState,
     DeliveryOutcome,
     EventType,
+    PurchaseOutcome,
+    ReasonCode,
     WorkflowEvent,
 )
 from src.workflow.v12_notifications import (
@@ -16,7 +19,13 @@ from src.workflow.v12_notifications import (
 )
 from src.workflow.v13_integration import V13HoldStore
 from tests.workflow.test_v12_flow import NOW as FLOW_NOW
-from tests.workflow.test_v12_flow import SHEET, FakeSheetsReader, _make_flow
+from tests.workflow.test_v12_flow import (
+    SHEET,
+    FakeSheetsReader,
+    _advanced_reader,
+    _make_flow,
+    _parked_order,
+)
 from tests.workflow.test_v12_notifications import NOW, prepared_store
 
 
@@ -528,3 +537,227 @@ def test_missing_source_status_is_not_reported_as_fresh():
     projected = projection.project(dto, now=NOW)
     assert projected.source_status is None and not projected.source_fresh
     assert "状态待同步" in projected.waiting_label
+
+
+# ---------------------------------------------------------------------------
+# CEO review 04222709 / 9d9181bd — manual Sheet edits must not settle an
+# external effect the program has not itself confirmed.
+# ---------------------------------------------------------------------------
+
+def _unknown_purchase(store, inquiry_id, *, now=NOW):
+    try:
+        outcome = store.purchase_state(inquiry_id)
+    except KeyError:
+        outcome = None
+    if outcome is None:
+        store.set_purchase_state(inquiry_id, "synthetic-purchase", PurchaseOutcome.PRE_SAVE_READY, at=now)
+        outcome = PurchaseOutcome.PRE_SAVE_READY
+    if outcome is PurchaseOutcome.PRE_SAVE_READY:
+        store.set_purchase_state(inquiry_id, "synthetic-purchase", PurchaseOutcome.AI_RECOGNIZED, at=now)
+        outcome = PurchaseOutcome.AI_RECOGNIZED
+    if outcome is PurchaseOutcome.AI_RECOGNIZED:
+        store.begin_save_dispatch(inquiry_id, at=now, save_and_send=True)
+    return store.purchase_state(inquiry_id)
+
+
+def _settled_not_saved_purchase(store, inquiry_id, *, now=NOW):
+    from src.workflow.v12_contracts import ReconciliationOutcome, ReconciliationResult
+    from src.workflow.v12_store import FakeSaveReconciler
+
+    _unknown_purchase(store, inquiry_id, now=now)
+    return store.reconcile_unknown_save(inquiry_id, FakeSaveReconciler(
+        ReconciliationResult(ReconciliationOutcome.CONFIRMED_NOT_SAVED, now,
+                             candidate_count=0, authoritative=True)), at=now)
+
+
+def _active_quote_hold(store, flow, inquiry_id, *, now=NOW):
+    from src.workflow.v13_integration import V13HoldStore
+    from src.workflow.v13_quotation import (
+        QuotationOutcome,
+        RowErrorReason,
+        V13QuotationResult,
+    )
+
+    identity = flow._workflow_store.get_by_inquiry_id(inquiry_id).record_identity
+    holds = V13HoldStore(store.database_path)
+    holds.migrate()
+    result = V13QuotationResult(
+        inquiry_id, identity, identity.identifying_snapshot.model,
+        QuotationOutcome.ROW_FAILED, None, RowErrorReason.UPDATE_RESULT_UNCONFIRMED,
+        identity.worksheet, identity.row_position, effect_uncertain=True)
+    return holds.hold(result, identity)
+
+
+@pytest.mark.parametrize("state", [
+    BusinessState.INTERRUPTED_POSSIBLY_SENT,
+    BusinessState.STATUS_WRITE_PENDING,
+])
+def test_manual_sheet_completion_never_closes_an_unconfirmed_purchase(tmp_path, state):
+    """A human status edit is not proof that a possibly-sent purchase succeeded."""
+
+    flow, store, inquiry_id = _parked_order(tmp_path, state)
+    _unknown_purchase(store, inquiry_id)
+    before = store.event_history(inquiry_id)
+
+    flow.poll_and_process(_advanced_reader("已报价给客户"), SHEET,
+                          now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is state
+    assert any(alert.alert_type is AlertType.PURCHASE_EXCEPTION
+               for alert in store.active_alerts(inquiry_id))
+    assert store.event_history(inquiry_id)[:len(before)] == before
+
+
+def test_manual_sheet_completion_does_not_close_over_an_active_quote_hold(tmp_path):
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.PURCHASE_EXCEPTION)
+    _settled_not_saved_purchase(store, inquiry_id)
+    _active_quote_hold(store, flow, inquiry_id)
+
+    flow.poll_and_process(_advanced_reader("已报价给客户"), SHEET,
+                          now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.PURCHASE_EXCEPTION
+
+
+def test_settled_purchase_exception_still_closes_from_the_owners_sheet(tmp_path):
+    """When the purchase was proven not saved, the Owner's own follow-up is enough."""
+
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.PURCHASE_EXCEPTION)
+    assert _settled_not_saved_purchase(store, inquiry_id) is PurchaseOutcome.CONFIRMED_NOT_SAVED
+
+    flow.poll_and_process(_advanced_reader("已报价给客户"), SHEET,
+                          now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.HUMAN_COMPLETED
+    assert not any(alert.alert_type is AlertType.PURCHASE_EXCEPTION
+                   for alert in store.active_alerts(inquiry_id))
+
+
+def test_manual_completion_keeps_a_failed_mail_alert_visible(tmp_path):
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT)
+    store.raise_alert(
+        inquiry_id=inquiry_id, alert_type=AlertType.NOTIFICATION_FAILED,
+        reason_code=ReasonCode.NOTIFICATION_PERMANENT,
+        event=WorkflowEvent("evt_notification", inquiry_id,
+                            EventType.NOTIFICATION_DELIVERY_FAILED, NOW, "workflow"))
+
+    flow.poll_and_process(_advanced_reader("已报价给客户"), SHEET,
+                          now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.HUMAN_COMPLETED
+    assert [alert.alert_type for alert in store.active_alerts(inquiry_id)] == [
+        AlertType.NOTIFICATION_FAILED]
+
+
+def test_manual_completion_only_clears_the_answered_data_quality_alert(tmp_path):
+    flow, store, inquiry_id = _parked_order(
+        tmp_path, BusinessState.INTERRUPTED_UNSENT, alert=AlertType.DATA_QUALITY)
+    store.raise_alert(
+        inquiry_id=inquiry_id, alert_type=AlertType.NOTIFICATION_FAILED,
+        reason_code=ReasonCode.NOTIFICATION_PERMANENT,
+        event=WorkflowEvent("evt_notification", inquiry_id,
+                            EventType.NOTIFICATION_DELIVERY_FAILED, NOW, "workflow"))
+
+    flow.poll_and_process(_advanced_reader("已报价给客户"), SHEET,
+                          now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.HUMAN_COMPLETED
+    assert [alert.alert_type for alert in store.active_alerts(inquiry_id)] == [
+        AlertType.NOTIFICATION_FAILED]
+
+
+# ---------------------------------------------------------------------------
+# Source-status truth: a physical line is not an identity proof.
+# ---------------------------------------------------------------------------
+
+def _source_dto(item):
+    return V12OrderStateDTO(item.inquiry_id, V12BusinessLabel.HUMAN_COMPLETED, None)
+
+
+@pytest.mark.parametrize("replacement", [
+    {"model": "COMPLETELY-OTHER"},
+    {"quantity": "99"},
+    {"model": "COMPLETELY-OTHER", "quantity": "99"},
+])
+def test_source_projection_marks_a_replaced_row_as_unproven(replacement):
+    from tests.workflow.test_v13_quotation import WS, item, source
+
+    projection = SourceStatusProjection()
+    original = item(2)
+    row = source(2, "已报价给客户", **replacement)
+    projection.observe(WS, [row], [original], at=NOW)
+
+    projected = projection.project(_source_dto(original), now=NOW)
+
+    assert projected.source_status is None
+    assert projected.source_link_unproven
+    assert "来源待核对" in (projected.waiting_label or "")
+    assert "状态待同步" not in (projected.waiting_label or "")
+
+
+def test_source_projection_follows_the_same_article_after_a_row_move():
+    from tests.workflow.test_v13_quotation import WS, item, source
+
+    projection = SourceStatusProjection()
+    original = item(2)
+    projection.observe(WS, [source(9, "已报价给客户")], [original], at=NOW)
+
+    projected = projection.project(_source_dto(original), now=NOW)
+
+    assert projected.source_status == "已报价给客户"
+    assert projected.source_fresh
+    assert not projected.source_link_unproven
+
+
+def test_source_projection_does_not_guess_between_two_identical_articles():
+    from tests.workflow.test_v13_quotation import WS, item, source
+
+    projection = SourceStatusProjection()
+    original = item(2)
+    rows = [source(7, "已报价给客户"), source(8, "采购已报价")]
+    projection.observe(WS, rows, [original], at=NOW)
+
+    projected = projection.project(_source_dto(original), now=NOW)
+
+    assert projected.source_status is None
+    assert projected.source_link_unproven
+
+
+def test_source_projection_never_lets_two_orders_claim_one_line():
+    from tests.workflow.test_v13_quotation import WS, item, source
+
+    projection = SourceStatusProjection()
+    first, second = item(2), item(3)
+    projection.observe(WS, [source(2, "已报价给客户")], [first, second], at=NOW)
+
+    for original in (first, second):
+        projected = projection.project(_source_dto(original), now=NOW)
+        assert projected.source_status is None
+        assert projected.source_link_unproven
+
+
+def test_source_projection_marks_a_missing_row_as_unproven():
+    from tests.workflow.test_v13_quotation import WS, item, source
+
+    projection = SourceStatusProjection()
+    original = item(2)
+    projection.observe(WS, [source(7, "采购已报价", model="OTHER-PART")], [original], at=NOW)
+
+    projected = projection.project(_source_dto(original), now=NOW)
+
+    assert projected.source_status is None
+    assert projected.source_link_unproven
+
+
+def test_gui_shows_source_unproven_instead_of_another_orders_status():
+    from src.gui.contracts import Order, OrderStatus
+    from src.gui.workbench import order_status
+    from tests.workflow.test_v13_quotation import WS, item, source
+
+    projection = SourceStatusProjection()
+    original = item(2)
+    projection.observe(WS, [source(2, "已报价给客户", model="OTHER-PART")], [original], at=NOW)
+    state = projection.project(_source_dto(original), now=NOW)
+    order = Order(original.inquiry_id, "MPN", "brand", 5, "", None, None, OrderStatus.COMPLETED)
+
+    assert order_status(order, state) == "来源待核对"

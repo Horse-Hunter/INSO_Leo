@@ -93,9 +93,12 @@ def _order_row_style(    order: Order,
     if v12_state is not None and v12_state.latest_active_alert is not None:
         if v12_state.business_label.value in {"已发采购（待确认）", "采购已处理，表格状态待人工更新"}:
             return "warning"
-        if v12_state.business_label.value in _SETTLED_LABELS:
-            return "legacy"
+        # A settled label is calm only when nothing is still open. An active alert
+        # keeps a failed mail or unresolved effect visible instead of history.
         return "error"
+    if v12_state is not None and v12_state.source_link_unproven:
+        # The status column says 来源待核对; the row must not look calm/history.
+        return "warning"
     if v12_state is not None:
         if v12_state.business_label.value in {"已发采购（待确认）", "采购已处理，表格状态待人工更新"}:
             return "warning"

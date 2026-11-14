@@ -238,6 +238,7 @@ class V12OrderStateDTO:
     source_verified_at: datetime | None = None
     source_fresh: bool = False
     processing_history: str | None = None
+    source_link_unproven: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.business_label, V12BusinessLabel):

@@ -9,6 +9,42 @@ from src.sheets.quotation_candidates import relocate_quotation_source
 from src.workflow.v13_quotation import expected_source_brand
 
 
+def _article_matches(row, snapshot, schema):
+    """Same article identity, deliberately ignoring the mutable status and brand."""
+
+    return (
+        row.cells.get(schema.model_column) == snapshot.model
+        and row.cells.get(schema.quantity_column) == snapshot.quantity
+        and (
+            schema.importance_column is None
+            or row.cells.get(schema.importance_column) == snapshot.importance_raw
+        )
+    )
+
+
+def _display_row(item, rows):
+    """The row whose status this order may truthfully display, or ``None``.
+
+    Exact relocation remains the primary proof. Only when that fails because the
+    Owner advanced the status or completed the brand, fall back to a unique article
+    match across the worksheet. A moved row is still found; a replaced, missing or
+    duplicated line is not attributed at all (a completed model text is not proof
+    either; that row shows 来源待核对).
+    """
+
+    from src.sheets.worksheet_schema import worksheet_schema
+
+    try:
+        return relocate_quotation_source(
+            item.record_identity, rows, expected_brand=expected_source_brand(item))
+    except SheetRecordConflict:
+        pass
+    snapshot = item.record_identity.identifying_snapshot
+    schema = worksheet_schema(item.record_identity.worksheet.worksheet)
+    matches = [row for row in rows if _article_matches(row, snapshot, schema)]
+    return matches[0] if len(matches) == 1 else None
+
+
 class SourceStatusProjection:
     def __init__(self):
         self._revision_lock, self.revision = Lock(), 0
@@ -20,6 +56,7 @@ class SourceStatusProjection:
         self.last_success = {}
         self.statuses = {}
         self._status_sources = {}
+        self._unproven = {}
 
     def begin_update(self, worksheet):
         with self._revision_lock:
@@ -38,6 +75,7 @@ class SourceStatusProjection:
                 for inquiry, source in self._status_sources.items():
                     if source == worksheet:
                         self.statuses[inquiry] = (None, None, False)
+                        self._unproven[inquiry] = False
             self.revision += 1
             self._sheet_revisions[worksheet] += 1
             self._updating[worksheet].discard(ticket)
@@ -77,34 +115,28 @@ class SourceStatusProjection:
                 return False
             affected = [i for i in items if i.record_identity.worksheet == worksheet]
             statuses = {item.inquiry_id: (None, at, False) for item in affected}
-            candidates = {}
+            unproven = {item.inquiry_id: False for item in affected}
             if not failed:
-                for item in affected:
-                    try:
-                        row = relocate_quotation_source(item.record_identity, rows, expected_brand=expected_source_brand(item))
-                    except SheetRecordConflict:
-                        continue
-                    candidates.setdefault(row.row_position, []).append(item)
-                for position, matches in candidates.items():
-                    if len(matches) == 1:
-                        row = next(r for r in rows if r.row_position == position)
-                        statuses[matches[0].inquiry_id] = (row.cells.get(worksheet_schema(worksheet.worksheet).status_column), at, True)
-                # Orders whose sheet status moved on (the Owner finished the line, or
-                # an earlier run wrote a later status) no longer relocate by the stored
-                # snapshot, so their status stayed unknown and the list could not show
-                # the sheet. For display only, fall back to the row this order still
-                # occupies: one physical position, one order.
                 column = worksheet_schema(worksheet.worksheet).status_column
+                located = {item.inquiry_id: _display_row(item, rows) for item in affected}
+                claims = {}
+                for inquiry, row in located.items():
+                    if row is not None:
+                        claims.setdefault(row.row_position, []).append(inquiry)
                 for item in affected:
-                    if statuses.get(item.inquiry_id, (None, None, False))[0] is not None:
+                    row = located[item.inquiry_id]
+                    if row is None or len(claims.get(row.row_position, ())) != 1:
+                        # The exact snapshot no longer relocates and no unique
+                        # article match exists (or two orders claim one line).
+                        # Never present that line's status as this order's status.
+                        unproven[item.inquiry_id] = True
                         continue
-                    anchors = [r for r in rows if r.row_position == item.record_identity.row_position]
-                    if len(anchors) == 1:
-                        statuses[item.inquiry_id] = (anchors[0].cells.get(column), at, True)
+                    statuses[item.inquiry_id] = (row.cells.get(column), at, True)
             with self._revision_lock:
                 if self._observation_sequence.get(worksheet) == ticket:
                     self.statuses.update(statuses)
                     self._status_sources.update({inquiry: worksheet for inquiry in statuses})
+                    self._unproven.update(unproven)
                 else:
                     return False
             return True
@@ -116,6 +148,7 @@ class SourceStatusProjection:
                     for inquiry, source in self._status_sources.items():
                         if source == worksheet:
                             self.statuses[inquiry] = (None, None, False)
+                            self._unproven[inquiry] = False
             raise
         finally:
             if owns_update:
@@ -133,19 +166,26 @@ class SourceStatusProjection:
     def project(self, dto, *, now):
         with self._revision_lock:
             status, at, fresh = self.statuses.get(dto.inquiry_id, (None, None, False))
+            unproven = bool(self._unproven.get(dto.inquiry_id, False))
             source = self._status_sources.get(dto.inquiry_id)
             if source is not None and self._observation_sequence.get(source) in self._updating.get(source, ()):
-                status, fresh = None, False
+                status, fresh, unproven = None, False, False
         # A successful row read does not verify a missing or non-text status.
         if not isinstance(status, str) or not status.strip():
             status, fresh = None, False
         else:
             status = status.strip()
-        fresh = fresh and at is not None and timedelta(0) <= now-at <= timedelta(minutes=15)
+        fresh = (fresh and not unproven and at is not None
+                 and timedelta(0) <= now-at <= timedelta(minutes=15))
         history = dto.processing_history or dto.waiting_label or dto.business_label.value
-        if fresh:
+        if unproven:
+            # The read succeeded, but it cannot prove this line is this order.
+            # Naming a source status here would attribute another order's state.
+            text = f"来源待核对（无法证明该状态属于此订单）；处理历史：{history}"
+        elif fresh:
             text = f"{status}；采购/处理历史：{history}"
         else:
             text = f"状态待同步（来源尚未核实/可能过期）；处理历史：{history}"
         return replace(dto, source_status=status, source_verified_at=at, source_fresh=bool(fresh),
-                       waiting_label=text, processing_history=history)
+                       source_link_unproven=unproven, waiting_label=text,
+                       processing_history=history)

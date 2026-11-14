@@ -296,11 +296,12 @@ class V12Store:
                         event.occurred_at, scope_key="")
             elif state is BusinessState.HUMAN_COMPLETED and event.event_type is EventType.HUMAN_RESOLUTION_RECORDED:
                 # The order was closed because the Owner finished it in the sheet
-                # itself. Every alert that was asking for that human decision is now
-                # answered, so none of them may keep the row on the exception list.
-                # The append-only events and the alert rows stay for the audit trail.
-                for alert_type in AlertType:
-                    _recover_alerts(connection, inquiry_id, alert_type, event, event.occurred_at)
+                # itself. Only the stale data-quality complaint is answered by that
+                # edit. Purchase, quotation, mail and security alerts stay active:
+                # a sheet status change is not evidence that an external effect
+                # actually completed. The append-only events stay for the audit.
+                _recover_alerts(connection, inquiry_id, AlertType.DATA_QUALITY, event,
+                    event.occurred_at)
 
     def record_missing_customer(self, inquiry_id: str, at: datetime) -> None:
         event = WorkflowEvent(

@@ -168,9 +168,18 @@ def test_restart_quarantines_and_sheet_manual_completion_releases_red_only(tmp_p
     assert _order_row_style(SimpleNamespace(status=SimpleNamespace(value=""), processed_at=None), NOW, dto) == "error"
     reader.row = WorksheetRow(99, {**reader.row.cells, "A": "发给采购"})
     f.poll_and_process(reader, SHEET, now=NOW)
-    assert vs.business_state(iid) is BusinessState.HUMAN_COMPLETED and not research.inputs
-    assert _order_row_style(SimpleNamespace(status=SimpleNamespace(value="error"), processed_at=None),
-        NOW, read_v12_order_state(vs, iid)) == "legacy"
+    assert not research.inputs
+    if armed:
+        # A possibly-sent Save is an unresolved external effect. The Owner's sheet
+        # edit does not prove it succeeded, so the row stays quarantined and red.
+        assert vs.business_state(iid) is BusinessState.INTERRUPTED_POSSIBLY_SENT
+        assert vs.active_alerts(iid)
+        assert _order_row_style(SimpleNamespace(status=SimpleNamespace(value="error"), processed_at=None),
+            NOW, read_v12_order_state(vs, iid)) == "error"
+    else:
+        assert vs.business_state(iid) is BusinessState.HUMAN_COMPLETED
+        assert _order_row_style(SimpleNamespace(status=SimpleNamespace(value="error"), processed_at=None),
+            NOW, read_v12_order_state(vs, iid)) == "legacy"
     assert f.poll_and_process(reader, SHEET, now=NOW) == () and not research.inputs
 
 
