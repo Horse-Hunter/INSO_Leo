@@ -1,18 +1,19 @@
-# RFQ-018 — CEO 第一轮源码安全发布门槛（2026-11-14）
+# RFQ-018 — CEO 第二轮源码 PASS / 生产发布未放行（2026-11-14）
 
-**`CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED / NOT_MERGED`**。完整依据：[REVIEW](REVIEW.md)。
+**`PASS_SOURCE_SAFETY_SCOPE / RELEASE_HOLD / OWNER_AUTHORIZATION_REQUIRED`**。详细源码和限制见 [独立 Review](REVIEW.md)。
 
-| 项目 | 审核状态 |
+| 门槛 | 结果 |
 | --- | --- |
-| 原 26 历史失败 | Executor 报告 26/26 全部变 PASS，原 nodeid 完全保留，6 未改/20 改写；CEO 验证 JSON 一致，但未独立跑 pytest |
-| 新 16 回归 | Executor 报告先红10/通过6，最后全绿；源测试与报告可查 |
-| 全树 | Executor 报告 4176 collected、4175 passed、1 skipped、0 failed；只代表其离线 fake/synthetic |
-| P0-A | **未闭合**：`PageResourceAdmission.document_hold()` 在 held page 已关闭时自行 `pop` 未确认写 hold，写入可能重新放行 |
-| P0-B | **未闭合**：API writer 未执行 admission `require_open()`；未注入共享 root 时可创建 private admission，绕过其它 hold |
-| P1-C | **未闭合**：没有在途写入的原子文档占用；旧线程串行化测试被单线程手动 hold 所替代 |
-| 后续测试等价性 | #11/#16/#17/#19 原测试由全局拦截改为隔离读/写新页，需以负向整合测试证明未确认**写**不能混作纯读 |
-| 生产程序 | 最近 Executor 报告旧 EXE SHA `E9E3DA33…`、PID38948/watch34304；并未部署本轮修复，CEO 未实机验收 |
-| 外部风险 | row221 INSO SAVED receipt `rec_440fafd3…` 不可重复；SHAHAB/115 UNKNOWN native NOT_VERIFIED；3 V13 hold 不清 |
-| 发布晋升 | `develop` 未合入业务源码；`main`、`release/previous` 未变；**无发布、实单试运行或版本晋升授权** |
+| P0-A 页面关闭误清文档 hold | **PASS**：不再通过 `page.is_closed()` 自动删 UNKNOWN，只有指定 owner 结算证据路径可释放 |
+| P0-B Sheets API 准入绕过 | **PASS**：缺失/失效共享 admission 写前停止，生产 backend 注入同一对象；无 private-root 写授权 |
+| P1-C 同文档写入竞争 | **PASS**：root admission 原子 in-flight lease，API/fallback/quote 共享，第二 writer 在 dispatch 前被拒；线程/Event、HTTP fake 竞争负向测试 |
+| 原 26 项历史失败 | 执行者报告全部通过、nodeid 保留，6 原样/20 按当前安全机制重写；CE0 审核来源证据 |
+| RFQ-018 新测试 | 执行者报告 28 项通过（首轮16+补修12） |
+| 全树离线测试 | 执行者报告 **4188 collected / 4187 passed /1 skipped /0 failed**，无 deselect；CEO 未亲跑 |
+| 重启/UNKNOWN 安全 | **未完成发布验证**：共享文档 hold 在内存中，重启清除；需明确外部效果 UNKNOWN 的重启恢复隔离 |
+| 运行中 EXE 与候选构建 | **NOT_VERIFIED**：旧 EXE 据 Executor 只读历史 SHA `E9E3DA33…`，新源码尚未打包部署；需源码/构建/回滚/配置全链证据 |
+| 历史业务 | row221 已 SAVED 禁重放；SHAHAB/115 采购 UNKNOWN、原生收据未验证；3 V13 quote holds 保留 |
+| 其他系统问题 | GUI 刷新/关闭卡住、浏览器遗留页、报价重试拒绝等单独评估；源码测试全绿不能代替现场观察 |
+| 分支和发布审批 | 新源码仍在 Executor 分支，`develop` 仅文档；`main` 和 `release/previous` 未变；Owner 尚未批准合入/试运行/晋升 |
 
-下一唯一动作：原 Executor 在原分支/工作树定点修复 P0-A/P0-B/P1-C，补真负向回归并重跑全树离线测试，再申请 CEO 独立 Review。
+**下一阶段建议：仅启动发布准备/重启恢复安全评估（RFQ-019）；不得基于本 PASS 自动停止运行中 EXE、覆盖新版、执行真实业务或晋升 `main`。**

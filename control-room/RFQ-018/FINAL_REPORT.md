@@ -26,7 +26,7 @@
    - 一个 root admission 持有按文档的 hold，child/父级互相可见；
    - 写者在创建页面或写单元格前被阻断；读和其他文档不受影响；
    - 未确认点击/结果/结算、受保护页面、浏览器 fallback 脏写、API 未确认写都会落 hold；
-   - 只有精确的页面关闭/已证实结算才释放该 owner 的 hold；owner 被接管或身份不明时不释放；
+   - **页面关闭本身不是结算证据**：hold 保留，直到明确的 owner 身份 + 结算证据释放；owner 被接管/身份不明时不释放；
    - hold 是进程内状态，重启清除页面层 hold；既有持久 V13 hold 仍独立有效。
 
 2. **订单邮件/销售录单统一准入**
@@ -35,28 +35,33 @@
    - 有效准入在建页前绑定到同一浏览器；backend 显式传 `self._page_admission`；
    - 销售 intent 的 Google 写路径继承同一 admission。
 
+3. **CEO P0/P1 补修**
+   - **P0-A**：删除“held page 关闭即清 hold”的逻辑；页面关闭不再解除未确认写保护；只有成功结算 + 精确 owner 路径可释放。
+   - **P0-B**：API 写入不再自动创建 private root；无共享 admission 时 fail closed，且写入前执行 `require_open()`；失效 admission 时 fake API 调用次数为 0。
+   - **P1-C**：同一文档增加原子 in-flight 写 lease（`begin_document_write`/`end_document_write`），同 owner 可重入、竞争 writer 得 `DocumentWriteBusy`；API、浏览器 fallback、quote dispatch 共用；UNKNOWN 落 hold 后才释放 lease。
+
 ## 做完了什么
 
-- 新增 16 项离线负向回归：admission 单元 6、quote/sales/backend 7、API 2、浏览器 fallback 1。
-- 先红后绿：wiring 前 **10 failed / 6 passed**；实现后 16/16 通过。
+- 新增 **28 项离线负向回归**：RFQ-018 原 16（admission 单元 6、quote/sales/backend 7、API 2、浏览器 fallback 1）+ CEO Review 补 12（P0-A 2、P0-B 4、P1-C 4、API/浏览器在途 2）。
+- 先红后绿：首轮 wiring 前 **10 failed / 6 passed**；CEO 补修前旧代码显示 `OLD closed-page hold: None`、无 atomic begin、API 无共享 admission 仍发起请求；补修后全部通过。
 - RFQ-017 的 **26 个原始 nodeid 全部保留并通过**：
   - **6 项未改**：owner adoption、未确认写 protected/script、busy-close、order-mail、sales-no-admission；代码修复后直接通过。
   - **20 项改写**：逐项把原安全意图映射到 `PageResourceAdmission` 文档 hold、retained identity、持久 V13 hold、sales admission；没有删除、skip 或静默排除。
   - 完整映射见 [TEST_MAPPING.md](TEST_MAPPING.md)。
-- 运行相关测试 426 passed；全量 `tests` 4176 collected / **4175 passed / 1 skipped / 0 failed / 320.88s**。唯一 skip 是既有 Windows symlink 权限限制。
+- 运行相关测试 **478 passed**；全量 `tests` **4188 collected / 4187 passed / 1 skipped / 0 failed / 341.54s**。唯一 skip 是既有 Windows symlink 权限限制。
 - `ruff check src tests` 与 `git diff --check` 通过（提交前）。
 - 未改生产配置、未部署、未重启、未合并、未操作真实 Chrome/Google/INSO/SMTP/SQLite；221、SHAHAB/115、3 条 V13 hold 未变。
 
 ## 测试结果
 
-- **新负向回归：** 10 项先失败，修复后 16 项全部通过。
-- **RFQ-017 原始 26 项：** 26/26 通过，0.72 秒。
-- **相关文件：** 426 passed，0 failed。
-- **全量离线：** 4175 passed / 1 skipped / 0 failed，320.88 秒；无 deselect、无隐藏失败。
+- **新负向回归：** 28 项全部通过；其中 P0-A 页面关闭保留 hold、P0-B 无/失效 admission 不发出 API 请求、P1-C 真实两线程/在途写竞争均覆盖。
+- **RFQ-017 原始 26 项：** 26/26 通过（0.88 秒）。
+- **相关文件：** 478 passed，0 failed。
+- **全量离线：** 4187 passed / 1 skipped / 0 failed（4188 collected）；无 deselect、无隐藏失败。
 - **真实环境验证：** 没有做。所有验证是离线 fake/synthetic；未在运行中的 EXE 上执行，未连接真实 Google/INSO/SMTP/Chrome，未修改生产 SQLite。真实部署/试运行仍为 `NOT_VERIFIED`。
 
 ## 你接下来需要做什么
 
 Review RFQ-018
 
-（CEO 复核后，再决定是否部署/试运行/合并；本任务不自动连锁。残余限制：共享文档 hold 为进程内、重启后页面层解除但持久 V13 hold 仍在；API transport 的跨服务保护依赖生产 builder 注入同一 admission，直接测试构造使用私有 admission，不作为生产路径。）
+（CEO 复核后，再决定是否部署/试运行/合并；本任务不自动连锁。残余限制：共享文档 hold 为进程内，页面关闭不会解除，但重启会清除页面层 hold（持久 V13 hold 仍在）；API 写入无共享 admission 时 fail closed，生产 builder 已注入 backend 的同一个 admission；真实部署/试运行仍为 `NOT_VERIFIED`。）
