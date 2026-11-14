@@ -1,6 +1,6 @@
 # Windows V1.6 release — safe minimal procedure
 
-**No deployment is implied by source Review or document cleanup.** Only one running INSO V1.6 business instance and one protected Chrome profile/9222. Latest *reported* installed EXE/backup and the absence of production API activation are summarized at [V16 release receipt](../V16_RELEASE_REPORT.md); **reconfirm live**.
+**No deployment is implied by source Review or document cleanup.** An EXE that has been built, installed and run remains a **trial of `develop`** until Owner explicitly says to promote it to the accepted current version. [Three-branch promotion](BRANCH_POLICY.md) is independent of safe Windows deployment. Only one running INSO V1.6 business instance and one protected Chrome profile/9222. Latest *reported* installed EXE/backup and the absence of production API activation are summarized at [V16 release receipt](../V16_RELEASE_REPORT.md); **reconfirm live**.
 
 ## Executor sequence (only with scoped Owner release authorization)
 

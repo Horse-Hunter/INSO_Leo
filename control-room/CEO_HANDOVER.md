@@ -1,6 +1,6 @@
 # INSO LEO — CEO / Executor takeover card
 
-**Updated 2026-11-14; remote-document snapshot, NOT Windows live evidence.** Start at [AI_START_HERE](../AI_START_HERE.md). Current remote development branch: `workbuddy/v16-rfq016-stabilization` (query HEAD each time); `main` is not the V1.6 working baseline.
+**Updated 2026-11-14; remote-document snapshot, NOT Windows live evidence.** Start at [AI_START_HERE](../AI_START_HERE.md). New integration line: `develop`; original active Executor branch `workbuddy/v16-rfq016-stabilization` is retained pending safe integration. `main` still points at legacy V1.1 and is **not yet aligned to an Owner-accepted present-day version**; `release/previous` is a provisional source backup, not verified current rollback. [Branch policy](../docs/BRANCH_POLICY.md) governs Owner-only promotion; query all HEADs and the Windows source before trusting labels.
 
 ## Active business goal
 

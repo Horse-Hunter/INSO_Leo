@@ -1,5 +1,7 @@
 # Control Room — current status (2026-11-14)
 
+**Version classification:** per [three-branch policy](../docs/BRANCH_POLICY.md), an installed/working trial remains **前瞻版** until explicit Owner acceptance. Currently `develop` has been created; `main` still has legacy V1.1 and is *not* attested as the real current V1.6; `release/previous` is a provisional reported rollback-source pointer. No EXE or business action was triggered by Git branch creation.
+
 **Status is an operational pointer, not live proof.** Owner/CEO own requirement meaning; active Executor updates actual execution status; CEO independently reviews. A disappeared agent is not proof the Windows process stopped. New windows start at [AI_START_HERE](../AI_START_HERE.md) and [CEO handover](CEO_HANDOVER.md).
 
 ## Active

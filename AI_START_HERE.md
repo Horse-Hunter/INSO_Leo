@@ -2,6 +2,8 @@
 
 **An interrupted CEO or Executor is replaceable without the prior conversation.** Only live systems and canonical repo records are authoritative; this file is the small routing map.
 
+**Version routing:** read [three-branch policy](docs/BRANCH_POLICY.md). `develop` is the integration line; `main` only after **explicit Owner sign-off following real trial**; `release/previous` holds rollback source. **During initial migration, `main` is still the old V1.1 pointer and not the verified running V1.6.** Do not auto-promote after deployment.
+
 ## Mandatory 90-second recovery
 
 1. Read [AGENTS.md](AGENTS.md) and [CEO_HANDOVER.md](control-room/CEO_HANDOVER.md).

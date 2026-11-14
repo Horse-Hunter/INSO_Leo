@@ -2,6 +2,7 @@
 
 Owner intent → canonical RFQ Task Spec → reuse existing stable product → minimum safe change → real evidence → CEO Review. **Process exists to deliver, not replace delivery.**
 
+- **Release promotion:** three branch lines per [BRANCH_POLICY](BRANCH_POLICY.md). A packaged/installed/running candidate stays on `develop` until Owner confirms stability and explicitly authorizes promotion; no automatic main update or rollback-branch rotation.
 - **Owner** decides business permissions. **CEO** owns Task Spec, architecture, independent Review and concise current-state docs. **Executor** owns implementation, testing, production evidence, exact commit and safe cleanup. Only one production Executor.
 - Requirements: `control-room/RFQ-XXX/TASK_SPEC.md`; status: `COORDINATION.md`; active execution checkpoint: `EXECUTION_LOG.md`; CEO result: `REVIEW.md`. No chat-only state. Any session must be replaceable from these plus live systems.
 - **Interruptibility:** checkpoint before potentially irreversible effects and after each observed result; never assume a previous window's process stopped; new window independently reconciles process, worktree, logs, database and external effect. No second writer for an UNKNOWN effect. Full procedure: [AGENTS](../AGENTS.md).

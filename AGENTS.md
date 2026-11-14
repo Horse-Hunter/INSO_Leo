@@ -2,6 +2,10 @@
 
 Read [AI_START_HERE.md](AI_START_HERE.md). **Current rules here outrank historic task notes.** Original pre-compaction rules: [pinned archive](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/AGENTS.md).
 
+## Branch promotion is Owner-only
+
+Three long-lived lines: `develop` (R&D + installed trial), `main` (only Owner-accepted current), `release/previous` (prior Owner-accepted current). **Packaging, installation, live operation, successful tests or elapsed time never promote a version.** Only explicit Owner approval may advance `main`; see [BRANCH_POLICY](docs/BRANCH_POLICY.md). During initial migration, `main` still contains legacy V1.1 and MUST NOT be presented as the verified current V1.6. Preserve existing DeepSeek worktree/branch.
+
 ## Ownership and source of truth
 
 - **Owner** sets business intent, grants real external-effect/production permissions, decides release; **CEO** owns requirements, architecture, independent Review; **one Executor** owns implementation, tests, deployment and live business evidence.
