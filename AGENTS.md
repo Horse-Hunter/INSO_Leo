@@ -4,6 +4,8 @@ Read [AI_START_HERE.md](AI_START_HERE.md). **Current rules here outrank historic
 
 ## Branch promotion is Owner-only
 
+**Bootstrap trap:** repository default `main` still contains historic V1.1. Every replacement CEO/Executor must explicitly open current `develop` entry docs before treating any branch as the project baseline. Do not auto-promote.
+
 Three long-lived lines: `develop` (R&D + installed trial), `main` (only Owner-accepted current), `release/previous` (prior Owner-accepted current). **Packaging, installation, live operation, successful tests or elapsed time never promote a version.** Only explicit Owner approval may advance `main`; see [BRANCH_POLICY](docs/BRANCH_POLICY.md). During initial migration, `main` still contains legacy V1.1 and MUST NOT be presented as the verified current V1.6. Preserve existing DeepSeek worktree/branch.
 
 ## Ownership and source of truth

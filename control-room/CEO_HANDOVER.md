@@ -2,6 +2,8 @@
 
 **Updated 2026-11-14; remote-document snapshot, NOT Windows live evidence.** Start at [AI_START_HERE](../AI_START_HERE.md). New integration line: `develop`; original active Executor branch `workbuddy/v16-rfq016-stabilization` is retained pending safe integration. `main` still points at legacy V1.1 and is **not yet aligned to an Owner-accepted present-day version**; `release/previous` is a provisional source backup, not verified current rollback. [Branch policy](../docs/BRANCH_POLICY.md) governs Owner-only promotion; query all HEADs and the Windows source before trusting labels.
 
+**接管优先级：** GitHub 默认 `main` 仍为 V1.1，**新的 CEO/Executor 必须显式打开 `develop` 的 `AI_START_HERE.md` 与 `docs/BRANCH_POLICY.md`**；先核实本地工作树和原生产现场，不得把默认主分支当现版或因试运行而晋升。当前旧版分支为待核实候选，尚未完成历史现版首次对齐。
+
 ## Active business goal
 
 **RFQ-016**: safely complete **one** real inquiry through V1.6 using Google Sheets API, with actual receipts and no unrelated orders. See [Task Spec](RFQ-016/TASK_SPEC.md), [live-state ledger](RFQ-016/EXECUTION_LOG.md), [CEO verdict](RFQ-016/REVIEW.md), [coordination](COORDINATION.md). **NOT accepted as complete.**

@@ -4,6 +4,10 @@
 
 **Version routing:** read [three-branch policy](docs/BRANCH_POLICY.md). `develop` is the integration line; `main` only after **explicit Owner sign-off following real trial**; `release/previous` holds rollback source. **During initial migration, `main` is still the old V1.1 pointer and not the verified running V1.6.** Do not auto-promote after deployment.
 
+## GitHub default-branch trap (mandatory)
+
+GitHub currently opens historical `main` (V1.1) by default. **Every new CEO/Executor must explicitly select `develop` first**, then open this current entry file and [BRANCH_POLICY](docs/BRANCH_POLICY.md). Do **not** copy rules/code from default `main`, assume its HEAD is the installed EXE, or fast-forward it because a trial build was deployed. When in doubt, list GitHub branch SHAs before reading.
+
 ## Mandatory 90-second recovery
 
 1. Read [AGENTS.md](AGENTS.md) and [CEO_HANDOVER.md](control-room/CEO_HANDOVER.md).
