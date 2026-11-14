@@ -36,8 +36,9 @@ def test_actual_owner_manual_order_failure_has_verified_notice_not_blanket_suppr
     service=OrderExceptionNotifications(tmp_path,transport=transport,background=False)
     def unsupported(*args):raise OrderError("LEAD_TIME")
     monkeypatch.setattr(sales_header,"sales_config",unsupported)
+    from src.research.cdp_pages import PageResourceAdmission
     try:
-        stage,_=sales_header.run_sales_header_check(config_path="synthetic",production_path="synthetic",root=tmp_path,notify=service.notify)
+        stage,_=sales_header.run_sales_header_check(config_path="synthetic",production_path="synthetic",root=tmp_path,notify=service.notify,page_admission=PageResourceAdmission())
         assert stage=="STOPPED" and client.send_attempts==1
         assert client.message["To"]=="linan229@qq.com"
         assert "交期" in client.message.get_content()
@@ -223,8 +224,9 @@ def test_unknown_manual_error_cannot_claim_successful_queue_submission(tmp_path,
     service,smtp=manual_service(tmp_path)
     def unclassified(*args):raise OrderError("SYNTH_UNCLASSIFIED")
     monkeypatch.setattr(sales_header,"sales_config",unclassified)
+    from src.research.cdp_pages import PageResourceAdmission
     try:
-        stage,message=sales_header.run_sales_header_check(config_path="synthetic",production_path="synthetic",root=tmp_path,notify=service.notify)
+        stage,message=sales_header.run_sales_header_check(config_path="synthetic",production_path="synthetic",root=tmp_path,notify=service.notify,page_admission=PageResourceAdmission())
         assert stage=="STOPPED" and "通知不可用" in message and smtp.send_attempts==0
     finally:service.close()
 

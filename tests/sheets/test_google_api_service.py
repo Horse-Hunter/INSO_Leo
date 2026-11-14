@@ -549,3 +549,41 @@ def test_fixed_range_read_returns_the_row_it_asked_for():
         spreadsheetId=SHEET, range="'报价输入'!B5:O5").execute()["values"]
     assert values == [payload]
     assert api.calls[0][1]["range"] == "'报价输入'!B5:O5"
+
+
+# --- RFQ-018 shared Google document write isolation -------------------------
+def test_api_write_is_blocked_by_shared_document_hold():
+    from src.research.cdp_pages import (
+        DocumentWriteHeld,
+        PageResourceAdmission,
+        google_document_key_for_spreadsheet,
+    )
+
+    admission = PageResourceAdmission()
+    admission.hold_document(
+        google_document_key_for_spreadsheet(SHEET), object(), "GOOGLE_WRITE_UNCONFIRMED")
+    service = GoogleApiSheetsService(FakeApi([]), page_admission=admission)
+
+    with pytest.raises(DocumentWriteHeld):
+        service.update(
+            spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
+            body={"values": [["TI"]]}).execute()
+
+
+def test_uncertain_api_write_records_the_shared_document_hold():
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        google_document_key_for_spreadsheet,
+    )
+
+    admission = PageResourceAdmission()
+    service = GoogleApiSheetsService(
+        FakeApi([TimeoutError("synthetic read timed out")]), page_admission=admission)
+
+    with pytest.raises(GoogleSheetsWriteUnconfirmed):
+        service.update(
+            spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
+            body={"values": [["TI"]]}).execute()
+
+    assert admission.document_hold(google_document_key_for_spreadsheet(SHEET)) == (
+        "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")

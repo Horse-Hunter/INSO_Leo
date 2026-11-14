@@ -12,8 +12,11 @@ from urllib.parse import parse_qsl, urlsplit
 
 from src.inso.quotation_read import QUOTATION_COLUMNS
 from src.research.cdp_pages import (
+    DocumentWriteHeld,
+    PageResourceAdmission,
     PageTargetOwnershipError,
     bounded_browser_call,
+    google_document_key,
     native_page_owner,
     new_background_page,
     page_owner,
@@ -339,6 +342,75 @@ class GoogleQuotationUpdateActions:
         self._read_only = False
         self._active_quote_target = None
 
+    def _document_key(self):
+        return google_document_key(self._location.url)
+
+    def _shared_admission(self):
+        browser = getattr(self._handle, "browser", None)
+        admission = getattr(browser, "_inso_page_admission", None)
+        return admission if isinstance(admission, PageResourceAdmission) else None
+
+    def _require_write_admission(self):
+        """Every write surface must share the runtime's page admission."""
+        if self._read_only:
+            return None
+        admission = self._shared_admission()
+        if admission is None:
+            # A write path with no shared admission cannot prove that another
+            # client/effect is not already unresolved; fail before page creation.
+            raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_PAGE_ADMISSION_UNCONFIRMED")
+        admission.require_open()
+        try:
+            admission.require_document_writable(self._document_key())
+        except DocumentWriteHeld as exc:
+            raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from exc
+        return admission
+
+    def _hold_document(self, reason):
+        """Publish an unresolved write on the one shared admission root."""
+        admission = self._shared_admission()
+        if admission is None:
+            return
+        try:
+            document = self._document_key()
+        except ValueError:
+            return
+        admission.hold_document(document, self, reason, page=self._page)
+        if self._page is not None:
+            self._page._inso_document_hold_owner = self
+            self._page._inso_document_hold_protected = (
+                bool(getattr(self._page, "_inso_document_hold_protected", False))
+                or self._protected)
+            if self._protected:
+                self._page._inso_protected_surface = True
+
+    def _release_page_document_hold(self, page=None):
+        """Release only the owner recorded on this exact page after settlement."""
+        admission = self._shared_admission()
+        page = page if page is not None else self._page
+        owner = getattr(page, "_inso_document_hold_owner", None)
+        if admission is None or owner is None:
+            return
+        if (getattr(page, "_inso_document_hold_protected", False) is True
+                or getattr(page, "_inso_protected_surface", False) is True):
+            # Protected identity/auth/ownership uncertainty is never released
+            # by an ordinary refresh-settlement probe.
+            return
+        try:
+            owned = page_owner(page) == self._page_role
+        except Exception:  # noqa: BLE001 - unprovable ownership cannot release
+            owned = False
+        if not owned:
+            # A page adopted/moved to another owner is never treated as this
+            # controller's settled surface.
+            return
+        try:
+            document = self._document_key()
+        except ValueError:
+            return
+        admission.release_document(document, owner)
+        page._inso_document_hold_owner = None
+
     def prepare_price_refresh(self):
         self._price_refresh = True
 
@@ -368,6 +440,10 @@ class GoogleQuotationUpdateActions:
                             or native_page_owner(page) != self._page_role or page_owner(page) != self._page_role):
                         raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
                 require_owner()
+                if getattr(page, "_inso_protected_surface", False) is True:
+                    # An explicitly protected/uncertain surface is never
+                    # settled by an ordinary refresh probe.
+                    raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
                 if not bounded_browser_call(page, "evaluate", "() => !!window.__insoQuoteSettlement"):
                     raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY")
                 recovery = GoogleQuotationUpdateActions(browser_handle=self._handle,
@@ -385,6 +461,11 @@ class GoogleQuotationUpdateActions:
                         require_owner()
                         bounded_browser_call(page, "evaluate", "() => { window.__insoRefreshPending = false; }")
                         recovery._script_pending = False
+                        # The hold is released only by the subsequent
+                        # recovery.close() proving this exact page closed, or
+                        # by an explicit protected-page resolution. Releasing
+                        # here would precede the close-time Owner-adoption
+                        # check and could bypass it.
                 except V12Fault:
                     raise  # Shared identity or settlement uncertainty is never a local busy read.
                 except Exception:  # noqa: BLE001 - unknown local wait remains protected
@@ -461,6 +542,7 @@ class GoogleQuotationUpdateActions:
         document/gid, and re-proves ownership before and after the reload. No
         cell value is compared here: the cancelled 14-cell readback stays gone.
         """
+        self._require_write_admission()
         if self._script_pending:
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED")
         self._guard()
@@ -481,6 +563,7 @@ class GoogleQuotationUpdateActions:
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED")
         if self._protected:
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_AUTHENTICATION_REQUIRED")
+        self._require_write_admission()
         if self._page is not None:
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_OPERATION_NOT_CLOSED")
         browser = self._handle.browser
@@ -812,6 +895,7 @@ class GoogleQuotationUpdateActions:
             try:
                 bounded_browser_call(button, "click", timeout=self._timeout, timeout_ms=(self._timeout)+1000)
             except Exception:  # noqa: BLE001 - do not retry a possibly delivered refresh click
+                self._hold_document("GOOGLE_QUOTE_CLICK_UNCONFIRMED")
                 raise UpdateClickUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from None
         else:
             self._attempt(lambda: bounded_browser_call(button, "evaluate", _SCRIPT_SETTLEMENT_LATCH, timeout=self._timeout))
@@ -826,6 +910,7 @@ class GoogleQuotationUpdateActions:
             try:
                 bounded_browser_call(button, "click", timeout=self._timeout, timeout_ms=(self._timeout)+1000)
             except Exception:  # noqa: BLE001 - native click may already have executed
+                self._hold_document("GOOGLE_QUOTE_CLICK_UNCONFIRMED")
                 raise UpdateClickUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from None
 
     def read_update_result(self):
@@ -838,10 +923,13 @@ class GoogleQuotationUpdateActions:
                     and type(exc).__module__.startswith("playwright")):
                 # The click already happened. Report the actual timeout immediately;
                 # the page and the order remain unresolved and are not reused here.
+                self._hold_document("GOOGLE_QUOTE_RESULT_UNCONFIRMED")
                 raise UpdateResultTimeout("UPDATE_RESULT_POPUP_TIMEOUT") from exc
             self._guard()
+            self._hold_document("GOOGLE_QUOTE_RESULT_UNCONFIRMED")
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED") from exc
         if bounded_browser_call(dialog, "count") != 1:
+            self._hold_document("GOOGLE_QUOTE_RESULT_UNCONFIRMED")
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_UNCONFIRMED")
         return self._attempt(lambda: bounded_browser_call(dialog, "inner_text", timeout=self._timeout, timeout_ms=(self._timeout)+1000))
 
@@ -875,8 +963,10 @@ class GoogleQuotationUpdateActions:
             self._require_owned_page()
             bounded_browser_call(self._page, "evaluate", "() => { window.__insoRefreshPending = false; }")
         except Exception:  # noqa: BLE001 - any settlement uncertainty preserves the operation page
+            self._hold_document("GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED")
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED") from None
         self._script_pending = False
+        self._release_page_document_hold()
 
     def _attempt(self, operation):
         try:
@@ -927,6 +1017,8 @@ class GoogleQuotationUpdateActions:
 
     def retire_failed_page(self, *, read_only=False):
         """Never pass a failed phase's page to another phase/retry."""
+        if self._page is not None and (not read_only or self._protected):
+            self._hold_document("GOOGLE_WRITE_UNCONFIRMED")
         if read_only and self._page is not None and not self._page.is_closed():
             try:
                 # Never restore or overwrite a marker after ownership changed:
@@ -967,6 +1059,11 @@ class GoogleQuotationUpdateActions:
                     break
 
     def close(self):
+        if (self._page is not None and not self._read_only
+                and (self._script_pending or self._protected)):
+            # Close cannot settle an unresolved write; publish a durable-to-restart
+            # shared hold before any later client can open the same document.
+            self._hold_document("GOOGLE_WRITE_UNCONFIRMED")
         if self._active_quote_target is not None:
             with _ACTIVE_QUOTE_LOCK:
                 if _ACTIVE_QUOTE_TARGETS.get(self._active_quote_target) is self:
@@ -998,6 +1095,8 @@ class GoogleQuotationUpdateActions:
                     self._location = expected
             entry["actions"] = self
             self._protected |= entry["protected"]
+            if not self._read_only and self._protected:
+                self._hold_document("GOOGLE_WRITE_UNCONFIRMED")
             scope = _POLL_GOOGLE_PAGES.get()
             if scope is not None and scope[1] is not None and not entry["page"].is_closed():
                 for key, candidate in scope[0].items():

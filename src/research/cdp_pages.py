@@ -9,6 +9,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Self
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 _LOG = logging.getLogger(__name__)
@@ -49,6 +50,39 @@ class ReadOnlyPageClosed(RuntimeError):
     """Only the scoped read may retry; never an uncertain write or global reset."""
 
 
+class DocumentWriteHeld(RuntimeError):
+    """A shared Google document has an unresolved/protected write.
+
+    This is an admission-layer fact, not a business outcome. Callers translate
+    it to their existing busy/fail-closed surface; they must never treat it as
+    "nothing was written" or retry the original effect.
+    """
+
+    def __init__(self, reason: str, document) -> None:
+        super().__init__(str(reason))
+        self.reason = str(reason)
+        self.document = tuple(document)
+        self.failure_classes: tuple[str, ...] = ()
+
+
+def google_document_key(url: str) -> tuple[str, str, str]:
+    """Exact Google document identity shared by quote/browser/API writers."""
+    if not isinstance(url, str):
+        raise TypeError("GOOGLE_DOCUMENT_UNCONFIRMED")
+    parsed = urlsplit(url)
+    if (parsed.scheme != "https" or parsed.hostname != "docs.google.com"
+            or not parsed.path.startswith("/spreadsheets/")):
+        raise ValueError("GOOGLE_DOCUMENT_UNCONFIRMED")
+    return (parsed.scheme, parsed.hostname, parsed.path)
+
+
+def google_document_key_for_spreadsheet(spreadsheet_id: str) -> tuple[str, str, str]:
+    """Canonical key for an ID passed to the Sheets API transport."""
+    if not isinstance(spreadsheet_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", spreadsheet_id):
+        raise ValueError("GOOGLE_SPREADSHEET_UNCONFIRMED")
+    return ("https", "docs.google.com", f"/spreadsheets/d/{spreadsheet_id}/edit")
+
+
 class PageResourceAdmission:
     """One injected, fail-closed admission shared by attached clients.
 
@@ -60,6 +94,9 @@ class PageResourceAdmission:
         self._parent = parent
         self._lock = threading.Lock()
         self._failure = None
+        # Document key -> {owner token: sanitized reason}. The root admission
+        # owns every hold so sibling/child services cannot bypass it.
+        self._document_holds = {}
 
     def invalidate(self, error):
         with self._lock:
@@ -92,6 +129,72 @@ class PageResourceAdmission:
             error = kind(())
             error.reason, error.failure_classes = reason, classes
             raise error
+
+    def _document_root(self):
+        node = self
+        seen = set()
+        while node._parent is not None:
+            if id(node) in seen:
+                raise RuntimeError("PAGE_ADMISSION_CYCLE")
+            seen.add(id(node))
+            node = node._parent
+        return node
+
+    def hold_document(self, document, owner, reason="GOOGLE_WRITE_UNCONFIRMED", *, page=None):
+        """Record one fail-closed owner on the shared root for this document.
+
+        ``page`` is optional: when supplied, the hold is dropped once that exact
+        page is provably closed. It never treats a closed page as a confirmed
+        write; it only ends page-level uncertainty. Durable business holds remain
+        independent.
+        """
+        key = tuple(document)
+        root = self._document_root()
+        with root._lock:
+            holds = root._document_holds.setdefault(key, {})
+            holds.setdefault(owner, (str(reason), page))
+
+    def release_document(self, document, owner):
+        """Release only this owner's hold; never clear another uncertainty."""
+        key = tuple(document)
+        root = self._document_root()
+        with root._lock:
+            holds = root._document_holds.get(key)
+            if holds is None:
+                return
+            holds.pop(owner, None)
+            if not holds:
+                root._document_holds.pop(key, None)
+
+    def document_hold(self, document):
+        """Return the sanitized reason when this document has any active hold."""
+        key = tuple(document)
+        node = self
+        seen = set()
+        while node is not None:
+            if id(node) in seen:
+                raise RuntimeError("PAGE_ADMISSION_CYCLE")
+            seen.add(id(node))
+            with node._lock:
+                holds = node._document_holds.get(key)
+                if holds:
+                    for owner, value in tuple(holds.items()):
+                        reason, page = value
+                        is_closed = getattr(page, "is_closed", None)
+                        if callable(is_closed) and is_closed() is True:
+                            holds.pop(owner, None)
+                            continue
+                        return reason
+                    if not holds:
+                        node._document_holds.pop(key, None)
+            node = node._parent
+        return None
+
+    def require_document_writable(self, document):
+        """Fail closed before any page creation or cell write on this document."""
+        reason = self.document_hold(document)
+        if reason is not None:
+            raise DocumentWriteHeld(reason, document)
 
 
 def bind_page_admission(browser, admission):

@@ -3,6 +3,8 @@ import re
 from dataclasses import dataclass
 from socket import timeout as SocketTimeout
 
+from src.research.cdp_pages import DocumentWriteHeld
+
 from .google_api_service import GoogleSheetsWriteUnconfirmed
 from .google_oauth import GoogleSheetsAuthorizationError
 from .google_reader import GoogleSheetsReadUnavailable, execute_google_read
@@ -166,6 +168,10 @@ class GoogleQuotationInput:
                 valueInputOption="RAW", body={"majorDimension": "ROWS", "values": [list(payload)]},
             ).execute()
         except Exception as exc:
+            if isinstance(exc, DocumentWriteHeld):
+                # A shared unresolved write on this document is a busy surface:
+                # defer, never classify it as an uncertain new write or retry it.
+                raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from exc
             if isinstance(exc, (QuotationInputBusy, QuotationInputUnavailable)):
                 raise
             if self.external_write and (

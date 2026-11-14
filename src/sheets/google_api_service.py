@@ -29,6 +29,10 @@ from time import monotonic
 from typing import Any
 
 from src.core.protected_local_store import unprotect_bytes
+from src.research.cdp_pages import (
+    PageResourceAdmission,
+    google_document_key_for_spreadsheet,
+)
 
 from .google_oauth import (
     READ_ONLY_SCOPE,
@@ -164,6 +168,7 @@ def build_service_account_sheets_service(
     timeout: int = DEFAULT_HTTP_TIMEOUT_SECONDS,
     on_read_success=lambda: None,
     timer=monotonic,
+    page_admission=None,
 ) -> "GoogleApiSheetsService":
     """Build the API transport once; no OAuth consent, no refresh token."""
     if scope not in {READ_ONLY_SCOPE, READ_WRITE_SCOPE}:
@@ -194,7 +199,8 @@ def build_service_account_sheets_service(
         raise GoogleSheetsAuthorizationError(
             "Unable to authorize read/write Google Sheets access"
         ) from None
-    return GoogleApiSheetsService(service, timer=timer, on_read_success=on_read_success)
+    return GoogleApiSheetsService(
+        service, timer=timer, on_read_success=on_read_success, page_admission=page_admission)
 
 
 class GoogleApiSheetsService:
@@ -202,8 +208,14 @@ class GoogleApiSheetsService:
 
     external_write = True  # A writer outside the browser page: reload before the script.
 
-    def __init__(self, service, *, timer=monotonic, on_read_success=lambda: None) -> None:
+    def __init__(self, service, *, timer=monotonic, on_read_success=lambda: None,
+                 page_admission=None) -> None:
         self._service = service
+        if page_admission is not None and not isinstance(page_admission, PageResourceAdmission):
+            raise ValueError("PAGE_ADMISSION_UNCONFIRMED")
+        # Direct test/legacy constructions get a private admission; production
+        # always injects the runtime's single shared root through the builder.
+        self._page_admission = page_admission or PageResourceAdmission()
         self._timer = timer
         self._on_read_success = on_read_success
         self._lock = RLock()
@@ -346,6 +358,10 @@ class GoogleApiSheetsService:
             raise ValueError("GOOGLE_WRITE_UNCONFIRMED")
         title, first_column, first_row, last_column = _parse_range(range_name)
         _require_write_target(title, first_column, first_row, last_column, len(values[0]))
+        document = google_document_key_for_spreadsheet(spreadsheet)
+        # Never start a new write on a document that already has an unresolved
+        # shared write hold from another client/service.
+        self._page_admission.require_document_writable(document)
         # A write changes whatever snapshot this transport may still hold.
         self._clear_snapshots()
         try:
@@ -360,8 +376,16 @@ class GoogleApiSheetsService:
             # external effect and must never be retried automatically.
             if _definite_write_rejection(exc):
                 raise
+            self._page_admission.hold_document(
+                document, self, "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
             raise GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED") from exc
-        _verify_write_receipt(response, spreadsheet, title, first_column, first_row, last_column)
+        try:
+            _verify_write_receipt(response, spreadsheet, title, first_column, first_row, last_column)
+        except Exception:
+            # A missing/mismatched receipt cannot prove the write did not apply.
+            self._page_admission.hold_document(
+                document, self, "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+            raise
         return response
 
     def _unexpired(self, spreadsheet):

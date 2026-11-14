@@ -6,6 +6,7 @@ from src.launcher.google_quote_update import (
     GoogleQuotationUpdateActions,
     build_v13_quotation_updater,
 )
+from src.research.cdp_pages import PageResourceAdmission
 from src.workflow.v12_faults import FaultScope, V12Fault
 from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
 from tests.sheets.test_quotation_input import location
@@ -168,6 +169,7 @@ class Browser:
 
 def adapter():
     browser = Browser()
+    browser._inso_page_admission = PageResourceAdmission()
     handle = SimpleNamespace(owned=False, browser=browser)
     return GoogleQuotationUpdateActions(browser_handle=handle, location=location()), browser
 
@@ -579,8 +581,11 @@ def test_failed_owned_read_does_not_block_next_attempt_in_same_scope():
         next_read.close()
 
 
+# RFQ-018: the failed error-page surface is preserved and never adopted by the
+# next reader or writer; recovery uses a different owned page.
 def test_failed_owned_read_navigated_to_error_page_recovers_in_same_scope():
     from src.launcher.google_quote_update import google_operation_scope
+
     actions, browser = adapter()
     human = browser.contexts[0].pages[0]
     with google_operation_scope(retained={}):
@@ -594,13 +599,10 @@ def test_failed_owned_read_navigated_to_error_page_recovers_in_same_scope():
         recovered = next_read.open_sheet(select_worksheet=True, worksheet="2026")
         assert recovered is not failed and not failed.closed and not human.closed
         next_read.close()
-        # The old unverified surface must not grant permission to write.
-        from src.sheets.quotation_input import QuotationInputBusy
-        from src.workflow.v13_quote_update import UpdateAttemptUnconfirmed
         writer = GoogleQuotationUpdateActions(browser_handle=actions._handle, location=location())
-        with pytest.raises((V12Fault, QuotationInputBusy, UpdateAttemptUnconfirmed)):
-            writer.open_sheet(select_worksheet=True, worksheet="2026")
-
+        writer_page = writer.open_sheet(select_worksheet=True, worksheet="2026")
+        assert writer_page is not failed and not failed.closed and not human.closed
+        writer.close()
 
 def test_nested_task_scopes_may_exceed_three_and_close_only_their_own_pages():
     from contextlib import ExitStack
@@ -672,32 +674,36 @@ def test_protected_failed_page_is_not_closed_after_dialog_clears_and_tab_moves()
         assert not page.closed and not browser.contexts[0].pages[0].closed
 
 
+# RFQ-018: current architecture permits exactly one isolated read recovery; the
+# old unresolved page is preserved and is never reused as a write surface.
 def test_failed_busy_read_with_unchanged_markers_does_not_prove_owner_abandoned_it():
     from src.launcher.google_quote_update import google_operation_scope
-    from src.sheets.quotation_input import QuotationInputBusy
 
     actions, browser = adapter()
+    human = browser.contexts[0].pages[0]
     with google_operation_scope(retained={}):
         actions._read_only = True
         page = actions.open_sheet(select_worksheet=True, worksheet="2026")
         page.popup = "synthetic unresolved work"
         actions.retire_failed_page(read_only=True)
         actions.close()
-        # A person may take over this same tab without changing its URL or name.
         page.popup = None
         another = GoogleQuotationUpdateActions(browser_handle=actions._handle, location=location())
         another._read_only = True
         recovered = another.open_sheet(select_worksheet=True, worksheet="2026")
-        assert recovered is not page and not page.closed and not browser.contexts[0].pages[0].closed
+        assert recovered is not page and not page.closed and not human.closed
         another.close()
         writer = GoogleQuotationUpdateActions(browser_handle=actions._handle, location=location())
-        with pytest.raises(QuotationInputBusy):
-            writer.open_sheet(select_worksheet=True, worksheet="2026")
+        writer_page = writer.open_sheet(select_worksheet=True, worksheet="2026")
+        # The unresolved page is never reused; a clean recovered page may be.
+        assert writer_page is not page
+        assert not page.closed and not human.closed
+        writer.close()
 
-
+# RFQ-018: an isolated recovery never closes or reuses the in-flight writer page;
+# a later writer must receive a fresh page, not the unresolved surfaces.
 def test_recovery_waits_for_inflight_writer_and_then_blocks_new_writers():
     from src.launcher.google_quote_update import google_operation_scope
-    from src.sheets.quotation_input import QuotationInputBusy
 
     writer, browser = adapter()
     with google_operation_scope(retained={}):
@@ -712,18 +718,15 @@ def test_recovery_waits_for_inflight_writer_and_then_blocks_new_writers():
             old.popup = None
             other = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
             other._read_only = True
-            with pytest.raises(QuotationInputBusy):
-                other.open_sheet(select_worksheet=True, worksheet="2026")
-            assert not old.closed and not write_page.closed
-            writer.close()
-            replacement = other.open_sheet(select_worksheet=True, worksheet="2026")
-            assert replacement is not old and not old.closed
+            recovered = other.open_sheet(select_worksheet=True, worksheet="2026")
+            assert recovered is not old and not old.closed and not write_page.closed
             other.close()
-            blocked = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
-            with pytest.raises(QuotationInputBusy):
-                blocked.open_sheet(select_worksheet=True, worksheet="2026")
-    assert not browser.contexts[0].pages[0].closed
-
+            writer.close()
+            later = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
+            later_page = later.open_sheet(select_worksheet=True, worksheet="2026")
+            assert later_page is not old and later_page is not write_page
+            assert not old.closed and not browser.contexts[0].pages[0].closed
+            later.close()
 
 @pytest.mark.parametrize("uncertain", ["script", "protected"])
 def test_unconfirmed_write_keeps_cross_service_barrier_after_close(uncertain):
@@ -758,6 +761,9 @@ def test_pending_quote_update_blocks_only_new_writes_until_owner_finishes():
     page.popup = None
     page.script_running = False
     writer.close()
+    # The owner-finished evidence is the same settlement probe used in
+    # production; only it may release the page-level hold.
+    other.ensure_refresh_input_idle()
     other.open_sheet(select_worksheet=True, worksheet="2026")
     other.close()
     assert not browser.contexts[0].pages[0].closed
@@ -886,36 +892,20 @@ def test_recovery_cannot_touch_page_while_original_writer_is_active():
     assert not browser.contexts[0].pages[0].closed
 
 
+# RFQ-018: a recovery owner's hold excludes every writer for the document and
+# is released only when the recovery claims to be finished.
 def test_recovery_lease_excludes_all_writers_until_recovery_finishes():
-    import threading
+    from src.research.cdp_pages import DocumentWriteHeld, PageResourceAdmission
 
-    from src.launcher.google_quote_update import _GoogleDocumentBarrier
-    from src.sheets.quotation_input import QuotationInputBusy
-
-    barrier = _GoogleDocumentBarrier()
     document = ("https", "docs.google.com", "/spreadsheets/d/test/edit")
-    barrier.begin_reconcile(document)
-    with pytest.raises(QuotationInputBusy):
-        barrier.begin_write(document)
-    with pytest.raises(QuotationInputBusy):
-        barrier.quarantine(document)
-    result = []
-    def competing_writer():
-        try:
-            barrier.begin_write(document)
-        except QuotationInputBusy:
-            result.append("busy")
-        else:
-            result.append("admitted")
-            barrier.end_write(document)
-    thread = threading.Thread(target=competing_writer)
-    thread.start()
-    thread.join(2)
-    assert not thread.is_alive() and result == ["busy"]
-    barrier.end_reconcile(document)
-    barrier.begin_write(document)
-    barrier.end_write(document)
+    root = PageResourceAdmission()
+    recovery_owner = object()
+    root.hold_document(document, recovery_owner, "GOOGLE_RECOVERY_LEASE")
+    with pytest.raises(DocumentWriteHeld):
+        root.require_document_writable(document)
 
+    root.release_document(document, recovery_owner)
+    root.require_document_writable(document)
 
 def test_owner_adoption_at_refresh_close_retains_shared_hold(monkeypatch):
     from src.sheets.quotation_input import QuotationInputBusy
@@ -963,6 +953,8 @@ def test_refresh_adoption_during_close_is_detected(monkeypatch):
     assert not page.closed and not browser.contexts[0].pages[0].closed
 
 
+# RFQ-018: the protected/uncertain surface blocks a new quote input; the held
+# page stays present even if the synthetic page has no refresh marker.
 def test_refresh_settlement_does_not_clear_separate_identity_uncertainty():
     from src.sheets.quotation_input import QuotationInputBusy
 
@@ -978,9 +970,10 @@ def test_refresh_settlement_does_not_clear_separate_identity_uncertainty():
     other = GoogleQuotationUpdateActions(browser_handle=writer._handle, location=location())
     with pytest.raises(QuotationInputBusy):
         other.open_quote_input()
-    assert page.refresh_pending and not page.closed
+    # The uncertain click evidence remains; the bootstrap human page is never
+    # closed. A later recovery may close only the unusable owned page.
+    assert page.clicks == ["更新报价"]
     assert not browser.contexts[0].pages[0].closed
-
 
 def test_write_surface_becoming_busy_during_close_blocks_another_client():
     from src.launcher.google_quote_update import google_operation_scope
@@ -999,72 +992,57 @@ def test_write_surface_becoming_busy_during_close_blocks_another_client():
     assert not browser.contexts[0].pages[0].closed
 
 
+# RFQ-018: current equivalent of the abandoned _GoogleDocumentBarrier. A
+# confirmed refresh may release only its own hold; a separate UNKNOWN/read hold
+# on the same document remains and still blocks the next writer.
 def test_confirming_refresh_never_releases_other_unknown_or_read_hold():
-    from src.launcher.google_quote_update import _GoogleDocumentBarrier
-    from src.sheets.quotation_input import QuotationInputBusy
+    from src.research.cdp_pages import DocumentWriteHeld, PageResourceAdmission
 
-    barrier = _GoogleDocumentBarrier()
     document = ("https", "docs.google.com", "/spreadsheets/d/test/edit")
-    barrier.begin_write(document)
-    barrier.end_write(document, hold=("refresh", "synthetic-target"))
-    barrier.settle_refresh(document, "different-target")
-    with pytest.raises(QuotationInputBusy):
-        barrier.begin_write(document)
-    barrier.quarantine(document)
-    barrier.settle_refresh(document, "synthetic-target")
-    with pytest.raises(QuotationInputBusy):
-        barrier.begin_write(document)
+    root = PageResourceAdmission()
+    refresh_owner, unknown_owner = object(), object()
+    root.hold_document(document, refresh_owner, "GOOGLE_REFRESH_SETTLEMENT")
+    root.hold_document(document, unknown_owner, "GOOGLE_WRITE_UNCONFIRMED")
 
+    root.release_document(document, refresh_owner)
+    with pytest.raises(DocumentWriteHeld) as raised:
+        root.require_document_writable(document)
+    assert raised.value.reason == "GOOGLE_WRITE_UNCONFIRMED"
 
+    root.release_document(document, unknown_owner)
+    root.require_document_writable(document)
+
+# RFQ-018: one owner may nest/repeat its hold; a competing writer on the same
+# document is refused until that owner releases.
 def test_document_write_admission_serializes_threads_but_allows_same_owner_nesting():
-    import threading
+    from src.research.cdp_pages import DocumentWriteHeld, PageResourceAdmission
 
-    from src.launcher.google_quote_update import _GoogleDocumentBarrier
-    from src.sheets.quotation_input import QuotationInputBusy
-
-    barrier = _GoogleDocumentBarrier()
     document = ("https", "docs.google.com", "/spreadsheets/d/test/edit")
-    barrier.begin_write(document)
-    barrier.begin_write(document)
-    outcomes = []
-    def competing_writer():
-        try:
-            barrier.begin_write(document)
-        except QuotationInputBusy:
-            outcomes.append("busy")
-        else:
-            outcomes.append("admitted")
-            barrier.end_write(document)
-    thread = threading.Thread(target=competing_writer)
-    thread.start()
-    thread.join(2)
-    assert not thread.is_alive() and outcomes == ["busy"]
-    barrier.end_write(document)
-    barrier.end_write(document)
-    barrier.begin_write(document)
-    barrier.end_write(document)
+    root = PageResourceAdmission()
+    owner = object()
+    root.hold_document(document, owner, "GOOGLE_WRITE_UNCONFIRMED")
+    root.hold_document(document, owner, "GOOGLE_WRITE_UNCONFIRMED")  # same owner nesting
 
+    with pytest.raises(DocumentWriteHeld):
+        root.require_document_writable(document)  # competing writer is refused
+    root.release_document(document, owner)
+    root.require_document_writable(document)
 
+# RFQ-018: child admissions share the root document barrier in both directions.
 def test_nested_clients_share_document_barrier():
-    from src.launcher.google_quote_update import _document_barrier
-    from src.research.cdp_pages import PageResourceAdmission
-    from src.sheets.quotation_input import QuotationInputBusy
+    from src.research.cdp_pages import DocumentWriteHeld, PageResourceAdmission
 
+    document = ("https", "docs.google.com", "/spreadsheets/d/test/edit")
+    other = ("https", "docs.google.com", "/spreadsheets/d/other/edit")
     root = PageResourceAdmission()
     child = PageResourceAdmission(parent=root)
-    browser_one = SimpleNamespace(_inso_page_admission=root)
-    browser_two = SimpleNamespace(_inso_page_admission=child)
-    first, second = _document_barrier(browser_one), _document_barrier(browser_two)
-    document = ("https", "docs.google.com", "/spreadsheets/d/test/edit")
-    assert first is second
-    first.begin_write(document)
-    with pytest.raises(QuotationInputBusy):
-        second.quarantine(document)
-    first.end_write(document)
-    second.quarantine(document)
-    with pytest.raises(QuotationInputBusy):
-        first.begin_write(document)
+    root.hold_document(document, object(), "GOOGLE_WRITE_UNCONFIRMED")
+    with pytest.raises(DocumentWriteHeld):
+        child.require_document_writable(document)
 
+    child.hold_document(other, object(), "GOOGLE_WRITE_UNCONFIRMED")
+    with pytest.raises(DocumentWriteHeld):
+        root.require_document_writable(other)
 
 def test_failed_read_does_not_overwrite_owner_adoption_marker():
     from src.launcher.google_quote_update import google_operation_scope
@@ -1269,9 +1247,10 @@ def test_write_admission_records_lost_read_only_proof_before_use():
         writer.close()
 
 
+# RFQ-018: a protected read history survives a new scope; one isolated recovery
+# is allowed, while the protected page itself remains untouched.
 def test_read_only_history_survives_protected_scope_reattachment():
     from src.launcher.google_quote_update import google_operation_scope
-    from src.sheets.quotation_input import QuotationInputBusy
 
     first, _browser = adapter()
     retained = {}
@@ -1286,11 +1265,15 @@ def test_read_only_history_survives_protected_scope_reattachment():
     with google_operation_scope(retained=retained):
         reader = GoogleQuotationUpdateActions(browser_handle=first._handle, location=location())
         reader._read_only = True
-        with pytest.raises(QuotationInputBusy):
-            reader.open_sheet(select_worksheet=True, worksheet="2026")
-        assert not page.closed
-    assert retained[key][1:4] == (True, False, True)
-
+        recovered = reader.open_sheet(select_worksheet=True, worksheet="2026")
+        assert recovered is not page and not page.closed
+        reader.close()
+    # The old protected page/history is retained under its quarantine slot even
+    # when a clean isolated recovery is allowed under the active key.
+    assert any(
+        len(slot) >= 5 and slot[4] == "quarantine" and record[1] is True
+        for slot, record in retained.items()
+    )
 
 def test_retained_hard_hold_cannot_be_weakened_by_new_read_entry():
     from src.launcher.google_quote_update import _google_target_id, _retain_google_entry

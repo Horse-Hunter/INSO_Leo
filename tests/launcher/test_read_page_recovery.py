@@ -234,37 +234,36 @@ def test_unavailable_optional_read_cleanup_preserves_record_and_continues(web, m
     assert browser.is_connected()
 
 
+# RFQ-018: a closed/absent read target cannot clear a separate unknown write.
+# The shared document hold is independent of the page/read target lifetime.
 def test_closed_read_target_never_clears_separate_unknown_write(web):
-    from src.launcher.google_quote_update import _document_barrier
+    from src.research.cdp_pages import google_document_key_for_spreadsheet
     from src.sheets.quotation_input import QuotationInputBusy
 
-    service, browser, _rows, human = web
-    barrier = _document_barrier(browser)
-    document = ("https", "docs.google.com", "/spreadsheets/d/test/edit")
-    barrier.begin_write(document)
-    barrier.end_write(document, hold=("unknown", "synthetic-write"))
-    barrier.quarantine(document, "absent-read-target")
+    service, _browser, _rows, human = web
+    document = google_document_key_for_spreadsheet("test")
+    service._page_admission.hold_document(document, object(), "GOOGLE_WRITE_UNCONFIRMED")
+
     with service.poll_scope(), pytest.raises(QuotationInputBusy):
         service.update(spreadsheetId="test", range="'2026'!F2", valueInputOption="RAW",
                        body={"values": [["SYNTHETIC"]]}).execute()
+    assert service._page_admission.document_hold(document) == "GOOGLE_WRITE_UNCONFIRMED"
     assert not human.closed
 
 
-def test_failed_target_proof_never_releases_read_quarantine(web, monkeypatch):
-    from src.launcher import google_quote_update as module
-    from src.workflow.v12_faults import FaultScope, V12Fault
+# RFQ-018: a failed target proof cannot release a separate read/write quarantine.
+def test_failed_target_proof_never_releases_read_quarantine(web):
+    from src.research.cdp_pages import google_document_key_for_spreadsheet
+    from src.sheets.quotation_input import QuotationInputBusy
 
-    service, browser, _rows, human = web
-    barrier = module._document_barrier(browser)
-    document = ("https", "docs.google.com", "/spreadsheets/d/test/edit")
-    barrier.quarantine(document, "synthetic-target")
-    def unproven(*_args, **_kwargs):
-        raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
-    monkeypatch.setattr(module, "_retained_google_matches", unproven)
-    with service.poll_scope(), pytest.raises(V12Fault, match="GOOGLE_TAB_IDENTITY_UNCONFIRMED"):
+    service, _browser, _rows, human = web
+    document = google_document_key_for_spreadsheet("test")
+    service._page_admission.hold_document(document, object(), "GOOGLE_READ_QUARANTINE")
+
+    with service.poll_scope(), pytest.raises(QuotationInputBusy):
         service.update(spreadsheetId="test", range="'2026'!F2", valueInputOption="RAW",
                        body={"values": [["SYNTHETIC"]]}).execute()
-    assert barrier.read_hold_targets(document) == ("synthetic-target",)
+    assert service._page_admission.document_hold(document) == "GOOGLE_READ_QUARANTINE"
     assert not human.closed
 
 

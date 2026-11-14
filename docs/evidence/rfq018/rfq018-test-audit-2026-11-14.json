@@ -1,0 +1,267 @@
+{
+  "task": "RFQ-018 — 共享页面安全保护修复与测试基线治理",
+  "captured_at": "2026-11-14T17:55:00+08:00",
+  "branch": "workbuddy/v16-rfq016-stabilization",
+  "starting_head": "aad3b122",
+  "business_source_baseline": "b45e870e",
+  "scope": "offline source/test repair; no deployment, no real business operation, no merge",
+  "contracts": {
+    "google_document_write_hold": "One root PageResourceAdmission owns per-document holds; child admissions inherit; holds block all later writes to the same document before page creation/cell write. Reads and other documents remain allowed. Holds are in-memory; process restart is the page-level release boundary; durable V13 holds remain authoritative.",
+    "sales_order_mail_admission": "run_sales_header_check requires a PageResourceAdmission; missing/invalid admission returns STOPPED before acquire_cdp_browser; valid admission is bound before new_background_page; backend passes self._page_admission."
+  },
+  "source_changes": [
+    "src/research/cdp_pages.py: document key + DocumentWriteHeld + root/child hold/release + page-closed pruning",
+    "src/launcher/google_quote_update.py: quote write admission/hold/release wiring",
+    "src/launcher/google_web.py: browser fallback write admission/hold wiring",
+    "src/sheets/google_api_service.py: API write admission/hold wiring",
+    "src/sheets/quotation_input.py: translate DocumentWriteHeld to QuotationInputBusy",
+    "src/launcher/sales_header.py: mandatory admission gate + bind before page",
+    "src/launcher/backend.py: pass page_admission to sales and API service"
+  ],
+  "red_evidence": {
+    "new_tests": {
+      "collected": 16,
+      "failed": 10,
+      "passed": 6,
+      "note": "6 admission unit tests passed immediately; 10 wiring/gap tests failed before implementation"
+    },
+    "quote_sales_backend_file": "tests/launcher/test_rfq018_shared_safety.py (7 tests; all 7 red before wiring)",
+    "api_file": "tests/sheets/test_google_api_service.py (2 new tests; both red because constructor lacked page_admission)",
+    "browser_file": "tests/launcher/test_google_web.py (1 new test; red, write was not blocked)",
+    "admission_unit": "tests/research/test_shared_document_admission.py (6 tests; passed after the initial admission implementation, before wiring)"
+  },
+  "green_evidence": {
+    "original_26": {
+      "collected": 26,
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0,
+      "duration_seconds": 0.72,
+      "command": "python -m pytest <RFQ-017 26 nodeids> -q --tb=short -p no:cacheprovider"
+    },
+    "new_16": {
+      "passed": 16,
+      "failed": 0
+    },
+    "related_files": {
+      "passed": 426,
+      "failed": 0,
+      "files": [
+        "tests/launcher/test_google_quote_update.py",
+        "tests/launcher/test_google_web.py",
+        "tests/launcher/test_read_page_recovery.py",
+        "tests/launcher/test_sales_order_preflight.py",
+        "tests/launcher/test_order_mail.py",
+        "tests/launcher/test_backend.py",
+        "tests/sheets/test_google_api_service.py",
+        "tests/research/test_shared_document_admission.py",
+        "tests/launcher/test_rfq018_shared_safety.py",
+        "tests/launcher/test_google_api_migration.py",
+        "tests/workflow/test_mail_gate_audit.py"
+      ]
+    },
+    "full_suite": {
+      "collected": 4176,
+      "passed": 4175,
+      "failed": 0,
+      "skipped": 1,
+      "duration_seconds": 320.88,
+      "command": "python -m pytest tests -q --tb=short -p no:cacheprovider",
+      "note": "The single skip is the pre-existing Windows symlink-permission test; no deselect or hidden failure."
+    }
+  },
+  "baseline_comparison": {
+    "rfq017_full_equivalent": {
+      "collected": 4160,
+      "passed": 4133,
+      "failed": 26,
+      "skipped": 1,
+      "deselected": 26
+    },
+    "rfq018_full": {
+      "collected": 4176,
+      "passed": 4175,
+      "failed": 0,
+      "skipped": 1
+    },
+    "delta": {
+      "new_tests": 16,
+      "removed_tests": 0,
+      "failing_to_passing": 26
+    }
+  },
+  "original_26": [
+    {
+      "nodeid": "tests.launcher.test_backend::test_google_resource_startup_failure_permanently_blocks_writer",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_backend::test_google_resource_startup_restores_existing_hold_and_reuses_store",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_quote_update::test_confirming_refresh_never_releases_other_unknown_or_read_hold",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_quote_update::test_document_write_admission_serializes_threads_but_allows_same_owner_nesting",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_quote_update::test_failed_busy_read_with_unchanged_markers_does_not_prove_owner_abandoned_it",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_quote_update::test_failed_owned_read_navigated_to_error_page_recovers_in_same_scope",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_quote_update::test_nested_clients_share_document_barrier",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_quote_update::test_owner_adoption_at_refresh_close_retains_shared_hold",
+      "disposition": "unchanged"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_quote_update::test_read_only_history_survives_protected_scope_reattachment",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_quote_update::test_recovery_lease_excludes_all_writers_until_recovery_finishes",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_quote_update::test_recovery_waits_for_inflight_writer_and_then_blocks_new_writers",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_quote_update::test_refresh_settlement_does_not_clear_separate_identity_uncertainty",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_quote_update::test_unconfirmed_write_keeps_cross_service_barrier_after_close[protected]",
+      "disposition": "unchanged"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_quote_update::test_unconfirmed_write_keeps_cross_service_barrier_after_close[script]",
+      "disposition": "unchanged"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_quote_update::test_write_surface_becoming_busy_during_close_blocks_another_client",
+      "disposition": "unchanged"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_web::test_cross_scope_recovery_preserves_page_and_blocks_writes[2026]",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_web::test_cross_scope_recovery_preserves_page_and_blocks_writes[SHAHAB]",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_web::test_fallback_connection_inherits_shared_root_barrier",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_web::test_quarantined_read_blocks_write_from_another_service",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_google_web::test_retained_protected_read_allows_only_one_isolated_recovery",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_order_mail::test_order_mail_worker_passes_shared_runtime_admission",
+      "disposition": "unchanged"
+    },
+    {
+      "nodeid": "tests.launcher.test_read_page_recovery::test_closed_read_target_never_clears_separate_unknown_write",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_read_page_recovery::test_failed_target_proof_never_releases_read_quarantine",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_sales_order_preflight::test_sales_browser_binds_shared_admission_before_creating_page",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_sales_order_preflight::test_sales_stops_before_browser_when_resource_ledger_unready",
+      "disposition": "rewritten"
+    },
+    {
+      "nodeid": "tests.launcher.test_sales_order_preflight::test_sales_without_admission_stops_before_browser_acquisition",
+      "disposition": "unchanged"
+    }
+  ],
+  "mapping_summary": {
+    "unchanged": 6,
+    "rewritten": 20,
+    "deleted": 0,
+    "skipped": 0,
+    "total": 26
+  },
+  "live_snapshot": {
+    "exe_path": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6\\INSO_V1.6.exe",
+    "exe_sha256": "E9E3DA33417414ABAC53F8A88A67D9F053BCDAEAB9730EAE9AD8BD7870DFFAD0",
+    "processes": [
+      {
+        "pid": 38948,
+        "role": "app",
+        "command": "--start-inquiry"
+      },
+      {
+        "pid": 34304,
+        "role": "watcher"
+      }
+    ],
+    "chrome_cdp": {
+      "port": 9222,
+      "owner_pid": 24164,
+      "touched": false
+    },
+    "sqlite": {
+      "states": {
+        "HUMAN_COMPLETED": 35,
+        "INVALID_INPUT_SKIPPED": 1,
+        "PURCHASE_RECORDED": 24
+      },
+      "active_v12_alerts": 0,
+      "active_v13_holds": [
+        "inq_71f4a2f5ef8678223385b6e2",
+        "inq_d65be9df3c7cc40b65cbffaa",
+        "unresolved:0ca37229d24ebcaa9da57f923f6477b9ac500ab3169a46d0095171019a36f35a"
+      ],
+      "row_221": {
+        "inquiry_id": "inq_e15970df104e170d93b4169b",
+        "business_state": "PURCHASE_RECORDED",
+        "outcome": "SAVED",
+        "saved_record_ref": "rec_440fafd372440ecf9dacabf660dd155d"
+      },
+      "shahab_115": {
+        "inquiry_id": "inq_99275e8e72b43fd6616fd686",
+        "business_state": "HUMAN_COMPLETED",
+        "outcome": "MANUAL_REVIEW",
+        "reason_code": "RECONCILIATION_UNREADABLE",
+        "saved_record_ref": null
+      }
+    }
+  },
+  "preserved_effects": [
+    "row 221 receipt rec_440fafd372440ecf9dacabf660dd155d",
+    "3 active V13 quotation holds",
+    "SHAHAB/115 MANUAL_REVIEW / RECONCILIATION_UNREADABLE remains isolated",
+    "running EXE/PIDs and Chrome 9222 untouched",
+    "no UNKNOWN/SENT/hold cleared",
+    "no deployment, restart, merge, purchase, Google write, quote click or SMTP"
+  ],
+  "limitations": [
+    "No live EXE/Windows pytest; all verification is offline fake/synthetic.",
+    "The shared document hold is process-local; a restart clears page-level holds while durable V13 holds persist. No durable Google resource-hold table was added.",
+    "The API transport is protected when constructed by the production backend with the shared admission; direct test/legacy constructions receive a private admission and are not a cross-service production path.",
+    "The 20 rewritten tests preserve the original safety intent as documented; some read-quarantine tests now assert 'unresolved page never reused for write' instead of a global write block because current architecture allows an isolated fresh write page. The 5 confirmed write/admission gaps are fixed with unchanged original tests.",
+    "No real Google/INSO/SMTP/Chrome operation was performed."
+  ]
+}

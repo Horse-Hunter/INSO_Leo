@@ -22,7 +22,11 @@ from time import monotonic
 from urllib.parse import parse_qs, urlsplit
 
 from src.research.cdp_pages import (
+    DocumentWriteHeld,
+    PageResourceAdmission,
+    bind_page_admission,
     bounded_browser_call,
+    google_document_key_for_spreadsheet,
     page_owner,
     shared_playwright_factory,
 )
@@ -190,8 +194,9 @@ class GoogleSheetsWebService:
     """One thread-safe transport injected into existing readers and writers."""
     def __init__(self, session, *, actions_factory=GoogleQuotationUpdateActions, on_read_success=lambda: None,
                  timer=monotonic, read_guard=_no_read_guard, stop_requested=lambda: False,
-                 retain_pages=False, retire_session=None, isolated_read=False):
+                 retain_pages=False, retire_session=None, isolated_read=False, page_admission=None):
         self._session, self._actions_factory = session, actions_factory
+        self._page_admission = page_admission
         self._isolated_read = isolated_read
         self._grid_lock = threading.RLock() if isolated_read else _GOOGLE_GRID_LOCK
         if isolated_read:
@@ -525,7 +530,22 @@ class GoogleSheetsWebService:
         if write and (geometry is None or options.get("valueInputOption") != "RAW"):
             raise ValueError("GOOGLE_WRITE_UNCONFIRMED")
         base = f"https://docs.google.com/spreadsheets/d/{spreadsheet}/edit#gid=0"
+        document = google_document_key_for_spreadsheet(spreadsheet)
         with self._grid_lock, self._operation_session() as handle:
+            admission = self._page_admission
+            if admission is None:
+                admission = getattr(handle.browser, "_inso_page_admission", None)
+            if isinstance(admission, PageResourceAdmission):
+                bind_page_admission(handle.browser, admission)
+            elif write:
+                # A write with no shared admission cannot prove that no other
+                # client already owns an unresolved effect on this document.
+                raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_PAGE_ADMISSION_UNCONFIRMED")
+            if write:
+                try:
+                    admission.require_document_writable(document)
+                except DocumentWriteHeld as exc:
+                    raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from exc
             actions = self._actions_factory(browser_handle=handle, location=_Location(base))
             actions._read_only = not write
             dirty = False
@@ -649,6 +669,8 @@ class GoogleSheetsWebService:
                         "runtime_reason": reason, "runtime_cause": type(exc).__name__})
                 if dirty:
                     actions._protected = True
+                    if isinstance(admission, PageResourceAdmission):
+                        admission.hold_document(document, self, "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
                     raise QuotationInputUnavailable("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED") from None
                 # Same bounded retry/next-15-minute policy as existing transient reads.
                 # Never turn auth, unknown errors or write ambiguity into a retry.
@@ -855,4 +877,4 @@ def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, 
 
     return GoogleSheetsWebService(session, on_read_success=on_read_success,
                                   read_guard=read_guard, stop_requested=stop_requested, retain_pages=not isolated_read, isolated_read=isolated_read,
-                                  retire_session=lambda: session(retire=True))
+                                  retire_session=lambda: session(retire=True), page_admission=page_admission)

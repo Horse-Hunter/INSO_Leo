@@ -1571,7 +1571,8 @@ class ProductionBackend(GuiBackend):
         )
         try:
             return build_service_account_sheets_service(
-                resolved, on_read_success=lambda: self._site_recovered("Google Sheets"))
+                resolved, on_read_success=lambda: self._site_recovered("Google Sheets"),
+                page_admission=getattr(self, "_page_admission", None))
         except (GoogleSheetsAuthorizationError, GoogleSheetsDependencyError) as exc:
             raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_AUTH_UNAVAILABLE") from exc
 
@@ -4139,6 +4140,7 @@ class ProductionBackend(GuiBackend):
                 config_path=self.config_path,
                 production_path=self.production_path, root=self.root, notify=self._notify_order_exception,
                 resolve_notify=self._resolve_order_exception,
+                page_admission=self._page_admission,
             )
         except Exception:  # noqa: BLE001 - never leak provider/customer data
             stage, text = "STOPPED", "订单头部检查未完成；未保存或提交，请检查配置后重试。"

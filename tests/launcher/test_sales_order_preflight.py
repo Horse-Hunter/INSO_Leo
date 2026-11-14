@@ -72,8 +72,11 @@ def setup(monkeypatch):
 
 
 def run(notifications, admission=None):
+    from src.research.cdp_pages import PageResourceAdmission
+    if admission is None:
+        admission = PageResourceAdmission()
     return service.run_sales_header_check(config_path='unused', production_path='unused', root='unused',
-        notify=lambda **kw: notifications.append(kw))
+        notify=lambda **kw: notifications.append(kw), page_admission=admission)
 
 
 def test_all_packages_complete_before_sales_and_success_no_notify(monkeypatch):
@@ -260,7 +263,6 @@ def test_sales_browser_binds_shared_admission_before_creating_page(monkeypatch):
     handle = SimpleNamespace(owned=False, browser=browser, disconnect=lambda: None)
     monkeypatch.setattr(service, "acquire_cdp_browser", lambda *_: handle)
     admission = PageResourceAdmission()
-    service.google_resource_barrier(admission).restore(SimpleNamespace(active=lambda: ()))
     observed = []
     def stop_at_new_page(actual, *_args, **_kwargs):
         observed.append(actual._inso_page_admission is admission)
@@ -279,12 +281,12 @@ def test_sales_without_admission_stops_before_browser_acquisition(monkeypatch):
 
 
 def test_sales_stops_before_browser_when_resource_ledger_unready(monkeypatch):
-    from src.research.cdp_pages import PageResourceAdmission
+    from src.research.cdp_pages import PageResourceAdmission, PageTargetCleanupError
 
     config = SimpleNamespace(cdp=SimpleNamespace(cdp_url="http://127.0.0.1:9222"))
     monkeypatch.setattr(service, "sales_config", lambda *_: (config, {}))
     monkeypatch.setattr(service, "acquire_cdp_browser", lambda *_: pytest.fail("unexpected browser acquisition"))
     admission = PageResourceAdmission()
-    service.google_resource_barrier(admission).require_restore()
+    admission.invalidate(PageTargetCleanupError((ValueError("synthetic"),)))
     assert service.run_sales_header_check(config_path="unused", production_path="unused", root="unused",
                                           page_admission=admission)[0] == "STOPPED"

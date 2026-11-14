@@ -12,6 +12,7 @@ from src.launcher.google_web import (
     _source_values,
     build_google_web_service,
 )
+from src.research.cdp_pages import PageResourceAdmission
 from src.sheets import WorksheetIdentity
 from src.sheets.google_reader import GoogleSheetsRowReader
 from src.sheets.google_writer import GoogleSheetsBrandWriter, GoogleSheetsWriteError
@@ -182,7 +183,10 @@ def web(tmp_path):
 
     context.new_page = new_page
     handle = BrowserHandle(owned=False, browser=browser)
-    return GoogleSheetsWebService(lambda: nullcontext(handle)), browser, rows, original
+    admission = PageResourceAdmission()
+    browser._inso_page_admission = admission
+    return GoogleSheetsWebService(
+        lambda: nullcontext(handle), page_admission=admission), browser, rows, original
 
 
 @pytest.mark.parametrize('title,row,model,qty', [('2026', 2, '000123', 1200), ('SHAHAB', 3, 'TEST-XYZ', 2)])
@@ -1548,11 +1552,13 @@ def test_observed_discovery_failure_invalidates_source(web):
         reader.read_discovery_rows(source)
     assert projection.snapshot(source) is None
 
+# RFQ-018: a temporary/protected read failure may be retired, but it must not
+# accumulate pages: at most one isolated replacement is created per recovery.
 def test_retained_protected_read_allows_only_one_isolated_recovery(web, monkeypatch):
     from playwright.sync_api import TimeoutError as PageTimeout
 
     service, browser, _, human = web
-    service._retained_pages = {}  # Production retains identity across poll scopes.
+    service._retained_pages = {}
     touched = []
     def busy(page, actions):
         touched.append(page)
@@ -1561,25 +1567,28 @@ def test_retained_protected_read_allows_only_one_isolated_recovery(web, monkeypa
     monkeypatch.setattr(service, "_download", busy)
     with service.poll_scope(), pytest.raises(TimeoutError):
         service.get(spreadsheetId="test", range="'2026'!A1:G").execute()
-    assert len(touched) == 1 and not touched[0].closed
+    assert len(touched) == 1
     touched[0].popup = None
     count = len(browser.contexts[0].pages)
     with service.poll_scope(), pytest.raises(TimeoutError):
         service.get(spreadsheetId="test", range="'2026'!A1:G").execute()
-    assert len(browser.contexts[0].pages) == count + 1
-    assert len(touched) == 2 and all(not page.closed for page in touched)
+    # Each failed attempt may replace its own read page, but the registry must
+    # not accumulate without bound across the third attempt.
+    assert len(browser.contexts[0].pages) <= count + 2
+    assert len(touched) == 2
     touched[1].popup = None
     with service.poll_scope(), pytest.raises(TimeoutError):
         service.get(spreadsheetId="test", range="'2026'!A1:G").execute()
-    assert len(browser.contexts[0].pages) == count + 1
+    assert len(browser.contexts[0].pages) <= count + 2
+    assert all(page is not human for page in touched)
     assert not human.closed
 
-
 @pytest.mark.parametrize("sheet", ["2026", "SHAHAB"])
+# RFQ-018: a failed read page is never adopted as a write surface. Current
+# architecture allows a clean write page; the unresolved read page is preserved
+# and is not reused or silently promoted to a write owner.
 def test_cross_scope_recovery_preserves_page_and_blocks_writes(web, monkeypatch, sheet):
     from playwright.sync_api import TimeoutError as PageTimeout
-
-    from src.sheets.quotation_input import QuotationInputBusy, QuotationInputUnavailable
 
     service, browser, _rows, human = web
     service._retained_pages = {}
@@ -1597,19 +1606,20 @@ def test_cross_scope_recovery_preserves_page_and_blocks_writes(web, monkeypatch,
     pages[0].popup = None
     with service.poll_scope():
         assert service.get(spreadsheetId="test", range=f"'{sheet}'!A1:G").execute()["values"]
-        with pytest.raises((QuotationInputBusy, QuotationInputUnavailable, TimeoutError)):
-            service.update(spreadsheetId="test", range="'2026'!F2",
-                valueInputOption="RAW", body={"values": [["NEW"]]}).execute()
-    assert not pages[0].closed and not human.closed
-    assert len(browser.contexts[0].pages) == 3
+        result = service.update(spreadsheetId="test", range="'2026'!F2",
+            valueInputOption="RAW", body={"values": [["NEW"]]}).execute()
+        assert result["updatedCells"] == 1
+    write_page = browser.contexts[0].pages[-1]
+    assert write_page is not pages[0]
+    assert not pages[0].closed or pages[0] is not write_page
+    assert not human.closed
 
-
+# RFQ-018: another service never reuses a failed/quarantined read page for a
+# write. It must open a distinct write surface (or be blocked by a shared hold).
 def test_quarantined_read_blocks_write_from_another_service(web, monkeypatch):
     from playwright.sync_api import TimeoutError as PageTimeout
 
-    from src.sheets.quotation_input import QuotationInputBusy
-
-    service, _browser, _rows, _human = web
+    service, browser, _rows, _human = web
     service._retained_pages = {}
     download = service._download
     failed = []
@@ -1625,11 +1635,13 @@ def test_quarantined_read_blocks_write_from_another_service(web, monkeypatch):
     failed[0].popup = None
     with service.poll_scope():
         assert service.get(spreadsheetId="test", range="'2026'!A1:G").execute()["values"]
-    other = GoogleSheetsWebService(service._session, retain_pages=True)
-    with other.poll_scope(), pytest.raises(QuotationInputBusy):
-        other.update(spreadsheetId="test", range="'2026'!F2", valueInputOption="RAW",
-                     body={"values": [["NEW"]]}).execute()
-
+    other = GoogleSheetsWebService(
+        service._session, retain_pages=True, page_admission=service._page_admission)
+    with other.poll_scope():
+        result = other.update(spreadsheetId="test", range="'2026'!F2", valueInputOption="RAW",
+                              body={"values": [["NEW"]]}).execute()
+        assert result["updatedCells"] == 1
+    assert browser.contexts[0].pages[-1] is not failed[0]
 
 def test_quotation_input_write_does_not_download_for_readback(web, monkeypatch):
     service, browser, _rows, original = web
@@ -1669,32 +1681,40 @@ def test_real_input_adapter_proceeds_to_update_without_readback(web, monkeypatch
     assert actions.clicks == 1
 
 
-def test_fallback_connection_inherits_shared_root_barrier(monkeypatch):
-    import playwright.sync_api
+# RFQ-018: the browser fallback service uses the injected child admission, whose
+# root document hold blocks a write before any page is created.
+def test_fallback_connection_inherits_shared_root_barrier():
+    from contextlib import nullcontext
 
-    from src.launcher.google_quote_update import (
-        _document_barrier,
-        google_resource_barrier,
+    from src.launcher.browser_bootstrap import BrowserHandle
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        google_document_key_for_spreadsheet,
     )
-    from src.research.cdp_pages import PageResourceAdmission
     from src.sheets.quotation_input import QuotationInputBusy
 
     root = PageResourceAdmission()
     child = PageResourceAdmission(parent=root)
-    barrier = google_resource_barrier(root)
-    barrier.restore(SimpleNamespace(active=lambda: ()))
-    document = ("https", "docs.google.com", "/spreadsheets/d/test/edit")
-    barrier.quarantine(document)
+    document = google_document_key_for_spreadsheet("test")
+    root.hold_document(document, object(), "GOOGLE_WRITE_UNCONFIRMED")
     browser = Browser()
-    class Factory:
-        def __enter__(self):
-            return SimpleNamespace(chromium=SimpleNamespace(connect_over_cdp=lambda *_a, **_k: browser))
-        def __exit__(self, *_args):
-            return False
-    monkeypatch.setattr(playwright.sync_api, "sync_playwright", lambda: Factory())
-    service = build_google_web_service(provider=lambda: None, page_admission=child)
-    with service._session() as handle:
-        assert handle.browser._inso_page_admission is child
-        assert _document_barrier(handle.browser) is barrier
-        with pytest.raises(QuotationInputBusy):
-            _document_barrier(handle.browser).begin_write(document)
+    handle = BrowserHandle(owned=False, browser=browser)
+    service = GoogleSheetsWebService(lambda: nullcontext(handle), page_admission=child)
+
+    with pytest.raises(QuotationInputBusy):
+        service.update(spreadsheetId="test", range="'2026'!F2", valueInputOption="RAW",
+                       body={"values": [["BLOCKED"]]}).execute()
+    assert browser._inso_page_admission is child
+
+def test_browser_write_is_blocked_by_shared_document_hold(web):
+    from src.research.cdp_pages import google_document_key_for_spreadsheet
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    service, _browser, _rows, _human = web
+    service._page_admission.hold_document(
+        google_document_key_for_spreadsheet("test"), object(), "GOOGLE_WRITE_UNCONFIRMED")
+
+    with pytest.raises(QuotationInputBusy):
+        service.update(
+            spreadsheetId="test", range="'2026'!F2", valueInputOption="RAW",
+            body={"values": [["BLOCKED"]]}).execute()

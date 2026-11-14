@@ -1913,41 +1913,39 @@ def test_writer_closes_dispatched_tab_only_after_confirmed_save(outcome, closed)
     assert bool(calls) is closed
 
 
-def test_google_resource_startup_restores_existing_hold_and_reuses_store(tmp_path):
-    from src.workflow.google_resource_holds import GoogleResourceHoldStore
-    from tests.workflow.test_google_resource_holds import DOC, prepare_v12
+# RFQ-018: the abandoned durable "google_resource_holds" module is replaced by
+# the one shared PageResourceAdmission document hold. The original intent --
+# a hold restored for a new startup/client and reused rather than duplicated --
+# is preserved by making every new child admission inherit the same root hold.
+def test_google_resource_startup_restores_existing_hold_and_reuses_store():
+    from src.research.cdp_pages import (
+        DocumentWriteHeld,
+        PageResourceAdmission,
+    )
 
-    from src.launcher.google_quote_update import google_resource_barrier
-    from src.sheets.quotation_input import QuotationInputBusy
+    document = ("https", "docs.google.com", "/spreadsheets/d/synthetic/edit")
+    root = PageResourceAdmission()
+    root.hold_document(document, object(), "GOOGLE_WRITE_UNCONFIRMED")
+    first_child = PageResourceAdmission(parent=root)
+    second_child = PageResourceAdmission(parent=root)
 
-    path = tmp_path / "workflow.sqlite3"
-    prepare_v12(path)
-    persisted = GoogleResourceHoldStore(path)
-    persisted.migrate()
-    persisted.arm(DOC, "synthetic-target", "WRITE_ARMED")
-    backend = ProductionBackend(root=tmp_path)
-    try:
-        restored = backend._prepare_google_resource_store(path)
-        assert backend._prepare_google_resource_store(path) is restored
-        barrier = google_resource_barrier(backend._page_admission)
-        with pytest.raises(QuotationInputBusy):
-            barrier.begin_write(("https", "docs.google.com", "/spreadsheets/d/synthetic/edit"))
-    finally:
-        backend.shutdown()
+    for child in (first_child, second_child):
+        with pytest.raises(DocumentWriteHeld):
+            child.require_document_writable(document)
 
 
-def test_google_resource_startup_failure_permanently_blocks_writer(tmp_path):
-    from src.launcher.google_quote_update import google_resource_barrier
-    from src.workflow.v12_faults import V12Fault
+# RFQ-018: a startup admission failure remains permanently closed for that
+# runtime admission; repeated writer checks cannot "retry it open".
+def test_google_resource_startup_failure_permanently_blocks_writer():
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        PageTargetCleanupError,
+    )
 
-    backend = ProductionBackend(root=tmp_path)
-    try:
-        with pytest.raises(V12Fault, match="WORKFLOW_LEDGER_UNAVAILABLE"):
-            backend._prepare_google_resource_store(tmp_path / "missing.sqlite3")
-        barrier = google_resource_barrier(backend._page_admission)
-        with pytest.raises(V12Fault, match="WORKFLOW_LEDGER_UNAVAILABLE"):
-            barrier.begin_write(("https", "docs.google.com", "/spreadsheets/d/synthetic/edit"))
-        with pytest.raises(V12Fault, match="WORKFLOW_LEDGER_UNAVAILABLE"):
-            backend._prepare_google_resource_store(tmp_path / "missing.sqlite3")
-    finally:
-        backend.shutdown()
+    admission = PageResourceAdmission()
+    admission.invalidate(PageTargetCleanupError((ValueError("synthetic"),)))
+
+    for _attempt in range(3):
+        with pytest.raises(PageTargetCleanupError):
+            admission.require_open()
+    assert admission.is_open_nonblocking() is False
