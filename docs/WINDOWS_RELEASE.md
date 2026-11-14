@@ -1,136 +1,15 @@
-# Windows release
+# Windows V1.6 release — safe minimal procedure
 
-## Owner-authorized V1.5 local release (2026-10-25)
+**No deployment is implied by source Review or document cleanup.** Only one running INSO V1.6 business instance and one protected Chrome profile/9222. Latest *reported* installed EXE/backup and the absence of production API activation are summarized at [V16 release receipt](../V16_RELEASE_REPORT.md); **reconfirm live**.
 
-Canonical script/spec supports `-Version 1.5` and optional `-PythonExecutable` to
-reuse the existing release environment. Built source
-ea537060a42c8b8b53c4472034ff7df4e387189c; no new dependency/packaging path.
-Use the standard Python Tcl/Tk directories during build; test overrides pointing
-to frozen _tcl_data can mislead PyInstaller's Tk sibling lookup and must be unset.
-Dependency self-check and RELEASE_SCAN_OK PASS before installation. Installed
-D:/Program_Leo/INSO_Leo/dist/INSO_V1.5/INSO_V1.5.exe; SHA256
-C45F8D8DC98ABE933A36997DDE9A4C85D803B3521FDAB5E4D00D6A3CD159FEF7.
-All2875 program asset hashes verified. Runtime junction points to existing
-INSO_V1.4/runtime; preserve that directory, its order-mail ledger and the central
-V1.2 workflow path. V1.4 program remains unchanged and its self-check PASS.
-V1.5 enables the same serial TP poll phase by default (explicit false overrides),
-retains the cross-version mutex, and uses future Owner229+Shawn TP recipients.
-Two verified trial SENT tasks carried forward with immutable original messages
-and verified pre-change backups; ordinary state unchanged. Full offline suite
-2666 PASS/11 SKIP, installed dependency/idle GUI/CDP/Vault readiness checks PASS.
-Actual GUI opened idle; no --start-inquiry, real SMTP, purchase or Sheet write.
-Live business acceptance remains UNKNOWN. Source changes are REVIEW_REQUIRED;
-Owner explicitly authorized this local release. Existing Task Packet contains
-complete evidence, first failed-build cleanup and retained/retired asset details.
+## Executor sequence (only with scoped Owner release authorization)
 
-## Build/release retention (binding)
+1. Inspect existing Windows worktree (`git status`, diff, HEAD, worktree list), current EXE PID/module/threads/active effects, config, SQLite/WAL/SHM, Chrome CDP, and actual installed file hash. Unknown action = no stop/replay/overwrite until reconciled.
+2. Reuse `scripts/build_windows_release.ps1` and the existing `packaging/INSO_V1.1.spec` (name is historical, still canonical). Verify candidate dependency self-check, safe idle GUI, scan, source/build provenance and exact file hashes. No duplicate installer/release infrastructure.
+3. Obtain supported normal application Stop/Exit and verify the whole business worker has safely drained; **do not overwrite running EXE**, blindly kill Chrome/9222, clear SQLite, or assume GUI disappearance is stop confirmation.
+4. Verify original program rollback and consistent source/config/DB backup **without overwriting newer business data on restoration**. Replace **program files only** in `D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6` as authorized; preserve `runtime` junction, `production.json`, credentials, SQLite/WAL/SHM, CDP/profile, business/outbox and unknown holds.
+5. Check exact installed EXE/hash/source, `--self-check` and safe `--idle-self-check`; use `--api-self-check` for transport assembly, but real production API needs `google_api.enabled=true`, valid external key, actual source read and Editor on affected workbook. Never present `TRANSPORT_READY` alone as live business acceptance.
+6. Start original single-instance entry only after current effects/permissions/scope are safe. Record first real module behavior and true Google/INSO/SQLite/SMTP effects; preserve unknown outcomes. Report current PID/state and blocked next step.
+7. Retire owned disposable staging/frozen test copies **in this task**, retain necessary rollback, evidence, protected links and unique work. Commit/push safe checkpoints so a new window can resume at any instant.
 
-**Trigger:** every build, frozen test, deployment scan, release or failed attempt. **Executor** reuses `scripts/build_windows_release.ps1` and its existing stage/scanner, avoiding repeated full frozen copies.
-
-- During the **same task**, retire known disposable staging, `_internal` and scan copies as soon as verification ends; keep small manifests/evidence. On failure, keep only necessary diagnostics/recovery assets.
-- After confirmed deployment, retain live installs, shared operational state and a **verified usable** rollback set; retire redundant historical packages. Inspect mixed backup folders individually.
-- Never delete/follow runtime links, CDP, business DB/outbox, Vault/OAuth, Git, unique evidence or dirty worktrees; never force unlock/elevate. A missing global handle inventory alone is not a blocker for unrelated proven-disposable copies.
-- **Evidence/Review:** summarize retained/retired assets and material disk change in the RFQ `EXECUTION_LOG.md`; CEO rejects unexplained duplicates. No new release pipeline or cleanup report.
-
-Historical release facts below are snapshots, not current deployment status.
-
-## Current RFQ-003 V1.2 refresh (2026-10-07)
-
-Owner-authorized resilience update, REVIEW_REQUIRED; not V1.3 or live acceptance.
-Existing build/spec/deploy path reused. Final EXE SHA256:
-`1A49C9650BA531F2299326FFC89761D0391CD5F2C0FE32327DDD0736BD5C3E84`.
-Current CEO B1 repair backup (earlier backups preserved):
-`dist/release-backups/INSO_V1.2-20261007-before-rfq003-b1`.
-Startup quarantine now requires actual execution evidence, not merely pre-enqueue.
-Only frozen assets overwritten; runtime junction, DB, config/grants/profile preserved.
-Build, frozen/deployed self-check, clean staged scan and idle launch PASS. GUI stays
-idle: no inquiry, submission, SMTP, Sheets write or real challenge tested.
-Current rules and full evidence: `control-room/RFQ-003/EXECUTION_LOG.md`.
-Older build descriptions below are historical when conflicting with this update.
-
-## Current V1.2 refresh (2026-10-06)
-
-Owner authorized rebuilding and overwriting the same V1.2 application path.
-Reused `scripts/build_windows_release.ps1 -Version 1.2 -BuildOnly`; staging
-self-check and RELEASE_SCAN_OK passed. Built production source
-`a1bed4094af8a834483c8f9f7852f6e7de0c7ac4`. Replaced only EXE/_internal after
-moving old assets into `dist/release-backups/INSO_V1.2-20261006-before-completion-update`.
-Runtime junction/target and protected grants were preserved; V1.1 untouched.
-Deployed frozen self-check exit 0; EXE SHA256:
-`FDAA40FEF27AB83C7C014F2C3BC0FB5072207882DFB1F748AD08050E9597482D`.
-
-Current build includes Oct 6 AI/confirmation fixes and purchase completion
-status/mail features. The narrow successful status transition 未发 -> 发给采购
-is now Owner-authorized; previous blanket Sheets-write statements below are
-historical, not current. Ordinary Save/generic Send remain closed.
-No orders, submission, mail or Sheets update executed during packaging.
-GUI launch attempt did not complete (Computer Use app approval timeout);
-no bypass. Owner can double-click the existing EXE path below. Build/self-check
-does not prove the new packaged full order chain; only test a genuine new order.
-Earlier startup/first-submit statements below apply to the old Oct 2 build.
-
-## V1.2 Owner-authorized build and local deployment (2026-10-02)
-
-Owner explicitly approved packaging after personal Review discussion. Reuse the
-existing build script/spec, not a parallel release pipeline:
-
-`powershell -ExecutionPolicy Bypass -File scripts\build_windows_release.ps1 -Version 1.2`
-
-Default version remains 1.1; version 1.2 uses distinct artifact/staging names.
-The generic artifact is scanned and self-checked BEFORE local runtime deployment.
-The existing V1.1 directory is never replaced.
-
-Owner executable on this machine:
-
-`D:\Program_Leo\INSO_Leo\dist\INSO_V1.2\INSO_V1.2.exe`
-
-Local `runtime` is a junction to the already-used
-`.worktrees\v1-2-design\dist\INSO_V1.1\runtime`, preserving config, SQLite,
-Research results and historical purchase state without copying customer data
-into the generic package. This local deployed directory is NOT a portable clean
-distribution; keep its runtime target intact. Do not archive that worktree
-before migrating its live runtime safely.
-
-Frozen dependency check, artifact safety scan and actual stopped GUI startup
-passed. Smoke instance closed normally; no Start Inquiry, credentials/readiness
-probe, order replay, SMTP or Save-and-Send was executed. Final submit remains
-untested by explicit Owner instruction. Double-click the executable, then only
-start inquiry when Owner has a genuine new order. A qualifying new order now
-performs REAL Save-and-Send; Sheets write/standalone Save/generic Send stay closed.
-
-## Phase A source startup
-
-Run from the repository root:
-
-`powershell -ExecutionPolicy Bypass -File scripts\start_v12_phase_a.ps1`
-
-This starts the V1.2 production source candidate against the existing V1.1 local runtime configuration, so it reuses the already-working Sheets, Chrome/CDP and Core Vault setup. It initializes the V1.2 database additively and keeps the Production Write Gate closed. EXE packaging is Phase B and requires separate Owner approval.
-
-## Runtime files
-
-Release 不包含生产数据。部署时在 release root 下提供 Git-ignored：
-- `runtime/research.json`
-- `runtime/production.json`
-
-Chrome bootstrap 只使用显式 approved 配置：
-
-```json
-{
-  "browser_bootstrap": {
-    "executable": "C:/Approved/Chrome/Application/chrome.exe",
-    "profile_dir": "D:/Program_Leo/INSO_CDP/chrome-profile",
-    "debug_port": 9222,
-    "ready_timeout_seconds": 30
-  }
-}
-```
-
-Profile 必须已存在且固定为上述唯一 profile；程序不猜路径、不创建替代 profile。CDP 已可用时复用；否则只启动同一 approved Chrome/profile。受保护 Chrome 永不关闭，只按 ownership 清理程序自己的标签。
-
-INSO ordinary authentication 使用共享 runtime helper + Core Vault 自动恢复；只有 CAPTCHA / OTP / device verification 等人工安全挑战需要 Owner。
-
-## Secrets / diagnostics
-
-不要把 runtime config、OAuth client/grant、browser profile、SQLite、Excel 或 credential 放进 release artifact。
-
-Launcher 日志位于 `runtime/logs/INSO_V1.2.log`，只允许 sanitized diagnostics。缺少 V1.2 production adapters 时应用会明确停止，不会静默退回 V1.1-only processing。报告只能包含 site/config readiness 与安全错误类型，不包含 credential value。
+**Safety:** release authorization ≠ unrestricted Google write, native purchase, quotation button, email send or bulk order processing. Original full release history/procedures: [pinned release doc](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/docs/WINDOWS_RELEASE.md); [historical receipts](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/V16_RELEASE_REPORT.md); [protected CDP](CDP_SESSION_POLICY.md).

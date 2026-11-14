@@ -1,15 +1,7 @@
-# Quotation module
+# Quotation — native result classification
 
-RFQ-005 adds only `update_result.parse_update_popup`: pure parsing of the
-Owner-confirmed 报价更新完成 title/counts into INSERTED/ALREADY_EXISTS/UNCONFIRMED.
-Display whitespace is ignored for this popup alone; raw quotation fields are not
-normalized. Generic success, zero/zero, malformed/duplicate/abnormal counts do not
-prove success. No pricing, formula, tax, margin, network, Sheets, browser or login
-implementation belongs here. Orchestration remains workflow; UI remains launcher;
-input/range/status read remains sheets. Live dialog/role acceptance is UNKNOWN.
+This is **not a separate scheduler**. `src/quotation/update_result.py` parses the original native `报价更新完成` result into `INSERTED / ALREADY_EXISTS / UNCONFIRMED`; malformed/zero/ambiguous counts do not prove success.
 
-Owner correction 2026-10-07: the actual target is `报价输入`; the former
-“报价输入子表” is an incorrect historical name, never an alias. Sheets owns the
-minimal metadata title/gid binding plus exact14 headers, validated before Workflow
-opens the UI or writes input. Popup parsing and inserted/existing success remain
-unchanged. Live-only geometry, DOM, Script delay and session remain UNKNOWN.
+Workflow coordinates exact source status/identity, original `报价输入` 14 RAW cells, Google receipt, **at most one** approved CDP `更新报价` click, read/parse of the result, durable UNKNOWN hold and later source reconciliation. A `未发` pending inquiry does not by itself qualify as a quotation candidate. Owner 2026-11-13 removed pre-click 14-cell readback **only**, not source identity, receipt verification or unknown write safety.
+
+[Detailed historical result and worksheet naming rules](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/docs/modules/QUOTATION.md) · [Sheets](SHEETS.md) · [Workflow](WORKFLOW.md).

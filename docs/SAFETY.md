@@ -1,29 +1,13 @@
-# 通用安全边界
+# INSO LEO — Safety / Write Gate (current)
 
-CEO 兼任日常 Safety Reviewer。原则：**最低充分安全、明确边界、fail closed。**
+**GREEN:** read code/Git, inspect live processes/logs/DB safely, analyze authorized production data read-only, run isolated fake/synthetic tests, use supported Agent Computer Use/CLI/API for authorized non-effect inspection.
 
-## GREEN — Main 可自主
+**YELLOW — explicit scoped Owner authority:** real Google workbook Editor grant or production write, INSO purchase/Save-and-Send, quotation-button effect, SMTP send, production release/overwrite/restore, destructive Git or security-account changes. One clearly bounded authorization covers repeated safe mechanics inside that exact scope; do not ask again for routine technical steps.
 
-- Repo/代码/文档读取与普通开发。
-- synthetic/fake 测试、已授权 read-only live 验证。
-- 未产生真实业务副作用的临时页面/预览。
-- 开发分支普通 commit/push。
+**RED — never without explicit exception and safe proof:** replay UNKNOWN purchases/quotes/emails, clear `SENT/UNKNOWN` or durable effect holds to force progress, invent source dates/identity/success, alter unrelated rows, delete unknown dirty worktree/physical CDP profile/runtime/SQLite/WAL/SHM, bypass CAPTCHA/OTP/2SV, leak secrets or force-kill the only Chrome 9222.
 
-## YELLOW — 需 Owner/CEO 明确授权
+**Agent Computer Use is ALLOWED** as of Owner 2026-11-14 (screen read/click/type where capability exists), but **GUI-tool permission is separate from business external-effect permission**. Original app-owned CDP remains protected under [CDP policy](CDP_SESSION_POLICY.md).
 
-- 真实外部写入、删除、覆盖、发送、下单、付款或迁移。
-- 打开 Production Write Gate。
-- 新增/改变真实 Credential 行为。
-- reset/clean/覆盖未知工作等高风险 Git 操作。
+**Interruption-safe enforcement:** before a real effect, record target/authorization/pre-state/hold in existing RFQ execution log **and native persistent guard**; after, record external receipt/confirmed outcome or UNKNOWN. New window must inspect live process and effects before any replay. Single active Executor. CEO rejects review if unknown effects are overwritten or current status is falsely inferred from chat shutdown.
 
-一次边界明确的授权可覆盖同一阶段的重复机械动作；范围或风险变化再升级。
-
-## RED — 禁止
-
-- 将 password、secret、token、cookie、Vault value 写入 Git、文档、日志、fixture 或证据文件。
-- 绕过 CAPTCHA、OTP、设备验证。
-- 目标不确定时猜测写入，或安全校验失败后静默降级。
-- 未授权修改真实订单、客户、支付等外部记录。
-- 删除未知用户工作或 force push `main`。
-
-当前 V1.2 Production Write Gate：**CLOSED**。普通技术问题本身不是 Safety escalation。
+Original historical Safety statements: [pinned copy](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/docs/SAFETY.md). Current active requirement details: [RFQ-016](../control-room/RFQ-016/TASK_SPEC.md).
