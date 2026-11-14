@@ -1,6 +1,6 @@
-# RFQ-016 — recoverable checkpoint after CEO second review c5d3ea50
+# RFQ-016 — recoverable checkpoint after CEO third review 57561e5b
 
-**Latest checkpoint:** section 6 (CEO second review `c5d3ea50`). **HEAD before this round:** `c5d3ea50`. **Round-2 code commit:** `4b227ba67ac22a018c432d17a4fa4706844314e0`. **Prior round:** sections 1–5, code `abf95cf0f6db5ae6e6b9624edb4359ffcc1e249e`. **No deployment and no new real business action.**
+**Latest checkpoint:** section 7 (CEO third review `57561e5b`). **HEAD before this round:** `57561e5b`. **Round-3 code commit:** `b45e870e328bab1183ae0a5478911d6c4575641f`. **Prior round:** sections 1–6, code `4b227ba67ac22a018c432d17a4fa4706844314e0`. **No deployment and no new real business action.**
 
 ## 1. Takeover audit (read-only, 2026-11-14 15:44–15:50 Shanghai)
 
@@ -100,3 +100,31 @@ Immutable prior logs: [41a96f0d execution log](https://github.com/Horse-Hunter/I
 - The three holds, old `inq_d65be9df…` failure, quotation-rerun refusal, GUI freeze, paused-module close and orphan page remain out of this narrow patch.
 
 **Next action:** CEO independent review of this source/test/evidence. No production deployment or promotion.
+
+## 7. CEO third review `57561e5b` — P1-E header alert guard (2026-11-14 16:42–)
+
+**Trigger:** the CEO accepted P0-A/B/C/P1-D and found one remaining gap: the header-row disposition path still called `recover_stale_alerts` without `alert_types`, which clears every active alert, including `NOTIFICATION_FAILED` and `SECURITY_EVENT`.
+
+### 7.1 Fix
+
+- `src/workflow/v12_flow.py` header-row branch now calls `recover_stale_alerts(..., alert_types={DATA_QUALITY})`. The branch still runs `_owner_completion_is_safe` first; no other closure path changed.
+- Mail, security and unknown-related alerts remain active; notification recipients and `SENT`/`UNKNOWN` rows are untouched.
+- No new state machine, no schema change, no new dependency.
+
+### 7.2 Test
+
+`tests/workflow/test_v12_flow.py::test_header_row_recovery_only_clears_data_quality_alerts`:
+- synthetic header model (`MPN`), `DATA_QUALITY` + `NOTIFICATION_FAILED` + `SECURITY_EVENT` alerts;
+- two notification recipients `SENT` and `UNKNOWN`;
+- after the header disposition, the state is `INVALID_INPUT_SKIPPED`, only `DATA_QUALITY` is recovered, `NOTIFICATION_FAILED`/`SECURITY_EVENT` remain active, and the two recipient outcomes are unchanged.
+- Before the fix this test failed with all alerts cleared; after the fix it passes.
+
+### 7.3 Results
+
+- Round-2 final (new baseline): **3407 collected / 3380 passed / 1 skipped / 26 failed**; `.tmp/round3-baseline.xml`.
+- Round-3 final: **`3408` collected / `3381` passed / 1 skipped / 26 failed**; the 26 failed node IDs are byte-identical to the baseline.
+- New regression: **1 case**; no test deleted or weakened. `ruff check src tests` and `git diff --check` pass.
+- No deployment, no EXE replacement, no process stop, no Chrome operation, no Google/INSO/SMTP write. Row 221 receipt and the three V13 holds are unchanged.
+- SHAHAB/115 remains exactly as recorded in section 6.3: live Sheet status `已报价给客户`, durable purchase `MANUAL_REVIEW`, no saved receipt, native INSO `NOT_VERIFIED`. This narrow fix does not change that business state.
+
+**Next action:** CEO independent Review of this one-file source/test/evidence delta. Production trial and promotion remain separate Owner gates.

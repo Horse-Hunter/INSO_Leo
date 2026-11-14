@@ -1,0 +1,154 @@
+{
+  "task": "RFQ-016 — CEO third review 57561e5b P1-E header alert-recovery guard",
+  "captured_at": "2026-11-14T16:49:05+08:00",
+  "branch": "workbuddy/v16-rfq016-stabilization",
+  "review_commit": "57561e5b",
+  "head_before": "57561e5b",
+  "code_commit": "b45e870e328bab1183ae0a5478911d6c4575641f",
+  "scope": "one narrow source fix and one deterministic regression; no deployment, no real business write",
+  "baseline": {
+    "collected": 3407,
+    "passed": 3380,
+    "failed": 26,
+    "skipped": 1,
+    "timestamp": "2026-11-14T16:27:32.408992+08:00",
+    "duration_seconds": 319.7,
+    "failed_nodeids": [
+      "tests.launcher.test_backend::test_google_resource_startup_failure_permanently_blocks_writer",
+      "tests.launcher.test_backend::test_google_resource_startup_restores_existing_hold_and_reuses_store",
+      "tests.launcher.test_google_quote_update::test_confirming_refresh_never_releases_other_unknown_or_read_hold",
+      "tests.launcher.test_google_quote_update::test_document_write_admission_serializes_threads_but_allows_same_owner_nesting",
+      "tests.launcher.test_google_quote_update::test_failed_busy_read_with_unchanged_markers_does_not_prove_owner_abandoned_it",
+      "tests.launcher.test_google_quote_update::test_failed_owned_read_navigated_to_error_page_recovers_in_same_scope",
+      "tests.launcher.test_google_quote_update::test_nested_clients_share_document_barrier",
+      "tests.launcher.test_google_quote_update::test_owner_adoption_at_refresh_close_retains_shared_hold",
+      "tests.launcher.test_google_quote_update::test_read_only_history_survives_protected_scope_reattachment",
+      "tests.launcher.test_google_quote_update::test_recovery_lease_excludes_all_writers_until_recovery_finishes",
+      "tests.launcher.test_google_quote_update::test_recovery_waits_for_inflight_writer_and_then_blocks_new_writers",
+      "tests.launcher.test_google_quote_update::test_refresh_settlement_does_not_clear_separate_identity_uncertainty",
+      "tests.launcher.test_google_quote_update::test_unconfirmed_write_keeps_cross_service_barrier_after_close[protected]",
+      "tests.launcher.test_google_quote_update::test_unconfirmed_write_keeps_cross_service_barrier_after_close[script]",
+      "tests.launcher.test_google_quote_update::test_write_surface_becoming_busy_during_close_blocks_another_client",
+      "tests.launcher.test_google_web::test_cross_scope_recovery_preserves_page_and_blocks_writes[2026]",
+      "tests.launcher.test_google_web::test_cross_scope_recovery_preserves_page_and_blocks_writes[SHAHAB]",
+      "tests.launcher.test_google_web::test_fallback_connection_inherits_shared_root_barrier",
+      "tests.launcher.test_google_web::test_quarantined_read_blocks_write_from_another_service",
+      "tests.launcher.test_google_web::test_retained_protected_read_allows_only_one_isolated_recovery",
+      "tests.launcher.test_order_mail::test_order_mail_worker_passes_shared_runtime_admission",
+      "tests.launcher.test_read_page_recovery::test_closed_read_target_never_clears_separate_unknown_write",
+      "tests.launcher.test_read_page_recovery::test_failed_target_proof_never_releases_read_quarantine",
+      "tests.launcher.test_sales_order_preflight::test_sales_browser_binds_shared_admission_before_creating_page",
+      "tests.launcher.test_sales_order_preflight::test_sales_stops_before_browser_when_resource_ledger_unready",
+      "tests.launcher.test_sales_order_preflight::test_sales_without_admission_stops_before_browser_acquisition"
+    ]
+  },
+  "final": {
+    "collected": 3408,
+    "passed": 3381,
+    "failed": 26,
+    "skipped": 1,
+    "timestamp": "2026-11-14T16:43:41.291280+08:00",
+    "duration_seconds": 312.2,
+    "failed_nodeids": [
+      "tests.launcher.test_backend::test_google_resource_startup_failure_permanently_blocks_writer",
+      "tests.launcher.test_backend::test_google_resource_startup_restores_existing_hold_and_reuses_store",
+      "tests.launcher.test_google_quote_update::test_confirming_refresh_never_releases_other_unknown_or_read_hold",
+      "tests.launcher.test_google_quote_update::test_document_write_admission_serializes_threads_but_allows_same_owner_nesting",
+      "tests.launcher.test_google_quote_update::test_failed_busy_read_with_unchanged_markers_does_not_prove_owner_abandoned_it",
+      "tests.launcher.test_google_quote_update::test_failed_owned_read_navigated_to_error_page_recovers_in_same_scope",
+      "tests.launcher.test_google_quote_update::test_nested_clients_share_document_barrier",
+      "tests.launcher.test_google_quote_update::test_owner_adoption_at_refresh_close_retains_shared_hold",
+      "tests.launcher.test_google_quote_update::test_read_only_history_survives_protected_scope_reattachment",
+      "tests.launcher.test_google_quote_update::test_recovery_lease_excludes_all_writers_until_recovery_finishes",
+      "tests.launcher.test_google_quote_update::test_recovery_waits_for_inflight_writer_and_then_blocks_new_writers",
+      "tests.launcher.test_google_quote_update::test_refresh_settlement_does_not_clear_separate_identity_uncertainty",
+      "tests.launcher.test_google_quote_update::test_unconfirmed_write_keeps_cross_service_barrier_after_close[protected]",
+      "tests.launcher.test_google_quote_update::test_unconfirmed_write_keeps_cross_service_barrier_after_close[script]",
+      "tests.launcher.test_google_quote_update::test_write_surface_becoming_busy_during_close_blocks_another_client",
+      "tests.launcher.test_google_web::test_cross_scope_recovery_preserves_page_and_blocks_writes[2026]",
+      "tests.launcher.test_google_web::test_cross_scope_recovery_preserves_page_and_blocks_writes[SHAHAB]",
+      "tests.launcher.test_google_web::test_fallback_connection_inherits_shared_root_barrier",
+      "tests.launcher.test_google_web::test_quarantined_read_blocks_write_from_another_service",
+      "tests.launcher.test_google_web::test_retained_protected_read_allows_only_one_isolated_recovery",
+      "tests.launcher.test_order_mail::test_order_mail_worker_passes_shared_runtime_admission",
+      "tests.launcher.test_read_page_recovery::test_closed_read_target_never_clears_separate_unknown_write",
+      "tests.launcher.test_read_page_recovery::test_failed_target_proof_never_releases_read_quarantine",
+      "tests.launcher.test_sales_order_preflight::test_sales_browser_binds_shared_admission_before_creating_page",
+      "tests.launcher.test_sales_order_preflight::test_sales_stops_before_browser_when_resource_ledger_unready",
+      "tests.launcher.test_sales_order_preflight::test_sales_without_admission_stops_before_browser_acquisition"
+    ]
+  },
+  "comparison": {
+    "same_26_failed_nodeids": true,
+    "new_test_nodeids": [
+      "tests.workflow.test_v12_flow::test_header_row_recovery_only_clears_data_quality_alerts"
+    ],
+    "removed_test_nodeids": [],
+    "new_test_count": 1,
+    "removed_test_count": 0
+  },
+  "checks": {
+    "ruff": "pass (python -m ruff check src tests)",
+    "diff_check": "pass (git diff --check)",
+    "real_external_verification": "none in this narrow fix; prior SHAHAB/115 read-only evidence remains unchanged"
+  },
+  "live_read_only_snapshot": {
+    "exe_path": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6\\INSO_V1.6.exe",
+    "exe_sha256": "E9E3DA33417414ABAC53F8A88A67D9F053BCDAEAB9730EAE9AD8BD7870DFFAD0",
+    "exe_bytes": 8422619,
+    "processes": [
+      {
+        "pid": 38948,
+        "role": "app",
+        "command": "--start-inquiry"
+      },
+      {
+        "pid": 34304,
+        "role": "watcher",
+        "command": "--watch-runtime"
+      }
+    ],
+    "chrome_cdp": {
+      "port": 9222,
+      "owner_pid": 24164,
+      "touched": false
+    },
+    "sqlite": {
+      "states": {
+        "HUMAN_COMPLETED": 35,
+        "INVALID_INPUT_SKIPPED": 1,
+        "PURCHASE_RECORDED": 24
+      },
+      "active_v12_alerts": 0,
+      "active_v13_holds": [
+        "inq_71f4a2f5ef8678223385b6e2",
+        "inq_d65be9df3c7cc40b65cbffaa",
+        "unresolved:0ca37229d24ebcaa9da57f923f6477b9ac500ab3169a46d0095171019a36f35a"
+      ],
+      "row_221": {
+        "business_state": "PURCHASE_RECORDED",
+        "outcome": "SAVED",
+        "saved_record_ref": "rec_440fafd372440ecf9dacabf660dd155d"
+      }
+    }
+  },
+  "p1e_change": {
+    "file": "src/workflow/v12_flow.py",
+    "header_row_alert_recovery": "DATA_QUALITY only",
+    "preserved": [
+      "NOTIFICATION_FAILED",
+      "SECURITY_EVENT",
+      "SENT",
+      "UNKNOWN",
+      "UNKNOWN purchase states"
+    ],
+    "test": "tests.workflow.test_v12_flow::test_header_row_recovery_only_clears_data_quality_alerts"
+  },
+  "preserved_effects": [
+    "INSO row 221 purchase receipt rec_440fafd372440ecf9dacabf660dd155d",
+    "3 historical V13 quotation holds",
+    "running production EXE and PID untouched",
+    "no UNKNOWN/SENT/hold cleared",
+    "no row221 re-purchase, quote button, SMTP, reboot or deployment"
+  ]
+}
