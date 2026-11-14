@@ -972,6 +972,29 @@ def test_owner_reconciliation_keeps_a_row_whose_article_changed(tmp_path):
     assert store.business_state(inquiry_id) is BusinessState.INTERRUPTED_UNSENT
 
 
+def test_owner_reconciliation_accepts_a_completed_model_text(tmp_path):
+    """Live 2026-11-14: three rows stayed open only because the Owner completed the
+    model text later (``N6210`` → ``CELERON-N6210``). Same quantity, same class."""
+
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.STATUS_WRITE_PENDING)
+    reader = _advanced_reader("已报价给客户")
+    reader.row = replace(reader.row, cells={**reader.row.cells, "E": "CELERON-Mpn-1"})
+
+    flow.poll_and_process(reader, SHEET, now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.HUMAN_COMPLETED
+
+
+def test_owner_reconciliation_refuses_a_completed_text_with_a_different_quantity(tmp_path):
+    flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.STATUS_WRITE_PENDING)
+    reader = _advanced_reader("已报价给客户")
+    reader.row = replace(reader.row, cells={**reader.row.cells, "E": "CELERON-Mpn-1", "G": 99})
+
+    flow.poll_and_process(reader, SHEET, now=NOW + timedelta(minutes=1))
+
+    assert store.business_state(inquiry_id) is BusinessState.STATUS_WRITE_PENDING
+
+
 def test_owner_reconciliation_ignores_an_unfinished_row(tmp_path):
     flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT)
 

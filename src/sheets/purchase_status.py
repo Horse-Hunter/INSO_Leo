@@ -3,7 +3,12 @@ from dataclasses import replace
 from typing import Protocol
 
 from .brand_write import SheetRecordConflict, relocate_record
-from .pending import SheetRecordIdentity, WorksheetIdentity, WorksheetRowReader
+from .pending import (
+    SheetRecordIdentity,
+    WorksheetIdentity,
+    WorksheetRow,
+    WorksheetRowReader,
+)
 from .worksheet_schema import worksheet_schema
 
 PURCHASE_COMPLETED_STATUSES = frozenset({"发给采购", "采购已报价", "已报价给客户", "意向订单", "成交"})
@@ -61,11 +66,42 @@ def owner_resolved_status(reader: WorksheetRowReader, identity: SheetRecordIdent
     try:
         relocated = relocate_record(identity, normalized)
     except SheetRecordConflict:
+        relocated = None
+    if relocated is not None:
+        actual = [row for row in eligible if row.row_position == relocated.row_position]
+        if len(actual) == 1:
+            return str(actual[0].cells[column]).strip()
+
+    # The Owner may also have completed the model text after the order was created
+    # (``N6210`` → ``CELERON-N6210``). That is still one article when exactly one
+    # completed row carries the stored text and the same importance/quantity; two
+    # candidates stay unproven and nothing is closed.
+    stored_model = str(identity.identifying_snapshot.model or "").strip().casefold()
+    if not stored_model:
         return None
-    actual = [row for row in eligible if row.row_position == relocated.row_position]
-    if len(actual) != 1:
+    candidates = [
+        row for row in eligible
+        if stored_model in str(row.cells.get(schema.model_column) or "").strip().casefold()
+        and row.cells.get(schema.quantity_column) == identity.identifying_snapshot.quantity
+        and (schema.importance_column is None
+             or row.cells.get(schema.importance_column) == identity.identifying_snapshot.importance_raw)
+    ]
+    if len(candidates) != 1:
         return None
-    return str(actual[0].cells[column]).strip()
+    return str(candidates[0].cells[column]).strip()
+
+
+def current_row_at_identity(reader: WorksheetRowReader, identity: SheetRecordIdentity) -> WorksheetRow | None:
+    """The physical row this order occupies now, or ``None`` when it is not unique.
+
+    Used only by the Owner's explicit "recover from the sheet" action: a human is
+    pointing at the line they can see, so the physical anchor is the intended
+    binding. Callers must not treat this as an automatic identity proof.
+    """
+
+    rows = tuple(reader.read_rows(identity.worksheet))
+    anchors = [row for row in rows if row.row_position == identity.row_position]
+    return anchors[0] if len(anchors) == 1 else None
 
 
 def _locate_purchase_record(reader, identity, expected_brand, brand_match=None):

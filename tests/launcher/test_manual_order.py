@@ -42,6 +42,39 @@ def prepared(tmp_path, monkeypatch):
     return backend, flow, store, ledger, source, research, writer, result.inquiry_id
 
 
+def test_recover_from_sheet_closes_an_order_the_owner_finished_by_hand(tmp_path, monkeypatch):
+    """Owner request 2026-11-14: a purchase may have failed, but if the row already
+    says it was quoted to the customer, one right-click must accept that and close
+    the order — no need to walk the skipped steps."""
+
+    backend, _, store, ledger, source, _, _, inquiry = prepared(tmp_path, monkeypatch)
+    ledger.set_business_state(inquiry, BusinessState.PURCHASE_EXCEPTION,
+        WorkflowEvent("evt_parked", inquiry, EventType.AI_RECOGNITION_MISMATCH, NOW, "workflow"))
+    source.rows[0] = WorksheetRow(3, {"A": "已报价给客户", "C": "A", "D": "Customer",
+                                      "E": "FIXED-PART", "F": "NewBrand", "G": 19})
+
+    backend._execute_order_action(("request", inquiry, "resync", None, None))
+
+    result = backend.get_manual_order_result()
+    assert result.success and "已报价给客户" in result.message
+    assert ledger.business_state(inquiry) is BusinessState.HUMAN_COMPLETED
+    assert store.get_by_inquiry_id(inquiry).record_identity.identifying_snapshot.model == "FIXED-PART"
+
+
+def test_recover_from_sheet_refuses_a_row_that_is_not_completed(tmp_path, monkeypatch):
+    backend, _, _, ledger, source, _, _, inquiry = prepared(tmp_path, monkeypatch)
+    ledger.set_business_state(inquiry, BusinessState.PURCHASE_EXCEPTION,
+        WorkflowEvent("evt_parked", inquiry, EventType.AI_RECOGNITION_MISMATCH, NOW, "workflow"))
+    source.rows[0] = WorksheetRow(3, {"A": "未发", "C": "A", "D": "Customer",
+                                      "E": "FIXED-PART", "F": "NewBrand", "G": 19})
+
+    backend._execute_order_action(("request", inquiry, "resync", None, None))
+
+    result = backend.get_manual_order_result()
+    assert not result.success and "未发" in result.message
+    assert ledger.business_state(inquiry) is BusinessState.PURCHASE_EXCEPTION
+
+
 def test_purchase_retry_rereads_changed_fields_reuses_coordinator_and_same_inquiry(tmp_path, monkeypatch):
     backend, _, store, ledger, source, research, writer, inquiry = prepared(tmp_path, monkeypatch)
     before = ledger.event_history(inquiry)

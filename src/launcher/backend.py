@@ -81,6 +81,7 @@ from src.workflow.inso_query import run_inso_query
 from src.workflow.purchase_follow_up import PurchaseFollowUp
 from src.workflow.service import OrderResourceOwnershipError
 from src.workflow.v12_contracts import (
+    BusinessState,
     DeliveryOutcome,  # noqa: F401 - compatibility injection seam
     EventType,
     NotificationCommand,
@@ -89,6 +90,7 @@ from src.workflow.v12_contracts import (
     PurchaseDraftResult,
     PurchaseOutcome,
     ReasonCode,
+    WorkflowEvent,
 )
 from src.workflow.v12_duplicate import InsoDuplicateHistoryChecker
 from src.workflow.v12_faults import FaultScope, V12Fault
@@ -1983,6 +1985,11 @@ class ProductionBackend(GuiBackend):
                     except ValueError:
                         return False
                     return True
+                if action == "resync":
+                    # Owner action: re-read the row the human is pointing at and make
+                    # the ledger agree with it. Requires a live source read, so the
+                    # execution path owns the real checks.
+                    return True
                 return action == "edit"
             except (KeyError, sqlite3.Error, V12DatabaseError):
                 return False
@@ -2026,7 +2033,8 @@ class ProductionBackend(GuiBackend):
                     V12BusinessLabel.HUMAN_COMPLETED,
                 }
                 and order.delivery_status != "UNKNOWN")
-        return action == "edit" or (action == "quotation" and self._manual_quote is not None)
+        return (action == "edit" or action == "resync"
+                or (action == "quotation" and self._manual_quote is not None))
 
     def request_order_action(self, inquiry_id, action, *, field=None, value=None):
         with self._manual_condition:
@@ -2139,6 +2147,42 @@ class ProductionBackend(GuiBackend):
         finally:
             self._owner_single_order = previous
 
+    def _recover_order_from_sheet(self, item, identity) -> str:
+        """Owner action: make this order agree with the row it currently occupies.
+
+        The human right-clicks the line they can see, so the physical row is the
+        binding. Only a completed sheet status is accepted — anything else is
+        reported back rather than invented — and the ledger is re-pointed at the
+        observed cells so later reads stop disagreeing with the sheet.
+        """
+
+        from src.sheets.pending import identify_worksheet_row
+        from src.sheets.purchase_status import (
+            PURCHASE_COMPLETED_STATUSES,
+            current_row_at_identity,
+        )
+        from src.sheets.worksheet_schema import worksheet_schema
+
+        row = current_row_at_identity(self._manual_reader, identity)
+        if row is None:
+            raise ValueError("表格里找不到这一行（可能已删除），未做任何修改。")
+        schema = worksheet_schema(identity.worksheet.worksheet)
+        observed = row.cells.get(schema.status_column)
+        status = observed.strip() if isinstance(observed, str) else ""
+        if status not in PURCHASE_COMPLETED_STATUSES:
+            raise ValueError(f"该行当前状态是「{status or '空'}」，不是已完成状态，未做任何修改。")
+        refreshed = identify_worksheet_row(identity.worksheet, row)
+        if not self._store.rebind_identity(item.id, refreshed):
+            raise ValueError("订单记录未能更新，未做任何修改。")
+        now = utc_now()
+        self._v12_store.set_business_state(
+            item.inquiry_id, BusinessState.HUMAN_COMPLETED,
+            WorkflowEvent(f"evt_{uuid.uuid4().hex}", item.inquiry_id,
+                          EventType.HUMAN_RESOLUTION_RECORDED, now, "workflow"),
+        )
+        self._v12_store.recover_stale_alerts(item.inquiry_id, at=now)
+        return f"已按表格恢复：当前状态「{status}」，该订单已结案。"
+
     @foreground_resources
     def _execute_order_action_impl(self, request):
         request_id, inquiry, action, field, value = request
@@ -2165,6 +2209,13 @@ class ProductionBackend(GuiBackend):
                 return
             item = self._store.get_by_inquiry_id(inquiry)
             identity = item.record_identity
+            if action == "resync":
+                message = self._recover_order_from_sheet(item, identity)
+                self._refresh_history(force=True)
+                with self._lock:
+                    self._manual_result = ManualOrderResult(request_id, inquiry, action, True, message)
+                self._notify()
+                return
             record, status = current_record(self._manual_reader, identity.worksheet, identity.row_position)
             scoped_reader = SingleRowReader(self._manual_reader, identity.worksheet, identity.row_position)
             if action == "edit":

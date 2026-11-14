@@ -532,7 +532,8 @@ class InsoDashboardApp:
             return
         self._tree.selection_set(inquiry)
         menu = Menu(self._tree, tearoff=False)
-        for label, action in (("重跑采购流程", "purchase"), ("重跑报价流程", "quotation"),
+        for label, action in (("按表格恢复状态", "resync"),
+                              ("重跑采购流程", "purchase"), ("重跑报价流程", "quotation"),
                               ("重跑 TP 价格", "tp")):
             enabled = (self._backend.order_action_hint(inquiry, action) if hasattr(self, "_view")
                        else self._backend.can_order_action(inquiry, action))
