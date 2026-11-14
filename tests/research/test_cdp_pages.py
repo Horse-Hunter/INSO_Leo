@@ -538,60 +538,85 @@ def test_native_identity_does_not_override_legacy_write_marker_quarantine():
     assert native_page_owner(page) == 'google-operation'  # Explicit read-only capability only.
 
 
-# --- RFQ-016 phase 2: a target Chrome already removed is not a leak ----------
-def test_close_false_with_an_absent_target_is_cleanup_complete():
-    """`Target.closeTarget` answers success:false for a page that is already gone.
+# --- RFQ-016 phase 2: only Chromium's own "no such target" proves absence -----
+MISSING_TARGET = "Protocol error (Target.closeTarget): No target with given id found"
 
-    The old code treated that answer as an unconfirmed cleanup, which invalidated
-    the shared page admission for the rest of the process: every later module
-    then failed instantly (21:44/21:46 in the 2026-11-13 production log) until a
-    full restart. A target that no longer exists cannot be leaked.
-    """
-    from src.research.cdp_pages import PageResourceAdmission, bind_page_admission
 
-    protocol = RacingTargets(spoof=True)
+class _ProtocolError(RuntimeError):
+    """Stands in for playwright._impl._errors.Error from the CDP client."""
+
+
+def _send_with(protocol, *, close, extra=None):
+    """Route Target.closeTarget through a test double, keep everything else."""
     original = protocol.send
 
     def send(command, params):
         if command == "Target.closeTarget":
             protocol.calls.append((command, params))
             protocol.closed.append(params["targetId"])
-            return {"success": False}
-        if command == "Target.getTargetInfo":
+            if isinstance(close, BaseException):
+                raise close
+            return close
+        if extra is not None and command == "Target.getTargetInfo":
             protocol.calls.append((command, params))
-            return {"targetInfo": {"targetType": "page"}}  # no such target any more
+            return extra(params)
         return original(command, params)
 
     protocol.send = send
+
+
+def test_close_target_missing_id_error_is_cleanup_complete():
+    """Chrome 156 raises on a vanished target; that is a positive answer.
+
+    Measured against the live 9222 session: both closeTarget and getTargetInfo
+    answer ``Protocol error (...): No target with given id found``. Treating it as
+    an unconfirmed cleanup is what invalidated the shared page admission and made
+    every later run fail in 0.000 s (2026-11-13 21:44/21:46) until a restart.
+    """
+    from src.research.cdp_pages import PageResourceAdmission, bind_page_admission
+
+    protocol = RacingTargets(spoof=True)
+    _send_with(protocol, close=_ProtocolError(MISSING_TARGET))
     admission = PageResourceAdmission()
     bind_page_admission(protocol, admission)
 
     with pytest.raises(ValueError) as caught:
         new_background_page(protocol, protocol, timeout_ms=1234)
 
-    # The original fault survives and the shared resources stay usable.
-    assert str(caught.value) == "TAB_TARGET_ID_MISMATCH"
-    assert admission.is_open_nonblocking() is True
+    assert str(caught.value) == "TAB_TARGET_ID_MISMATCH"   # the original fault survives
+    assert admission.is_open_nonblocking() is True          # nothing was poisoned
     assert not getattr(protocol, "_inso_page_resource_failed", False)
 
 
-def test_close_false_with_a_surviving_target_still_fails_closed():
+def test_close_target_success_false_is_not_proof_of_absence():
+    """An anomalous success:false must fail closed, whatever getTargetInfo says."""
     from src.research.cdp_pages import PageTargetCleanupError
 
     protocol = RacingTargets(spoof=True)
-    original = protocol.send
+    # A missing/mismatched targetInfo is deliberately NOT accepted as absence.
+    _send_with(protocol, close={"success": False},
+               extra=lambda params: {"targetInfo": {"targetType": "page"}})
 
-    def send(command, params):
-        if command == "Target.closeTarget":
-            protocol.calls.append((command, params))
-            protocol.closed.append(params["targetId"])
-            return {"success": False}
-        if command == "Target.getTargetInfo":
-            protocol.calls.append((command, params))
-            return {"targetInfo": {"targetId": params["targetId"]}}  # still there
-        return original(command, params)
+    with pytest.raises(PageTargetCleanupError):
+        new_background_page(protocol, protocol, timeout_ms=1234)
 
-    protocol.send = send
+
+def test_close_target_transport_fault_still_fails_closed():
+    from src.research.cdp_pages import PageTargetCleanupError
+
+    protocol = RacingTargets(spoof=True)
+    _send_with(protocol, close=TimeoutError("synthetic close timeout"))
+
+    with pytest.raises(PageTargetCleanupError):
+        new_background_page(protocol, protocol, timeout_ms=1234)
+
+
+def test_close_target_other_protocol_error_still_fails_closed():
+    """Only the exact not-found statement counts; a different protocol error does not."""
+    from src.research.cdp_pages import PageTargetCleanupError
+
+    protocol = RacingTargets(spoof=True)
+    _send_with(protocol, close=_ProtocolError("Protocol error (Target.closeTarget): Not allowed"))
 
     with pytest.raises(PageTargetCleanupError):
         new_background_page(protocol, protocol, timeout_ms=1234)

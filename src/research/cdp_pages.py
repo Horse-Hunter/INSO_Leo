@@ -342,27 +342,36 @@ def close_research_page(page):
         raise fault from failure
 
 
-def _target_is_gone(session, target_id):
-    """Chrome's own answer that the created target no longer exists."""
-    try:
-        info = bounded_browser_call(session, "send", "Target.getTargetInfo",
-                                    {"targetId": target_id})
-    except Exception:  # noqa: BLE001 - an unreadable target is not proof of absence
-        return False
-    target = info.get("targetInfo") if isinstance(info, dict) else None
-    if not isinstance(target, dict):
-        return False
-    return target.get("targetId") != target_id
+# Chromium's own statement that the target does not exist. Measured on Chrome 156
+# through this exact client: both Target.getTargetInfo and Target.closeTarget raise
+# ``playwright._impl._errors.Error`` with
+# ``Protocol error (Target.closeTarget): No target with given id found``
+# (target_handler.cc, kTargetNotFound). It is a positive protocol answer, so it can
+# prove absence; nothing else may be inferred from a response body.
+TARGET_NOT_FOUND = "No target with given id found"
+
+
+def _is_missing_target(error):
+    """True only for Chromium's explicit 'this target does not exist' answer."""
+    return TARGET_NOT_FOUND in str(error)
 
 
 def _close_created_target(session, target_id):
-    if bounded_browser_call(session, "send", "Target.closeTarget", {"targetId": target_id}).get("success") is not True:
-        # Chrome answers success:false for a target that is already gone: the page
-        # can close itself, and a navigation error tears down the document. A
-        # target that no longer exists cannot be leaked, so prove absence instead
-        # of declaring the shared page resources unusable until restart.
-        if _target_is_gone(session, target_id):
+    try:
+        response = bounded_browser_call(session, "send", "Target.closeTarget",
+                                        {"targetId": target_id})
+    except Exception as exc:
+        if _is_missing_target(exc):
+            # The page closed itself (or a navigation error tore the document
+            # down). A target that no longer exists cannot be leaked, so cleanup
+            # is complete instead of the shared page resources being declared
+            # unusable until a program restart.
             return
+        raise
+    if not isinstance(response, dict) or response.get("success") is not True:
+        # Any other answer - including an anomalous ``success:false`` - is not a
+        # statement of absence. Mismatched ids, missing fields and transport
+        # faults must keep failing closed.
         raise RuntimeError("CDP_TARGET_CLOSE_UNCONFIRMED")
 
 
