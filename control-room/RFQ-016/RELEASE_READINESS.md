@@ -1,16 +1,14 @@
-# RFQ-016 — CEO release / acceptance gates (2026-11-14)
+# RFQ-016 — safety acceptance/release gate (CEO second Review, 2026-11-14)
 
-**Current:** `EXECUTOR_REPORTED_API_PURCHASE_DONE / CEO_CHANGES_REQUESTED / INSTALLED_TRIAL_NOT_MAIN`. This is a source/document review, not a fresh Windows check. See [CEO Review](REVIEW.md), [checkpoint](EXECUTION_LOG.md), [Executor report](FINAL_REPORT.md).
+**State: `CHANGES_REQUESTED / NO_CODE_DEPLOYMENT / NO_OWNER_PROMOTION`.** See [REVIEW](REVIEW.md) and [latest Executor report](FINAL_REPORT.md). Prior CEO Review [04222709](https://github.com/Horse-Hunter/INSO_Leo/blob/04222709295a6a5fbfc9b33f0485cc0ccd9a9aa1/control-room/RFQ-016/REVIEW.md).
 
-| Area | Verdict |
+| Gate | Current evidence |
 | --- | --- |
-| Exact row221 procurement | Executor reported one native Save-and-Send reconciled `SAVED` / `rec_440fafd372440ecf9dacabf660dd155d`; independent fresh live check NOT_VERIFIED |
-| Google API | Executor reported enabled Editor, `A221=发给采购/F221=FTDI` API readback; independent live entitlement NOT_VERIFIED |
-| Quote | `NO_RECENT_QUOTE` because no supplier quote, so **0 legitimate writes and 0 native button clicks**; future quote path not yet live-tested |
-| Task-centre 60 orders | Executor reported 35 human complete, 24 purchased, 1 invalid/header row, 0 active V12 alerts; **3 old quote holds still persist** |
-| Safety blockers | Automatic closure of possibly-sent/unknown states; all-alert recovery; resync identity rebind without original identity/hold guard; physical-row display fallback after match failure |
-| Tests | Executor-reported 3349 pass/1 skip/26 fail; no new machine-readable final failure comparison/manifest committed |
-| Reliability | Manual quote refusal, stale GUI interval, paused-exit deadlock, orphan tab, recurring old held quote failure remain |
-| Release line | Latest installed `E9E3DA33…` **reported trial**, not Owner-accepted `main`. Branch `develop` retains governance; current code is unmerged on original Executor branch |
+| Real row221 purchase | Executor reported INSO `rec_440fafd3…` saved, Google status/brand API readback; no supplier quote/no button/no mail; no new CEO live verification |
+| Fixed source | `abf95cf0` not installed, not in `develop`; old EXE SHA `E9E3DA33…` still reported running |
+| Tests | Executor JSON: baseline 3376/3349pass/26fail/1skip → final 3397/3370pass/26fail/1skip; identical ordered 26 fail IDs, 21 new tests; CEO verified JSON/patch, did not run suite |
+| Safety | P0-A other business states bypass durable unresolved purchase; P0-B old auto-completion physical row fallback ignores qty and accepts blank model; P0-C resync lets STATUS_WRITE_PENDING through when purchase SAVED; P1-D unproven row filtered as 需核对 but painted calm in actual Workbench |
+| Historical source/DB contradiction | SHAHAB row115 `inq_99275e8e72b43fd6616fd686` `MANUAL_REVIEW / RECONCILIATION_UNREADABLE` but `HUMAN_COMPLETED`, previously recovered unknown alert. Read-only audit APPROVED; no write/replay/SQL correction |
+| Other risks | 3 old quote holds, `inq_d65be9df…` repeated failure, quote manual refusal, GUI stale, paused-window exit, browser orphan tab |
 
-**Required next:** focused P0/P1 safety regressions + minimum fix; compare exact failed IDs to prior baseline; preserve UNKNOWN/SENT/older original browser, business SQLite and backups; only then request renewed independent Review. Production rebuild or forced stop requires separate scoped release/safety authorization. **No automatic `develop → main` promotion.**
+**Exit criteria:** narrow P0/P1 tests/patch and renewed independent source Review; fresh production snapshot before any release; explicit separate release approval and Owner sign-off after real trial before `develop → main`. Do not use “0 V12 alerts” as “0 unknown effects.”
