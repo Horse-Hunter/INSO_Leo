@@ -10,7 +10,9 @@
 ## 1. Takeover audit (read-only)
 
 - Read `AI_START_HERE.md`, `AGENTS.md`, `control-room/CEO_HANDOVER.md`, `control-room/COORDINATION.md`, `RFQ-019/{TASK_SPEC,EXECUTION_LOG,RELEASE_PREP_REPORT,RELEASE_READINESS,RISK_REGISTER}.md`, `RFQ-018/{REVIEW,RELEASE_READINESS}.md`, `docs/REPORTING.md`, `docs/WINDOWS_RELEASE.md`.
-- **Discrepancy recorded:** requested `docs/BRANCH_POLICY.md` does not exist on this branch (only `docs/CDP_SESSION_POLICY.md`, `docs/SAFETY.md`, …); requested `control-room/RFQ-019/REVIEW.md` does not exist (RFQ-019 has `TASK_SPEC`/`EXECUTION_LOG`/`FINAL_REPORT`/`RELEASE_READINESS`/`RELEASE_PREP_REPORT`/`RISK_REGISTER`). No file was invented to fill either gap.
+- **Discrepancy recorded:** requested `docs/BRANCH_POLICY.md` does not exist **on this branch** (it exists on `develop`; only `docs/CDP_SESSION_POLICY.md`, `docs/SAFETY.md`, … are copied here). `control-room/RFQ-019/REVIEW.md` was **not visible to this window when the work started**; the CEO then committed it as `64dba150` on this same branch, so it does exist — the earlier wording wrongly implied it never existed in the repository. No file was invented to fill either gap.
+
+> **Correction (2026-11-15, RFQ-021):** the two statements above are the corrected form, per the RFQ-020 CEO Review. The original text claimed both files were absent; that was true only of this executor's local view at that moment, not of the repository.
 - `git status --porcelain` clean before work; no stash; only the pre-existing `main` and old worktrees besides this one (`git worktree list --porcelain`).
 - `25894efa` is an **ancestor** of HEAD. `git diff --name-status 25894efa..HEAD` = 11 files, all `control-room/*` docs and `docs/evidence/rfq019/*.json`; `git diff --name-only 25894efa..HEAD -- src tests scripts packaging requirements-windows-release.lock requirements-windows-release.txt` is **empty**. The reviewed source is therefore exactly the code in this build.
 - No test suite was rerun (RFQ-018 evidence reused: 4188 collected / 4187 passed / 1 skipped / 0 failed). No source, test, or config file was modified in this RFQ.
@@ -102,7 +104,7 @@ The idle check created `<staging>/runtime/logs/v13-idle-self-check.json`. Its co
 | WAL/SHM | none | none |
 | Chrome 9222 pages | 15 | 15 |
 
-**Later observation (23:00, after the checks, for honesty):** the running production program kept working, so at the final re-read the production SQLite mtime had advanced to epoch `1794667251` and Chrome 9222 showed **14** pages. Both movements are the live program's own activity during a still-running business session — this RFQ never attached to CDP, never opened/closed a page, and never wrote to the database. The before/after equality above is therefore scoped to the self-check window (22:38–22:45), not to the whole evening.
+**Later observation (timing corrected 2026-11-15):** the running production program kept working, so at a re-read **taken at about 22:47 Shanghai, before commit `6f1b1d25`**, the production SQLite mtime had advanced to epoch `1794667251` and Chrome 9222 showed **14** pages. The earlier "23:00" label was wrong: it was written from memory after the fact, not read from the host clock, and it post-dates the commit that contains it. Both movements are the live program's own activity during a still-running business session — this RFQ never attached to CDP, never opened/closed a page, and never wrote to the database. The before/after equality above is therefore scoped to the self-check window (22:38–22:45), not to the whole evening.
 
 ## 7. Read-only rollback asset inventory (no backup taken, no DB touched)
 

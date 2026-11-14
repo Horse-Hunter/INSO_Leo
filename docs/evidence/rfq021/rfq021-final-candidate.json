@@ -1,0 +1,179 @@
+{
+  "rfq": "RFQ-021",
+  "title": "Final release candidate: safe preview, scoped start, durable write intents",
+  "generated_at": "2026-11-15T03:25:00+08:00",
+  "status": "READY_FOR_CEO_RELEASE_REVIEW",
+  "flags": {
+    "installed": false,
+    "production_stopped": false,
+    "normal_gui_started": false,
+    "business_start": false,
+    "production_sqlite_written": false,
+    "production_sqlite_backed_up": false,
+    "chrome_9222_touched": false,
+    "merged_to_develop": false,
+    "promoted_to_main": false,
+    "tests_deleted_or_skipped": false
+  },
+  "blockers": {
+    "B5_scoped_start": "CLOSED_SOURCE_AND_TESTS",
+    "B6_restart_unknown": "CLOSED_SOURCE_AND_TESTS",
+    "B7_safe_preview": "CLOSED_SOURCE_AND_TESTS",
+    "B3_full_rollback_snapshot": "OPEN_NEEDS_STOP_WINDOW",
+    "B4_clean_stop_evidence": "OPEN_NEEDS_MAINTENANCE_WINDOW"
+  },
+  "source": {
+    "base_reviewed_sha": "25894eface6ea622153d1573c19d0ca6b9ad72aa",
+    "built_commit": "8cded532221571e99697af7668634afab3ea07af",
+    "branch": "workbuddy/v16-rfq016-stabilization",
+    "worktree": "D:\\Program_Leo\\INSO_Leo\\.worktrees\\v16-rfq016-stabilization",
+    "new_files": [
+      "src/launcher/run_scope.py",
+      "src/workflow/write_intents.py",
+      "scripts/verify_release_candidate.ps1",
+      "scripts/backup_running_release.ps1",
+      "scripts/install_release_candidate.ps1",
+      "tests/launcher/test_rfq021_run_scope.py",
+      "tests/research/test_rfq021_write_intents.py",
+      "tests/gui/test_rfq021_safe_preview.py"
+    ],
+    "modified_files": [
+      "src/research/cdp_pages.py",
+      "src/launcher/backend.py",
+      "src/gui/main.py",
+      "src/gui/app.py",
+      "src/launcher/single_instance.py",
+      "scripts/windows_release_entry.py",
+      "tests/gui/test_startup.py"
+    ]
+  },
+  "build_environment": {
+    "venv": ".venv-release",
+    "python": "3.12.10",
+    "tcl_tk": "8.6.15",
+    "pyinstaller": "6.16.0",
+    "lock_modified": false
+  },
+  "build_inputs_sha256": {
+    "scripts/build_windows_release.ps1": "ab35565ab9d42fd831eb6c59461f745400d14872145a3e60cec7d0d7b24cbdf1",
+    "requirements-windows-release.lock": "3dc5d7a5dae4387f156b4589259e899e887c607349b111a599911735dc2494ec",
+    "packaging/INSO_V1.1.spec": "d7574c2011917ff2c81007dc2271fd6d62d769d783d21d3098355a2d56d6e80c",
+    "packaging/assets/inso-v1.1.ico": "8f0e07dc4a78f982c58015430029a8c901b2705a4869ebbcc6d8a0f24e4e2028",
+    "scripts/scan_release_artifact.py": "f251734088b2506aaec21088a8c31d6c62f201fb277b232ed6e06e60fb883e29",
+    "scripts/windows_release_entry.py": "ae4eafa5d7a713a928683bc7eb468600bcce804d4ffdf86c3f66b8f9de21e329"
+  },
+  "candidate": {
+    "exe_path": "build/windows-release-stage-1.6/dist/INSO_V1.6/INSO_V1.6.exe",
+    "exe_size_bytes": 8455788,
+    "exe_sha256": "63bcd6cea66003f84ce016cfa8742dc479a9d67ce3f579a92b5b7c398bf4465b",
+    "file_count": 2872,
+    "runtime_dir_present": false,
+    "manifest_path": "docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256",
+    "manifest_lines": 2872,
+    "manifest_sha256": "d5cc3d4cc41fff16bf0316e0799305b31269201a5728bb7a207b8220d6a2aa7a",
+    "superseded_candidate": {
+      "sha256": "b358f68715f9e1dadeae19d5ad5b0f517664756105ebf1fcea1b843dc482d29c",
+      "note": "RFQ-020 build of 25894efa; explicitly not evidence for this source"
+    }
+  },
+  "self_checks": {
+    "self_check": {"exit_code": 0},
+    "idle_self_check": {"exit_code": 0, "state": "已停止", "business_thread_started": false},
+    "preview_self_check": {
+      "exit_code": 0,
+      "duration_seconds": 3,
+      "rounds": 2,
+      "blockers": ["PREVIEW_ONLY"],
+      "start_button": "安全预览（不启动业务）",
+      "start_state": "disabled",
+      "business_thread_started": false,
+      "order_thread_started": false,
+      "mail_service_started": false,
+      "process_services_consumed": false
+    },
+    "artifact_scan": "RELEASE_SCAN_OK",
+    "manifest_recomputation": {
+      "tool": "scripts/verify_release_candidate.ps1",
+      "matched": 2872,
+      "missing": 0,
+      "hash_mismatch": 0,
+      "unexpected": 0,
+      "result": "PASS"
+    }
+  },
+  "tests": {
+    "new_negative_tests": 35,
+    "new_negative_tests_failed": 0,
+    "affected_modules": {
+      "scope": "tests/launcher tests/research tests/sheets tests/inso tests/gui",
+      "passed": 2886,
+      "failed": 0,
+      "duration_seconds": 161.6
+    },
+    "full_suite": {
+      "collected": 4223,
+      "passed": 4220,
+      "failed": 2,
+      "skipped": 1,
+      "duration_seconds": 382.18,
+      "failed_nodeids": [
+        "tests/launcher/test_release_infrastructure.py::test_backend_closes_only_owned_browser_after_runtime_thread_exits[False]",
+        "tests/launcher/test_release_infrastructure.py::test_backend_closes_only_owned_browser_after_runtime_thread_exits[True]"
+      ],
+      "report": "docs/evidence/rfq021/pytest-report.xml"
+    },
+    "baseline_control_same_environment": {
+      "tree": "e59ce62f via git archive",
+      "collected": 4187,
+      "passed": 4181,
+      "failed": 2,
+      "errors": 4,
+      "skipped": 1,
+      "duration_seconds": 388.23,
+      "same_failed_nodeids": true,
+      "note": "the 4 errors are specific to the extracted tree (no git/runtime context) and do not appear in the worktree run"
+    },
+    "isolated_reruns": "the two failing nodeids pass individually 6/6 and inside the 2886-test module run"
+  },
+  "production_invariance": {
+    "exe_sha256_before_and_after": "e9e3da33417414abac53f8a88a67d9f053bcdaeab9730eae9ad8bd7870dffad0",
+    "processes": [38948, 34304],
+    "processes_stopped_or_restarted": false,
+    "sqlite_path": "dist/INSO_V1.2/runtime/production/workflow.sqlite3",
+    "sqlite_opened_by_this_rfq": false,
+    "sqlite_copied_or_modified_by_this_rfq": false,
+    "chrome_9222_attached": false
+  },
+  "switch_materials": {
+    "runbook": "control-room/RFQ-021/INSTALL_AND_ROLLBACK.md",
+    "scripts": [
+      "scripts/verify_release_candidate.ps1",
+      "scripts/backup_running_release.ps1",
+      "scripts/install_release_candidate.ps1"
+    ],
+    "executed_against_production": false
+  },
+  "launch_contract": {
+    "plain_launch": "safe preview only (no process services, no Start)",
+    "business_launch": "requires --scoped-start with --scope-inquiries, --scope-modules, optional --scope-writes + --scope-approval",
+    "start_without_scope": "refused (exit 2), never downgraded",
+    "writes_without_approval": "denied before dispatch (EXTERNAL_WRITE_NOT_IN_SCOPE)",
+    "unknown_from_previous_process": "blocks the same document (WRITE_INTENT_PENDING / WRITE_INTENT_UNKNOWN)",
+    "unreadable_ledger": "blocks every external write (WRITE_LEDGER_UNAVAILABLE)"
+  },
+  "not_verified": [
+    "candidate installed or running as the production program",
+    "any real scoped business run (even read-only)",
+    "stop timing, GUI refresh stall, residual Chrome pages",
+    "bit-reproducibility of the PyInstaller build",
+    "source lineage of the running E9E3DA33 EXE",
+    "sqlite3.exe availability and .backup duration on this host",
+    "business UNKNOWN state (221, SHAHAB/115, 3 V13 holds) untouched and unresolved"
+  ],
+  "doc_corrections_from_rfq020_review": [
+    "RFQ-020 generated_at corrected from 23:00 to 22:52 with an explicit correction note",
+    "RFQ-020 later_observation corrected to ~22:47, before its own commit",
+    "docs/BRANCH_POLICY.md: absent on this branch, present on develop",
+    "control-room/RFQ-019/REVIEW.md: added by CEO commit 64dba150"
+  ]
+}

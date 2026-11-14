@@ -1,4 +1,17 @@
-# INSO LEO — RFQ-020 CEO Review（2026-11-14）
+# INSO LEO — RFQ-021 最终候选交付（2026-11-15）
+
+**当前状态：`RFQ021_READY_FOR_CEO_RELEASE_REVIEW / NOT_DEPLOYED / NOT_MERGED / B5-B6-B7_CLOSED_IN_SOURCE`。** 最新执行证据：[FINAL_REPORT](RFQ-021/FINAL_REPORT.md)、[EXECUTION_LOG](RFQ-021/EXECUTION_LOG.md)、[安装与回滚](RFQ-021/INSTALL_AND_ROLLBACK.md)、[JSON](../docs/evidence/rfq021/rfq021-final-candidate.json)、[候选清单](../docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256)、[JUnit](../docs/evidence/rfq021/pytest-report.xml)。
+
+- **B7 关闭（源码+测试）**：普通双击＝安全预览，不调 `start_process_services`、不迁移、不读 IMAP、不发 SMTP、不连 CDP，开始按钮显示「安全预览（不启动业务）」且禁用；`--start-inquiry` 缺范围直接拒绝。候选 `--preview-self-check` 真机跑两轮全绿。
+- **B5 关闭（源码+测试）**：`RunScope` 限制订单/模块/写入目标，写入需 `OWNER-APPROVED:` 审批串；Google 写入在唯一租约处拦截，INSO 写入在既有门外面加一层拒绝，范围只收窄不放宽；无范围不启动，不会退回 full Start。
+- **B6 关闭（源码+测试）**：`workflow_write_intents` 在外部请求前落盘；进程崩溃后残留的 PENDING/UNKNOWN 会阻断同一文档的后续写入；账本不可读/不可写一律 fail closed；没有自动清理路径。
+- **候选**：源码 `8cded532`，EXE 8,455,788 B / `63bcd6ce…`，2,872 文件、无 `runtime/`；清单 `d5cc3d4c…` 经脚本逐文件复算 2,872/2,872 一致。RFQ-020 的 `b358f687…` 不再作为本轮证据。
+- **测试**：新增 35 项负向测试全绿；受影响模块 2,886 项全绿；完整套件 4,223 项中 4,220 通过、2 失败、1 跳过，两处失败与**未修改的父提交基线完全相同**（同一测试、同一现象），非本轮引入，未删除任何测试。
+- **未做**：未安装、未停机、未正常 GUI、未业务 Start、未碰生产 SQLite/Chrome9222，未合并 `develop`、未晋升分支。B3 完整回滚快照与 B4 干净停机仍需 Owner 单独批准的维护窗口。
+- **保护不变**：221 SAVED `rec_440fafd372440ecf9dacabf660dd155d` 不重下；SHAHAB/115 `MANUAL_REVIEW` 未证真实采购；3 条 V13 报价 hold 保留。
+- **下一步**：CEO 复核 RFQ-021。通过后仍分三步，各自单独授权：①维护窗口内做停机+完整回滚快照；②安装候选并只做安全预览验收；③受控业务启用。
+
+## RFQ-020 CEO Review（保留记录，2026-11-14）
 
 **当前状态：`RFQ020_PASS_BUILD_AND_ISOLATED_SELF_CHECK / RELEASE_HOLD / NOT_INSTALLED / RFQ019_PREP_PASS / RFQ018_SOURCE_PASS`。** 最新审核：[RFQ-020 CEO Review](RFQ-020/REVIEW.md)，执行证据：[EXECUTION_LOG](RFQ-020/EXECUTION_LOG.md)、[JSON](../docs/evidence/rfq020/rfq020-build-2026-11-14.json)、[完整 SHA256 清单](../docs/evidence/rfq020/INSO_V1.6-artifact-manifest.sha256)。
 
