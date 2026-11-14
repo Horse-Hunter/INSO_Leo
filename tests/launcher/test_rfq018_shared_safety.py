@@ -63,6 +63,57 @@ def test_quote_write_without_shared_admission_fails_closed():
         actions.open_sheet(select_worksheet=True, worksheet="2026")
 
 
+def test_unconfirmed_quote_hold_survives_page_close_for_root_and_child():
+    """P0-A: page closure is not proof that the quote write did not happen."""
+    writer, browser, root = _quote_with_admission()
+    writer.open_sheet(select_worksheet=True, worksheet="2026")
+    held_page = writer._page
+    writer._script_pending = True
+    writer.close()
+    held_page.closed = True  # Owner/Chrome/exception closed the held page.
+
+    assert root.document_hold(("https", "docs.google.com", "/spreadsheets/d/fake-sheet/edit"))
+
+    child = PageResourceAdmission(parent=root)
+    browser._inso_page_admission = child
+    other = GoogleQuotationUpdateActions(
+        browser_handle=SimpleNamespace(owned=False, browser=browser),
+        location=location(),
+    )
+    with pytest.raises((QuotationInputBusy, V12Fault)):
+        other.open_sheet(select_worksheet=True, worksheet="2026")
+    with pytest.raises((QuotationInputBusy, V12Fault)):
+        other.open_sheet(select_worksheet=True, worksheet="SHAHAB")
+
+    reader = GoogleQuotationUpdateActions(
+        browser_handle=SimpleNamespace(owned=False, browser=browser),
+        location=location(),
+    )
+    reader._read_only = True
+    assert reader.open_sheet(select_worksheet=True, worksheet="SHAHAB") is not None
+    reader.close()
+
+
+def test_quote_write_occupies_document_until_dispatch_settles():
+    """P1-C: the dispatch common entry holds an atomic document write lease."""
+    writer, browser, _root = _quote_with_admission()
+    writer.prepare_price_refresh()
+    writer.open_quote_input()
+    writer.click_update_quote()  # dispatch is now in flight
+
+    other = GoogleQuotationUpdateActions(
+        browser_handle=SimpleNamespace(owned=False, browser=browser),
+        location=location(),
+    )
+    with pytest.raises((QuotationInputBusy, V12Fault)):
+        other.open_sheet(select_worksheet=True, worksheet="2026")
+
+    writer.dismiss_result()  # confirmed settlement releases hold + lease
+    writer.close()
+    other.open_sheet(select_worksheet=True, worksheet="2026")
+    other.close()
+
+
 def _sales_config():
     return SimpleNamespace(cdp=SimpleNamespace(cdp_url="http://127.0.0.1:9222"))
 

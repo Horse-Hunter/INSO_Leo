@@ -1718,3 +1718,50 @@ def test_browser_write_is_blocked_by_shared_document_hold(web):
         service.update(
             spreadsheetId="test", range="'2026'!F2", valueInputOption="RAW",
             body={"values": [["BLOCKED"]]}).execute()
+
+def test_browser_fallback_inflight_write_blocks_second_client(web, monkeypatch):
+    """P1-C: browser fallback shares the atomic document write lease."""
+    import threading
+
+    from src.launcher.google_quote_update import GoogleQuotationUpdateActions
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    service, _browser, _rows, _human = web
+    # Give each service its own transport lock so the test reaches the shared
+    # document lease concurrently; production still has the global grid lock.
+    service._grid_lock = threading.RLock()
+    second = GoogleSheetsWebService(
+        service._session, page_admission=service._page_admission)
+    second._grid_lock = threading.RLock()
+    entered = threading.Event()
+    release = threading.Event()
+    original = GoogleQuotationUpdateActions.open_sheet
+
+    def blocking_open_sheet(actions, *args, **kwargs):
+        entered.set()
+        assert release.wait(2)
+        return original(actions, *args, **kwargs)
+
+    monkeypatch.setattr(GoogleQuotationUpdateActions, "open_sheet", blocking_open_sheet)
+    results = []
+
+    def first_write():
+        try:
+            service.update(spreadsheetId="test", range="'2026'!F2",
+                           valueInputOption="RAW",
+                           body={"values": [["FIRST"]]}).execute()
+        except Exception as exc:  # noqa: BLE001 - recorded for assertion
+            results.append(type(exc).__name__)
+
+    thread = threading.Thread(target=first_write)
+    thread.start()
+    assert entered.wait(2) is True
+    with pytest.raises(QuotationInputBusy):
+        second.update(spreadsheetId="test", range="'2026'!F2",
+                      valueInputOption="RAW",
+                      body={"values": [["SECOND"]]}).execute()
+    release.set()
+    thread.join(2)
+    assert not thread.is_alive() and results == []
+    second.update(spreadsheetId="test", range="'2026'!F2",
+                  valueInputOption="RAW", body={"values": [["SECOND"]]}).execute()

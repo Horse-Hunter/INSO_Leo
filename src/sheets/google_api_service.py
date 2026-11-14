@@ -213,9 +213,9 @@ class GoogleApiSheetsService:
         self._service = service
         if page_admission is not None and not isinstance(page_admission, PageResourceAdmission):
             raise ValueError("PAGE_ADMISSION_UNCONFIRMED")
-        # Direct test/legacy constructions get a private admission; production
-        # always injects the runtime's single shared root through the builder.
-        self._page_admission = page_admission or PageResourceAdmission()
+        # Reads may be constructed without an admission; every write must have
+        # the runtime's one shared root. A private fallback is not a write grant.
+        self._page_admission = page_admission
         self._timer = timer
         self._on_read_success = on_read_success
         self._lock = RLock()
@@ -359,34 +359,43 @@ class GoogleApiSheetsService:
         title, first_column, first_row, last_column = _parse_range(range_name)
         _require_write_target(title, first_column, first_row, last_column, len(values[0]))
         document = google_document_key_for_spreadsheet(spreadsheet)
-        # Never start a new write on a document that already has an unresolved
-        # shared write hold from another client/service.
+        if self._page_admission is None:
+            from src.workflow.v12_faults import FaultScope, V12Fault
+            raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_PAGE_ADMISSION_UNCONFIRMED")
+        # A globally invalidated admission must stop before the API request;
+        # then a same-document hold must stop before it too.
+        self._page_admission.require_open()
         self._page_admission.require_document_writable(document)
-        # A write changes whatever snapshot this transport may still hold.
-        self._clear_snapshots()
+        owner = object()
+        self._page_admission.begin_document_write(document, owner)
         try:
-            response = self._call(lambda: self._service.spreadsheets().values().update(
-                spreadsheetId=spreadsheet, range=range_name, valueInputOption="RAW",
-                body={"majorDimension": "ROWS", "values": values},
-            ).execute())
-        except Exception as exc:
-            # The request may already have been delivered. Only a server rejection
-            # that provably applied nothing may propagate as a normal failure;
-            # everything else (5xx, timeouts, unknown client faults) is an unknown
-            # external effect and must never be retried automatically.
-            if _definite_write_rejection(exc):
+            # A write changes whatever snapshot this transport may still hold.
+            self._clear_snapshots()
+            try:
+                response = self._call(lambda: self._service.spreadsheets().values().update(
+                    spreadsheetId=spreadsheet, range=range_name, valueInputOption="RAW",
+                    body={"majorDimension": "ROWS", "values": values},
+                ).execute())
+            except Exception as exc:
+                # The request may already have been delivered. Only a server rejection
+                # that provably applied nothing may propagate as a normal failure;
+                # everything else (5xx, timeouts, unknown client faults) is an unknown
+                # external effect and must never be retried automatically.
+                if _definite_write_rejection(exc):
+                    raise
+                self._page_admission.hold_document(
+                    document, self, "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+                raise GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED") from exc
+            try:
+                _verify_write_receipt(response, spreadsheet, title, first_column, first_row, last_column)
+            except Exception:
+                # A missing/mismatched receipt cannot prove the write did not apply.
+                self._page_admission.hold_document(
+                    document, self, "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
                 raise
-            self._page_admission.hold_document(
-                document, self, "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
-            raise GoogleSheetsWriteUnconfirmed("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED") from exc
-        try:
-            _verify_write_receipt(response, spreadsheet, title, first_column, first_row, last_column)
-        except Exception:
-            # A missing/mismatched receipt cannot prove the write did not apply.
-            self._page_admission.hold_document(
-                document, self, "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
-            raise
-        return response
+            return response
+        finally:
+            self._page_admission.end_document_write(document, owner)
 
     def _unexpired(self, spreadsheet):
         with self._lock:

@@ -3,7 +3,11 @@ import re
 from dataclasses import dataclass
 from socket import timeout as SocketTimeout
 
-from src.research.cdp_pages import DocumentWriteHeld
+from src.research.cdp_pages import (
+    DocumentWriteBusy,
+    DocumentWriteHeld,
+    PageTargetCleanupError,
+)
 
 from .google_api_service import GoogleSheetsWriteUnconfirmed
 from .google_oauth import GoogleSheetsAuthorizationError
@@ -168,10 +172,16 @@ class GoogleQuotationInput:
                 valueInputOption="RAW", body={"majorDimension": "ROWS", "values": [list(payload)]},
             ).execute()
         except Exception as exc:
-            if isinstance(exc, DocumentWriteHeld):
-                # A shared unresolved write on this document is a busy surface:
-                # defer, never classify it as an uncertain new write or retry it.
+            if isinstance(exc, (DocumentWriteHeld, DocumentWriteBusy)):
+                # A shared unresolved write or in-flight lease on this document
+                # is a busy surface: defer, never classify it as an uncertain
+                # new write or retry the original effect.
                 raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from exc
+            if isinstance(exc, PageTargetCleanupError) or str(getattr(exc, "reason", "")) == (
+                    "CDP_PAGE_ADMISSION_UNCONFIRMED"):
+                # Admission was missing/invalid before any request was sent.
+                # This is shared infrastructure unavailability, not UNKNOWN.
+                raise QuotationInputUnavailable("QUOTE_INPUT_ADMISSION_UNAVAILABLE") from exc
             if isinstance(exc, (QuotationInputBusy, QuotationInputUnavailable)):
                 raise
             if self.external_write and (

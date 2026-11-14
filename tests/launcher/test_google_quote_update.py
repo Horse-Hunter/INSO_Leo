@@ -846,7 +846,16 @@ def test_pending_quote_left_by_previous_client_is_not_replayed():
     reader._read_only = True
     assert reader.open_sheet(select_worksheet=True, worksheet="2026") is not page
     reader.close()
-    page.closed = True  # Owner resolves and closes the earlier quotation page.
+    page.closed = True  # Closing the page alone is NOT write settlement.
+    with pytest.raises(QuotationInputBusy):
+        other.open_sheet(select_worksheet=True, worksheet="2026")
+
+    # Only the explicit, owner-identified resolution path may release the hold.
+    from src.research.cdp_pages import google_document_key
+    admission = browser._inso_page_admission
+    owner = getattr(page, "_inso_document_hold_owner", None)
+    assert owner is not None
+    admission.release_document(google_document_key(location().url), owner)
     other.open_sheet(select_worksheet=True, worksheet="2026")
     other.close()
     assert not browser.contexts[0].pages[0].closed
@@ -1015,18 +1024,39 @@ def test_confirming_refresh_never_releases_other_unknown_or_read_hold():
 # RFQ-018: one owner may nest/repeat its hold; a competing writer on the same
 # document is refused until that owner releases.
 def test_document_write_admission_serializes_threads_but_allows_same_owner_nesting():
-    from src.research.cdp_pages import DocumentWriteHeld, PageResourceAdmission
+    import threading
+
+    from src.research.cdp_pages import DocumentWriteBusy, PageResourceAdmission
 
     document = ("https", "docs.google.com", "/spreadsheets/d/test/edit")
     root = PageResourceAdmission()
-    owner = object()
-    root.hold_document(document, owner, "GOOGLE_WRITE_UNCONFIRMED")
-    root.hold_document(document, owner, "GOOGLE_WRITE_UNCONFIRMED")  # same owner nesting
+    owner, competitor = object(), object()
+    root.begin_document_write(document, owner)
+    root.begin_document_write(document, owner)  # same-owner nesting
 
-    with pytest.raises(DocumentWriteHeld):
-        root.require_document_writable(document)  # competing writer is refused
-    root.release_document(document, owner)
-    root.require_document_writable(document)
+    outcomes = []
+    started = threading.Event()
+
+    def compete():
+        started.set()
+        try:
+            root.begin_document_write(document, competitor)
+        except DocumentWriteBusy:
+            outcomes.append("busy")
+        else:
+            outcomes.append("admitted")
+            root.end_document_write(document, competitor)
+
+    thread = threading.Thread(target=compete)
+    thread.start()
+    assert started.wait(2) is True
+    thread.join(2)
+    assert not thread.is_alive() and outcomes == ["busy"]
+
+    root.end_document_write(document, owner)
+    root.end_document_write(document, owner)
+    root.begin_document_write(document, competitor)
+    root.end_document_write(document, competitor)
 
 # RFQ-018: child admissions share the root document barrier in both directions.
 def test_nested_clients_share_document_barrier():

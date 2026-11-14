@@ -6,6 +6,7 @@ for numeric cells, display strings for dates, blanks as trimmed rows, and an
 """
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -73,6 +74,13 @@ class FakeApi:
         return _Spreadsheets(self)
 
 
+def _service(api, **kwargs):
+    """Test-only controlled construction: inject one explicit shared admission."""
+    from src.research.cdp_pages import PageResourceAdmission
+    kwargs.setdefault("page_admission", PageResourceAdmission())
+    return GoogleApiSheetsService(api, **kwargs)
+
+
 def header_2026():
     """A real 2026 header row: the exact labels the CDP transport required."""
     row = ["STATUS", "", "CLASS", "", "MPN", "MFR", "Qty"]
@@ -90,7 +98,7 @@ def row_2026(date, importance, customer, mpn, brand, qty, quote_date):
 
 
 def read(response, range_name="'2026'!A1:G"):
-    return GoogleApiSheetsService(FakeApi([response])).get(
+    return _service(FakeApi([response])).get(
         spreadsheetId=SHEET, range=range_name, majorDimension="ROWS",
         valueRenderOption="UNFORMATTED_VALUE").execute()
 
@@ -99,7 +107,7 @@ def read(response, range_name="'2026'!A1:G"):
 def test_source_read_is_formatted_and_widened_to_the_quote_date_column():
     api = FakeApi([{"values": [header_2026(),
                                row_2026("2026/10/07", "高", "客户A", "000123", "TI", 100, "2026/10/01")]}])
-    response = GoogleApiSheetsService(api).get(
+    response = _service(api).get(
         spreadsheetId=SHEET, range="'2026'!A1:G", valueRenderOption="UNFORMATTED_VALUE").execute()
 
     # The caller asked for unformatted, but display parity is the transport contract.
@@ -127,7 +135,7 @@ def test_reader_binds_the_same_row_without_any_identity_mismatch():
                                row_2026("2026/10/07", "高", "客户A", 123, "TI", 100, "2026/10/01"),
                                row_2026("2026/10/07", "低", "客户B", "000123", "TI", 5.5, "2026/10/02")]}])
     observed = []
-    reader = GoogleSheetsRowReader(GoogleApiSheetsService(api), first_row=1,
+    reader = GoogleSheetsRowReader(_service(api), first_row=1,
                                    on_observation=lambda ws, rows, failed: observed.append((rows, failed)))
     rows = reader.read_rows(WorksheetIdentity(SHEET, "2026"))
 
@@ -169,7 +177,7 @@ def test_shahab_keeps_the_native_column_contract():
     header = ["", "STATUS", "", "Part Number", "Brand", "QTY", ""]
     data = ["2026/10/07", "发给采购", "", "MPN1", "TI", 1000]
     api = FakeApi([{"values": [["stale pre-header row"], header, data]}])
-    response = GoogleApiSheetsService(api).get(
+    response = _service(api).get(
         spreadsheetId=SHEET, range="'SHAHAB'!A1:G").execute()
     # Read from row 1 like the native download; the requested slice starts at row 1.
     assert api.calls[0][1]["range"] == "'SHAHAB'!A1:G"
@@ -194,7 +202,7 @@ def test_shahab_header_must_be_on_the_second_row():
     from src.workflow.v12_faults import V12Fault
 
     with pytest.raises(V12Fault) as caught:
-        GoogleApiSheetsService(FakeApi([{"values": [
+        _service(FakeApi([{"values": [
             ["", "STATUS", "", "Part Number", "Brand", "QTY"]]}])).get(
             spreadsheetId=SHEET, range="'SHAHAB'!A1:G").execute()
     assert caught.value.reason == "SHEETS_SCHEMA_UNAVAILABLE"
@@ -242,7 +250,7 @@ def test_2026_header_search_stays_bounded():
 def test_quotation_input_row_is_text_only():
     payload = [2026, 5, "MPN", "", "USD", "", 12.5, "", "", "", "", "", "", ""]
     api = FakeApi([{"values": [payload]}])
-    values = GoogleApiSheetsService(api).get(
+    values = _service(api).get(
         spreadsheetId=SHEET, range="'报价输入'!B1:O1").execute()["values"]
     assert values == [["2026", "5", "MPN", "", "USD", "", "12.5", "", "", "", "", "", "", ""]]
 
@@ -251,7 +259,7 @@ def test_brief_read_makes_every_cell_text_like_the_native_read():
     brief = [["rfq_line_id", "sheet", "sheet_row", "rfq_date", "mpn", "mfr", "qty"],
              [12345, "2026", 42, "2026/10/07", 100123, "TI", 1000]]
     api = FakeApi([{"values": brief}])
-    transport = GoogleApiSheetsService(api)
+    transport = _service(api)
     values = transport.read_brief(SHEET)["values"]
 
     assert api.calls[0][1]["range"].endswith("RFQ_BRIEF!A1:Q")
@@ -265,7 +273,7 @@ def test_brief_snapshot_caches_for_a_minute_and_write_invalidates():
     clock = [0.0]
     api = FakeApi([{"values": [["rfq_line_id"], ["x", "2026"]]},
                    {"spreadsheetId": SHEET, "updatedRange": "'2026'!F9", "updatedCells": 1}])
-    transport = GoogleApiSheetsService(api, timer=lambda: clock[0])
+    transport = _service(api, timer=lambda: clock[0])
     transport.read_brief(SHEET)
     revision, entry = transport.peek_brief_token(SHEET)
     assert revision == 1 and entry is not None
@@ -284,7 +292,7 @@ def test_raw14_write_is_confirmed_by_its_exact_receipt():
     api = FakeApi([{"spreadsheetId": SHEET, "updatedRange": "'报价输入'!B5:O5",
                     "updatedRows": 1, "updatedCells": 14}])
     payload = [f"v{index}" for index in range(14)]
-    response = GoogleApiSheetsService(api).update(
+    response = _service(api).update(
         spreadsheetId=SHEET, range="'报价输入'!B5:O5", valueInputOption="RAW",
         body={"majorDimension": "ROWS", "values": [payload]}).execute()
     assert response["updatedCells"] == 14
@@ -295,7 +303,7 @@ def test_single_cell_write_accepts_quoted_or_bare_receipts():
     for receipt_range in ("'2026'!F9", "2026!F9", "'2026'!F9:F9"):
         api = FakeApi([{"spreadsheetId": SHEET, "updatedRange": receipt_range,
                         "updatedCells": 1}])
-        GoogleApiSheetsService(api).update(
+        _service(api).update(
             spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
             body={"values": [["TI"]]}).execute()
 
@@ -313,7 +321,7 @@ def test_single_cell_write_accepts_quoted_or_bare_receipts():
 def test_write_receipt_must_prove_the_exact_target_and_count(receipt):
     api = FakeApi([receipt])
     with pytest.raises(GoogleSheetsWriteUnconfirmed):
-        GoogleApiSheetsService(api).update(
+        _service(api).update(
             spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
             body={"values": [["TI"]]}).execute()
 
@@ -327,7 +335,7 @@ def test_write_receipt_must_prove_the_exact_target_and_count(receipt):
 def test_write_receipt_must_carry_the_matching_spreadsheet_identity(receipt):
     api = FakeApi([receipt])
     with pytest.raises(GoogleSheetsWriteUnconfirmed):
-        GoogleApiSheetsService(api).update(
+        _service(api).update(
             spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
             body={"values": [["TI"]]}).execute()
 
@@ -335,7 +343,7 @@ def test_write_receipt_must_carry_the_matching_spreadsheet_identity(receipt):
 def test_missing_receipt_is_not_success():
     api = FakeApi([{"spreadsheetId": SHEET}])
     with pytest.raises(GoogleSheetsWriteUnconfirmed):
-        GoogleApiSheetsService(api).update(
+        _service(api).update(
             spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
             body={"values": [["TI"]]}).execute()
 
@@ -352,7 +360,7 @@ def test_missing_receipt_is_not_success():
 ])
 def test_write_rejects_anything_outside_the_existing_contract(options):
     with pytest.raises(ValueError, match="GOOGLE_WRITE_UNCONFIRMED"):
-        GoogleApiSheetsService(FakeApi([])).update(spreadsheetId=SHEET, **options).execute()
+        _service(FakeApi([])).update(spreadsheetId=SHEET, **options).execute()
 
 
 @pytest.mark.parametrize("range_name, width", [
@@ -365,7 +373,7 @@ def test_write_rejects_anything_outside_the_existing_contract(options):
 def test_forbidden_write_targets_are_refused_before_any_call(range_name, width):
     api = FakeApi([])
     with pytest.raises(ValueError):
-        GoogleApiSheetsService(api).update(
+        _service(api).update(
             spreadsheetId=SHEET, range=range_name, valueInputOption="RAW",
             body={"values": [["x"] * width]}).execute()
     assert api.calls == []
@@ -380,12 +388,12 @@ def test_forbidden_write_targets_are_refused_before_any_call(range_name, width):
 def test_forbidden_read_targets_are_refused_before_any_call(range_name):
     api = FakeApi([])
     with pytest.raises(ValueError):
-        GoogleApiSheetsService(api).get(spreadsheetId=SHEET, range=range_name).execute()
+        _service(api).get(spreadsheetId=SHEET, range=range_name).execute()
     assert api.calls == []
 
 
 def test_read_only_lifecycle_ports_are_inert():
-    transport = GoogleApiSheetsService(FakeApi([]))
+    transport = _service(FakeApi([]))
     with transport.poll_scope(), transport.suspend_idle_poll():
         assert transport.operations_idle() is True
     assert transport.release_retained_pages(browser_handle=object()) is None
@@ -484,7 +492,7 @@ def test_source_values_match_the_frozen_cdp_a_to_g_contract(title, prefix):
     header = (["STATUS", "", "CLASS", "", "MPN", "MFR", "Qty"] if title == "2026"
               else ["", "STATUS", "", "Part Number", "Brand", "QTY"])
     api_rows = prefix + [header, *[row[:7] for row in SOURCE_SAMPLE]]
-    response = GoogleApiSheetsService(FakeApi([{"values": api_rows}])).get(
+    response = _service(FakeApi([{"values": api_rows}])).get(
         spreadsheetId=SHEET, range=f"'{title}'!A1:G").execute()
 
     expected = _source_values(_tsv_rows(api_rows), title, 1, 1, 7, None)
@@ -496,7 +504,7 @@ def test_source_values_match_the_frozen_cdp_a_to_g_contract(title, prefix):
 def test_quote_date_proof_matches_the_frozen_cdp_payload():
     api_rows = [["STATUS", "", "CLASS", "", "MPN", "MFR", "Qty"] + [""] * 15 + ["quote_date"],
                 *SOURCE_SAMPLE]
-    response = GoogleApiSheetsService(FakeApi([{"values": api_rows}])).get(
+    response = _service(FakeApi([{"values": api_rows}])).get(
         spreadsheetId=SHEET, range="'2026'!A1:G").execute()
 
     assert response["source_order_dates"]["rows"] == _cdp_quote_dates(_tsv_rows(api_rows))
@@ -511,7 +519,7 @@ def test_quote_date_proof_matches_the_frozen_cdp_payload():
 def test_unknown_post_dispatch_write_error_is_an_unknown_effect():
     api = FakeApi([RuntimeError("client socket closed mid-response")])
     with pytest.raises(GoogleSheetsWriteUnconfirmed):
-        GoogleApiSheetsService(api).update(
+        _service(api).update(
             spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
             body={"values": [["TI"]]}).execute()
 
@@ -524,14 +532,14 @@ def test_a_server_rejection_propagates_as_a_definite_rejection(status):
     body = f'{{"error": {{"code": {status}, "message": "synthetic"}}}}'.encode()
     error = HttpError(httplib2.Response({"status": status, "reason": "synthetic"}), body)
     with pytest.raises(HttpError):
-        GoogleApiSheetsService(FakeApi([error])).update(
+        _service(FakeApi([error])).update(
             spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
             body={"values": [["TI"]]}).execute()
 
 
 def test_transport_timeout_is_an_unknown_effect():
     with pytest.raises(GoogleSheetsWriteUnconfirmed):
-        GoogleApiSheetsService(FakeApi([TimeoutError("read timed out")])).update(
+        _service(FakeApi([TimeoutError("read timed out")])).update(
             spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
             body={"values": [["TI"]]}).execute()
 
@@ -545,7 +553,7 @@ def test_fixed_range_read_returns_the_row_it_asked_for():
     """
     payload = ["2026", "5", "MPN", "", "000123", "USD", "12.5", "", "", "", "", "", "", ""]
     api = FakeApi([{"values": [payload]}])
-    values = GoogleApiSheetsService(api).get(
+    values = _service(api).get(
         spreadsheetId=SHEET, range="'报价输入'!B5:O5").execute()["values"]
     assert values == [payload]
     assert api.calls[0][1]["range"] == "'报价输入'!B5:O5"
@@ -562,7 +570,7 @@ def test_api_write_is_blocked_by_shared_document_hold():
     admission = PageResourceAdmission()
     admission.hold_document(
         google_document_key_for_spreadsheet(SHEET), object(), "GOOGLE_WRITE_UNCONFIRMED")
-    service = GoogleApiSheetsService(FakeApi([]), page_admission=admission)
+    service = _service(FakeApi([]), page_admission=admission)
 
     with pytest.raises(DocumentWriteHeld):
         service.update(
@@ -577,7 +585,7 @@ def test_uncertain_api_write_records_the_shared_document_hold():
     )
 
     admission = PageResourceAdmission()
-    service = GoogleApiSheetsService(
+    service = _service(
         FakeApi([TimeoutError("synthetic read timed out")]), page_admission=admission)
 
     with pytest.raises(GoogleSheetsWriteUnconfirmed):
@@ -587,3 +595,86 @@ def test_uncertain_api_write_records_the_shared_document_hold():
 
     assert admission.document_hold(google_document_key_for_spreadsheet(SHEET)) == (
         "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
+
+
+# --- RFQ-018 CEO review: API admission and atomic in-flight write -----------
+def test_api_write_without_shared_admission_fails_before_any_api_call():
+    from src.workflow.v12_faults import V12Fault
+
+    api = FakeApi([])
+    service = GoogleApiSheetsService(api)
+
+    with pytest.raises(V12Fault, match="CDP_PAGE_ADMISSION_UNCONFIRMED"):
+        service.update(
+            spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
+            body={"values": [["TI"]]}).execute()
+    assert api.calls == []
+
+
+def test_api_write_with_invalid_shared_admission_fails_before_any_api_call():
+    from src.research.cdp_pages import PageResourceAdmission, PageTargetCleanupError
+
+    admission = PageResourceAdmission()
+    admission.invalidate(PageTargetCleanupError((ValueError("synthetic"),)))
+    api = FakeApi([])
+    service = _service(api, page_admission=admission)
+
+    with pytest.raises(PageTargetCleanupError):
+        service.update(
+            spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
+            body={"values": [["TI"]]}).execute()
+    assert api.calls == []
+
+
+def test_api_inflight_write_blocks_a_second_client_before_its_request():
+    import threading
+
+    from src.research.cdp_pages import DocumentWriteBusy, PageResourceAdmission
+
+    class BlockingApi:
+        def __init__(self):
+            self.calls = 0
+            self.entered = threading.Event()
+            self.release = threading.Event()
+
+        def spreadsheets(self):
+            outer = self
+            class Values:
+                def update(self, **kwargs):
+                    outer.calls += 1
+                    class Exec:
+                        def execute(self_inner):
+                            outer.entered.set()
+                            assert outer.release.wait(2)
+                            return {"spreadsheetId": SHEET,
+                                    "updatedRange": "'2026'!F9", "updatedCells": 1}
+                    return Exec()
+            return SimpleNamespace(values=lambda: Values())
+
+    api = BlockingApi()
+    admission = PageResourceAdmission()
+    first = _service(api, page_admission=admission)
+    second = _service(api, page_admission=admission)
+    results = []
+
+    def send(service):
+        try:
+            service.update(spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
+                           body={"values": [["TI"]]}).execute()
+        except Exception as exc:  # noqa: BLE001 - the test records the class
+            results.append(type(exc).__name__)
+
+    thread = threading.Thread(target=send, args=(first,))
+    thread.start()
+    assert api.entered.wait(2) is True
+    with pytest.raises(DocumentWriteBusy):
+        second.update(spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
+                      body={"values": [["TI"]]}).execute()
+    assert api.calls == 1
+
+    api.release.set()
+    thread.join(2)
+    assert not thread.is_alive() and results == []
+    second.update(spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
+                  body={"values": [["TI"]]}).execute()
+    assert api.calls == 2

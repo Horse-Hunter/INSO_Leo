@@ -33,6 +33,7 @@
 4. hold 不自动清除。进程重启/新 runtime 是内存层解除边界；同一报价单的持久 V13 hold 仍独立有效，不得因页面层重启被绕过。
 5. 覆盖路径：CDP 报价按钮/脚本、浏览器的 `GoogleSheetsWebService` fallback 写、Sheets API 写。任何路径不得以“没有共享 admission”为由默认可写；生产路径必须传入同一 admission。
 6. 不新增第二个数据库、调度器或独立 hold 文件；复用现有 `PageResourceAdmission` 和现有持久 V13 hold。
+7. 同一文档在途写入必须有原子 lease：同 owner 可重入，竞争 writer 在 API/页面 dispatch 前得到 busy（不是 UNKNOWN）；只有结算/关闭证据路径释放 lease，UNKNOWN 在释放 lease 前落 hold。
 
 **验收负向测试：**
 
@@ -92,9 +93,11 @@
 - 交付报告：[FINAL_REPORT.md](FINAL_REPORT.md)
 - 下一步：CEO 独立复核；是否部署/试运行/合并均需另行授权。
 
-## 完成结果（2026-11-14）
+## 完成结果（2026-11-14，含 CEO 第一轮 Review 补修）
 
-- 两个安全契约均已实现：共享 Google 文档 hold（root/child 继承、写前阻断、页面关闭/证据释放）与订单邮件/销售录单统一 admission（无/失效准入在取浏览器前 STOPPED）。
+- 两个安全契约均已实现：共享 Google 文档 hold（root/child 继承、写前阻断、页面关闭不是结算证据）与订单邮件/销售录单统一 admission（无/失效准入在取浏览器前 STOPPED）。
+- CEO Review 的 P0-A/P0-B/P1-C 已完成：页面关闭不再自动解除未确认写 hold；API 写入必须 `require_open()` + 共享 admission，缺失共享根 fail closed；同一文档带原子 in-flight 写 lease，真实两线程/在途 API/浏览器 fallback 竞争测试覆盖。
 - RFQ-017 的 **26 个原始 nodeid 全部保留并通过**：6 项未改（含 5 项确认缺口 + owner adoption），20 项按原安全意图改写为当前机制。
-- 全量离线测试：**4176 collected / 4175 passed / 0 failed / 1 skipped / 320.88s**；唯一 skip 是既有 Windows symlink 权限限制，无 deselect、无隐藏失败。
+- 新增回归共 **26 项**（RFQ-018 原 16 + CEO Review 补 10）。
+- 全量离线测试：**4188 collected / 4187 passed / 0 failed / 1 skipped / 341.54s**；唯一 skip 是既有 Windows symlink 权限限制，无 deselect、无隐藏失败。
 - 未部署、未重启、未合并、未操作真实 Chrome/Google/INSO/SMTP/SQLite；221、SHAHAB/115、3 条 V13 hold 未变。

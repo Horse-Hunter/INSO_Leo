@@ -12,6 +12,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 from src.inso.quotation_read import QUOTATION_COLUMNS
 from src.research.cdp_pages import (
+    DocumentWriteBusy,
     DocumentWriteHeld,
     PageResourceAdmission,
     PageTargetOwnershipError,
@@ -341,6 +342,7 @@ class GoogleQuotationUpdateActions:
         self._poll_entry = None
         self._read_only = False
         self._active_quote_target = None
+        self._document_write_owner = None
 
     def _document_key(self):
         return google_document_key(self._location.url)
@@ -360,8 +362,9 @@ class GoogleQuotationUpdateActions:
             # client/effect is not already unresolved; fail before page creation.
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_PAGE_ADMISSION_UNCONFIRMED")
         admission.require_open()
+        document = self._document_key()
         try:
-            admission.require_document_writable(self._document_key())
+            admission.require_document_writable(document)
         except DocumentWriteHeld as exc:
             raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from exc
         return admission
@@ -384,8 +387,13 @@ class GoogleQuotationUpdateActions:
             if self._protected:
                 self._page._inso_protected_surface = True
 
-    def _release_page_document_hold(self, page=None):
-        """Release only the owner recorded on this exact page after settlement."""
+    def _release_page_document_hold(self, page=None, *, allow_closed=False):
+        """Release only the owner recorded on this exact page after settlement.
+
+        ``allow_closed`` is used only by the successful settlement+close path,
+        where the page is already gone and ownership was proved immediately
+        before close. Page closure alone never calls this method.
+        """
         admission = self._shared_admission()
         page = page if page is not None else self._page
         owner = getattr(page, "_inso_document_hold_owner", None)
@@ -400,7 +408,7 @@ class GoogleQuotationUpdateActions:
             owned = page_owner(page) == self._page_role
         except Exception:  # noqa: BLE001 - unprovable ownership cannot release
             owned = False
-        if not owned:
+        if not owned and not (allow_closed and page.is_closed()):
             # A page adopted/moved to another owner is never treated as this
             # controller's settled surface.
             return
@@ -474,7 +482,11 @@ class GoogleQuotationUpdateActions:
                     raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from None
                 require_owner()
                 recovery.close()
-                if not page.is_closed():
+                if page.is_closed():
+                    # Only the successful settlement + close path above may
+                    # release the owner's page-level hold.
+                    recovery._release_page_document_hold(page, allow_closed=True)
+                else:
                     require_owner()  # The Owner may have adopted the page during close.
 
     def _require_owned_page(self):
@@ -881,6 +893,7 @@ class GoogleQuotationUpdateActions:
         # Stale result dialogs cannot be mistaken for this attempt's result.
         if bounded_browser_call(self._result_dialog(), "count"):
             raise UpdateAttemptUnconfirmed("UPDATE_RESULT_STALE")
+        self._acquire_write_owner()
         if self._price_refresh:
             # Arm before native dispatch; a click timeout may mean it DID execute.
             bounded_browser_call(button, "evaluate", _SCRIPT_SETTLEMENT_LATCH, timeout=self._timeout)
@@ -967,6 +980,7 @@ class GoogleQuotationUpdateActions:
             raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_SCRIPT_SETTLEMENT_UNCONFIRMED") from None
         self._script_pending = False
         self._release_page_document_hold()
+        self._release_write_owner()
 
     def _attempt(self, operation):
         try:
@@ -1017,7 +1031,9 @@ class GoogleQuotationUpdateActions:
 
     def retire_failed_page(self, *, read_only=False):
         """Never pass a failed phase's page to another phase/retry."""
-        if self._page is not None and (not read_only or self._protected):
+        # Pure read failures use retained-page isolation only; they are not a
+        # dispatched-write unknown and must not freeze unrelated writes.
+        if self._page is not None and not read_only:
             self._hold_document("GOOGLE_WRITE_UNCONFIRMED")
         if read_only and self._page is not None and not self._page.is_closed():
             try:
@@ -1058,7 +1074,42 @@ class GoogleQuotationUpdateActions:
                     _retain_google_entry(key, entry, scope[1])
                     break
 
+    def _acquire_write_owner(self):
+        """Atomically claim the in-flight write lease immediately before dispatch."""
+        if self._document_write_owner is not None:
+            return
+        admission = self._require_write_admission()
+        document = self._document_key()
+        owner = object()
+        try:
+            admission.begin_document_write(document, owner)
+        except DocumentWriteHeld as exc:
+            raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from exc
+        except DocumentWriteBusy as exc:
+            raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from exc
+        self._document_write_owner = owner
+
+    def _release_write_owner(self):
+        owner = self._document_write_owner
+        if owner is None:
+            return
+        self._document_write_owner = None
+        admission = self._shared_admission()
+        if admission is None:
+            return
+        try:
+            document = self._document_key()
+        except ValueError:
+            return
+        admission.end_document_write(document, owner)
+
     def close(self):
+        try:
+            self._close_impl()
+        finally:
+            self._release_write_owner()
+
+    def _close_impl(self):
         if (self._page is not None and not self._read_only
                 and (self._script_pending or self._protected)):
             # Close cannot settle an unresolved write; publish a durable-to-restart

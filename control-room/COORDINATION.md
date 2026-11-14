@@ -2,6 +2,8 @@
 
 **当前裁决：`RFQ018_CHANGES_REQUESTED / NOT_DEPLOYED / NO_CODE_MERGE / RELEASE_HOLD`.** [完整独立 Review](RFQ-018/REVIEW.md)；RFQ-017 审计仍 PASS，RFQ-016 专项源码修复仍 PASS。
 
+**RFQ-018 P0-A/P0-B/P1-C 补修已提交，等待第二轮 CEO Review。** 全树 4188 collected / 4187 passed / 1 skipped；详见 [FINAL_REPORT](RFQ-018/FINAL_REPORT.md)、[EXECUTION_LOG](RFQ-018/EXECUTION_LOG.md)。
+
 - 原 Executor 在 `workbuddy/v16-rfq016-stabilization` 代码提交 `446d090998e8e2845aae2b23d9cae59f465a789c`，确实新增共享 Google 文档 hold、订单邮件/销售准入与测试治理。26 原 nodeid 保留（20 rewritten、6 unchanged）；Executor 报告全树 **4175 PASS /1 SKIP /0 FAIL**（无 deselect）。CEO 只做 GitHub 静态复核，未独立运行 Windows 测试。
 - **P0-A** `cdp_pages.py:169-190`：被保护的未确认写入 hold 会因页面被关闭而自动清除。页面关闭不是写入结算证据；须证明关闭后其他客户端仍无法写入。
 - **P0-B** `google_api_service.py:211-218,347-389`：可写 API 构造缺共享 admission 时自动私有根；写前仅查文档 hold，不检查 admission 已失效，存在绕过。

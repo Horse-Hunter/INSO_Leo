@@ -22,6 +22,7 @@ from time import monotonic
 from urllib.parse import parse_qs, urlsplit
 
 from src.research.cdp_pages import (
+    DocumentWriteBusy,
     DocumentWriteHeld,
     PageResourceAdmission,
     bind_page_admission,
@@ -541,6 +542,7 @@ class GoogleSheetsWebService:
                 # A write with no shared admission cannot prove that no other
                 # client already owns an unresolved effect on this document.
                 raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_PAGE_ADMISSION_UNCONFIRMED")
+            write_owner = None
             if write:
                 try:
                     admission.require_document_writable(document)
@@ -549,6 +551,14 @@ class GoogleSheetsWebService:
             actions = self._actions_factory(browser_handle=handle, location=_Location(base))
             actions._read_only = not write
             dirty = False
+            if write:
+                try:
+                    write_owner = object()
+                    admission.begin_document_write(document, write_owner)
+                except DocumentWriteHeld as exc:
+                    raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from exc
+                except DocumentWriteBusy as exc:
+                    raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from exc
             stage = "google-open-sheet"
             try:
                 if write and geometry[0] == "报价输入":
@@ -712,6 +722,8 @@ class GoogleSheetsWebService:
                 raise
             finally:
                 actions.close()  # Own tab only; reuse existing auth/script protection.
+                if write_owner is not None:
+                    admission.end_document_write(document, write_owner)
 
     @staticmethod
     def _headers(rows, title):

@@ -6,15 +6,15 @@
   "business_source_baseline": "b45e870e",
   "scope": "offline source/test repair; no deployment, no real business operation, no merge",
   "contracts": {
-    "google_document_write_hold": "One root PageResourceAdmission owns per-document holds; child admissions inherit; holds block all later writes to the same document before page creation/cell write. Reads and other documents remain allowed. Holds are in-memory; process restart is the page-level release boundary; durable V13 holds remain authoritative.",
+    "google_document_write_hold": "One root PageResourceAdmission owns per-document holds and atomic in-flight writer leases; child admissions inherit. Holds block later writes before page/API dispatch and survive held-page closure; only explicit owner-identified settlement/close or an explicit review release clears them. Reads and other documents remain allowed. Holds/leases are in-memory; process restart clears page-level state while durable V13 holds remain authoritative.",
     "sales_order_mail_admission": "run_sales_header_check requires a PageResourceAdmission; missing/invalid admission returns STOPPED before acquire_cdp_browser; valid admission is bound before new_background_page; backend passes self._page_admission."
   },
   "source_changes": [
-    "src/research/cdp_pages.py: document key + DocumentWriteHeld + root/child hold/release + page-closed pruning",
-    "src/launcher/google_quote_update.py: quote write admission/hold/release wiring",
-    "src/launcher/google_web.py: browser fallback write admission/hold wiring",
-    "src/sheets/google_api_service.py: API write admission/hold wiring",
-    "src/sheets/quotation_input.py: translate DocumentWriteHeld to QuotationInputBusy",
+    "src/research/cdp_pages.py: document key + DocumentWriteHeld/Busy + root/child hold + atomic begin/end write lease + no page-close auto-release",
+    "src/launcher/google_quote_update.py: quote write hold + dispatch lease + explicit settlement release; no page-close release",
+    "src/launcher/google_web.py: browser fallback write hold + atomic in-flight lease",
+    "src/sheets/google_api_service.py: API write requires shared admission/require_open, atomic lease, no private-root fallback",
+    "src/sheets/quotation_input.py: DocumentWriteHeld/Busy -> QuotationInputBusy, never UNKNOWN",
     "src/launcher/sales_header.py: mandatory admission gate + bind before page",
     "src/launcher/backend.py: pass page_admission to sales and API service"
   ],
@@ -28,7 +28,26 @@
     "quote_sales_backend_file": "tests/launcher/test_rfq018_shared_safety.py (7 tests; all 7 red before wiring)",
     "api_file": "tests/sheets/test_google_api_service.py (2 new tests; both red because constructor lacked page_admission)",
     "browser_file": "tests/launcher/test_google_web.py (1 new test; red, write was not blocked)",
-    "admission_unit": "tests/research/test_shared_document_admission.py (6 tests; passed after the initial admission implementation, before wiring)"
+    "admission_unit": "tests/research/test_shared_document_admission.py (6 tests; passed after the initial admission implementation, before wiring)",
+    "ceo_review": {
+      "p0a_old_proof": "Loaded old 446d0909 cdp_pages: OLD closed-page hold: None (hold pruned by page.is_closed)",
+      "p0b_old_proof": "Old google_api_service used `page_admission or PageResourceAdmission()` and `_write_range` only called require_document_writable; no require_open, no shared-root fail-closed, no atomic lease.",
+      "p1c_old_proof": "Old cdp_pages had no begin_document_write/end_document_write; previous same-name test was single-thread manual hold.",
+      "new_tests_added": 12,
+      "new_tests": [
+        "unconfirmed hold survives page close",
+        "quote page close root/child block",
+        "atomic owner reentry/competitor thread",
+        "other document allowed",
+        "api no admission fail-before-call",
+        "api invalid admission fail-before-call",
+        "api in-flight blocks second client",
+        "browser fallback in-flight blocks second client",
+        "quote dispatch lease",
+        "busy-not-unknown quotation input",
+        "old behavior red proof"
+      ]
+    }
   },
   "green_evidence": {
     "original_26": {
@@ -36,15 +55,11 @@
       "passed": 26,
       "failed": 0,
       "skipped": 0,
-      "duration_seconds": 0.72,
+      "duration_seconds": 0.88,
       "command": "python -m pytest <RFQ-017 26 nodeids> -q --tb=short -p no:cacheprovider"
     },
-    "new_16": {
-      "passed": 16,
-      "failed": 0
-    },
     "related_files": {
-      "passed": 426,
+      "passed": 478,
       "failed": 0,
       "files": [
         "tests/launcher/test_google_quote_update.py",
@@ -57,17 +72,23 @@
         "tests/research/test_shared_document_admission.py",
         "tests/launcher/test_rfq018_shared_safety.py",
         "tests/launcher/test_google_api_migration.py",
-        "tests/workflow/test_mail_gate_audit.py"
+        "tests/workflow/test_mail_gate_audit.py",
+        "tests/sheets/test_quotation_input.py"
       ]
     },
     "full_suite": {
-      "collected": 4176,
-      "passed": 4175,
+      "collected": 4188,
+      "passed": 4187,
       "failed": 0,
       "skipped": 1,
-      "duration_seconds": 320.88,
+      "duration_seconds": 341.54,
       "command": "python -m pytest tests -q --tb=short -p no:cacheprovider",
       "note": "The single skip is the pre-existing Windows symlink-permission test; no deselect or hidden failure."
+    },
+    "new_tests": {
+      "passed": 28,
+      "failed": 0,
+      "note": "16 initial + 12 CEO-review regressions"
     }
   },
   "baseline_comparison": {
@@ -79,13 +100,13 @@
       "deselected": 26
     },
     "rfq018_full": {
-      "collected": 4176,
-      "passed": 4175,
+      "collected": 4188,
+      "passed": 4187,
       "failed": 0,
       "skipped": 1
     },
     "delta": {
-      "new_tests": 16,
+      "new_tests": 28,
       "removed_tests": 0,
       "failing_to_passing": 26
     }
@@ -259,9 +280,10 @@
   ],
   "limitations": [
     "No live EXE/Windows pytest; all verification is offline fake/synthetic.",
-    "The shared document hold is process-local; a restart clears page-level holds while durable V13 holds persist. No durable Google resource-hold table was added.",
-    "The API transport is protected when constructed by the production backend with the shared admission; direct test/legacy constructions receive a private admission and are not a cross-service production path.",
+    "The shared document hold is process-local; a held page closing does NOT clear it, but a process restart clears page-level holds while durable V13 holds persist. No durable Google resource-hold table was added.",
+    "The API transport fails closed for writes without the production backend's shared admission; read-only/test construction must inject an explicit controlled admission. No private-root write fallback remains.",
     "The 20 rewritten tests preserve the original safety intent as documented; some read-quarantine tests now assert 'unresolved page never reused for write' instead of a global write block because current architecture allows an isolated fresh write page. The 5 confirmed write/admission gaps are fixed with unchanged original tests.",
     "No real Google/INSO/SMTP/Chrome operation was performed."
-  ]
+  ],
+  "review_round": "CEO first Review CHANGES_REQUESTED (P0-A/P0-B/P1-C) addressed; original RFQ-018 work retained"
 }

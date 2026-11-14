@@ -222,3 +222,23 @@ def test_unknown_error_on_the_native_transport_keeps_the_old_retry():
     values.write_error = RuntimeError("native grid input failed")
     with pytest.raises(QuotationInputAttemptFailed):
         writer.write_payload(RAW)
+
+def test_shared_document_busy_is_deferred_not_an_uncertain_write():
+    """P1-C: atomic busy is a retryable busy surface, never a durable UNKNOWN."""
+    from src.research.cdp_pages import DocumentWriteBusy
+    from src.sheets.quotation_input import QuotationInputBusy
+
+    writer, values = adapter()
+    values.write_error = DocumentWriteBusy(
+        ("https", "docs.google.com", "/spreadsheets/d/fake-sheet/edit"))
+    with pytest.raises(QuotationInputBusy):
+        writer.write_payload(RAW)
+
+def test_invalid_shared_admission_is_unavailable_not_an_uncertain_write():
+    """P0-B: invalid admission stops before dispatch; not a new UNKNOWN write."""
+    from src.research.cdp_pages import PageTargetCleanupError
+
+    writer, values = adapter()
+    values.write_error = PageTargetCleanupError((ValueError("synthetic"),))
+    with pytest.raises(QuotationInputUnavailable):
+        writer.write_payload(RAW)

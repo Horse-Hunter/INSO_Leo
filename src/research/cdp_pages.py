@@ -65,6 +65,20 @@ class DocumentWriteHeld(RuntimeError):
         self.failure_classes: tuple[str, ...] = ()
 
 
+class DocumentWriteBusy(RuntimeError):
+    """Another owner currently holds the atomic in-flight write lease.
+
+    Busy is not an unknown outcome; the caller may defer/retry according to its
+    existing policy. It is never converted into a durable UNKNOWN hold.
+    """
+
+    def __init__(self, document) -> None:
+        super().__init__("GOOGLE_DOCUMENT_WRITE_BUSY")
+        self.reason = "GOOGLE_DOCUMENT_WRITE_BUSY"
+        self.document = tuple(document)
+        self.failure_classes: tuple[str, ...] = ()
+
+
 def google_document_key(url: str) -> tuple[str, str, str]:
     """Exact Google document identity shared by quote/browser/API writers."""
     if not isinstance(url, str):
@@ -97,6 +111,8 @@ class PageResourceAdmission:
         # Document key -> {owner token: sanitized reason}. The root admission
         # owns every hold so sibling/child services cannot bypass it.
         self._document_holds = {}
+        # Document key -> {owner token: reentrant in-flight write count}.
+        self._document_writers = {}
 
     def invalidate(self, error):
         with self._lock:
@@ -166,6 +182,42 @@ class PageResourceAdmission:
             if not holds:
                 root._document_holds.pop(key, None)
 
+    def begin_document_write(self, document, owner):
+        """Atomically claim the one in-flight write lease for this document.
+
+        Same-owner reentry is allowed. A competing owner gets
+        ``DocumentWriteBusy`` before any page/API dispatch. An unresolved hold
+        is still a hard ``DocumentWriteHeld``. The claim is released only by
+        ``end_document_write``; it is never a durable UNKNOWN by itself.
+        """
+        key = tuple(document)
+        root = self._document_root()
+        with root._lock:
+            holds = root._document_holds.get(key)
+            if holds:
+                raise DocumentWriteHeld(next(iter(holds.values()))[0], key)
+            writers = root._document_writers.setdefault(key, {})
+            if owner in writers:
+                writers[owner] += 1
+                return
+            if writers:
+                raise DocumentWriteBusy(key)
+            writers[owner] = 1
+
+    def end_document_write(self, document, owner):
+        """Release this owner's in-flight write lease (idempotent)."""
+        key = tuple(document)
+        root = self._document_root()
+        with root._lock:
+            writers = root._document_writers.get(key)
+            if not writers or owner not in writers:
+                return
+            writers[owner] -= 1
+            if writers[owner] <= 0:
+                writers.pop(owner, None)
+            if not writers:
+                root._document_writers.pop(key, None)
+
     def document_hold(self, document):
         """Return the sanitized reason when this document has any active hold."""
         key = tuple(document)
@@ -178,15 +230,9 @@ class PageResourceAdmission:
             with node._lock:
                 holds = node._document_holds.get(key)
                 if holds:
-                    for owner, value in tuple(holds.items()):
-                        reason, page = value
-                        is_closed = getattr(page, "is_closed", None)
-                        if callable(is_closed) and is_closed() is True:
-                            holds.pop(owner, None)
-                            continue
-                        return reason
-                    if not holds:
-                        node._document_holds.pop(key, None)
+                    # Page closure is NOT evidence that an uncertain write
+                    # settled. Only release_document(owner) may clear this.
+                    return next(iter(holds.values()))[0]
             node = node._parent
         return None
 

@@ -121,3 +121,68 @@ python -m pytest tests -q --tb=short -p no:cacheprovider
 - This log, `TASK_SPEC.md`, `TEST_MAPPING.md`, `FINAL_REPORT.md` and the evidence JSON are the durable checkpoint.
 - **Next single action:** CEO independent review of RFQ-018. No deployment, trial run, `develop` merge or `main` promotion is authorized by this task.
 - If changes are requested: first re-run the 26 original nodeids and the 16 new tests; do not remove or skip any test to obtain a green result.
+
+## 7. CEO first Review round — P0-A / P0-B / P1-C (2026-11-14 18:35–)
+
+**Review input:** [REVIEW.md](REVIEW.md) (`CHANGES_REQUESTED / P0-A_P0-B_P1-C`), [RELEASE_READINESS.md](RELEASE_READINESS.md). Reused the same worktree/branch; no new task, no source reset, no deployment.
+
+### P0-A — page closure no longer clears an unconfirmed write hold
+
+**Red proof against the previous commit `446d0909`:**
+
+```text
+OLD closed-page hold: None
+```
+
+The old `document_hold()` pruned a hold whenever the held page reported `is_closed()==True`. New tests first reproduced that hazard:
+- `tests/research/test_shared_document_admission.py::test_unconfirmed_write_hold_survives_the_held_page_closing`
+- `tests/launcher/test_rfq018_shared_safety.py::test_unconfirmed_quote_hold_survives_page_close_for_root_and_child`
+- `tests/launcher/test_google_quote_update.py::test_pending_quote_left_by_previous_client_is_not_replayed` (now asserts the hold survives page close; only an explicit owner-identified release lets the next write proceed).
+
+**Fix:** removed page-closed pruning from `document_hold()`. A hold is released only by `release_document(owner)` from an explicit settlement path; page lifecycle alone is not evidence. `retire_failed_page(read_only=True)` no longer creates a write hold for pure read failures (bounded read isolation only). The successful `ensure_refresh_input_idle` settlement + close path may release the owner's hold with `allow_closed=True`; owner adoption/identity mismatch still refuses.
+
+### P0-B — API writes require the shared admission and `require_open()`
+
+**Red proof/old source:** previous `GoogleApiSheetsService` used `page_admission or PageResourceAdmission()` and `_write_range` called only `require_document_writable`, without `require_open()` or an atomic lease. New tests:
+- `test_api_write_without_shared_admission_fails_before_any_api_call` (fake API calls == 0)
+- `test_api_write_with_invalid_shared_admission_fails_before_any_api_call` (fake API calls == 0)
+- `test_api_write_is_blocked_by_shared_document_hold`
+- `test_uncertain_api_write_records_the_shared_document_hold`
+
+**Fix:** removed the private-root fallback for writes. `_write_range` fails closed (`CDP_PAGE_ADMISSION_UNCONFIRMED`) when no shared admission is injected, calls `require_open()` and `require_document_writable()` before the API request, and only then starts the atomic lease. The production backend passes `self._page_admission`; read-only/test construction uses an explicit admission via controlled helper.
+
+### P1-C — atomic in-flight write lease and real concurrency tests
+
+**Red proof:** the previous commit had no `begin_document_write`/`end_document_write`; the prior same-name test was a single-thread manual hold. New/changed tests:
+- `tests/research/test_shared_document_admission.py::test_atomic_document_write_allows_same_owner_and_rejects_competitor_thread` (real thread + Event, same-owner reentry, competitor `DocumentWriteBusy`)
+- `tests/launcher/test_google_quote_update.py::test_document_write_admission_serializes_threads_but_allows_same_owner_nesting` (restored as a real two-thread test)
+- `tests/sheets/test_google_api_service.py::test_api_inflight_write_blocks_a_second_client_before_its_request` (blocking fake API; second request not sent; `api.calls == 1`)
+- `tests/launcher/test_google_web.py::test_browser_fallback_inflight_write_blocks_second_client` (blocking first browser write; second client gets `QuotationInputBusy`)
+- `tests/launcher/test_rfq018_shared_safety.py::test_quote_write_occupies_document_until_dispatch_settles` (quote dispatch lease; settled then released)
+
+**Fix:** root admission now stores per-document atomic writer leases (`begin_document_write`/`end_document_write`), same-owner reentrant, competitor `DocumentWriteBusy` (not UNKNOWN). API writes and browser fallback writes acquire around the actual request; quote acquires immediately before the native click and releases at settlement/close. Any uncertain outcome writes a hold before the lease is released, so a later writer sees the hold. Other documents remain writable.
+
+### Targeted results
+
+```text
+python -m pytest <RFQ-017 26 nodeids> -q
+26 passed
+```
+
+```text
+python -m pytest tests/launcher/test_google_quote_update.py tests/launcher/test_google_web.py \
+  tests/launcher/test_read_page_recovery.py tests/launcher/test_sales_order_preflight.py \
+  tests/launcher/test_order_mail.py tests/launcher/test_backend.py \
+  tests/sheets/test_google_api_service.py tests/research/test_shared_document_admission.py \
+  tests/launcher/test_rfq018_shared_safety.py tests/launcher/test_google_api_migration.py \
+  tests/workflow/test_mail_gate_audit.py tests/workflow/test_rfq016_api_chain.py -q
+478 passed
+```
+
+**Full suite after P0/P1 fixes:** `4187 passed, 1 skipped in 341.54s` (4188 collected). No deselect; the only skip remains the pre-existing Windows symlink test.
+
+### Preserved
+
+- No production EXE/process/Chrome/SQLite/Google/INSO/SMTP action; no UNKNOWN/hold clear.
+- 221/SHAHAB/3 V13 holds unchanged; no merge/promotion.
+- All RFQ-018 prior work (26 original nodeids, 16 prior new tests) retained; total new tests 28 (12 added for P0/P1).
