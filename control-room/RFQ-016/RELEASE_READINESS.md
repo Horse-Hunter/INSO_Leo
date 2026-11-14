@@ -1,18 +1,16 @@
-# RFQ-016 — production API single-order release gate
+# RFQ-016 — CEO release / acceptance gates (2026-11-14)
 
-**Status: `SOURCE_FIX_ACCEPTED / PRODUCTION_API_NOT_VERIFIED / REAL_ORDER_NOT_COMPLETED`.** This is a bounded checklist, not a second implementation plan or a license to run all modules.
+**Current:** `EXECUTOR_REPORTED_API_PURCHASE_DONE / CEO_CHANGES_REQUESTED / INSTALLED_TRIAL_NOT_MAIN`. This is a source/document review, not a fresh Windows check. See [CEO Review](REVIEW.md), [checkpoint](EXECUTION_LOG.md), [Executor report](FINAL_REPORT.md).
 
-| Gate | Evidence / next action |
+| Area | Verdict |
 | --- | --- |
-| Existing V1.6 source fix | `24b73be70feb407a85fd25c3af9178430bdaf508` accepted at source; prior EXE replacement **reported**, hash/live binary still recheck |
-| Synthetic API | Previous Service Account synthetic write + readback reported; no need to repeat approved synthetic tests |
-| Production transport | Inspect actual `production.json.google_api.enabled`, external key and frozen `--api-self-check`; `TRANSPORT_READY` only checks construction |
-| Production Google | Read exact document/sheet/row and Editor role **live**; earlier SA Viewer is not sufficient to write. Editor grants entire workbook access |
-| Eligibility | Target row `2026/221` last `未发` = inquiry; prove current date, source identity/brand, SQLite orders, INSO and SMTP; preserve 7-day or approved age-only manual path |
-| Isolation | Existing `inquiry_ids` is not a global filter; prove quotation/TP/mail won't touch unrelated orders or disclose and authorize their effects |
-| External operations | Only after one consolidated Owner authorization for needed Editor + INSO purchase + Google write + quote button + mail; record pre/post receipts and durable UNKNOWN |
-| Acceptance | Read→research→INSO→Google→eligible quote→native button→SQLite/mail; independently show what succeeded, what is UNKNOWN, other affected orders, current process |
+| Exact row221 procurement | Executor reported one native Save-and-Send reconciled `SAVED` / `rec_440fafd372440ecf9dacabf660dd155d`; independent fresh live check NOT_VERIFIED |
+| Google API | Executor reported enabled Editor, `A221=发给采购/F221=FTDI` API readback; independent live entitlement NOT_VERIFIED |
+| Quote | `NO_RECENT_QUOTE` because no supplier quote, so **0 legitimate writes and 0 native button clicks**; future quote path not yet live-tested |
+| Task-centre 60 orders | Executor reported 35 human complete, 24 purchased, 1 invalid/header row, 0 active V12 alerts; **3 old quote holds still persist** |
+| Safety blockers | Automatic closure of possibly-sent/unknown states; all-alert recovery; resync identity rebind without original identity/hold guard; physical-row display fallback after match failure |
+| Tests | Executor-reported 3349 pass/1 skip/26 fail; no new machine-readable final failure comparison/manifest committed |
+| Reliability | Manual quote refusal, stale GUI interval, paused-exit deadlock, orphan tab, recurring old held quote failure remain |
+| Release line | Latest installed `E9E3DA33…` **reported trial**, not Owner-accepted `main`. Branch `develop` retains governance; current code is unmerged on original Executor branch |
 
-**Stop immediately:** another live worker; uncertain INSO/save or Google write; source/date/identity mismatch; unknown quote button result; SENT/UNKNOWN mail conflict; unexpected extra order; unsafe Chrome tab ownership. No raw DB replacement or old top-row removal.
-
-**Resume after any agent interruption:** [CEO handover](../CEO_HANDOVER.md) → [Execution checkpoint](EXECUTION_LOG.md) → verify real Windows process/DB/Google/INSO/SMTP → next authorized single step. [Full historical readiness analysis](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/control-room/RFQ-016/RELEASE_READINESS.md).
+**Required next:** focused P0/P1 safety regressions + minimum fix; compare exact failed IDs to prior baseline; preserve UNKNOWN/SENT/older original browser, business SQLite and backups; only then request renewed independent Review. Production rebuild or forced stop requires separate scoped release/safety authorization. **No automatic `develop → main` promotion.**

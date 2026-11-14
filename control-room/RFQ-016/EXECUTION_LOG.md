@@ -1,36 +1,22 @@
-# RFQ-016 — live execution checkpoint (not historical diary)
+# RFQ-016 — latest recoverable checkpoint (CEO review 2026-11-14)
 
-**Last refreshed: 2026-11-14 document-only takeover.** Everything below marked `REPORTED` is prior Executor evidence, **not a new Windows observation**. **No active production executor/process can be inferred from chat silence.** New Executor must update this card from real live state before any external effect.
+**Source branch:** `workbuddy/v16-rfq016-stabilization` Executor report `41a96f0dd31e815065dce379fadc02aa6c0f86f8`. **CEO verdict:** [CHANGES_REQUESTED / partial real-order receipt accepted](REVIEW.md). This is a **document-only CEO Review, not a fresh Windows observation**.
 
-## 1. Last known facts (do not elevate to current)
+## Last Executor-reported live facts (14:55 Shanghai; reverify)
 
-| Area | Previously reported | Real-time status |
-| --- | --- | --- |
-| Git / source | Dev branch `workbuddy/v16-rfq016-stabilization`; product fix `24b73be70feb407a85fd25c3af9178430bdaf508`; prior CEO review `71a67012e2d0f31b505c2f17aecd407d9cebc951` | Current branch/HEAD/dirty status/worktrees **NOT_VERIFIED on Windows** |
-| Installed EXE | `D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6\\INSO_V1.6.exe` SHA256 `b357889d48e5abe6ec6504eddd610442c877e438018f156c4c932477070814f6`; rollback `dist/release-backups/INSO_V1.6-header-block-20261114T021508Z` | Process, current EXE hash, binary/config match **NOT_VERIFIED** |
-| Production API | `production.json` reported missing `google_api` key; `--api-self-check` reportedly DISABLED on production config | Enabled, key path, real reads/writes **NOT_VERIFIED** |
-| Google ACL | `INSO_QUOTE` reported **Viewer** for original test SA `rfq016-sheets-test@inso-509314.iam.gserviceaccount.com` | Current Editor entitlement **NOT_VERIFIED** |
-| Source candidate | `2026` physical row `221`, `FT2232H-56Q-REEL`, Qty `105`, Brand blank, status `未发`; customer/date not verified here | Source identity, age, INSO, Google, SQLite, mail **NOT_VERIFIED** |
-| External results | Owner said old DeepSeek quota exhausted before order completed; no subsequent authoritative live receipt in Git | No safe claim of zero in-flight operations or no partial effect |
+- EXE `D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.6\\INSO_V1.6.exe` SHA256 `E9E3DA33417414ABAC53F8A88A67D9F053BCDAEAB9730EAE9AD8BD7870DFFAD0`; **reported** PID `38948`. Earlier `197EC23B…`/PID `26604` are **superseded**, not latest.
+- `INSO_QUOTE/2026` physical row **221**, `FT2232H-56Q-REEL` qty105, status `未发 → 发给采购`, brand `空 → FTDI`. Original native save-and-send **once**, followed by `RECONCILIATION_CONFIRMED_SAVED`, INSO receipt `rec_440fafd372440ecf9dacabf660dd155d`, SQLite `PURCHASE_RECORDED/SAVED`. API Writer + readback reported. **No supplier quote** → `NO_RECENT_QUOTE`, 0 `报价输入` writes, 0 button clicks, no mail.
+- API `google_api.enabled=true`, production SA Editor/write after earlier 403, external key preserved; this is prior Executor's observation, not a new verified credential check.
+- Task centre after Owner-directed reconciliation: 60 entries = 35 `HUMAN_COMPLETED` +24 `PURCHASE_RECORDED` +1 `INVALID_INPUT_SKIPPED`, 0 V12 active alerts, white/grey GUI with sheet status column. **Do not infer 0 unresolved external holds**; 3 historical V13 quotation holds remain; `inq_d65be9df…` still fails repeatedly.
+- Six rebuild/deploys reported with rollback; initial backup `dist/release-backups/INSO_V1.6-customer-20261114T113817Z` (old EXE `b357889d…`), last `_internal.prev-20261114T144500Z`. No CEO live verification of current EXE, rollback, PID or SQLite.
+- Four pending groups: unexplained refusal of quotation rerun; 12:00–12:04 stale GUI; paused-module window cannot exit naturally (forced stop reported); orphan blank CDP tab + old recurring quotation hold.
 
-## 2. Mandatory next check (read only)
+## Resume instructions for the next Executor
 
-1. Inspect `git branch --show-current`, `git rev-parse HEAD`, `git status --short`, `git diff`, `git worktree list --porcelain`; preserve all unknown dirty state and reuse original working tree.
-2. Check live INSO EXE PID, module/start/stop status and fresh logs; never start another on an unconfirmed old process. Keep protected Chrome 9222/profile.
-3. Inspect SQLite in read-only mode including WAL/SHM with locks/holds/new order/purchase/quote/SMTP SENT/UNKNOWN; inspect Google current row/date and SA sharing; inspect actual INSO purchase and native quotation state when safely possible.
-4. Verify production API config/self-check/read/Editor and a **genuinely isolated** one-order entry including all other modules.
-5. If business effect/Editor authorization is missing, ask Owner **once** with precise scope. Otherwise proceed per [Task Spec](TASK_SPEC.md).
+1. Read [CEO Review](REVIEW.md) and [active Task Spec](TASK_SPEC.md), plus [14:55 Executor Final Report](FINAL_REPORT.md); full pre-review detailed run log is **preserved immutably** at [`41a96f0d` EXECUTION_LOG](https://github.com/Horse-Hunter/INSO_Leo/blob/41a96f0dd31e815065dce379fadc02aa6c0f86f8/control-room/RFQ-016/EXECUTION_LOG.md). Older 988-line diary at [`0db292fe`](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/control-room/RFQ-016/EXECUTION_LOG.md).
+2. Inspect current branch/HEAD, `git status --short`, `git diff`, `git worktree list --porcelain` **and Windows live process/EXE/config/SQLite/WAL/SHM/Google/INSO/SMTP**. Existing agent window ending does **not** prove app stopped.
+3. Preserve the original worktree, unique Chrome 9222 profile, runtime junctions, all `SENT/UNKNOWN`, V13 holds, unread provider receipts and release backups. **Do not retry row221 purchase/quote**, force-kill Chrome, clear old alerts/holds, or start a second worker.
+4. Source changes remain on original Executor branch, **not yet merged into `develop`**. Add targeted failing regressions and minimum safe fixes for P0/P1 in CEO Review; keep all current production effects gated. Commit exact tests, 26 historical failure IDs, final build provenance and post-effect evidence. One Executor; future chat can disappear without needing a special handoff.
+5. **Next single action:** read-only inspection and minimal source/test remediation; obtain scoped Owner release authorization separately before replacing running EXE. Trial deployment ≠ promotion to `main`.
 
-## 3. Checkpoint record for every meaningful boundary
-
-Use this **same file** (replace this section's current entry with newest fact plus concise references, not endless diary). **Before any external effect**: record timestamp/time zone, executor/window, worktree/HEAD/dirty files, process PID/mode, authorized workbook/sheet/physical row/identity, original Google/INSO/SQLite/SMTP states, durable idempotency hold, exact next effect and other-module scope. Persist actual native guard before dispatch; commit/push safe checkpoint when possible.
-
-**After receipt:** record exact operation attempted, response/ack, independent observed external result, `DONE / NOT_DONE / UNKNOWN / WAITING_OWNER`, SQLite/Google/INSO/mail consistency, other-order impact, whether original process still running, next **single** action and any Owner decision. Do not put credentials, customer private data or raw mail into Git.
-
-**Current checkpoint:** `TAKEOVER_REQUIRED / LIVE_NOT_VERIFIED / NO_EXTERNAL_ACTION_THIS_DOCUMENT_UPDATE`. Last action of this document-only CEO: shorten/reroute docs, no app run, no Google write, no INSO save, no quote click and no mail sent. **Next:** live scene read-only verification by single Executor.
-
-**Crash/quota rule:** a successor trusts only last persisted pre-action guard + actual external reconciliation, never a missing final report. A previous window may have left a process still running. Unknown = do not replay.
-
-## 4. Historic evidence (immutable links)
-
-[Full original execution log (988 lines)](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/control-room/RFQ-016/EXECUTION_LOG.md) · [Historical final reports](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/control-room/RFQ-016/FINAL_REPORT.md) · [API feasibility](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/control-room/RFQ-016/GOOGLE_API_FEASIBILITY_2026-11-13.md) · [latest header/read evidence](../../docs/evidence/v16/rfq016-phase3-production-parity-2026-11-14.json) · [current Review](REVIEW.md) · [CEO takeover card](../CEO_HANDOVER.md).
+**Review status:** `CHANGES_REQUESTED / SOURCE_FIX_REQUIRED / NO_CEO_LIVE_RUN`. Change `COORDINATION.md` only when actual state changes.
