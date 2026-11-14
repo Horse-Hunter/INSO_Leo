@@ -1,42 +1,44 @@
-# RFQ-016 — 安全修复交付（2026-11-14）
+﻿# RFQ-016 — 安全修复交付（第二轮，2026-11-14）
 
 正在实现什么：
 
-修复 CEO 复核 `04222709` 指出的三处安全问题；不重跑第 221 行、不做新的真实业务、不部署。
+按 CEO 第二次复核 `c5d3ea50` 修复 P0-A/B/C/P1-D 四个剩余安全缺口；不重跑第 221 行、不做新的真实业务、不部署。
 
 理想变化是什么：
 
-你在表格里手工推进订单，程序不会因此把“可能已发采购、结果未知或已被别的料号占用”的订单当成完成；任务中心的状态列只显示这笔订单自己的状态，证明不了就明确写「来源待核对」。
+手工改表格状态不能替程序确认未完成的外部操作；自动结案不能因空型号、数量/重要度变化或历史错配状态误结案；右键恢复必须把未确认的状态写入和可能已发送的采购挡住；任务中心显示「来源待核对」时，行颜色和筛选必须一致。
 
 以前是什么：
 
-- 自动结案会把 `INTERRUPTED_POSSIBLY_SENT`、`STATUS_WRITE_PENDING` 和未确认采购当成“人工处理完成”，并清掉它们的告警。
-- 右键「按表格恢复状态」主要看旧行号和“完成状态”，可能把订单改绑到完全不同的型号或数量。
-- 原订单定位失败后，状态列会直接读旧物理行，可能把另一笔订单的状态显示给当前订单。
+- 采购守卫只对 `PURCHASE_EXCEPTION` 生效；`SOURCE_CHANGED`、`RESEARCH_FAILED` 等状态若历史上带着 `MANUAL_REVIEW` / `UNKNOWN_WRITE_OUTCOME`，仍可能被手工表格状态结案。
+- 自动结案最后一层只按型号子串匹配，不校验数量/重要度；空型号会因 `"" in stored_model` 误通过。
+- 右键恢复在采购 `SAVED` 时放行 `STATUS_WRITE_PENDING` 和 `INTERRUPTED_POSSIBLY_SENT`，但保存采购不等于 Google 状态写入/可能已发送的结果已确认。
+- Workbench 实际行渲染用 `_calm`，它不看 `source_link_unproven`：筛选算「需核对」，行却画成灰色。
 
 现在是什么：
 
-- **自动结案只接受外部效果已结算的订单**。可能已发采购、表格状态待写、采购结果未知、报价仍有挂起保护的订单，即使表格状态被手工改成完成，也保持原状态和有效告警。
-- **右键恢复必须证明是同一订单**：同一物理行、同一物料（型号/数量/重要度；允许你补全型号文字、改品牌），采购和报价结果都已结算；不同物料、行号被复用、重复行、未知采购或报价挂起一律拒绝，不改台账。
-- **状态列只认真实归属**：精确重定位，或全表唯一的物料匹配；两者都不成立时显示「来源待核对」，不再借用旧行的状态。
-- 代码已提交到原 Executor 分支（代码提交 `abf95cf0f6db5ae6e6b9624edb4359ffcc1e249e`）；**未部署**。正式 EXE 仍是 `E9E3DA33…`、PID `38948`，本轮没有替换、没有停止、没有新业务操作。
-- 第 221 行的采购记录完整保留：`PURCHASE_RECORDED` / `SAVED` / `rec_440fafd372440ecf9dacabf660dd155d`，**没有重新下单或重新报价**。
+- **所有结案路径统一检查**：durable purchase 的未确认结果、派发事件（armed/clicked/unknown/saved）和 V13 报价挂起；任何一项未结算就不结案。`SOURCE_CHANGED + MANUAL_REVIEW`、`RESEARCH_FAILED + armed event` 均有回归测试。
+- **自动结案更严格**：空型号、数量变化、重要度变化不再自动结案；型号补全（`N6210`→`CELERON-N6210`）仍可自动结案。数量修正保留给显式右键恢复。
+- **右键恢复**：`STATUS_WRITE_PENDING` / `INTERRUPTED_POSSIBLY_SENT` 即使采购 `SAVED` 也拒绝；`PURCHASE_RECORDED + SAVED` 等已核对状态可以通过；显式数量修正仍可完成。
+- **Workbench 实际渲染**：`source_link_unproven` 现在使行 tag 为 `warning`，与「需核对」筛选一致；已确认的结案行保持 `legacy` 灰色。
+- 代码已提交到原 Executor 分支（代码提交 `4b227ba67ac22a018c432d17a4fa4706844314e0`）；**未部署**。正式 EXE `E9E3DA33…`、PID `38948` 未动；第 221 行采购记录 `rec_440fafd372440ecf9dacabf660dd155d` 保留。
 
 做完了什么：
 
-1. **P0-1 自动结案安全**：新增“未确认外部效果不自动结案”的判断；未知采购、待写状态、可能已发送、报价挂起都不再被手工表格状态带走。人工完成时只清“已无意义”的数据质量告警；采购结果已结算时同时清对应采购告警；邮件失败、采购未知、安全类告警继续保留。
-2. **P0-2 右键恢复安全**：重写为“先校验、后改台账”；校验物理行、唯一物料、采购结算状态和报价保护；拒绝不同料号、行号复用、未知采购与报价挂起。测试中原来“换料也能改绑”的旧断言已改为拒绝。
-3. **P1 状态列真实性**：删除“旧行号唯一就当本单”的兜底；改为精确重定位或全表唯一物料匹配；无法证明时显示「来源待核对」；同一物理行不允许被两笔订单同时认领；任务中心筛选与颜色保持一致。
-4. **回归测试先行**：修复前新增的用例确实失败（13 项自动结案/状态列 + 4 项右键恢复），修复后全部通过；旧安全测试没有删除、跳过或放宽，两处按新口径改成更严格的断言。
-5. **保留现场**：没有停止正在运行的正式程序，没有强杀 Chrome，没有清 UNKNOWN/挂起，没有恢复旧数据库，没有覆盖正式 EXE，没有开展新的真实业务操作。
+1. **P0-A**：`_owner_completion_is_safe` 对所有可自动结案状态统一检查 durable purchase + 派发事件 + 报价 hold；台账不可信时 fail closed。头表处置路径也走同一守卫。
+2. **P0-B**：`owner_resolved_status` 最后一层增加非空型号、数量、重要度校验；自动数量修正改为拒绝。显式 `resync` 保留人工数量/重要度修正能力，并仍要求唯一型号行。
+3. **P0-C**：`_resync_effects_settled` 无条件拒绝 `STATUS_WRITE_PENDING` / `INTERRUPTED_POSSIBLY_SENT`（即使采购 `SAVED`）；预保存投影若存在派发事件也拒绝；`PURCHASE_RECORDED + SAVED` 可正常恢复。
+4. **P1-D**：`_settled`/`_calm` 排除 `source_link_unproven`，Workbench 真实渲染 tag 改为 `warning`，新增真实 tag 路径测试；已确认结案行仍为灰色。
+5. **只读核对**：用只读 Service Account 读取 SHAHAB 第 115 行，并核对 SQLite 事件/告警/V13/SMTP；未改任何数据。原生 INSO 采购回执因受保护 Chrome 会话由运行中程序持有，标记 `NOT_VERIFIED`。
+6. **现场保留**：没有停止正式程序、强杀 Chrome、清 UNKNOWN/hold、恢复旧数据库、覆盖正式 EXE 或重下第 221 行。
 
 测试结果：
 
-- **改动前基线**（`04222709` 干净工作树）：`3376` 项，`3349` 通过 / `1` 跳过 / `26` 失败。
-- **改动后**：`3397` 项，`3370` 通过 / `1` 跳过 / `26` 失败；失败 nodeid 与基线**完全相同**，没有新增失败。
-- 这 26 项都是早已存在的 launcher 共享页/已移除符号基线（`_document_barrier`、`_GoogleDocumentBarrier`、`google_resource_barrier`、`google_resource_holds`、shared admission），与本次改动无关；精确名称和前后对比在证据 JSON 中。
-- 新增 **21 项**针对性回归测试；`ruff check` 与 `git diff --check` 干净。
-- 本轮**没有**做真实 Google/INSO/SMTP 验证，也没有部署；按授权只做离线测试。
+- 上一轮基线：`3397` 项，`3370` 通过 / `1` 跳过 / `26` 失败。
+- 本轮：`3407` 项，`3380` 通过 / `1` 跳过 / `26` 失败；26 个失败 nodeid 与基线完全一致，没有新增失败。
+- 这 26 项仍是既有 launcher 共享页/已移除符号基线（`_document_barrier`、`_GoogleDocumentBarrier`、`google_resource_barrier`、`google_resource_holds`、shared admission），与本次改动无关。
+- 新增 **10 项**回归，另有 1 项旧测试按新契约收紧（自动数量修正由接受改为拒绝）；`ruff check` 与 `git diff --check` 干净。
+- 本轮只做只读 Google 表读取和 SQLite 只读核对，没有 INSO/SMTP 写入、没有部署、没有真实业务操作。
 
 你接下来需要做什么：
 
@@ -47,25 +49,31 @@ Review RFQ-016 — 安全修复完成，请 CEO 独立复核
 ### 代码与测试
 
 - 分支：`workbuddy/v16-rfq016-stabilization`
-- 修复提交：`abf95cf0f6db5ae6e6b9624edb4359ffcc1e249e`
-- 改动文件：`src/workflow/v12_flow.py`、`src/workflow/v12_store.py`、`src/launcher/backend.py`、`src/launcher/source_status.py`、`src/gui/contracts.py`、`src/gui/workbench.py`、`src/gui/app.py` 及对应测试。
-- 机器可读证据：`docs/evidence/v16/rfq016-ceo-fix-2026-11-14.json`（基线/最终测试计数、26 个失败 nodeid 的前后对比、21 个新增用例、EXE/PID/SQLite/Chrome 只读快照）。
+- 修复提交：`4b227ba67ac22a018c432d17a4fa4706844314e0`
+- 改动文件：`src/workflow/v12_flow.py`、`src/sheets/purchase_status.py`、`src/launcher/backend.py`、`src/gui/workbench.py` 及对应测试。
+- 机器可读证据：`docs/evidence/v16/rfq016-ceo-second-review-2026-11-14.json`（前后测试计数、26 个失败 nodeid 对比、10 个新增用例、SHAHAB/115 只读快照、EXE/PID/SQLite/Chrome 快照）。
 
-### 只读现场（本轮观察）
+### 只读现场
 
-- 正式 EXE：`E9E3DA33417414ABAC53F8A88A67D9F053BCDAEAB9730EAE9AD8BD7870DFFAD0`，PID `38948`（外加 watcher `34304`），运行正常。
+- 正式 EXE：`E9E3DA33417414ABAC53F8A88A67D9F053BCDAEAB9730EAE9AD8BD7870DFFAD0`，PID `38948`（外加 watcher `34304`）。
 - 台账：60 单 = 35 人工处理完成 + 24 已发采购单 + 1 表头脏行跳过；未关闭 V12 告警 0；历史报价保护 3 条仍在。
 - Chrome：仅 `127.0.0.1:9222`，PID `24164`；未操作。
 - 第 221 行：采购记录 `rec_440fafd372440ecf9dacabf660dd155d` 保持，未重跑。
 
-### 必须保留的历史风险（本轮未修改生产数据）
+### SHAHAB 第 115 行只读核对（未改数据）
 
-- **历史不一致**：`inq_99275e8e72b43fd6616fd686`（SHAHAB 第 115 行，`550BG125M000DG`）的采购台账是 `MANUAL_REVIEW / RECONCILIATION_UNREADABLE`，但业务状态被上一版自动结案成 `HUMAN_COMPLETED`，其 `SAVE_OUTCOME_UNKNOWN` 告警在 `2026-11-14T04:39:40Z` 被上一版自动结案清除（recovered）。**这正是本次 P0-1 要防的模式；它早于本轮，不能用新代码自动改写历史。** 是否需要单独开只读核对/重开任务，请 CEO/Owner 决定。
-- 3 条历史 V13 报价挂起（`inq_d65be9df…`、`inq_71f4a2f5…`、`unresolved:0ca37229…`）保持；旧 `inq_d65be9df…` 报价输入失败仍在循环重试，本次未动。
+- 当前表格：日期 `2026-10-06`，状态 `已报价给客户`，型号 `550BG125M000DG`，品牌 `SILICON LABS / Skyworks`，数量 `8`，单位 `Pcs`。
+- SQLite：采购 `MANUAL_REVIEW / RECONCILIATION_UNREADABLE`，无 `saved_record_ref`；事件包含 `SAVE_DISPATCH_ARMED`、`SAVE_OUTCOME_UNKNOWN`、`RECONCILIATION_AMBIGUOUS`；业务状态 `HUMAN_COMPLETED`（2026-10-07）；两条采购告警在 `2026-11-14T04:39:40Z` 被上一版清除；无 V13 hold；两封 `IMPORTANT_ORDER` 邮件 `SENT`。
+- **原生 INSO 采购回执：`NOT_VERIFIED`**。受保护的 Chrome 9222 会话由运行中程序持有，本轮未做独立 INSO 原生读取；没有改数据、没有重放采购、没有清告警/hold。
+- 结论：表格身份与台账一致、表格显示已完成，但 durable purchase 从未被证明保存；这不是成功采购的证据。是否需要单独重开/核对，请 CEO/Owner 决定。
+
+### 保留风险
+
+- 3 条历史 V13 报价挂起（`inq_d65be9df…`、`inq_71f4a2f5…`、`unresolved:0ca37229…`）保持；旧 `inq_d65be9df…` 报价输入失败仍在循环重试。
 - 其他已知问题保持记录、未扩大修复范围：报价重跑拒绝原因未落库、GUI 停刷、暂停时退出卡住、浏览器残留空白页。
 - 当前运行的正式 EXE 仍是修复前代码；源码修复、测试和部署是四件事，部署/晋升须另行批准。
-- **残余限制**：Google 表格没有稳定的行 ID。若旧行被另一笔“完全相同物料/数量/重要度”的订单原地替换，单凭单元格无法区分；本轮未观察到这种情况。不同物料、重复候选和移动行已按上述规则处理。
+- **残余限制**：Google 表格没有稳定的行 ID。若旧行被另一笔“完全相同物料/数量/重要度”的订单原地替换，单凭单元格无法区分；本轮未观察到这种情况。
 
 ### 技术定位
 
-[Task Spec](TASK_SPEC.md) · [本轮执行检查点](EXECUTION_LOG.md) · [CEO Review](REVIEW.md) · [历史报告](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/control-room/RFQ-016/FINAL_REPORT.md)
+[Task Spec](TASK_SPEC.md) · [执行检查点](EXECUTION_LOG.md) · [CEO Review](REVIEW.md) · [历史报告](https://github.com/Horse-Hunter/INSO_Leo/blob/0db292fe0cb79d5177f436c3f8cc9b87c75288ee/control-room/RFQ-016/FINAL_REPORT.md)

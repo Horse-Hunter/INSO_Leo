@@ -1,14 +1,16 @@
-# RFQ-016 — safety acceptance/release gate (CEO second Review, 2026-11-14)
+# RFQ-016 — 第三轮 CEO 源码安全门槛（2026-11-14）
 
-**State: `CHANGES_REQUESTED / NO_CODE_DEPLOYMENT / NO_OWNER_PROMOTION`.** See [REVIEW](REVIEW.md) and [latest Executor report](FINAL_REPORT.md). Prior CEO Review [04222709](https://github.com/Horse-Hunter/INSO_Leo/blob/04222709295a6a5fbfc9b33f0485cc0ccd9a9aa1/control-room/RFQ-016/REVIEW.md).
+**`CHANGES_REQUESTED_ONE_ALERT_GAP`；之前四项 P0-A/B/C/P1-D 已在源码静态复核接受；**[详见 Review](REVIEW.md)。
 
-| Gate | Current evidence |
+| 关口 | 现状 |
 | --- | --- |
-| Real row221 purchase | Executor reported INSO `rec_440fafd3…` saved, Google status/brand API readback; no supplier quote/no button/no mail; no new CEO live verification |
-| Fixed source | `abf95cf0` not installed, not in `develop`; old EXE SHA `E9E3DA33…` still reported running |
-| Tests | Executor JSON: baseline 3376/3349pass/26fail/1skip → final 3397/3370pass/26fail/1skip; identical ordered 26 fail IDs, 21 new tests; CEO verified JSON/patch, did not run suite |
-| Safety | P0-A other business states bypass durable unresolved purchase; P0-B old auto-completion physical row fallback ignores qty and accepts blank model; P0-C resync lets STATUS_WRITE_PENDING through when purchase SAVED; P1-D unproven row filtered as 需核对 but painted calm in actual Workbench |
-| Historical source/DB contradiction | SHAHAB row115 `inq_99275e8e72b43fd6616fd686` `MANUAL_REVIEW / RECONCILIATION_UNREADABLE` but `HUMAN_COMPLETED`, previously recovered unknown alert. Read-only audit APPROVED; no write/replay/SQL correction |
-| Other risks | 3 old quote holds, `inq_d65be9df…` repeated failure, quote manual refusal, GUI stale, paused-window exit, browser orphan tab |
+| 采购业务 | row221 INSO receipt `rec_440fafd3…` SAVED、Google 发给采购/FTDI，Executor 报告；不得重跑 |
+| 本轮代码 | `4b227ba6`，仅在原 Executor 分支，**没有部署也没有合并** |
+| 四项安全漏洞 | P0-A/B/C + P1-D 源码/新增测试复核通过 |
+| 一项剩余 | 表头脏行处置 `v12_flow.py:410-417` 无条件恢复所有 AlertType，必须限缩 DATA_QUALITY 并测试保留邮件/安全告警 |
+| 测试 | Executor 3407 项：3380 pass /1skip /26 fail；和前版失败 nodeid 完全一致，但 26 launcher/shared-page 准入旧失败尚未解决 |
+| SHAHAB/115 | `MANUAL_REVIEW/RECONCILIATION_UNREADABLE`、无 saved receipt，历史告警被错清；原生 INSO `NOT_VERIFIED`，不得判定真实采购成功或自动重开 |
+| 运行程序 | Executor 报告旧 EXE SHA `E9E3DA33…` PID38948；CEO 无实机验证。3 条旧报价 hold 仍存在 |
+| 发布晋升 | 无源码 PASS、无 Owner 部署授权；现版晋升严格 Owner 试运行后明确批准 |
 
-**Exit criteria:** narrow P0/P1 tests/patch and renewed independent source Review; fresh production snapshot before any release; explicit separate release approval and Owner sign-off after real trial before `develop → main`. Do not use “0 V12 alerts” as “0 unknown effects.”
+**下一步**：P1-E 单项安全补修 → CEO 复核；26 既存测试失败作为独立发布风险处理；生产试运行与 `develop → main` 都需另外按规则审批。
