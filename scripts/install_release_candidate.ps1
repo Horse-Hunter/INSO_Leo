@@ -12,10 +12,16 @@ RFQ-021-R5. Nothing is touched until every one of these is proven:
      behind that junction, and its `sqlite_path` still resolves to the database
      the database report covers;
   6. the database report proves provenance: the copy is byte-identical to the
-     live ledger, no non-empty `-wal`, the program was stopped, integrity ok,
-     business tables present, recent activity -- all bound to the copy's hash;
-  7. the candidate re-verifies against its own manifest;
-  8. no process is running from the target directory.
+     live ledger, no non-empty `-wal`, the program was **proven** stopped
+     (process enumeration succeeded and every INSO_V1.6 executable path was
+     readable), integrity ok, business tables present, recent activity -- all
+     bound to the copy's hash;
+  7. the write-intent journal answers with a real 0, or the ledger provably
+     predates it and its recorded unknown writes are still protected. An
+     absent, unreadable or null count is never treated as zero;
+  8. the candidate re-verifies against its own manifest;
+  9. no process is running from the target directory -- and an unprovable
+     process state refuses here and again immediately before the first move.
 
 After the copy, **every installed program file is re-hashed against the
 candidate manifest**. A count check is not integrity. If anything mismatches --
@@ -58,13 +64,53 @@ param(
     # ever cause a failure -- none can turn a bad install into PASS.
     [switch]$InjectSwitchFault,
     [switch]$InjectPostCopyCorruption,
-    [switch]$InjectRestoreFault
+    [switch]$InjectRestoreFault,
+    # "always" / "unidentified" / "before_switch": see Get-StopState.
+    [string]$InjectProcessQueryFault = ""
 )
 $ErrorActionPreference = "Stop"
 if ($env:RFQ021_OFFLINE_GATE_TESTS -ne "1") {
     $InjectSwitchFault = $false
     $InjectPostCopyCorruption = $false
     $InjectRestoreFault = $false
+    $InjectProcessQueryFault = ""
+}
+
+function Get-Sha256([string]$path) {
+    return (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+# Fail-closed process enumeration (RFQ-021-R5 P0).
+#
+# "No rows" is not "not running" when the query itself failed, when access was
+# denied, or when a process's executable path cannot be read: each of those could
+# be the program this install is about to overwrite. The status is three-valued;
+# $null means unproven and must refuse. Used both before the first verification
+# and again immediately before the first move.
+function Get-StopState([string]$InstallRoot, [string]$FaultMode) {
+    if ($FaultMode -eq "query_failed") {
+        return @{ Stopped = $null; Detail = "the process query failed (offline fault simulation)" }
+    }
+    if ($FaultMode -eq "unidentified") {
+        return @{ Stopped = $null; Detail = "a process executable path could not be read (offline fault simulation)" }
+    }
+    try {
+        $processes = @(Get-CimInstance Win32_Process -Filter "Name='INSO_V1.6.exe'" -ErrorAction Stop)
+    }
+    catch {
+        return @{ Stopped = $null; Detail = "process enumeration failed: $($_.Exception.Message)" }
+    }
+    $unidentified = @($processes | Where-Object { [string]::IsNullOrWhiteSpace([string]$_.ExecutablePath) })
+    if ($unidentified.Count -gt 0) {
+        return @{ Stopped = $null; Detail = "cannot read the executable path of $($unidentified.Count) INSO_V1.6.exe process(es) (PIDs: $($unidentified.ProcessId -join ', '))" }
+    }
+    $running = @($processes | Where-Object {
+        ([string]$_.ExecutablePath).StartsWith($InstallRoot, [StringComparison]::OrdinalIgnoreCase)
+    })
+    if ($running.Count -gt 0) {
+        return @{ Stopped = $false; Detail = "PIDs $($running.ProcessId -join ', ')" }
+    }
+    return @{ Stopped = $true; Detail = "$($processes.Count) other INSO_V1.6 process(es), none under this install" }
 }
 
 function Stop-Switch([string]$message) {
@@ -283,13 +329,16 @@ if (-not (Test-Path -LiteralPath $DatabaseReport -PathType Leaf)) {
 }
 $report = Get-Content -LiteralPath $DatabaseReport -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($report.result -ne "PASS") { Stop-Switch "database verification report is not PASS" }
-if ($report.schema_version -lt 3) {
-    Stop-Switch "the database report is schema $($report.schema_version); it does not carry the quiescence proof this installer requires. Re-run verify_database_backup.ps1."
+if ($report.schema_version -lt 4) {
+    Stop-Switch "the database report is schema $($report.schema_version); it does not carry the quiescence and write-intent proofs this installer requires. Re-run verify_database_backup.ps1."
 }
 if (-not $report.quiescence) { Stop-Switch "the database report carries no quiescence proof" }
-if ($report.integrity_check -ne "ok") { Stop-Switch "database integrity_check was $($report.integrity_check)" }
-if (-not $report.program_stopped) { Stop-Switch "the database report does not prove the program was stopped" }
+if (-not $report.process_state) { Stop-Switch "the database report carries no proven process state" }
+if ($report.program_stopped -isnot [bool] -or -not $report.program_stopped) {
+    Stop-Switch "the database report does not prove the program was stopped"
+}
 if (-not $report.wal_clean) { Stop-Switch "the database report does not prove a checkpointed WAL" }
+if ($report.integrity_check -ne "ok") { Stop-Switch "database integrity_check was $($report.integrity_check)" }
 if ([double]$report.event_age_hours -gt $MaxAgeHours) {
     Stop-Switch ("the ledger's last event is {0} h old; this backup is not current" -f $report.event_age_hours)
 }
@@ -313,8 +362,39 @@ $reportInstall = if ($report.install_dir) { ([string]$report.install_dir).TrimEn
 if (-not $reportInstall -or -not [string]::Equals($reportInstall, $target, [StringComparison]::OrdinalIgnoreCase)) {
     Stop-Switch "the database report belongs to '$reportInstall', not to this installation '$target'"
 }
-if ($null -ne $report.open_write_intents -and [int]$report.open_write_intents -gt 0) {
-    Stop-Switch "$($report.open_write_intents) unresolved write intent(s) were in the ledger; switching over an unconfirmed external write can lose or replay an order"
+# A write-intent count that is absent, null or not a number is not zero. Only a
+# confirmed 0, or a proven legacy ledger whose unknown writes are still
+# protected, may authorise the switch.
+$intentCount = $report.open_write_intents
+if ($null -eq $intentCount -or -not (($intentCount -is [int]) -or ($intentCount -is [long]))) {
+    Stop-Switch "the report's write-intent count is '$intentCount', not a proven number. An unproven count is not zero."
+}
+if ([int64]$intentCount -ne 0) {
+    Stop-Switch "$([int64]$intentCount) unresolved write intent(s) were in the ledger; switching over an unconfirmed external write can lose or replay an order"
+}
+switch ([string]$report.write_intent_state) {
+    "NONE_PROVEN" { }
+    "LEGACY_NO_JOURNAL_PROVEN" {
+        $legacy = $report.legacy_unknown_write
+        if (-not $legacy -or -not $legacy.checked) {
+            Stop-Switch "the report claims a legacy ledger without verifying its unknown-write state; absence of the journal is not zero"
+        }
+        foreach ($field in @("unprotected_unknown_rows", "unattributed_holds")) {
+            $value = $legacy.$field
+            if ($null -eq $value -or -not (($value -is [int]) -or ($value -is [long]))) {
+                Stop-Switch "the report's legacy unknown-write check could not determine '$field'; that is not zero"
+            }
+            if ([int64]$value -ne 0) {
+                Stop-Switch ("the ledger holds {0} {1}; switching over it could lose or replay an unknown write" -f $value, $field)
+            }
+        }
+    }
+    "LEGACY_NO_JOURNAL_UNPROVEN" {
+        Stop-Switch "the report's legacy unknown-write state is not proven; an unprotected UNKNOWN/SENT write could be lost or replayed by a switch. Reconcile it by hand and never clear a hold."
+    }
+    default {
+        Stop-Switch "the report's write-intent state is '$($report.write_intent_state)'; it is not a proven state"
+    }
 }
 
 # The configuration must still point at the ledger the report covers.
@@ -352,10 +432,14 @@ $candidateInternal = Join-Path $candidate "_internal"
 $approved = Read-Manifest $Manifest
 
 # --- 7. the target must not be running (by path, not just by name) ---------
-$running = @(Get-CimInstance Win32_Process -Filter "Name='INSO_V1.6.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($target, [StringComparison]::OrdinalIgnoreCase) })
-if ($running.Count -gt 0) {
-    Stop-Switch "INSO_V1.6 is still running from $target (PIDs: $($running.ProcessId -join ', ')). Stop it normally first; never force-kill."
+# An unqueryable or unidentifiable process is NOT "not running".
+$gateFault = if ($InjectProcessQueryFault -eq "always") { "query_failed" } else { $InjectProcessQueryFault }
+$stop = Get-StopState $target $gateFault
+if ($null -eq $stop.Stopped) {
+    Stop-Switch "cannot prove INSO_V1.6 is stopped for ${target}: $($stop.Detail). Refusing to switch on an unproven stop."
+}
+if (-not $stop.Stopped) {
+    Stop-Switch "INSO_V1.6 is still running from $target ($($stop.Detail)). Stop it normally first; never force-kill."
 }
 
 # --- 8. switch ------------------------------------------------------------
@@ -408,11 +492,16 @@ $previousInternal = Join-Path $target ("_internal.prev-" + $stamp)
 $switched = $false
 
 # Re-check right before the first move: the guard above ran before the candidate
-# was verified, and a program started in between must still stop the switch.
-$runningNow = @(Get-CimInstance Win32_Process -Filter "Name='INSO_V1.6.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($target, [StringComparison]::OrdinalIgnoreCase) })
-if ($runningNow.Count -gt 0) {
-    Stop-Switch "INSO_V1.6 started from $target while the candidate was being verified (PIDs: $($runningNow.ProcessId -join ', ')); nothing was changed."
+# was verified, and a program started in between must still stop the switch. The
+# same fail-closed rule applies: an unproven process state refuses, and nothing
+# has been moved yet.
+$lateFault = if ($InjectProcessQueryFault -eq "before_switch") { "query_failed" } else { "" }
+$stopNow = Get-StopState $target $lateFault
+if ($null -eq $stopNow.Stopped) {
+    Stop-Switch "cannot prove INSO_V1.6 is stopped before the switch: $($stopNow.Detail). Nothing was changed."
+}
+if (-not $stopNow.Stopped) {
+    Stop-Switch "INSO_V1.6 started from $target while the candidate was being verified ($($stopNow.Detail)); nothing was changed."
 }
 
 try {

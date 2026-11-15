@@ -33,9 +33,13 @@ param(
     [string]$PythonExecutable = "",
     [string[]]$RequireTable = @("workflow_v12_purchase_state", "workflow_v13_holds", "workflow_v12_events"),
     [int]$MinPurchaseRows = 1,
-    [int]$MaxAgeHours = 72
+    [int]$MaxAgeHours = 72,
+    # Offline-gate-test fault simulation. Honoured only when
+    # RFQ021_OFFLINE_GATE_TESTS=1, and it can only ever cause a refusal.
+    [string]$InjectProcessQueryFault = ""
 )
 $ErrorActionPreference = "Stop"
+$processFault = if ($env:RFQ021_OFFLINE_GATE_TESTS -eq "1") { $InjectProcessQueryFault } else { "" }
 
 function Write-Failure([string]$message) {
     Write-Output "DB_VERIFY_RESULT = FAIL"
@@ -45,6 +49,40 @@ function Write-Failure([string]$message) {
 
 function Get-Sha256([string]$path) {
     return (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+# Fail-closed process enumeration (RFQ-021-R5 P0).
+#
+# A query that fails, a permission denial and a process whose executable path
+# cannot be read all look exactly like "no rows" if the caller only inspects the
+# result. None of them proves the program stopped, and the exclusive SQLite
+# handle probe does *not* cover a paused program that closed its database
+# handles. So the status is three-valued: $null = unknown (must refuse),
+# $false = running from this install, $true = provably not running from it.
+function Get-StopState([string]$InstallRoot, [string]$FaultMode) {
+    if ($FaultMode -eq "query_failed") {
+        return @{ Stopped = $null; Detail = "the process query failed (offline fault simulation)" }
+    }
+    if ($FaultMode -eq "unidentified") {
+        return @{ Stopped = $null; Detail = "a process executable path could not be read (offline fault simulation)" }
+    }
+    try {
+        $processes = @(Get-CimInstance Win32_Process -Filter "Name='INSO_V1.6.exe'" -ErrorAction Stop)
+    }
+    catch {
+        return @{ Stopped = $null; Detail = "process enumeration failed: $($_.Exception.Message)" }
+    }
+    $unidentified = @($processes | Where-Object { [string]::IsNullOrWhiteSpace([string]$_.ExecutablePath) })
+    if ($unidentified.Count -gt 0) {
+        return @{ Stopped = $null; Detail = "cannot read the executable path of $($unidentified.Count) INSO_V1.6.exe process(es) (PIDs: $($unidentified.ProcessId -join ', '))" }
+    }
+    $running = @($processes | Where-Object {
+        ([string]$_.ExecutablePath).StartsWith($InstallRoot, [StringComparison]::OrdinalIgnoreCase)
+    })
+    if ($running.Count -gt 0) {
+        return @{ Stopped = $false; Detail = "PIDs $($running.ProcessId -join ', ')" }
+    }
+    return @{ Stopped = $true; Detail = "$($processes.Count) other INSO_V1.6 process(es), none under this install" }
 }
 
 # A clean stop is also a fact about handles, not only about process names: any
@@ -111,11 +149,14 @@ if (-not [string]::IsNullOrWhiteSpace($InstallDir)) {
         Write-Failure "install directory not found: $InstallDir"
     }
     $root = (Resolve-Path -LiteralPath $InstallDir).Path.TrimEnd('\')
-    $running = @(Get-CimInstance Win32_Process -Filter "Name='INSO_V1.6.exe'" -ErrorAction SilentlyContinue |
-        Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($root, [StringComparison]::OrdinalIgnoreCase) })
-    if ($running.Count -gt 0) {
-        Write-Failure ("INSO_V1.6 is still running from {0} (PIDs: {1})" -f $root, ($running.ProcessId -join ', '))
+    $stop = Get-StopState $root $processFault
+    if ($null -eq $stop.Stopped) {
+        Write-Failure "cannot prove INSO_V1.6 is stopped for ${root}: $($stop.Detail). An unproven process state is not a clean stop."
     }
+    if (-not $stop.Stopped) {
+        Write-Failure ("INSO_V1.6 is still running from {0} ({1})" -f $root, $stop.Detail)
+    }
+    Write-Output "process_state = stopped (proven; $($stop.Detail))"
 }
 
 # --- 3b. no process may still hold the ledger open --------------------------
@@ -161,7 +202,6 @@ try:
                        ("saved_purchase_rows", "SELECT COUNT(*) FROM workflow_v12_purchase_state WHERE outcome='SAVED'"),
                        ("hold_rows", "SELECT COUNT(*) FROM workflow_v13_holds"),
                        ("active_alert_rows", "SELECT COUNT(*) FROM workflow_v12_active_alerts WHERE active=1"),
-                       ("open_write_intents", "SELECT COUNT(*) FROM workflow_write_intents WHERE state<>'SETTLED'"),
                        ("event_rows", "SELECT COUNT(*) FROM workflow_v12_events"),
                        ("max_event_at", "SELECT MAX(occurred_at) FROM workflow_v12_events"),
                        ("max_purchase_update", "SELECT MAX(updated_at) FROM workflow_v12_purchase_state")):
@@ -178,6 +218,83 @@ try:
         }
     except sqlite3.Error:
         result["purchase_outcomes"] = None
+
+    # --- write-intent admission -------------------------------------------
+    # A count that could not be read is NOT zero. Either the journal answers
+    # with a real number, or the ledger provably predates the journal and the
+    # old state is verified in its own terms: every recorded unknown write must
+    # still be protected by an alert or a V13 hold. Nothing is cleared here.
+    unknown_outcomes = ("SUBMIT_UNCONFIRMED", "UNKNOWN_WRITE_OUTCOME",
+                        "READ_ONLY_RECONCILIATION_REQUIRED", "MANUAL_REVIEW")
+    unknown_reasons = ("SAVE_OUTCOME_UNKNOWN", "UPDATE_RESULT_UNCONFIRMED", "UNKNOWN_WRITE_OUTCOME")
+    result["write_intent_table_present"] = "workflow_write_intents" in names
+    result["write_intent_state"] = "DETERMINATION_FAILED"
+    result["open_write_intents"] = None
+    result["legacy_unknown_write"] = None
+    try:
+        if result["write_intent_table_present"]:
+            open_intents = con.execute(
+                "SELECT COUNT(*) FROM workflow_write_intents WHERE state<>'SETTLED'").fetchone()[0]
+            if not isinstance(open_intents, int):
+                raise ValueError("the write-intent count is not an integer")
+            result["open_write_intents"] = open_intents
+            result["write_intent_state"] = (
+                "NONE_PROVEN" if open_intents == 0 else "OPEN_WRITE_INTENTS")
+        else:
+            outcome_marks = ",".join("?" for _ in unknown_outcomes)
+            reason_marks = ",".join("?" for _ in unknown_reasons)
+            purchase_unknown = [row[0] for row in con.execute(
+                "SELECT inquiry_id FROM workflow_v12_purchase_state WHERE outcome IN ("
+                + outcome_marks + ")", unknown_outcomes) if row[0]]
+            save_unknown = [row[0] for row in con.execute(
+                "SELECT inquiry_id FROM workflow_v12_events WHERE event_type='SAVE_OUTCOME_UNKNOWN'")
+                if row[0]]
+            unknown_orders = {str(order) for order in purchase_unknown + save_unknown}
+            alert_orders = {str(row[0]) for row in con.execute(
+                "SELECT inquiry_id FROM workflow_v12_active_alerts WHERE active=1 AND reason_code IN ("
+                + reason_marks + ")", unknown_reasons) if row[0]}
+            holds_present = "workflow_v13_holds" in names
+            hold_orders, active_holds, unattributed_holds = set(), 0, 0
+            if holds_present:
+                for (payload,) in con.execute(
+                        "SELECT result_json FROM workflow_v13_holds "
+                        "WHERE active=1 AND reason='UPDATE_RESULT_UNCONFIRMED'"):
+                    active_holds += 1
+                    try:
+                        data = json.loads(payload or "{}")
+                    except ValueError:
+                        unattributed_holds += 1
+                        continue
+                    held = data.get("inquiry_id") if isinstance(data, dict) else None
+                    if not held:
+                        unattributed_holds += 1
+                        continue
+                    hold_orders.add(str(held))
+            protected = alert_orders | hold_orders
+            unprotected = sorted(unknown_orders - protected)
+            result["legacy_unknown_write"] = {
+                "checked": True,
+                "unknown_purchase_rows": len(purchase_unknown),
+                "unknown_save_events": len(save_unknown),
+                "unknown_orders": len(unknown_orders),
+                "protected_unknown_orders": len(unknown_orders & protected),
+                "unprotected_unknown_rows": len(unprotected),
+                "unprotected_examples": unprotected[:5],
+                "active_unknown_alerts": len(alert_orders),
+                "active_unknown_holds": active_holds,
+                "unattributed_holds": unattributed_holds,
+                "holds_table_present": holds_present,
+                "outcomes_considered": list(unknown_outcomes),
+            }
+            result["open_write_intents"] = 0
+            result["write_intent_state"] = (
+                "LEGACY_NO_JOURNAL_PROVEN"
+                if not unprotected and unattributed_holds == 0
+                else "LEGACY_NO_JOURNAL_UNPROVEN")
+    except Exception as exc:  # noqa: BLE001 - an unreadable journal is a refusal
+        result["write_intent_state"] = "DETERMINATION_FAILED"
+        result["write_intent_error"] = type(exc).__name__ + ": " + str(exc)
+        result["open_write_intents"] = None
     con.close()
 except Exception as exc:
     result["error"] = type(exc).__name__ + ": " + str(exc)
@@ -209,12 +326,49 @@ if ([int]$check.purchase_rows -lt $MinPurchaseRows) {
 if (-not $check.max_event_at) { Write-Failure "workflow_v12_events is empty; this is not the business ledger" }
 if ($null -eq $check.purchase_rows) { Write-Failure "workflow_v12_purchase_state could not be counted" }
 
+# --- write-intent admission: a confirmed zero, or a proven legacy state -----
 # An unresolved write intent means the previous process may have dispatched an
-# external write without confirming it. Switching over that state would make a
-# rollback lose or replay a real order, so it is refused rather than recorded.
-if ($null -ne $check.open_write_intents -and [int]$check.open_write_intents -gt 0) {
-    Write-Failure "$($check.open_write_intents) unresolved write intent(s) exist in the ledger. Resolve or explicitly account for them before taking a rollback snapshot; never clear them automatically."
+# external write without confirming it. An unreadable or absent journal is not
+# evidence of zero: it is a refusal, unless the ledger provably predates the
+# journal and its recorded unknown writes are still protected (never cleared).
+$intentCount = $check.open_write_intents
+if ($null -eq $intentCount -or -not (($intentCount -is [int]) -or ($intentCount -is [long]))) {
+    Write-Failure "the write-intent count is '$intentCount', not a number. An unproven count is not zero."
 }
+if ([int64]$intentCount -ne 0) {
+    Write-Failure "$([int64]$intentCount) unresolved write intent(s) exist in the ledger. Resolve or explicitly account for them before taking a rollback snapshot; never clear them automatically."
+}
+switch ([string]$check.write_intent_state) {
+    "NONE_PROVEN" { }
+    "OPEN_WRITE_INTENTS" {
+        Write-Failure "unresolved write intent(s) exist in the ledger. Resolve or explicitly account for them before taking a rollback snapshot; never clear them automatically."
+    }
+    "LEGACY_NO_JOURNAL_PROVEN" {
+        $legacy = $check.legacy_unknown_write
+        if (-not $legacy -or -not $legacy.checked) {
+            Write-Failure "the ledger has no write-intent journal and its legacy state was not verified; absence is not zero."
+        }
+        foreach ($field in @("unprotected_unknown_rows", "unattributed_holds")) {
+            $value = $legacy.$field
+            if ($null -eq $value -or -not (($value -is [int]) -or ($value -is [long]))) {
+                Write-Failure "the legacy unknown-write check could not determine '$field'; that is not zero."
+            }
+            if ([int64]$value -ne 0) {
+                Write-Failure ("the ledger predates the write-intent journal and holds {0} {1}. Refusing: an unprotected or unattributable unknown write could be lost or replayed by a switch. Preserve it and reconcile by hand." -f $value, $field)
+            }
+        }
+    }
+    "LEGACY_NO_JOURNAL_UNPROVEN" {
+        $legacy = $check.legacy_unknown_write
+        $unprotected = if ($legacy) { $legacy.unprotected_unknown_rows } else { "unknown" }
+        $unattributed = if ($legacy) { $legacy.unattributed_holds } else { "unknown" }
+        Write-Failure ("the ledger predates the write-intent journal and its unknown-write state is not proven: {0} unprotected unknown order(s), {1} unattributable hold(s). An unprotected UNKNOWN/SENT write could be lost or replayed by a switch; reconcile it by hand and never clear a hold." -f $unprotected, $unattributed)
+    }
+    default {
+        Write-Failure "the write-intent state is '$($check.write_intent_state)'; it is not a proven state. $(if ($check.write_intent_error) { "($($check.write_intent_error))" })"
+    }
+}
+Write-Output "write_intent_state = $($check.write_intent_state)"
 
 # Recency: an old-but-valid ledger is the wrong rollback target.
 $lastEvent = [datetime]::Parse($check.max_event_at, [Globalization.CultureInfo]::InvariantCulture,
@@ -225,7 +379,7 @@ if ($ageHours -gt $MaxAgeHours) {
 }
 
 $payload = [ordered]@{
-    schema_version = 3
+    schema_version = 4
     database_backup = $db
     database_sha256 = $backupHash
     source_database = $source
@@ -233,6 +387,7 @@ $payload = [ordered]@{
     source_size_bytes = $item.Length
     install_dir = (Resolve-Path -LiteralPath $InstallDir).Path
     program_stopped = $true
+    process_state = "stopped (proven: process enumeration succeeded, every INSO_V1.6 process had a readable executable path, none ran from install_dir)"
     quiescence = "no process runs from install_dir; the ledger file accepted an exclusive handle; both WAL sides are empty"
     wal_clean = $true
     size_bytes = $item.Length
@@ -244,7 +399,10 @@ $payload = [ordered]@{
     purchase_outcomes = $check.purchase_outcomes
     hold_rows = $check.hold_rows
     active_alert_rows = $check.active_alert_rows
+    write_intent_state = $check.write_intent_state
+    write_intent_table_present = $check.write_intent_table_present
     open_write_intents = $check.open_write_intents
+    legacy_unknown_write = $check.legacy_unknown_write
     event_rows = $check.event_rows
     max_event_at = $check.max_event_at
     max_purchase_update = $check.max_purchase_update

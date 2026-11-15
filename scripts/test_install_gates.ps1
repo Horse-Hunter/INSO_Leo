@@ -71,22 +71,55 @@ function Write-FixtureDatabaseScript {
 import sqlite3, sys
 path = sys.argv[1]
 when = sys.argv[2] if len(sys.argv) > 2 else "2026-11-15T08:00:00+00:00"
-extra = sys.argv[3] if len(sys.argv) > 3 else ""
+scenario = sys.argv[3] if len(sys.argv) > 3 else ""
 con = sqlite3.connect(path)
+# Real V1.2 column set: the verifier reads outcome/event_type/reason_code, so a
+# fixture without them would test a schema that does not exist.
 con.execute("DROP TABLE IF EXISTS workflow_v12_purchase_state")
-con.execute("CREATE TABLE workflow_v12_purchase_state(inquiry_id TEXT PRIMARY KEY, outcome TEXT)")
+con.execute("CREATE TABLE workflow_v12_purchase_state(inquiry_id TEXT PRIMARY KEY, "
+            "command_id TEXT, outcome TEXT, reason_code TEXT, saved_record_ref TEXT, "
+            "evidence_ref TEXT, updated_at TEXT)")
 con.execute("DROP TABLE IF EXISTS workflow_v13_holds")
-con.execute("CREATE TABLE workflow_v13_holds(hold_key TEXT PRIMARY KEY, active INTEGER)")
+con.execute("CREATE TABLE workflow_v13_holds(hold_key TEXT PRIMARY KEY, "
+            "result_json TEXT NOT NULL, observed_identity TEXT NOT NULL, reason TEXT NOT NULL, "
+            "episode INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1)")
 con.execute("DROP TABLE IF EXISTS workflow_v12_events")
-con.execute("CREATE TABLE workflow_v12_events(event_id TEXT PRIMARY KEY, occurred_at TEXT)")
+con.execute("CREATE TABLE workflow_v12_events(event_id TEXT PRIMARY KEY, inquiry_id TEXT, "
+            "event_type TEXT, occurred_at TEXT, source_module TEXT, schema_version INTEGER, "
+            "reason_code TEXT, attempt INTEGER, evidence_ref TEXT, payload_json TEXT)")
 con.execute("DROP TABLE IF EXISTS workflow_v12_active_alerts")
-con.execute("CREATE TABLE workflow_v12_active_alerts(alert_id TEXT PRIMARY KEY, active INTEGER)")
+con.execute("CREATE TABLE workflow_v12_active_alerts(alert_id TEXT PRIMARY KEY, inquiry_id TEXT, "
+            "alert_type TEXT, reason_code TEXT, active INTEGER, raised_at TEXT)")
 con.execute("DROP TABLE IF EXISTS workflow_write_intents")
-con.execute("CREATE TABLE workflow_write_intents(intent_id TEXT PRIMARY KEY, document_key TEXT, kind TEXT, state TEXT, created_at TEXT, settled_at TEXT, reason TEXT)")
-con.execute("INSERT INTO workflow_v12_purchase_state VALUES('inq_x','SAVED')")
-con.execute("INSERT INTO workflow_v12_events VALUES('evt_x',?)", (when,))
-if extra:
-    con.executescript(extra)
+con.execute("CREATE TABLE workflow_write_intents(intent_id TEXT PRIMARY KEY, document_key TEXT, "
+            "kind TEXT, state TEXT, created_at TEXT, settled_at TEXT, reason TEXT)")
+con.execute("INSERT INTO workflow_v12_purchase_state(inquiry_id,outcome,updated_at) "
+            "VALUES('inq_x','SAVED',?)", (when,))
+con.execute("INSERT INTO workflow_v12_events(event_id,inquiry_id,event_type,occurred_at) "
+            "VALUES('evt_x','inq_x','RESEARCH_STARTED',?)", (when,))
+
+UNKNOWN = """INSERT INTO workflow_v12_purchase_state(inquiry_id,outcome,updated_at)
+    VALUES('inq_y','UNKNOWN_WRITE_OUTCOME','2026-11-15T08:00:00+00:00');"""
+PROTECTED_HOLD = """INSERT INTO workflow_v13_holds(hold_key,result_json,observed_identity,reason,episode,active)
+    VALUES('q_y','{"inquiry_id":"inq_y","quotation":{"effect_uncertain":true}}','obs','UPDATE_RESULT_UNCONFIRMED',0,1);"""
+SCENARIOS = {
+    # The journal exists and an intent is still open.
+    "open_intent": "INSERT INTO workflow_write_intents(intent_id,document_key,kind,state,created_at) "
+                   "VALUES('wi_x','doc','sheets','PENDING','2026-11-15T08:00:00+00:00');",
+    # A ledger written before the journal existed, with no uncertain write at all.
+    "legacy_no_journal": "DROP TABLE workflow_write_intents;",
+    # Same old ledger, but an uncertain write that a hold still protects.
+    "legacy_protected_unknown": "DROP TABLE workflow_write_intents;\n" + UNKNOWN + "\n" + PROTECTED_HOLD,
+    # Same old ledger, with an uncertain write nothing protects.
+    "legacy_unprotected_unknown": "DROP TABLE workflow_write_intents;\n" + UNKNOWN,
+    # The journal table exists but cannot be read the way the runtime reads it.
+    "broken_journal": "DROP TABLE workflow_write_intents;\n"
+                      "CREATE TABLE workflow_write_intents(intent_id TEXT PRIMARY KEY);",
+}
+if scenario:
+    if scenario not in SCENARIOS:
+        raise SystemExit("unknown fixture scenario: " + scenario)
+    con.executescript(SCENARIOS[scenario])
 con.commit(); con.close()
 '@
     # `python -c` mangles quotes on Windows, so the fixture is a real file.
@@ -94,7 +127,7 @@ con.commit(); con.close()
 }
 
 function New-Fixture {
-    param([string]$Base, [switch]$RealRuntimeDirectory, [switch]$RelativeSqlitePath)
+    param([string]$Base, [switch]$RealRuntimeDirectory, [switch]$RelativeSqlitePath, [string]$Scenario = "")
 
     $target = Join-Path $Base "target"
     $candidate = Join-Path $Base "candidate"
@@ -119,7 +152,12 @@ function New-Fixture {
     # Live ledger, and a byte-identical copy beside it.
     Write-FixtureDatabaseScript $Base
     $liveDb = Join-Path $liveDbDir "workflow.sqlite3"
-    & $python (Join-Path $Base "make_db.py") $liveDb
+    if ($Scenario) {
+        & $python (Join-Path $Base "make_db.py") $liveDb "2026-11-15T08:00:00+00:00" $Scenario
+    }
+    else {
+        & $python (Join-Path $Base "make_db.py") $liveDb
+    }
     if ($LASTEXITCODE -ne 0) { throw "fixture database failed" }
     $backupDb = Join-Path $backupDir "workflow.sqlite3"
     Copy-Item -LiteralPath $liveDb -Destination $backupDb
@@ -358,11 +396,109 @@ try {
 
     $f = New-Fixture (Join-Path $root "db-open-write-intent")
     New-Snapshot $f | Out-Null
-    & $python (Join-Path $f.Base "make_db.py") $f.LiveDatabase "2026-11-15T08:00:00+00:00" `
-        "INSERT INTO workflow_write_intents(intent_id,document_key,kind,state,created_at) VALUES('wi_x','doc','sheets','PENDING','2026-11-15T08:00:00+00:00');"
+    & $python (Join-Path $f.Base "make_db.py") $f.LiveDatabase "2026-11-15T08:00:00+00:00" "open_intent"
     if ($LASTEXITCODE -ne 0) { throw "write-intent fixture database failed" }
     Copy-Item -LiteralPath $f.LiveDatabase -Destination $f.BackupDatabase -Force
     Assert-Refused "unresolved write intent blocks the snapshot" (Get-DatabaseReport $f) "unresolved write intent"
+
+    # --- P0: the write-intent journal must be proven, never assumed -----------
+    # A ledger that predates the journal is legitimate only when the old state is
+    # explicitly verified and every unknown write is still protected.
+    $f = New-Fixture (Join-Path $root "db-legacy-no-journal") -Scenario "legacy_no_journal"
+    New-Snapshot $f | Out-Null
+    $legacy = Get-DatabaseReport $f
+    Assert-Output "legacy ledger without the journal is proven, not assumed" $legacy "DB_VERIFY_RESULT = PASS"
+    $script:checks++
+    $report = Get-Content -LiteralPath $f.DatabaseReport -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($report.write_intent_state -ne "LEGACY_NO_JOURNAL_PROVEN") {
+        [void]$failures.Add("legacy ledger : write_intent_state is '$($report.write_intent_state)', not LEGACY_NO_JOURNAL_PROVEN")
+    }
+    $script:checks++
+    if (-not $report.legacy_unknown_write -or -not $report.legacy_unknown_write.checked) {
+        [void]$failures.Add("legacy ledger : the report does not record the legacy unknown-write check")
+    }
+    Assert-Output "legacy ledger still installs when it is proven clean" `
+        (Invoke-Child "install_release_candidate.ps1" (New-InstallArgs $f)) "INSTALL_RESULT = PASS"
+
+    $f = New-Fixture (Join-Path $root "db-legacy-protected-unknown") -Scenario "legacy_protected_unknown"
+    New-Snapshot $f | Out-Null
+    Assert-Output "a legacy unknown write that a hold still protects does not block" (Get-DatabaseReport $f) "DB_VERIFY_RESULT = PASS"
+
+    $f = New-Fixture (Join-Path $root "db-legacy-unprotected-unknown") -Scenario "legacy_unprotected_unknown"
+    New-Snapshot $f | Out-Null
+    Assert-Refused "a legacy unknown write with no protection blocks the snapshot" (Get-DatabaseReport $f) "unprotected"
+
+    $f = New-Fixture (Join-Path $root "db-write-intent-query-error") -Scenario "broken_journal"
+    New-Snapshot $f | Out-Null
+    Assert-Refused "an unreadable write-intent journal blocks the snapshot" (Get-DatabaseReport $f) "write-intent"
+
+    $f = New-Fixture (Join-Path $root "db-report-null-intents")
+    New-Snapshot $f | Out-Null
+    Get-DatabaseReport $f | Out-Null
+    $report = Get-Content -LiteralPath $f.DatabaseReport -Raw -Encoding UTF8 | ConvertFrom-Json
+    $report.open_write_intents = $null
+    $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $f.DatabaseReport -Encoding UTF8
+    Assert-Refused "a NULL write-intent count is not zero" (Invoke-Child "install_release_candidate.ps1" (New-InstallArgs $f)) "write-intent"
+
+    $f = New-Fixture (Join-Path $root "db-report-missing-intent-state")
+    New-Snapshot $f | Out-Null
+    Get-DatabaseReport $f | Out-Null
+    $report = Get-Content -LiteralPath $f.DatabaseReport -Raw -Encoding UTF8 | ConvertFrom-Json
+    $report.PSObject.Properties.Remove("write_intent_state")
+    $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $f.DatabaseReport -Encoding UTF8
+    Assert-Refused "a report without a proven write-intent state is not accepted" (Invoke-Child "install_release_candidate.ps1" (New-InstallArgs $f)) "write-intent"
+
+    # --- P0: an unproven stop must never be read as "not running" -------------
+    $f = New-Fixture (Join-Path $root "db-process-query-failed")
+    New-Snapshot $f | Out-Null
+    Assert-Refused "a failed process query is not a clean stop" (Invoke-Child "verify_database_backup.ps1" @{
+        DatabaseBackup = $f.BackupDatabase
+        SourceDatabase = $f.LiveDatabase
+        InstallDir = $f.Target
+        Report = $f.DatabaseReport
+        PythonExecutable = $python
+        InjectProcessQueryFault = "query_failed"
+    }) "cannot prove"
+
+    $f = New-Fixture (Join-Path $root "db-process-unidentified")
+    New-Snapshot $f | Out-Null
+    Assert-Refused "a process with no readable executable path is not a clean stop" (Invoke-Child "verify_database_backup.ps1" @{
+        DatabaseBackup = $f.BackupDatabase
+        SourceDatabase = $f.LiveDatabase
+        InstallDir = $f.Target
+        Report = $f.DatabaseReport
+        PythonExecutable = $python
+        InjectProcessQueryFault = "unidentified"
+    }) "cannot prove"
+
+    $f = New-Fixture (Join-Path $root "install-process-query-failed")
+    New-Snapshot $f | Out-Null
+    Get-DatabaseReport $f | Out-Null
+    Assert-Refused "the installer refuses when it cannot query processes" `
+        (Invoke-Child "install_release_candidate.ps1" (New-InstallArgs $f @{ InjectProcessQueryFault = "always" })) `
+        "cannot prove INSO_V1.6 is stopped"
+
+    $f = New-Fixture (Join-Path $root "install-process-unidentified")
+    New-Snapshot $f | Out-Null
+    Get-DatabaseReport $f | Out-Null
+    Assert-Refused "the installer refuses an unidentifiable process" `
+        (Invoke-Child "install_release_candidate.ps1" (New-InstallArgs $f @{ InjectProcessQueryFault = "unidentified" })) `
+        "cannot prove INSO_V1.6 is stopped"
+
+    $f = New-Fixture (Join-Path $root "install-before-switch-query-failed")
+    New-Snapshot $f | Out-Null
+    Get-DatabaseReport $f | Out-Null
+    $oldExe = (Get-FileHash -LiteralPath (Join-Path $f.Target "INSO_V1.6.exe") -Algorithm SHA256).Hash.ToLowerInvariant()
+    $late = Invoke-Child "install_release_candidate.ps1" (New-InstallArgs $f @{ InjectProcessQueryFault = "before_switch" })
+    Assert-Refused "the pre-switch recheck refuses when it cannot query processes" $late "cannot prove INSO_V1.6 is stopped"
+    $script:checks++
+    if ((Get-FileHash -LiteralPath (Join-Path $f.Target "INSO_V1.6.exe") -Algorithm SHA256).Hash.ToLowerInvariant() -ne $oldExe) {
+        [void]$failures.Add("pre-switch refusal : the target was modified anyway")
+    }
+    $script:checks++
+    if ($late.Output -match "INSTALL_RESULT = PASS") {
+        [void]$failures.Add("pre-switch refusal : printed PASS")
+    }
 
     $f = New-Fixture (Join-Path $root "db-foreign-copy")
     New-Snapshot $f | Out-Null
