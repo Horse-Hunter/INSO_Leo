@@ -618,6 +618,11 @@ class ProductionBackend(GuiBackend):
     ):
         self.root = Path(root) if root is not None else app_root()
         self._inquiry_scope = inquiry_ids
+        # RFQ-021 P0-A: the launcher passes a RunScope, not `inquiry_ids`. Without
+        # this binding `compose_v12_production` receives None and the run would
+        # process every order while claiming to be scoped.
+        if self._inquiry_scope is None and run_scope is not None:
+            self._inquiry_scope = run_scope.inquiry_ids
         # RFQ-021: a packaged release never starts without an explicit scope,
         # and it can render a read-only preview without any process service.
         self._run_scope = run_scope
@@ -753,9 +758,9 @@ class ProductionBackend(GuiBackend):
 
     def start_process_services(self):
         """Start before business workers, serialized with process shutdown."""
-        if self._preview_mode:
-            # Safety preview renders the dashboard and nothing else: no mail
-            # preparation, no DB migration, no IMAP/SMTP worker.
+        if not self.may_start_process_services():
+            # Preview, or a scope with no authorised mail: never open IMAP or
+            # SMTP on the strength of "the launcher called it anyway".
             return
         with self._mail_start_retry_lock:
             with self._lock:
@@ -784,6 +789,8 @@ class ProductionBackend(GuiBackend):
 
     def retry_failed_process_service(self):
         """Retry a pristine config read, completed preparation, or a drained owner."""
+        if not self.may_start_process_services():
+            return
         with self._lock:
             service = self._mail_research_service
             prior = self._mail_start_retry_thread
@@ -1062,6 +1069,40 @@ class ProductionBackend(GuiBackend):
                 "WARNING",
                 f"存在 {len(pending)} 个未结算写入意图，相关文档的写入保持阻断。",
             )
+
+    def effect_actions_blocked(self) -> bool:
+        """RFQ-021 P0-C: the mail/login buttons must stay disabled here.
+
+        Both drive Chrome, IMAP or order entry with no per-order filter, so a
+        preview and any scoped run refuse them outright.
+        """
+        return self._preview_mode or self._enforce_scope
+
+    def _external_action_allowed(self, target: str, label: str) -> bool:
+        """RFQ-021 P0-C: operator actions are gated exactly like business writes."""
+        if self._preview_mode:
+            self._append_log("WARNING", f"安全预览模式不执行：{label}。")
+            return False
+        if not self._enforce_scope:
+            return True
+        if self._write_policy.allows(target):
+            return True
+        self._append_log("WARNING", f"当前受控范围不允许：{label}。")
+        return False
+
+    def may_start_process_services(self) -> bool:
+        """RFQ-021 P0-B: IMAP/SMTP research starts only when explicitly allowed.
+
+        ``start_process_services`` builds the mail-research service, which opens
+        an IMAP session and can send mail. That is an independent external
+        effect, so a preview never starts it and a scoped run starts it only
+        when the scope names the notification module *and* the smtp target.
+        """
+        if self._preview_mode:
+            return False
+        if not self._enforce_scope:
+            return True
+        return self._module_allowed("notification") and self._write_policy.allows("smtp")
 
     def start(self):
         if self._preview_mode:
@@ -2069,6 +2110,14 @@ class ProductionBackend(GuiBackend):
 
     def can_order_action(self, inquiry_id, action):
         with self._lock:
+            # RFQ-021 P0-C: a preview must not expose an action that would drive
+            # Chrome, mail or an external write; a scoped run only exposes the
+            # orders it named.
+            if self._preview_mode:
+                return False
+            if self._enforce_scope and (
+                    self._run_scope is None or inquiry_id not in self._run_scope.inquiry_ids):
+                return False
             if not self._manual_idle() or self._store is None or self._manual_reader is None:
                 return False
             try:
@@ -2096,6 +2145,12 @@ class ProductionBackend(GuiBackend):
     def order_action_hint(self, inquiry_id, action):
         # Display only: no business lock, SQL, or cached authorization. The
         # canonical request/execute path always checks durable permissions.
+        if getattr(self, "_preview_mode", False):
+            return False
+        scope = getattr(self, "_run_scope", None)
+        if getattr(self, "_enforce_scope", False) and (
+                scope is None or inquiry_id not in scope.inquiry_ids):
+            return False
         if not self._manual_idle() or self._store is None or self._manual_reader is None:
             return False
         order = next((o for o in self._view_snapshot.orders if o.inquiry_id == inquiry_id), None)
@@ -2136,6 +2191,11 @@ class ProductionBackend(GuiBackend):
                 or (action == "quotation" and self._manual_quote is not None))
 
     def request_order_action(self, inquiry_id, action, *, field=None, value=None):
+        if self._preview_mode:
+            return "安全预览模式不执行任何订单操作。"
+        if self._enforce_scope and (
+                self._run_scope is None or inquiry_id not in self._run_scope.inquiry_ids):
+            return "该订单不在本次受控试运行范围内。"
         with self._manual_condition:
             if not self.can_order_action(inquiry_id, action):
                 if action == "quotation" and self._manual_quote is not None:
@@ -4185,6 +4245,8 @@ class ProductionBackend(GuiBackend):
         self._idle_login_since = utc_now()  # New idle window begins after the sweep finishes.
 
     def start_order_mail_check(self) -> bool:
+        if not self._external_action_allowed("smtp", "订单邮件检查"):
+            return False
         if not self._mail_start_retry_lock.acquire(blocking=False):
             return False
         try:
@@ -4246,6 +4308,8 @@ class ProductionBackend(GuiBackend):
             self._order_mail_report = text
 
     def start_login_all_sites(self) -> None:
+        if not self._external_action_allowed("google", "一键登录所有网站"):
+            return
         if not self._mail_start_retry_lock.acquire(blocking=False):
             self._append_log("WARNING", "独立服务正在初始化，请稍后再执行登录检查。")
             return

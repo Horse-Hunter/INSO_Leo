@@ -18,8 +18,15 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-#: Business modules that may be enabled for one scoped run.
+#: Business modules that exist in the product.
 MODULES = frozenset({"inquiry", "quotation", "tp", "notification"})
+
+#: Modules that can currently be proven to touch only the named orders.
+#: ``inquiry`` filters rows through ``compose_v12_production(inquiry_ids=...)``.
+#: Quotation, TP and notification iterate their own queues/worksheets with no
+#: per-order filter, so a scope that enabled them would be a promise the code
+#: cannot keep -- they are refused instead (RFQ-021 follow-up: add the filter).
+ISOLATABLE_MODULES = frozenset({"inquiry"})
 
 #: External write families a run may be allowed to reach.
 WRITE_TARGETS = frozenset({"google", "inso", "smtp"})
@@ -74,6 +81,13 @@ class RunScope:
         # program. Optional modules are what actually get added.
         if "inquiry" not in self.modules:
             raise ScopeError("SCOPE_REQUIRES_INQUIRY_MODULE")
+        # A module that cannot be limited to the named orders must not start at
+        # all; enabling it would silently widen the trial to every order.
+        if self.modules - ISOLATABLE_MODULES:
+            raise ScopeError("SCOPE_MODULE_NOT_ISOLATABLE")
+        # Mail is the one target with no per-order filter anywhere in the queue.
+        if "smtp" in self.write_targets:
+            raise ScopeError("SCOPE_SMTP_NOT_ISOLATABLE")
         unknown = sorted(self.write_targets - WRITE_TARGETS)
         if unknown:
             raise ScopeError("SCOPE_UNKNOWN_WRITE_TARGET")

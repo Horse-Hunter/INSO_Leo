@@ -394,6 +394,11 @@ class InsoDashboardApp:
     def _on_order_mail(self) -> None:
         if self._closing:
             return
+        if getattr(self._backend, "effect_actions_blocked", lambda: False)():
+            # RFQ-021 P0-C: the backend refuses anyway; say why instead of
+            # leaving the operator with a button that silently does nothing.
+            messagebox.showinfo("自动订单录单", "安全预览或受控试运行模式下不执行订单录单。")
+            return
         if self._backend.start_order_mail_check():
             self._shown_order_mail_report = None
             self._order_mail_button.configure(text="正在检查并填写订单…", state="disabled")
@@ -402,9 +407,10 @@ class InsoDashboardApp:
 
     def _sync_order_mail(self) -> None:
         running = self._backend.order_mail_running()
+        blocked = getattr(self._backend, "effect_actions_blocked", lambda: False)()
         self._order_mail_button.configure(
             text="正在检查并填写订单…" if running else "自动订单录单",
-            state="disabled" if running else "normal",
+            state="disabled" if (running or blocked) else "normal",
         )
         report = self._backend.get_order_mail_report()
         if report is None or report == self._shown_order_mail_report:
@@ -420,6 +426,9 @@ class InsoDashboardApp:
 
     def _on_login_all(self) -> None:
         if self._login_all_running:
+            return
+        if getattr(self._backend, "effect_actions_blocked", lambda: False)():
+            messagebox.showinfo("一键登录", "安全预览或受控试运行模式下不执行一键登录。")
             return
         if self._status.state in {RunState.RUNNING, RunState.QUOTATION_RUNNING, RunState.STOPPING_AFTER_CYCLE}:
             messagebox.showwarning(
@@ -442,7 +451,8 @@ class InsoDashboardApp:
             self._show_login_all_report(report)
         running = bool(self._backend.login_all_running())
         self._login_all_running = running
-        busy = running or self._status.state in {
+        blocked = getattr(self._backend, "effect_actions_blocked", lambda: False)()
+        busy = running or blocked or self._status.state in {
             RunState.RUNNING,
             RunState.QUOTATION_RUNNING,
             RunState.STOPPING_AFTER_CYCLE,

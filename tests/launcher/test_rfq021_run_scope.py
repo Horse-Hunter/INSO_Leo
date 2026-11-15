@@ -72,21 +72,18 @@ def test_writes_without_owner_approval_are_refused():
 def test_parse_run_scope_splits_cli_text():
     parsed = parse_run_scope(
         inquiry_ids=f"{ORDER}, inq_" + "b" * 24,
-        modules="inquiry, quotation",
+        modules="inquiry",
         write_targets="google",
         approval="OWNER-APPROVED:RFQ-021-TRIAL-1",
     )
     assert parsed.inquiry_ids == frozenset({ORDER, "inq_" + "b" * 24})
-    assert parsed.modules == frozenset({"inquiry", "quotation"})
+    assert parsed.modules == frozenset({"inquiry"})
     assert parsed.allows_write("google")
 
 
-def test_scope_warns_when_a_module_has_no_write_target():
-    warnings = scope(modules=frozenset({"inquiry", "quotation"})).warnings()
-    assert warnings == [
-        "MODULE_WRITES_DISABLED:inquiry->inso",
-        "MODULE_WRITES_DISABLED:quotation->google",
-    ]
+def test_scope_warns_when_the_only_module_has_no_write_target():
+    warnings = scope().warnings()
+    assert warnings == ["MODULE_WRITES_DISABLED:inquiry->inso"]
 
 
 # --- write policy -----------------------------------------------------------

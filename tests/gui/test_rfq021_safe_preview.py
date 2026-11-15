@@ -114,13 +114,13 @@ def test_an_invalid_scope_is_refused_before_any_backend(tmp_path, monkeypatch):
     assert shown and "SCOPE_INVALID_INQUIRY_ID" in shown[0]
 
 
-def test_a_scoped_start_starts_services_and_the_scoped_run(tmp_path, monkeypatch):
+def test_a_scoped_start_starts_the_scoped_run(tmp_path, monkeypatch):
     harness = Harness().install(monkeypatch, tmp_path)
     argv(
         monkeypatch,
         "--scoped-start",
         "--scope-inquiries", ORDER,
-        "--scope-modules", "inquiry,quotation",
+        "--scope-modules", "inquiry",
         "--scope-writes", "google",
         "--scope-approval", "OWNER-APPROVED:RFQ-021-TRIAL-1",
         "--start-inquiry",
@@ -132,10 +132,26 @@ def test_a_scoped_start_starts_services_and_the_scoped_run(tmp_path, monkeypatch
     assert harness.backend_kwargs["preview_mode"] is False
     assert harness.backend_kwargs["enforce_scope"] is True
     assert scope.inquiry_ids == frozenset({ORDER})
-    assert scope.modules == frozenset({"inquiry", "quotation"})
+    assert scope.modules == frozenset({"inquiry"})
     assert harness.events.index("services") < harness.events.index("gui")
     assert "start" in harness.events
     assert [event for event in harness.events if isinstance(event, tuple)] == [("guard", None)]
+
+
+def test_a_scope_that_names_a_non_isolatable_module_is_refused(tmp_path, monkeypatch):
+    harness = Harness().install(monkeypatch, tmp_path)
+    shown = []
+    monkeypatch.setattr(launcher, "_show_error", lambda message, title=None: shown.append(message))
+    argv(
+        monkeypatch,
+        "--scoped-start",
+        "--scope-inquiries", ORDER,
+        "--scope-modules", "inquiry,quotation",
+    )
+
+    assert launcher.main() == 2
+    assert harness.events == []
+    assert shown and "SCOPE_MODULE_NOT_ISOLATABLE" in shown[0]
 
 
 @pytest.mark.parametrize("blockers, expected", [

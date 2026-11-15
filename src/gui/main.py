@@ -248,7 +248,12 @@ def main(*, guard_factory=None, backend_factory=None, diagnostics=None) -> int:
                 preview_mode=preview,
             )
         )
-        if not args.mock and not preview and hasattr(backend, "start_process_services"):
+        if not args.mock and hasattr(backend, "may_start_process_services"):
+            # RFQ-021 P0-B: mail research opens IMAP and can send mail; it must
+            # never start on a preview or outside an approved notification scope.
+            if backend.may_start_process_services():
+                backend.start_process_services()
+        elif not args.mock and hasattr(backend, "start_process_services") and not preview:
             backend.start_process_services()
         app = (InsoDashboardApp(backend) if diagnostics is None
                else InsoDashboardApp(backend, diagnostics=diagnostics))
