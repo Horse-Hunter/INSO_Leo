@@ -277,9 +277,25 @@ class V12WorkflowCoordinator:
         self._row_closed = False
         return not self._stop_requested()
 
+    def _in_scope(self, inquiry_id: str) -> bool:
+        """Whether a mutating loop may touch this order (RFQ-021-R4).
+
+        Every loop that rewrites workflow/V1.2 state, events or alerts runs
+        through here. ``None`` keeps the historical unscoped behaviour; a named
+        scope must leave every other order exactly as it found it, including the
+        parked and Owner-completed ones. Reading the ledger for display or for
+        relocation is still allowed -- only mutation is narrowed.
+        """
+
+        return self._inquiry_ids is None or inquiry_id in self._inquiry_ids
+
     def initialize_run_state(self, *, now: datetime) -> None:
         """Quarantine unfinished effects; retain only proven current read retries."""
         for item in self._workflow_store.all_items():
+            if not self._in_scope(item.inquiry_id):
+                # Out of scope: leave its parked state, events and alerts alone.
+                # Startup is not an opportunity to reinterpret history.
+                continue
             try:
                 state = self._v12_store.business_state(item.inquiry_id)
             except KeyError:
@@ -394,6 +410,11 @@ class V12WorkflowCoordinator:
         self.pending_rows_seen += len(records)
         for item in self._workflow_store.all_items():
             if item.record_identity.worksheet != worksheet:
+                continue
+            if not self._in_scope(item.inquiry_id):
+                # The Owner-completed and header-row branches below close orders
+                # and recover alerts. Neither may fire for an order this run was
+                # not asked to touch, even though its row is on the same sheet.
                 continue
             try:
                 state = self._v12_store.business_state(item.inquiry_id)

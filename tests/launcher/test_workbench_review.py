@@ -175,6 +175,12 @@ def _hint_backend(alert, action_state: str = "purchase") -> SimpleNamespace:
         _manual_idle=lambda: True,
         _store=object(),
         _manual_reader=object(),
+        # RFQ-021-R4: the hint now consults the same guards as the execution
+        # path. This stub stands for an unscoped run, so both answer True.
+        _enforce_scope=False,
+        _run_scope=None,
+        _order_in_scope=lambda _inquiry_id: True,
+        _action_in_scope=lambda _action: True,
         _view_snapshot=SimpleNamespace(
             orders=(SimpleNamespace(inquiry_id=identity, module_id="quotation",
                                     delivery_status=None),)),

@@ -2130,6 +2130,17 @@ class ProductionBackend(GuiBackend):
             and self._poll_idle.is_set() and not self._stop.is_set()
             and not self._manual_busy and self._manual_request is None)
 
+    def _order_in_scope(self, inquiry_id) -> bool:
+        """RFQ-021-R4: the single definition of "this run may touch this order".
+
+        An unscoped run keeps its historical behaviour. A scoped run must be
+        positive about the order: no scope object means no order is in scope.
+        """
+        if not getattr(self, "_enforce_scope", False):
+            return True
+        scope = getattr(self, "_run_scope", None)
+        return scope is not None and inquiry_id in scope.inquiry_ids
+
     def _action_in_scope(self, action) -> bool:
         """RFQ-021-R3 P0-C: audit a manual action against modules and targets.
 
@@ -2153,8 +2164,7 @@ class ProductionBackend(GuiBackend):
             # orders it named.
             if self._preview_mode:
                 return False
-            if self._enforce_scope and (
-                    self._run_scope is None or inquiry_id not in self._run_scope.inquiry_ids):
+            if not self._order_in_scope(inquiry_id):
                 return False
             if not self._action_in_scope(action):
                 return False
@@ -2187,9 +2197,12 @@ class ProductionBackend(GuiBackend):
         # canonical request/execute path always checks durable permissions.
         if getattr(self, "_preview_mode", False):
             return False
-        scope = getattr(self, "_run_scope", None)
-        if getattr(self, "_enforce_scope", False) and (
-                scope is None or inquiry_id not in scope.inquiry_ids):
+        if not self._order_in_scope(inquiry_id):
+            return False
+        # RFQ-021-R4: the hint must agree with the execution guard, or the button
+        # advertises an action the backend will refuse. The guard stays canonical;
+        # this only stops promising what it will not allow.
+        if not self._action_in_scope(action):
             return False
         if not self._manual_idle() or self._store is None or self._manual_reader is None:
             return False
@@ -2233,8 +2246,7 @@ class ProductionBackend(GuiBackend):
     def request_order_action(self, inquiry_id, action, *, field=None, value=None):
         if self._preview_mode:
             return "安全预览模式不执行任何订单操作。"
-        if self._enforce_scope and (
-                self._run_scope is None or inquiry_id not in self._run_scope.inquiry_ids):
+        if not self._order_in_scope(inquiry_id):
             return "该订单不在本次受控试运行范围内。"
         if not self._action_in_scope(action):
             return "当前受控范围不允许该操作（模块或写入目标未授权）。"
@@ -3875,7 +3887,12 @@ class ProductionBackend(GuiBackend):
             incident_key = f"program-blocked:{site}"
             # Only a previously bound active task can establish affected business.
             # Read failures are not evidence that Google as a whole is unavailable.
-            candidates = [i for i in self._store.all_items() if i.status.value in {"QUEUED", "RETRY_WAIT", "RESEARCHING"}] if self._store else []
+            # RFQ-021-R4: the incident record itself is program-wide, but its
+            # per-order proof must not attach to an order this run was not asked
+            # to touch -- that would be an event/alert on out-of-scope history.
+            candidates = [i for i in self._store.all_items()
+                if i.status.value in {"QUEUED", "RETRY_WAIT", "RESEARCHING"}
+                and self._order_in_scope(i.inquiry_id)] if self._store else []
             for item in candidates:
                 current = self._current_mail_source(item.inquiry_id, at, module="inquiry", persistent=True)
                 if current is not None and current[1].cells.get(worksheet_schema(item.record_identity.worksheet.worksheet).status_column) == "未发":
@@ -4226,6 +4243,10 @@ class ProductionBackend(GuiBackend):
         """Optional maintenance at the serial poll boundary; never a business fault."""
         if not self._v13_enabled:
             return
+        # RFQ-021-R4: idle keep-alive opens Chrome pages for no particular order.
+        # A scoped trial or a preview has no standing to do that.
+        if getattr(self, "_preview_mode", False) or getattr(self, "_enforce_scope", False):
+            return
         paused = self._combined is not None and self._combined.v12_paused
         if self._state is not RunState.RUNNING or paused or self._immediate_stop_requested():
             self._idle_empty_polls = 0
@@ -4430,6 +4451,16 @@ class ProductionBackend(GuiBackend):
     @foreground_resources
     def _run_login_sweep(self, *, background=False, check_only=False, only_sites=None) -> tuple[SiteLoginResult, ...]:
         """Attach the approved CDP browser, sweep it, then give it back."""
+
+        # RFQ-021-R4: a login sweep is a whole-browser effect with no order
+        # filter, so it cannot belong to a scoped trial or a preview. It was
+        # already refused on the button; this is the same refusal on the two
+        # automatic paths (`business_continuations`, `_idle_login_tick`) so the
+        # button cannot be stricter than the background.
+        if not check_only and (
+                getattr(self, "_preview_mode", False) or getattr(self, "_enforce_scope", False)):
+            self._append_log("WARNING", "预览或受控试运行不执行跨站点登录巡检。")
+            return ()
 
         try:
             production_config = json.loads(
