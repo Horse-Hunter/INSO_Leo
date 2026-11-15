@@ -1,4 +1,10 @@
-# INSO LEO — CEO/Executor 接管入口（2026-11-15 R4）
+# INSO LEO — CEO/Executor 接管入口（2026-11-15 R4 CEO Review）
+
+**最新权威结论：`R4 CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED`，并非 Executor 自测 PASS。** 先读 `develop/AGENTS.md` 精简规则、[CEO REVIEW](RFQ-021/REVIEW.md) 最新 R4 章、[COORDINATION](COORDINATION.md) 顶部；固定 R4 源码 `2ad471e7`、候选 `19918185…` 仅是离线证据，未部署。
+
+**一次性补修重点：** 旧配置快照与真实 runtime 配置绑定；当前 DB 备份来源和清洁停机证据；新 `_internal` 安装后逐文件 hash；登录巡检 `check_only` 入口拒绝；六项全量失败的证据归因。复用原 Executor 工作树，保持所有 UNKNOWN/hold。没有 Owner 单独授权，禁止停/启旧程序、安装、业务写入、动生产 SQLite/Chrome9222 或晋升分支。
+
+## R4 Executor 历史交接（待审标注已被 CEO 结论覆盖）
 
 **当前唯一 CEO 结论：`RFQ-021-R3 CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED`；R4 执行结果待独立复核。** [独立审核及 R4 验收范围](RFQ-021/REVIEW.md)；[当前指挥状态](COORDINATION.md)。R3 Executor 的 `PASS_SOURCE_SCOPE` 是历史自测记录，R4 的执行记录同样是自测，二者都不是发布许可。
 
