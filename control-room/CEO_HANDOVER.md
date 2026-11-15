@@ -1,16 +1,18 @@
-# INSO LEO — CEO/Executor 接管入口（2026-11-15）
+# INSO LEO — CEO/Executor 接管入口（2026-11-15 上午）
 
-**先访问 `develop`，不要默认 `main`**：[AI_START_HERE](../AI_START_HERE.md)、[AGENTS](../AGENTS.md)、[BRANCH_POLICY](../docs/BRANCH_POLICY.md)、[COORDINATION](COORDINATION.md)、[RFQ-021 最终报告](RFQ-021/FINAL_REPORT.md)、[RFQ-021 执行记录](RFQ-021/EXECUTION_LOG.md)、[安装与回滚](RFQ-021/INSTALL_AND_ROLLBACK.md)、[RFQ-020 CEO Review](RFQ-020/REVIEW.md)。`docs/BRANCH_POLICY.md` 在 **develop** 有，在 Executor 分支没有；`control-room/RFQ-019/REVIEW.md` 由 CEO `64dba150` 加入，两分支均存在。新窗口先 fetch 最新 develop 再读取、核对本地 git HEAD/status/worktree。只保留一个正在操作的 Executor/工作树，不得关闭正在运行的 Windows 生产程序。
+**先访问 `develop`，不要默认 `main`**：[AI_START_HERE](../AI_START_HERE.md)、[AGENTS](../AGENTS.md)、[BRANCH_POLICY](../docs/BRANCH_POLICY.md)、[COORDINATION](COORDINATION.md)、[RFQ-021 REVIEW_FOLLOWUP](RFQ-021/REVIEW_FOLLOWUP.md)、[INC-20261115](INCIDENT-20261115.md)、[安装与回滚](RFQ-021/INSTALL_AND_ROLLBACK.md)。新窗口先 fetch 最新 develop，再核对本地 git HEAD/status/worktree 与运行中的进程。**只保留一个 Executor 工作树，不得关闭正在运行的生产程序。**
 
-**最新结论：`RFQ-021 READY_FOR_CEO_RELEASE_REVIEW / NOT_DEPLOYED / NOT_MERGED`**。原工作树 `D:\\Program_Leo\\INSO_Leo\\.worktrees\\v16-rfq016-stabilization`，源码提交 `8cded532221571e99697af7668634afab3ea07af`（基线 `25894efa` + RFQ-021 改动），候选 EXE `63bcd6cea66003f84ce016cfa8742dc479a9d67ce3f579a92b5b7c398bf4465b`（8,455,788 B，2,872 文件，无 `runtime/`），清单 `docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256`（`d5cc3d4c…`）已由 `verify_release_candidate.ps1` 在本地逐文件复算 2,872/2,872 一致。**RFQ-020 的 `b358f687…` 只代表旧源码，不要再引用。**
+**最新结论：`RFQ-021-R2 PASS_SOURCE_SCOPE / RELEASE_HOLD / NOT_DEPLOYED`；`INC-20261115 ROOT_CAUSE_CONFIRMED`。** 源码 `1314da5d`（基线 `8cded532` + 三个 P0 修复），候选 EXE `74586eb29ed19e037e2045f481d4ed2226aa555a8f6ef7951028c873fa68d0ed`（8,457,679 B，2,872 文件），清单 `74ae29c7…` 已逐文件复算 2,872/2,872。上一版 `63bcd6ce…` 已归档为 r1，不再代表当前源码。
 
-**B5/B6/B7 已在源码与测试层面关闭**：普通启动＝安全预览（无 process services / 无迁移 / 无 IMAP / 无 SMTP / 无 CDP，Start 禁用）；业务必须 `--scoped-start` 且写明订单、模块、写入目标与 `OWNER-APPROVED:` 审批串；Google 写入意图在请求前落盘，崩溃或超时留下的 UNKNOWN 会阻断同一文档后续写入，账本损坏一律 fail closed。真实候选上 `--self-check` / `--idle-self-check` / `--preview-self-check`（两轮）均 0，扫描 `RELEASE_SCAN_OK`。
+**三个 P0 已修**：范围真正绑定到业务编排（此前 `inquiry_ids=None`＝全量处理）；邮件服务改由 `may_start_process_services()` 把关（预览恒不启动，受控模式需 notification+smtp 同时授权）；订单邮件、一键登录、单笔动作在预览与越界订单上双层拒绝。**代价**：报价/TP/通知没有按订单过滤能力，现在被直接拒绝而不是假装受控；`smtp` 也不能作为写入目标。受控试运行目前只支持 `inquiry` + 指定订单。
 
-**仍未做、也不得自动做**：未安装、未停机、未正常 GUI、未业务 Start、未碰生产 SQLite/Chrome9222。B3 完整回滚快照与 B4 干净停机仍需 Owner 单独批准的维护窗口；安装与业务启用各自再单独授权。`INSTALL_AND_ROLLBACK.md` 已给出步骤与中止条件，其中「默认不回滚数据库」必须遵守。
+**今早发生了什么**：运行的是旧 EXE `E9E3DA33…`（PID 38948 + watcher 34304，11-14 13:47 启动）。06:06:49 报价模块读取 Google Sheets 时 `SSLEOFError` → `SHEETS_READ_UNAVAILABLE` → `MODULE_PAUSED`。不是崩溃（fatal.log 空、无 Windows 应用错误事件），没有产生未确认外部效果（故障后 0 条业务事件、采购状态/3 条 hold/告警均未变）。界面四行提示是同一故障的连带展示。**是否重启旧程序属业务动作，需 Owner 单独授权；重启前先确认到 Google 的连通性。**
 
-**测试如实**：完整套件 4,223 项 → 4,220 通过 / 2 失败 / 1 跳过；两处失败与未修改的父提交基线完全相同（同一 nodeid、同一现象），非本轮引入；未删除或跳过任何测试。新增 35 项负向测试全绿，受影响模块 2,886 项全绿。
+**仍未做**：未安装、未停机、未重启、未碰生产 SQLite/Chrome9222、未合并或晋升。B3/B4 仍需维护窗口。**可用性问题**：一次 TLS 抖动就停到人工介入（`SSLEOFError` 未被当作可恢复读），建议另开有界任务，本轮按"不扩大范围"未改。
 
-**生产保护不变**：旧 V1.6 `E9E3DA33…` 与 PID 38948/34304 未动；第 221 行 SAVED `rec_440fafd372440ecf9dacabf660dd155d` 不重下；SHAHAB/115 `MANUAL_REVIEW/RECONCILIATION_UNREADABLE` 未证真实采购；3 条 V13 hold 保留；Chrome 9222、生产 SQLite/WAL/SHM、真实 Google/INSO/SMTP 一律不碰；`main`、`release/previous` 不晋升，`develop` 只同步管理文档。
+## RFQ-021-R1 首次交付（保留记录，2026-11-15 凌晨）
+
+**结论：`RFQ-021 READY_FOR_CEO_RELEASE_REVIEW / NOT_DEPLOYED / NOT_MERGED`**。源码 `8cded532`，候选 EXE `63bcd6ce…`（8,455,788 B，2,872 文件），清单 `d5cc3d4c…`；`--self-check` / `--idle-self-check` / `--preview-self-check` 全 0。完整套件 4,223 → 4,220 通过 / 2 失败 / 1 跳过，两处失败与父提交基线相同。**未安装、未停机、未启用业务。**
 
 ## RFQ-020 CEO Review（保留记录，2026-11-14）
 

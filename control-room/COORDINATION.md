@@ -1,6 +1,18 @@
-# INSO LEO — RFQ-021 最终候选交付（2026-11-15）
+# INSO LEO — RFQ-021-R2 定点补修 + 早间事件（2026-11-15 上午）
 
-**当前状态：`RFQ021_READY_FOR_CEO_RELEASE_REVIEW / NOT_DEPLOYED / NOT_MERGED / B5-B6-B7_CLOSED_IN_SOURCE`。** 最新执行证据：[FINAL_REPORT](RFQ-021/FINAL_REPORT.md)、[EXECUTION_LOG](RFQ-021/EXECUTION_LOG.md)、[安装与回滚](RFQ-021/INSTALL_AND_ROLLBACK.md)、[JSON](../docs/evidence/rfq021/rfq021-final-candidate.json)、[候选清单](../docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256)、[JUnit](../docs/evidence/rfq021/pytest-report.xml)。
+**当前状态：`RFQ021_R2_PASS_SOURCE_SCOPE / RELEASE_HOLD / NOT_DEPLOYED`；事件 `INC-20261115 ROOT_CAUSE_CONFIRMED`。**
+
+- **早间事件（只读取证，已结案为单一故障）**：正在跑的是旧 EXE `E9E3DA33…`（PID 38948 `--start-inquiry` + watcher 34304，2026-11-14 13:47 启动）。06:06:28 报价模块开始，06:06:48 失败（19.3 s），06:06:49 `SHEETS_READ_UNAVAILABLE / SSLEOFError` → `MODULE_PAUSED`。**不是崩溃**（fatal.log 为空、无 Windows 应用错误事件）。**无未确认外部效果**（失败在读取阶段；故障后 0 条业务事件；采购状态、3 条 V13 hold、0 活动告警均未变）。详见 [INCIDENT-20261115](INCIDENT-20261115.md)。
+- **CEO 三个 P0 全部属实并已修复**：范围绑定到 `compose_v12_production`（此前传 None＝全量）；邮件服务改为 `may_start_process_services()` 双层把关；邮件/登录/单笔动作在预览与越界订单上双层拒绝。详见 [REVIEW_FOLLOWUP](RFQ-021/REVIEW_FOLLOWUP.md)。
+- **能力收窄（刻意）**：报价/TP/通知无法按订单隔离，现在直接拒绝（`SCOPE_MODULE_NOT_ISOLATABLE`），`smtp` 也不能作为写入目标。受控试运行当前只支持 `inquiry` 模块 + 指定订单。
+- **新候选**：源码 `1314da5d`，EXE 8,457,679 B / `74586eb2…`，2,872 文件，清单 `74ae29c7…`（旧候选 `63bcd6ce…` 与清单已归档为 `-r1`）；三种自检全 0，逐文件复算 2,872/2,872 PASS。
+- **测试**：完整套件 4,237 项 → 4,235 通过 / 2 失败 / 1 跳过；两处失败与未修改的父提交基线相同（同一 nodeid），捕获原因为测试临时目录写入被拒，非本轮引入，未删除未跳过。
+- **仍未做**：未安装、未停机、未重启旧程序、未碰生产 SQLite/Chrome9222、未合并或晋升。B3 完整回滚快照与 B4 干净停机仍需维护窗口。
+- **下一步**：CEO 复核 RFQ-021-R2。旧程序当前仍处于"采购模块暂停"，是否重启恢复属业务动作，需 Owner 单独授权（建议先确认到 Google 的连通性）。
+
+## RFQ-021-R1 首次交付（保留记录，2026-11-15 凌晨）
+
+**当前状态：`RFQ021_READY_FOR_CEO_RELEASE_REVIEW / NOT_DEPLOYED / NOT_MERGED / B5-B6-B7_CLOSED_IN_SOURCE`。** 最新执行证据：[FINAL_REPORT](RFQ-021/FINAL_REPORT.md)、[EXECUTION_LOG](RFQ-021/EXECUTION_LOG.md)、[安装与回滚](RFQ-021/INSTALL_AND_ROLLBACK.md)、[JSON](../docs/evidence/rfq021/rfq021-final-candidate.json)、[候选清单](../docs/evidence/rfq021/INSO_V1.6-artifact-manifest-r1.sha256)、[JUnit](../docs/evidence/rfq021/pytest-report.xml)。
 
 - **B7 关闭（源码+测试）**：普通双击＝安全预览，不调 `start_process_services`、不迁移、不读 IMAP、不发 SMTP、不连 CDP，开始按钮显示「安全预览（不启动业务）」且禁用；`--start-inquiry` 缺范围直接拒绝。候选 `--preview-self-check` 真机跑两轮全绿。
 - **B5 关闭（源码+测试）**：`RunScope` 限制订单/模块/写入目标，写入需 `OWNER-APPROVED:` 审批串；Google 写入在唯一租约处拦截，INSO 写入在既有门外面加一层拒绝，范围只收窄不放宽；无范围不启动，不会退回 full Start。

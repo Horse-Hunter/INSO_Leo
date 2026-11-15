@@ -1,6 +1,23 @@
 # RFQ-021 — execution log (final release candidate)
 
-- **Status:** `READY_FOR_CEO_RELEASE_REVIEW`
+## RFQ-021-R2 — CEO review follow-up (2026-11-15 morning)
+
+- **Status:** `PASS_SOURCE_SCOPE / RELEASE_HOLD / NOT_DEPLOYED`
+- **Source commit built:** `1314da5d` (base `8cded532` + three P0 fixes)
+- **Candidate:** 8,457,679 B / `74586eb29ed19e037e2045f481d4ed2226aa555a8f6ef7951028c873fa68d0ed`, 2,872 files
+- **Manifest:** `docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256` (`74ae29c7…`); the r1 manifest is kept as `…-manifest-r1.sha256`
+- **Self-checks:** `--self-check` 0, `--idle-self-check` 0, `--preview-self-check` 0 (two rounds, 4 s), `RELEASE_SCAN_OK`
+- **Manifest recomputation:** `verify_release_candidate.ps1` → 2,872/2,872 matched, 0 missing / 0 mismatch / 0 unexpected, PASS
+- **Tests:** full suite **4,237 collected / 4,235 passed / 2 failed / 1 skipped** in 424.76 s (`pytest-report-r2.xml`). The two failures are the same `test_backend_closes_only_owned_browser_after_runtime_thread_exits[False|True]` nodeids that fail on the untouched parent commit `e59ce62f`; captured cause is `V12Fault(WORKFLOW_LEDGER_UNAVAILABLE) <- OperationalError(attempt to write a readonly database)` in the pytest temp directory. Isolated reruns pass; no test was deleted or skipped.
+- **New tests:** `tests/launcher/test_rfq021_p0_scope_binding.py` (15) plus one UI-refusal test in `test_rfq021_safe_preview.py`.
+- **Capability reduction:** quotation / TP / notification and the `smtp` target are now refused by scope validation because none of them can prove per-order isolation. See `REVIEW_FOLLOWUP.md`.
+- **Incident:** see `control-room/INCIDENT-20261115.md`. The running program was the old `E9E3DA33…` EXE; the morning stop was `SHEETS_READ_UNAVAILABLE` caused by `SSLEOFError`, not a crash and not these code paths.
+
+---
+
+## RFQ-021-R1 — first delivery (superseded)
+
+- **Status:** `READY_FOR_CEO_RELEASE_REVIEW` (superseded by R2)
 - **Window:** 2026-11-15 02:00–03:05 Shanghai
 - **Worktree:** `D:\Program_Leo\INSO_Leo\.worktrees\v16-rfq016-stabilization` (reused; no second worktree)
 - **Branch:** `workbuddy/v16-rfq016-stabilization`

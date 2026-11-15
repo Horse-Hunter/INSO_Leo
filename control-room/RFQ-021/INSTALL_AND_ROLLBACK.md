@@ -10,14 +10,14 @@
 |---|---|
 | 源码提交 | `8cded532221571e99697af7668634afab3ea07af` |
 | 候选 EXE | `build/windows-release-stage-1.6/dist/INSO_V1.6/INSO_V1.6.exe` |
-| 候选 EXE SHA256 | `63bcd6cea66003f84ce016cfa8742dc479a9d67ce3f579a92b5b7c398bf4465b` |
-| 候选 EXE 字节数 | 8,455,788 |
+| 候选 EXE SHA256 | `74586eb29ed19e037e2045f481d4ed2226aa555a8f6ef7951028c873fa68d0ed` |
+| 候选 EXE 字节数 | 8,457,679 |
 | 文件数 | 2,872 |
-| 清单 | `docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256`（清单自身 SHA256 `d5cc3d4cc41fff16bf0316e0799305b31269201a5728bb7a207b8220d6a2aa7a`） |
+| 清单 | `docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256`（清单自身 SHA256 `74ae29c793fb759e84a7c9bc450c77e75cf56df948ed778af67a0dcecbe77118`） |
 | 当前运行版本 | `dist/INSO_V1.6/INSO_V1.6.exe`，SHA256 `E9E3DA33…`（源码血缘 `NOT_VERIFIED`） |
 | 生产数据库 | `dist/INSO_V1.2/runtime/production/workflow.sqlite3`（经 `dist/INSO_V1.6/runtime` junction 指向 `dist/INSO_V1.4/runtime`） |
 
-> 候选 EXE 完整哈希：`63bcd6cea66003f84ce016cfa8742dc479a9d67ce3f579a92b5b7c398bf4465b`
+> 候选 EXE 完整哈希：`74586eb29ed19e037e2045f481d4ed2226aa555a8f6ef7951028c873fa68d0ed`
 
 ---
 
@@ -164,9 +164,10 @@ INSO_V1.6.exe --scoped-start `
   --start-inquiry
 ```
 
-- `--scope-modules` 只写本次要跑的模块（`inquiry` 必需，`quotation` / `tp` / `notification` 按需）；
+- `--scope-modules` **只能写 `inquiry`**。报价 / TP / 通知在当前代码里没有按订单过滤的入口，写入就会被拒绝（`SCOPE_MODULE_NOT_ISOLATABLE`），这是刻意的：宁可不让它跑，也不让它带着"范围"标签处理全部订单；
 - `--scope-writes` 为空 = **只读试运行**，任何外部写入在发出前就被拒绝；
-- 要写入必须同时写 `--scope-writes google`（或 `inso` / `smtp`）**和**
+- 目前可用目标只有 `google` 与 `inso`（`smtp` 同样没有按订单过滤，会被拒绝）。
+- 要写入必须同时写 `--scope-writes google`（或 `inso`）**和**
   `--scope-approval OWNER-APPROVED:<本次审批编号>`。
 
 **不允许隐式升级：** 只写 `--start-inquiry` 而不给 `--scoped-start` 会被直接拒绝并弹窗，不会退回"全量启动"。
