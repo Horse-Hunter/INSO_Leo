@@ -1,5 +1,53 @@
 # RFQ-021 — execution log (final release candidate)
 
+## RFQ-021-R5 — 现场部署执行（2026-11-16 00:39–01:0x +08:00，唯一 Executor）
+
+- **结论：`DEPLOYMENT_FAILED / NOT_INSTALLED / NO_BUSINESS_ACTION`。** 依 Owner 2026-11-16 最终授权执行到第 3 步；自有数据库门禁在真实生产账本上 FAIL，安装器按设计只接受已证明状态，未绕过、未改库、未启程序、未产生任何外部效果。旧版 `e9e3da33…` 完好如初。
+- **接管基线：** 分支 `workbuddy/v16-rfq016-stabilization`，文档 HEAD `f6096138`，冻结源码 `6a75cc93`，候选未变。
+
+### 1. 旧程序停机（PASS，由程序自身记录证明）
+
+`runtime\logs\runtime-86030824867e430d81c366c4e6a9f60a.{state,exit}.json`：PID `38948`，`exit_requested` 与 `app_finished` 同刻 `2026-11-15T16:28:58Z`（本地 `2026-11-16 00:28:58`），`exit_reason = owner_exit`，`application_exit_code = 0`，`exit.json` 判 `classification = normal`。进程枚举（`Get-Process` 全量 365 个，查询成功）中 `INSO_V1.6` 进程数 **0**；校验脚本判 `process_state = stopped (proven; 0 other INSO_V1.6 process(es), none under this install)`。无 `taskkill`、无强杀。
+
+### 2. 候选与旧版核对（PASS）
+
+`verify_release_candidate.ps1` → `VERIFY_RESULT = PASS`，`manifest_entries = 2872`、`files_on_disk = 2872`、`missing = 0`、`hash_mismatch = 0`、`unexpected = 0`、`candidate_exe_sha256 = f1a0351d…`。旧安装 `dist\INSO_V1.6\INSO_V1.6.exe` 实测 `e9e3da33…`、`_internal` 2870 文件，与手册预期一致。`runtime` 为真 Junction，目标 `D:\Program_Leo\INSO_Leo\dist\INSO_V1.4\runtime`。
+
+### 3. 快照与数据库备份（PASS）
+
+`backup_running_release.ps1` → `BACKUP_RESULT = PASS`，快照 `dist\release-backups\RFQ-021-pre-switch-20261115T164102Z`（`PROGRAM-MANIFEST.sha256` 2875 条目、`_internal` 2870 文件、`config\`、`database-state.json`、`runtime_junction_copied = FALSE`）。
+生产库由实时 `production.json` 的 `sqlite_path` 定位：`dist\INSO_V1.2\runtime\production\workflow.sqlite3`，`1,204,224 B`，源无 `-wal`/`-shm`，停机后逐字节复制，**备份与源哈希同为 `c50c3636318a0de85acf3e14406e21a244468d4a8848239f1b6fa9fb1010dc03`**。`PRAGMA integrity_check = ok`。
+
+### 4. 数据库门禁 —— FAIL（唯一阻断，且结构性）
+
+```
+process_state = stopped (proven; 0 other INSO_V1.6 process(es), none under this install)
+DB_VERIFY_RESULT = FAIL
+reason = the ledger predates the write-intent journal and its unknown-write state is
+not proven: 27 unprotected unknown order(s), 0 unattributable hold(s).
+```
+
+账本为旧库：`workflow_v12_schema_migrations` 只有 `1201 / v1_2_additive_001`，无 `workflow_write_intents`。`legacy_unknown_write` 判定命中 27 单：
+
+| 分类 | 数量 | 现场事实 |
+|---|---|---|
+| `SAVED` 且带真实 `saved_record_ref` | **26** | 每单的 `SAVE_OUTCOME_UNKNOWN` 事件都比该单 `purchase_state.outcome = SAVED` 早约 6 秒，即"派发未确认 → 重试后确认保存"，随后有 `PURCHASE_DATA_SAVED` / `HUMAN_RESOLUTION_RECORDED` / `NOTIFICATION_DELIVERY_SUCCEEDED` / `ALERT_RECOVERED`。写入结果已知，无重放风险，但**没有**活动告警或 hold 挂着它们，门禁因此计入未保护。 |
+| `MANUAL_REVIEW`，无 `saved_record_ref` | **1** | `inq_99275e8e72b43fd6616fd686`（SHAHAB/115，MT7988A）：2026-10-06 `SAVE_DISPATCH_ARMED` 后 `SAVE_OUTCOME_UNKNOWN`，回读 `RECONCILIATION_AMBIGUOUS / RECONCILIATION_UNREADABLE`；2026-10-07 人工 `HUMAN_RESOLUTION_RECORDED`，`inquiry_state = HUMAN_COMPLETED`，但 `purchase_state` 仍停在 `MANUAL_REVIEW`；**无 hold、无活动告警**。 |
+
+**为什么这构成结构性阻断、而不是一次误报：** 即使 26 单 SAVED 全部被正确排除，仅剩的 SHAHAB/115 仍使 `unprotected_unknown_rows = 1`，安装器第 7 条依旧拒绝。而让该单变成"已证明"只有两条路——把 `purchase_state` 改成已结算（伪造无回执的业务状态），或补一条活动 hold（自造保护）——两者都属于 Owner 明令禁止的"改数据库业务状态/清理 SHAHAB-115"。程序自身的人工处置流程（2026-10-07 那次）也**只**写了 `inquiry_state = HUMAN_COMPLETED`，不回填 `purchase_state`，所以不存在"按原机制走完就通过"的路径。清除 26 条历史 `SAVE_OUTCOME_UNKNOWN` 事件同样是篡改证据。
+
+**因此没有执行第 4 步安装**：安装器在改动任何文件前即会以同一条件拒绝，失败关闭；主动跑一遍只会制造无谓的中间态。未安装、未启动新 EXE、未做 `--safe-preview`、未跑真实订单、未碰 Chrome 9222、未改生产库。
+
+### 5. 只读现场核对（Read-only，Service Account）
+
+- `INSO_QUOTE`，sheets：`2026`(gid 0) / `SHAHAB` / `报价输入`(489913321) 等 13 个；SA `rfq016-sheets-test@inso-509314.iam.gserviceaccount.com` 读取成功。
+- **表头已移位，但源码已容错**：物理第 1 行是外来布局（`Model/Qty/Brand/Note/MPN/MFR/Qty/…`），真实契约表头在**物理第 5 行**（`STATUS/WHAT/CLASS/WHO/MPN/MFR/Qty/…`）。冻结源码 `src/sheets/worksheet_schema.py` 的 `SOURCE_HEADER_ANCHOR_ROW["2026"] = 0` + `SOURCE_HEADER_WINDOW = 10` 会在 1–10 行内有界扫描并命中第 5 行，故 `2026` 读取**不会**因表头下移而 `SHEETS_SCHEMA_UNAVAILABLE`。此前 2026-11-13 记录的"两种传输都要求第 1 行"在本冻结源码上已不成立。
+- **原目标已完成，禁止重复采购**：物理第 221 行（也是最后一行）`STATUS = 发给采购`、`CLASS = C`、`MPN = FT2232H-56Q-REEL`、`MFR = FTDI`、`Qty = 105`、Brand 空；SQLite `inq_e15970df104e170d93b4169b` = `SAVED`，`saved_record_ref = rec_440fafd372440ecf9dacabf660dd155d`，`2026-11-14T03:59:17Z`。与历史回执一致 → 该单不得再次 Save/采购，Owner 指示的备选路径（另选一笔真实未发订单）因部署未成立而无法执行。
+
+### 6. 现场状态
+
+旧版在位且未变（`e9e3da33…`，2870 文件）；无 `INSO_V1.6` 进程；生产库哈希 `c50c3636…` 未变；worktree 干净；回滚材料为上述快照（本机 `_internal.prev-*` 目录均未被触碰）。**唯一需要的 Owner 决策：** 是否授权处置 SHAHAB/115（补证为已结算或补 hold），或授权对门禁做最小修正（需新构建，Owner 已声明不要 R6）。二者之外无合法通过路径。
+
 ## RFQ-021-R5 — closure round (2026-11-15 evening, Executor takeover)
 
 - **Status:** `SOURCE_AND_OFFLINE_RELEASE_READY_FOR_CEO_REVIEW / RELEASE_HOLD / NOT_DEPLOYED` (R5 + its two-condition closure patch, submitted for the CEO's final R5 recheck)

@@ -1,5 +1,15 @@
 # INSO LEO — Owner 最终授权：发布 V1.6 并执行真实单笔订单（2026-11-16）
 
+## Executor 现场执行结果（2026-11-16 01:0x +08:00）：`DEPLOYMENT_FAILED / NOT_INSTALLED / NO_BUSINESS_ACTION`
+
+依本页 Owner 授权连续执行到安装前一步，**自有数据库门禁在真实生产账本上 FAIL**，安装器按设计只接受已证明状态，故未安装、未启动、未做真实订单、未产生任何外部效果。旧版 `e9e3da33…` 在位未变。
+
+- **已实证 PASS：** 旧程序由自身运行记录证明干净退出（PID 38948，`exit_reason=owner_exit`，code 0，`2026-11-16 00:28:58` 本地）；候选逐文件复算 `2,872/2,872`、EXE `f1a0351d…`；旧程序/配置快照 `BACKUP_RESULT = PASS`；停机后生产库逐字节备份，哈希与源同为 `c50c3636…`，`integrity_check = ok`，源无 `WAL/SHM`。
+- **唯一阻断（结构性）：** `DB_VERIFY_RESULT = FAIL` —— 账本无 `workflow_write_intents`（旧库，迁移仅 `1201`），`27 unprotected unknown order(s)`。其中 26 单实为 `SAVED` 且带真实 `saved_record_ref`（`SAVE_OUTCOME_UNKNOWN` 均早于 `SAVED` 约 6 秒，属重试后确认成功），但无活动告警/hold 挂靠；剩 1 单 `inq_99275e8e72b43fd6616fd686`（SHAHAB/115）为 `MANUAL_REVIEW`、`RECONCILIATION_UNREADABLE`、无回执、无 hold。**即使排除 26 单，SHAHAB/115 一单仍使门禁拒绝**；而把它变成"已证明"只能靠改 `purchase_state` 或补 hold，两者均为 Owner 明令禁止。
+- **不触碰：** 未安装、未启新 EXE、未 `--safe-preview`、未跑真实订单、未动 Chrome 9222、未改生产库、未清理 SHAHAB/115 或任何 hold。详见 [RFQ-021 EXECUTION_LOG](RFQ-021/EXECUTION_LOG.md#rfq-021-r5--现场部署执行2026-11-16-0039010x-0800唯一-executor)。
+- **待 Owner 决策：** ①授权处置 SHAHAB/115（补证为已结算，或补一条活动 hold）；②授权对安装门禁做最小修正（需新构建，Owner 已声明不要 R6）。二者之外无合法通过路径。
+- **顺带更正：** 物理第 1 行外来表头 + 第 5 行真实契约表头的布局，在本冻结源码上**不会**导致 `SHEETS_SCHEMA_UNAVAILABLE`（`SOURCE_HEADER_ANCHOR_ROW=0` + `SOURCE_HEADER_WINDOW=10` 已容错）；2026-11-13 的"两种传输都要求第 1 行"结论对 `6a75cc93` 不成立。原目标第 221 行 `FT2232H-56Q-REEL` 现场为 `发给采购`，SQLite 为 `SAVED / rec_440fafd…`，已完成，不得重复采购。
+
 **Owner 最新明确纠正：** “就是要跑真实订单啊，禁止再加阻断”。此授权**取代**此前只允许安装与 `--safe-preview` 的业务范围限制。Owner 已另行声明旧程序退出；Executor 必须以现场核实为准。**本次无需分阶段重复请求 CEO/Owner 批准**：在现有产品安全门禁真实通过后，唯一新 Executor 可连续执行：旧程序停机核验 → 真实配置/账本备份及校验 → 安装冻结 V1.6 → 新版安全预览 → **一笔真实且符合准入条件的 inquiry 订单**（Google Sheets API 读取及必要的 brand/status 写入、现有 INSO Save-and-Send 采购动作及回执核对）→ 证据归档。不得无故停在安全预览或增加额外 CEO Review。
 
 - **授权范围：** `OWNER_AUTHORIZED_GATED_INSTALL_AND_ONE_REAL_INQUIRY / NOT_YET_VERIFIED`；`--scoped-start --scope-modules inquiry --scope-writes google,inso --scope-approval OWNER-APPROVED:RFQ016-REAL-20261116 --start-inquiry`；`--scope-inquiries` **只能是现场核准的一笔真实订单 inquiry_id**（不得使用占位符）。正常业务需要的真实 API/INSO 写入已经获得此处 Owner 一次性明确授权。
