@@ -1,6 +1,6 @@
 # RFQ-021 — 最终发布候选集中交付（最终报告）
 
-> **已被 RFQ-021-R2 取代（2026-11-15 上午）。** CEO 复核指出三个 P0（范围未绑定、邮件服务绕过范围、其他入口无预览防护），已在 `1314da5d` 修复并重建候选 `74586eb2…`。当前结论请看 [REVIEW_FOLLOWUP.md](REVIEW_FOLLOWUP.md) 与 [EXECUTION_LOG.md](EXECUTION_LOG.md) 的 R2 段。
+> **历史文档：已被 R2/R3/R4 取代，最新一轮是 R5（2026-11-15 晚）。** 本文件只记录 R1 的交付；当前结论与证据请看 [EXECUTION_LOG.md](EXECUTION_LOG.md) 的 R5 段、[INSTALL_AND_ROLLBACK.md](INSTALL_AND_ROLLBACK.md) 与 `docs/evidence/rfq021/rfq021-final-candidate-r5.json`。CEO 独立复核见 [REVIEW.md](REVIEW.md)。
 
 **RFQ 状态：`READY_FOR_CEO_RELEASE_REVIEW`。未部署、未切换、未启用业务。**
 

@@ -1,11 +1,12 @@
-# INSO LEO — RFQ-021-R4 CEO 独立复核（2026-11-15 16:47+08:00）
+# INSO LEO — RFQ-021-R5 Executor 交付（2026-11-15 晚，待 CEO 独立复核）
 
-**最新权威状态：`RFQ021_R4_CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED`。** R3 结论及 R4 Executor 自测均不是发布许可。详见 [CEO 独立 Review](RFQ-021/REVIEW.md) 顶部 R4 段。
+**最新权威状态（Executor 自报，不是发布许可）：`RFQ021_R5_SOURCE_AND_OFFLINE_RELEASE_READY / RELEASE_HOLD / NOT_DEPLOYED`。** R4 的五个集中阻断已在 R5 内逐条处理；CEO 独立结论仍以 [REVIEW.md](RFQ-021/REVIEW.md) 为准。
 
-- **已按源码接受：** 协调器启动/轮询的范围外状态过滤、手动操作权限提示；R4 候选清单 GitHub 内容 SHA256 独立复算一致（并非 Windows EXE 实物验收）。
-- **集中阻断：** 回滚配置与真实 runtime 配置未绑定；切换后只核对新 `_internal` 文件数量而未逐文件校验；有效旧 DB 备份仍缺当前生产库来源证明；登录巡检的 `check_only=True` 低层绕过；全量 4,260 测试中 6 失败（比 R3 多 4 项），原因没有得到独立确认。
-- **R4 基线：** 源码 `2ad471e7`，Executor 自报候选 EXE `19918185…`，报告 `4,253 passed / 6 failed / 1 skipped`；仅离线构建及测试，未部署。后续若补修，必须重新冻结源码、测试并构建最终候选。
-- **继续禁止：** 停机/重启、生产安装、真实订单和外部写入、修改/备份生产 SQLite、接管 Chrome9222、清理 UNKNOWN/hold、合并 develop、晋升 main/release。B3/B4 现场条件需 Owner 独立授权。
+- **冻结源码：** `2c58529d14902b84598f36fc29c7b52e105d461c`（其后的提交只含文档与证据）。
+- **唯一候选：** EXE `be7c0d3fcc348b21e78f8d86a9917edb2a5d4d78d33bf955ce0c9416b42d4620`，`8,461,034` B，`2,872` 文件；清单自身 `a969a9bf21385e109632bc75f3a8b19a2ee70c2732fa412daf007db1ed24ba9b`；逐文件复算 `PASS（2,872/2,872，0 missing / 0 mismatch / 0 unexpected）`。R4 的 `19918185…` 不再作为证据。
+- **R4 阻断处理：** ①快照配置绑定真实 runtime junction，并新增"账本路径取自实时配置"（本机实测：junction 指向的 `dist\INSO_V1.4\runtime` 里没有 `production\`，真实库在 `dist\INSO_V1.2\runtime\production\workflow.sqlite3`）；②切换后逐文件复算，回滚按快照逐文件恢复并验证，恢复中断报 `ROLLBACK_REQUIRED`；③数据库证明=源路径/独占句柄停机一致性/业务不变式/报告与安装目录及账本互相绑定，未结算写入意图直接拒绝；④`_run_login_sweep(check_only=True)` 在预览与受控范围一律拒绝（断言未获取 Chrome）；⑤六项失败已定性为环境（测试临时树不可写）并给出可复现机制证据，全量 `4,277 collected / 4,276 passed / 0 failed / 0 errors / 1 skipped in 321.39 s`。
+- **仍未验证：** 安装、停机、真实业务试运行、B4 干净停机均需 Owner 维护窗口；旧 EXE 血缘仍 `NOT_VERIFIED`。
+- **继续禁止：** 停机/重启、生产安装、真实订单和外部写入、修改/备份生产 SQLite、接管 Chrome9222、清理 UNKNOWN/hold、合并 develop、晋升 main/release。
 
 ## R4 Executor 交付前历史协调记录
 

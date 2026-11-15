@@ -1,5 +1,80 @@
 # RFQ-021 — execution log (final release candidate)
 
+## RFQ-021-R5 — closure round (2026-11-15 evening, Executor takeover)
+
+- **Status:** `SOURCE_AND_OFFLINE_RELEASE_READY_FOR_CEO_REVIEW / RELEASE_HOLD / NOT_DEPLOYED`
+- **Reviewed base:** CEO [REVIEW.md](REVIEW.md) R4 (`CHANGES_REQUESTED`, five consolidated blockers). R4 source `2ad471e7`, branch HEAD at takeover `c94d99ec` plus an unfinished R5 working tree (install scripts, backend, `v12_store`, evidence) which was audited, kept where correct, and finished rather than restarted.
+- **Frozen source:** `2c58529d14902b84598f36fc29c7b52e105d461c` (only documentation/evidence commits follow it).
+- **Candidate (one, final):** `build/windows-release-stage-1.6/dist/INSO_V1.6/INSO_V1.6.exe`, `8,461,034` B, SHA256 `be7c0d3fcc348b21e78f8d86a9917edb2a5d4d78d33bf955ce0c9416b42d4620`, `2,872` files, no `runtime/`.
+- **Manifest:** `docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256`, self-SHA256 `a969a9bf21385e109632bc75f3a8b19a2ee70c2732fa412daf007db1ed24ba9b`; r1–r4 kept as `-r1`…`-r4` (R4's file, `2de4df2f…`, is now `-r4`). **One candidate only.**
+- **Self-checks:** `--self-check` `0`, `--idle-self-check` `0`, `--preview-self-check` `0` (two real GUI rounds), `RELEASE_SCAN_OK`, `verify_release_candidate.ps1` `PASS（2,872/2,872，0 missing / 0 mismatch / 0 unexpected）`.
+
+### 1. B3 — rollback, backup and install (R4 blockers 1–3)
+
+| Was | Now |
+|---|---|
+| backup took the configuration from `-RuntimeConfigDir` | it comes from the target of the install's own `runtime` junction; a `-RuntimeConfigDir` that disagrees is refused |
+| backup copied `_internal` and wrote a manifest of whatever it copied | the copy is compared byte for byte with the running payload (count + every hash); `robocopy` exit ≥4 is refused, so a self-consistent partial snapshot cannot exist |
+| backup described a *guessed* `runtime\production\workflow.sqlite3` | it reads `sqlite_path` from the live `production.json` and records `configured_path`/`resolved_path`. **This mattered on the real box:** the runtime junction points at `dist\INSO_V1.4\runtime`, which has no `production\` directory, while the live ledger is at `dist\INSO_V1.2\runtime\production\workflow.sqlite3` (itself a junction into the v1-2-design worktree). The old guessed path did not exist. |
+| installer checked that the snapshot's config paths existed | it requires both mandatory configs and compares their bytes with the live config behind the junction |
+| installer accepted any database report with `PASS` | the report must be schema ≥3, carry a quiescence proof, name **this** `install_dir`, name **this** ledger (`sqlite_path`, junction-normalised), bind copy hash = source hash = report hash, and have `open_write_intents = 0` |
+| database `integrity_check` was the whole proof | `verify_database_backup.ps1` proves a clean stop three ways: no process from the install directory, **an exclusive handle can be taken on the ledger** (no other process still holds it), and **both** `-wal` sides are empty; plus required tables, non-empty purchase/event ledger, recency, purchase-outcome counts, active alerts and open write intents are recorded in the report |
+| after a copy it counted `_internal` files | every program file is re-hashed against the candidate manifest, and the count must match |
+| a failed switch only re-checked the EXE hash | the restore is exception-safe, then verified **file by file against the snapshot**; `FAIL_RESTORED` now means proven, otherwise `ROLLBACK_REQUIRED` names the exact things to restore by hand |
+| — | a program starting during candidate verification is caught by a second path-based process check immediately before the first `Move-Item` |
+| — | offline-gate fault injection (`-InjectSwitchFault`, `-InjectPostCopyCorruption`, `-InjectRestoreFault`) is honoured **only** when `RFQ021_OFFLINE_GATE_TESTS=1`, and each one can only force a failure |
+
+Isolated synthetic-install harness (`scripts/test_install_gates.ps1`, production never touched because the process guard is path-based): **`107` checks, `GATE_TEST_RESULT = PASS`** — complete success path, then refusals for: missing authorisation switches, malformed expected hash, snapshot file changed/missing, wrong expected build, foreign/damaged/missing snapshot, foreign config directory, stale config, missing runtime junction, runtime that is a real directory, junction pointing elsewhere, report missing / from another install / naming another source, ledger still open, unresolved write intent, copy that is not the live ledger, stale ledger, uncheckpointed WAL, missing `-InstallDir`, post-copy mismatch, injected mid-switch failure (restored, verified file by file), corrupted post-copy bytes (count unchanged: caught), and an interrupted restore (`ROLLBACK_REQUIRED`, never `PASS`).
+
+**Answer to "if the install fails halfway, how does the old program and config come back without losing or replaying a real order?"**
+The old `INSO_V1.6.exe` and the old `_internal` are moved aside inside the target (`.prev-<UTC>`), never overwritten; the new payload is verified file by file; any failure restores both, re-verifies every program file against the snapshot, and reports `FAIL_RESTORED` (or `ROLLBACK_REQUIRED` with the exact paths). `runtime` (the config junction) is never moved or replaced. The database is not touched by the installer at all: the switch requires a proven, hash-identical, quiescent backup of the configured ledger taken after a clean stop, and refuses to run when any write intent is still unresolved — so a rollback cannot silently drop an unconfirmed external write, and nothing is replayed because every hold/UNKNOWN row stays in whichever ledger the operator chooses to keep.
+
+### 2. B5/B6/B7 — effect-entry audit (R4 blocker 4 and the full-scope pass)
+
+Every entrance that can produce an order state, event, alert, persisted write intent, Google/INSO/SMTP effect or Chrome/CDP operation was enumerated and traced to its **final executing function**:
+
+| Entrance | Final gate |
+|---|---|
+| preview launch, `start()`, `start_process_services()`, `retry_failed_process_service()` | preview ⇒ no-op; scoped ⇒ needs `notification` module + `smtp` target |
+| `initialize_run_state`, `discover_pending`, `prepare_pending`, `process_pending` | coordinator `_in_scope()` before any mutation (R4) |
+| `PurchaseCompletionActions.retry_saved_statuses/process` | scope-filtered (R3) |
+| notification dispatch | one choke point (`_run_notifications`), needs module + target |
+| site recovery / incident settlement | **`resolve_incidents(..., within=<scope ids>)`**: settles program-level records and the run's own orders only; an out-of-scope order's incident evidence is left untouched (new in R5) |
+| idle keep-alive login sweep, deferred-auth recovery sweep, login-all button | all three, plus `check_only=True`, refuse before touching Chrome (R4 + R5) |
+| manual order actions (`request_order_action` → `_manual_request` → `_execute_order_action_impl`) | **the executor itself re-checks `_order_in_scope` + `_action_in_scope`** before the first effect (new in R5), so a direct/low-level call cannot bypass the button |
+| order mail check, `reconcile_v12_save` | `_external_action_allowed("smtp", …)`; `reconcile_v12_save` has no caller |
+| local DB writes / events / alerts / write intents | only inside the scoped loops; incident records stay program-level |
+| external writes | one write lease + scope gate + durable write-intent journal (`WRITE_INTENT_PENDING`, `WRITE_LEDGER_UNAVAILABLE`) |
+| purchase re-submission | `manual_purchase_retry_allowed` refuses `SUBMIT_UNCONFIRMED`, `INTERRUPTED_POSSIBLY_SENT`, `PURCHASE_RECORDED`, `STATUS_WRITE_PENDING`, `HUMAN_COMPLETED`, and refuses on **any** `SAVE_DISPATCH_ARMED` / `SAVE_CLICK_COMPLETED` / `SAVE_OUTCOME_UNKNOWN` / `PURCHASE_DATA_SAVED` event — UNKNOWN/SENT can never be retried automatically |
+| operator diagnostics (`--cdp-self-check`, `--api-self-check`, `--diagnose-vault`) | explicit read-only probes: they attach/probe and read local config only; they start no business, write no order state and close nothing |
+| GUI | only calls backend methods; no GUI module imports an adapter |
+
+### 3. The six full-suite failures (R4 blocker 5)
+
+- **Reproduction attempts (this host, unrestricted file access):** full suite twice — once with the R5 retry enabled, once with it **disabled** — plus `tests/gui tests/launcher` together. Result: `0 failures in the full suite; the six R4 nodeids passed in every attempt`; the only `BEGIN IMMEDIATE` refusal in a whole run was the deliberate lock test `test_supplement_scan_database` (`SQLITE_BUSY`, correctly refused), and **`SQLITE_READONLY` never occurred**. The six R4 nodeids passed every time.
+- **Mechanism control (proved):** a WAL ledger whose `-wal`/`-shm` cannot be written fails `BEGIN IMMEDIATE` with exactly `sqlite3.OperationalError: attempt to write a readonly database` (`SQLITE_READONLY`, code 8) — measured directly, so that message identifies a write-denied ledger, not a changed code path. A denied *directory* gives `SQLITE_CANTOPEN` instead, which is why the ACL form matters.
+- **Environment evidence:** the R4 runs were executed under a restricted file policy. The proof is still on disk: the pytest temporary trees that those runs created inside the repository (`D:\Program_Leo\INSO_Leo\.test_tmp_*`) are unreadable to the current user — even `Get-Acl` returns "unauthorised operation" — while the trees created by this round (`%TEMP%\pytest-of-Leo\pytest-94x`) are ordinary writable directories.
+- **Conclusion:** the failures were an environment fault (a temporary tree the test process could not write), amplified by the launcher's correct fail-closed mapping `sqlite error → WORKFLOW_LEDGER_UNAVAILABLE → MODULE_PAUSED`. **Not proven:** which sandbox rule denied which file in that earlier session (that process's records are gone). **Not claimed:** that a source defect caused them.
+- **Fix, without touching any test's intent:** `tests/conftest.py` now proves at session start that the session's temporary tree can hold a real WAL ledger (create, `BEGIN IMMEDIATE`, insert, commit, read back) and refuses the session with the path and the underlying error if it cannot. No test was deleted, skipped, deselected or loosened.
+- **Hardening kept, honestly scoped:** `_transaction` retries a *contended* `BEGIN IMMEDIATE` (`SQLITE_BUSY`/`SQLITE_LOCKED`, measured in the suite) on a fresh connection — the body has not run, so no effect can be replayed. `SQLITE_READONLY` is **not** retried: it fails closed immediately, so the R4 symptom can never be masked. Pinned by `tests/workflow/test_rfq021_r5_ledger_retry.py`.
+
+### 4. Tests (frozen source, one full run)
+
+`docs/evidence/rfq021/pytest-report-r5.xml` — **`4,277 collected / 4,276 passed / 0 failed / 0 errors / 1 skipped in 321.39 s`**.
+
+### 5. NOT_VERIFIED (unchanged business reality)
+
+1. Nothing was installed, stopped, started or restarted against production; no Google/INSO/SMTP effect; production SQLite never opened for write; Chrome 9222 untouched.
+2. The installer's success path is proven only in isolated synthetic installations, never against the real one (the real program is running, and the installer refuses by design).
+3. Old-program Stop timing, GUI refresh stall and residual Chrome pages are unmeasured.
+4. PyInstaller output is not bit-reproducible: `be7c0d3fcc348b21e78f8d86a9917edb2a5d4d78d33bf955ce0c9416b42d4620` identifies this build only.
+5. The running `E9E3DA33…` EXE still has no proven source lineage.
+6. A real scoped business run was not executed; scope behaviour rests on negative/integration tests.
+7. `sqlite3.exe` presence is irrelevant to the new runbook (the copy is byte-identical after a clean stop), but the actual duration of the maintenance window is unmeasured.
+8. B4 clean stop and the real rollback remain `NOT_VERIFIED` until the Owner-authorized window.
+
+---
+
 ## RFQ-021-R4 — Lean Review round (2026-11-15 afternoon)
 
 - **Status:** `R4_SUBMITTED_FOR_CEO_REVIEW / RELEASE_HOLD / NOT_DEPLOYED`
