@@ -1,3 +1,38 @@
+# RFQ-021 — CEO Final Independent Review (R5 Closure, 2026-11-15 21:30+08:00)
+
+**Verdict: `PASS_SOURCE_AND_OFFLINE_RELEASE_READY / RELEASE_HOLD / NOT_DEPLOYED`.** RFQ-021 R5 **source/offline development may close**. This verdict is permission to **request** a separately approved maintenance window, **not** an order to stop/restart, install, run real orders, write Google/INSO/SMTP, clear holds/UNKNOWN, or promote branches.
+
+## Subject and independent verification
+
+- Frozen source/scripts/tests SHA **`6a75cc93130c8b7805569edfc3131f82032e22c4`**; Executor handoff HEAD before this CEO review **`54f55dd88522864c464d85e69b66425374d5ab3b`**. GitHub compare confirms every file changed after freeze belongs to documentation/evidence; `src/`, `scripts/` and `tests/` unchanged. `src/` also unchanged from pre-closure R5 source `2c58529d`.
+- Full-suite JUnit `docs/evidence/rfq021/pytest-report-r5.xml` was read directly: **4,277 testcases / 0 failures / 0 errors / 1 platform-conditional skip** (symlink-creation permission); 4,276 passed. These are Executor's recorded test results; CEO did not independently rerun Windows tests.
+- The GitHub release manifest was independently SHA256-hashed (canonical text): **`5dfce4c17e1583f401d78123d17378a527aeca78df356222e4d22ec954c33a64`** matched the report; 2,872 entries, 2,872 distinct paths, no `runtime/` entries, EXE entry `f1a0351dd9837239043250fa86b9d8c921620d151eef660529d85eaecca020e2`. Actual Windows EXE bytes / on-disk stage were **not independently accessed** by CEO.
+- Executor-reported candidate: EXE 8,461,034 bytes, 2,872 files, SHA256 **`f1a0351dd9837239043250fa86b9d8c921620d151eef660529d85eaecca020e2`**. The pre-P0 build `be7c0d3f…` and manifest `a969a9bf…` are historical only and must **not** be installed.
+- Executor reports **156 isolated PowerShell gate checks PASS**, including full synthetic install, failures/rollback and the new negative tests. CEO inspected exact-script implementation and fixture/test cases but did not execute the Windows harness; this distinction remains explicit.
+
+## Closure of the two prior P0 findings
+
+1. **P0 write-intent UNKNOWN-as-zero — SOURCE PASS.** `scripts/verify_database_backup.ps1` now computes a fail-closed `write_intent_state`; existing/readable journal must yield an integer zero (`NONE_PROVEN`); legacy journal absence requires explicit checks of unknown purchase outcomes, save-unknown events, current alerts/holds and no unprotected/unattributable uncertainties (`LEGACY_NO_JOURNAL_PROVEN`). Null, invalid schema/query or undetermined state fails. The installer's schema-4 report gate also explicitly refuses NULL/non-integer/nonzero counts or unproven states; preserves UNKNOWN/hold without clearing. Red→green negatives include missing journal with/without protection, malformed journal, NULL count and missing state.
+2. **P0 unprovable process state treated as stopped — SOURCE PASS.** Both DB verifier and installer use three-valued `Get-StopState` backed by `Get-CimInstance Win32_Process -ErrorAction Stop`; enumeration errors and unreadable executable paths produce **unknown ⇒ refusal**, named target processes produce running ⇒ refusal. Installer repeats the gate before first `Move-Item`. Negative test injects each failure mode, including pre-switch refusal with the target EXE hash unchanged.
+
+Prior R3/R4/R5 pass families (coordinator scope and local effects, manual final-action guard, Chrome login sweep, incident handling, config/ledger provenance, post-copy hashes and rollback recovery, preview self-check) remain unchanged by this two-P0 patch. They are accepted under their earlier focused review; no additional source-scope blockers were identified within the agreed review boundary.
+
+## Required external gates and hard stop conditions
+
+**Keep `RELEASE_HOLD / NOT_DEPLOYED`.** Before a real switch the Owner must separately authorize and observe an explicit maintenance window and the following checkpoints:
+
+1. Re-hash the actual on-disk Windows candidate EXE and all files against the R5-closure manifest, verify the **currently installed old EXE** identity and exact runtime/config/SQLite junction paths, and confirm no unexpected other writer or watcher remains.
+2. Approve and perform **normal clean stop (B4)**; stop if the old process/watchers persist, if an operation is in flight, or if the process state is unprovable. **No force kill or Chrome 9222 takeover.**
+3. Only after clean stop, take a consistent program/config/ledger rollback snapshot from the *live configured* `sqlite_path`. Verify source/backup SHA, WAL/quiescence, schema-4 report, and write-intent/UNKNOWN protections; any failure ⇒ **do not install**, preserve evidence, no automatic clearing/replay.
+4. If and only if all proofs pass and installation is separately authorized, run the fixed installer, verify installed bytes, then first launch **new EXE in safe preview only**. Cold rollback and any restart are independent Owner decisions.
+5. Actual single-order, Google/INSO/SMTP write, 221 SAVED / SHAHAB-115 / three V13 holds / UNKNOWN disposition remain **not authorized / not yet verified**. Do not claim business acceptance from offline tests.
+
+The old `E9E3DA33…` production EXE's source lineage and the underlying TLS-EOF cause remain **NOT_VERIFIED**. Last Executor Windows process/DB observations are time-stamped and not continuously-live CEO evidence. No branch merge or release promotion is authorized by this review.
+
+**R5 final verdict:** `PASS_SOURCE_AND_OFFLINE_RELEASE_READY` **only**; production release gate remains `RELEASE_HOLD`.
+
+---
+
 # RFQ-021 — CEO Independent Review (R5, 2026-11-15 19:46+08:00)
 
 **Verdict: `CHANGES_REQUESTED (2 fail-closed conditions only) / RELEASE_HOLD / NOT_DEPLOYED`.** The R5 coordinator, manual-action and Chrome scope fixes are accepted at source level; test/build evidence is valid as **GitHub-stored evidence**. A final source-ready claim must close the two concrete installation safety gaps below. **Do not open a new RFQ or repeat architectural work; finish these as an R5 closure patch.** No production action is authorized.
