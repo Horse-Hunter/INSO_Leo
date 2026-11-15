@@ -1,3 +1,17 @@
+# INSO LEO — Owner 最终授权：发布 V1.6 并执行真实单笔订单（2026-11-16）
+
+**Owner 最新明确纠正：** “就是要跑真实订单啊，禁止再加阻断”。此授权**取代**此前只允许安装与 `--safe-preview` 的业务范围限制。Owner 已另行声明旧程序退出；Executor 必须以现场核实为准。**本次无需分阶段重复请求 CEO/Owner 批准**：在现有产品安全门禁真实通过后，唯一新 Executor 可连续执行：旧程序停机核验 → 真实配置/账本备份及校验 → 安装冻结 V1.6 → 新版安全预览 → **一笔真实且符合准入条件的 inquiry 订单**（Google Sheets API 读取及必要的 brand/status 写入、现有 INSO Save-and-Send 采购动作及回执核对）→ 证据归档。不得无故停在安全预览或增加额外 CEO Review。
+
+- **授权范围：** `OWNER_AUTHORIZED_GATED_INSTALL_AND_ONE_REAL_INQUIRY / NOT_YET_VERIFIED`；`--scoped-start --scope-modules inquiry --scope-writes google,inso --scope-approval OWNER-APPROVED:RFQ016-REAL-20261116 --start-inquiry`；`--scope-inquiries` **只能是现场核准的一笔真实订单 inquiry_id**（不得使用占位符）。正常业务需要的真实 API/INSO 写入已经获得此处 Owner 一次性明确授权。
+- **目标订单准则：** 先读 `control-room/RFQ-016/TASK_SPEC.md`、`EXECUTION_LOG.md`，通过真实 Sheets API + SQLite/INSO 核对。历史 `INSO_QUOTE/2026` 物理 221 行 `inq_e15970df104e170d93b4169b` 已据上一轮现场报告 `SAVED`、回执 `rec_440fafd372440ecf9dacabf660dd155d`；如最新事实仍证实保存，不得重复 Save/购买。若原目标已完成，**直接选择一笔真实、未发、来源身份唯一、当下符合准入且无历史发出/未知效果的新 inquiry**，无需额外请示；最多处理一笔。SHAHAB/115 `MANUAL_REVIEW` 与历史 hold 保持原样。
+- **固定安装候选：** 源码 `6a75cc93130c8b7805569edfc3131f82032e22c4`，EXE SHA256 `f1a0351dd9837239043250fa86b9d8c921620d151eef660529d85eaecca020e2`，清单 `5dfce4c17e1583f401d78123d17378a527aeca78df356222e4d22ec954c33a64`，旧版预期 `e9e3da33417414abac53f8a88a67d9f053bcdaeab9730eae9ad8bd7870dffad0`；必须现场复核。不得新建候选或降级/绕过既有安装安全门禁。
+- **业务路径：** 使用现有 Google Sheets Service Account API（实际确认 enabled、权限和唯一行身份），保留现有 INSO 业务保护及已授权 CDP 连接，不强夺/重置 Chrome9222，不启用未按订单隔离的 quotation/TP/notification/smtp 批处理。记录每次实际外部效果前/后证据、去重与 durable write intent、Google/INSO/SQLite 实际回执。一个 API 请求或按钮点击不等于 DONE。
+- **自然失败而非“新增审批关卡”：** 已有安装 B3/B4、写入意图、源行身份、真实权限、采购去重、UNKNOWN/SENT 和 holds 等硬安全门禁仍按源码运行；有实质 FAIL/UNKNOWN 即停止该效果并上报可验证原因，不擅自删除或伪造业务状态。**没有问题时无需返回 CEO、无需多轮确认，直接完成单笔业务。**
+- **完成定义：** 安装后真实 `INSTALLED_PREVIEW_PASS` 加 **ONE_REAL_INQUIRY_DONE**（Sheet API 写入回读/INSO 原生确认/SQLite 回执一致）；若业务确实无法完成则据实标 `NOT_DONE` / `UNKNOWN` 而非伪造完成。提交原有 `EXECUTION_LOG.md`、`COORDINATION.md`，记录唯一订单、证据与现场最后程序状态；无须再开 R6。
+- **不授权：** 批量处理、重复采购历史 221、任意其他订单、自动清除 SHAHAB/115/UNKNOWN/hold、跨订单报价/邮件模块、修改安装源码规避门禁、强杀进程、任意回滚覆盖生产库、合并/晋升 `develop`/`main`/`release`。原有条款中的“禁止真实订单”仅在本次**单笔 inquiry 明确授权的范围内**被更新。
+
+## 之前仅授权安装与安全预览的协调记录（历史；业务范围已被本次 Owner 明确更新）
+
 # INSO LEO — RFQ-021 Owner 授权发布准备（2026-11-16）
 
 **Owner 最新指令（聊天确认）：** “程序已退出，指挥新窗口发布吧”。Owner 自述旧程序已退出，**CEO/Executor 尚未独立验证 B4**。本条授权仅覆盖**本次**按 RFQ-021 手册执行现场核验、完整程序/配置快照、停机后当前账本一致性备份与只读校验、全部门禁 PASS 后安装固定 R5 候选，以及**新 EXE 的 `--safe-preview` 首次验收**；**不代表无条件通过、也不是实际部署已完成。**
