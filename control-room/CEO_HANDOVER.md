@@ -1,3 +1,11 @@
+# INSO LEO — CEO/Executor 交接入口（2026-11-15 R5 Final PASS）
+
+**当前 CEO 最终源码结论：`PASS_SOURCE_AND_OFFLINE_RELEASE_READY / RELEASE_HOLD / NOT_DEPLOYED`。** <u>不要再开 R6 或重复开发</u>；先读 `develop/AGENTS.md` 与 [RFQ-021/REVIEW.md](RFQ-021/REVIEW.md) 最新最终 R5 段和 [COORDINATION.md](COORDINATION.md)。
+
+**固定候选：** 源码 `6a75cc93130c8b7805569edfc3131f82032e22c4`；EXE `f1a0351d…`；清单 `5dfce4c1…`。预补丁 R5 候选严禁混用。下一阶段仅在 Owner 明确授权的维护窗口进行 B4 正常停机、真正回滚材料和生产安装前门禁检查；此文档不授权任何动作。未经单独许可，任何生产进程/订单/SQLite/Chrome9222/Google/INSO/SMTP/分支晋升均不得操作。
+
+## 历史 R5 Executor 及 CEO 阻断记录（仅追溯，不是当前许可）
+
 # INSO LEO — RFQ-021-R5 CEO Review 交接（2026-11-15 晚）
 
 **当前唯一有效 CEO 状态：`R5 CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED`。** 执行前先看 [CEO REVIEW R5](RFQ-021/REVIEW.md) 顶部和 [COORDINATION](COORDINATION.md)。R5 源码基线 `2c58529d`，候选哈希 `be7c0d3…` 属旧 R5 待补基线，不能在修复后沿用。仅需在 R5 内补两个 fail-closed 条件：写入意图 NULL/缺表不准 PASS，进程枚举不可确认不准当已停机；定向负测、冻结后全测、一次重建。复用唯一 Executor 工作树，禁止生产变更及版本晋升。
