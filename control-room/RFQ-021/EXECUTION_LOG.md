@@ -1,5 +1,82 @@
 # RFQ-021 — execution log (final release candidate)
 
+## RFQ-021-R4 — Lean Review round (2026-11-15 afternoon)
+
+- **Status:** `R4_SUBMITTED_FOR_CEO_REVIEW / RELEASE_HOLD / NOT_DEPLOYED`
+- **Reviewed base:** CEO [REVIEW.md](REVIEW.md) (R3, `CHANGES_REQUESTED`); R3 source `1ef20c81`, Executor branch HEAD at review `cf592212` (docs only).
+- **Source commits:** `557cde28` (scope + gates + hint) then `2ad471e7` (snapshot manifest BOM). **Final frozen source: `2ad471e7b3c0101f18f6edae05d77522c6f71d47`.**
+- **Candidate (one, final):** `build/windows-release-stage-1.6/dist/INSO_V1.6/INSO_V1.6.exe`, **8,459,710 B**, SHA256 `199181856ac1430af5aa0bd0af37b6bf45a1bf17272413583b2bb6e27e679d32`, **2,872 files**, no `runtime/`.
+- **Manifest:** `docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256`, self-SHA256 `2de4df2f9f23fe56eea89633b25c46c941bbf9e7b35eae99bc855d2189c1e2e3`; r1/r2/r3 manifests kept as `-r1`/`-r2`/`-r3`. **One candidate only.**
+- **Build inputs:** `scripts/build_windows_release.ps1` `ab35565a…`, `requirements-windows-release.lock` `3dc5d7a5…` (unmodified), `packaging/INSO_V1.1.spec` `d7574c20…`, `scripts/scan_release_artifact.py` `f2517340…`, `scripts/windows_release_entry.py` `ae4eafa5…`.
+- **Manifest recomputation:** `verify_release_candidate.ps1` → 2,872 entries / 2,872 files, 0 missing, 0 mismatch, 0 unexpected, `VERIFY_RESULT = PASS`.
+- **Self-checks on the candidate:** `--self-check` 0, `--idle-self-check` 0, `--preview-self-check` 0 (2 GUI rounds, 3 s, `"ok": true`), `RELEASE_SCAN_OK` ×2. Reports: `docs/evidence/rfq021/v16-preview-self-check-r4.json`, `v13-idle-self-check-r4.json`.
+
+### Tests (frozen source, one full run)
+
+`docs/evidence/rfq021/pytest-report-r4.xml` — **4,260 collected / 4,253 passed / 6 failed / 1 skipped in 387.78 s**.
+
+Failed nodeids (all in `tests/launcher`, none in the new R4 suites):
+
+1. `test_backend.py::test_empty_poll_defers_browser_bootstrap_until_an_inquiry_is_due[False]`
+2. `test_backend.py::test_browser_bootstrap_failure_enters_manual_review_without_research_retry`
+3. `test_backend.py::test_readiness_failure_closes_owned_browser_without_research_retry`
+4. `test_backend.py::test_real_poll_seam_stops_batch_on_login_and_resumes_queued_inquiry`
+5. `test_release_infrastructure.py::test_backend_closes_only_owned_browser_after_runtime_thread_exits[False]`
+6. `test_release_infrastructure.py::test_backend_closes_only_owned_browser_after_runtime_thread_exits[True]`
+
+Attribution, recorded as measured and not as a conclusion:
+
+- Captured cause is uniform: `V12Fault(WORKFLOW_LEDGER_UNAVAILABLE) <- sqlite3.OperationalError(attempt to write a readonly database)` raised at `V12Store.resolve_incidents` → `BEGIN IMMEDIATE` on the test's temp database, after which the run state is `MODULE_PAUSED` instead of `STOPPED`.
+- Each of these nodeids passes **5/5** when run alone, in this worktree and in archives of both `a577e94d` (pre-R4) and `2ad471e7`.
+- Attempts to isolate an environment cause (fresh `--basetemp`, a short `D:\r4t` basetemp, removing the worktree's `runtime/` byproduct) changed *which* of the six failed but did not eliminate the set.
+- Nodeids 5 and 6 are the same pair that failed on the untouched parent `e59ce62f` in earlier rounds and in the R3 run; the observed cause there was the identical readonly-temp-database fault.
+- **No test was deleted, skipped, deselected or loosened.** The new R4 suites (20 tests) passed in this run.
+
+### Install gates (offline, synthetic layout — never the production install)
+
+`scripts/test_install_gates.ps1` → **`checks = 13`, `GATE_TEST_RESULT = PASS`**. Each case builds a throwaway install and asserts a refusal *and its reason*: missing `-ConfirmSwitch`, missing `-ConfirmDatabaseBackupVerified`, malformed expected hash, snapshot file changed, snapshot missing one `_internal` file, wrong expected EXE identity, missing runtime junction, junction pointing elsewhere, absent database report, report bound to different bytes — then the real `backup_running_release.ps1` output fed to the installer, which reaches the last gate (only possible if every material gate accepted it). The switch itself is `NOT_VERIFIED`: a real `INSO_V1.6` is running and the installer must refuse.
+
+### What changed
+
+| Area | Change |
+|---|---|
+| B5 history mutation | `V12WorkflowCoordinator._in_scope()` gates `initialize_run_state()` and `discover_pending()` before their quarantine / `HUMAN_COMPLETED` / `INVALID_INPUT_SKIPPED` / alert-recovery branches. `None` preserves legacy behaviour. |
+| B3 rollback admission | Installer now proves the snapshot reproduces the installed build (EXE + every `_internal` file, no extra program file), requires `-ExpectedPreviousExeSha256` to match the live EXE, requires both mandatory configs, and requires `runtime` to *be* a junction pointing at exactly `-RuntimeTarget` (missing no longer passes). |
+| B3 database proof | New `verify_database_backup.ps1`: read-only open, `PRAGMA integrity_check`, required tables, non-empty ledger, report bound to the file's SHA256. A magic header plus an acknowledgement is no longer accepted. |
+| P1 UI | `order_action_hint()` consults `_order_in_scope()` and `_action_in_scope()`; three copies of the scope test collapsed into one definition. |
+| Audit finding | The whole-browser login sweep was refused on the button but still reachable from three automatic paths (deferred-auth recovery, login-all worker, 30-minute idle keep-alive). All now refuse in preview and in any enforced scope; unscoped behaviour unchanged. |
+| Audit finding | Runtime-fault evidence no longer attaches per-order proof to an out-of-scope order (program-level incident records are still written). |
+| Snapshot format | `backup_running_release.ps1` wrote `PROGRAM-MANIFEST.sha256` with a BOM, which made a good snapshot unverifiable; it now writes without a BOM, refuses a missing/empty `_internal`, and refuses when a mandatory config is absent. |
+
+### Bounded effect-path audit (one pass)
+
+| Entrance | Verdict |
+|---|---|
+| Startup: `start_process_services`, `start()` | preview ⇒ no-op; scoped ⇒ needs notification+smtp (R2/R3) |
+| Startup: `initialize_run_state` | **scoped now** (this round) |
+| Poll: `discover_pending` | **scoped now**; `prepare_pending`/`process_pending` already filtered |
+| Poll: `PurchaseCompletionActions.retry_saved_statuses/process` | scoped (R3) |
+| Poll: notification dispatch | single choke point, needs notification+smtp (R2) |
+| Poll: idle keep-alive login sweep | **refused in scope/preview** (this round) |
+| Background: deferred-auth recovery sweep | **refused in scope/preview** (this round) |
+| Manual: order mail / login-all / retry service / order actions / hint | gated (R2/R3) + hint aligned (this round) |
+| Local DB: business state, events, alerts, snapshots | only inside the scoped loops; incident records remain program-level |
+| External: Google / INSO / SMTP | one write lease + scoped INSO gate + write-intent ledger (R2/R3) |
+| Installer / rollback | 8 gates before the first `Move-Item`, 13 offline negatives |
+
+### NOT_VERIFIED
+
+1. Nothing installed, stopped, started or restarted against production; no Google/INSO/SMTP effect; production SQLite not opened for write; Chrome 9222 untouched.
+2. The installer's success path was never executed against a real install (production was running, so the last gate refused by design).
+3. `sqlite3.exe` presence and `.backup` duration on this host.
+4. Old-program Stop timing, GUI refresh stall, residual Chrome pages.
+5. PyInstaller output is not bit-reproducible: `19918185…` identifies this build only.
+6. The running `E9E3DA33…` EXE still has no proven source lineage.
+7. A real scoped business run was not executed; scope behaviour rests on negative/integration tests.
+8. The six flaky nodeids above are not explained to a root cause; they are recorded, not excused.
+
+---
+
 ## RFQ-021-R3 — CHANGES_REQUESTED follow-up (2026-11-15 late morning)
 
 - **Status:** `PASS_SOURCE_SCOPE / RELEASE_HOLD / NOT_DEPLOYED`

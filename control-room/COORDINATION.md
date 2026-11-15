@@ -8,6 +8,18 @@
 - **历史和现场：** R3 源码 `1ef20c81`、候选 `faa3166d…` 已被 CEO 拒绝发布；2026-11-15 06:06 故障类别为 TLS EOF / `SHEETS_READ_UNAVAILABLE`，底层原因 `NOT_VERIFIED`；10:40 现场数据不代表实时进程。B3 完整一致回滚备份、B4 授权干净停机仍未满足。
 - **绝对禁止：** 安装、重启旧生产、真实订单、Google/INSO/SMTP 写入、生产 SQLite/Chrome9222 操作、清理 UNKNOWN/hold，以及合并 `develop` / 晋升 `main` 或 `release/previous`。Owner 必须分别审批这些真实动作。
 
+## R4 Executor 交付（2026-11-15 下午，待 CEO 独立复核）
+
+**状态：`RFQ021_R4_SUBMITTED_FOR_REVIEW / RELEASE_HOLD / NOT_DEPLOYED`。** 自测通过不等于 CEO 通过。
+
+- **源码**`2ad471e7b3c0101f18f6edae05d77522c6f71d47`（`557cde28` + 快照清单 BOM 修复）。
+- **候选** EXE `199181856ac1430af5aa0bd0af37b6bf45a1bf17272413583b2bb6e27e679d32`，8,459,710 B，2,872 文件；清单 `docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256`（`2de4df2f…`），逐文件 2,872/2,872 PASS。R1/R2/R3 候选与清单已归档，只认这一个。
+- **三项 R4 阻断已处理：** 协调器 `initialize_run_state`/`discover_pending` 的范围过滤；安装脚本的快照完整性 / 旧版身份 / junction 目标 / 独立数据库校验；`order_action_hint` 与执行守卫一致。
+- **审计另发现并修复：** 跨站点登录巡检在按钮之外还有三个自动入口；故障证据会挂到范围外订单；备份脚本写的清单带 BOM 导致好快照不可验证。
+- **测试如实：** 4,260 项 / 4,253 通过 / 6 失败 / 1 跳过；6 个失败均在本轮未改动的 launcher 用例，单独运行各 5/5 通过，捕获原因为测试临时库只读；未删除或跳过任何测试。详见 [EXECUTION_LOG](RFQ-021/EXECUTION_LOG.md)。
+- **仍未做：** 安装、停机、重启、真实业务、生产 DB/Chrome 一律未动；安装脚本的"通过路径"未在真实装机上跑过（生产在运行，末道门按设计拒绝）。
+
+
 ## R3 Executor 阶段记录（历史，不构成 CEO 通过）
 
 **当前状态：`RFQ021_R3_PASS_SOURCE_SCOPE / RELEASE_HOLD / NOT_DEPLOYED`；事件 `INC-20261115 FAULT_CLASS_CONFIRMED / UNDERLYING_CAUSE_NOT_VERIFIED`。**

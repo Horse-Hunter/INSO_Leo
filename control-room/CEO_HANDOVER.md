@@ -1,6 +1,8 @@
 # INSO LEO — CEO/Executor 接管入口（2026-11-15 R4）
 
-**当前唯一 CEO 结论：`RFQ-021-R3 CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED`。** [独立审核及 R4 验收范围](RFQ-021/REVIEW.md)；[当前指挥状态](COORDINATION.md)。R3 Executor 的 `PASS_SOURCE_SCOPE` 是历史自测记录，不是发布许可。
+**当前唯一 CEO 结论：`RFQ-021-R3 CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED`；R4 执行结果待独立复核。** [独立审核及 R4 验收范围](RFQ-021/REVIEW.md)；[当前指挥状态](COORDINATION.md)。R3 Executor 的 `PASS_SOURCE_SCOPE` 是历史自测记录，R4 的执行记录同样是自测，二者都不是发布许可。
+
+**R4 已提交待审：`2ad471e7` → 候选 `19918185…`（8,459,710 B / 2,872 文件 / 清单 `2de4df2f…`，逐文件 2,872/2,872 PASS），三种自检 0，安装门禁离线 13 项 PASS。**差异、审计矩阵与失败 nodeid 见 [EXECUTION_LOG](RFQ-021/EXECUTION_LOG.md) 的 R4 段。**R4 自测 PASS 不等于 CEO 通过，也不构成部署授权。**
 
 **高效接管顺序：** 先显式读 **`develop`** 的 [AI_START_HERE](https://github.com/Horse-Hunter/INSO_Leo/blob/develop/AI_START_HERE.md)、[AGENTS（Lean Review）](https://github.com/Horse-Hunter/INSO_Leo/blob/develop/AGENTS.md) 和 [BRANCH_POLICY](https://github.com/Horse-Hunter/INSO_Leo/blob/develop/docs/BRANCH_POLICY.md)；再读本分支本文件、`COORDINATION.md`、`RFQ-021/REVIEW.md` 和执行日志最新 R3 记录。先比对固定源码 `1ef20c81` 的差异与关键效果路径，不重复通读历史文件。恢复原 Executor 工作树前核实本地 HEAD/status/diff/worktree，不清理未知改动。
 
