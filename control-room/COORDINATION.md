@@ -1,3 +1,9 @@
+# INSO LEO — RFQ-021-R5 CEO 独立 Review（2026-11-15 晚）
+
+**最新权威状态：`RFQ021_R5_CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED`。** R5 完整套件报告 4,277 / 4,276 PASS / 0 FAIL / 1 SKIP；清单独立重算 SHA 与 2,872 路径已通过。当前只剩两处安装安全失败关闭条件：① 数据库 `open_write_intents` 查询失败或缺表返回 NULL 却被当成 0；② `Get-CimInstance -ErrorAction SilentlyContinue` 导致进程无法核实时被当成已停机。R5 内定点闭环修补，不开启新的 RFQ。完整依据：[CEO REVIEW 顶部](RFQ-021/REVIEW.md)。**严禁自行停机、安装或真实业务。**
+
+## R5 Executor 自测及历史状态（CEO 已复核，结论以顶部为准）
+
 # INSO LEO — RFQ-021-R5 Executor 交付（2026-11-15 晚，待 CEO 独立复核）
 
 **最新权威状态（Executor 自报，不是发布许可）：`RFQ021_R5_SOURCE_AND_OFFLINE_RELEASE_READY / RELEASE_HOLD / NOT_DEPLOYED`。** R4 的五个集中阻断已在 R5 内逐条处理；CEO 独立结论仍以 [REVIEW.md](RFQ-021/REVIEW.md) 为准。
