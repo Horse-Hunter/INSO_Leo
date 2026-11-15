@@ -1,3 +1,11 @@
+# INSO LEO — 新 DeepSeek Executor 最终发布+真实单笔订单入口（2026-11-16）
+
+**最新 Owner 权威授权见 [COORDINATION.md](COORDINATION.md) 顶部：不仅安装，还要真实执行一笔 inquiry；不再另设阶段性 CEO Review。** 上一版交接中“只允许安全预览/禁止真实业务”的描述已由 Owner 后续明确指令取代，不能拿历史段落阻止已经授权的单笔订单。
+
+先读 `develop/AGENTS.md`，本分支 `RFQ-021/REVIEW.md`、`RFQ-021/INSTALL_AND_ROLLBACK.md`、`RFQ-016/TASK_SPEC.md` 与 `RFQ-016/EXECUTION_LOG.md`；保留唯一工作树。固定候选源码 `6a75cc93`，EXE `f1a0351d…`；先按真实门禁安装和安全预览，再使用**仅 inquiry 模块、唯一订单、google/inso 写入**的 `--scoped-start` 运行，批准引用 `OWNER-APPROVED:RFQ016-REAL-20261116`。221 行先核对 SAVED，已保存则不得重下，选一笔新的合法未发真实订单。异常按已有 UNKNOWN/去重门禁停止对应效果；顺利则一次性运行至真实回执确认和归档，无需再向 CEO 请求下一阶段批准。
+
+## 前次 R5 源码放行与历史交接（仍可追溯，不是当前 Owner 业务授权范围）
+
 # INSO LEO — CEO/Executor 交接入口（2026-11-15 R5 Final PASS）
 
 **当前 CEO 最终源码结论：`PASS_SOURCE_AND_OFFLINE_RELEASE_READY / RELEASE_HOLD / NOT_DEPLOYED`。** <u>不要再开 R6 或重复开发</u>；先读 `develop/AGENTS.md` 与 [RFQ-021/REVIEW.md](RFQ-021/REVIEW.md) 最新最终 R5 段和 [COORDINATION.md](COORDINATION.md)。
