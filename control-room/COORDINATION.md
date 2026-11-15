@@ -1,3 +1,14 @@
+# INSO LEO — RFQ-021-R5 CEO 最终独立验收（2026-11-15 21:30+08:00）
+
+**最新权威结论：`PASS_SOURCE_AND_OFFLINE_RELEASE_READY / RELEASE_HOLD / NOT_DEPLOYED`。** R5 两个 P0 的 fail-closed 源码及负向案例通过独立检查。**RFQ-021 离线开发阶段可以关闭；本结论不授予生产维护、安装、业务动作、分支晋升许可。**
+
+- **唯一固定来源：** 冻结源码 `6a75cc93130c8b7805569edfc3131f82032e22c4`；候选 EXE SHA256 `f1a0351dd9837239043250fa86b9d8c921620d151eef660529d85eaecca020e2`；清单 SHA256 `5dfce4c17e1583f401d78123d17378a527aeca78df356222e4d22ec954c33a64`（CEO 对 GitHub 清单独立复算一致）。预补丁 R5 候选 `be7c0d3…` 已归档禁止安装。
+- **测试证据：** GitHub JUnit 4,277 / 4,276 pass / 0 fail / 0 error / 1 conditional skip；Executor 报告隔离 PowerShell 门禁 156 项 PASS，CEO 检查了脚本和测试，但未实际运行 Windows 现场。
+- **仍待 Owner：** B4 正常停止、实际备份与来源验证、真实安装/安全预览和冷回滚均 `NOT_VERIFIED`。维护窗口前先重新核对实时进程及本机真实 EXE/SQLite/junction，任何不满足停止。真实订单和所有外部写入仍不授权。详见 [CEO REVIEW 最新章节](RFQ-021/REVIEW.md)。
+- **禁止动作保持：** 未经 Owner 分别确认，不得停/启程序、安装、改变生产 SQLite/WAL/SHM、接管 Chrome9222、真实 Google/INSO/SMTP、清理 221/SHAHAB-115/hold/UNKNOWN、合并 develop 或晋升 main/release。
+
+## 以往 Executor 状态与 CEO 阻断（历史，已被上方新结论替代）
+
 # INSO LEO — RFQ-021-R5 CEO 独立 Review（2026-11-15 晚）
 
 **最新权威状态：`RFQ021_R5_CLOSURE_SUBMITTED / RELEASE_HOLD / NOT_DEPLOYED`（Executor 已闭环两处 P0，待 CEO 最终复核；CEO 上一次结论仍是 `R5 CHANGES_REQUESTED`）。** 两处安装安全失败关闭条件已按 R5 内定点修补完成：① 数据库缺表/查询失败/NULL 不再被当成 0——改为"确认的 0，或逐项核实过的旧库状态（UNKNOWN/SENT 仍被告警或 hold 保护），hold 只读不清"；② 进程枚举失败/权限不足/EXE 路径不可读一律拒绝，安装前最终复检同样适用。先补负测（旧脚本下红），再修复；冻结后全量 4,277 / 4,276 PASS / 0 FAIL / 1 SKIP，离线安装门禁 **156** 项 PASS。完整依据：[CEO REVIEW 顶部](RFQ-021/REVIEW.md)。**严禁自行停机、安装或真实业务。**
