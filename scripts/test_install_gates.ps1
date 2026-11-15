@@ -82,6 +82,12 @@ function New-Fixture {
 
     New-Item -ItemType Junction -Path (Join-Path $target "runtime") -Target $runtimeTarget | Out-Null
 
+    # A stand-in for dist\INSO_V1.4\runtime, the config source the backup script reads.
+    $configDir = Join-Path $Base "runtime-config"
+    New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+    Write-TextNoBom -Path (Join-Path $configDir "production.json") -Lines @('{"sqlite_path":"x"}')
+    Write-TextNoBom -Path (Join-Path $configDir "research.json") -Lines @('{"cdp":{}}')
+
     $db = Join-Path $Base "workflow.sqlite3"
     $code = @'
 import sqlite3, sys
@@ -100,7 +106,7 @@ con.commit(); con.close()
 
     return [pscustomobject]@{
         Base = $Base; Target = $target; Candidate = $candidate; Snapshot = $snapshot
-        RuntimeTarget = $runtimeTarget; Database = $db
+        RuntimeTarget = $runtimeTarget; Database = $db; ConfigDir = $configDir
         CandidateManifest = (Join-Path $Base "candidate-manifest.sha256")
         DatabaseReport = "$db.verify.json"
     }
@@ -227,6 +233,47 @@ try {
     [System.IO.Directory]::Delete((Join-Path $f.Target "runtime"), $false)
     New-Item -ItemType Junction -Path (Join-Path $f.Target "runtime") -Target $other | Out-Null
     Assert-Refused "junction points elsewhere" (Invoke-Installer $f) "runtime points at"
+
+    # --- the real backup script must produce a snapshot the installer accepts --
+    # A hand-written manifest can hide a formatting bug; this runs the actual
+    # backup_running_release.ps1 over a synthetic install and feeds its output to
+    # the installer.
+    $f = New-Fixture (Join-Path $root "roundtrip")
+    Initialize-DatabaseReport $f
+    $realSnapshot = Join-Path $f.Base "snapshot-real"
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $backupOut = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here "backup_running_release.ps1") `
+            -SourceDir $f.Target -RuntimeConfigDir $f.ConfigDir -Destination $realSnapshot 2>&1
+        $backupCode = $LASTEXITCODE
+    }
+    finally { $ErrorActionPreference = $previous }
+    $script:checks++
+    if ($backupCode -ne 0) {
+        [void]$failures.Add("backup script : failed`n$backupOut")
+    }
+    else {
+        $bytes = [System.IO.File]::ReadAllBytes((Join-Path $realSnapshot "PROGRAM-MANIFEST.sha256"))
+        $script:checks++
+        if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB) {
+            [void]$failures.Add("backup script : PROGRAM-MANIFEST.sha256 starts with a BOM; the installer cannot parse the first hash")
+        }
+        $result = Invoke-Installer $f @{ RollbackDir = $realSnapshot }
+        if ($result.Output -match "still running") {
+            # The process gate sits after every material gate, so reaching it means
+            # the real snapshot was accepted by all of them. Anything else being
+            # reported would mean the backup output is still unusable.
+            $script:checks++
+            if ($result.Output -match "snapshot|not the build|runtime junction|runtime points|verification report|different bytes|Candidate verification|integrity") {
+                [void]$failures.Add("backup round trip : reached the process gate but also reported a material refusal`n$($result.Output)")
+            }
+            $script:skipped += "backup round trip install : NOT_VERIFIED - a real INSO_V1.6 process is running, so the switch itself was refused"
+        }
+        else {
+            Assert-Passed "backup round trip" $result
+        }
+    }
 
     # --- happy path ----------------------------------------------------------
     # The installer refuses while any INSO_V1.6 is running, and the production

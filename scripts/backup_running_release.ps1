@@ -37,19 +37,23 @@ New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 Copy-Item -LiteralPath $exe -Destination (Join-Path $Destination "INSO_V1.6.exe")
 
 $internal = Join-Path $source "_internal"
-if (Test-Path -LiteralPath $internal -PathType Container) {
-    # robocopy mirrors the program payload only; it never follows the junction.
-    $null = robocopy $internal (Join-Path $Destination "_internal") /E /COPY:DAT /R:1 /W:1 /NFL /NDL /NJH /NJS
-    if ($LASTEXITCODE -ge 8) { throw "robocopy failed with $LASTEXITCODE" }
+if (-not (Test-Path -LiteralPath $internal -PathType Container)) {
+    throw "No _internal in $source; a snapshot without the program payload cannot roll the program back."
 }
+# robocopy mirrors the program payload only; it never follows the junction.
+$null = robocopy $internal (Join-Path $Destination "_internal") /E /COPY:DAT /R:1 /W:1 /NFL /NDL /NJH /NJS
+if ($LASTEXITCODE -ge 8) { throw "robocopy failed with $LASTEXITCODE" }
+$copied = @(Get-ChildItem -LiteralPath (Join-Path $Destination "_internal") -Recurse -File).Count
+if ($copied -lt 1) { throw "The copied _internal is empty; refusing to call this a snapshot." }
 
 $configTarget = Join-Path $Destination "config"
 New-Item -ItemType Directory -Force -Path $configTarget | Out-Null
 foreach ($name in @("production.json", "research.json")) {
     $path = Join-Path $RuntimeConfigDir $name
-    if (Test-Path -LiteralPath $path -PathType Leaf) {
-        Copy-Item -LiteralPath $path -Destination (Join-Path $configTarget $name)
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Missing mandatory configuration $path; the installer will refuse this snapshot, so it is not written."
     }
+    Copy-Item -LiteralPath $path -Destination (Join-Path $configTarget $name)
 }
 Get-ChildItem -LiteralPath $RuntimeConfigDir -Filter "production.json.bak-*" -File -ErrorAction SilentlyContinue |
     ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $configTarget $_.Name) }
@@ -77,7 +81,10 @@ Get-ChildItem -LiteralPath $Destination -Recurse -File |
         $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         [void]$lines.Add("$hash  $relative")
     }
-$lines | Set-Content -LiteralPath $manifest -Encoding UTF8
+# No BOM: the installer parses "<hash>  <path>" and a leading BOM would corrupt
+# the first hash, making a perfectly good snapshot unverifiable.
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllLines($manifest, $lines.ToArray(), $utf8NoBom)
 
 Write-Output "snapshot_dir = $Destination"
 Write-Output "program_files = $((Get-ChildItem -LiteralPath $Destination -Recurse -File).Count)"
