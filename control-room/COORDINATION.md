@@ -1,3 +1,14 @@
+# INSO LEO — RFQ-021-R4 CEO 独立复核（2026-11-15 16:47+08:00）
+
+**最新权威状态：`RFQ021_R4_CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED`。** R3 结论及 R4 Executor 自测均不是发布许可。详见 [CEO 独立 Review](RFQ-021/REVIEW.md) 顶部 R4 段。
+
+- **已按源码接受：** 协调器启动/轮询的范围外状态过滤、手动操作权限提示；R4 候选清单 GitHub 内容 SHA256 独立复算一致（并非 Windows EXE 实物验收）。
+- **集中阻断：** 回滚配置与真实 runtime 配置未绑定；切换后只核对新 `_internal` 文件数量而未逐文件校验；有效旧 DB 备份仍缺当前生产库来源证明；登录巡检的 `check_only=True` 低层绕过；全量 4,260 测试中 6 失败（比 R3 多 4 项），原因没有得到独立确认。
+- **R4 基线：** 源码 `2ad471e7`，Executor 自报候选 EXE `19918185…`，报告 `4,253 passed / 6 failed / 1 skipped`；仅离线构建及测试，未部署。后续若补修，必须重新冻结源码、测试并构建最终候选。
+- **继续禁止：** 停机/重启、生产安装、真实订单和外部写入、修改/备份生产 SQLite、接管 Chrome9222、清理 UNKNOWN/hold、合并 develop、晋升 main/release。B3/B4 现场条件需 Owner 独立授权。
+
+## R4 Executor 交付前历史协调记录
+
 # INSO LEO — RFQ-021-R4 CEO 决定（2026-11-15）
 
 **当前唯一有效 CEO 状态：`RFQ021_R3_CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED`。R4 仅授权离线补修与测试，未获部署或真实业务授权。**
