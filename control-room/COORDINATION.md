@@ -1,4 +1,14 @@
-# INSO LEO — RFQ-021-R3 定点补修（2026-11-15 上午晚些时候）
+# INSO LEO — RFQ-021-R4 CEO 决定（2026-11-15）
+
+**当前唯一有效 CEO 状态：`RFQ021_R3_CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED`。R4 仅授权离线补修与测试，未获部署或真实业务授权。**
+
+- **独立 CEO 结论：** [RFQ-021/REVIEW.md](RFQ-021/REVIEW.md)（R3）。R3 Executor 的 `PASS_SOURCE_SCOPE` 只代表其自测报告，**不等于 CEO PASS**。
+- **R4 集中待修：** ① `V12WorkflowCoordinator.initialize_run_state/discover_pending` 范围外历史订单的本地状态/事件/告警变更；② 安装脚本的旧版回滚快照完整性、身份和缺失 runtime junction 校验；③ `order_action_hint` 与后端受控权限一致。验收矩阵及证据在 CEO REVIEW。
+- **Lean Review 生效：** 读取 `develop/AGENTS.md` 的 `Lean Review / bounded execution`；一次端到端效果路径审计、先定向测试、源码冻结后一次完整回归和最终构建，交付报告简洁链接证据；安全门禁不变。
+- **历史和现场：** R3 源码 `1ef20c81`、候选 `faa3166d…` 已被 CEO 拒绝发布；2026-11-15 06:06 故障类别为 TLS EOF / `SHEETS_READ_UNAVAILABLE`，底层原因 `NOT_VERIFIED`；10:40 现场数据不代表实时进程。B3 完整一致回滚备份、B4 授权干净停机仍未满足。
+- **绝对禁止：** 安装、重启旧生产、真实订单、Google/INSO/SMTP 写入、生产 SQLite/Chrome9222 操作、清理 UNKNOWN/hold，以及合并 `develop` / 晋升 `main` 或 `release/previous`。Owner 必须分别审批这些真实动作。
+
+## R3 Executor 阶段记录（历史，不构成 CEO 通过）
 
 **当前状态：`RFQ021_R3_PASS_SOURCE_SCOPE / RELEASE_HOLD / NOT_DEPLOYED`；事件 `INC-20261115 FAULT_CLASS_CONFIRMED / UNDERLYING_CAUSE_NOT_VERIFIED`。**
 
