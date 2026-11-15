@@ -1,3 +1,27 @@
+# RFQ-021 — CEO Independent Review (R5, 2026-11-15 19:46+08:00)
+
+**Verdict: `CHANGES_REQUESTED (2 fail-closed conditions only) / RELEASE_HOLD / NOT_DEPLOYED`.** The R5 coordinator, manual-action and Chrome scope fixes are accepted at source level; test/build evidence is valid as **GitHub-stored evidence**. A final source-ready claim must close the two concrete installation safety gaps below. **Do not open a new RFQ or repeat architectural work; finish these as an R5 closure patch.** No production action is authorized.
+
+## Verified fixed evidence
+
+- Reviewed R5 frozen source: `2c58529d14902b84598f36fc29c7b52e105d461c`; reported Executor HEAD `4914b40737dda1ea4344ca3cd2d532d1173a363c` (only docs/evidence since freeze). Changes since R4 were independently enumerated, and key Python/PowerShell sources reopened at this exact commit.
+- `pytest-report-r5.xml`: exactly 4,277 tests / 0 failures / 0 errors / 1 skipped. 4,276 passed by arithmetic; the skip is existing symlink-creation privilege limitation. This is the report's factual content, not an independently executed pytest run.
+- Candidate: reported EXE SHA256 `be7c0d3fcc348b21e78f8d86a9917edb2a5d4d78d33bf955ce0c9416b42d4620` / 8,461,034 bytes / 2,872 files. Independently recomputed GitHub manifest SHA256 **`a969a9bf21385e109632bc75f3a8b19a2ee70c2732fa412daf007db1ed24ba9b`**, all 2,872 paths unique, no `runtime/` entry, EXE entry matches claimed hash. No independent direct verification of Windows EXE/staging bytes or live processes.
+- Accepted code-level R4 closure: runtime-config snapshot binding; post-copy per-file checks and failure-recovery outcomes; scoped `_run_login_sweep(check_only=True)` refusal; manual final-execution scope guard; per-order incident settlement; SQL BUSY/LOCKED bounded retry with READONLY fail-closed. Executor reports 107 synthetic install harness checks PASS; CEO inspected their source and covered cases, but did not execute Windows PowerShell.
+
+## Two remaining concrete fail-closed gaps (one bounded R5 patch)
+
+1. **P0, unresolved write-intent admission permits UNKNOWN.** `scripts/verify_database_backup.ps1` Python query for `workflow_write_intents` (around lines 160–172) catches every `sqlite3.Error` and sets `open_write_intents = None`. Its PowerShell gate (around line 215) fails **only when non-null and >0**. `scripts/install_release_candidate.ps1` around lines 316–318 repeats the same nullable guard. Thus a missing, unreadable or wrong-schema `workflow_write_intents` table can appear as `PASS` instead of `NOT_VERIFIED/FAIL`; notably the installed older EXE predates this R5 source and its ledger schema cannot be assumed. An incident where intent status is unprovable must never be silently treated as zero. Require a genuinely confirmed 0, with explicit handling for any provable legacy schema rather than inventing absence; separately audit other protected UNKNOWN/SENT records, don't auto-clear holds. Add a synthetic old-schema/missing-table and broken-query negative test.
+2. **P0, failed process discovery treated as a clean stop.** `verify_database_backup.ps1` around line 114 and `install_release_candidate.ps1` around lines 355 and 412 run `Get-CimInstance ... -ErrorAction SilentlyContinue` and then only inspect returned rows. Query failure, permission denial or inaccessible `ExecutablePath` can be silently interpreted as no running process. The exclusive SQLite-handle probe alone does **not** prove a paused EXE with closed DB handles is stopped. Use fail-closed process enumeration (`-ErrorAction Stop`, explicit handling for uninspectable target/unknown paths), including the immediately-before-switch check. Add targeted fault simulation that proves no move occurs if process status cannot be established.
+
+Do not broaden work. Make the two negatives fail before fixes, patch, rerun targeted tests and **one final full suite** after source freeze, then rebuild a **single** matching candidate with new SHA/manifest. Preserve the prior valid R5 evidence as historical, do not relabel the old EXE as the new candidate. Submit amended R5 evidence for independent CEO recheck.
+
+## Outstanding production gates unchanged
+
+B3 current program/config/ledger rollback snapshot and B4 normal stopped-process state are **not yet verified on the live Windows installation**. Old EXE source lineage unknown; TLS EOF/root network cause not proven; no actual single-order run or external result confirmed. Owner authorization separately required for clean stop, DB backup, candidate install/safe preview, any cold rollback, any real Google/INSO/SMTP action, and branch promotion. Preserve 221 SAVED, SHAHAB/115, three V13 holds, UNKNOWN. **No install, restart, business action or develop/main/release promotion is authorized.**
+
+---
+
 # RFQ-021 — CEO Independent Review (R4, 2026-11-15 16:47+08:00)
 
 **Verdict: `CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED`.** R4's requested coordinator scope fix and GUI hint fix are accepted **at source level**. The rollback/installer proof is improved but not yet sufficient for a release claim. **No authorization** to stop/restart production, install, execute real orders, touch live SQLite/CDP or promote branches.
