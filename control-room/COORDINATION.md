@@ -1,4 +1,16 @@
-# INSO LEO — RFQ-021-R2 定点补修 + 早间事件（2026-11-15 上午）
+# INSO LEO — RFQ-021-R3 定点补修（2026-11-15 上午晚些时候）
+
+**当前状态：`RFQ021_R3_PASS_SOURCE_SCOPE / RELEASE_HOLD / NOT_DEPLOYED`；事件 `INC-20261115 FAULT_CLASS_CONFIRMED / UNDERLYING_CAUSE_NOT_VERIFIED`。**
+
+- **R3 第 1 条（P0-A 背景效果）已修**：`PurchaseCompletionActions` 现在接收范围订单集，`retry_saved_statuses` 与 `process()` 都按范围过滤；范围外 SAVED 订单即使 `google` 是已授权目标也不会触发 Google 写入或本地状态变更。显式 `inquiry_ids` 与 `RunScope` 冲突时直接拒绝（`SCOPE_INQUIRY_IDS_CONFLICT`）。
+- **R3 第 2 条（P0-C）已修**：`start_login_all_sites` 在预览或任何受控范围下**一律拒绝**，与 google 权限无关；新增 `_action_in_scope` 逐个审计手动动作（`edit` 需 google、`purchase` 需 inso+google，报价/TP 因模块不可隔离永远拒绝）。
+- **R3 第 3/4 条（证据与安装）已处理**：手册源码 SHA 更正为 `1ef20c81`、只用当前一个候选；R1 JSON 归档；R2 通过数由 4235 更正为 4234；安装脚本改为失败关闭（回滚快照逐文件复算 + 数据库备份文件头校验 + 显式确认），删除"旧 EXE 支持 `--safe-preview`"的错误假设；冷回滚与回滚后业务重启是两个独立审批。
+- **新候选**：源码 `1ef20c81`，EXE 8,459,010 B / `faa3166d…`，2,872 文件，清单 `accd463a…`（r1/r2 已归档）；三种自检全 0，逐文件复算 2,872/2,872 PASS。
+- **测试**：完整套件 4,248 项 → 4,245 通过 / 2 失败 / 1 跳过；两处失败与未修改的父提交基线相同（同一 nodeid，测试临时目录只读），未删除未跳过。新增 11 项 R3 负向/集成测试。
+- **事件（第 5 条）**：`FAULT_CLASS_CONFIRMED`（`SSLEOFError` → `SHEETS_READ_UNAVAILABLE` → `MODULE_PAUSED`）、`UNDERLYING_CAUSE_NOT_VERIFIED`（为何那一刻断网）。10:40 只读复核：旧 EXE `e9e3da33…` 未变、日志停在 06:06:49、进程无 443 外连（未偷偷重试）、Google 现在可建连（302/0.40 s）、3 条 hold 与 0 活动告警未变、故障后 0 条业务事件。
+- **仍未做**：未安装、未停机、未重启、未碰生产 SQLite/Chrome9222、未合并或晋升。B3/B4 仍需维护窗口。
+
+## RFQ-021-R2 定点补修（保留记录，2026-11-15 上午）
 
 **当前状态：`RFQ021_R2_PASS_SOURCE_SCOPE / RELEASE_HOLD / NOT_DEPLOYED`；事件 `INC-20261115 ROOT_CAUSE_CONFIRMED`。**
 

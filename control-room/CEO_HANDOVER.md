@@ -1,14 +1,19 @@
-# INSO LEO — CEO/Executor 接管入口（2026-11-15 上午）
+# INSO LEO — CEO/Executor 接管入口（2026-11-15 上午晚些时候）
 
-**先访问 `develop`，不要默认 `main`**：[AI_START_HERE](../AI_START_HERE.md)、[AGENTS](../AGENTS.md)、[BRANCH_POLICY](../docs/BRANCH_POLICY.md)、[COORDINATION](COORDINATION.md)、[RFQ-021 REVIEW_FOLLOWUP](RFQ-021/REVIEW_FOLLOWUP.md)、[INC-20261115](INCIDENT-20261115.md)、[安装与回滚](RFQ-021/INSTALL_AND_ROLLBACK.md)。新窗口先 fetch 最新 develop，再核对本地 git HEAD/status/worktree 与运行中的进程。**只保留一个 Executor 工作树，不得关闭正在运行的生产程序。**
+**先访问 `develop`，不要默认 `main`**：[AI_START_HERE](../AI_START_HERE.md)、[AGENTS](../AGENTS.md)、[BRANCH_POLICY](../docs/BRANCH_POLICY.md)、[COORDINATION](COORDINATION.md)、[RFQ-021 REVIEW_R3](RFQ-021/REVIEW_R3.md)、[INC-20261115](INCIDENT-20261115.md)、[安装与回滚](RFQ-021/INSTALL_AND_ROLLBACK.md)。新窗口先 fetch 最新 develop，再核对本地 git HEAD/status/worktree 与运行中的进程。**只保留一个 Executor 工作树，不得关闭正在运行的生产程序。**
 
-**最新结论：`RFQ-021-R2 PASS_SOURCE_SCOPE / RELEASE_HOLD / NOT_DEPLOYED`；`INC-20261115 ROOT_CAUSE_CONFIRMED`。** 源码 `1314da5d`（基线 `8cded532` + 三个 P0 修复），候选 EXE `74586eb29ed19e037e2045f481d4ed2226aa555a8f6ef7951028c873fa68d0ed`（8,457,679 B，2,872 文件），清单 `74ae29c7…` 已逐文件复算 2,872/2,872。上一版 `63bcd6ce…` 已归档为 r1，不再代表当前源码。
+**最新结论：`RFQ-021-R3 PASS_SOURCE_SCOPE / RELEASE_HOLD / NOT_DEPLOYED`；`INC-20261115 FAULT_CLASS_CONFIRMED / UNDERLYING_CAUSE_NOT_VERIFIED`。**
+源码 `1ef20c81`，候选 EXE `faa3166d41db5a738348dc57f6adebbfcda0b3dbf29eb99f3549cf0d0d2596c1`（8,459,010 B，2,872 文件），清单 `accd463a…` 已逐文件复算 2,872/2,872。**只以这一个候选为准**；r1（`63bcd6ce…`）、r2（`74586eb2…`）与各自清单已归档为历史。
 
-**三个 P0 已修**：范围真正绑定到业务编排（此前 `inquiry_ids=None`＝全量处理）；邮件服务改由 `may_start_process_services()` 把关（预览恒不启动，受控模式需 notification+smtp 同时授权）；订单邮件、一键登录、单笔动作在预览与越界订单上双层拒绝。**代价**：报价/TP/通知没有按订单过滤能力，现在被直接拒绝而不是假装受控；`smtp` 也不能作为写入目标。受控试运行目前只支持 `inquiry` + 指定订单。
+**R3 修了什么**：①后台 `retry_saved_statuses`/`process()` 按范围过滤——范围外 SAVED 订单即使 google 授权也不会写 Google 或改状态；显式 `inquiry_ids` 与范围冲突直接拒绝。②一键登录在预览/受控范围下无条件拒绝（与写入权限无关）；手动动作按模块与写入族逐个审计，`edit` 需 google、`purchase` 需 inso+google。③手册源码 SHA、单一候选、R2 计数更正；安装脚本失败关闭（回滚快照复算 + DB 备份文件头 + 显式确认），不再假设旧 EXE 支持 `--safe-preview`；冷回滚与回滚后业务重启分两次审批。
 
-**今早发生了什么**：运行的是旧 EXE `E9E3DA33…`（PID 38948 + watcher 34304，11-14 13:47 启动）。06:06:49 报价模块读取 Google Sheets 时 `SSLEOFError` → `SHEETS_READ_UNAVAILABLE` → `MODULE_PAUSED`。不是崩溃（fatal.log 空、无 Windows 应用错误事件），没有产生未确认外部效果（故障后 0 条业务事件、采购状态/3 条 hold/告警均未变）。界面四行提示是同一故障的连带展示。**是否重启旧程序属业务动作，需 Owner 单独授权；重启前先确认到 Google 的连通性。**
+**今早事件**：旧 EXE `e9e3da33417414abac53f8a88a67d9f053bcdaeab9730eae9ad8bd7870dffad0` 仍在运行（PID 38948 + 34304，11-14 13:47 启动）。06:06:49 `SSLEOFError` → `SHEETS_READ_UNAVAILABLE` → `MODULE_PAUSED`；非崩溃、无未确认外部效果。10:40 复核：日志停在 06:06:49、无 443 外连、Google 现在可建连、3 条 hold 与 0 活动告警未变、故障后 0 条业务事件。**重启旧程序属业务动作，需 Owner 单独授权。**
 
-**仍未做**：未安装、未停机、未重启、未碰生产 SQLite/Chrome9222、未合并或晋升。B3/B4 仍需维护窗口。**可用性问题**：一次 TLS 抖动就停到人工介入（`SSLEOFError` 未被当作可恢复读），建议另开有界任务，本轮按"不扩大范围"未改。
+**测试**：4,248 项 → 4,245 通过 / 2 失败 / 1 跳过；两处失败与未修改父提交基线相同（测试临时目录只读），未删除未跳过。
+
+**仍未做**：未安装、未停机、未重启、未碰生产 SQLite/Chrome9222、未合并或晋升。B3 完整回滚快照、B4 干净停机仍需维护窗口。
+
+## RFQ-021-R2 定点补修（保留记录，2026-11-15 上午）
 
 ## RFQ-021-R1 首次交付（保留记录，2026-11-15 凌晨）
 

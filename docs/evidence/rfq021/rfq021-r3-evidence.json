@@ -1,0 +1,139 @@
+{
+  "rfq": "RFQ-021-R3",
+  "title": "CHANGES_REQUESTED follow-up: background effects, manual actions, evidence and installer",
+  "generated_at": "2026-11-15T11:05:00+08:00",
+  "status": "PASS_SOURCE_SCOPE",
+  "release_hold": true,
+  "reviewed_base_sha": "1314da5d",
+  "source_sha": "1ef20c81",
+  "candidate": {
+    "exe_sha256": "faa3166d41db5a738348dc57f6adebbfcda0b3dbf29eb99f3549cf0d0d2596c1",
+    "exe_size_bytes": 8459010,
+    "file_count": 2872,
+    "manifest": "docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256",
+    "manifest_sha256": "accd463a78c23d5739d298a0ea6d2735ab1f51af051aad13900697ca406455ae",
+    "archived_manifests": [
+      "docs/evidence/rfq021/INSO_V1.6-artifact-manifest-r1.sha256",
+      "docs/evidence/rfq021/INSO_V1.6-artifact-manifest-r2.sha256"
+    ],
+    "verification": {
+      "matched": 2872,
+      "missing": 0,
+      "mismatch": 0,
+      "unexpected": 0,
+      "result": "PASS"
+    },
+    "self_checks": {
+      "self": 0,
+      "idle": 0,
+      "preview": {
+        "exit": 0,
+        "rounds": 2,
+        "ok": true
+      }
+    },
+    "artifact_scan": "RELEASE_SCAN_OK"
+  },
+  "p0_a_background_effects": {
+    "defect": "PurchaseCompletionActions.retry_saved_statuses iterated every workflow item, so a SAVED order outside the scope could cause a Google status write and a local state change",
+    "fix": [
+      "PurchaseCompletionActions accepts inquiry_ids; retry_saved_statuses uses the filtered set",
+      "process() refuses results outside the scope before any write",
+      "backend passes _inquiry_scope into the construction",
+      "explicit inquiry_ids conflicting with RunScope is refused (SCOPE_INQUIRY_IDS_CONFLICT)"
+    ],
+    "audited_paths": {
+      "retry_saved_statuses": "scoped",
+      "process": "scoped",
+      "compose_v12_production": "scoped (R2)",
+      "quotation_tp": "modules refused (R2)",
+      "notification_smtp": "single choke point (R2)",
+      "brand_update": "only on scoped rows",
+      "manual_actions": "audited this round"
+    },
+    "tests": 7
+  },
+  "p0_c_manual_actions": {
+    "defect": "start_login_all_sites was gated on the google write permission, so an approved google target reopened the unscoped sweep",
+    "fix": [
+      "start_login_all_sites refuses in preview or in any enforced scope, independent of write permission",
+      "_action_in_scope audits each action against the required module and every write family it reaches",
+      "edit requires google (it writes a cell); purchase requires inso and google; quotation/tp refused",
+      "can_order_action and request_order_action use the audit and explain the refusal"
+    ],
+    "tests": 4
+  },
+  "evidence_corrections": {
+    "rollback_manual_source_sha": "8cded532 -> 1ef20c81",
+    "r1_json": "archived as rfq021-final-candidate-r1.json; the current evidence is this file (r2 JSON kept as historical)",
+    "r2_passed_count": "4235 -> 4234 (4237 - 2 failed - 1 skipped)",
+    "single_candidate_rule": "only the current manifest is canonical; r1/r2 are archived"
+  },
+  "installer_hardening": {
+    "requires": [
+      "-ConfirmSwitch",
+      "rollback snapshot with a re-verified PROGRAM-MANIFEST.sha256",
+      "database backup >4 KB whose header is 'SQLite format 3'",
+      "-ConfirmDatabaseBackupVerified acknowledgement (operator ran quick_check)"
+    ],
+    "removed_assumption": "the previous EXE does not support --safe-preview; rollback is verified by hash only",
+    "separate_approvals": [
+      "cold rollback",
+      "post-rollback business restart"
+    ]
+  },
+  "tests": {
+    "full_suite": {
+      "collected": 4248,
+      "passed": 4245,
+      "failed": 2,
+      "skipped": 1,
+      "duration_seconds": 661.77,
+      "report": "docs/evidence/rfq021/pytest-report-r3.xml"
+    },
+    "failed_nodeids": [
+      "tests/launcher/test_release_infrastructure.py::test_backend_closes_only_owned_browser_after_runtime_thread_exits[False]",
+      "tests/launcher/test_release_infrastructure.py::test_backend_closes_only_owned_browser_after_runtime_thread_exits[True]"
+    ],
+    "baseline_comparison": "the untouched parent commit e59ce62f fails the same two nodeids in this environment",
+    "deleted_or_skipped": false
+  },
+  "incident": {
+    "id": "INC-20261115",
+    "verdict": "FAULT_CLASS_CONFIRMED / UNDERLYING_CAUSE_NOT_VERIFIED",
+    "running_exe_sha256": "e9e3da33417414abac53f8a88a67d9f053bcdaeab9730eae9ad8bd7870dffad0",
+    "recheck_at": "2026-11-15T10:40:00+08:00",
+    "recheck_findings": {
+      "pids": [
+        38948,
+        34304
+      ],
+      "started_at": "2026-11-14T13:47:50+08:00",
+      "log_last_line": "2026-11-15 06:06:49,995 runtime fault reason=SHEETS_READ_UNAVAILABLE cause=SSLEOFError",
+      "log_mtime": "2026-11-15T06:06:49+08:00",
+      "outbound_443_connections": 0,
+      "google_https": {
+        "status": 302,
+        "tls_verify": 0,
+        "seconds": 0.4
+      },
+      "v13_holds": 3,
+      "active_alerts": 0,
+      "purchase_states": {
+        "SAVED": 26,
+        "VALIDATION_FAILED": 7,
+        "AI_RECOGNIZED": 3,
+        "MANUAL_REVIEW": 1
+      },
+      "business_events_after_fault": 0
+    }
+  },
+  "not_verified": [
+    "install, stop, restart or any real scoped run",
+    "per-order isolation for quotation / TP / notification (they are refused instead)",
+    "sqlite3.exe availability and .backup duration",
+    "bit-reproducibility of the build",
+    "source lineage of the running e9e3da33 EXE",
+    "the underlying network cause of the 06:06 TLS EOF"
+  ]
+}

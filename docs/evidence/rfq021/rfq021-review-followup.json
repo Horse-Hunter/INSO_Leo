@@ -89,7 +89,7 @@
     "artifact_scan": "RELEASE_SCAN_OK"
   },
   "tests": {
-    "full_suite": {"collected": 4237, "passed": 4235, "failed": 2, "skipped": 1, "duration_seconds": 424.76,
+    "full_suite": {"collected": 4237, "passed": 4234, "failed": 2, "skipped": 1, "duration_seconds": 424.76,
       "report": "docs/evidence/rfq021/pytest-report-r2.xml"},
     "failed_nodeids": [
       "tests/launcher/test_release_infrastructure.py::test_backend_closes_only_owned_browser_after_runtime_thread_exits[False]",

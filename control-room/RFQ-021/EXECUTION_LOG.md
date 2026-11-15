@@ -1,5 +1,23 @@
 # RFQ-021 — execution log (final release candidate)
 
+## RFQ-021-R3 — CHANGES_REQUESTED follow-up (2026-11-15 late morning)
+
+- **Status:** `PASS_SOURCE_SCOPE / RELEASE_HOLD / NOT_DEPLOYED`
+- **Reviewed base:** `1314da5d` → **source commit built:** `1ef20c81`
+- **Candidate:** 8,459,010 B / `faa3166d41db5a738348dc57f6adebbfcda0b3dbf29eb99f3549cf0d0d2596c1`, 2,872 files
+- **Manifest:** `docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256` (`accd463a…`); r1 and r2 manifests kept as `-r1` / `-r2`. **One candidate only.**
+- **Self-checks:** `--self-check` 0, `--idle-self-check` 0, `--preview-self-check` 0 (two rounds, 3 s, `ok: true`), `RELEASE_SCAN_OK` ×2
+- **Manifest recomputation:** 2,872/2,872 matched, 0 missing / 0 mismatch / 0 unexpected, `VERIFY_RESULT = PASS`
+- **Tests:** full suite **4,248 collected / 4,245 passed / 2 failed / 1 skipped in 661.77 s** (`pytest-report-r3.xml`).
+  Failed nodeids (identical to the untouched parent baseline `e59ce62f`):
+  `test_backend_closes_only_owned_browser_after_runtime_thread_exits[False]` and `[True]`.
+  Captured cause: `V12Fault(WORKFLOW_LEDGER_UNAVAILABLE) <- sqlite3.OperationalError(attempt to write a readonly database)` on the pytest temp database. No test deleted, skipped or deselected.
+- **New tests:** `tests/launcher/test_rfq021_r3_scope_effects.py` (11). One R2/R3 test was **rewritten** (same intent, new contract): explicit `inquiry_ids` conflicting with `RunScope` is now refused.
+- **Fixed in this round:** background `retry_saved_statuses`/`process()` scoping; conflict rejection; login sweep refused in any enforced scope; per-action audit (`edit` and `purchase` need the google target; quotation/tp refused); installer fail-closed on rollback integrity + verified DB backup; manual corrected (source SHA, single candidate, removed the old-EXE `--safe-preview` assumption; cold rollback and post-rollback restart are separate approvals).
+- **Incident verdict:** `FAULT_CLASS_CONFIRMED / UNDERLYING_CAUSE_NOT_VERIFIED`; 10:40 read-only re-collection recorded in `INCIDENT-20261115.md`.
+
+---
+
 ## RFQ-021-R2 — CEO review follow-up (2026-11-15 morning)
 
 - **Status:** `PASS_SOURCE_SCOPE / RELEASE_HOLD / NOT_DEPLOYED`
@@ -8,7 +26,7 @@
 - **Manifest:** `docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256` (`74ae29c7…`); the r1 manifest is kept as `…-manifest-r1.sha256`
 - **Self-checks:** `--self-check` 0, `--idle-self-check` 0, `--preview-self-check` 0 (two rounds, 4 s), `RELEASE_SCAN_OK`
 - **Manifest recomputation:** `verify_release_candidate.ps1` → 2,872/2,872 matched, 0 missing / 0 mismatch / 0 unexpected, PASS
-- **Tests:** full suite **4,237 collected / 4,235 passed / 2 failed / 1 skipped** in 424.76 s (`pytest-report-r2.xml`). The two failures are the same `test_backend_closes_only_owned_browser_after_runtime_thread_exits[False|True]` nodeids that fail on the untouched parent commit `e59ce62f`; captured cause is `V12Fault(WORKFLOW_LEDGER_UNAVAILABLE) <- OperationalError(attempt to write a readonly database)` in the pytest temp directory. Isolated reruns pass; no test was deleted or skipped.
+- **Tests:** full suite **4,237 collected / 4,234 passed / 2 failed / 1 skipped** in 424.76 s (`pytest-report-r2.xml`). The two failures are the same `test_backend_closes_only_owned_browser_after_runtime_thread_exits[False|True]` nodeids that fail on the untouched parent commit `e59ce62f`; captured cause is `V12Fault(WORKFLOW_LEDGER_UNAVAILABLE) <- OperationalError(attempt to write a readonly database)` in the pytest temp directory. Isolated reruns pass; no test was deleted or skipped.
 - **New tests:** `tests/launcher/test_rfq021_p0_scope_binding.py` (15) plus one UI-refusal test in `test_rfq021_safe_preview.py`.
 - **Capability reduction:** quotation / TP / notification and the `smtp` target are now refused by scope validation because none of them can prove per-order isolation. See `REVIEW_FOLLOWUP.md`.
 - **Incident:** see `control-room/INCIDENT-20261115.md`. The running program was the old `E9E3DA33…` EXE; the morning stop was `SHEETS_READ_UNAVAILABLE` caused by `SSLEOFError`, not a crash and not these code paths.

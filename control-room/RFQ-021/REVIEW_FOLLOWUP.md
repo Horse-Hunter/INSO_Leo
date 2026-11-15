@@ -1,6 +1,8 @@
 # RFQ-021 — CEO Review 定点补修（REVIEW_FOLLOWUP）
 
-**结论：`PASS_SOURCE_SCOPE`（三个 P0 已修复并有负向与集成测试）／`RELEASE_HOLD`（B3、B4 仍需维护窗口）／`NOT_DEPLOYED`。**
+> **已被 RFQ-021-R3 取代（2026-11-15 上午晚些时候）。** CEO 的 R3 复核指出：`retry_saved_statuses` 等后台效果未受范围约束、`start_login_all_sites` 仍按 google 权限放行、文档与证据计数有误、安装脚本的回滚假设不成立。当前记录请看 [REVIEW_R3.md](REVIEW_R3.md) 与 [EXECUTION_LOG.md](EXECUTION_LOG.md) 的 R3 段。本文件保留为 R2 轮次的历史。
+
+**结论（R2）：`PASS_SOURCE_SCOPE`（三个 P0 已修复并有负向与集成测试）／`RELEASE_HOLD`（B3、B4 仍需维护窗口）／`NOT_DEPLOYED`。**
 
 基线：`8cded532221571e99697af7668634afab3ea07af`（RFQ-021 首轮）。本轮修复提交：`1314da5d`。
 
@@ -53,7 +55,7 @@
 
 - 新增 `tests/launcher/test_rfq021_p0_scope_binding.py`（15 项）+ 1 项 UI 拒绝测试。
 - 受影响模块（launcher + gui + research + inso）：**2,653 passed / 0 failed**（203 s，修复过程中记录）。
-- 完整套件：**4,237 项 / 4,235 通过 / 2 失败 / 1 跳过 / 424.76 s**。
+- 完整套件：**4,237 项 / 4,234 通过 / 2 失败 / 1 跳过 / 424.76 s**。
 - 两个失败就是第 2 节分析的那两个 nodeid，失败集合与未修改基线一致；新代码没有引入新的失败。
 
 ## 4. 最终候选（重建）
