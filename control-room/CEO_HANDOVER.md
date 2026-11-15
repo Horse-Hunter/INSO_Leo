@@ -6,7 +6,7 @@
 
 # INSO LEO — CEO/Executor 接管入口（2026-11-15 R5 Executor 交付，待 CEO 复核）
 
-**当前状态：`R5 SOURCE_AND_OFFLINE_RELEASE_READY_FOR_CEO_REVIEW / RELEASE_HOLD / NOT_DEPLOYED`（Executor 自报，不是发布许可）。** 先读 `develop/AGENTS.md` 精简规则、[CEO REVIEW](RFQ-021/REVIEW.md) 的最新结论、[COORDINATION](COORDINATION.md) 顶部与 [EXECUTION_LOG](RFQ-021/EXECUTION_LOG.md) 的 R5 段。冻结源码 `2c58529d`，唯一候选 EXE `be7c0d3f…`（8,461,034 B / 2,872 文件 / 清单 `a969a9bf…`），三种自检 0，安装门禁离线 107 项 PASS，全量 4,277 项 → 4,276 通过 / 0 失败 / 1 跳过（平台条件跳过）。
+**当前状态：`R5 SOURCE_AND_OFFLINE_RELEASE_READY_FOR_CEO_REVIEW / RELEASE_HOLD / NOT_DEPLOYED`（Executor 自报，不是发布许可；两个 fail-closed 补丁已完成，待 CEO 复核）。** 先读 `develop/AGENTS.md` 精简规则、[CEO REVIEW](RFQ-021/REVIEW.md) 的最新结论、[COORDINATION](COORDINATION.md) 顶部与 [EXECUTION_LOG](RFQ-021/EXECUTION_LOG.md) 的 R5 段。R5 收尾补丁后的冻结源码 `6a75cc93`，唯一候选 EXE `f1a0351d…`（8,461,034 B / 2,872 文件 / 清单 `5dfce4c1…`），三种自检 0，安装门禁离线 **156** 项 PASS，全量 4,277 项 → 4,276 通过 / 0 失败 / 1 跳过（平台条件跳过）。补丁前那版（源码 `2c58529d`、EXE `be7c0d3f…`、清单 `a969a9bf…`、门禁 107 项）只作历史证据保留，不得当作新候选。
 
 **R5 处理了 R4 五个阻断：** 回滚快照配置绑定真实 runtime junction，且备份/安装的账本路径改为取自实时配置（本机 junction 指向的 `dist\INSO_V1.4\runtime` 里没有 `production\`，真实库在 `dist\INSO_V1.2\runtime\production\workflow.sqlite3`）；切换后逐文件复算、回滚按快照逐文件恢复并验证，恢复中断报 `ROLLBACK_REQUIRED`；数据库证明＝配置源路径＋独占句柄停机一致性＋业务不变式＋报告与安装目录/账本互绑，存在未结算写入意图直接拒绝；`_run_login_sweep(check_only=True)` 与手动执行器末端的范围复检；六项全量失败定性为环境（测试临时树不可写）并加会话级 WAL 探针。详见 EXECUTION_LOG R5 段与 [候选 JSON](../docs/evidence/rfq021/rfq021-final-candidate-r5.json)。
 

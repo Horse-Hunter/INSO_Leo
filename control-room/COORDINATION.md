@@ -1,16 +1,16 @@
 # INSO LEO — RFQ-021-R5 CEO 独立 Review（2026-11-15 晚）
 
-**最新权威状态：`RFQ021_R5_CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED`。** R5 完整套件报告 4,277 / 4,276 PASS / 0 FAIL / 1 SKIP；清单独立重算 SHA 与 2,872 路径已通过。当前只剩两处安装安全失败关闭条件：① 数据库 `open_write_intents` 查询失败或缺表返回 NULL 却被当成 0；② `Get-CimInstance -ErrorAction SilentlyContinue` 导致进程无法核实时被当成已停机。R5 内定点闭环修补，不开启新的 RFQ。完整依据：[CEO REVIEW 顶部](RFQ-021/REVIEW.md)。**严禁自行停机、安装或真实业务。**
+**最新权威状态：`RFQ021_R5_CLOSURE_SUBMITTED / RELEASE_HOLD / NOT_DEPLOYED`（Executor 已闭环两处 P0，待 CEO 最终复核；CEO 上一次结论仍是 `R5 CHANGES_REQUESTED`）。** 两处安装安全失败关闭条件已按 R5 内定点修补完成：① 数据库缺表/查询失败/NULL 不再被当成 0——改为"确认的 0，或逐项核实过的旧库状态（UNKNOWN/SENT 仍被告警或 hold 保护），hold 只读不清"；② 进程枚举失败/权限不足/EXE 路径不可读一律拒绝，安装前最终复检同样适用。先补负测（旧脚本下红），再修复；冻结后全量 4,277 / 4,276 PASS / 0 FAIL / 1 SKIP，离线安装门禁 **156** 项 PASS。完整依据：[CEO REVIEW 顶部](RFQ-021/REVIEW.md)。**严禁自行停机、安装或真实业务。**
 
 ## R5 Executor 自测及历史状态（CEO 已复核，结论以顶部为准）
 
-# INSO LEO — RFQ-021-R5 Executor 交付（2026-11-15 晚，待 CEO 独立复核）
+# INSO LEO — RFQ-021-R5 Executor 交付（2026-11-15 晚，含两处 P0 闭环补丁）
 
-**最新权威状态（Executor 自报，不是发布许可）：`RFQ021_R5_SOURCE_AND_OFFLINE_RELEASE_READY / RELEASE_HOLD / NOT_DEPLOYED`。** R4 的五个集中阻断已在 R5 内逐条处理；CEO 独立结论仍以 [REVIEW.md](RFQ-021/REVIEW.md) 为准。
+**最新权威状态（Executor 自报，不是发布许可）：`RFQ021_R5_SOURCE_AND_OFFLINE_RELEASE_READY / RELEASE_HOLD / NOT_DEPLOYED`。** R4 的五个集中阻断与 CEO R5 指出的两个 fail-closed 条件均已在 R5 内处理；CEO 独立结论仍以 [REVIEW.md](RFQ-021/REVIEW.md) 为准。
 
-- **冻结源码：** `2c58529d14902b84598f36fc29c7b52e105d461c`（其后的提交只含文档与证据）。
-- **唯一候选：** EXE `be7c0d3fcc348b21e78f8d86a9917edb2a5d4d78d33bf955ce0c9416b42d4620`，`8,461,034` B，`2,872` 文件；清单自身 `a969a9bf21385e109632bc75f3a8b19a2ee70c2732fa412daf007db1ed24ba9b`；逐文件复算 `PASS（2,872/2,872，0 missing / 0 mismatch / 0 unexpected）`。R4 的 `19918185…` 不再作为证据。
-- **R4 阻断处理：** ①快照配置绑定真实 runtime junction，并新增"账本路径取自实时配置"（本机实测：junction 指向的 `dist\INSO_V1.4\runtime` 里没有 `production\`，真实库在 `dist\INSO_V1.2\runtime\production\workflow.sqlite3`）；②切换后逐文件复算，回滚按快照逐文件恢复并验证，恢复中断报 `ROLLBACK_REQUIRED`；③数据库证明=源路径/独占句柄停机一致性/业务不变式/报告与安装目录及账本互相绑定，未结算写入意图直接拒绝；④`_run_login_sweep(check_only=True)` 在预览与受控范围一律拒绝（断言未获取 Chrome）；⑤六项失败已定性为环境（测试临时树不可写）并给出可复现机制证据，全量 `4,277 collected / 4,276 passed / 0 failed / 0 errors / 1 skipped in 321.39 s`。
+- **冻结源码：** `6a75cc93130c8b7805569edfc3131f82032e22c4`（其后的提交只含文档与证据；`src/` 自 `2c58529d` 起未变，补丁在脚本与门禁测试）。
+- **唯一候选：** EXE `f1a0351dd9837239043250fa86b9d8c921620d151eef660529d85eaecca020e2`，`8,461,034` B，`2,872` 文件；清单自身 `5dfce4c17e1583f401d78123d17378a527aeca78df356222e4d22ec954c33a64`；逐文件复算 `PASS（2,872/2,872，0 missing / 0 mismatch / 0 unexpected）`。补丁前那版（`be7c0d3f…` / 清单 `a969a9bf…` / 门禁 107 项）只作历史证据，保留为 `*-pre-p0`，不得作为候选安装。
+- **R4/R5 阻断处理：** ①快照配置绑定真实 runtime junction，并新增"账本路径取自实时配置"（本机实测：junction 指向的 `dist\INSO_V1.4\runtime` 里没有 `production\`，真实库在 `dist\INSO_V1.2\runtime\production\workflow.sqlite3`）；②切换后逐文件复算，回滚按快照逐文件恢复并验证，恢复中断报 `ROLLBACK_REQUIRED`；③数据库证明=源路径/进程状态/独占句柄/业务不变式/报告与安装目录及账本互绑；④**写入意图必须是确认的 0 或已证明的旧库状态**，缺表/查询失败/NULL 一律拒绝；⑤`_run_login_sweep(check_only=True)` 在预览与受控范围一律拒绝（断言未获取 Chrome）；⑥六项失败已定性为环境（测试临时树不可写）并给出可复现机制证据，全量 `4,277 collected / 4,276 passed / 0 failed / 0 errors / 1 skipped in 328.56 s`。
 - **仍未验证：** 安装、停机、真实业务试运行、B4 干净停机均需 Owner 维护窗口；旧 EXE 血缘仍 `NOT_VERIFIED`。
 - **继续禁止：** 停机/重启、生产安装、真实订单和外部写入、修改/备份生产 SQLite、接管 Chrome9222、清理 UNKNOWN/hold、合并 develop、晋升 main/release。
 

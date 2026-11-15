@@ -2,12 +2,31 @@
 
 ## RFQ-021-R5 — closure round (2026-11-15 evening, Executor takeover)
 
-- **Status:** `SOURCE_AND_OFFLINE_RELEASE_READY_FOR_CEO_REVIEW / RELEASE_HOLD / NOT_DEPLOYED`
-- **Reviewed base:** CEO [REVIEW.md](REVIEW.md) R4 (`CHANGES_REQUESTED`, five consolidated blockers). R4 source `2ad471e7`, branch HEAD at takeover `c94d99ec` plus an unfinished R5 working tree (install scripts, backend, `v12_store`, evidence) which was audited, kept where correct, and finished rather than restarted.
-- **Frozen source:** `2c58529d14902b84598f36fc29c7b52e105d461c` (only documentation/evidence commits follow it).
-- **Candidate (one, final):** `build/windows-release-stage-1.6/dist/INSO_V1.6/INSO_V1.6.exe`, `8,461,034` B, SHA256 `be7c0d3fcc348b21e78f8d86a9917edb2a5d4d78d33bf955ce0c9416b42d4620`, `2,872` files, no `runtime/`.
-- **Manifest:** `docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256`, self-SHA256 `a969a9bf21385e109632bc75f3a8b19a2ee70c2732fa412daf007db1ed24ba9b`; r1–r4 kept as `-r1`…`-r4` (R4's file, `2de4df2f…`, is now `-r4`). **One candidate only.**
+- **Status:** `SOURCE_AND_OFFLINE_RELEASE_READY_FOR_CEO_REVIEW / RELEASE_HOLD / NOT_DEPLOYED` (R5 + its two-condition closure patch, submitted for the CEO's final R5 recheck)
+- **Reviewed base:** CEO [REVIEW.md](REVIEW.md) R4 (`CHANGES_REQUESTED`, five consolidated blockers) and then R5 (`CHANGES_REQUESTED (2 fail-closed conditions only)`). R4 source `2ad471e7`, branch HEAD at takeover `c94d99ec`, R5 closure patch on source `2c58529d`.
+- **Frozen source:** `6a75cc93130c8b7805569edfc3131f82032e22c4` (only documentation/evidence commits follow it; `src/` is unchanged since `2c58529d`, so the patch is in the scripts and their gate tests).
+- **Candidate (one, final):** `build/windows-release-stage-1.6/dist/INSO_V1.6/INSO_V1.6.exe`, `8,461,034` B, SHA256 `f1a0351dd9837239043250fa86b9d8c921620d151eef660529d85eaecca020e2`, `2,872` files, no `runtime/`.
+- **Manifest:** `docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256`, self-SHA256 `5dfce4c17e1583f401d78123d17378a527aeca78df356222e4d22ec954c33a64`; r1–r4 and the pre-closure R5 manifest (`-r5-pre-p0`, `a969a9bf…`) are kept as history. **One candidate only.**
+- **Superseded candidate (not evidence for this source):** `be7c0d3f…` / manifest `a969a9bf…` / gate count 107 — the R5 build before the closure patch. Preserved as `*-pre-p0`; never to be installed as this candidate.
 - **Self-checks:** `--self-check` `0`, `--idle-self-check` `0`, `--preview-self-check` `0` (two real GUI rounds), `RELEASE_SCAN_OK`, `verify_release_candidate.ps1` `PASS（2,872/2,872，0 missing / 0 mismatch / 0 unexpected）`.
+
+### 0. R5 closure patch — the CEO R5 review's two P0 gates
+
+Only these two gates were touched; nothing else was reopened, and `src/` did not change.
+
+**P0-1 — an unprovable write-intent count can no longer look like zero.**
+Reproduced first: (`scripts/verify_database_backup.ps1`) caught every `sqlite3.Error` for `workflow_write_intents` into `open_write_intents = None`, and the PASS gate fired only when the value was non-null and `> 0`; `scripts/install_release_candidate.ps1` repeated the same nullable guard. On the pre-patch scripts the new harness cases failed exactly as the review predicted ("passed but should have refused").
+
+Now the database gate answers one of three ways and refuses everything else:
+- journal present and readable → the report carries a confirmed integer; a non-zero count refuses;
+- journal absent → the ledger must **prove** it predates the journal: unknown purchase outcomes (`SUBMIT_UNCONFIRMED`, `UNKNOWN_WRITE_OUTCOME`, `READ_ONLY_RECONCILIATION_REQUIRED`, `MANUAL_REVIEW`), `SAVE_OUTCOME_UNKNOWN` events, active unknown-write alerts and active `UPDATE_RESULT_UNCONFIRMED` holds are enumerated; every unknown order must still be protected by an alert or by a hold that names it, and any hold whose evidence cannot be attributed refuses. Holds are **read, never cleared**;
+- unreadable/wrong-schema journal, or a null/non-numeric count → `DETERMINATION_FAILED` → refuse.
+The report (schema 4) carries `write_intent_state` (`NONE_PROVEN` / `LEGACY_NO_JOURNAL_PROVEN` / `LEGACY_NO_JOURNAL_UNPROVEN` / `DETERMINATION_FAILED`), `open_write_intents`, and the full `legacy_unknown_write` audit record. The installer accepts only the two proven states, requires `open_write_intents = 0`, and re-checks `unprotected_unknown_rows = unattributed_holds = 0` for the legacy state.
+
+**P0-2 — an unqueryable or unidentifiable process can no longer read as "stopped".**
+Reproduced first: `Get-CimInstance … -ErrorAction SilentlyContinue` plus a `$_.ExecutablePath` filter turned a failed query, a permission denial and an unreadable executable path into "not running". Both scripts now use one three-valued probe (`Get-StopState`): `-ErrorAction Stop`, any `INSO_V1.6.exe` process whose executable path cannot be read makes the state **unproven** (never "not running"), and an unproven state refuses. It is used at the database gate, at installer gate 7, and again immediately before the first `Move-Item`; the report carries `process_state`.
+
+**Negative tests (red first, then green).** `scripts/test_install_gates.ps1` gained 11 cases. On the pre-patch scripts: 4 × "passed but should have refused" (unprotected legacy unknown, broken journal, null count, missing state) and 5 × "refused for the wrong reason" (the process faults did not even exist). After the patch: **156 checks, `GATE_TEST_RESULT = PASS`**, including the complete success path plus legacy-clean accepted with `LEGACY_NO_JOURNAL_PROVEN` and its audit record, legacy-protected accepted, legacy-unprotected refused, broken journal refused, null count refused, report without a proven state refused, verify refusing on a failed query and on an unreadable path, and the installer refusing at the gate and again at the pre-switch re-check — with the target EXE hash unchanged and no `PASS` printed.
 
 ### 1. B3 — rollback, backup and install (R4 blockers 1–3)
 
@@ -24,7 +43,7 @@
 | — | a program starting during candidate verification is caught by a second path-based process check immediately before the first `Move-Item` |
 | — | offline-gate fault injection (`-InjectSwitchFault`, `-InjectPostCopyCorruption`, `-InjectRestoreFault`) is honoured **only** when `RFQ021_OFFLINE_GATE_TESTS=1`, and each one can only force a failure |
 
-Isolated synthetic-install harness (`scripts/test_install_gates.ps1`, production never touched because the process guard is path-based): **`107` checks, `GATE_TEST_RESULT = PASS`** — complete success path, then refusals for: missing authorisation switches, malformed expected hash, snapshot file changed/missing, wrong expected build, foreign/damaged/missing snapshot, foreign config directory, stale config, missing runtime junction, runtime that is a real directory, junction pointing elsewhere, report missing / from another install / naming another source, ledger still open, unresolved write intent, copy that is not the live ledger, stale ledger, uncheckpointed WAL, missing `-InstallDir`, post-copy mismatch, injected mid-switch failure (restored, verified file by file), corrupted post-copy bytes (count unchanged: caught), and an interrupted restore (`ROLLBACK_REQUIRED`, never `PASS`).
+Isolated synthetic-install harness (`scripts/test_install_gates.ps1`, production never touched because the process guard is path-based): **`156` checks, `GATE_TEST_RESULT = PASS`** — complete success path, then refusals for: missing authorisation switches, malformed expected hash, snapshot file changed/missing, wrong expected build, foreign/damaged/missing snapshot, foreign config directory, stale config, missing runtime junction, runtime that is a real directory, junction pointing elsewhere, report missing / from another install / naming another source, ledger still open, unresolved write intent, copy that is not the live ledger, stale ledger, uncheckpointed WAL, missing `-InstallDir`, post-copy mismatch, injected mid-switch failure (restored, verified file by file), corrupted post-copy bytes (count unchanged: caught), and an interrupted restore (`ROLLBACK_REQUIRED`, never `PASS`).
 
 **Answer to "if the install fails halfway, how does the old program and config come back without losing or replaying a real order?"**
 The old `INSO_V1.6.exe` and the old `_internal` are moved aside inside the target (`.prev-<UTC>`), never overwritten; the new payload is verified file by file; any failure restores both, re-verifies every program file against the snapshot, and reports `FAIL_RESTORED` (or `ROLLBACK_REQUIRED` with the exact paths). `runtime` (the config junction) is never moved or replaced. The database is not touched by the installer at all: the switch requires a proven, hash-identical, quiescent backup of the configured ledger taken after a clean stop, and refuses to run when any write intent is still unresolved — so a rollback cannot silently drop an unconfirmed external write, and nothing is replayed because every hold/UNKNOWN row stays in whichever ledger the operator chooses to keep.
@@ -60,14 +79,14 @@ Every entrance that can produce an order state, event, alert, persisted write in
 
 ### 4. Tests (frozen source, one full run)
 
-`docs/evidence/rfq021/pytest-report-r5.xml` — **`4,277 collected / 4,276 passed / 0 failed / 0 errors / 1 skipped in 321.39 s`**.
+`docs/evidence/rfq021/pytest-report-r5.xml` — **`4,277 collected / 4,276 passed / 0 failed / 0 errors / 1 skipped in 328.56 s`** (run on frozen `6a75cc93`).
 
 ### 5. NOT_VERIFIED (unchanged business reality)
 
 1. Nothing was installed, stopped, started or restarted against production; no Google/INSO/SMTP effect; production SQLite never opened for write; Chrome 9222 untouched.
 2. The installer's success path is proven only in isolated synthetic installations, never against the real one (the real program is running, and the installer refuses by design).
 3. Old-program Stop timing, GUI refresh stall and residual Chrome pages are unmeasured.
-4. PyInstaller output is not bit-reproducible: `be7c0d3fcc348b21e78f8d86a9917edb2a5d4d78d33bf955ce0c9416b42d4620` identifies this build only.
+4. PyInstaller output is not bit-reproducible: `f1a0351dd9837239043250fa86b9d8c921620d151eef660529d85eaecca020e2` identifies this build only.
 5. The running `E9E3DA33…` EXE still has no proven source lineage.
 6. A real scoped business run was not executed; scope behaviour rests on negative/integration tests.
 7. `sqlite3.exe` presence is irrelevant to the new runbook (the copy is byte-identical after a clean stop), but the actual duration of the maintenance window is unmeasured.

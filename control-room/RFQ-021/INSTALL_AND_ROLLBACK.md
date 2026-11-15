@@ -4,18 +4,19 @@
 
 适用对象：Owner 在批准维护窗口后按顺序执行的人。每一步都有"中止条件"；任一条件不满足就**停在这一步**。
 
-固定对象（**整套证据只对应这一个候选**；r1–r4 的产物已归档，不得混用）：
+固定对象（**整套证据只对应这一个候选**；r1–r4 与本轮 P0 补丁前的 R5 产物均已归档为 `-r1…-r4`、`-r5-pre-p0`，不得混用）：
 
 | 项目 | 值 |
 |---|---|
-| 源码提交 | `2c58529d14902b84598f36fc29c7b52e105d461c` |
+| 源码提交 | `6a75cc93130c8b7805569edfc3131f82032e22c4` |
 | 候选 EXE | `build/windows-release-stage-1.6/dist/INSO_V1.6/INSO_V1.6.exe` |
-| 候选 EXE SHA256 | `be7c0d3fcc348b21e78f8d86a9917edb2a5d4d78d33bf955ce0c9416b42d4620` |
+| 候选 EXE SHA256 | `f1a0351dd9837239043250fa86b9d8c921620d151eef660529d85eaecca020e2` |
 | 候选 EXE 字节数 | 8,461,034 |
 | 文件数 | 2,872 |
-| 清单 | `docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256`（自身 SHA256 `a969a9bf21385e109632bc75f3a8b19a2ee70c2732fa412daf007db1ed24ba9b`） |
+| 清单 | `docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256`（自身 SHA256 `5dfce4c17e1583f401d78123d17378a527aeca78df356222e4d22ec954c33a64`） |
 | 当前运行版本 | `dist/INSO_V1.6/INSO_V1.6.exe`，SHA256 `e9e3da33417414abac53f8a88a67d9f053bcdaeab9730eae9ad8bd7870dffad0`（8,422,619 B；源码血缘 `NOT_VERIFIED`） |
-| 生产数据库 | `dist/INSO_V1.2/runtime/production/workflow.sqlite3`（经 `dist/INSO_V1.6/runtime` junction 指向 `dist/INSO_V1.4/runtime`） |
+| 配置树 | `dist/INSO_V1.6/runtime` → junction → `dist/INSO_V1.4/runtime`（`production.json` / `research.json` 在这里） |
+| 生产数据库 | 以配置里的 `sqlite_path` 为准：`dist/INSO_V1.2/runtime/production/workflow.sqlite3`（`dist/INSO_V1.2/runtime` 本身是另一个 junction，指向 `.worktrees/v1-2-design/dist/INSO_V1.1/runtime`） |
 
 > **两个版本的能力差异（重要）：** `--safe-preview` 只存在于 RFQ-021 这条发行线。**当前运行的旧 EXE 没有这个参数**，回滚后只能靠哈希核对，不能靠它验证界面；把旧程序"启动看看"属于业务动作，要另批。
 
@@ -86,15 +87,19 @@ powershell -ExecutionPolicy Bypass -File scripts\verify_database_backup.ps1 `
 
 **为什么不是 `sqlite3 .backup`：** `.backup` 写出的是重新打包的数据库，字节与源文件不同，于是"这份备份确实来自当前这台机器的这一份库"就无法用哈希证明。停机之后库是静止的，逐字节复制既一致又可证明。**如果停机后仍有非空 `-wal`，说明停机不干净，直接中止**（校验脚本也会拒绝）。
 
-**验收：** `DB_VERIFY_RESULT = PASS`；同目录出现 `workflow.sqlite3.verify.json`，其中 `database_sha256 == source_sha256`、`integrity_check = ok`、`purchase_rows >= 1`、`event_age_hours` 在限值内、`program_stopped = true`、`wal_clean = true`、`quiescence` 非空、`open_write_intents = 0`。
+**验收：** `DB_VERIFY_RESULT = PASS`；同目录出现 `workflow.sqlite3.verify.json`，其中 `database_sha256 == source_sha256`、`integrity_check = ok`、`purchase_rows >= 1`、`event_age_hours` 在限值内、`program_stopped = true`、`process_state` 非空、`wal_clean = true`、`quiescence` 非空、`open_write_intents = 0`，且 `write_intent_state` 是下列之一：
 
-校验脚本的"停机一致性"不是靠你口头确认，而是三道实测：
+- `NONE_PROVEN`：写入意图台账存在，查询成功，未结算数为 **0**（真 0，不是未知）。
+- `LEGACY_NO_JOURNAL_PROVEN`：台账表**确实不存在**（旧版库），并且旧状态已逐项核实：`legacy_unknown_write.unprotected_unknown_rows = 0`、`unattributed_holds = 0`。也就是说，旧库记录到的每一笔 UNKNOWN/SENT 写入都仍被活动告警或 V13 hold 保护着——**只读核实，不清除任何 hold**。
 
-1. **没有进程**从 `-InstallDir` 运行（按可执行文件路径判断）。
+校验脚本的"停机一致性"不是靠你口头确认，而是四道实测：
+
+1. **进程查询本身必须成功**，且每个 `INSO_V1.6.exe` 进程的可执行路径**都读得到**，且没有任何一个从 `-InstallDir` 运行。查询失败、权限不足、读不到路径，一律判为"无法证明已停机"并拒绝——**"查不到"不等于"没在跑"**（暂停中的程序可能已关闭数据库句柄，所以只靠文件句柄证明不够）。
 2. **没有任何进程仍打开这个库**：脚本以只读、`FileShare.None` 独占方式打开源文件再立即释放。只要还有别的连接（包括另一份安装、或残留的 watcher）持有它，就会拒绝。这一步同时排除了"另一份安装共用同一个 junction 库"这种最危险的情况。
 3. **两侧 `-wal` 都为空**（复制件和源件都必须如此），证明没有未 checkpoint 的提交。
+4. **写入意图必须被证明**（见上面的 `write_intent_state`）：台账缺表、查询报错、计数为 NULL 或非数字，都不会被当成 0。
 
-**中止：** 没有 Python 解释器、`integrity_check` 不是 `ok`、表缺失、备份与源哈希不同或源路径对不上、最后一条业务事件过旧（默认 72 小时）、任一 `-wal` 非空、**源库仍被某个进程占用**、或账本里还有未结算的写入意图（`open_write_intents > 0`——那意味着上一次外部写入结果未确认，此时换版会丢失或重放真实订单，必须先人工核对，禁止自动清理）。
+**中止：** 没有 Python 解释器、`integrity_check` 不是 `ok`、表缺失、备份与源哈希不同或源路径对不上、最后一条业务事件过旧（默认 72 小时）、任一 `-wal` 非空、**源库仍被某个进程占用**、**进程状态无法证明**、`write_intent_state` 不是上面两种已证明状态、或旧库里存在未被保护的 UNKNOWN/SENT（那意味着上一次外部写入结果未确认，换版会丢失或重放真实订单，必须先人工核对；**禁止清表、禁止清 hold**）。
 
 ---
 
@@ -124,16 +129,17 @@ powershell -ExecutionPolicy Bypass -File scripts\install_release_candidate.ps1 `
 3. **快照就是当前安装的这一版**：快照 EXE 哈希 = 声明的旧版哈希 = 目标 EXE 实际哈希；`_internal` 文件数与清单条目一致、逐文件一致；快照里没有目标不存在的程序文件。
 4. `runtime` 必须是 **Junction**（symlink 等其他 reparse point 会被拒绝）且指向 `-RuntimeTarget`；**缺失或目标不存在也失败**。
 5. 快照里的 `config\production.json` / `research.json` 与 **junction 后面那份实时配置**逐字节一致；且 `production.json` 的 `sqlite_path` 仍指向报告覆盖的那个库。
-6. 数据库报告：`PASS`、`schema_version >= 3`、`quiescence` 非空、`integrity_check=ok`、三张必需表、`purchase_rows>=1`、`program_stopped`、`wal_clean`、事件未过期、`open_write_intents=0`；报告哈希 = 备份实际哈希 = 源哈希；**报告的 `install_dir` 必须就是本次 `-TargetDir`、报告的 `source_database` 必须就是当前配置指向的库**（防止拿另一台/另一份安装的有效报告来授权切换）。
-7. 候选按清单逐文件复算 PASS。
-8. 最后一步才检查**是否有进程从 `-TargetDir` 运行**（按路径判定，不只是进程名）；并在**第一次移动文件之前再查一次**，防止校验期间程序被启动。
+6. 数据库报告：`PASS`、`schema_version >= 4`、`quiescence` 非空、`process_state` 非空、`integrity_check=ok`、三张必需表、`purchase_rows>=1`、`program_stopped`、`wal_clean`、事件未过期；报告哈希 = 备份实际哈希 = 源哈希；**报告的 `install_dir` 必须就是本次 `-TargetDir`、报告的 `source_database` 必须就是当前配置指向的库**（防止拿另一台/另一份安装的有效报告来授权切换）。
+7. **写入意图必须是"确认的 0"，不是"未知"**：`write_intent_state` 只能是 `NONE_PROVEN`（台账存在且未结算数确为 0）或 `LEGACY_NO_JOURNAL_PROVEN`（旧库无台账，且 `unprotected_unknown_rows = unattributed_holds = 0`）；计数为 NULL/非数字、台账缺表或查询失败、旧库存在未受保护的 UNKNOWN/SENT，一律拒绝。
+8. 候选按清单逐文件复算 PASS。
+9. 最后一步才检查**是否有进程从 `-TargetDir` 运行**（按路径判定，不只是进程名），且**进程查询本身必须成功、每个 `INSO_V1.6.exe` 的 EXE 路径都读得到**；无法证明即拒绝。**第一次移动文件之前再查一次**，同样的失败关闭规则——查不到不等于没在跑，那一步拒绝时目标目录还没有任何改动。
 
 **安装后**：对安装目录里的**每一个程序文件**按候选清单重新算哈希，并核对 `_internal` 文件总数。数量相同但内容不同（同数量损坏）会被判为失败。
 
 **它会做的：** 旧 `_internal` → `_internal.prev-<UTC>`，旧 EXE → `INSO_V1.6.exe.prev-<UTC>`，复制候选，逐文件复算。
 **它不会做的：** 不碰 `runtime` junction、不启动程序、不写数据库、不迁移。
 
-**验收：** `INSTALL_RESULT = PASS`，`installed_exe_sha256 = be7c0d3fcc348b21e78f8d86a9917edb2a5d4d78d33bf955ce0c9416b42d4620`，`installed_files_verified = 2,872`。
+**验收：** `INSTALL_RESULT = PASS`，`installed_exe_sha256 = f1a0351dd9837239043250fa86b9d8c921620d151eef660529d85eaecca020e2`，`installed_files_verified = 2,872`。
 
 **如果中途失败（重要）：**
 
@@ -248,6 +254,9 @@ powershell -ExecutionPolicy Bypass -File scripts\install_release_candidate.ps1 `
 | 安装报 `the configured ledger … is not the database this report covers` | 配置指向的库与备份报告不是一个 | 重做第 3 步 |
 | 安装报 `the database report belongs to …` | 报告是另一份安装生成的 | 重做第 3 步，不要改报告 |
 | 安装报 `unresolved write intent(s) were in the ledger` | 停机时仍有未确认的外部写入 | **不许换版**；先按真实结果人工核对并结算，禁止清表 |
+| 校验/安装报 `write-intent count is not a number / not a proven number` | 意图台账缺表、查询失败或计数为 NULL | 未知不是 0：旧库按 `LEGACY_NO_JOURNAL_PROVEN` 逐项核实；否则停下核对 |
+| 校验报 `holds N unprotected_unknown_rows` | 旧库有 UNKNOWN/SENT 写入没有任何告警/hold 保护 | 先人工核对该订单真实结果；禁止清 hold、禁止把未知改成已结算 |
+| 校验/安装报 `cannot prove INSO_V1.6 is stopped` | 进程查询失败、权限不足、或读不到某个进程的 EXE 路径 | 不要当成"没在跑"；用有权限的会话重查，必要时上报，禁止强杀后硬装 |
 | 校验报 `another process still holds the live ledger open` | 停机不干净，或另一份安装还连着这个库 | 不要强杀、不要复制"凑一份"；先查清是谁还连着 |
 
 ---
@@ -255,7 +264,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install_release_candidate.ps1 `
 ## 本轮未验证（如实记录）
 
 - 本手册任何一步都没有在生产上执行（第 1 步的只读校验除外）。
-- 安装脚本的通过路径与失败恢复路径是在**隔离的合成安装目录**里验证的（`scripts\test_install_gates.ps1`：107 项检查全通过，含完整成功路径与上面列出的每一条拒绝路径），不是真实装机；生产程序在跑，安装脚本按设计拒绝同一路径。
+- 安装脚本的通过路径与失败恢复路径是在**隔离的合成安装目录**里验证的（`scripts\test_install_gates.ps1`：156 项检查全通过，含完整成功路径与上面列出的每一条拒绝路径），不是真实装机；生产程序在跑，安装脚本按设计拒绝同一路径。
 - 最终候选的自检：`--self-check` / `--idle-self-check` / `--preview-self-check` 均 0；预览自检两轮 `ok: true`、开始按钮禁用、无业务线程/邮件服务。
 - `sqlite3.exe` 是否存在：`NOT_VERIFIED`（第 3 步已改为停机后逐字节复制，不再依赖它）。
 - 旧程序 Stop 耗时、GUI 停刷、Chrome 残留页：历史观察项，未测。

@@ -33,7 +33,7 @@
   "source": {
     "reviewed_base": "2ad471e7b3c0101f18f6edae05d77522c6f71d47",
     "branch_head_at_takeover": "c94d99ec",
-    "frozen_commit": "2c58529d14902b84598f36fc29c7b52e105d461c",
+    "frozen_commit": "6a75cc93130c8b7805569edfc3131f82032e22c4",
     "branch": "workbuddy/v16-rfq016-stabilization",
     "worktree": "D:\\Program_Leo\\INSO_Leo\\.worktrees\\v16-rfq016-stabilization",
     "changed_in_r5": {
@@ -75,17 +75,18 @@
   "candidate": {
     "exe_path": "build/windows-release-stage-1.6/dist/INSO_V1.6/INSO_V1.6.exe",
     "exe_size_bytes": 8461034,
-    "exe_sha256": "be7c0d3fcc348b21e78f8d86a9917edb2a5d4d78d33bf955ce0c9416b42d4620",
+    "exe_sha256": "f1a0351dd9837239043250fa86b9d8c921620d151eef660529d85eaecca020e2",
     "file_count": 2872,
     "runtime_dir_present": false,
     "manifest_path": "docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256",
     "manifest_lines": 2872,
-    "manifest_sha256": "a969a9bf21385e109632bc75f3a8b19a2ee70c2732fa412daf007db1ed24ba9b",
+    "manifest_sha256": "5dfce4c17e1583f401d78123d17378a527aeca78df356222e4d22ec954c33a64",
     "superseded_candidates": {
       "r4": "199181856ac1430af5aa0bd0af37b6bf45a1bf17272413583b2bb6e27e679d32 (manifest 2de4df2f…, kept as -r4)",
       "r3": "faa3166d41db5a738348dc57f6adebbfcda0b3dbf29eb99f3549cf0d0d2596c1",
       "r2": "74586eb29ed19e037e2045f481d4ed2226aa555a8f6ef7951028c873fa68d0ed",
-      "r1": "63bcd6cea66003f84ce016cfa8742dc479a9d67ce3f579a92b5b7c398bf4465b"
+      "r1": "63bcd6cea66003f84ce016cfa8742dc479a9d67ce3f579a92b5b7c398bf4465b",
+      "r5_pre_p0": "be7c0d3fcc348b21e78f8d86a9917edb2a5d4d78d33bf955ce0c9416b42d4620 (manifest a969a9bf..., gate 107)"
     }
   },
   "self_checks": {
@@ -95,7 +96,9 @@
       "exit_code": 0,
       "rounds": 2,
       "ok": true,
-      "blockers": ["PREVIEW_ONLY"],
+      "blockers": [
+        "PREVIEW_ONLY"
+      ],
       "start_state": "disabled",
       "business_thread_started": false,
       "order_thread_started": false,
@@ -121,11 +124,11 @@
       "failed": 0,
       "errors": 0,
       "skipped": 1,
-      "duration_seconds": 321.39,
+      "duration_seconds": 328.56,
       "skipped_nodeid": "tests/workflow/test_v12_evidence_and_safety.py::test_existing_path_rejects_symlink_escape_when_supported",
       "skipped_reason": "platform-conditional: creating a symlink needs a privilege this test session does not have (pre-existing, unchanged)",
       "report": "docs/evidence/rfq021/pytest-report-r5.xml",
-      "run_against": "frozen commit 2c58529d14902b84598f36fc29c7b52e105d461c"
+      "run_against": "frozen commit 6a75cc93130c8b7805569edfc3131f82032e22c4"
     },
     "new_r5_tests": {
       "count": 22,
@@ -152,7 +155,7 @@
   },
   "install_and_rollback": {
     "harness": "scripts/test_install_gates.ps1",
-    "checks": 107,
+    "checks": 156,
     "result": "GATE_TEST_RESULT = PASS",
     "isolation": "throwaway installs under %TEMP%; the production install is never read or written",
     "success_path": "verified: candidate copied, every installed program file re-hashed against the candidate manifest, runtime junction untouched, previous build kept as .prev-<UTC>",
@@ -168,14 +171,20 @@
       "post-copy per-file mismatch",
       "injected mid-switch failure -> FAIL_RESTORED with a file-by-file verified restore",
       "corrupted bytes after copy with unchanged file count -> caught and restored",
-      "interrupted restore -> ROLLBACK_REQUIRED, never PASS"
+      "interrupted restore -> ROLLBACK_REQUIRED, never PASS",
+      "legacy ledger with no write-intent journal: accepted only with a proven clean legacy state; refused when an unknown write is unprotected or a hold cannot be attributed",
+      "write-intent journal missing / unreadable / wrong schema / null count -> refuse (unknown is not zero)",
+      "process enumeration failed or an INSO_V1.6 executable path unreadable -> refuse at the database gate, at installer gate 7 and at the pre-switch re-check, with the target unchanged"
     ],
     "fault_injection_gate": "honoured only when RFQ021_OFFLINE_GATE_TESTS=1, and only ever forces a failure",
     "executed_against_production": false
   },
   "production_invariance": {
     "exe_sha256_before_and_after": "e9e3da33417414abac53f8a88a67d9f053bcdaeab9730eae9ad8bd7870dffad0",
-    "processes": [34304, 38948],
+    "processes": [
+      34304,
+      38948
+    ],
     "processes_started_at": "2026-11-14T13:47:50",
     "processes_stopped_or_restarted": false,
     "ledger_path": "D:\\Program_Leo\\INSO_Leo\\dist\\INSO_V1.2\\runtime\\production\\workflow.sqlite3",
@@ -211,5 +220,19 @@
     "install the candidate and verify the first launch as a safe preview",
     "any cold rollback or post-rollback business restart",
     "any real scoped business run, Google/INSO/SMTP write, or disposition of the existing UNKNOWN/hold state"
-  ]
+  ],
+  "closure_patch": {
+    "review": "REVIEW.md top (R5, CHANGES_REQUESTED with two fail-closed conditions only)",
+    "frozen_commit": "6a75cc93130c8b7805569edfc3131f82032e22c4",
+    "src_unchanged_since": "2c58529d14902b84598f36fc29c7b52e105d461c",
+    "p0_write_intents": "A missing, unreadable, wrong-schema or null write-intent count refuses. A confirmed integer is used; a ledger that provably predates the journal is verified in its own terms (unknown purchase outcomes, SAVE_OUTCOME_UNKNOWN events, active unknown-write alerts, active UPDATE_RESULT_UNCONFIRMED holds that name the order) and accepted only when no unknown write is unprotected or unattributable. Holds are read, never cleared. Report schema 4 carries write_intent_state and the legacy_unknown_write audit record.",
+    "p0_process_state": "Fail-closed process enumeration in both scripts (Get-CimInstance -ErrorAction Stop; an unreadable ExecutablePath is unproven, not 'not running'). Unproven refuses at the database gate, at installer gate 7 and again immediately before the first Move-Item; nothing moves on an unproven state.",
+    "negative_tests_first": "11 new offline gate cases; on the pre-patch scripts 4 x 'passed but should have refused' and 5 x 'refused for the wrong reason'; after the patch the harness is green.",
+    "superseded_build": {
+      "exe_sha256": "be7c0d3fcc348b21e78f8d86a9917edb2a5d4d78d33bf955ce0c9416b42d4620",
+      "manifest_sha256": "a969a9bf21385e109632bc75f3a8b19a2ee70c2732fa412daf007db1ed24ba9b",
+      "gate_checks": 107,
+      "note": "R5 build before the closure patch; its evidence is preserved as *-pre-p0 and it must not be installed as this candidate"
+    }
+  }
 }
