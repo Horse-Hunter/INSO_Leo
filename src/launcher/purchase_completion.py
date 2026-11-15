@@ -29,7 +29,7 @@ OWNER = NotificationRecipient("owner", "linan229@qq.com")
 
 
 class PurchaseCompletionActions:
-    def __init__(self, *, workflow_store, v12_store, reader, writer_factory, clock=None, follow_up_store=None, mail_evidence=None, automatic_admission=lambda inquiry_id, at: False):
+    def __init__(self, *, workflow_store, v12_store, reader, writer_factory, clock=None, follow_up_store=None, mail_evidence=None, automatic_admission=lambda inquiry_id, at: False, inquiry_ids=None):
         self._automatic_admission = automatic_admission
         self._mail_evidence = mail_evidence
         self.workflow_store = workflow_store
@@ -39,8 +39,26 @@ class PurchaseCompletionActions:
         self.follow_up_store = follow_up_store
         self._clock = clock or (lambda: datetime.now(UTC))
         self._settled_status_ids: set[str] = set()
+        # RFQ-021-R3 P0-A: a scoped run must not reconcile orders it does not
+        # own. ``None`` keeps the historical "every order" behaviour only for
+        # the unscoped path.
+        self._inquiry_ids = None if inquiry_ids is None else frozenset(inquiry_ids)
+
+    def in_scope(self, inquiry_id) -> bool:
+        return self._inquiry_ids is None or inquiry_id in self._inquiry_ids
+
+    def _items(self):
+        items = tuple(self.workflow_store.all_items())
+        if self._inquiry_ids is None:
+            return items
+        return tuple(item for item in items if item.inquiry_id in self._inquiry_ids)
 
     def process(self, result, *, at):
+        if not self.in_scope(result.inquiry_id):
+            # Defence in depth: the coordinator is already scoped, but a result
+            # from another order must never reach a Google write or a state change.
+            log.warning("completion skipped outside the run scope")
+            return False
         item = self.workflow_store.get_by_inquiry_id(result.inquiry_id)
         state = self.v12_store.business_state(item.inquiry_id)
         if state is BusinessState.INTERRUPTED_POSSIBLY_SENT:
@@ -99,7 +117,7 @@ class PurchaseCompletionActions:
         return True
 
     def retry_saved_statuses(self, *, at):
-        for item in self.workflow_store.all_items():
+        for item in self._items():
             try:
                 business_state = self.v12_store.business_state(item.inquiry_id)
             except KeyError:

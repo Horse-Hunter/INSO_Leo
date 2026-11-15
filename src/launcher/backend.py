@@ -45,7 +45,7 @@ from src.inso.purchase_writer import InsoPurchaseWriter, PlaywrightParentProduct
 from src.inso.session import SecurityViolation
 from src.inso.write_safety import OwnerAuthorizedSaveAndSendGate
 from src.launcher.purchase_completion import PurchaseCompletionActions
-from src.launcher.run_scope import ExternalWritePolicy, ScopedInsoWriteGate
+from src.launcher.run_scope import ExternalWritePolicy, ScopedInsoWriteGate, ScopeError
 from src.research import ResearchInput, ResearchResult
 from src.research.cdp_pages import (
     PageResourceAdmission,
@@ -533,6 +533,19 @@ def _fault_detail(exc, limit=3):
     return " <- ".join(parts)
 
 
+#: Manual order actions and what they actually need (RFQ-021-R3 P0-C):
+#: the module that must be enabled and every external write family they reach.
+#: ``edit`` writes a Google cell, ``purchase`` reruns a flow that ends in a
+#: status write, so both need more than "the order is in scope".
+_ACTION_MODULE = {"quotation": "quotation", "tp": "tp", "purchase": "inquiry"}
+_ACTION_WRITES = {
+    "edit": ("google",),
+    "purchase": ("inso", "google"),
+    "quotation": ("google",),
+    "tp": ("google",),
+}
+
+
 def _website_failure(exc):
     """Identify a failed dependency without treating local data errors as outages."""
     from .market_continuation import MarketContinuationFault
@@ -621,8 +634,13 @@ class ProductionBackend(GuiBackend):
         # RFQ-021 P0-A: the launcher passes a RunScope, not `inquiry_ids`. Without
         # this binding `compose_v12_production` receives None and the run would
         # process every order while claiming to be scoped.
-        if self._inquiry_scope is None and run_scope is not None:
-            self._inquiry_scope = run_scope.inquiry_ids
+        if run_scope is not None:
+            if self._inquiry_scope is None:
+                self._inquiry_scope = run_scope.inquiry_ids
+            elif frozenset(self._inquiry_scope) != frozenset(run_scope.inquiry_ids):
+                # Two different order sets cannot both be "the scope"; refuse
+                # rather than silently pick one.
+                raise ScopeError("SCOPE_INQUIRY_IDS_CONFLICT")
         # RFQ-021: a packaged release never starts without an explicit scope,
         # and it can render a read-only preview without any process service.
         self._run_scope = run_scope
@@ -1291,6 +1309,10 @@ class ProductionBackend(GuiBackend):
                 workflow_store=self._store, v12_store=self._v12_store,
                 reader=reader, writer_factory=get_status_writer, follow_up_store=follow_up_store,
                 mail_evidence=self._fault_evidence,
+                # RFQ-021-R3 P0-A: background status reconciliation is an
+                # automatic Google write; it must never touch an order that is
+                # outside the approved scope.
+                inquiry_ids=self._inquiry_scope,
                 automatic_admission=lambda iid, at: getattr(self, "_owner_single_order", None) == iid
                     or self._current_mail_source(iid, at, module="inquiry") is not None,
             )
@@ -2108,6 +2130,22 @@ class ProductionBackend(GuiBackend):
             and self._poll_idle.is_set() and not self._stop.is_set()
             and not self._manual_busy and self._manual_request is None)
 
+    def _action_in_scope(self, action) -> bool:
+        """RFQ-021-R3 P0-C: audit a manual action against modules and targets.
+
+        A scoped run has no per-order filter for quotation/TP, so those actions
+        are refused by module; a purchase needs the INSO write target.
+        """
+        if not self._enforce_scope:
+            return True
+        module = _ACTION_MODULE.get(action)
+        if module is not None and not self._module_allowed(module):
+            return False
+        for target in _ACTION_WRITES.get(action, ()):
+            if not self._write_policy.allows(target):
+                return False
+        return True
+
     def can_order_action(self, inquiry_id, action):
         with self._lock:
             # RFQ-021 P0-C: a preview must not expose an action that would drive
@@ -2117,6 +2155,8 @@ class ProductionBackend(GuiBackend):
                 return False
             if self._enforce_scope and (
                     self._run_scope is None or inquiry_id not in self._run_scope.inquiry_ids):
+                return False
+            if not self._action_in_scope(action):
                 return False
             if not self._manual_idle() or self._store is None or self._manual_reader is None:
                 return False
@@ -2196,6 +2236,8 @@ class ProductionBackend(GuiBackend):
         if self._enforce_scope and (
                 self._run_scope is None or inquiry_id not in self._run_scope.inquiry_ids):
             return "该订单不在本次受控试运行范围内。"
+        if not self._action_in_scope(action):
+            return "当前受控范围不允许该操作（模块或写入目标未授权）。"
         with self._manual_condition:
             if not self.can_order_action(inquiry_id, action):
                 if action == "quotation" and self._manual_quote is not None:
@@ -4308,7 +4350,11 @@ class ProductionBackend(GuiBackend):
             self._order_mail_report = text
 
     def start_login_all_sites(self) -> None:
-        if not self._external_action_allowed("google", "一键登录所有网站"):
+        # RFQ-021-R3 P0-C: the sweep drives every site's login with no order
+        # filter. A Google write permission says nothing about that, so an
+        # enforced scope refuses it outright rather than checking a target.
+        if self._preview_mode or self._enforce_scope:
+            self._append_log("WARNING", "一键登录在预览或受控试运行模式下不可用。")
             return
         if not self._mail_start_retry_lock.acquire(blocking=False):
             self._append_log("WARNING", "独立服务正在初始化，请稍后再执行登录检查。")

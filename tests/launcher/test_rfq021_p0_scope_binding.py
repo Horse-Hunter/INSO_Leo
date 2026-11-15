@@ -41,11 +41,15 @@ def test_run_scope_binds_the_order_scope_it_was_given(tmp_path):
     assert backend._inquiry_scope == frozenset({ORDER})
 
 
-def test_explicit_inquiry_ids_still_win_over_the_scope(tmp_path):
-    backend = ProductionBackend(
-        root=tmp_path, inquiry_ids=frozenset({OTHER}),
-        run_scope=scoped(), enforce_scope=True)
-    assert backend._inquiry_scope == frozenset({OTHER})
+def test_explicit_inquiry_ids_conflicting_with_the_scope_are_refused(tmp_path):
+    # RFQ-021-R3: two different order sets cannot both be "the scope"; the
+    # earlier "explicit wins" behaviour silently widened or narrowed the run.
+    from src.launcher.run_scope import ScopeError
+    with pytest.raises(ScopeError) as info:
+        ProductionBackend(
+            root=tmp_path, inquiry_ids=frozenset({OTHER}),
+            run_scope=scoped(), enforce_scope=True)
+    assert info.value.reason == "SCOPE_INQUIRY_IDS_CONFLICT"
 
 
 def test_composition_receives_the_scoped_orders(tmp_path, monkeypatch):
