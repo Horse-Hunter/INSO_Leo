@@ -1,3 +1,9 @@
+# INSO LEO — RFQ-021-R5 CEO Review 交接（2026-11-15 晚）
+
+**当前唯一有效 CEO 状态：`R5 CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED`。** 执行前先看 [CEO REVIEW R5](RFQ-021/REVIEW.md) 顶部和 [COORDINATION](COORDINATION.md)。R5 源码基线 `2c58529d`，候选哈希 `be7c0d3…` 属旧 R5 待补基线，不能在修复后沿用。仅需在 R5 内补两个 fail-closed 条件：写入意图 NULL/缺表不准 PASS，进程枚举不可确认不准当已停机；定向负测、冻结后全测、一次重建。复用唯一 Executor 工作树，禁止生产变更及版本晋升。
+
+## R5 Executor 和此前历史交接（非最新 CEO 许可）
+
 # INSO LEO — CEO/Executor 接管入口（2026-11-15 R5 Executor 交付，待 CEO 复核）
 
 **当前状态：`R5 SOURCE_AND_OFFLINE_RELEASE_READY_FOR_CEO_REVIEW / RELEASE_HOLD / NOT_DEPLOYED`（Executor 自报，不是发布许可）。** 先读 `develop/AGENTS.md` 精简规则、[CEO REVIEW](RFQ-021/REVIEW.md) 的最新结论、[COORDINATION](COORDINATION.md) 顶部与 [EXECUTION_LOG](RFQ-021/EXECUTION_LOG.md) 的 R5 段。冻结源码 `2c58529d`，唯一候选 EXE `be7c0d3f…`（8,461,034 B / 2,872 文件 / 清单 `a969a9bf…`），三种自检 0，安装门禁离线 107 项 PASS，全量 4,277 项 → 4,276 通过 / 0 失败 / 1 跳过（平台条件跳过）。
