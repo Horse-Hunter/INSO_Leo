@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sqlite3
+import time
 import uuid
 from collections.abc import Callable
 from contextlib import AbstractContextManager
@@ -896,16 +897,30 @@ class V12Store:
                            (command.inquiry_id, command_id))
         return command_id
 
-    def resolve_incidents(self, module, *, at, reason_code=None):
+    def resolve_incidents(self, module, *, at, reason_code=None, within=None):
+        """Mark a recovered site's incidents inactive.
+
+        ``within`` narrows the settlement to incidents whose evidence names no
+        order or an order in that set. A scoped trial passes its own order set:
+        a program-level incident is still settled, an incident that is evidence
+        about an order this run never touched is left exactly as it was.
+        """
+        allowed = None if within is None else frozenset(within)
         with _transaction(self.database_path) as db:
             rows = db.execute("SELECT command_id,review_json FROM workflow_v12_notification_commands "
                               "WHERE command_id LIKE 'incident:%'").fetchall()
             for command_id, payload in rows:
                 proof = json.loads(payload or "null")
-                if proof and proof.get("module") == module and proof.get("active") and (reason_code is None or proof.get("reason_code") == reason_code):
-                    proof.update(active=False, recovered_at=_time_text(at))
-                    db.execute("UPDATE workflow_v12_notification_commands SET review_json=? WHERE command_id=?",
-                               (json.dumps(proof, sort_keys=True), command_id))
+                if not (proof and proof.get("module") == module and proof.get("active")
+                        and (reason_code is None or proof.get("reason_code") == reason_code)):
+                    continue
+                if allowed is not None:
+                    bound = proof.get("inquiry_id")
+                    if bound is not None and bound not in allowed:
+                        continue
+                proof.update(active=False, recovered_at=_time_text(at))
+                db.execute("UPDATE workflow_v12_notification_commands SET review_json=? WHERE command_id=?",
+                           (json.dumps(proof, sort_keys=True), command_id))
 
     def record_notification_result(
         self,
@@ -1875,17 +1890,59 @@ def _all_recipients_sent(connection: sqlite3.Connection, command_id: str) -> boo
     return bool(row[0]) and row[0] == row[1]
 
 
+#: Bounded retry for a *contended* `BEGIN IMMEDIATE`. Measured on this host: a
+#: sibling connection (the GUI projection reads the same ledger) can hold the
+#: write lock past the connection timeout, and the refusal is then transient.
+#: Four attempts and 0.35 s total: long enough for the sibling to finish, short
+#: enough that a real problem still surfaces inside one poll tick.
+_BEGIN_RETRY_DELAYS: tuple[float, ...] = (0.02, 0.05, 0.08, 0.20)
+
+#: Only contention is retried. SQLITE_READONLY is *not* in this set: a ledger
+#: that cannot be written will not become writable 20 ms later, and retrying it
+#: would delay the fail-closed path while hiding the real fault. Nothing has
+#: been dispatched at BEGIN time, so a retry can never replay a business effect.
+_BEGIN_RETRY_CODES = frozenset({
+    getattr(sqlite3, "SQLITE_BUSY", 5),
+    getattr(sqlite3, "SQLITE_LOCKED", 6),
+})
+
+
+def _retryable_begin(exc: sqlite3.OperationalError) -> bool:
+    code = getattr(exc, "sqlite_errorcode", None)
+    if isinstance(code, int):
+        # Extended codes (e.g. SQLITE_BUSY_SNAPSHOT) share the low byte.
+        return (code & 0xFF) in _BEGIN_RETRY_CODES
+    text = str(exc).casefold()
+    return "locked" in text or "busy" in text
+
+
 def _transaction(database_path: Path, *, timeout=30, deadline=None):
     connection = _connect(database_path, timeout=timeout, deadline=deadline)
 
     class Transaction:
         def __enter__(self) -> sqlite3.Connection:
-            try:
-                connection.execute("BEGIN IMMEDIATE")
-                return connection
-            except Exception:
-                connection.close()
-                raise
+            nonlocal connection
+            attempt = 0
+            while True:
+                try:
+                    connection.execute("BEGIN IMMEDIATE")
+                    return connection
+                except sqlite3.OperationalError as exc:
+                    connection.close()
+                    # RFQ-021-R5: a `BEGIN IMMEDIATE` that lost the lock race is
+                    # retried on a fresh connection. Nothing of the body has run
+                    # yet, so this can never replay a business effect; a ledger
+                    # that is genuinely read-only or corrupt is not retried at
+                    # all and fails closed immediately.
+                    if attempt >= len(_BEGIN_RETRY_DELAYS) or not _retryable_begin(exc):
+                        raise
+                    time.sleep(_BEGIN_RETRY_DELAYS[attempt])
+                    attempt += 1
+                    connection = _connect(
+                        database_path, timeout=timeout, deadline=deadline)
+                except Exception:
+                    connection.close()
+                    raise
 
         def __exit__(self, exc_type, exc, tb) -> None:
             try:

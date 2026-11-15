@@ -96,3 +96,22 @@ def test_scoped_run_does_not_sweep_even_after_thirty_idle_minutes(tmp_path):
     backend._idle_login_tick(now=datetime(2026, 11, 15, 3, tzinfo=UTC))
 
     assert swept == []
+
+
+def test_check_only_sweep_also_refuses_and_never_acquires(tmp_path):
+    """RFQ-021-R5: `check_only` still attaches the protected browser."""
+
+    acquirer = ExplodingAcquirer()
+    backend = ProductionBackend(
+        root=tmp_path, run_scope=scoped(), enforce_scope=True, browser_acquirer=acquirer)
+
+    assert backend._run_login_sweep(background=True, check_only=True) == ()
+    assert acquirer.calls == 0
+
+
+def test_check_only_sweep_refuses_in_preview_without_touching_chrome(tmp_path):
+    acquirer = ExplodingAcquirer()
+    backend = ProductionBackend(root=tmp_path, preview_mode=True, browser_acquirer=acquirer)
+
+    assert backend._run_login_sweep(check_only=True) == ()
+    assert acquirer.calls == 0

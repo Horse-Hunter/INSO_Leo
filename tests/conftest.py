@@ -78,3 +78,54 @@ def _forbid_outbound_mail(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(smtplib, "SMTP_SSL", _refuse, raising=False)
     monkeypatch.setattr(smtplib, "SMTP", _refuse, raising=False)
     yield
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Prove the session's temporary tree can hold a real WAL ledger.
+
+    RFQ-021-R4 lost six launcher tests to `WORKFLOW_LEDGER_UNAVAILABLE <-
+    sqlite3.OperationalError(attempt to write a readonly database)` in a run whose
+    temporary tree was not writable (a restricted/sandboxed process had created
+    it). Every one of those tests passes in a writable tree, and a WAL database
+    whose side files cannot be written reproduces exactly that error on
+    `BEGIN IMMEDIATE`.
+
+    An environment that cannot host the ledger is a broken test environment, not
+    six unrelated product failures. This probe says so once, up front, with the
+    path and the underlying error, instead of leaving opaque partial failures
+    behind. It does not skip, deselect or weaken any test.
+    """
+
+    import sqlite3
+    import tempfile
+    from pathlib import Path
+
+    factory = session.config._tmp_path_factory  # pytest's own factory
+    try:
+        base = Path(factory.getbasetemp())
+    except Exception as exc:  # noqa: BLE001 - report, never mask
+        raise pytest.UsageError(
+            f"pytest cannot create its temporary tree: {exc}. RFQ-021: run the suite "
+            "from a session that may write its own temp directory."
+        ) from None
+    probe = os.path.join(tempfile.mkdtemp(prefix="ledger-probe-", dir=str(base)), "probe.sqlite3")
+    try:
+        connection = sqlite3.connect(probe, timeout=5)
+        try:
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("CREATE TABLE probe (a INTEGER)")
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute("INSERT INTO probe VALUES (1)")
+            connection.commit()
+            rows = connection.execute("SELECT count(*) FROM probe").fetchone()[0]
+        finally:
+            connection.close()
+        if rows != 1:
+            raise sqlite3.OperationalError("the probe row did not persist")
+    except (sqlite3.Error, OSError) as exc:
+        raise pytest.UsageError(
+            "RFQ-021: this session's temporary tree cannot hold a WAL ledger "
+            f"({probe}): {exc}. The suite would fail with misleading "
+            "'attempt to write a readonly database' faults; run it from a session "
+            "that owns and may write its temp directory."
+        ) from None

@@ -2494,6 +2494,17 @@ class ProductionBackend(GuiBackend):
     def _execute_order_action_impl(self, request):
         request_id, inquiry, action, field, value = request
         success, message = False, "操作未执行。"
+        # RFQ-021-R5: the request gate is not the only entrance -- tests, recovery
+        # code and any future caller reach this executor directly. The final
+        # function therefore repeats the same scope judgement before the first
+        # effect, so no manual action can run outside an approved scope.
+        if not self._order_in_scope(inquiry) or not self._action_in_scope(action):
+            with self._lock:
+                self._manual_result = ManualOrderResult(
+                    request_id, inquiry, action, False,
+                    "该操作不在本次受控试运行范围内，未执行。")
+            self._notify()
+            return
         try:
             if action == "tp":
                 from src.sheets.tp_brief import TpLocalError
@@ -3151,8 +3162,18 @@ class ProductionBackend(GuiBackend):
         return SaveReconciliationTarget(item.mpn, brand, item.quantity)
 
     def _site_recovered(self, site):
+        # RFQ-021-R5: an incident record can carry per-order evidence about any
+        # order on that site. A scoped trial settles the program-level incidents
+        # (and its own orders) but leaves an out-of-scope order's alert evidence
+        # exactly as it was; an unscoped run keeps the historical behaviour.
         if self._v12_store is not None and callable(getattr(self._v12_store, "resolve_incidents", None)):
-            self._v12_store.resolve_incidents(site, at=utc_now())
+            if getattr(self, "_enforce_scope", False):
+                scope = getattr(self, "_run_scope", None)
+                self._v12_store.resolve_incidents(
+                    site, at=utc_now(),
+                    within=(scope.inquiry_ids if scope is not None else frozenset()))
+            else:
+                self._v12_store.resolve_incidents(site, at=utc_now())
         with self._lock:
             self._site_outages.pop(site, None)
             self._site_manual_wait.discard(site)
@@ -4452,13 +4473,12 @@ class ProductionBackend(GuiBackend):
     def _run_login_sweep(self, *, background=False, check_only=False, only_sites=None) -> tuple[SiteLoginResult, ...]:
         """Attach the approved CDP browser, sweep it, then give it back."""
 
-        # RFQ-021-R4: a login sweep is a whole-browser effect with no order
-        # filter, so it cannot belong to a scoped trial or a preview. It was
-        # already refused on the button; this is the same refusal on the two
-        # automatic paths (`business_continuations`, `_idle_login_tick`) so the
-        # button cannot be stricter than the background.
-        if not check_only and (
-                getattr(self, "_preview_mode", False) or getattr(self, "_enforce_scope", False)):
+        # RFQ-021-R4/R5: a login sweep is a whole-browser effect with no order
+        # filter, so it cannot belong to a scoped trial or a preview. The button
+        # already refused it; these two automatic paths (`business_continuations`,
+        # `_idle_login_tick`) are the same refusal, and `check_only` is included
+        # because it still attaches the protected browser and parks a target.
+        if getattr(self, "_preview_mode", False) or getattr(self, "_enforce_scope", False):
             self._append_log("WARNING", "预览或受控试运行不执行跨站点登录巡检。")
             return ()
 
