@@ -1,4 +1,14 @@
-# INSO LEO — CEO/Executor 接管入口（2026-11-15 上午晚些时候）
+# INSO LEO — CEO/Executor 接管入口（2026-11-15 R4）
+
+**当前唯一 CEO 结论：`RFQ-021-R3 CHANGES_REQUESTED / RELEASE_HOLD / NOT_DEPLOYED`。** [独立审核及 R4 验收范围](RFQ-021/REVIEW.md)；[当前指挥状态](COORDINATION.md)。R3 Executor 的 `PASS_SOURCE_SCOPE` 是历史自测记录，不是发布许可。
+
+**高效接管顺序：** 先显式读 **`develop`** 的 [AI_START_HERE](https://github.com/Horse-Hunter/INSO_Leo/blob/develop/AI_START_HERE.md)、[AGENTS（Lean Review）](https://github.com/Horse-Hunter/INSO_Leo/blob/develop/AGENTS.md) 和 [BRANCH_POLICY](https://github.com/Horse-Hunter/INSO_Leo/blob/develop/docs/BRANCH_POLICY.md)；再读本分支本文件、`COORDINATION.md`、`RFQ-021/REVIEW.md` 和执行日志最新 R3 记录。先比对固定源码 `1ef20c81` 的差异与关键效果路径，不重复通读历史文件。恢复原 Executor 工作树前核实本地 HEAD/status/diff/worktree，不清理未知改动。
+
+**R4 仅允许离线修改和测试：** 集中修复协调器启动/轮询对范围外订单的本地状态、事件、告警影响；强制旧版回滚快照完整与有效 runtime junction；同步 `order_action_hint`。迭代时定向测试，冻结代码后一次完整测试及一次最终构建，真实结果写原 `EXECUTION_LOG.md`。任何源码变更须重建候选，不可沿用 R3 EXE 哈希。
+
+**事故和生产：** 06:06 `SSLEOFError` → `SHEETS_READ_UNAVAILABLE` → `MODULE_PAUSED` 为确认故障类别，底层网络原因未知。10:40 旧 EXE `e9e3da33…` 与 PID 38948/34304 的读取证据有时间边界，不能宣称此刻仍然运行。B3/B4 未完成，未经 Owner 另行授权不得停机、重启、安装、真实订单/写入、碰 Chrome9222/生产 DB、清理 hold/UNKNOWN 或移动 `develop/main/release`。
+
+## R3 Executor 历史交接（保留证据，非最新 CEO 决定）
 
 **先访问 `develop`，不要默认 `main`**：[AI_START_HERE](../AI_START_HERE.md)、[AGENTS](../AGENTS.md)、[BRANCH_POLICY](../docs/BRANCH_POLICY.md)、[COORDINATION](COORDINATION.md)、[RFQ-021 REVIEW_R3](RFQ-021/REVIEW_R3.md)、[INC-20261115](INCIDENT-20261115.md)、[安装与回滚](RFQ-021/INSTALL_AND_ROLLBACK.md)。新窗口先 fetch 最新 develop，再核对本地 git HEAD/status/worktree 与运行中的进程。**只保留一个 Executor 工作树，不得关闭正在运行的生产程序。**
 
