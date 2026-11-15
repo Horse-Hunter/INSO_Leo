@@ -1,3 +1,16 @@
+# INSO LEO — RFQ-021 Owner 授权发布准备（2026-11-16）
+
+**Owner 最新指令（聊天确认）：** “程序已退出，指挥新窗口发布吧”。Owner 自述旧程序已退出，**CEO/Executor 尚未独立验证 B4**。本条授权仅覆盖**本次**按 RFQ-021 手册执行现场核验、完整程序/配置快照、停机后当前账本一致性备份与只读校验、全部门禁 PASS 后安装固定 R5 候选，以及**新 EXE 的 `--safe-preview` 首次验收**；**不代表无条件通过、也不是实际部署已完成。**
+
+- **当前工作状态：** `OWNER_AUTHORIZED_GATED_INSTALL_AND_SAFE_PREVIEW / RELEASE_HOLD / INSTALL_NOT_VERIFIED`。待 Executor 根据真实现场证据更新 `EXECUTION_LOG.md` 和本页；所有门禁有一项 FAIL / UNKNOWN，立即 `DEPLOYMENT_BLOCKED` 并报告，不得跳过、修改数据库业务状态、篡改报告或为达成 PASS 临时改代码。
+- **固定候选，不准换版：** 冻结源码 `6a75cc93130c8b7805569edfc3131f82032e22c4`；EXE `f1a0351dd9837239043250fa86b9d8c921620d151eef660529d85eaecca020e2`；清单 `5dfce4c17e1583f401d78123d17378a527aeca78df356222e4d22ec954c33a64`；旧安装预期 `e9e3da33417414abac53f8a88a67d9f053bcdaeab9730eae9ad8bd7870dffad0`（须现场复核）。
+- **执行入口：** `develop/AGENTS.md` 和 `AI_START_HERE.md`；本分支 `control-room/RFQ-021/REVIEW.md` 顶部 CEO R5 Final 与 `INSTALL_AND_ROLLBACK.md`。只允许**唯一新 DeepSeek Executor**接管；确认无旧窗口并行。检查 Git HEAD/worktree/status，核验安装来源、旧 EXE、watcher、进程、`runtime` junction、真实配置指向的 SQLite、WAL/SHM/打开句柄，任何不明即停。
+- **必须保留的最终门禁：** 真实候选 2,872 文件哈希 PASS；旧程序及 watcher 均已退出且状态可证；备份旧程序/配置与账本身份一致；数据库报告 schema ≥4、业务不变量/意图/UNKNOWN 保护全部通过；安装器安装后逐文件校验；首次启动只能用 `INSO_V1.6.exe --safe-preview`，禁止任何真实业务启动。
+- **此次明确未授权：** `--scoped-start`、`--start-inquiry`、任何真实订单、Google/INSO/SMTP 写入、Chrome9222 接管、UNKNOWN/hold/221/SHAHAB-115 的结算或清理、发生故障后冷回滚/回滚后重启、合并 `develop`、晋升 `main/release`。冷回滚（即使手册有步骤）及业务重启仍需 Owner 单独确认。脚本自动 `FAIL_RESTORED` 的安全恢复例外按原手册允许；若 `ROLLBACK_REQUIRED`，停工上报。
+- **反馈：** 新窗口在每个实际动作后记录时间、路径、SHA、PASS/FAIL、生产副作用和日志路径；仅当现场安装与安全预览均有实证 PASS，才报告 `INSTALLED_PREVIEW_PASS / BUSINESS_HOLD`，否则说明真实阻断，禁止宣称发布成功。
+
+## 先前 CEO R5 离线验收及历史状态（仍然有效，但已获得上述有限现场授权）
+
 # INSO LEO — RFQ-021-R5 CEO 最终独立验收（2026-11-15 21:30+08:00）
 
 **最新权威结论：`PASS_SOURCE_AND_OFFLINE_RELEASE_READY / RELEASE_HOLD / NOT_DEPLOYED`。** R5 两个 P0 的 fail-closed 源码及负向案例通过独立检查。**RFQ-021 离线开发阶段可以关闭；本结论不授予生产维护、安装、业务动作、分支晋升许可。**
