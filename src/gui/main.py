@@ -204,12 +204,15 @@ def main(*, guard_factory=None, backend_factory=None, diagnostics=None) -> int:
         )
         args = parser.parse_args()
 
-        # RFQ-021: a plain launch is a safe preview. Business only happens when
-        # the operator names the scope, and there is no path from one to the
-        # other (an unscoped --start-inquiry is refused, not downgraded).
-        preview = not args.mock and not args.scoped_start
+        # Owner order 2026-11-16: a plain launch is the FULL production program
+        # again -- Start enabled, process services allowed, every module and
+        # write target available exactly as configured.  The read-only mode is
+        # kept behind an explicit --safe-preview, and --scoped-start still
+        # narrows a run to named orders when the operator wants that.
+        preview = bool(args.safe_preview) and not args.mock
+        enforce_scope = bool(args.scoped_start) and not args.mock
         scope = None
-        if args.scoped_start and not args.mock:
+        if enforce_scope:
             try:
                 scope = parse_run_scope(
                     inquiry_ids=args.scope_inquiries,
@@ -224,8 +227,8 @@ def main(*, guard_factory=None, backend_factory=None, diagnostics=None) -> int:
                 return 2
         if args.start_inquiry and preview:
             logging.getLogger("inso.startup").error(
-                "Start requested without --scoped-start; refusing")
-            _show_error("业务启动需要 --scoped-start 与受控范围，已取消启动。")
+                "Start requested under --safe-preview; refusing")
+            _show_error("安全预览模式不执行任何业务，请去掉 --safe-preview。")
             return 2
 
         guard = (
@@ -244,7 +247,7 @@ def main(*, guard_factory=None, backend_factory=None, diagnostics=None) -> int:
             else backend_factory() if backend_factory else ProductionBackend(
                 defer_local_view=True,
                 run_scope=scope,
-                enforce_scope=True,
+                enforce_scope=enforce_scope,
                 preview_mode=preview,
             )
         )

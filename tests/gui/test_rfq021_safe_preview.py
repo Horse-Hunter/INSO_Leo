@@ -1,4 +1,9 @@
-"""RFQ-021: a plain launch renders the dashboard and starts nothing."""
+"""Owner order 2026-11-16: a plain launch is the full production program.
+
+The RFQ-021 B7 preview-only default was removed on the Owner's instruction.
+``--safe-preview`` still renders the dashboard and starts nothing, and
+``--scoped-start`` still narrows a run to named orders.
+"""
 
 from __future__ import annotations
 
@@ -69,38 +74,52 @@ def argv(monkeypatch, *flags):
     monkeypatch.setattr(sys, "argv", ["INSO_V1.6.exe", *flags])
 
 
-def test_a_plain_launch_is_a_safe_preview(tmp_path, monkeypatch):
+def test_a_plain_launch_is_the_full_production_program(tmp_path, monkeypatch):
     harness = Harness().install(monkeypatch, tmp_path)
     argv(monkeypatch)
 
     assert launcher.main() == 0
 
-    assert harness.backend_kwargs["preview_mode"] is True
-    assert harness.backend_kwargs["enforce_scope"] is True
+    assert harness.backend_kwargs["preview_mode"] is False
+    assert harness.backend_kwargs["enforce_scope"] is False
     assert harness.backend_kwargs["run_scope"] is None
-    assert "services" not in harness.events
+    # Full mode: the mail research service starts, and business waits for the
+    # operator to press Start because --start-inquiry was not given.
+    assert "services" in harness.events
     assert "start" not in harness.events
     guard_calls = [event for event in harness.events if isinstance(event, tuple)]
-    assert guard_calls == [("guard", launcher.PREVIEW_MUTEX_NAME)]
+    assert guard_calls == [("guard", None)]
 
 
-def test_explicit_safe_preview_behaves_the_same(tmp_path, monkeypatch):
+def test_explicit_safe_preview_renders_only(tmp_path, monkeypatch):
     harness = Harness().install(monkeypatch, tmp_path)
     argv(monkeypatch, "--safe-preview")
     assert launcher.main() == 0
     assert harness.backend_kwargs["preview_mode"] is True
+    assert harness.backend_kwargs["enforce_scope"] is False
     assert "services" not in harness.events
+    assert "start" not in harness.events
 
 
-def test_start_without_a_scope_is_refused_not_downgraded(tmp_path, monkeypatch):
+def test_start_without_a_scope_runs_the_full_program(tmp_path, monkeypatch):
+    harness = Harness().install(monkeypatch, tmp_path)
+    argv(monkeypatch, "--start-inquiry")
+
+    assert launcher.main() == 0
+    assert harness.backend_kwargs["preview_mode"] is False
+    assert harness.backend_kwargs["enforce_scope"] is False
+    assert "start" in harness.events
+
+
+def test_start_under_safe_preview_is_refused(tmp_path, monkeypatch):
     harness = Harness().install(monkeypatch, tmp_path)
     shown = []
     monkeypatch.setattr(launcher, "_show_error", lambda message, title=None: shown.append(message))
-    argv(monkeypatch, "--start-inquiry")
+    argv(monkeypatch, "--safe-preview", "--start-inquiry")
 
     assert launcher.main() == 2
     assert harness.events == []
-    assert shown and "受控" in shown[0]
+    assert shown and "安全预览" in shown[0]
 
 
 def test_an_invalid_scope_is_refused_before_any_backend(tmp_path, monkeypatch):

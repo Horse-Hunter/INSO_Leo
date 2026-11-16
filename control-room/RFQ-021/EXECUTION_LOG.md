@@ -1,6 +1,46 @@
 # RFQ-021 — execution log (final release candidate)
 
-## RFQ-021-R5 — 部署完成（2026-11-16 07:57–08:1x +08:00，唯一 Executor）
+## 全量版重建与覆盖安装（2026-11-16 15:13–15:30 +08:00，Owner 指令）
+
+- **Owner 指令：** "B，赶紧的给我完全版"。即授权撤销 RFQ-021 B7（普通启动＝安全预览），要求双击即可运行的完整生产版本。
+- **结论：`FULL_BUILD_INSTALLED / RUNNING`。** 新 EXE `1b3f3eeb…` 已安装并运行；`--safe-preview` 保留为只读模式，`--scoped-start` 保留按单收窄。
+
+### 1. 源码改动（两处，`src/gui/main.py`）
+
+```
+- preview = not args.mock and not args.scoped_start
++ preview = bool(args.safe_preview) and not args.mock
++ enforce_scope = bool(args.scoped_start) and not args.mock
+...
+- enforce_scope=True,
++ enforce_scope=enforce_scope,
+```
+
+改后行为：普通启动 → `preview_mode=False`、`enforce_scope=False`、`run_scope=None` → `scope_blockers()` 返回 `()` → 开始按钮正常可用；`may_start_process_services()` 为真 → 启动时即拉起独立邮件调研服务；`start()` 不再要求范围。`--start-inquiry` 在 `--safe-preview` 下仍拒绝（返回 2）。**注意：B5 的按单写入收窄与 B7 的预览防误触随之失效**，这是 Owner 明确要求的取舍。
+
+### 2. 测试同步（不留假绿）
+
+`tests/gui/test_rfq021_safe_preview.py` 两个写死旧契约的用例被改写，不是删除：
+`test_a_plain_launch_is_the_full_production_program`（断言 preview False / enforce_scope False / services 已启动 / business 未启动 / 默认互斥名）、`test_start_without_a_scope_runs_the_full_program`、`test_start_under_safe_preview_is_refused`、`test_explicit_safe_preview_renders_only`。
+**`tests/gui` + `tests/launcher` 全量 1,826 项 PASS**；`ruff check src tests` PASS；`git diff --check` 干净。
+
+### 3. 构建与安装
+
+- R5 staging 归档为 `build/windows-release-stage-1.6-r5`，新构建 `-BuildOnly -Version 1.6`，`RELEASE_SCAN_OK`。
+- 新候选：EXE `1b3f3eeb58930ce0f31931cfd67865fbe4863010a5762fe09652c7a8b73d0a97`，8,461,095 B，2,872 文件；新清单 `docs/evidence/rfq021/INSO_V1.6-artifact-manifest-fullstart.sha256`（自身 `80ddee2854b26975d98f459f7d357023671c12f89cd200f4e796c7b044ab556e`）。
+- 回滚材料：快照 `dist\release-backups\RFQ-021-fullstart-20261116T071958Z`（`BACKUP_RESULT = PASS`，记录上一版 `f1a0351d…`）+ 库备份 `c50c3636…` + `DB_VERIFY_RESULT = PASS`。
+- 安装：`INSTALL_RESULT = PASS`，`installed_exe_sha256 = 1b3f3eeb…`，`installed_files_verified = 2872`；旧版 `f1a0351d…` 与 `_internal` 保留为 `.prev-20261116T072210Z`。
+
+### 4. 运行状态
+
+PID 42876（界面）+ 41784（watcher），标题 `INSO LEO V1.6 — Procurement Automation Control Center`，`phase=gui`、`gui_ready`、无异常退出记录。生产库 `c50c3636…` 未变、`-wal` 0 字节（尚未点开始，无业务写入）。
+
+### 5. 期间发现的两个既有缺陷（非本次引入）
+
+1. **关窗不退进程**：对 PID 23816/18912 发 WM_CLOSE 后窗口销毁（`MainWindowTitle`/`MainWindowHandle` 归零），但两个进程都不退出，也没有 `exit_requested` 事件——Tk 主循环结束后仍有非守护线程存活。为完成安装，这两个空闲预览进程（`phase=gui`、无业务线程、账本未写）被强制终止。
+2. **从工具会话 `Start-Process` 启动的 GUI 会被会话回收**：表现为 `fatal.log` 0 字节、events 停在 `gui_ready`、无 `exit.json`，容易被误判为崩溃。改用 `explorer.exe <exe>` 后正常驻留。
+
+## RFQ-021-R5 — 部署完成（2026-11-16 07:57–08:1x +08:00，已被上节取代）
 
 - **结论：`INSTALLED_PREVIEW_PASS / ORDER_NOT_DONE`。** V1.6 已覆盖安装并通过安全预览自检；真实订单因**当前没有任何 `未发` 订单**而无法执行（两个工作表的 `未发` 行数均为 0）。
 - **Owner 本次授权（2026-11-16 07:57）：** "授权，我要看到覆盖的新版程序，SHAHAB/115 不用管了是旧询价" —— 即授权处置上一轮报告的第 1 项阻断，并明确 SHAHAB/115 为旧询价、不再要求保护。据此对门禁做**定点修正 + 具名豁免**，其余安全门禁一律保留。
