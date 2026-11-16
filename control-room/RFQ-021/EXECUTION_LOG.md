@@ -1,6 +1,51 @@
 # RFQ-021 — execution log (final release candidate)
 
-## RFQ-021-R5 — 现场部署执行（2026-11-16 00:39–01:0x +08:00，唯一 Executor）
+## RFQ-021-R5 — 部署完成（2026-11-16 07:57–08:1x +08:00，唯一 Executor）
+
+- **结论：`INSTALLED_PREVIEW_PASS / ORDER_NOT_DONE`。** V1.6 已覆盖安装并通过安全预览自检；真实订单因**当前没有任何 `未发` 订单**而无法执行（两个工作表的 `未发` 行数均为 0）。
+- **Owner 本次授权（2026-11-16 07:57）：** "授权，我要看到覆盖的新版程序，SHAHAB/115 不用管了是旧询价" —— 即授权处置上一轮报告的第 1 项阻断，并明确 SHAHAB/115 为旧询价、不再要求保护。据此对门禁做**定点修正 + 具名豁免**，其余安全门禁一律保留。
+
+### 1. 门禁修正（只改 `scripts/verify_database_backup.ps1`，安装器与候选均未改动）
+
+上一轮的 FAIL 来自一处已被实证的误判：26 单的 `SAVE_OUTCOME_UNKNOWN` 都在该单确认 `SAVED` 之前约 6 秒（派发未确认→重试→确认保存），但旧判定只认"活动告警或 hold 挂靠"，因此把已解决的历史当成未解决。现在 legacy 判定新增两类**显式、可审计**的解决方式：
+
+| 解决方式 | 判据（全部满足才算） |
+|---|---|
+| `resolved_by_confirmed_save` | `outcome = SAVED` **且** `saved_record_ref` 非空 **且** `updated_at` **不早于**该单最后一笔 `SAVE_OUTCOME_UNKNOWN`（时间戳用 `datetime.fromisoformat` 解析，无法解析即视为未证明） |
+| `owner_exempt_orders` | 必须同时给 `-OwnerExemptInquiry`（`^inq_[0-9a-f]{24}$`，逐个具名）与 `-OwnerExemptAuthority`；缺任一项直接拒绝 |
+
+其余规则不变：缺表/查询失败/NULL 仍拒绝、hold 只读不清、`unattributed_holds` 必须为 0、未命中保护且不属于上述两类的单仍然拦。报告新增 `resolved_by_confirmed_save_orders`、`owner_exempted_orders`、`owner_exempt_authority`、`owner_exempt_unmatched`，并在 PASS 输出里逐项打印——豁免不会静默发生。
+
+**门禁自测：** `scripts/test_install_gates.ps1` 扩到 **182 项，`GATE_TEST_RESULT = PASS`**（原 156 项无回归）。新增负向用例均按预期拒绝：SAVED 但无回执引用、SAVED 但时间早于不确定事件、豁免缺授权串、豁免 id 格式非法、未豁免的 `MANUAL_REVIEW` 仍拦；新增正向：确认保存后解决可装、具名豁免可装且报告记录授权与单号。
+
+### 2. 数据库门禁（真实账本，PASS）
+
+```
+unknown_orders_considered      = 27
+resolved_by_confirmed_save     = 26
+owner_exempted_orders          = inq_99275e8e72b43fd6616fd686
+owner_exempt_authority         = OWNER-APPROVED:SHAHAB-115-IS-OLD-INQUIRY-20261116
+DB_VERIFY_RESULT = PASS     (database_sha256 = c50c3636…, source 同哈希)
+purchase_rows = 37, max_event_at = 2026-11-14T21:51:31Z, event_age_hours = 26.16
+```
+
+### 3. 安装（PASS）
+
+`install_release_candidate.ps1`：`INSTALL_RESULT = PASS`，`installed_exe_sha256 = f1a0351dd9837239043250fa86b9d8c921620d151eef660529d85eaecca020e2`，`installed_files_verified = 2872`。回滚材料：`INSO_V1.6.exe.prev-20261116T000225Z`（`e9e3da33…`）、`_internal.prev-20261116T000225Z`，快照与数据库备份仍在 `dist\release-backups\RFQ-021-pre-switch-20261115T164102Z`。安装后独立复核：EXE `f1a0351d…`、8,461,034 B、`_internal` 2871 文件、`runtime` junction 未改。
+
+### 4. 安全预览自检（PASS）
+
+`INSO_V1.6.exe --preview-self-check` → `runtime\logs\v16-preview-self-check.json`：`ok: true`，两轮均 `acquired: true`，标题 `INSO LEO V1.6 — Procurement Automation Control Center`，`start_button = 安全预览（不启动业务）`、`start_state = disabled`、`business_thread_started = false`、`order_thread_started = false`、`mail_service_started = false`、`process_services_consumed = false`、`state = 已停止`。退出码 0；控制台 `invalid command name …update` 属窗口销毁后的 after 回调噪声。自检后无 `INSO_V1.6` 残留进程（全量 380 进程，0 命中）。
+
+### 5. 真实订单：未执行（`ORDER_NOT_DONE`，业务事实而非程序阻断）
+
+- 原目标第 221 行 `FT2232H-56Q-REEL` 已 `SAVED`（`rec_440fafd…`），不得重复采购。
+- 现场只读扫描：`2026` 221 行状态分布 `已报价给客户 84 / STATUS 73 / 空 39 / 采购已报价 13 / 成交 7 / 收到报价 1 / 发给采购 1`，**`未发` = 0**；`SHAHAB` 140 行 `已报价给客户 89 / 空 45 / 意向订单 3 / 成交 2`，**`未发` = 0**。
+- `src/sheets/pending.py::discover_pending` 要求状态**恰好**为 `未发`，采购重跑亦要求 `未发`（`backend.py:2548`）。故当前没有可被合法领取的询价单，自动受控试运行无输入。把任何一行改回 `未发` 属篡改业务状态，不做。
+
+**未发生的外部效果：** 无 Google 写入、无 INSO 采购、无 SMTP、未接管 Chrome 9222、未改生产库。**程序当前状态：** 新版已安装、未运行（预览自检已退出）。
+
+## RFQ-021-R5 — 现场部署被门禁拒绝（2026-11-16 00:39，历史，已被上节取代）
 
 - **结论：`DEPLOYMENT_FAILED / NOT_INSTALLED / NO_BUSINESS_ACTION`。** 依 Owner 2026-11-16 最终授权执行到第 3 步；自有数据库门禁在真实生产账本上 FAIL，安装器按设计只接受已证明状态，未绕过、未改库、未启程序、未产生任何外部效果。旧版 `e9e3da33…` 完好如初。
 - **接管基线：** 分支 `workbuddy/v16-rfq016-stabilization`，文档 HEAD `f6096138`，冻结源码 `6a75cc93`，候选未变。

@@ -102,6 +102,30 @@ UNKNOWN = """INSERT INTO workflow_v12_purchase_state(inquiry_id,outcome,updated_
     VALUES('inq_y','UNKNOWN_WRITE_OUTCOME','2026-11-15T08:00:00+00:00');"""
 PROTECTED_HOLD = """INSERT INTO workflow_v13_holds(hold_key,result_json,observed_identity,reason,episode,active)
     VALUES('q_y','{"inquiry_id":"inq_y","quotation":{"effect_uncertain":true}}','obs','UPDATE_RESULT_UNCONFIRMED',0,1);"""
+
+# A row that once lost its save outcome.  Whether it still counts as unknown
+# depends on the receipt and on the ordering, which is what the new cases pin.
+CERTAIN_ID = "inq_111111111111111111111111"
+LOST_THEN_SAVED_WITH_REF = (
+    "INSERT INTO workflow_v12_purchase_state(inquiry_id,outcome,reason_code,saved_record_ref,updated_at) "
+    "VALUES('" + CERTAIN_ID + "','SAVED',NULL,'rec_fixture','2026-11-15T09:00:00+00:00');\n"
+    "INSERT INTO workflow_v12_events(event_id,inquiry_id,event_type,occurred_at) "
+    "VALUES('evt_c1','" + CERTAIN_ID + "','SAVE_OUTCOME_UNKNOWN','2026-11-15T08:00:00+00:00');")
+SAVED_WITHOUT_REF = (
+    "INSERT INTO workflow_v12_purchase_state(inquiry_id,outcome,reason_code,saved_record_ref,updated_at) "
+    "VALUES('" + CERTAIN_ID + "','SAVED',NULL,NULL,'2026-11-15T09:00:00+00:00');\n"
+    "INSERT INTO workflow_v12_events(event_id,inquiry_id,event_type,occurred_at) "
+    "VALUES('evt_c2','" + CERTAIN_ID + "','SAVE_OUTCOME_UNKNOWN','2026-11-15T08:00:00+00:00');")
+SAVED_BEFORE_UNCERTAINTY = (
+    "INSERT INTO workflow_v12_purchase_state(inquiry_id,outcome,reason_code,saved_record_ref,updated_at) "
+    "VALUES('" + CERTAIN_ID + "','SAVED',NULL,'rec_fixture','2026-11-15T08:00:00+00:00');\n"
+    "INSERT INTO workflow_v12_events(event_id,inquiry_id,event_type,occurred_at) "
+    "VALUES('evt_c3','" + CERTAIN_ID + "','SAVE_OUTCOME_UNKNOWN','2026-11-15T09:00:00+00:00');")
+MANUAL_REVIEW_ID = (
+    "INSERT INTO workflow_v12_purchase_state(inquiry_id,outcome,reason_code,updated_at) "
+    "VALUES('" + CERTAIN_ID + "','MANUAL_REVIEW','RECONCILIATION_UNREADABLE','2026-11-15T09:00:00+00:00');\n"
+    "INSERT INTO workflow_v12_events(event_id,inquiry_id,event_type,occurred_at) "
+    "VALUES('evt_c4','" + CERTAIN_ID + "','SAVE_OUTCOME_UNKNOWN','2026-11-15T08:00:00+00:00');")
 SCENARIOS = {
     # The journal exists and an intent is still open.
     "open_intent": "INSERT INTO workflow_write_intents(intent_id,document_key,kind,state,created_at) "
@@ -112,6 +136,14 @@ SCENARIOS = {
     "legacy_protected_unknown": "DROP TABLE workflow_write_intents;\n" + UNKNOWN + "\n" + PROTECTED_HOLD,
     # Same old ledger, with an uncertain write nothing protects.
     "legacy_unprotected_unknown": "DROP TABLE workflow_write_intents;\n" + UNKNOWN,
+    # A lost save outcome that a later confirmed save with a receipt resolved.
+    "legacy_saved_with_ref": "DROP TABLE workflow_write_intents;\n" + LOST_THEN_SAVED_WITH_REF,
+    # SAVED without a receipt reference proves nothing; it stays unknown.
+    "legacy_saved_without_reference": "DROP TABLE workflow_write_intents;\n" + SAVED_WITHOUT_REF,
+    # A save stamped before the uncertainty describes a different attempt.
+    "legacy_saved_before_uncertainty": "DROP TABLE workflow_write_intents;\n" + SAVED_BEFORE_UNCERTAINTY,
+    # The order an Owner exemption is meant to name.
+    "legacy_manual_review": "DROP TABLE workflow_write_intents;\n" + MANUAL_REVIEW_ID,
     # The journal table exists but cannot be read the way the runtime reads it.
     "broken_journal": "DROP TABLE workflow_write_intents;\n"
                       "CREATE TABLE workflow_write_intents(intent_id TEXT PRIMARY KEY);",
@@ -239,8 +271,8 @@ function New-Snapshot {
 }
 
 function Get-DatabaseReport {
-    param([pscustomobject]$Fixture, [int]$MaxAgeHours = 72)
-    return Invoke-Child "verify_database_backup.ps1" @{
+    param([pscustomobject]$Fixture, [int]$MaxAgeHours = 72, [hashtable]$Extra = @{})
+    $values = @{
         DatabaseBackup = $Fixture.BackupDatabase
         SourceDatabase = $Fixture.LiveDatabase
         InstallDir = $Fixture.Target
@@ -248,6 +280,8 @@ function Get-DatabaseReport {
         PythonExecutable = $python
         MaxAgeHours = $MaxAgeHours
     }
+    foreach ($key in $Extra.Keys) { $values[$key] = $Extra[$key] }
+    return Invoke-Child "verify_database_backup.ps1" $values
 }
 
 function New-InstallArgs {
@@ -427,6 +461,57 @@ try {
     $f = New-Fixture (Join-Path $root "db-legacy-unprotected-unknown") -Scenario "legacy_unprotected_unknown"
     New-Snapshot $f | Out-Null
     Assert-Refused "a legacy unknown write with no protection blocks the snapshot" (Get-DatabaseReport $f) "unprotected"
+
+    # A lost save outcome that a later confirmed save resolved is not an open
+    # write: the outcome is known, a receipt exists, and SAVED is terminal.
+    # The three cases below pin the exact conditions, so the tolerance cannot
+    # be widened by accident into "any SAVED row is fine".
+    $f = New-Fixture (Join-Path $root "db-legacy-saved-with-ref") -Scenario "legacy_saved_with_ref"
+    New-Snapshot $f | Out-Null
+    $resolved = Get-DatabaseReport $f
+    Assert-Output "a lost outcome later confirmed SAVED with a receipt does not block" $resolved "DB_VERIFY_RESULT = PASS"
+    $script:checks++
+    $report = Get-Content -LiteralPath $f.DatabaseReport -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ([int]$report.legacy_unknown_write.resolved_by_confirmed_save -lt 1) {
+        [void]$failures.Add("confirmed-save resolution : the report does not record that anything was resolved by a confirmed save")
+    }
+    Assert-Output "the resolved order still installs" `
+        (Invoke-Child "install_release_candidate.ps1" (New-InstallArgs $f)) "INSTALL_RESULT = PASS"
+
+    $f = New-Fixture (Join-Path $root "db-legacy-saved-no-ref") -Scenario "legacy_saved_without_reference"
+    New-Snapshot $f | Out-Null
+    Assert-Refused "SAVED without a receipt reference is still an unknown write" (Get-DatabaseReport $f) "unprotected"
+
+    $f = New-Fixture (Join-Path $root "db-legacy-saved-before") -Scenario "legacy_saved_before_uncertainty"
+    New-Snapshot $f | Out-Null
+    Assert-Refused "a save stamped before the uncertainty does not resolve it" (Get-DatabaseReport $f) "unprotected"
+
+    # An exemption has to be attributed and named exactly; anything less is the
+    # automatic clearing this gate exists to prevent.
+    $f = New-Fixture (Join-Path $root "db-legacy-exempt-no-authority") -Scenario "legacy_manual_review"
+    New-Snapshot $f | Out-Null
+    Assert-Refused "an owner exemption without an authority reference is refused" `
+        (Get-DatabaseReport $f -Extra @{ OwnerExemptInquiry = "inq_111111111111111111111111" }) "without an authority"
+    Assert-Refused "a malformed exemption id is refused" `
+        (Get-DatabaseReport $f -Extra @{ OwnerExemptInquiry = "inq_not-an-id"; OwnerExemptAuthority = "OWNER-TEST" }) "not an inquiry id"
+    Assert-Refused "the unexempted manual-review order still blocks" (Get-DatabaseReport $f) "unprotected"
+
+    $f = New-Fixture (Join-Path $root "db-legacy-exempt-ok") -Scenario "legacy_manual_review"
+    New-Snapshot $f | Out-Null
+    $exempted = Get-DatabaseReport $f -Extra @{
+        OwnerExemptInquiry = "inq_111111111111111111111111"
+        OwnerExemptAuthority = "OWNER-TEST-EXEMPT"
+    }
+    Assert-Output "a named, attributed owner exemption unblocks the snapshot" $exempted "DB_VERIFY_RESULT = PASS"
+    $script:checks++
+    $report = Get-Content -LiteralPath $f.DatabaseReport -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (-not $report.legacy_unknown_write.owner_exempt_authority) {
+        [void]$failures.Add("owner exemption : the report does not carry the authority it was granted under")
+    }
+    $script:checks++
+    if ($report.legacy_unknown_write.owner_exempted_orders -notcontains "inq_111111111111111111111111") {
+        [void]$failures.Add("owner exemption : the report does not name the exempted order")
+    }
 
     $f = New-Fixture (Join-Path $root "db-write-intent-query-error") -Scenario "broken_journal"
     New-Snapshot $f | Out-Null

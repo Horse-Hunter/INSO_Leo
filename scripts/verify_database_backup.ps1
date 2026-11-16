@@ -34,6 +34,13 @@ param(
     [string[]]$RequireTable = @("workflow_v12_purchase_state", "workflow_v13_holds", "workflow_v12_events"),
     [int]$MinPurchaseRows = 1,
     [int]$MaxAgeHours = 72,
+    # An Owner-authorised, named exemption for specific historical orders the
+    # Owner has ruled out of scope. Both switches are required together: an
+    # exemption without an authority string is indistinguishable from silently
+    # clearing a hold, and is refused. Every exemption is printed and recorded
+    # in the report; nothing is exempted implicitly and nothing is cleared.
+    [string[]]$OwnerExemptInquiry = @(),
+    [string]$OwnerExemptAuthority = "",
     # Offline-gate-test fault simulation. Honoured only when
     # RFQ021_OFFLINE_GATE_TESTS=1, and it can only ever cause a refusal.
     [string]$InjectProcessQueryFault = ""
@@ -49,6 +56,19 @@ function Write-Failure([string]$message) {
 
 function Get-Sha256([string]$path) {
     return (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+# An exemption is only meaningful as an explicit, attributed Owner decision.
+# Without the authority string it would be indistinguishable from the automatic
+# clearing this gate exists to prevent, so half an exemption is a refusal.
+$OwnerExemptInquiry = @($OwnerExemptInquiry | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
+if ($OwnerExemptInquiry.Count -gt 0 -and [string]::IsNullOrWhiteSpace($OwnerExemptAuthority)) {
+    Write-Failure "owner exemptions were requested without an authority reference; an unattributed exemption is indistinguishable from clearing a hold"
+}
+foreach ($exempt in $OwnerExemptInquiry) {
+    if ($exempt -notmatch '^inq_[0-9a-f]{24}$') {
+        Write-Failure "the owner exemption '$exempt' is not an inquiry id; refusing to exempt anything that cannot be named exactly"
+    }
 }
 
 # Fail-closed process enumeration (RFQ-021-R5 P0).
@@ -186,7 +206,24 @@ if ([string]::IsNullOrWhiteSpace($PythonExecutable) -or -not (Test-Path -Literal
 
 $checks = @'
 import json, sqlite3, sys
+from datetime import datetime, timezone
 path, tables = sys.argv[1], [t for t in sys.argv[2].split(",") if t]
+exempt_orders = {o.strip() for o in (sys.argv[3].split(",") if len(sys.argv) > 3 else []) if o.strip()}
+exempt_authority = sys.argv[4] if len(sys.argv) > 4 else ""
+
+
+def _instant(text):
+    """Parse a stored timestamp, or return None so the caller stays conservative."""
+    if not text:
+        return None
+    try:
+        stamp = datetime.fromisoformat(str(text).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    return stamp
+
 result = {"integrity_check": None, "tables": {}, "error": None}
 try:
     con = sqlite3.connect("file:" + path.replace("\\", "/") + "?mode=ro", uri=True, timeout=10)
@@ -271,13 +308,49 @@ try:
                         continue
                     hold_orders.add(str(held))
             protected = alert_orders | hold_orders
-            unprotected = sorted(unknown_orders - protected)
+
+            # An order that once hit SAVE_OUTCOME_UNKNOWN but was afterwards
+            # confirmed SAVED -- with a real receipt reference, recorded no
+            # earlier than that last uncertainty -- is not an open write. Its
+            # outcome is known and SAVED is terminal for the duplicate guard,
+            # so a version switch can neither lose nor replay it. The receipt
+            # and the ordering are both required: a SAVED row without a
+            # reference, or one stamped before the uncertainty, stays unknown.
+            resolved_orders = set()
+            for order in unknown_orders:
+                row = con.execute(
+                    "SELECT outcome, saved_record_ref, updated_at "
+                    "FROM workflow_v12_purchase_state WHERE inquiry_id=?", (order,)).fetchone()
+                if not row:
+                    continue
+                outcome, reference, updated_at = row[0], row[1], row[2]
+                if str(outcome) != "SAVED" or not str(reference or "").strip():
+                    continue
+                last_unknown = con.execute(
+                    "SELECT MAX(occurred_at) FROM workflow_v12_events "
+                    "WHERE inquiry_id=? AND event_type='SAVE_OUTCOME_UNKNOWN'", (order,)).fetchone()[0]
+                confirmed = _instant(updated_at)
+                uncertain = _instant(last_unknown)
+                if last_unknown and confirmed is None:
+                    continue        # cannot order the two -> not proven
+                if uncertain is not None and confirmed < uncertain:
+                    continue        # the uncertainty came after the save
+                resolved_orders.add(order)
+
+            exempt_applied = unknown_orders & exempt_orders
+            exempt_unmatched = sorted(exempt_orders - unknown_orders)
+            unprotected = sorted(unknown_orders - protected - resolved_orders - exempt_applied)
             result["legacy_unknown_write"] = {
                 "checked": True,
                 "unknown_purchase_rows": len(purchase_unknown),
                 "unknown_save_events": len(save_unknown),
                 "unknown_orders": len(unknown_orders),
                 "protected_unknown_orders": len(unknown_orders & protected),
+                "resolved_by_confirmed_save": len(resolved_orders),
+                "resolved_by_confirmed_save_orders": sorted(resolved_orders),
+                "owner_exempted_orders": sorted(exempt_applied),
+                "owner_exempt_authority": exempt_authority,
+                "owner_exempt_unmatched": exempt_unmatched,
                 "unprotected_unknown_rows": len(unprotected),
                 "unprotected_examples": unprotected[:5],
                 "active_unknown_alerts": len(alert_orders),
@@ -307,7 +380,7 @@ $checker = Join-Path ([System.IO.Path]::GetTempPath()) ("rfq021-dbverify-" + [Gu
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($checker, $checks, $utf8)
 try {
-    $raw = & $PythonExecutable $checker $db ($RequireTable -join ",") 2>&1
+    $raw = & $PythonExecutable $checker $db ($RequireTable -join ",") ($OwnerExemptInquiry -join ",") $OwnerExemptAuthority 2>&1
     $code = $LASTEXITCODE
 } finally {
     Remove-Item -LiteralPath $checker -Force -ErrorAction SilentlyContinue
@@ -369,6 +442,18 @@ switch ([string]$check.write_intent_state) {
     }
 }
 Write-Output "write_intent_state = $($check.write_intent_state)"
+$legacyAudit = $check.legacy_unknown_write
+if ($legacyAudit) {
+    Write-Output "unknown_orders_considered = $($legacyAudit.unknown_orders)"
+    Write-Output "resolved_by_confirmed_save = $($legacyAudit.resolved_by_confirmed_save)"
+    Write-Output "owner_exempted_orders = $($legacyAudit.owner_exempted_orders -join ',')"
+    if ($legacyAudit.owner_exempt_authority) {
+        Write-Output "owner_exempt_authority = $($legacyAudit.owner_exempt_authority)"
+    }
+    if ($legacyAudit.owner_exempt_unmatched) {
+        Write-Output "owner_exempt_unmatched = $($legacyAudit.owner_exempt_unmatched -join ',')"
+    }
+}
 
 # Recency: an old-but-valid ledger is the wrong rollback target.
 $lastEvent = [datetime]::Parse($check.max_event_at, [Globalization.CultureInfo]::InvariantCulture,

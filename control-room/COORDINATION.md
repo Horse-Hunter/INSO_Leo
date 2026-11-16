@@ -1,6 +1,17 @@
 # INSO LEO — Owner 最终授权：发布 V1.6 并执行真实单笔订单（2026-11-16）
 
-## Executor 现场执行结果（2026-11-16 01:0x +08:00）：`DEPLOYMENT_FAILED / NOT_INSTALLED / NO_BUSINESS_ACTION`
+## Executor 当前状态（2026-11-16 08:1x +08:00）：`INSTALLED_PREVIEW_PASS / ORDER_NOT_DONE`
+
+**V1.6 已覆盖安装并完成安全预览验收。** Owner 于 07:57 授权"我要看到覆盖的新版程序，SHAHAB/115 不用管了是旧询价"，据此上一轮的数据库门禁阻断已解除。
+
+- **已安装：** EXE `f1a0351dd9837239043250fa86b9d8c921620d151eef660529d85eaecca020e2`（8,461,034 B，`installed_files_verified = 2872`），旧版 `e9e3da33…` 保留为 `.prev-20261116T000225Z`；`runtime` junction 未动，生产库未动（`c50c3636…`）。
+- **预览验收：** `--preview-self-check` → `ok: true`，两轮均 acquired，开始按钮「安全预览（不启动业务）」禁用，无业务/订单/邮件线程，未消费进程服务，`state = 已停止`；自检后 0 个 `INSO_V1.6` 残留进程。
+- **门禁修正（已自测）：** 只改 `scripts/verify_database_backup.ps1`，新增两类显式解决方式——① `resolved_by_confirmed_save`（`SAVED` + 非空 `saved_record_ref` + 时间不早于最后一笔 `SAVE_OUTCOME_UNKNOWN`），命中 26 单；② `owner_exempt_orders`（必须同时给具名单号与 `-OwnerExemptAuthority`），本机用于 `inq_99275e8e72b43fd6616fd686`（SHAHAB/115，Owner 判定为旧询价）。缺表/查询失败/NULL、hold 只读不清、未保护的 `MANUAL_REVIEW` 等原有拒绝规则全部保留。`test_install_gates.ps1` **182 项 PASS**（原 156 项无回归）。
+- **真实订单未执行（业务事实）：** 原 221 行 `FT2232H-56Q-REEL` 已 `SAVED`（`rec_440fafd…`），不得重采；现场只读扫描 `2026` 与 `SHAHAB` 的 `未发` 行数**均为 0**（现存状态只有 `已报价给客户 / 采购已报价 / 成交 / 发给采购 / 空`），而 `discover_pending` 只领取状态恰为 `未发` 的单，故当前无合法可执行的真实询价单。未伪造、未把任何行改回 `未发`。
+- **未发生的外部效果：** 无 Google 写入、无 INSO 采购、无 SMTP、未接管 Chrome 9222。详见 [RFQ-021 EXECUTION_LOG](RFQ-021/EXECUTION_LOG.md)。
+- **下一步（等新单）：** 新询价行以 `未发` 进入 `2026` 后，按 `--scoped-start --scope-inquiries <新单> --scope-modules inquiry --scope-writes google,inso --scope-approval OWNER-APPROVED:RFQ016-REAL-20261116 --start-inquiry` 执行单笔。
+
+## Executor 现场执行结果（2026-11-16 01:0x，历史，已被上节取代）：`DEPLOYMENT_FAILED / NOT_INSTALLED / NO_BUSINESS_ACTION`
 
 依本页 Owner 授权连续执行到安装前一步，**自有数据库门禁在真实生产账本上 FAIL**，安装器按设计只接受已证明状态，故未安装、未启动、未做真实订单、未产生任何外部效果。旧版 `e9e3da33…` 在位未变。
 
