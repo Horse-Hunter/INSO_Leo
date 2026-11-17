@@ -1,6 +1,6 @@
-# Executor 2026-11-17 结案：982/983 已查明、暂停根因已定位、修复已安装并运行（业务待 Owner 点开始）
+# Executor 2026-11-17 结案：982/983 已查明、根因已修、新版已装并跑通真实业务
 
-**状态：`DIAGNOSED / FIXED / INSTALLED_RUNNING / BUSINESS_IDLE / ORDERS_STILL_PENDING`。** 详细证据见 [RFQ-021/EXECUTION_LOG.md](RFQ-021/EXECUTION_LOG.md) 首节。
+**状态：`DIAGNOSED / FIXED / INSTALLED_RUNNING / BUSINESS_VERIFIED`。** 详细证据见 [RFQ-021/EXECUTION_LOG.md](RFQ-021/EXECUTION_LOG.md) 首节。
 
 - **982 / 983 不是"没读取"，而是卡在重复检查。** 两笔在 **14:37:21 正常发现并入库**（`inq_895ed99a1ec48c7d95735db8` / `inq_f39d38e94aa183a6d6676a16`，状态 `DUPLICATE_CHECKING` / `DUPLICATE_CHECK_PENDING`）。`未发`、型号/数量/客户与截图一致，W 列 `quote_date`=2026-11-17，`RFQ_BRIEF` 已有同日原始日期，七天门限成立；981 行重复表头是允许结构。卡点是重复检查要用 INSO 浏览器，而 **14:05 起每次都在 CDP/登录巡检处失败**（`BrowserBootstrapError`），982 只在 14:37/14:53/15:24/16:25 留下四次 `STARTED`。两笔**无告警、无采购事件、`workflow_write_intents`=0**，没有任何外部写入。
 - **17:55 的暂停与三小时机制无关。** 当日 `GOOGLE_OUTAGE_THREE_HOURS` 记录为 0（全库唯一三小时记录是 10-24 的 INSO）；incident 为 `PROGRAM_SAFETY_PAUSED / PROGRAM_INTERNAL_STOP / MODULE_PAUSED`。第一故障是报价读表时的 **`ssl.SSLEOFError`**（TLS 中途断链，已重试约 20 s 后耗尽）：因 `_website_failure` 与 `is_isolated_source_read_error` 都把 TLS 判为"不可隔离"，`_defer_website_poll` 拒绝推迟 → `_runtime_error` 停止全部业务且**无自动恢复路径**。同一签名 11-15 已出现过（INC-20261115），属**同一缺陷复发**。"隔三小时又崩"的观感来自退避 900→1800→3600→7200 s。**两起故障无因果关系。**
@@ -8,8 +8,9 @@
 - **测试：** 新增 18 项定向用例；`tests/gui` 123 PASS；`tests/launcher`+`tests/gui` 合跑 **1843 PASS / 1 失败**（`test_empty_poll_defers_browser_bootstrap_until_an_inquiry_is_due[False]`，捕获原因为测试临时库只读，**单跑 2/2 通过**，与 R3/R4 记录的同类偶发一致，非本轮引入）；`ruff`、`git diff --check` PASS。
 - **候选：** EXE `f2ffa44f…`（8,476,327 B / 2,872 文件），清单 `INSO_V1.6-artifact-manifest-rfq022.sha256`（`08b0e9f6…`）；`--preview-self-check` `ok:true`×2、`--idle-self-check` `gui_rendered:true`。库备份 `dist/release-backups/RFQ-022-20261117T111417Z/workflow.sqlite3`（`76bfdfd0…`，与生产库逐字节一致）。
 - **已安装：** 走完既有发布闸门 —— 程序快照 `RFQ-022-pre-switch-20261117T112320Z`（`BACKUP_RESULT = PASS`）、库副本 `76bfdfd0…` 逐字节一致、`DB_VERIFY_RESULT = PASS`（`process_state = stopped (proven)`、`write_intent_state = NONE_PROVEN`）、`INSTALL_RESULT = PASS`（2,872/2,872 逐文件复算）。旧版保留为 `INSO_V1.6.exe.prev-20261117T112542Z`。
-- **当前现场：** 新版 `f2ffa44f…` 正在运行（PID 62628 界面 + 59704 watcher，`gui_ready`，`fatal.log` 空）；**尚未点「开始运行」**，所以没有任何真实采购/报价；982/983 仍 `未发`，库内仍是 `DUPLICATE_CHECKING` / `DUPLICATE_CHECK_PENDING`，`workflow_write_intents` 0 行。
-- **待 Owner：** 点「开始运行」即按正常流程继续这两笔（重复检查 → 采购）；冷回滚按 `INSTALL_AND_ROLLBACK.md` 单独批准。
+- **真实业务已跑通（19:29–19:37）：** 983 于 19:30:57、982（人工重跑后）于 19:35:55 均 `PURCHASE_DATA_SAVED`，源表 `未发 → 发给采购`，两笔邮件 SENT×2；3 条写意图全部 `SETTLED`，活动告警 0，无 runtime fault / deferred。982 在重启时被判 `INTERRUPTED_UNSENT`（停在重复检查、无派发证据）属既定安全行为，人工点「重跑采购流程」后正常完成。
+- **遗留（非本轮产生、受保护不自动重试）：** `inq_71f4a2f5`（2026 行 219 GLH110）`UPDATE_RESULT_UNCONFIRMED`、`inq_d65be9df`（SHAHAB 行 137 HMC941A）`QUOTE_INPUT_WRITE_FAILED`、`unresolved:0ca37…` `SOURCE_IDENTITY_UNRESOLVED`。
+- **已知功能缺口待 Owner 决定：** 两笔客户 TP 只写在 `2026` 的 `Remark`，`RFQ_BRIEF.target_price` 为空，TP 只认该列 → 不建 TP 任务。填列（3.60 / 18.00 RMB）或改 TP 取价口径，二者选一。
 
 ## Owner 原始要求（已由上面的改造满足，保留原文）
 

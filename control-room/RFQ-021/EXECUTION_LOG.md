@@ -2,7 +2,7 @@
 
 ## 2026-11-17 两笔未处理订单 + 业务暂停取证、定点修复与「异常与通知」改造（RFQ-022）
 
-**结论：`DIAGNOSED / FIXED_IN_SOURCE / CANDIDATE_BUILT / INSTALLED_RUNNING / BUSINESS_IDLE`。**
+**结论：`DIAGNOSED / FIXED_IN_SOURCE / CANDIDATE_BUILT / INSTALLED_RUNNING / BUSINESS_VERIFIED`。**
 两笔订单并非"没被读取"，而是在 14:37:21 被正常发现并入库后卡在**重复检查**阶段；
 17:55:08 的全业务暂停是**另一起独立故障**（Google 表格读取 TLS EOF），
 **与三小时升级机制无关**（当日无任何三小时记录）。
@@ -124,11 +124,28 @@ CDP 类故障同理显示 `BrowserBootstrapError(CDP_ATTACH_FAILED)` 这类可�
 | 旧版保留 | `INSO_V1.6.exe.prev-20261117T112542Z` + `_internal.prev-20261117T112542Z` |
 | 新版启动 | PID 62628（界面）+ 59704（watcher），`gui_ready`，`fatal.log` 0 字节，`state.json` 正常 |
 
-**最终现场：`INSTALLED_RUNNING / BUSINESS_IDLE / ORDERS_STILL_PENDING`。**
+**最终现场：`INSTALLED_RUNNING / BUSINESS_VERIFIED`。**
 
-- 现场 EXE 已是 `f2ffa44f…`（本轮候选），程序正在运行；**尚未点「开始运行」，因此没有任何真实采购或报价发生**。
-- 982/983 仍为 `未发`，库内仍是 `DUPLICATE_CHECKING` / `DUPLICATE_CHECK_PENDING`，`workflow_write_intents` 仍为 0 行 —— 是否立即继续处理这两笔由 Owner 点「开始运行」决定（点后程序会按正常流程继续重复检查→采购）。
-- 旧版 `1b3f3eeb…` 与 `RFQ-022-pre-switch-20261117T112320Z` 快照、库副本、`workflow.sqlite3.verify.json` 均为冷回滚材料，回滚按 `INSTALL_AND_ROLLBACK.md` 单独批准执行。
+Owner 于 19:29 点「开始运行」，19:35 对 982 点「重跑采购流程」，两笔均按正常链路完成：
+
+| 时间 | 事件 |
+|---|---|
+| 19:29:24 | 983 `DUPLICATE_CHECK_STARTED/CONFIRMED` → `RESEARCH_STARTED` → `PURCHASE_DRAFT_STARTED` |
+| 19:30:50 | 983 `AI_RECOGNITION_READY` → `SAVE_DISPATCH_ARMED` → `SAVE_CLICK_COMPLETED` → `SAVE_OUTCOME_UNKNOWN` |
+| 19:30:57 | 983 `RECONCILIATION_CONFIRMED_SAVED` + `ALERT_RECOVERED` → `PURCHASE_DATA_SAVED`（purchase `SAVED`） |
+| 19:32:39/41 | 983 邮件 SENT ×2（linan229@qq.com、shawn@inso-hk.com） |
+| 19:29:20 | 982 重启时被判 `INTERRUPTED_UNSENT`（停在重复检查、无派发证据）→ 转人工 |
+| 19:34:38 | 982 人工重跑：`DUPLICATE_CHECK_CONFIRMED` → `RESEARCH_STARTED` → `PURCHASE_DRAFT_STARTED` |
+| 19:35:48 | 982 `AI_RECOGNITION_READY` → `SAVE_DISPATCH_ARMED` → `SAVE_CLICK_COMPLETED` → `SAVE_OUTCOME_UNKNOWN` |
+| 19:35:55 | 982 `RECONCILIATION_CONFIRMED_SAVED` + `ALERT_RECOVERED` → `PURCHASE_DATA_SAVED`（purchase `SAVED`） |
+| 19:37:38/39 | 982 邮件 SENT ×2 |
+
+- 两行源表状态均已 `未发 → 发给采购`，品牌解析 TI / Fairchild；`workflow_items` 均 `COMPLETED / SUCCESS`。
+- 3 条 Google 写意图全部 `SETTLED`（无挂起、无未知写入）；活动告警 **0**；采购跟进 episode 已为两笔建立。
+- 本次运行无 `runtime fault`、无 `deferred`、无异常栈；告警仅 `QUOTE_AGE_EXPIRED`（历史超期行）/`NO_RECENT_QUOTE` 等既有类别。
+- **遗留（非本轮产生，均受保护不自动重试）**：`inq_71f4a2f5`（2026 行 219 GLH110）`UPDATE_RESULT_UNCONFIRMED`、`inq_d65be9df`（SHAHAB 行 137 HMC941A）`QUOTE_INPUT_WRITE_FAILED`、以及 `unresolved:0ca37…` 的 `SOURCE_IDENTITY_UNRESOLVED`。
+- **已知功能缺口**：两笔客户 TP 只写在 `2026` 的 `Remark` 文本里，`RFQ_BRIEF.target_price` 为空，而 TP 只认该列 → 不会建 TP 任务。需 Owner 决定填列或改取价口径。
+- 旧版 `1b3f3eeb…` 与 `RFQ-022-pre-switch-20261117T112320Z` 快照、库副本 `76bfdfd0…`、`workflow.sqlite3.verify.json` 均为冷回滚材料，回滚按 `INSTALL_AND_ROLLBACK.md` 单独批准执行。
 
 ## 全量版重建与覆盖安装（2026-11-16 15:13–15:30 +08:00，Owner 指令）
 
