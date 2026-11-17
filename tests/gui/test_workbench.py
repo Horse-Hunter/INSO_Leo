@@ -425,3 +425,48 @@ def test_unknown_mail_does_not_hide_durable_purchase_alert_under_quotation_state
     state = V12OrderStateDTO(item.inquiry_id, V12BusinessLabel.QUOTATION_COMPLETED,
                              alert, active_alerts=(alert,))
     assert order_status(item, state) == "邮件及写入待核对"
+
+
+def test_the_exceptions_page_shows_the_reason_not_a_pointer_to_it():
+    """Owner 2026-11-17: opening 异常与通知 must answer "what broke and what now".
+
+    The old page printed "请按已记录状态人工核对" and forced a log hunt.  The
+    fault record is already the durable, secret-free projection, so the page only
+    has to render it.
+    """
+    from src.gui.app import InsoDashboardApp
+    from src.launcher.fault_diagnostics import build_diagnostic
+
+    fault = build_diagnostic(
+        "SHEETS_READ_UNAVAILABLE", site="Google Sheets", cause_class="SSLEOFError",
+        first_seen=datetime(2026, 11, 17, 9, 55, 5, tzinfo=UTC),
+        last_seen=datetime(2026, 11, 17, 9, 55, 8, tzinfo=UTC),
+        escalation="已停止共享业务；本次没有达到三小时升级门限",
+        external_effect="没有未结清的外部写入意图")
+    view = snapshot(faults=(fault,), modules=(
+        ModuleSnapshot("inquiry", "询价采购", status="需要人工处理",
+                       changed_at=datetime(2026, 11, 17, 9, 55, 8, tzinfo=UTC)),))
+    import tkinter
+
+    try:  # A crashed/reused Tcl interpreter is an environment limit, not a product one.
+        tkinter.Tk().destroy()
+    except tkinter.TclError:
+        import pytest
+
+        pytest.skip("Tcl/Tk is unavailable in this process; the release EXE is verified live")
+    app = InsoDashboardApp(MockBackend())
+    try:
+        app._view.show_page("异常与通知")
+        app._view.render(view, force=True)
+        text = app._view.notices.get("1.0", "end")
+    finally:
+        app._view.close()
+        app._root.destroy()
+
+    assert "Google Sheets 数据读取失败" in text
+    assert "SHEETS_READ_UNAVAILABLE" in text
+    assert "SSLEOFError" in text
+    assert "询价采购、报价跟进、目标价调研" in text
+    assert "没有达到三小时升级门限" in text
+    assert "建议操作：" in text
+    assert "请按已记录状态人工核对" not in text

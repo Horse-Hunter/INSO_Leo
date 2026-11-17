@@ -572,12 +572,17 @@ def _website_failure(exc):
         return "INSO"
     from src.sheets.google_reader import (
         TEMPORARY_READ_NETWORK_CODES,
+        TRANSIENT_TLS_READ_ERRORS,
         GoogleSheetsReadError,
     )
     read_error = any(isinstance(e, GoogleSheetsReadError) for e in chain)
     if read_error:
         from ssl import SSLError
         for item in chain:
+            # A TLS session the route tore down mid-read is a dropped connection,
+            # not a certificate verdict: it keeps the bounded isolated retry.
+            if isinstance(item, TRANSIENT_TLS_READ_ERRORS):
+                continue
             if isinstance(item, SSLError):
                 return None
             if type(item).__module__.startswith("playwright") and type(item).__name__ != "TimeoutError":
@@ -720,6 +725,14 @@ class ProductionBackend(GuiBackend):
         self._next_poll_at = None
         self._site_outages = {}
         self._site_manual_wait = set()
+        # Wall-clock first-fault time per site/reason.  The outage clock above is
+        # monotonic and cannot be shown to the Owner or survive a restart.
+        self._site_fault_since: dict[str, datetime] = {}
+        self._fault_first_seen: dict[str, datetime] = {}
+        self._fault_last_seen: dict[str, datetime] = {}
+        self._fault_counts: dict[str, int] = {}
+        self._faults: tuple = ()
+        self._faults_hydrated = False
         self._keepalive_protected_targets = set()
         self._idle_empty_polls = 0
         self._idle_login_since = utc_now()
@@ -1934,6 +1947,10 @@ class ProductionBackend(GuiBackend):
                 raise self._module_pause_requested
             self._module_failures.pop(module, None)
             outcome = "stopped" if self._stop.is_set() else "completed"
+            if outcome == "completed":
+                # A module that ran end-to-end is the only proof that its sites
+                # recovered: an old red banner must not outlive the evidence.
+                self._resolve_faults_after_success(module)
         except V13Stopped:
             outcome = "stopped"
             raise
@@ -3177,6 +3194,8 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             self._site_outages.pop(site, None)
             self._site_manual_wait.discard(site)
+            self._site_fault_since.pop(site, None)
+        self._resolve_faults(site=site)
 
     def _check_site_recovery(self, rc=None, cfg=None):
         with self._lock:
@@ -3215,6 +3234,7 @@ class ProductionBackend(GuiBackend):
             if self._stop.is_set():
                 return True  # Explicit Owner stop always wins over automatic recovery.
             since = self._site_outages.setdefault(site, monotonic())
+            self._site_fault_since.setdefault(site, utc_now())
             if not recoverable_read and site != "Browser/CDP" and monotonic() - since >= 3 * 60 * 60:
                 return False
             cause, visited = exc, set()
@@ -3248,7 +3268,8 @@ class ProductionBackend(GuiBackend):
         log.warning("Website recovery deferred", extra={
             "runtime_reason": reason, "runtime_cause": type(exc).__name__})
         if notify and not recoverable_read and self._v13_ledger_ready:
-            self._notify_runtime_fault( f"{self._run_id or 'run'}:{site}:{since}", reason, at=utc_now())
+            self._notify_runtime_fault( f"{self._run_id or 'run'}:{site}:{since}", reason,
+                at=utc_now(), cause_class=self._fault_cause_label(exc))
         elif notify and not recoverable_read:
             self._alert_owner_of_login(stop_reason=f"{site}等待恢复；程序未停止")
         self._notify()
@@ -3276,11 +3297,108 @@ class ProductionBackend(GuiBackend):
         })
         if self._v13_ledger_ready:
             self._notify_runtime_fault( self._cycle_id or self._run_id or "run",
-                "GOOGLE_READ_RETRY_EXHAUSTED", at=utc_now())
+                "GOOGLE_READ_RETRY_EXHAUSTED", at=utc_now(),
+                cause_class=self._fault_cause_label(exc))
         else:
             self._alert_owner_of_login(stop_reason="Google表格等待恢复；程序未停止")
         self._notify()
         return True
+
+    def _record_fault_diagnostic(self, reason, *, site=None, cause_class=None,
+            escalation="", external_effect="尚未确认", uncertainty="", impact="",
+            log_hint="runtime/logs/INSO_V1.3.log"):
+        """Remember one Owner-facing fault record.  Never invents a cause."""
+
+        from .fault_diagnostics import build_diagnostic
+        now = utc_now()
+        with self._lock:
+            first = self._fault_first_seen.setdefault(reason, now)
+            site_first = self._site_fault_since.get(site) if site else None
+            if site_first is not None and site_first < first:
+                first = site_first
+            self._fault_last_seen[reason] = now
+            count = self._fault_counts[reason] = self._fault_counts.get(reason, 0) + 1
+            diagnostic = build_diagnostic(reason, site=site, cause_class=cause_class,
+                first_seen=first, last_seen=now, occurrences=count,
+                escalation=escalation, external_effect=external_effect,
+                uncertainty=uncertainty, impact=impact, log_hint=log_hint)
+            rest = tuple(item for item in self._faults if item.code != reason)
+            self._faults = (diagnostic,) + rest[:11]
+        return diagnostic
+
+    def _resolve_faults_after_success(self, module):
+        """Clear faults that a completed module has just disproved."""
+
+        sites = {"inquiry": ("Google Sheets", "INSO", "Browser/CDP"),
+                 "quotation": ("Google Sheets", "INSO", "Browser/CDP"),
+                 "tp": ("Google Sheets",)}.get(module, ())
+        with self._lock:
+            still_out = set(self._site_outages)
+        for site in sites:
+            if site not in still_out:
+                self._resolve_faults(site=site)
+
+    def _resolve_faults(self, *, site=None, reason=None):
+        """Mark a recovered fault resolved; the page must not show history as live."""
+
+        with self._lock:
+            updated, changed = [], False
+            for item in self._faults:
+                match = (reason is not None and item.code == reason) or (
+                    reason is None and site is not None and item.site == site)
+                if match and item.recovered_at is None:
+                    item = replace(item, recovered_at=utc_now().isoformat(),
+                                   phase="已恢复")
+                    changed = True
+                updated.append(item)
+            if changed:
+                self._faults = tuple(updated)
+
+    def _fault_cause_label(self, exc):
+        """A stable label for the page: exception class plus a machine reason code.
+
+        Only a class name and an ``[A-Z_]`` style code are ever read; messages are
+        where URLs, sheet titles and tokens hide.
+        """
+
+        node, deepest, visited = exc, None, set()
+        while node is not None and id(node) not in visited:
+            visited.add(id(node))
+            deepest = node
+            node = node.__cause__ or node.__context__
+        if deepest is None:
+            return None
+        name = type(deepest).__name__
+        code = getattr(deepest, "reason_code", None)
+        if isinstance(code, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", code):
+            return f"{name}({code})"
+        return name
+
+    def _fault_diagnostics(self) -> tuple:
+        # GUI pure read: the tuple is replaced atomically by its writers, so the
+        # projection never waits on the business lock.
+        return self._faults
+
+    def _hydrate_fault_diagnostics(self):
+        """Load unresolved historical faults once, from the existing ledger rows."""
+
+        if self._faults_hydrated:
+            return
+        store = self._v12_store
+        if store is None or not callable(getattr(store, "recent_fault_diagnostics", None)):
+            return
+        self._faults_hydrated = True
+        try:
+            historical = store.recent_fault_diagnostics(12)
+        except Exception:  # noqa: BLE001 - observation must never stop business
+            log.debug("Historical fault projection unavailable")
+            return
+        if not historical:
+            return
+        with self._lock:
+            known = {item.code for item in self._faults}
+            restored = tuple(item for item in historical if item.code not in known)
+            self._faults = self._faults + restored[:12 - len(self._faults)] if restored else self._faults
 
     def accept_market_fault(self, fault):
         """Original owner consumes immutable actor fault via existing stop path.
@@ -3409,6 +3527,11 @@ class ProductionBackend(GuiBackend):
         log.warning("Runtime fault", extra={
             "runtime_reason": safe_reason, "runtime_cause": type(root_cause).__name__,
         })
+        diagnostic = self._record_fault_diagnostic(reason, site=site,
+            cause_class=self._fault_cause_label(exc),
+            escalation=("连续三小时未恢复，已停止共享业务" if prolonged else
+                        "已停止共享业务；本次没有达到三小时升级门限"),
+            external_effect=self._external_effect_state())
         # The canonical manual-login path already mailed this exact legacy pause.
         if (isinstance(exc, V12Fault) and exc.reason == "Research requires session repair"
                 and self._inquiries and self._inquiries[-1] in self._manual_inquiries):
@@ -3417,12 +3540,30 @@ class ProductionBackend(GuiBackend):
             self._record_fault_alert(fault_inquiry, "FAULT", reason)
         if (shared_fault or fault_inquiry is None) and self._v13_ledger_ready:
             try:
-                self._notify_runtime_fault(self._run_id or "run",reason,at=utc_now())
+                self._notify_runtime_fault(self._run_id or "run",reason,at=utc_now(),
+                                           diagnostic=diagnostic)
                 self._run_notifications(utc_now())
             except (sqlite3.Error,V12DatabaseError):
                 self._alert_owner_of_login(stop_reason=reason)
         elif self._purchase_completion is None or fault_inquiry is None:
             self._alert_owner_of_login(stop_reason=reason)
+
+    def _external_effect_state(self) -> str:
+        """What the write ledger can actually prove about pending external writes."""
+
+        store = self._v12_store
+        path = getattr(store, "database_path", None) if store is not None else None
+        if path is None:
+            return "尚未确认"
+        try:
+            from src.workflow.write_intents import WriteLedger
+            open_documents = WriteLedger(path).open_documents()
+        except Exception:  # noqa: BLE001 - an unreadable ledger is never "clean"
+            return "写入台账不可读，外部写入结果尚未确认；不可盲目重试"
+        if not open_documents:
+            return "没有未结清的外部写入意图；本次未确认任何新的外部写入"
+        return (f"仍有 {len(open_documents)} 个文档的写入结果未确认；"
+                "这些写入不会自动重试，请先人工核对")
 
     def _record_fault_alert(self, inquiry_id, phase, reason):
         if isinstance(inquiry_id, str) and inquiry_id.startswith("tp_"):
@@ -3851,7 +3992,7 @@ class ProductionBackend(GuiBackend):
                 uncertainty="录单未完成，未发采购；不据此认定网站故障。")
         return proof
 
-    def _notify_runtime_fault(self, key, reason, *, at):
+    def _notify_runtime_fault(self, key, reason, *, at, diagnostic=None, cause_class=None):
         from src.sheets.worksheet_schema import worksheet_schema
         from src.workflow.automatic_admission import binding_key
         inquiry = self._active_inso_inquiry
@@ -3928,6 +4069,16 @@ class ProductionBackend(GuiBackend):
             if proof is not None:
                 proof.update(active=True, verified_at=at.isoformat(), retries_exhausted=True,
                              needs_owner=reason.endswith("OUTAGE_THREE_HOURS"))
+        # One durable, Owner-readable record per fault.  It rides the existing
+        # incident row instead of a second, divergent state store.
+        if diagnostic is None:
+            diagnostic = self._record_fault_diagnostic(reason, site=site,
+                cause_class=cause_class,
+                escalation="已自动推迟本轮，等待下一轮重试" if not self._stop.is_set()
+                           else "业务已停止等待人工处理",
+                external_effect=self._external_effect_state())
+        if proof is not None:
+            proof["diagnostic"] = diagnostic.to_dict()
         notify_runtime_fault(self._v12_store, key, reason, at=at, evidence=proof,
                              occurrence=self._cycle_id or key)
 
@@ -4712,7 +4863,8 @@ class ProductionBackend(GuiBackend):
             modules=modules, cycle_started_at=started, cycle_started_monotonic=tick,
             cycle_finished_at=finished, local_loading=self._view_loading,
             timings=timings, cycle_durations=durations,
-            planned_check_at=planned, recovery_site=recovery)
+            planned_check_at=planned, recovery_site=recovery,
+            faults=self._fault_diagnostics())
 
     def _invalidate_order_view(self, key):
         # Existing callbacks may run alongside the existing refresh worker.
@@ -4732,6 +4884,7 @@ class ProductionBackend(GuiBackend):
                         self._view_snapshot = replace(self._view_snapshot, session=session)
                 return
             self._view_last_refresh = monotonic()
+            self._hydrate_fault_diagnostics()
             with self._snapshot_lock:
                 dirty, self._view_dirty = self._view_dirty, set()
             for key in dirty:

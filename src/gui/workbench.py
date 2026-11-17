@@ -43,6 +43,46 @@ def stamp(value):
     return value.astimezone().strftime("%m-%d %H:%M:%S") if value else "暂无记录"
 
 
+def _when(value):
+    """Render one ISO timestamp from a fault record in local time."""
+
+    if not value:
+        return "暂无记录"
+    try:
+        moment = datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return str(value)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return stamp(moment)
+
+
+def fault_block(fault):
+    """One Owner-readable fault: what broke, when, what it stopped, what to do."""
+
+    lines = [
+        ("【已恢复】" if not fault.active else "【故障】") + str(fault.title),
+        "故障代码：" + str(fault.code),
+        "发生时间：" + _when(fault.last_seen)
+        + f"（首次 {_when(fault.first_seen)} · 最近 {_when(fault.last_seen)}"
+        + f" · 共 {fault.occurrences} 次）",
+        "影响模块：" + (
+            "、".join(fault.related_modules)
+            if fault.related_modules else (fault.site or "自动业务")
+        ) + ("（同一原因引起，非独立故障）" if fault.knock_on else ""),
+        "具体原因：" + str(fault.cause),
+        ("未确认部分：" + str(fault.uncertainty)) if fault.uncertainty else None,
+        "恢复过程：" + (
+            f"已于 {_when(fault.recovered_at)} 恢复"
+            if not fault.active else str(fault.escalation or fault.phase)
+        ),
+        "外部写入：" + str(fault.external_effect),
+        "建议操作：" + str(fault.action),
+        "诊断位置：" + (str(fault.evidence) or "runtime/logs/INSO_V1.3.log"),
+    ]
+    return "\n".join(line for line in lines if line)
+
+
 def elapsed(module, now=None):
     seconds = module.elapsed_seconds
     if module.started_monotonic is not None:
@@ -1154,10 +1194,16 @@ class WorkbenchView:
             )
         elif self.page == "异常与通知" and changed:
             entries = []
+            # Faults first: the Owner asked for the reason, not a pointer to one.
+            for fault in getattr(snapshot, "faults", ()):
+                entries.append(fault_block(fault))
             for m in snapshot.modules:
-                if m.status in {"需要人工处理", "已暂停"}:
+                if m.status in {"需要人工处理", "已暂停"} and not getattr(snapshot, "faults", ()):
+                    # Without a recorded fault the honest statement is the
+                    # module's own observed wait reason, never a guess.
                     entries.append(
-                        f"{m.name}｜{stamp(m.changed_at)}｜{m.status}\n{m.waiting_reason or '请人工核对'}"
+                        f"{m.name}｜{stamp(m.changed_at)}｜{m.status}\n"
+                        + (m.waiting_reason or "本轮没有记录到可用的故障原因。")
                     )
             for o in snapshot.orders:
                 state = self.states.get(o.inquiry_id)
@@ -1171,7 +1217,7 @@ class WorkbenchView:
                 ):
                     entries.append(
                         f"{NAMES.get(o.module_id)}｜{o.model}｜{order_status(o)}\n"
-                        + ("请按已记录状态人工核对；本页不会重新发送或提交。")
+                        + "本单停在已记录状态，需要人工确认后继续；本页不会重新发送或提交。"
                     )
                 if state:
                     for alert in state.active_alerts:
@@ -1181,12 +1227,12 @@ class WorkbenchView:
                             + (
                                 MAIL_UNKNOWN
                                 if alert.reason_code.value == "NOTIFICATION_UNKNOWN"
-                                else "请核对已记录异常；本页不推断未证实的原因。"
+                                else "本单存在未结算异常；保留现有保护状态，不要重复提交。"
                             )
                         )
             text = (
                 "\n\n".join(entries[:200])
-                or "当前已加载记录中没有待展示异常；未加载的数据不作判断。"
+                or "当前没有记录到故障或待处理异常。"
             )
             if text != self._notice_signature:
                 self.write_box(self.notices, text)

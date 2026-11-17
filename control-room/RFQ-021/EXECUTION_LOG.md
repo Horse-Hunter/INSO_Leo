@@ -1,5 +1,121 @@
 # RFQ-021 — execution log (final release candidate)
 
+## 2026-11-17 两笔未处理订单 + 业务暂停取证、定点修复与「异常与通知」改造（RFQ-022）
+
+**结论：`DIAGNOSED / FIXED_IN_SOURCE / CANDIDATE_BUILT / NOT_INSTALLED`。**
+两笔订单并非"没被读取"，而是在 14:37:21 被正常发现并入库后卡在**重复检查**阶段；
+17:55:08 的全业务暂停是**另一起独立故障**（Google 表格读取 TLS EOF），
+**与三小时升级机制无关**（当日无任何三小时记录）。
+
+### 1. 接管核实（现场实测，不采信历史哈希）
+
+| 项 | 实测值 |
+|---|---|
+| 运行进程 | PID 42876（界面）+ 41784（watcher，`--watch-runtime 744 caa2c1cc…`） |
+| 启动时间 / 参数 | 2026-11-16 15:23:43；无参数（= 普通启动 = 完整生产版） |
+| EXE SHA256 | `1b3f3eeb58930ce0f31931cfd67865fbe4863010a5762fe09652c7a8b73d0a97`（与 11-16 发布记录一致） |
+| 进程状态 | 两个进程**仍存活**；`fatal.log` 0 字节；无 `exit.json`；`state.json` 停在 `gui_ready` |
+
+→ 不是 EXE 崩溃，是**业务线程停止、进程仍在**。运行指令 HEAD 已快进到 `cda61456`（本地原为 `ffc8ec36`，落后 3 个文档提交）。
+
+### 2. 只读核对 `2026!A975:W985`（正式 Sheets API，SA 只读）
+
+`2026` 网格 988 行、数据止于 983；**981 行是重复 RFQ 表头（允许的结构，未改动表格）**。
+
+| 物理行 | STATUS | CLASS | WHO | MPN | MFR | Qty | W `quote_date` |
+|---|---|---|---|---|---|---|---|
+| 982 | 未发 | A | Majic | ADS1115IDGSR | TI | 1500 | 2026-11-17 |
+| 983 | 未发 | A | Majic | G60N100BNTD | （空） | 400 | 2026-11-17 |
+
+`RFQ_BRIEF` 已有对应两行（`sheet_row` 982/983，`rfq_date` 2026-11-17，status 未发，`updated_at` 2026-11-17T08:54:04Z）。
+W 列 = `SOURCE_ORDER_DATE` 证据列；七天门限（`today-7`）对 2026-11-17 **成立**。物理行号无偏移。
+
+### 3. 两笔订单的真实状态（SQLite 实测）
+
+| 订单 | inquiry_id | 行 | 状态 | 事件 |
+|---|---|---|---|---|
+| 982 ADS1115IDGSR×1500 | `inq_895ed99a1ec48c7d95735db8` | 982 | `DUPLICATE_CHECKING` | `DUPLICATE_CHECK_STARTED` ×4：14:37:21 / 14:53:24 / 15:24:28 / 16:25:33，**均未完成** |
+| 983 G60N100BNTD×400 | `inq_f39d38e94aa183a6d6676a16` | 983 | `DUPLICATE_CHECK_PENDING` | `DUPLICATE_CHECK_STARTED` ×1：14:37:21 |
+
+- 两笔均由 `created_at` **2026-11-17T06:37:21Z（=14:37:21 +08）** 建立 → **发现与准入都成功了**，`新订单 0` 是因为它们已在台账里，不是没读到。
+- 两笔**无任何告警**、无采购事件、`workflow_write_intents` **0 行** → 未发生任何外部写入，也不需要"不可盲目重试"之外的处置。
+- 卡点：重复检查需要 INSO ERP 浏览器；14:37 起每轮询价都先在 CDP/登录巡检处失败，重复检查只留下 `STARTED` 就中断。
+
+### 4. 11-17 时间线（`runtime/logs/INSO_V1.3.log` + 台账）
+
+```
+13:49:10  inquiry  completed（2.4 s，正常）
+14:05:25  runtime fault BROWSER_WAITING_RECOVERY / cause=V12Fault  ← 当日第一处异常
+14:05:55  workflow step failed at login-sweep-cdp (BrowserBootstrapError)
+14:22:21  inquiry  completed（22.7 s）  ← 最后一次真正跑完的询价轮
+14:37:21  inquiry  发现并入库 982/983；重复检查 982 STARTED；随后 62.6 s 后 deferred（退避 900 s）
+14:53:24  deferred（退避 1800 s）／15:24:28（3600 s）／16:25:33（7200 s）
+          → 下一轮本应在 18:25:33，未到达
+17:54:45  quotation begin
+17:55:05  quotation phase=failed（19.7 s）
+17:55:08  runtime fault SHEETS_READ_UNAVAILABLE / cause=SSLEOFError  ← 全业务暂停
+```
+
+- 故障通知台账最新一行 `incident:f3d0e07b…:3`（2026-11-17T09:55:08Z）：`reason_code=PROGRAM_SAFETY_PAUSED`、`stop_reason=PROGRAM_INTERNAL_STOP`、`stop_state=MODULE_PAUSED`、`actual_stop_reason=SHEETS_READ_UNAVAILABLE`，正文却是"暂停原因：内部操作未能正常完成，具体原因待核对"。
+- **当日 `GOOGLE_OUTAGE_THREE_HOURS` 记录为 0**；全库唯一一条三小时记录是 2026-10-24 的 `INSO_OUTAGE_THREE_HOURS`。
+
+### 5. 第一故障与"为什么不恢复"（源码级）
+
+17:55:05 报价模块读 `2026` 时收到 **`ssl.SSLEOFError`**（TLS 会话被中途切断）。读取层已在 20 s 内做过有界重试（2+4+6+8 s），耗尽后抛 `GoogleSheetsReadUnavailable`，被包成 `V12Fault(SHEETS_READ_UNAVAILABLE)`。随后：
+
+1. `backend.py::_website_failure()` 在"read_error 且链上有任意 `ssl.SSLError`"时**直接返回 None**（TLS 故障被显式排除在"站点故障"之外）；
+2. `v13_integration.py::is_isolated_source_read_error()` 只接受 `GoogleSheetsReadError / TimeoutError / ConnectionError`，`SSLEOFError` 三者都不是 → 判为**不可隔离**；
+3. 因此 `_defer_website_poll()` 返回 False，不做任何推迟/隔离；
+4. `_runtime_error()` 以 `site=None` 进入，`prolonged=False` → `MODULE_PAUSED` 且 `self._stop.set()` → **所有业务停止，没有任何自动恢复路径**。
+
+**这是一次瞬时读故障被当成不可恢复故障**，与 Owner 规则（"Google 瞬时读取属程序侧问题，应有限重试并隔离"）相反；同一签名在 **2026-11-15 06:06:49** 已出现过一次（INC-20261115），当时被记为"TLS 故障保持关闭"，因此本轮是**同一缺陷复发**。
+
+**三小时机制**：未触发，且对 `Browser/CDP` 结构性不可触发（`backend.py` 两处 `site != "Browser/CDP"` 排除）。看起来"隔三小时又崩"的真实原因是退避间隔按 900→1800→3600→7200 s 增长，轮次被拉成 1–2 小时一次。**两起故障无因果关系**：CDP 故障（14:05 起）让订单卡住；Sheets TLS 故障（17:55）结束了整个运行。
+
+### 6. 定点修复
+
+| 文件 | 改动 |
+|---|---|
+| `src/sheets/google_reader.py` | 新增 `TRANSIENT_TLS_READ_ERRORS`（`SSLEOFError`/`SSLZeroReturnError`/`SSLSyscallError`）计入 `_temporary_read_failure` → 读侧有界重试；**证书类错误仍不算临时** |
+| `src/workflow/v13_integration.py` | `is_isolated_source_read_error` 接受 TLS 中途断链 → 隔离推迟而非全局停止；证书/DB/鉴权/所有权仍失败关闭 |
+| `src/launcher/backend.py` | `_website_failure` 不再把瞬时 TLS 当作"非站点故障"；证书仍 `None` |
+| `src/launcher/fault_diagnostics.py`（新） | 结构化、可持久、脱敏的 `FaultDiagnostic` 投影 + 故障码中文目录 |
+| `src/launcher/backend.py` | 记录首/末时间、次数、站点、异常类+稳定码、是否三小时、外部写入状态；写入既有 incident 的 `review_json.diagnostic`；`_site_recovered`/模块成功即标记已恢复；快照新增 `faults` |
+| `src/gui/workbench.py` | 「异常与通知」按故障渲染原因/影响/建议；无记录时不再输出"请人工核对"式空话 |
+| `src/launcher/v13_integration.py` | 故障邮件正文/标题复用同一诊断，界面与邮件不再互相矛盾 |
+| `src/workflow/v12_store.py` | `recent_fault_diagnostics()`：只从既有 incident 行读回**未结清**故障（重启后仍可见） |
+
+保持不动：UNKNOWN/SENT、采购去重、write-intent、hold、三小时门限、五类安全停止、双击即完整生产。
+
+### 7. 「异常与通知」实际显示（真实故障数据渲染）
+
+```
+【故障】Google Sheets 数据读取失败
+故障代码：SHEETS_READ_UNAVAILABLE
+发生时间：11-17 17:55:08（首次 11-17 17:55:05 · 最近 11-17 17:55:08 · 共 1 次）
+影响模块：询价采购、报价跟进、目标价调研（同一原因引起，非独立故障）
+具体原因：读取源表格时连接中断或返回无效响应，程序已按上限重试仍未成功。（异常类型 SSLEOFError）
+恢复过程：已停止共享业务；本次没有达到三小时升级门限
+外部写入：没有未结清的外部写入意图；本次未确认任何新的外部写入
+建议操作：1) 确认本机能直接打开该 Google 表格；2) 检查网络/VPN 是否稳定；3) 恢复后重新开始。
+诊断位置：program-safety-stop:runtime-operation；runtime/logs/INSO_V1.3.log
+```
+CDP 类故障同理显示 `BrowserBootstrapError(CDP_ATTACH_FAILED)` 这类可行动子原因（只允许 `[A-Z_]` 稳定码，绝不含异常原文）。
+
+### 8. 测试与候选
+
+- 新增定向用例 18 项：TLS 断链=有界隔离（不再全局停止）／证书仍失败关闭／重复表头下 982-983 准入且超过七天仍拒／故障记录与恢复标记／持久化只回读未结清／真实 Tk 页面渲染。
+- `tests/gui` 123 PASS；`tests/workflow/test_source_order_date.py` 22 PASS；通知+站点恢复+故障诊断 74 PASS；`ruff check src tests` PASS；`git diff --check` PASS。
+- 候选：`build/windows-release-stage-1.6/dist/INSO_V1.6`，EXE `f2ffa44f7f31d373ac010116a0bbcb240297341948fb86b567c7e7bd94b3728c`（8,476,327 B，2,872 文件，无 `runtime/`），清单 `docs/evidence/rfq021/INSO_V1.6-artifact-manifest-rfq022.sha256`（`08b0e9f6…`，2,872 行）。
+- 候选自检（真机）：`--self-check` 通过（构建脚本内置）、`--preview-self-check` `ok:true`×2 轮、`--idle-self-check` `gui_rendered:true` 且无业务线程。
+- 回滚材料：现场程序目录与库未动；库备份 `dist/release-backups/RFQ-022-20261117T111417Z/workflow.sqlite3`（`76bfdfd0…`，与生产库逐字节一致）。
+
+### 9. 最终现场状态（诚实记录）
+
+- **现场仍是旧版 `1b3f3eeb…`，业务自 17:55:08 起仍处于停止状态**；本轮未安装、未重启、未触发任何真实采购或报价。
+- 982/983 仍为 `未发`，`DUPLICATE_CHECKING` / `DUPLICATE_CHECK_PENDING`，无外部写入。
+- 安装与重启属生产维护动作，按既有发布程序需单独确认；候选与回滚材料已就绪，等待 Owner 决定。
+
 ## 全量版重建与覆盖安装（2026-11-16 15:13–15:30 +08:00，Owner 指令）
 
 - **Owner 指令：** "B，赶紧的给我完全版"。即授权撤销 RFQ-021 B7（普通启动＝安全预览），要求双击即可运行的完整生产版本。

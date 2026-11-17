@@ -536,6 +536,45 @@ class V12Store:
                 _recover_alerts(connection, inquiry_id, alert_type, event, at)
         return tuple(sorted(stale))
 
+    def recent_fault_diagnostics(self, limit=12):
+        """Unresolved runtime faults already recorded in the incident ledger.
+
+        The GUI must still explain a fault after the window was closed and the
+        program restarted, so the record is read back from the same incident row
+        that already carries the stop proof -- never from a second store.
+        """
+
+        from src.launcher.fault_diagnostics import FaultDiagnostic
+        if type(limit) is not int or not 1 <= limit <= 50:
+            raise ValueError("FAULT_HISTORY_LIMIT_UNCONFIRMED")
+        with _connect(self.database_path) as db:
+            rows = db.execute(
+                "SELECT command_id, created_at, review_json FROM workflow_v12_notification_commands"
+                " WHERE review_json LIKE '%\"diagnostic\"%' ORDER BY created_at DESC LIMIT 256"
+            ).fetchall()
+        restored, seen = [], set()
+        for row in rows:
+            if len(restored) >= limit:
+                break
+            try:
+                proof = json.loads(row["review_json"] or "{}")
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(proof, dict) or proof.get("active") is not True:
+                continue  # A settled incident is history, not a live fault.
+            data = proof.get("diagnostic")
+            if not isinstance(data, dict):
+                continue
+            try:
+                item = FaultDiagnostic.from_dict(data)
+            except (TypeError, ValueError):
+                continue
+            if item.code in seen:
+                continue
+            seen.add(item.code)
+            restored.append(item)
+        return tuple(restored)
+
     def notification_command(self, command_id, *, timeout=30, deadline=None):
         """Read an original command without claiming, reopening or editing it."""
         with _connect(self.database_path, timeout=timeout, deadline=deadline) as db:

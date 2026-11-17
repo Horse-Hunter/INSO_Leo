@@ -372,6 +372,9 @@ class WorkbenchSnapshot:
     cycle_durations: tuple[tuple[str, float], ...] = ()
     planned_check_at: datetime | None = None
     recovery_site: str | None = None
+    # Owner-facing fault records: reason code, first/last time, cause, impact and
+    # the next actionable step.  Built from measured runtime evidence only.
+    faults: tuple = ()
 
 
 @dataclass(frozen=True, slots=True)

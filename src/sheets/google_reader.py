@@ -1,6 +1,7 @@
 """Read-only Google Sheets API adapter for worksheet rows."""
 
 import socket
+import ssl
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -18,6 +19,19 @@ TEMPORARY_READ_NETWORK_CODES = frozenset({
     "ERR_NAME_NOT_RESOLVED", "ERR_NETWORK_CHANGED", "ERR_INTERNET_DISCONNECTED",
     "ERR_PROXY_CONNECTION_FAILED", "ERR_TUNNEL_CONNECTION_FAILED",
 })
+
+# A TLS session that the peer/route tore down mid-read is the encrypted form of a
+# dropped connection: it carries no authentication or identity claim, and the read
+# itself is idempotent.  It is therefore the same bounded, isolated retry as an
+# ordinary reset.  Certificate validation errors are deliberately NOT here: those
+# stay a closed, human-actionable condition.
+TRANSIENT_TLS_READ_ERRORS: tuple[type[BaseException], ...] = tuple(
+    error for error in (
+        getattr(ssl, "SSLEOFError", None),
+        getattr(ssl, "SSLZeroReturnError", None),
+        getattr(ssl, "SSLSyscallError", None),
+    ) if isinstance(error, type)
+)
 
 
 class GoogleReadArtifactLost(TimeoutError):
@@ -40,9 +54,11 @@ def _temporary_read_failure(exc: Exception) -> bool:
     status = getattr(getattr(exc, "resp", None), "status", None)
     if isinstance(status, int):
         return status == 429 or 500 <= status < 600
-    return isinstance(exc, (TimeoutError, ConnectionError, socket.gaierror)) or type(exc).__name__ in {
-        "ServerNotFoundError", "TransportError", "ConnectTimeout", "ReadTimeout",
-    }
+    return (isinstance(exc, (TimeoutError, ConnectionError, socket.gaierror)
+                       + TRANSIENT_TLS_READ_ERRORS)
+            or type(exc).__name__ in {
+                "ServerNotFoundError", "TransportError", "ConnectTimeout", "ReadTimeout",
+            })
 
 
 def execute_google_read(operation, *, retry_wait):

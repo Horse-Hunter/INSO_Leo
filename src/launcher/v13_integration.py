@@ -89,6 +89,24 @@ def notify_quotation(store, result, key, episode, *, at, old_price=None, new_pri
     store.observe_incident(command, evidence, occurrence=evidence["original_event"])
 
 
+def _diagnostic_lines(diagnostic):
+    """The same fault projection the GUI shows, so mail and UI cannot diverge."""
+
+    if not isinstance(diagnostic, dict):
+        return ""
+    modules = diagnostic.get("related_modules")
+    lines = [
+        ("故障：" + str(diagnostic.get("title"))) if diagnostic.get("title") else "",
+        ("故障代码：" + str(diagnostic.get("code"))) if diagnostic.get("code") else "",
+        ("发生时间：" + str(diagnostic.get("last_seen"))) if diagnostic.get("last_seen") else "",
+        ("影响模块：" + "、".join(str(m) for m in modules)) if modules else "",
+        ("具体原因：" + str(diagnostic.get("cause"))) if diagnostic.get("cause") else "",
+        ("恢复过程：" + str(diagnostic.get("escalation"))) if diagnostic.get("escalation") else "",
+        ("外部写入：" + str(diagnostic.get("external_effect"))) if diagnostic.get("external_effect") else "",
+    ]
+    return "".join(line + "\n" for line in lines if line)
+
+
 def notify_runtime_fault(store, key, reason, *, at, evidence=None, occurrence=None):
     """Only verified actionable incidents enter the canonical outbox."""
     if evidence is None:
@@ -103,7 +121,10 @@ def notify_runtime_fault(store, key, reason, *, at, evidence=None, occurrence=No
         f"处理：{evidence['action']}\n待核实：{evidence['uncertainty']}", None, at)
     if evidence.get("category") == "runtime_stop":
         from dataclasses import replace
-        command = replace(command, subject="【需要处理】INSO自动业务安全暂停",
+        command = replace(command, subject="【需要处理】" + (
+                str(evidence["diagnostic"].get("title"))
+                if isinstance(evidence.get("diagnostic"), dict)
+                and evidence["diagnostic"].get("title") else "INSO自动业务安全暂停"),
             text_body=("情况：程序的一次操作曾长时间未完成确认，已暂停派发后续自动任务；主程序仍在。\n" if evidence.get("stop_reason") == "PROGRAM_OPERATION_STALLED" else
                 "情况：自动询价、报价和TP已安全暂停，主程序仍在；不会自动重复提交。\n")
                 + ("暂停原因：操作进展超出有界等待且经持续复核；在途操作不被视为已取消。\n" if evidence.get("stop_reason") == "PROGRAM_OPERATION_STALLED" else
@@ -111,6 +132,7 @@ def notify_runtime_fault(store, key, reason, *, at, evidence=None, occurrence=No
                    "暂停原因：程序的Google登录或访问权限核验未通过，需核对。\n" if evidence.get("stop_reason") == "GOOGLE_AUTHENTICATION_REQUIRED" else
                    "暂停原因：程序专属浏览器页面的创建、身份或收口未能确认。\n" if evidence.get("stop_reason", "").startswith("CDP_PAGE_") else
                    "暂停原因：Google操作页身份或操作收口未能确认。\n")
+                + _diagnostic_lines(evidence.get("diagnostic"))
                 + f"处理：{evidence['action']}\n待核对：{evidence['uncertainty']}")
     store.observe_incident(command, evidence, occurrence=occurrence or key)
 
