@@ -24,8 +24,8 @@
 
 | 物理行 | STATUS | CLASS | WHO | MPN | MFR | Qty | W `quote_date` |
 |---|---|---|---|---|---|---|---|
-| 982 | 未发 | A | Majic | ADS1115IDGSR | TI | 1500 | 2026-11-17 |
-| 983 | 未发 | A | Majic | G60N100BNTD | （空） | 400 | 2026-11-17 |
+| 982 | 未发 | A | （客户列已脱敏） | ADS1115IDGSR | TI | 1500 | 2026-11-17 |
+| 983 | 未发 | A | （客户列已脱敏） | G60N100BNTD | （空） | 400 | 2026-11-17 |
 
 `RFQ_BRIEF` 已有对应两行（`sheet_row` 982/983，`rfq_date` 2026-11-17，status 未发，`updated_at` 2026-11-17T08:54:04Z）。
 W 列 = `SOURCE_ORDER_DATE` 证据列；七天门限（`today-7`）对 2026-11-17 **成立**。物理行号无偏移。
@@ -133,7 +133,7 @@ Owner 于 19:29 点「开始运行」，19:35 对 982 点「重跑采购流程�
 | 19:29:24 | 983 `DUPLICATE_CHECK_STARTED/CONFIRMED` → `RESEARCH_STARTED` → `PURCHASE_DRAFT_STARTED` |
 | 19:30:50 | 983 `AI_RECOGNITION_READY` → `SAVE_DISPATCH_ARMED` → `SAVE_CLICK_COMPLETED` → `SAVE_OUTCOME_UNKNOWN` |
 | 19:30:57 | 983 `RECONCILIATION_CONFIRMED_SAVED` + `ALERT_RECOVERED` → `PURCHASE_DATA_SAVED`（purchase `SAVED`） |
-| 19:32:39/41 | 983 邮件 SENT ×2（linan229@qq.com、shawn@inso-hk.com） |
+| 19:32:39/41 | 983 邮件 SENT ×2（Owner 与 ops 各一封） |
 | 19:29:20 | 982 重启时被判 `INTERRUPTED_UNSENT`（停在重复检查、无派发证据）→ 转人工 |
 | 19:34:38 | 982 人工重跑：`DUPLICATE_CHECK_CONFIRMED` → `RESEARCH_STARTED` → `PURCHASE_DRAFT_STARTED` |
 | 19:35:48 | 982 `AI_RECOGNITION_READY` → `SAVE_DISPATCH_ARMED` → `SAVE_CLICK_COMPLETED` → `SAVE_OUTCOME_UNKNOWN` |

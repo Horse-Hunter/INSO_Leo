@@ -1,6 +1,8 @@
-# INSO LEO — CEO 同步入口（2026-11-17 生产故障结案 + 新版上线）
+# INSO LEO — CEO 复核入口（2026-11-17 生产故障结案 + 新版上线）
 
-**当前有效状态：`DIAGNOSED / FIXED / INSTALLED_RUNNING / BUSINESS_VERIFIED`。** 本轮唯一 CEO 同步材料：[RFQ-021/CEO_SYNC_20261117.md](RFQ-021/CEO_SYNC_20261117.md)（结论、两个根因、修复范围、现场业务结果、测试与回滚材料、5 项待决事项）。技术证据：[RFQ-021/EXECUTION_LOG.md](RFQ-021/EXECUTION_LOG.md) 首节；协调状态：[COORDINATION.md](COORDINATION.md) 顶部。分支 `workbuddy/v16-rfq016-stabilization`，提交 `aaac8c75`（修复）→ `f4190cf8`（安装）→ `849ed5d7`（业务结果）；现场 EXE `f2ffa44f…`。下面各段为本轮之前的历史交接，仅供追溯。
+**一句话入口：`Review RFQ-022`。** 当前有效状态 `DELIVERED_FOR_CEO_REVIEW / INSTALLED_RUNNING / BUSINESS_VERIFIED`。
+读序：[RFQ-022/TASK_SPEC.md](RFQ-022/TASK_SPEC.md)（需求 + 复核清单 + 请 CEO 判断的三件事 + 待决项）→ [RFQ-022/EXECUTION_LOG.md](RFQ-022/EXECUTION_LOG.md)（可复算命令、现场声明边界）→ [RFQ-021/EXECUTION_LOG.md](RFQ-021/EXECUTION_LOG.md) 首节（完整时间线与日志）→ [RFQ-021/CEO_SYNC_20261117.md](RFQ-021/CEO_SYNC_20261117.md)（一页摘要）。结论写进 `RFQ-022/REVIEW.md`（尚未创建）。
+分支 `workbuddy/v16-rfq016-stabilization`；提交 `aaac8c75`（修复）→ `f4190cf8`（安装）→ `849ed5d7`（业务结果）→ `95669170`（CEO 材料）；现场 EXE `f2ffa44f…`。下面各段为本轮之前的历史交接，仅供追溯。
 
 ## 历史交接（2026-11-16 及更早，非当前状态）
 
