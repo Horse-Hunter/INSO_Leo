@@ -21,6 +21,16 @@ Read [AI_START_HERE.md](AI_START_HERE.md). **Current rules here outrank historic
 
 Three long-lived lines: `develop` (R&D + installed trial), `main` (only Owner-accepted current), `release/previous` (prior Owner-accepted current). **Packaging, installation, live operation, successful tests or elapsed time never promote a version.** Only explicit Owner approval may advance `main`; see [BRANCH_POLICY](docs/BRANCH_POLICY.md). During initial migration, `main` still contains legacy V1.1 and MUST NOT be presented as the verified current V1.6. Preserve existing DeepSeek worktree/branch.
 
+## 故障原因必须在产品界面自解释（Owner 强制验收要求，2026-11-17）
+
+**适用：** 生产运行故障、暂停、三小时超时、单笔任务异常、外部写入未知、登录/凭据/Sheets/CDP/Research 事件。**产品不得把 Agent 查日志作为普通用户理解故障的唯一途径。**
+
+- “异常与通知”须直接显示：首次/最后发生时间、真实影响的模块/站点、当前阶段、可验证的 `reason_code` 与错误类别、简明中文原因及下一步用户能做什么；对于超时区分“首次故障”与“持续三小时后升级停止”。
+- 明确区分**最初根因、后续连带暂停、仍未验证的猜测**，不得把 Google Sheets 暂停显示造成的 Browser/CDP 和 Credential 状态当成已证明的独立故障；未知就写“原因未确认”，附日志/事件定位方式。
+- 订单/来源行仅在真实可证时关联；未确认的外部写入应标明 `UNKNOWN/SENT`、保留的保护状态和“不可盲目重试”。异常记录需可追溯并可在重启后查看未结算状态。
+- 技术详情允许展示稳定故障代码和脱敏异常类型、简短安全摘要，但禁止暴露 API 密钥、Cookie、Token、完整隐私数据或原始异常可能携带的敏感字段。优先复用同一诊断/事件/告警源，不能用不同界面复制多套相互矛盾的状态。
+- CEO/Executor 交付生产候选时必须实际验证异常 UI 的真实故障场景、三小时升级、恢复/重启显示；仅写“需要人工处理”或“查看日志”不达标。此要求提升可观测性，不允许顺势关闭功能、屏蔽报错或降低已有去重和交易安全机制。
+
 ## Ownership and source of truth
 
 - **Owner** sets business intent, grants real external-effect/production permissions, decides release; **CEO** owns requirements, architecture, independent Review; **one Executor** owns implementation, tests, deployment and live business evidence.
