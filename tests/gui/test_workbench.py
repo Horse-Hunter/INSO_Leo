@@ -448,13 +448,12 @@ def test_the_exceptions_page_shows_the_reason_not_a_pointer_to_it():
                        changed_at=datetime(2026, 11, 17, 9, 55, 8, tzinfo=UTC)),))
     import tkinter
 
-    try:  # A crashed/reused Tcl interpreter is an environment limit, not a product one.
-        tkinter.Tk().destroy()
-    except tkinter.TclError:
+    try:
+        app = InsoDashboardApp(MockBackend())
+    except tkinter.TclError:  # A broken Tcl interpreter is an environment limit.
         import pytest
 
         pytest.skip("Tcl/Tk is unavailable in this process; the release EXE is verified live")
-    app = InsoDashboardApp(MockBackend())
     try:
         app._view.show_page("异常与通知")
         app._view.render(view, force=True)
@@ -470,3 +469,42 @@ def test_the_exceptions_page_shows_the_reason_not_a_pointer_to_it():
     assert "没有达到三小时升级门限" in text
     assert "建议操作：" in text
     assert "请按已记录状态人工核对" not in text
+
+
+def test_a_real_deferred_read_reaches_the_tk_page(tmp_path, monkeypatch):
+    """CEO RFQ-022 P1-A: backend -> snapshot -> Tk, not a hand-built snapshot.
+
+    The TLS fix turned a shared stop into a deferred read, so this is now the
+    most common fault path; it must be visible without any mail or alert.
+    """
+    import tkinter
+    from datetime import timedelta
+
+    from src.gui.app import InsoDashboardApp
+    from tests.launcher.test_google_transient_read_recovery import _tls_fault
+    from tests.launcher.test_runtime_safety_notice import harness
+
+    backend, _worker, _smtp = harness(tmp_path, monkeypatch)
+    backend._defer_website_poll(_tls_fault(), timedelta(minutes=15),
+                                notify=False, recoverable_read=True)
+    view = backend.get_workbench_snapshot()
+    assert view.faults and view.faults[0].code == "GOOGLE_WAITING_RECOVERY"
+
+    try:
+        app = InsoDashboardApp(MockBackend())
+    except tkinter.TclError:  # A broken Tcl interpreter is an environment limit.
+        import pytest
+
+        pytest.skip("Tcl/Tk is unavailable in this process; the release EXE is verified live")
+    try:
+        app._view.show_page("异常与通知")
+        app._view.render(view, force=True)
+        text = app._view.notices.get("1.0", "end")
+    finally:
+        app._view.close()
+        app._root.destroy()
+
+    assert "Google 表格等待恢复" in text
+    assert "已自动推迟到下一轮" in text
+    assert "下一轮预计：" in text
+    assert "没有未结清的外部写入意图" in text or "未新增外部写入意图" in text

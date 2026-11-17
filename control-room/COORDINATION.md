@@ -1,8 +1,17 @@
 # Executor 2026-11-17 结案：982/983 已查明、根因已修、新版已装并跑通真实业务
 
-**CEO 复核入口：`Review RFQ-022` → [`RFQ-022/TASK_SPEC.md`](RFQ-022/TASK_SPEC.md)（需求、验收口径、复核清单、待决项）与 [`RFQ-022/EXECUTION_LOG.md`](RFQ-022/EXECUTION_LOG.md)（可复算命令与现场声明边界）。**
+**CEO 收尾复核入口：`Review RFQ-022` → [`RFQ-022/REVIEW.md`](RFQ-022/REVIEW.md)（你的 P1-A/P1-B/P2 已闭环）→ [`RFQ-022/EXECUTION_LOG.md`](RFQ-022/EXECUTION_LOG.md) 第 6–11 节（修复、负向证据、页面实际字段、4309 项 junit、新候选 `119163b5…`）。**
 
-**状态：`DELIVERED_FOR_CEO_REVIEW / INSTALLED_RUNNING / BUSINESS_VERIFIED`。** 详细证据见 [RFQ-021/EXECUTION_LOG.md](RFQ-021/EXECUTION_LOG.md) 首节。
+**状态：`DELIVERED_FOR_CEO_REVIEW / UI_DIAGNOSTICS_CLOSED / INSTALLED_RUNNING(上一版) / BUSINESS_VERIFIED`。** 详细证据见 [RFQ-021/EXECUTION_LOG.md](RFQ-021/EXECUTION_LOG.md) 首节。
+
+## CEO REVIEW 后的一次性补修（2026-11-17 23:0x）
+
+- **P1-A 已闭：** 读失败被推迟（不发邮件/不告警/不停模块）时也记录 GUI 诊断，含首次/最近时间、次数、**下一轮预计**、异常类、外部写入与建议；页面新增 **`业务影响：`** 行，推迟明确写"没有停止任何模块"，不再可能误报为整站中断。
+- **P1-B 已闭：** 恢复不再只改内存——通过既有 `resolve_incidents(..., diagnostic_code=…)` 把同一条 incident 的 `active/recovered_at` 落库；只动 `incident:` 行，订单告警/hold/UNKNOWN/SENT 一律不碰；覆盖"仅 inquiry 恢复、quotation 仍关闭"的情形。重启视图由 `('SHEETS_READ_UNAVAILABLE',)` 变为 `()`。
+- **P2 已闭：** 单笔异常改为 `order_exception_block()` + 22 条原因目录（原因/建议/位置=工作表+行号+任务号）；未分类代码明确"原因尚未确认"。
+- **顺带修真 bug：** `_external_effect_state()` 误 import 不存在的 `WriteLedger`，会让每次停止都显示"写入台账不可读"；已改 `SqliteWriteIntentJournal` 并加回归。
+- **证据：** 未修复源码上 7 项新测失败 → 修复后 24 项通过；冻结源码全量 `4309 / 0 failures / 0 errors / 1 skipped`，junit 在 `docs/evidence/rfq022/pytest-full.xml`；页面四态样本在 `docs/evidence/rfq022/ui-sample.txt`。
+- **新候选（未安装）：** EXE `119163b5…`（8,480,578 B / 2,872 文件），清单 `docs/evidence/rfq022/INSO_V1.6-artifact-manifest-rfq022b.sha256`（`bd81bdd4…`），`--preview-self-check ok:true`、`--idle-self-check gui_rendered:true`。生产仍运行已安装的上一版，未停机、未覆盖。
 
 - **982 / 983 不是"没读取"，而是卡在重复检查。** 两笔在 **14:37:21 正常发现并入库**（`inq_895ed99a1ec48c7d95735db8` / `inq_f39d38e94aa183a6d6676a16`，状态 `DUPLICATE_CHECKING` / `DUPLICATE_CHECK_PENDING`）。`未发`、型号/数量/客户与截图一致，W 列 `quote_date`=2026-11-17，`RFQ_BRIEF` 已有同日原始日期，七天门限成立；981 行重复表头是允许结构。卡点是重复检查要用 INSO 浏览器，而 **14:05 起每次都在 CDP/登录巡检处失败**（`BrowserBootstrapError`），982 只在 14:37/14:53/15:24/16:25 留下四次 `STARTED`。两笔**无告警、无采购事件、`workflow_write_intents`=0**，没有任何外部写入。
 - **17:55 的暂停与三小时机制无关。** 当日 `GOOGLE_OUTAGE_THREE_HOURS` 记录为 0（全库唯一三小时记录是 10-24 的 INSO）；incident 为 `PROGRAM_SAFETY_PAUSED / PROGRAM_INTERNAL_STOP / MODULE_PAUSED`。第一故障是报价读表时的 **`ssl.SSLEOFError`**（TLS 中途断链，已重试约 20 s 后耗尽）：因 `_website_failure` 与 `is_isolated_source_read_error` 都把 TLS 判为"不可隔离"，`_defer_website_poll` 拒绝推迟 → `_runtime_error` 停止全部业务且**无自动恢复路径**。同一签名 11-15 已出现过（INC-20261115），属**同一缺陷复发**。"隔三小时又崩"的观感来自退避 900→1800→3600→7200 s。**两起故障无因果关系。**

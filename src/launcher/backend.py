@@ -3267,6 +3267,16 @@ class ProductionBackend(GuiBackend):
                   "正能量": "BOM_AI_WAITING_RECOVERY"}[site]
         log.warning("Website recovery deferred", extra={
             "runtime_reason": reason, "runtime_cause": type(exc).__name__})
+        # A deferral that sends no mail and raises no alert is still a fault the
+        # Owner must be able to read in the GUI. After the TLS fix this is the
+        # most common fault path, so silence here would be a hole, not a feature:
+        # record it locally, never mail it, never alert an order, keep the run.
+        if recoverable_read or not notify:
+            self._record_fault_diagnostic(reason, site=site,
+                cause_class=self._fault_cause_label(exc),
+                escalation="已自动推迟到下一轮，业务未停止；本次不发邮件提醒",
+                external_effect="本次仅记录读取/连接重试，未新增外部写入意图",
+                next_retry_at=utc_now() + interval, deferred=True)
         if notify and not recoverable_read and self._v13_ledger_ready:
             self._notify_runtime_fault( f"{self._run_id or 'run'}:{site}:{since}", reason,
                 at=utc_now(), cause_class=self._fault_cause_label(exc))
@@ -3306,7 +3316,7 @@ class ProductionBackend(GuiBackend):
 
     def _record_fault_diagnostic(self, reason, *, site=None, cause_class=None,
             escalation="", external_effect="尚未确认", uncertainty="", impact="",
-            log_hint="runtime/logs/INSO_V1.3.log"):
+            next_retry_at=None, deferred=False, log_hint="runtime/logs/INSO_V1.3.log"):
         """Remember one Owner-facing fault record.  Never invents a cause."""
 
         from .fault_diagnostics import build_diagnostic
@@ -3321,7 +3331,8 @@ class ProductionBackend(GuiBackend):
             diagnostic = build_diagnostic(reason, site=site, cause_class=cause_class,
                 first_seen=first, last_seen=now, occurrences=count,
                 escalation=escalation, external_effect=external_effect,
-                uncertainty=uncertainty, impact=impact, log_hint=log_hint)
+                uncertainty=uncertainty, impact=impact, next_retry_at=next_retry_at,
+                deferred=deferred, log_hint=log_hint)
             rest = tuple(item for item in self._faults if item.code != reason)
             self._faults = (diagnostic,) + rest[:11]
         return diagnostic
@@ -3339,8 +3350,13 @@ class ProductionBackend(GuiBackend):
                 self._resolve_faults(site=site)
 
     def _resolve_faults(self, *, site=None, reason=None):
-        """Mark a recovered fault resolved; the page must not show history as live."""
+        """Mark a recovered fault resolved and persist that evidence.
 
+        The page must not show history as live, and a restart must not either:
+        the same incident row that carries the diagnostic is settled here.
+        """
+
+        settled = []
         with self._lock:
             updated, changed = [], False
             for item in self._faults:
@@ -3348,11 +3364,34 @@ class ProductionBackend(GuiBackend):
                     reason is None and site is not None and item.site == site)
                 if match and item.recovered_at is None:
                     item = replace(item, recovered_at=utc_now().isoformat(),
-                                   phase="已恢复")
+                                   phase="已恢复", next_retry_at=None)
+                    settled.append(item)
                     changed = True
                 updated.append(item)
             if changed:
                 self._faults = tuple(updated)
+        for item in settled:
+            self._persist_fault_recovery(item)
+
+    def _persist_fault_recovery(self, diagnostic):
+        """Settle the durable incident that carries this diagnostic.
+
+        Only the shared-runtime / same-site incident rows flip to inactive.
+        Order alerts, holds and UNKNOWN/SENT outcomes are never touched here.
+        """
+
+        store = self._v12_store
+        if store is None or not callable(getattr(store, "resolve_incidents", None)):
+            return
+        modules = [module for module in ("business_runtime", diagnostic.site)
+                   if isinstance(module, str) and module]
+        for module in dict.fromkeys(modules):
+            try:
+                store.resolve_incidents(module, at=utc_now(),
+                                        diagnostic_code=diagnostic.code)
+            except (sqlite3.Error, V12DatabaseError) as error:
+                log.warning("Fault recovery could not be persisted (%s)",
+                            type(error).__name__)
 
     def _fault_cause_label(self, exc):
         """A stable label for the page: exception class plus a machine reason code.
@@ -3556,8 +3595,8 @@ class ProductionBackend(GuiBackend):
         if path is None:
             return "尚未确认"
         try:
-            from src.workflow.write_intents import WriteLedger
-            open_documents = WriteLedger(path).open_documents()
+            from src.workflow.write_intents import SqliteWriteIntentJournal
+            open_documents = SqliteWriteIntentJournal(path).open_documents()
         except Exception:  # noqa: BLE001 - an unreadable ledger is never "clean"
             return "写入台账不可读，外部写入结果尚未确认；不可盲目重试"
         if not open_documents:

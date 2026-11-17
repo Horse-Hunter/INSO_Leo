@@ -172,6 +172,7 @@ class FaultDiagnostic:
     knock_on: tuple[str, ...] = ()
     related_modules: tuple[str, ...] = ()
     escalation: str = ""
+    next_retry_at: str | None = None
     recovered_at: str | None = None
     evidence: str = ""
     uncertainty: str = ""
@@ -220,18 +221,27 @@ def build_diagnostic(
     last_seen=None,
     occurrences: int = 1,
     escalation: str = "",
+    next_retry_at=None,
     recovered_at=None,
     event_id: str = "",
     external_effect: str = UNCONFIRMED,
     uncertainty: str = "",
     impact: str = "",
+    deferred: bool = False,
     log_hint: str = "runtime/logs/INSO_V1.3.log",
 ) -> FaultDiagnostic:
-    """Build the record from the values the runtime actually measured."""
+    """Build the record from the values the runtime actually measured.
+
+    ``deferred`` marks a fault that only postponed work: nothing was stopped, so
+    it must not claim the dependent modules were paused.
+    """
 
     title, cause, action = describe(reason)
-    knock_on = SHARED_DEPENDENT_MODULES.get(site or "", ())
-    if site and knock_on:
+    knock_on = () if deferred else SHARED_DEPENDENT_MODULES.get(site or "", ())
+    if deferred:
+        impact = impact or "本轮只推迟了这一步，没有停止任何模块；其他任务照常运行。"
+        phase = escalation or f"{site or '依赖'}等待下一轮"
+    elif site and knock_on:
         impact = impact or f"本次停止了 {('、'.join(knock_on))}；三者的暂停由 {site} 同一原因引起。"
         phase = escalation or f"{site}未恢复，业务已停止"
     else:
@@ -255,6 +265,7 @@ def build_diagnostic(
         knock_on=tuple(knock_on),
         related_modules=tuple(knock_on) or ((site,) if site else ()),
         escalation=escalation,
+        next_retry_at=_iso(next_retry_at),
         recovered_at=_iso(recovered_at),
         evidence="；".join(part for part in (event_id, log_hint) if part),
         uncertainty=uncertainty,

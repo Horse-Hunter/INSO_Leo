@@ -238,3 +238,198 @@ def test_the_cause_label_keeps_only_a_class_name_and_a_stable_code(tmp_path):
     outer = RuntimeError("wrapper")
     outer.__cause__ = coded
     assert backend._fault_cause_label(outer) == "BrowserBootstrapError(CDP_ATTACH_FAILED)"
+
+
+# --- CEO RFQ-022 review P1-A: a deferred read must still reach the GUI --------
+
+def _tls_fault():
+    from tests.launcher.test_google_transient_read_recovery import _tls_fault as build
+
+    return build()
+
+
+def test_a_recoverable_read_failure_still_reaches_the_gui(tmp_path, monkeypatch):
+    """No mail, no alert, no stop -- but the Owner must still see the reason.
+
+    This is the most common fault path after the TLS fix: the reader retries next
+    round. Recording it only in the log is exactly the hole the Owner reported.
+    """
+    from datetime import timedelta
+
+    from tests.launcher.test_runtime_safety_notice import NOW as RUN_NOW
+    from tests.launcher.test_runtime_safety_notice import harness
+
+    backend, worker, smtp = harness(tmp_path, monkeypatch)
+    assert backend._defer_website_poll(_tls_fault(), timedelta(minutes=15),
+                                       notify=False, recoverable_read=True)
+
+    faults = backend._fault_diagnostics()
+    assert [item.code for item in faults] == ["GOOGLE_WAITING_RECOVERY"]
+    fault = faults[0]
+    assert fault.site == "Google Sheets"
+    assert fault.occurrences == 1
+    assert fault.next_retry_at == (RUN_NOW + timedelta(minutes=15)).isoformat()
+    assert "未停止" in fault.escalation
+    # A deferral must never read like a shared stop on the page.
+    assert "没有停止任何模块" in fault.impact
+    assert "未停止" not in fault.impact
+    assert backend._state is RunState.RUNNING and not backend._stop.is_set()
+
+    worker.run_due(now=NOW)
+    assert smtp.send_attempts == 0                              # never a nuisance mail
+    assert backend._v12_store.recent_fault_diagnostics() == ()   # never a durable incident
+
+
+def test_a_deferred_read_counts_up_and_clears_on_a_real_recovery(tmp_path, monkeypatch):
+    from datetime import timedelta
+
+    from tests.launcher.test_runtime_safety_notice import harness
+
+    backend, _worker, _smtp = harness(tmp_path, monkeypatch)
+    for _ in range(3):
+        backend._defer_website_poll(_tls_fault(), timedelta(minutes=15),
+                                    notify=False, recoverable_read=True)
+    fault = backend._fault_diagnostics()[0]
+    assert fault.occurrences == 3
+    assert fault.first_seen == fault.last_seen
+
+    backend._site_recovered("Google Sheets")
+    recovered = backend._fault_diagnostics()[0]
+    assert not recovered.active
+    assert recovered.next_retry_at is None
+    assert backend.get_workbench_snapshot().faults[0].code == "GOOGLE_WAITING_RECOVERY"
+
+
+# --- CEO RFQ-022 review P1-B: recovery must be durable ------------------------
+
+def test_recovery_settles_the_durable_incident_so_a_restart_stays_quiet(tmp_path, monkeypatch):
+    from src.workflow.v12_faults import FaultScope, V12Fault
+    from src.workflow.v12_store import V12Store
+    from tests.launcher.test_runtime_safety_notice import harness
+
+    backend, _worker, _smtp = harness(tmp_path, monkeypatch)
+    backend._runtime_error(V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE"))
+    path = backend._v12_store.database_path
+    assert [f.code for f in V12Store(path).recent_fault_diagnostics()] == ["SHEETS_READ_UNAVAILABLE"]
+
+    backend._resolve_faults(site="Google Sheets")
+
+    assert not backend._fault_diagnostics()[0].active
+    # The restart view is a fresh read of the same ledgers, nothing from memory.
+    assert V12Store(path).recent_fault_diagnostics() == ()
+
+
+def test_an_inquiry_only_recovery_also_settles_the_durable_incident(tmp_path, monkeypatch):
+    """Quotation may stay closed while inquiry recovers; the stop must still settle."""
+    from src.workflow.v12_faults import FaultScope, V12Fault
+    from src.workflow.v12_store import V12Store
+    from tests.launcher.test_runtime_safety_notice import harness
+
+    backend, _worker, _smtp = harness(tmp_path, monkeypatch)
+    backend._runtime_error(V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE"))
+    backend._resolve_faults_after_success("inquiry")
+
+    assert V12Store(backend._v12_store.database_path).recent_fault_diagnostics() == ()
+
+
+def test_settling_a_runtime_incident_leaves_order_alerts_alone(tmp_path, monkeypatch):
+    from src.workflow.v12_faults import FaultScope, V12Fault
+    from tests.launcher.test_runtime_safety_notice import harness
+
+    backend, _worker, _smtp = harness(tmp_path, monkeypatch)
+    backend._runtime_error(V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE"))
+    import sqlite3
+
+    def alert_rows():
+        with sqlite3.connect(backend._v12_store.database_path) as db:
+            return db.execute("SELECT count(*) FROM workflow_v12_active_alerts").fetchone()[0]
+
+    before = alert_rows()
+    backend._resolve_faults(site="Google Sheets")
+    assert alert_rows() == before
+
+
+# --- CEO RFQ-022 review P2: one order's exception must name a real action -----
+
+def _order(model="SYNTH", *, sheet="2026", row=982):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(inquiry_id="inq_" + "a" * 24, model=model, module_id="inquiry",
+                           source_sheet=sheet, source_row=row)
+
+
+def _state(*codes):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(active_alerts=tuple(
+        SimpleNamespace(reason_code=SimpleNamespace(value=code)) for code in codes))
+
+
+def test_an_order_exception_names_the_reason_and_the_next_step():
+    from src.gui.workbench import order_exception_block
+
+    block = order_exception_block(_order(), _state("SAVE_OUTCOME_UNKNOWN"), "需核对")
+
+    assert "原因：保存后没有收到确认回执" in block
+    assert "建议：先到 INSO 核对" in block
+    assert "位置：2026 第 982 行" in block
+    assert "本单停在已记录状态" not in block
+
+
+def test_an_unclassified_order_alert_admits_the_cause_is_unconfirmed():
+    from src.gui.workbench import order_exception_block
+
+    block = order_exception_block(_order(), _state("SOMETHING_NEW"), "需核对")
+
+    assert "原因尚未确认" in block
+    assert "SOMETHING_NEW" in block
+    assert "建议：" in block
+
+
+def test_an_order_without_a_reason_is_not_given_an_invented_cause():
+    from src.gui.workbench import order_exception_block
+
+    block = order_exception_block(_order(), _state(), "需核对")
+
+    assert "没有记录到带原因的异常" in block
+    assert "原因：" not in block
+
+
+def test_the_write_ledger_statement_is_proven_not_guessed(tmp_path, monkeypatch):
+    """A stop must not claim "ledger unreadable" because of a wrong import.
+
+    The first cut imported a class that does not exist, so every shared stop
+    would have told the Owner the write ledger was unreadable even when it was
+    clean and empty.
+    """
+    from src.workflow.write_intents import SqliteWriteIntentJournal
+    from tests.launcher.test_runtime_safety_notice import harness
+
+    backend, _worker, _smtp = harness(tmp_path, monkeypatch)
+    SqliteWriteIntentJournal(backend._v12_store.database_path).migrate()
+
+    assert "没有未结清的外部写入意图" in backend._external_effect_state()
+
+
+def test_an_unreadable_write_ledger_is_reported_as_unproven(tmp_path, monkeypatch):
+    from tests.launcher.test_runtime_safety_notice import harness
+
+    backend, _worker, _smtp = harness(tmp_path, monkeypatch)
+    # No journal table at all: an absent ledger is not a clean ledger.
+    assert "写入台账不可读" in backend._external_effect_state()
+
+
+def test_the_page_block_separates_a_deferral_from_a_shared_stop():
+    from src.gui.workbench import fault_block
+
+    deferred = build_diagnostic("GOOGLE_WAITING_RECOVERY", site="Google Sheets",
+                                first_seen=NOW, last_seen=NOW, deferred=True)
+    stop = build_diagnostic("SHEETS_READ_UNAVAILABLE", site="Google Sheets",
+                            first_seen=NOW, last_seen=NOW)
+
+    deferred_block = fault_block(deferred)
+    assert "业务影响：本轮只推迟了这一步" in deferred_block
+    assert "本次停止了" not in deferred_block
+
+    stop_block = fault_block(stop)
+    assert "业务影响：本次停止了 询价采购、报价跟进、目标价调研" in stop_block

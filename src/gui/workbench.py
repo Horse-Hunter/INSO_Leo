@@ -57,6 +57,113 @@ def _when(value):
     return stamp(moment)
 
 
+# Order-level reason codes and what the Owner can actually do about them.  The
+# wording stays strictly about THIS order: a program-wide fault must never be
+# projected onto one order as "its write failed".
+ORDER_REASON_ACTION = {
+    "SAVE_OUTCOME_UNKNOWN": (
+        "保存后没有收到确认回执，无法判定这笔采购单是否已生成。",
+        "先到 INSO 核对这笔单是否已存在；已存在就不要重发，确实没有再用「重跑采购流程」。"),
+    "CONTROL_NOT_FOUND": (
+        "采购页面上的目标控件没有找到。",
+        "确认 INSO 采购页面已完整展开、没有加载中或弹窗遮挡，再用「重跑采购流程」。"),
+    "CONTROL_AMBIGUOUS": (
+        "采购页面上匹配到多个目标控件，无法安全选择。",
+        "确认只打开一个采购录入页面后重跑；不要手工猜测点哪一个。"),
+    "CONTROL_DENIED": (
+        "采购页面拒绝了对该控件的操作。",
+        "确认当前账号有该采购操作权限后再重跑。"),
+    "SESSION_STALE": (
+        "INSO 登录会话已失效。",
+        "在已授权的 Chrome 里重新登录 INSO（需要验证码时由本人完成），再重跑该单。"),
+    "SESSION_IDENTITY_UNVERIFIED": (
+        "无法确认当前 ERP 会话属于本人。",
+        "重新登录并确认页面显示本人账号后，再重跑该单。"),
+    "INQUIRY_INPUT_INVALID": (
+        "源表该行的输入不完整或不合法，程序拒绝下单。",
+        "核对这一行的型号、数量、客户与品牌列，补齐后重跑。"),
+    "INQUIRY_QUANTITY_INVALID": (
+        "源表该行数量不是有效数字。",
+        "改正数量列后重跑。"),
+    "CUSTOMER_NAME_MISSING": (
+        "源表缺少客户名称。",
+        "补齐客户列后重跑。"),
+    "DUPLICATE_ORDER_DETECTED": (
+        "系统判定这笔与历史订单重复。",
+        "先确认是否同一客户同一型号的重复询价；确认重复则无需处理，不必重跑。"),
+    "DUPLICATE_LOOKUP_AMBIGUOUS": (
+        "历史订单比对出现同时间同型号的多条记录，无法判定是否重复。",
+        "人工确认历史记录后，再决定是否重跑。"),
+    "DUPLICATE_LOOKUP_UNAVAILABLE": (
+        "历史订单比对所需的查询不可用。",
+        "等查询恢复后重跑；期间不要手工重复下单。"),
+    "UPDATE_RESULT_UNCONFIRMED": (
+        "报价更新点击后没有拿到确认结果，写入状态未确认。",
+        "先核对该单在报价表里的实际内容；确认未写入再重报，不要直接重发。"),
+    "QUOTE_INPUT_WRITE_FAILED": (
+        "报价输入表写入失败。",
+        "核对报价输入表对应位置是否可写、是否被占用，再重跑报价。"),
+    "AI_RECOGNITION_MISMATCH": (
+        "ERP 的智能识别结果与源表型号/品牌/数量不一致。",
+        "核对录单页的识别结果，修正后再重跑。"),
+    "RECONCILIATION_AMBIGUOUS": (
+        "保存结果的复核无法判定成功或失败。",
+        "到 ERP 人工核对该单，再决定是否重跑；不要重发。"),
+    "RECONCILIATION_UNREADABLE": (
+        "保存结果的复核记录不可读。",
+        "到 ERP 人工核对该单，并保留现有台账；不要重发。"),
+    "NOTIFICATION_UNKNOWN": (
+        "通知邮件的结果未确认。",
+        "先核对收件人是否已收到；系统不会自动重发同一封。"),
+    "NOTIFICATION_PERMANENT": (
+        "通知邮件被永久拒绝。",
+        "核对收件地址后人工补发；不要依赖自动重试。"),
+    "NOTIFICATION_TRANSIENT": (
+        "通知邮件暂时投递失败，系统会按既定策略重试。",
+        "通常无需处理；若长时间未送达再核对邮件配置。"),
+    "UNKNOWN_EXTERNAL_FAILURE": (
+        "一次外部操作失败且结果未知。",
+        "保留现场并先核对实际结果，再决定是否重跑。"),
+    "PURCHASE_FOLLOW_UP_REQUIRED": (
+        "采购已发出但供应商尚未报价，已到跟进时间。",
+        "联系采购催价；不需要重发采购单。"),
+}
+
+
+def _order_location(order):
+    """Where this order lives, so the Owner can look at it directly."""
+
+    sheet = getattr(order, "source_sheet", None)
+    row = getattr(order, "source_row", None)
+    parts = []
+    if sheet:
+        parts.append(f"{sheet} 第 {row} 行" if row else str(sheet))
+    parts.append("任务 " + order.inquiry_id[-12:])
+    return "、".join(parts)
+
+
+def order_exception_block(order, state, status_text):
+    """One order's exception with a reason-specific next step, never a slogan."""
+
+    lines = [f"{NAMES.get(order.module_id)}｜{order.model}｜{status_text}"]
+    reasons = []
+    if state is not None:
+        reasons = [alert.reason_code.value for alert in state.active_alerts]
+    if not reasons:
+        lines.append("该单停在已记录状态；本单没有记录到带原因的异常，需人工核对表格与台账。")
+    for code in dict.fromkeys(reasons):
+        reason, action = ORDER_REASON_ACTION.get(code, (None, None))
+        if reason is None:
+            lines.append(f"异常代码：{code}（该代码没有已确认的中文说明，原因尚未确认）")
+            lines.append("建议：保留现场并把本页这一条转给技术处理；不要重复提交。")
+        else:
+            lines.append(f"原因：{reason}")
+            lines.append(f"建议：{action}")
+    lines.append("位置：" + _order_location(order))
+    lines.append("本页不会重新发送或提交；程序也不会自动重试未确认的写入。")
+    return "\n".join(lines)
+
+
 def fault_block(fault):
     """One Owner-readable fault: what broke, when, what it stopped, what to do."""
 
@@ -70,12 +177,15 @@ def fault_block(fault):
             "、".join(fault.related_modules)
             if fault.related_modules else (fault.site or "自动业务")
         ) + ("（同一原因引起，非独立故障）" if fault.knock_on else ""),
+        ("业务影响：" + str(fault.impact)) if getattr(fault, "impact", None) else None,
         "具体原因：" + str(fault.cause),
         ("未确认部分：" + str(fault.uncertainty)) if fault.uncertainty else None,
         "恢复过程：" + (
             f"已于 {_when(fault.recovered_at)} 恢复"
             if not fault.active else str(fault.escalation or fault.phase)
         ),
+        ("下一轮预计：" + _when(fault.next_retry_at))
+        if fault.active and getattr(fault, "next_retry_at", None) else None,
         "外部写入：" + str(fault.external_effect),
         "建议操作：" + str(fault.action),
         "诊断位置：" + (str(fault.evidence) or "runtime/logs/INSO_V1.3.log"),
@@ -1215,21 +1325,7 @@ class WorkbenchView:
                 elif o.status in {OrderStatus.ERROR, OrderStatus.UNKNOWN} or (
                     state and state.active_alerts
                 ):
-                    entries.append(
-                        f"{NAMES.get(o.module_id)}｜{o.model}｜{order_status(o)}\n"
-                        + "本单停在已记录状态，需要人工确认后继续；本页不会重新发送或提交。"
-                    )
-                if state:
-                    for alert in state.active_alerts:
-                        entries.append(
-                            f"{NAMES.get(o.module_id)}｜任务 {o.inquiry_id[-12:]}｜需人工核对\n"
-                            f"{stamp(alert.raised_at)} · {alert.alert_type.value} / {alert.reason_code.value}\n"
-                            + (
-                                MAIL_UNKNOWN
-                                if alert.reason_code.value == "NOTIFICATION_UNKNOWN"
-                                else "本单存在未结算异常；保留现有保护状态，不要重复提交。"
-                            )
-                        )
+                    entries.append(order_exception_block(o, state, order_status(o)))
             text = (
                 "\n\n".join(entries[:200])
                 or "当前没有记录到故障或待处理异常。"

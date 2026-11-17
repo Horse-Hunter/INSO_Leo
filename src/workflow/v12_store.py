@@ -936,7 +936,8 @@ class V12Store:
                            (command.inquiry_id, command_id))
         return command_id
 
-    def resolve_incidents(self, module, *, at, reason_code=None, within=None):
+    def resolve_incidents(self, module, *, at, reason_code=None, within=None,
+                          diagnostic_code=None):
         """Mark a recovered site's incidents inactive.
 
         ``within`` narrows the settlement to incidents whose evidence names no
@@ -956,6 +957,10 @@ class V12Store:
                 if allowed is not None:
                     bound = proof.get("inquiry_id")
                     if bound is not None and bound not in allowed:
+                        continue
+                if diagnostic_code is not None:
+                    diagnostic = proof.get("diagnostic")
+                    if not isinstance(diagnostic, dict) or diagnostic.get("code") != diagnostic_code:
                         continue
                 proof.update(active=False, recovered_at=_time_text(at))
                 db.execute("UPDATE workflow_v12_notification_commands SET review_json=? WHERE command_id=?",
