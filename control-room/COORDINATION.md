@@ -1,3 +1,15 @@
+# CEO 2026-11-18 独立事故复核：CDP 页面归属故障已接受修复（当前权威状态）
+
+**最新 CEO 结论：`INC20261118_SOURCE_AND_OFFLINE_PASS / PRODUCTION_RESUMED_EXECUTOR_REPORTED / NO_FURTHER_DEVELOPMENT_REQUIRED`.** 详见 [INCIDENT-20261118-CEO-REVIEW.md](INCIDENT-20261118-CEO-REVIEW.md)；Executor 完整现场记录 [INCIDENT-20261118.md](INCIDENT-20261118.md)。此前“待现场取证”的状态为历史，不是目前产品状态。
+
+- **当前源码/构建：** Executor 修复 `e2eb7cceaf9aae35a4ca78e398a0e25bb6c63563`；最终 EXE `7a1ff6a6578cb07ee75584795dfa7535ff5caf5258b4b434ca58c945313313f7`；清单 `a25ca50e599c736fc98d3782d1480bd2e98464dd2cab19cac11454d24b4cca49`（CEO 已独立复算），2,872 项；JUnit 4,320 / 0 fail / 0 error / 1 skip。
+- **已核验源码：** CDP targetId 只读重证最多三次、真实错配立刻 fail-closed；诊断含中文/发生阶段/子原因；归属故障有 `Browser/CDP` site，真实恢复可结算历史 incident；不再以安全预览替代生产功能。
+- **现场为 Executor 13:26 左右的时点报告：** 已过既有安装门禁，新 EXE 据报运行，询价/报价/TP 完成，4 Chrome targets、0 runtime fault、8 条 write-intent SETTLED；CEO 无法独立访问当前 Windows 的 PID/EXE/账本，不宣称长期 7×24 稳定。
+- **仍未知：** 11:48 首个页面归属错误的底层触发是协议超时、会话回收还是页面关闭；旧 EXE 未记录，不可虚构。新代码今后会脱敏记录子原因。
+- **不要再重复修改已通过的源码或重放 982/983**，仍保护 UNKNOWN/SENT/hold、历史台账及真实订单；本次 CEO Review 不授权额外生产停机、安装或分支晋升。
+
+## 此前 Executor 现场结案及协同历史（保留）
+
 # Executor 2026-11-18 结案：CDP 页面归属停机已定位、修复、安装并恢复业务
 
 **事件记录：[INCIDENT-20261118.md](INCIDENT-20261118.md)**（版本核验、时间线、证据链、根因、修复、负向测试、门禁、最终现场）。
