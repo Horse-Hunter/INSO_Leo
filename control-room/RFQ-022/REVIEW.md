@@ -1,3 +1,29 @@
+# RFQ-022 — CEO 最终收尾独立核验（2026-11-18；Executor 5cb23619）
+
+**最新唯一有效结论：`RFQ022_FINAL_SOURCE_AND_OFFLINE_ACCEPTED / REVIEW_CLOSED / NEW_CANDIDATE_NOT_INSTALLED / PRODUCTION_UNCHANGED_EXECUTOR_REPORTED`.**
+
+**决议：RFQ-022 P1-A、P1-B、P2 及此前唯一遗留的受控订单范围隔离回归已按本 RFQ 契约完成源码级和提交证据验收；本轮代码审核结束。** 无须新开 RFQ 或再进行一次重复源码审查。**不等于已安装最新 EXE 或现场生产版已更新**。这份 REVIEW 本身不授权停机、换版、重发真实订单或清理历史 hold。
+
+## 核验事实与复核范围
+
+- GitHub 执行分支 `workbuddy/v16-rfq016-stabilization`，核验对象 SHA：**`5cb23619c98256bfaebad2384d9710112258cb71`**。与上一 CEO REVIEW 提交 `5245eefa45f17dcebc0b7b88764ad46495a26642` 相比，源码仅改 `src/launcher/backend.py`（11 增/1 删）；测试仅改 `tests/launcher/test_fault_diagnostics.py`（新增范围负测）。余下提交为执行日志/任务状态和候选证据，不存在额外业务模块改动。
+- `backend.py:_persist_fault_recovery` 实际读取：`_enforce_scope=True` 时将 `within=frozenset(scope.inquiry_ids)` 传给 `store.resolve_incidents(..., diagnostic_code=…, within=within)`；scope 缺失时为空集合（不是全量）；不受控模式 `within=None` 保留旧逻辑。与已存在的 `_site_recovered` 范围规则一致。
+- 测试 `test_a_scoped_recovery_never_settles_another_orders_incident` 构造 A（授权）、B（非授权）、程序级和 B 的站点 incident，均为相同诊断码 `SHEETS_READ_UNAVAILABLE`；调用真正的 `backend._resolve_faults(site="Google Sheets")` 后断言：A/程序级变 inactive，B 的两条仍 active，活动告警/hold 表行数不变。另测 `test_an_unscoped_backend_keeps_the_historical_settlement` 验证无范围旧行为。Executor 提供修复前 `1 failed / 1 passed`、修复后 `2 passed` 的红→绿记录；CEO 审阅了用例源码和断言，未自行在 Windows 运行。
+- 机器可读 `docs/evidence/rfq022/pytest-full-scope-fix.xml` 直接检查：**`4311 testcase / failures=0 / errors=0 / skipped=1`**，即 **4310 passed**。Skip 为既有 Windows symlink 权限条件。前次偶发 `SQLITE_READONLY` 本次未复现，但缺少当时进程/ACL 实证，不能由全绿倒推出其历史根因已彻底证明。
+- GitHub `docs/evidence/rfq022/INSO_V1.6-artifact-manifest-rfq022c.sha256` 文本 SHA256 **已独立重算并匹配**：**`58c933b73a4b6bd6441efe3c8ceb9a7c7343ba500ca4c2fa8469d0c189883a97`**；2,872 条均格式正确、路径唯一，无 `runtime/`；EXE 清单项 **`0e7a985bd61e5abdcabb011c7de2999ac3fd038ec5b2d1cdf45d4cf58c8ef488`**。报告中的 EXE 8,480,855 B、运行 `--preview-self-check`/`--idle-self-check` 与 `RELEASE_SCAN_OK` 为 Executor 提交的 Windows 构建证据；CEO **没有读取/哈希 Windows 实物 EXE**。
+- 此次未重复调查已接受的 TLS 故障分类、故障页面 P1-A/P2、故障持久化主体 P1-B，也未对真实 Google/INSO/SMTP、已安装程序、生产 SQLite、PID、982/983 订单进行现场操作。历史两笔 `SAVED` 仅为 Executor 提交的先前现场证据，禁止再次采购来“验收”。
+- **非阻断已知剩余行为**：若持久化恢复写库发生 SQLite 错误，当前会记录警告而本会话内存已显示【已恢复】；重启后可能重新显示活动 incident。这是已披露的保守/可见性不一致，不等于未知采购写入自动恢复，亦不影响本次明确的订单范围补丁验收。后续若有实际重现，可另作为稳定性问题处理，**不再反复要求 RFQ-022 补丁迭代**。
+
+## 后续界限
+
+1. **RFQ-022 源码与离线发布候选通过，审核结束。** 最终尚未安装的候选是 EXE SHA256 **`0e7a985bd61e5abdcabb011c7de2999ac3fd038ec5b2d1cdf45d4cf58c8ef488`**，清单 SHA256 **`58c933b73a4b6bd6441efe3c8ceb9a7c7343ba500ca4c2fa8469d0c189883a97`**。此前 `119163b5…` 和已安装 `f2ffa44f…` 均是不同历史版本。
+2. **生产部署未验收：** Executor 报告现行生产仍是 `f2ffa44f…`；新 UI 诊断与范围补丁的真实机器上安装和运行结果为 **NOT_VERIFIED**。后续若需换版，必须对当前实物、备份、独占数据库/未结算写入和安装门禁作真实核验；不得覆盖活动程序；依 Owner 明确发布授权执行，不得把离线 PASS 当成现场安装 PASS。
+3. **不授权重复 982/983**、更改采购回执、清除 `UNKNOWN/SENT/hold`，不改变 TP 口径或推送 main/release。正式生产版要保留正常 GUI 业务入口和功能，不能退回仅供安全预览的受限模式。
+
+**Final: `RFQ022_FINAL_SOURCE_AND_OFFLINE_ACCEPTED / REVIEW_CLOSED / NEW_CANDIDATE_NOT_INSTALLED`.**
+
+---
+
 # RFQ-022 — CEO 收尾独立复核（2026-11-18，提交 9842eb8f）
 
 **当前权威结论：`CHANGES_REQUESTED_SCOPE_REGRESSION_ONLY / P1-A_ACCEPTED / P1-B_PERSISTENCE_ACCEPTED_WITH_SCOPE_FIX / P2_ACCEPTED / SOURCE_CANDIDATE_NOT_INSTALLED`.**
