@@ -200,3 +200,68 @@ tests 4309 · failures 0 · errors 0 · skipped 1 · 596.6s
 - 未再次处理 982/983（两笔均 `SAVED`，重发有重复采购风险）；未停止/覆盖运行中的生产程序；未清任何 `UNKNOWN/hold`；未改 TP 取价规则；未动 `main`/`release`／未合并 `develop`。
 - 真实故障态的现场界面证据仍缺（本轮用同一 backend 的合成故障跑通 backend → snapshot → Tk；不制造生产故障）。
 
+---
+
+# CEO 收尾复核唯一补丁（2026-11-18）：恢复落库补回订单范围
+
+**状态：`SCOPE_REGRESSION_FIXED / TESTS_GREEN / CANDIDATE_REBUILT(op22c) / NOT_INSTALLED / PRODUCTION_UNTOUCHED`。**
+
+## 12. 问题与修法
+
+- **问题（CEO 逐行指出的源码事实）：** `_persist_fault_recovery` 调 `store.resolve_incidents(module, at=…, diagnostic_code=…)` 时**没有传 `within`**。`resolve_incidents(within=None)` 会结算该 module + 该诊断码下的**全部**活动 `incident:%`，包括证据里 `inquiry_id` 指向未授权订单的那条。这绕过了 `_site_recovered` 早已遵守、且 `tests/workflow/test_rfq021_r5_incident_scope.py` 已固定守护的 RFQ-021 范围隔离规则。
+- **修法（最小）：** `_persist_fault_recovery` 在 `_enforce_scope=True` 时传 `within=frozenset(scope.inquiry_ids)`（scope 缺失时传空集合，与 `_site_recovered` 完全一致）；不受控模式传 `None`，保留历史语义。`resolve_incidents` 本身、订单告警、hold、`UNKNOWN/SENT`、写意图账本一律未改。
+
+## 13. 负向证据（先红后绿，真的构造 A/B 两笔）
+
+fixture 复用 `tests/workflow/test_rfq021_r5_incident_scope.py`（`_database`/`_incident`/`_active`），在同一个库里放四条**同模块同诊断码**的活动 incident：
+
+| 记录 | 归属 | 期望 |
+|---|---|---|
+| `incident:a:0` | 订单 A（本次授权） | 结算为 inactive |
+| `incident:b:0` | 订单 B（**未授权**） | **保持 active** |
+| `incident:program:0` | 程序级（不绑订单） | 结算为 inactive |
+| `incident:bsite:0`（module = `Google Sheets`） | 订单 B | **保持 active** |
+
+在**未修复**源码上（`git stash push -- src/`）：
+
+```
+pytest tests/launcher/test_fault_diagnostics.py -q -k "scoped_recovery or unscoped_backend"
+→ 1 failed, 1 passed
+   assert _active(store, ids["b"]) is True
+   AssertionError: assert False is True        ← B 被误结算，正是 CEO 指出的风险
+```
+
+修复后同一批：**2 passed**；整个 `test_fault_diagnostics.py` 27 passed；再叠加既有范围测试 `tests/workflow/test_rfq021_r5_incident_scope.py` 3 passed。额外断言：结算前后 `workflow_v12_active_alerts` 与 `workflow_v13_holds` 计数不变。
+
+不受控回归（防止历史语义回退）：`_enforce_scope=False` 时四条 incident 全部结算。
+
+## 14. 全量回归与机器可读结果
+
+冻结源码一次全量：
+
+```
+tests 4311 · failures 0 · errors 0 · skipped 1 · 583.0s
+```
+
+- junit：`docs/evidence/rfq022/pytest-full-scope-fix.xml`（上一版 4,309 项对应当时代码 `9842eb8f`，保留未覆盖）。
+- 唯一 skip 仍是 `test_existing_path_rejects_symlink_escape_when_supported`（Windows 无 symlink 权限）。
+- `ruff check src tests` → `All checks passed!`；`git diff --check` 干净。
+
+## 15. 最终候选（`119163b5…` 自此仅为历史）
+
+| 项 | 值 |
+|---|---|
+| EXE SHA256 | `0e7a985bd61e5abdcabb011c7de2999ac3fd038ec5b2d1cdf45d4cf58c8ef488` |
+| EXE 大小 | 8,480,855 B |
+| 文件数 | 2,872（无 `runtime/`） |
+| 清单 | `docs/evidence/rfq022/INSO_V1.6-artifact-manifest-rfq022c.sha256`，自身 SHA256 `58c933b73a4b6bd6441efe3c8ceb9a7c7343ba500ca4c2fa8469d0c189883a97`，2,872 行 |
+| `--preview-self-check` | `ok: true` |
+| `--idle-self-check` | `gui_rendered: true`，无业务线程，`start_action = 开始运行` |
+| 构建扫描 | `RELEASE_SCAN_OK` |
+
+**未安装**：生产仍是已运行的 `f2ffa44f…`，未停机、未覆盖、未重放 982/983、未清 `UNKNOWN/hold`、未改 TP 口径、未动 `main`/`release`。
+
+## 16. CEO 指出的非阻断项（按指令未扩为第二任务）
+
+"内存已标恢复、但落库抛 SQLite 异常时，重启仍可能显示活动 incident"——本轮**未改**，仅记录：当前实现会保留 `Fault recovery could not be persisted (…)` 警告，页面在本会话显示【已恢复】，重启后若 ledger 仍 active 会再次显示该故障（即偏向"多显示"而非隐藏）。若 CEO 要收敛为"落库失败即保持 active 并标注未证实"，建议单开一条小任务，避免与本轮范围补丁混在一起。
+

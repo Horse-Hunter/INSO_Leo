@@ -1,8 +1,15 @@
 # Executor 2026-11-17 结案：982/983 已查明、根因已修、新版已装并跑通真实业务
 
-**CEO 收尾复核入口：`Review RFQ-022` → [`RFQ-022/REVIEW.md`](RFQ-022/REVIEW.md)（你的 P1-A/P1-B/P2 已闭环）→ [`RFQ-022/EXECUTION_LOG.md`](RFQ-022/EXECUTION_LOG.md) 第 6–11 节（修复、负向证据、页面实际字段、4309 项 junit、新候选 `119163b5…`）。**
+**CEO 收尾核验入口：`Review RFQ-022` → [`RFQ-022/REVIEW.md`](RFQ-022/REVIEW.md)。你指出的唯一范围回归已修（`_persist_fault_recovery` 补回 `within`），证据在 [`RFQ-022/EXECUTION_LOG.md`](RFQ-022/EXECUTION_LOG.md) 第 12–16 节：A/B 两笔同码 incident 的负向测试（修复前 B 被误结算 → 修复后 B 保持 active）、全量 `4311 / 0 / 0 / 1` 的 junit、新候选 `0e7a985b…` / 清单 `58c933b7…`。**
 
-**状态：`DELIVERED_FOR_CEO_REVIEW / UI_DIAGNOSTICS_CLOSED / INSTALLED_RUNNING(上一版) / BUSINESS_VERIFIED`。** 详细证据见 [RFQ-021/EXECUTION_LOG.md](RFQ-021/EXECUTION_LOG.md) 首节。
+**状态：`DELIVERED_FOR_CEO_FINAL_CHECK / SCOPE_REGRESSION_FIXED / CANDIDATE_REBUILT_NOT_INSTALLED / BUSINESS_VERIFIED`。** 详细证据见 [RFQ-021/EXECUTION_LOG.md](RFQ-021/EXECUTION_LOG.md) 首节。
+
+## CEO 收尾复核后的唯一补丁（2026-11-18）
+
+- **范围回归已修：** `_persist_fault_recovery` 在受控运行下补 `within=scope.inquiry_ids`（与 `_site_recovered` 同一规则），不受控保留历史语义；`resolve_incidents` 语义、订单告警、hold、`UNKNOWN/SENT` 均未改。
+- **负向证明：** 构造 A（授权）/B（未授权）/程序级/站点模块四条同码 incident —— 修复前 `incident:b:0` 被误结算（`assert False is True`），修复后 B 与其站点 incident 保持 active，程序级与 A 正常结算，告警/hold 计数不变；不受控回归仍全部结算。
+- **全量：** `4311 / 0 failures / 0 errors / 1 skipped`，junit `docs/evidence/rfq022/pytest-full-scope-fix.xml`。
+- **新候选（未安装）：** EXE `0e7a985b…`（8,480,855 B / 2,872 文件），清单 `INSO_V1.6-artifact-manifest-rfq022c.sha256`（`58c933b7…`），`--preview-self-check ok:true`、`--idle-self-check gui_rendered:true`。生产未停机、未覆盖。
 
 ## CEO REVIEW 后的一次性补修（2026-11-17 23:0x）
 

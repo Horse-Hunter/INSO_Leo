@@ -3378,17 +3378,27 @@ class ProductionBackend(GuiBackend):
 
         Only the shared-runtime / same-site incident rows flip to inactive.
         Order alerts, holds and UNKNOWN/SENT outcomes are never touched here.
+
+        A scoped run has standing only for the orders it was given: the same
+        rule ``_site_recovered`` already applies must govern this path too, or a
+        recovery here would close another order's incident and make the next
+        real outage look "already recovered".
         """
 
         store = self._v12_store
         if store is None or not callable(getattr(store, "resolve_incidents", None)):
             return
+        within = None
+        if getattr(self, "_enforce_scope", False):
+            scope = getattr(self, "_run_scope", None)
+            within = frozenset(scope.inquiry_ids) if scope is not None else frozenset()
         modules = [module for module in ("business_runtime", diagnostic.site)
                    if isinstance(module, str) and module]
         for module in dict.fromkeys(modules):
             try:
                 store.resolve_incidents(module, at=utc_now(),
-                                        diagnostic_code=diagnostic.code)
+                                        diagnostic_code=diagnostic.code,
+                                        within=within)
             except (sqlite3.Error, V12DatabaseError) as error:
                 log.warning("Fault recovery could not be persisted (%s)",
                             type(error).__name__)

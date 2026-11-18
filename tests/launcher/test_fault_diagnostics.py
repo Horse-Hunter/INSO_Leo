@@ -433,3 +433,106 @@ def test_the_page_block_separates_a_deferral_from_a_shared_stop():
 
     stop_block = fault_block(stop)
     assert "业务影响：本次停止了 询价采购、报价跟进、目标价调研" in stop_block
+
+
+# --- CEO RFQ-022 closure: a scoped recovery must not settle another order -----
+
+def _two_order_ledger(tmp_path):
+    """A (authorised) and B (not authorised), plus program-level evidence."""
+    from src.workflow.v12_store import V12Store
+    from src.workflow.v13_integration import V13HoldStore
+    from tests.workflow.test_rfq021_r5_incident_scope import (
+        INQUIRY as A,
+    )
+    from tests.workflow.test_rfq021_r5_incident_scope import (
+        OTHER as B,
+    )
+    from tests.workflow.test_rfq021_r5_incident_scope import (
+        _database,
+        _incident,
+    )
+
+    store = V12Store(_database(tmp_path / "workflow.sqlite3"))
+    V13HoldStore(store.database_path).migrate()
+    code = "SHEETS_READ_UNAVAILABLE"
+    ids = {
+        "a": "incident:a:0",
+        "b": "incident:b:0",
+        "program": "incident:program:0",
+        "b_site": "incident:bsite:0",
+    }
+    _incident(store, command_id=ids["a"], inquiry_id=A, module="business_runtime",
+              proof={"inquiry_id": A, "diagnostic": {"code": code}})
+    _incident(store, command_id=ids["b"], inquiry_id=B, module="business_runtime",
+              proof={"inquiry_id": B, "diagnostic": {"code": code}})
+    _incident(store, command_id=ids["program"], inquiry_id=A, module="business_runtime",
+              proof={"diagnostic": {"code": code}})
+    _incident(store, command_id=ids["b_site"], inquiry_id=B, module="Google Sheets",
+              proof={"inquiry_id": B, "diagnostic": {"code": code}})
+    return store, ids, A, B
+
+
+def _scoped_backend(store, backends_scope):
+    from types import SimpleNamespace
+
+    from src.gui.contracts import RunState
+    from src.launcher.backend import ProductionBackend
+
+    backend = ProductionBackend(root=store.database_path.parent)
+    backend._v12_store = store
+    backend._v13_ledger_ready = True
+    backend._run_id = "scoped-run"
+    backend._state = RunState.RUNNING
+    backend._enforce_scope = True
+    backend._run_scope = SimpleNamespace(inquiry_ids=frozenset({backends_scope}))
+    return backend
+
+
+def test_a_scoped_recovery_never_settles_another_orders_incident(tmp_path):
+    """CEO 2026-11-18: the persistence path must honour the order scope.
+
+    Order A recovers. Its own incident and the program-level record settle; B's
+    records -- same module, same diagnostic code, different order -- must stay
+    active, or the next real outage looks "already recovered".
+    """
+    import sqlite3
+
+    from tests.workflow.test_rfq021_r5_incident_scope import _active
+
+    store, ids, A, _B = _two_order_ledger(tmp_path)
+    backend = _scoped_backend(store, A)
+    backend._record_fault_diagnostic("SHEETS_READ_UNAVAILABLE", site="Google Sheets")
+
+    def counts():
+        with sqlite3.connect(store.database_path) as db:
+            return (db.execute("SELECT count(*) FROM workflow_v12_active_alerts").fetchone()[0],
+                    db.execute("SELECT count(*) FROM workflow_v13_holds").fetchone()[0])
+
+    before = counts()
+    backend._resolve_faults(site="Google Sheets")
+
+    assert _active(store, ids["program"]) is False
+    assert _active(store, ids["a"]) is False
+    assert _active(store, ids["b"]) is True
+    assert _active(store, ids["b_site"]) is True
+    assert counts() == before
+
+
+def test_an_unscoped_backend_keeps_the_historical_settlement(tmp_path):
+    from tests.workflow.test_rfq021_r5_incident_scope import _active
+
+    store, ids, _A, _B = _two_order_ledger(tmp_path)
+    backend = _scoped_backend(store, _A)
+    backend._enforce_scope = False
+    backend._run_scope = None
+    backend._record_fault_diagnostic("SHEETS_READ_UNAVAILABLE", site="Google Sheets")
+
+    backend._resolve_faults(site="Google Sheets")
+
+    assert _active(store, ids["program"]) is False
+    assert _active(store, ids["a"]) is False
+    assert _active(store, ids["b"]) is False
+    assert _active(store, ids["b_site"]) is False
+
+
+# --- CEO RFQ-022 closure: a scoped recovery must not settle another order -----

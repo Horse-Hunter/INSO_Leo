@@ -1,7 +1,7 @@
 # RFQ-022 — 11-17 两笔未处理订单 + 全业务暂停：取证、定点修复、异常 UI 改造（待 CEO 复核）
 
-**状态：`DELIVERED_FOR_CEO_REVIEW / UI_DIAGNOSTICS_CLOSED / INSTALLED_RUNNING(上一版) / BUSINESS_VERIFIED`**
-CEO 的 P1-A / P1-B / P2 三项已在同一 RFQ-022 内闭环，见 [EXECUTION_LOG 第 6–11 节](EXECUTION_LOG.md)。
+**状态：`DELIVERED_FOR_CEO_FINAL_CHECK / SCOPE_REGRESSION_FIXED / CANDIDATE_REBUILT_NOT_INSTALLED / BUSINESS_VERIFIED`**
+CEO 的 P1-A / P1-B / P2 已闭环（第 6–11 节）；2026-11-18 收尾复核指出的"恢复落库遗漏订单范围"已修（第 12–16 节），见 [EXECUTION_LOG](EXECUTION_LOG.md)。
 Owner 只转发一句 `Review RFQ-022`。收到这句话的 CEO 按 `AGENTS.md` 的顺序读本文件即可，不需要 Owner 复述任何上下文。
 
 **复核所需材料（全部在 git 内）：**
