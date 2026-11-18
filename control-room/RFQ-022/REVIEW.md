@@ -1,3 +1,41 @@
+# RFQ-022 — CEO 收尾独立复核（2026-11-18，提交 9842eb8f）
+
+**当前权威结论：`CHANGES_REQUESTED_SCOPE_REGRESSION_ONLY / P1-A_ACCEPTED / P1-B_PERSISTENCE_ACCEPTED_WITH_SCOPE_FIX / P2_ACCEPTED / SOURCE_CANDIDATE_NOT_INSTALLED`.**
+
+三项原始 UI 缺口的主体修改已验证；测试与 manifest 证据成立。**只剩一个可直接由当前源码证明、且与此前 RFQ-021 P0 范围隔离规则冲突的收尾问题**。不重新开发模块、不重放真实订单、不触碰现有生产、不另开 RFQ，不把这个结果误读为已部署新诊断版本。
+
+## 1. 独立复核已确认
+
+- **审核基线**：`workbuddy/v16-rfq016-stabilization`，Executor 修复提交 **`9842eb8ffc1972db211dc008518de1f076b622c1`**。对比上轮 CEO REVIEW 后的提交：`src/gui/workbench.py`、`src/launcher/backend.py`、`src/launcher/fault_diagnostics.py`、`src/workflow/v12_store.py` 和相应测试/证据。
+- **P1-A 基本闭环**：`backend.py:_defer_website_poll` 在 `recoverable_read=True` 或 `notify=False` 分支写内存故障投影；`FaultDiagnostic.next_retry_at`、`deferred=True` 及 UI“业务影响：本轮只推迟”区分瞬时只读失败与共享停止；不因该分支新增 SMTP、单笔采购事件、全局停机。backend→snapshot→真实 Tk 控件集成测试已添加。
+- **P1-B 正常路径基本闭环**：`backend.py:_resolve_faults` 已改为调用 `_persist_fault_recovery`，经 `V12Store.resolve_incidents(diagnostic_code=…)` 将共享 incident 的 `active=False` 写入既有 ledger；新增站点恢复与仅 inquiry 恢复的重启读回测试。**但新增落库调用遗漏受控订单范围，见下方唯一必须修复项**。
+- **P2 基本闭环**：`order_exception_block` 按订单独立 `reason_code` 提供原因/操作建议/来源行/任务号；未知时显式表示不能确定；不将全局故障臆断为单笔写入失败。部分邮件 UNKNOWN 仍由专用 `MAIL_UNKNOWN` 呈现，属于既有业务文案，不单列阻断。
+- **原误报 bug 修复成立**：`_external_effect_state` 的错误 `WriteLedger` import 已替换为实际存在的 `SqliteWriteIntentJournal`；新测试覆盖空意图与无台账时不同的状态。
+- **GitHub junit 独立查看**：`docs/evidence/rfq022/pytest-full.xml` 的 suite 标明 **4,309 tests / 0 failures / 0 errors / 1 skipped**，实际解析 **4,309 个 testcase**；唯一跳过据 Runner 是 Windows symlink 条件。CEO 未在 Executor 的 Windows 主机上自行运行 pytest；过去间歇性 SQLITE_READONLY 未在本次完整回归出现，原因仍不能称为百分之百排除。
+- **GitHub 清单独立计算**：`docs/evidence/rfq022/INSO_V1.6-artifact-manifest-rfq022b.sha256` 文本 SHA256 **`bd81bdd4aafda0fbf8851b78ba76c1653418af10a9cb7e2c27443ba1730ccc82`**，与 Executor 报告相符；2,872 个唯一文件，无 `runtime/`；EXE 条目 **`119163b545aa9b9b2a935738fa0ac96ea12e0d2cdb4e2a7d0ca5872002161cb0`**。这验证仓库清单而**不等于 CEO 实测** Windows EXE 文件及 staging。Executor 明确说明新候选**未安装**；生产仍据其当时现场记录运行上一版 `f2ffa44f…`，此信息不是持续实时监控。
+- `docs/evidence/rfq022/ui-sample.txt` 提供四种合成故障页面字段与重启投影，**不等于发生过真实故障时的生产界面截图**。真实业务 982/983 `SAVED` 属 Executor 历史现场证据，禁止重复下单验证。
+
+## 2. 唯一必须修复：受控运行的故障恢复可能误结算其他订单 incident
+
+**证据，逐行可核：**
+- `src/launcher/backend.py:_site_recovered`（约 3186–3193）已正确在 `_enforce_scope=True` 时传 `within=scope.inquiry_ids` 给 `V12Store.resolve_incidents`。
+- 新增 `backend.py:_resolve_faults`→`_persist_fault_recovery`（约 3352–3394）会对 `business_runtime` 和 `diagnostic.site` 执行 `store.resolve_incidents(module, at=…, diagnostic_code=diagnostic.code)`，**遗漏 `within`**。
+- `src/workflow/v12_store.py:resolve_incidents`（约 939–967）在 `within=None` 时会结算**所有**该 module/diagnostic_code 的活动 `incident:%`，即使 incident 证据里 `inquiry_id` 指向另一个未授权订单。这重新绕过了 RFQ-021 已审的范围保护；`tests/workflow/test_rfq021_r5_incident_scope.py` 证明该保护本来就存在且很重要。
+- **实际风险是条件性源码风险，不声称已在生产发生：** 例如在仅授权订单 A 的受控运行里，订单 B 存有相同 site + diagnostic code 的活动 incident；订单 A 恢复时，这条新持久化路径可能把 B 的 incident 误标 `active=False`，影响 UI/下一次故障核对。全量绿灯未覆盖此交叉路径。
+
+**最小修正要求：** `_persist_fault_recovery` 在受控模式下将 `within=当前 scope.inquiry_ids` 传给原有 `resolve_incidents`；不受控模式保留历史语义。加一条**真的构造 A、B 两笔相同模块/相同诊断码 active incident** 的定向负测，通过 `backend._resolve_faults(site=…)` 确认：程序级及 A 变 inactive，B 保持 active，且订单告警/hold/UNKNOWN/SENT 不变。可复用现有 `test_rfq021_r5_incident_scope.py` fixture，测试应先红后绿。**不扩展到新的诊断框架或产品需求**。
+
+## 3. 处置边界和收尾条件
+
+- **无需重新调查 982/983、TLS 或重做 GUI 设计；不强迫现在停止旧版生产。** 修复仅影响新候选源码，修复后重新跑定向与一次完整回归、更新唯一候选 EXE/manifest 的版本和证据即可。当前 `119163b5…` 候选在改源码后只能作为历史，不能冒充修复后的最终 EXE。
+- 发布/替换仍依据原维护窗口授权、完整快照/停机/一致性门禁/安全预览与生产功能可用性。**不授权**擅自停机、覆盖当前 EXE、重放 982/983、清历史 UNKNOWN/hold、变更 TP 业务口径或 main/release 分支晋升。
+- 完成这个**唯一**补丁后只请求一次简短的 RFQ-022 收尾核验，着重提交变更 SHA、新全量 JUnit、负向 A/B 证据、最终候选 SHA。若没有新实质问题，CEO 应即结束本 RFQ 的代码审核，避免无谓 R6 式回环。
+- 额外的**非阻断注意**：内存故障若恢复落库时发生 SQLite 异常，当前实现会保留日志但已把内存标成已恢复；下次重启仍可能看到活动 incident。应优先保持诊断诚实/可见，不把写库失败当已证明持久恢复；本轮不扩大为第二个开发任务，若定向测试恰好覆盖，可一并加强。
+
+**最终当前状态：`RFQ022_CHANGES_REQUESTED_SCOPE_REGRESSION_ONLY / NEW_CANDIDATE_NOT_INSTALLED`.**
+
+---
+
 # RFQ-022 — CEO Independent Review（2026-11-17）
 
 **独立结论：`CHANGES_REQUESTED_UI_DIAGNOSTICS / SOURCE_TLS_FIX_ACCEPTED / PRODUCTION_ALREADY_INSTALLED_EXECUTOR_REPORTED / BUSINESS_DONE_EXECUTOR_REPORTED / NO_NEW_PRODUCTION_ACTION`.**
