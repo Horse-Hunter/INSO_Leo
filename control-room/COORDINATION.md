@@ -1,3 +1,15 @@
+# Owner 新生产故障：2026-11-18 11:48:45 CDP_PAGE_OWNERSHIP_UNCONFIRMED（待现场取证）
+
+**Owner 当场截图，仅此能确认：** 在 INSO LEO V1.6 GUI “异常与通知”页面，11-18 11:48:45 首次、最近一次均报告 `CDP_PAGE_OWNERSHIP_UNCONFIRMED`，类型 `PageTargetOwnershipError`，顶部“全局基础设施故障”，正文“程序记录到故障代码 CDP_PAGE_OWNERSHIP_UNCONFIRMED，但该代码没有已确认的中文说明”；业务影响为已停止共享业务、未触发三小时门限；外部写入说明“三个台账不可读，外部写入结果尚未确认”，用户建议保留现场、不要重复提交。**截图证实业务已全局停止而不是 EXE 进程必然退出；没有提供可证明实际根因的底层 CDP 异常链。** 下方 GLH110 / ISL9440BIRZ / RC442-128-301-3900 / HI-15850 / 4210 / I7-12700TE / I7-6700TE / NEWPART12345 / CELERON-N6210 等是既存“人工处理/报价”状态，不能将列表误认为本次新故障造成的重复写入或失败。
+
+**独立源码初步复核：** `src/research/cdp_pages.py:45-46` 定义 `PageTargetOwnershipError.reason`; `bind_page_admission` 可因 `CDP_ADMISSION_REBIND_REFUSED` 抛此错；`native_page_owner/_native_page_owner` 可能因 `NATIVE_PAGE_LEASE_MISSING`、`Target.getTargetInfo` 原生 CDP 异常、`TAB_TARGET_ID_MISMATCH` 抛此错；`new_background_page` 的 `MARKET_PAGE_ADMISSION_MISMATCH` 可抛此错。后端 `_run_independent_job_scoped` 和 `_runtime_error` 对真正归属未知 fail-closed 全局停机。此机制**不得通过删除/跳过归属验证解决**，应追底层失败原因，区分临时 CDP transport 故障与真实页面身份错配/泄漏，建立可验证、无重复写副作用的精确恢复。
+
+**委派新 DeepSeek Executor 一次性处理同一现场事件：** 先只读核对最新进程、实际运行 EXE SHA 和启动参数、日志 `runtime/logs/INSO_V1.3.log`、fatal/退出、当前 Chrome 9222 的连接和页面信息（不关闭/接管未知人工作业页面）、事件及写意图/hold；围绕 11:48:45 ±30 分钟重建异常链、发生模块/阶段、资源 owner/target/session/admission 的生灭时序。查清为什么 GUI 只有通用故障码，补稳定的脱敏归属子原因、时间线、用户操作建议。最小修复确保独占页面、正确租约与身份以及页面资源关闭/重新绑定；可自动恢复的**纯读**任务在重新证明身份后重试，真实身份未知或写入效果未知仍阻断对应危险动作而不盲目重复采购。补有针对性的并发/超时/会话回收/负测，生产正常 GUI、询价报价 TP 不能被永久安全预览禁用；经完整回归、单一可核验候选构建后提交证据。现场替换遵循已有 B3/B4、备份、逐文件校验，不覆盖在运行的生产程序，不重做 982/983，不清原有 UNKNOWN/hold；无需增加重复 CEO Review 轮次。无法证明安全时如实报真实证据与阻断。
+
+**当前任务状态：`INCIDENT_20261118_CDP_OWNERSHIP_DIAGNOSIS_REQUESTED / CAUSE_NOT_YET_VERIFIED / NO_NEW_PRODUCTION_ACTION`。** 先前 RFQ-022 源码验收结论仍成立；本次是之后发生的独立现场故障，严禁错误归因于 RFQ-022 未安装的 `0e7a985b…` 新候选，须先查实际运行版本。
+
+## 既往协调记录（历史）
+
 # Executor 2026-11-17 结案：982/983 已查明、根因已修、新版已装并跑通真实业务
 
 **CEO 收尾核验入口：`Review RFQ-022` → [`RFQ-022/REVIEW.md`](RFQ-022/REVIEW.md)。你指出的唯一范围回归已修（`_persist_fault_recovery` 补回 `within`），证据在 [`RFQ-022/EXECUTION_LOG.md`](RFQ-022/EXECUTION_LOG.md) 第 12–16 节：A/B 两笔同码 incident 的负向测试（修复前 B 被误结算 → 修复后 B 保持 active）、全量 `4311 / 0 / 0 / 1` 的 junit、新候选 `0e7a985b…` / 清单 `58c933b7…`。**
