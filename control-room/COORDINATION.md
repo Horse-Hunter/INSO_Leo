@@ -1,6 +1,8 @@
 # Owner 新生产故障：2026-11-18 11:48:45 CDP_PAGE_OWNERSHIP_UNCONFIRMED（待现场取证）
 
-**Owner 当场截图，仅此能确认：** 在 INSO LEO V1.6 GUI “异常与通知”页面，11-18 11:48:45 首次、最近一次均报告 `CDP_PAGE_OWNERSHIP_UNCONFIRMED`，类型 `PageTargetOwnershipError`，顶部“全局基础设施故障”，正文“程序记录到故障代码 CDP_PAGE_OWNERSHIP_UNCONFIRMED，但该代码没有已确认的中文说明”；业务影响为已停止共享业务、未触发三小时门限；外部写入说明“三个台账不可读，外部写入结果尚未确认”，用户建议保留现场、不要重复提交。**截图证实业务已全局停止而不是 EXE 进程必然退出；没有提供可证明实际根因的底层 CDP 异常链。** 下方 GLH110 / ISL9440BIRZ / RC442-128-301-3900 / HI-15850 / 4210 / I7-12700TE / I7-6700TE / NEWPART12345 / CELERON-N6210 等是既存“人工处理/报价”状态，不能将列表误认为本次新故障造成的重复写入或失败。
+**Owner 当场截图，仅此能确认：** 在 INSO LEO V1.6 GUI “异常与通知”页面，11-18 11:48:45 首次、最近一次均报告 `CDP_PAGE_OWNERSHIP_UNCONFIRMED`，类型 `PageTargetOwnershipError`，顶部“全局基础设施故障”，正文“程序记录到故障代码 CDP_PAGE_OWNERSHIP_UNCONFIRMED，但该代码没有已确认的中文说明”；业务影响为已停止共享业务、未触发三小时门限；外部写入说明“写入台账不可读，外部写入结果尚未确认”，用户建议保留现场、不要重复提交。**截图证实业务已全局停止而不是 EXE 进程必然退出；没有提供可证明实际根因的底层 CDP 异常链。** 下方 GLH110 / ISL9440BIRZ / RC442-128-301-3900 / HI-15850 / 4210 / I7-12700TE / I7-6700TE / NEWPART12345 / CELERON-N6210 等是既存“人工处理/报价”状态，不能将列表误认为本次新故障造成的重复写入或失败。
+
+**已知旧版误报要先排除：** RFQ-022 源码 review 曾确认 `_external_effect_state()` 把不存在的 `WriteLedger` 误当实际读取器，导致历史已安装 EXE 即使账本干净也可能显示“写入台账不可读”；新候选源代码已改 `SqliteWriteIntentJournal`，但该候选在最新报告中**尚未安装**。因此此处的“写入台账不可读”不能直接认作账本损坏，也不能直接认定安全无风险，须只读核对真实 write-intent/SQLite 证明。
 
 **独立源码初步复核：** `src/research/cdp_pages.py:45-46` 定义 `PageTargetOwnershipError.reason`; `bind_page_admission` 可因 `CDP_ADMISSION_REBIND_REFUSED` 抛此错；`native_page_owner/_native_page_owner` 可能因 `NATIVE_PAGE_LEASE_MISSING`、`Target.getTargetInfo` 原生 CDP 异常、`TAB_TARGET_ID_MISMATCH` 抛此错；`new_background_page` 的 `MARKET_PAGE_ADMISSION_MISMATCH` 可抛此错。后端 `_run_independent_job_scoped` 和 `_runtime_error` 对真正归属未知 fail-closed 全局停机。此机制**不得通过删除/跳过归属验证解决**，应追底层失败原因，区分临时 CDP transport 故障与真实页面身份错配/泄漏，建立可验证、无重复写副作用的精确恢复。
 
