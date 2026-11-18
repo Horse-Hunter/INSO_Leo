@@ -164,6 +164,12 @@ def order_exception_block(order, state, status_text):
     return "\n".join(lines)
 
 
+def _stage_label(stage):
+    """Name the module that was running when the fault fired."""
+
+    return f"{NAMES.get(stage, stage)}（{stage}）"
+
+
 def fault_block(fault):
     """One Owner-readable fault: what broke, when, what it stopped, what to do."""
 
@@ -173,6 +179,7 @@ def fault_block(fault):
         "发生时间：" + _when(fault.last_seen)
         + f"（首次 {_when(fault.first_seen)} · 最近 {_when(fault.last_seen)}"
         + f" · 共 {fault.occurrences} 次）",
+        ("发生阶段：" + _stage_label(fault.stage)) if getattr(fault, "stage", None) else None,
         "影响模块：" + (
             "、".join(fault.related_modules)
             if fault.related_modules else (fault.site or "自动业务")

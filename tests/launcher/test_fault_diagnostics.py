@@ -536,3 +536,90 @@ def test_an_unscoped_backend_keeps_the_historical_settlement(tmp_path):
 
 
 # --- CEO RFQ-022 closure: a scoped recovery must not settle another order -----
+
+
+def test_a_page_ownership_fault_explains_itself_in_the_gui(tmp_path, monkeypatch):
+    """2026-11-18 11:48:45: the installed build showed only "未分类故障"."""
+    from src.gui.workbench import fault_block
+    from src.research.cdp_pages import PageTargetOwnershipError
+    from src.workflow.v12_faults import FaultScope, V12Fault
+    from tests.launcher.test_runtime_safety_notice import harness
+
+    backend, _worker, _smtp = harness(tmp_path, monkeypatch)
+    marker = ValueError("TAB_TARGET_ID_MISMATCH")
+    ownership = PageTargetOwnershipError((marker,))
+    ownership.__cause__ = marker
+    fault = V12Fault(FaultScope.GLOBAL_STOP, "CDP_PAGE_OWNERSHIP_UNCONFIRMED")
+    fault.__cause__ = ownership
+    backend._module_contexts = ["quotation"]
+
+    backend._runtime_error(fault)
+
+    item = backend._fault_diagnostics()[0]
+    assert item.code == "CDP_PAGE_OWNERSHIP_UNCONFIRMED"
+    assert item.title == "Chrome 页面归属无法确认"
+    assert item.stage == "quotation"
+    assert item.cause_class == "ValueError(TAB_TARGET_ID_MISMATCH)"
+    block = fault_block(item)
+    assert "发生阶段：报价跟进（quotation）" in block
+    assert "targetId" in block
+    assert "建议操作：1) 保留当前 Chrome" in block
+    assert "未分类故障" not in block
+
+
+def test_the_ownership_marker_survives_into_the_cause_chain():
+    """The GUI can only explain the sub-reason if the raise keeps it."""
+    from src.research.cdp_pages import PageTargetOwnershipError
+
+    marker = ValueError("TAB_TARGET_ID_MISMATCH")
+    error = PageTargetOwnershipError((marker,))
+    assert error.failure_classes == ("ValueError",)
+    assert error.reason == "CDP_PAGE_OWNERSHIP_UNCONFIRMED"
+
+
+def test_a_page_resource_stop_is_tied_to_the_browser_and_can_settle(tmp_path, monkeypatch):
+    """Without a site, a hydrated stop could never be settled -> stale red forever."""
+    from src.research.cdp_pages import PageTargetOwnershipError
+    from src.workflow.v12_faults import FaultScope, V12Fault
+    from src.workflow.v12_store import V12Store
+    from tests.launcher.test_runtime_safety_notice import harness
+
+    backend, _worker, _smtp = harness(tmp_path, monkeypatch)
+    marker = ValueError("TAB_TARGET_ID_MISMATCH")
+    ownership = PageTargetOwnershipError((marker,))
+    ownership.__cause__ = marker
+    fault = V12Fault(FaultScope.GLOBAL_STOP, "CDP_PAGE_OWNERSHIP_UNCONFIRMED")
+    fault.__cause__ = ownership
+    backend._runtime_error(fault)
+
+    item = backend._fault_diagnostics()[0]
+    assert item.site == "Browser/CDP"
+    assert item.related_modules == ("询价采购", "报价跟进", "目标价调研")
+    path = backend._v12_store.database_path
+    assert [f.code for f in V12Store(path).recent_fault_diagnostics()] == [
+        "CDP_PAGE_OWNERSHIP_UNCONFIRMED"]
+
+    backend._resolve_faults_after_success("quotation")
+
+    assert not backend._fault_diagnostics()[0].active
+    assert V12Store(path).recent_fault_diagnostics() == ()
+
+
+def test_a_legacy_unclassified_record_picks_up_the_catalogue_wording():
+    """The 11-18 record was written before the code had a Chinese explanation."""
+    legacy = {
+        "code": "CDP_PAGE_OWNERSHIP_UNCONFIRMED",
+        "title": "未分类故障（CDP_PAGE_OWNERSHIP_UNCONFIRMED）",
+        "cause": "程序记录到故障代码 CDP_PAGE_OWNERSHIP_UNCONFIRMED，但该代码没有已确认的中文说明。",
+        "action": "保留现场（日志与数据库）后交给技术处理；不要重复提交采购或报价。",
+        "first_seen": "2026-11-18T03:48:45.390478+00:00",
+        "last_seen": "2026-11-18T03:48:45.390478+00:00",
+        "occurrences": 1,
+    }
+
+    restored = FaultDiagnostic.from_dict(legacy)
+
+    assert restored.title == "Chrome 页面归属无法确认"
+    assert "targetId" in restored.cause
+    assert "保留当前 Chrome" in restored.action
+    assert restored.first_seen == legacy["first_seen"]  # the evidence is untouched

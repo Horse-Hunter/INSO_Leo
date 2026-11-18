@@ -73,6 +73,24 @@ _CATALOGUE: dict[str, tuple[str, str, str]] = {
         "共享浏览器会话不可用，涉及浏览器的业务无法开始。",
         "确认授权 Chrome 正常后重新开始；不要另开新的登录环境。",
     ),
+    "CDP_PAGE_OWNERSHIP_UNCONFIRMED": (
+        "Chrome 页面归属无法确认",
+        ("程序在操作某个标签页前重新核对它的身份（targetId）没有通过：可能是该标签页已被关闭或重建、"
+         "CDP 会话中途断开，或协议查询超时。为避免操作到不属于程序的页面，程序已停止。"),
+        ("1) 保留当前 Chrome，不要新建登录环境，也不要关闭程序不认识的标签页；"
+         "2) 确认该 Chrome 仍能正常打开网页；3) 重新开始，程序会重建专属页面并重新核对身份；"
+         "若反复出现，把本页故障码与日志交给技术处理。"),
+    ),
+    "CDP_PAGE_CREATION_UNCONFIRMED": (
+        "Chrome 页面创建结果无法确认",
+        "程序请求新建标签页后没有拿到可用的 targetId，无法确认页面是否已创建。",
+        "不要手工补开页面；重新开始会让程序重新创建并核对；反复出现请保留日志。",
+    ),
+    "CDP_PAGE_CLEANUP_UNCONFIRMED": (
+        "Chrome 页面释放失败",
+        "程序关闭或释放专属标签页时失败，无法确认页面资源已归还。",
+        "保留当前 Chrome 现场，重新开始；不要手工关闭未知用途的标签页。",
+    ),
     "INSO_AUTHENTICATION_REQUIRED": (
         "INSO 需要人工登录/验证",
         "ERP 会话失效或需要验证码，只有本人能完成。",
@@ -166,6 +184,7 @@ class FaultDiagnostic:
     last_seen: str | None = None
     occurrences: int = 1
     site: str | None = None
+    stage: str | None = None
     cause_class: str | None = None
     phase: str = UNCONFIRMED
     impact: str = ""
@@ -198,9 +217,16 @@ class FaultDiagnostic:
         clean["knock_on"] = tuple(clean.get("knock_on") or ())
         clean["related_modules"] = tuple(clean.get("related_modules") or ())
         clean["code"] = str(clean.get("code") or "UNKNOWN")
-        clean["title"] = str(clean.get("title") or describe(clean["code"])[0])
-        clean["cause"] = str(clean.get("cause") or describe(clean["code"])[1])
-        clean["action"] = str(clean.get("action") or describe(clean["code"])[2])
+        title, cause, action = describe(clean["code"])
+        stored_title = str(clean.get("title") or "")
+        if not stored_title or stored_title.startswith("未分类故障"):
+            # A record written before the catalogue learned this code keeps the
+            # old placeholder. Re-derive the wording; everything else is kept.
+            clean["title"], clean["cause"], clean["action"] = title, cause, action
+        else:
+            clean["title"] = stored_title
+            clean["cause"] = str(clean.get("cause") or cause)
+            clean["action"] = str(clean.get("action") or action)
         return cls(**clean)
 
 
@@ -216,6 +242,7 @@ def build_diagnostic(
     reason: str,
     *,
     site: str | None = None,
+    stage: str | None = None,
     cause_class: str | None = None,
     first_seen=None,
     last_seen=None,
@@ -259,6 +286,7 @@ def build_diagnostic(
         last_seen=_iso(last_seen),
         occurrences=max(1, int(occurrences)),
         site=site,
+        stage=stage,
         cause_class=cause_class,
         phase=phase,
         impact=impact,

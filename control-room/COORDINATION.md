@@ -1,3 +1,20 @@
+# Executor 2026-11-18 结案：CDP 页面归属停机已定位、修复、安装并恢复业务
+
+**事件记录：[INCIDENT-20261118.md](INCIDENT-20261118.md)**（版本核验、时间线、证据链、根因、修复、负向测试、门禁、最终现场）。
+
+**状态：`DEFECT_CONFIRMED_AND_FIXED / TRIGGER_NOT_PROVEN / INSTALLED_RUNNING / BUSINESS_RESUMED`。**
+
+- **现场版本先核验：** 故障发生在 `f2ffa44f…`（11-17 19:11 由 `aaac8c75` 构建），**不是** RFQ-022 候选 `0e7a985b…`（从未安装）。
+- **第一故障：** 11:48:45.390 `CDP_PAGE_OWNERSHIP_UNCONFIRMED / PageTargetOwnershipError`，由报价更新边界 `_boundary_safety_fault` 包成 `V12Fault(GLOBAL_STOP)` → 全局停机；不是崩溃、不是库损坏、不是三小时机制。具体子原因（超时/会话回收/页面关闭）旧版**未记录**，故不编造。
+- **程序缺陷：** `_native_page_owner` 把"身份查询没回答"当成"归属丢失"，并**永久**作废共享页面资源，没有任何重新证明的机会——所以只能重启。
+- **修复：** 身份查询改为有界重证（3 次，只读协议），`TAB_TARGET_ID_MISMATCH` 仍一次即判；页面在核对中关闭视为"不再归属"；只有三次都没回答或身份不匹配才作废并保留写入保护。另把 `CDP_PAGE_*` 归到 `Browser/CDP`、补齐中文目录与 **`发生阶段：`**、让子原因进异常链（界面可见 `ValueError(TAB_TARGET_ID_MISMATCH)`）、历史"未分类"记录按目录刷新措辞。
+- **"写入台账不可读"是旧版误报：** 由 `aaac8c75` 的错误 import 造成，`9842eb8f` 已修；实测写意图 8 条全部 `SETTLED`、活动告警 0，账本无损。
+- **测试：** 新增 9 项（5 项 CDP 归属 + 4 项诊断），未修复源码上 3 项先红；全量 **4320 / 0 failures / 0 errors / 1 skipped**，junit `docs/evidence/rfq023/pytest-full.xml`。
+- **门禁安装：** 快照 + 停机 + 库副本/校验（一次因非空 `-wal` 被拒，停机 checkpoint 后复验 PASS）+ `INSTALL_RESULT = PASS`（2,872/2,872）。最终 EXE `7a1ff6a6…` / 清单 `a25ca50e…`；旧版保留 `.prev-20261118T045741Z`、`.prev-20261118T052322Z`。
+- **现场：** PID 47040 + 71872（13:23:55），inquiry 6.0 s / quotation 93.3 s / tp 0.5 s 全部 completed，启动后 0 条 `runtime fault`；11:48 那条 incident 已 `active=false`；Chrome 4 个页面稳定、未关闭他人页面、未新建登录环境。
+
+## 既往协调记录（历史）
+
 # Owner 新生产故障：2026-11-18 11:48:45 CDP_PAGE_OWNERSHIP_UNCONFIRMED（待现场取证）
 
 **Owner 当场截图，仅此能确认：** 在 INSO LEO V1.6 GUI “异常与通知”页面，11-18 11:48:45 首次、最近一次均报告 `CDP_PAGE_OWNERSHIP_UNCONFIRMED`，类型 `PageTargetOwnershipError`，顶部“全局基础设施故障”，正文“程序记录到故障代码 CDP_PAGE_OWNERSHIP_UNCONFIRMED，但该代码没有已确认的中文说明”；业务影响为已停止共享业务、未触发三小时门限；外部写入说明“写入台账不可读，外部写入结果尚未确认”，用户建议保留现场、不要重复提交。**截图证实业务已全局停止而不是 EXE 进程必然退出；没有提供可证明实际根因的底层 CDP 异常链。** 下方 GLH110 / ISL9440BIRZ / RC442-128-301-3900 / HI-15850 / 4210 / I7-12700TE / I7-6700TE / NEWPART12345 / CELERON-N6210 等是既存“人工处理/报价”状态，不能将列表误认为本次新故障造成的重复写入或失败。

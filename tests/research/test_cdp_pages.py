@@ -620,3 +620,160 @@ def test_close_target_other_protocol_error_still_fails_closed():
 
     with pytest.raises(PageTargetCleanupError):
         new_background_page(protocol, protocol, timeout_ms=1234)
+
+
+# --- 2026-11-18 incident: an unanswered identity query is not ownership loss ---
+
+
+def _owned(protocol, *, owner="task-one"):
+    return new_background_page(protocol, protocol, timeout_ms=1234, owner=owner)
+
+
+def _flaky_proof(protocol, failures, *, then="ok"):
+    """A protocol whose Target.getTargetInfo fails a bounded number of times."""
+
+    make = protocol.new_cdp_session
+    state = {"left": failures, "sessions": 0}
+
+    def factory(page):
+        state["sessions"] += 1
+        session = make(page)
+
+        def proof(_):
+            if state["left"] > 0:
+                state["left"] -= 1
+                raise TimeoutError("synthetic protocol deadline")
+            return {"targetInfo": {"targetId": page.target}}
+
+        return SimpleNamespace(send=proof, detach=session.detach)
+
+    protocol.new_cdp_session = factory
+    return state
+
+
+def test_a_timed_out_ownership_proof_is_reproven_without_faulting():
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        bind_page_admission,
+        native_page_owner,
+    )
+
+    admission = PageResourceAdmission()
+    protocol = RacingTargets()
+    bind_page_admission(protocol, admission)
+    page = _owned(protocol)
+    _flaky_proof(protocol, 1)
+
+    assert native_page_owner(page) == "task-one"
+    admission.require_open()  # a re-proven page is still usable
+
+
+def test_an_unanswered_proof_fails_closed_after_the_bound_and_invalidates():
+    from src.research.cdp_pages import (
+        NATIVE_OWNER_PROOF_ATTEMPTS,
+        PageResourceAdmission,
+        PageTargetOwnershipError,
+        bind_page_admission,
+        native_page_owner,
+    )
+
+    admission = PageResourceAdmission()
+    protocol = RacingTargets()
+    bind_page_admission(protocol, admission)
+    page = _owned(protocol)
+    state = _flaky_proof(protocol, 99)
+
+    with pytest.raises(PageTargetOwnershipError):
+        native_page_owner(page)
+    assert state["sessions"] == NATIVE_OWNER_PROOF_ATTEMPTS
+    with pytest.raises(PageTargetOwnershipError):
+        admission.require_open()
+
+
+def test_a_target_id_mismatch_is_never_retried():
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        PageTargetOwnershipError,
+        bind_page_admission,
+        native_page_owner,
+    )
+
+    admission = PageResourceAdmission()
+    protocol = RacingTargets()
+    bind_page_admission(protocol, admission)
+    page = _owned(protocol)
+    sessions = {"count": 0}
+
+    def wrong(page):
+        sessions["count"] += 1
+        return SimpleNamespace(send=lambda _: {"targetInfo": {"targetId": "someone-else"}},
+                               detach=lambda: None)
+
+    protocol.new_cdp_session = wrong
+
+    with pytest.raises(PageTargetOwnershipError):
+        native_page_owner(page)
+    assert sessions["count"] == 1  # an identity conflict is not a hiccup
+    with pytest.raises(PageTargetOwnershipError):
+        admission.require_open()
+
+
+def test_a_page_closed_mid_proof_is_no_longer_owned_rather_than_faulted():
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        bind_page_admission,
+        native_page_owner,
+    )
+
+    admission = PageResourceAdmission()
+    protocol = RacingTargets()
+    bind_page_admission(protocol, admission)
+    page = _owned(protocol)
+    state = {"closed": False}
+    page.is_closed = lambda: state["closed"]
+    make = protocol.new_cdp_session
+
+    def closing(target):
+        session = make(target)
+
+        def proof(_):
+            state["closed"] = True
+            raise TimeoutError("synthetic target closed")
+        return SimpleNamespace(send=proof, detach=session.detach)
+
+    protocol.new_cdp_session = closing
+
+    assert native_page_owner(page) is None
+    admission.require_open()
+
+
+def test_concurrent_proofs_of_one_page_do_not_fault_it():
+    from threading import Thread
+
+    from src.research.cdp_pages import (
+        PageResourceAdmission,
+        bind_page_admission,
+        native_page_owner,
+    )
+
+    admission = PageResourceAdmission()
+    protocol = RacingTargets()
+    bind_page_admission(protocol, admission)
+    page = _owned(protocol)
+    results, errors = [], []
+
+    def verify():
+        try:
+            results.append(native_page_owner(page))
+        except Exception as exc:  # noqa: BLE001 - the assertion below reports it
+            errors.append(exc)
+
+    threads = [Thread(target=verify) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(5)
+
+    assert errors == []
+    assert results == ["task-one"] * 4
+    admission.require_open()

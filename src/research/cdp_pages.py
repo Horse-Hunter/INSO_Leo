@@ -18,6 +18,38 @@ _LOG = logging.getLogger(__name__)
 _OWNER_PREFIX = "INSO_OWNER_TAB:"
 NATIVE_PROTOCOL_TIMEOUT_MS = 10000
 
+# Re-proving a page's identity is a read-only protocol query.  When the query it-
+# self does not answer (deadline, torn session, closed target) nothing about the
+# page has been proven, so it is retried a bounded number of times before the
+# resource is declared unowned.  A *mismatched* target id is never retried.
+NATIVE_OWNER_PROOF_ATTEMPTS = 3
+
+
+def ownership_failure_marker(error) -> str:
+    """A stable, secret-free label for the GUI and the log.
+
+    Only a class name and one of our own ``[A-Z_]`` marker codes are read; an
+    exception message can carry site text and is never copied.
+    """
+
+    name = type(error).__name__
+    marker = str(error).strip()
+    if marker and re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", marker):
+        return f"{name}({marker})"
+    return name
+
+
+def _transient_ownership_proof_failure(error) -> bool:
+    """Did the proof *not answer*, as opposed to answering "not yours"?"""
+
+    name = type(error).__name__
+    if isinstance(error, (TimeoutError, ConnectionError, OSError)):
+        return True
+    return (type(error).__module__ or "").startswith("playwright") and name in {
+        "Error", "TimeoutError", "TargetClosedError", "BrowserClosedError",
+        "WebSocketError", "ConnectionClosedError",
+    }
+
 
 def bounded_browser_call(port, operation, *args, timeout_ms=None, **kwargs):
     """Compatibility entry; Core owns the single SDK deadline implementation."""
@@ -354,12 +386,13 @@ def bind_page_admission(browser, admission):
     """All clients of one runtime must bind the same admission before use."""
     old = getattr(browser, "_inso_page_admission", None)
     if old is not None and old is not admission:
-        error = PageTargetOwnershipError((ValueError("CDP_ADMISSION_REBIND_REFUSED"),))
+        marker = ValueError("CDP_ADMISSION_REBIND_REFUSED")
+        error = PageTargetOwnershipError((marker,))
         admission.invalidate(error)
         if isinstance(old, PageResourceAdmission):
             old.invalidate(error)
         browser._inso_page_resource_failed = True
-        raise error
+        raise error from marker
     browser._inso_page_admission = admission
     if getattr(browser, "_inso_page_resource_failed", False) is True:
         admission.invalidate(PageTargetCleanupError(()))
@@ -378,24 +411,50 @@ def _native_page_owner(page, lease):
     admission = getattr(browser, "_inso_page_admission", None)
     if isinstance(admission, PageResourceAdmission):
         admission.require_open()
-    session = None
-    try:
-        session = bounded_browser_call(context, "new_cdp_session", page)
-        actual = bounded_browser_call(session, "send", "Target.getTargetInfo")["targetInfo"]["targetId"]
-        if actual != target_id:
-            raise ValueError("TAB_TARGET_ID_MISMATCH")
-    except Exception as failure:
+    failure = None
+    for _attempt in range(NATIVE_OWNER_PROOF_ATTEMPTS):
+        if page.is_closed():
+            return None  # A target that is gone owns nothing; the caller makes a new one.
+        session = None
+        detach_failure = None
+        try:
+            session = bounded_browser_call(context, "new_cdp_session", page)
+            actual = bounded_browser_call(session, "send", "Target.getTargetInfo")["targetInfo"]["targetId"]
+            if actual != target_id:
+                # A different target answers for this wrapper: never adopt it and
+                # never retry -- that is a real identity conflict, not a hiccup.
+                marker = ValueError("TAB_TARGET_ID_MISMATCH")
+                error = PageTargetOwnershipError((marker,))
+                _invalidate_page_resource(browser, error)
+                # Keep our own marker in the chain so the Owner-facing fault can
+                # say *why* ownership was refused; the message is our code only.
+                raise error from marker
+            failure = None
+        except PageTargetOwnershipError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - every unanswered proof is classified below
+            failure = exc
+        finally:
+            if session is not None:
+                try:
+                    bounded_browser_call(session, "detach")
+                except Exception as exc:  # noqa: BLE001 - an undetached session is a leak
+                    detach_failure = exc
+        if detach_failure is not None:
+            error = PageTargetCleanupError((detach_failure,))
+            _invalidate_page_resource(browser, error)
+            raise error from detach_failure
+        if failure is None:
+            break
+        if not _transient_ownership_proof_failure(failure):
+            break
+        _LOG.warning("Native page ownership proof unanswered (%s); re-proving",
+                     ownership_failure_marker(failure))
+    if failure is not None:
         error = PageTargetOwnershipError((failure,))
         _invalidate_page_resource(browser, error)
+        _LOG.warning("Native page ownership unproven: %s", ownership_failure_marker(failure))
         raise error from failure
-    finally:
-        if session is not None:
-            try:
-                bounded_browser_call(session, "detach")
-            except Exception as failure:
-                error = PageTargetCleanupError((failure,))
-                _invalidate_page_resource(browser, error)
-                raise error from failure
     if isinstance(admission, PageResourceAdmission):
         admission.require_open()
     return owner
@@ -411,7 +470,8 @@ def native_page_owner(page: Any) -> str | None:
         return None
     lease = getattr(page, "_inso_native_page_owner", None)
     if lease is None:
-        raise PageTargetOwnershipError((ValueError("NATIVE_PAGE_LEASE_MISSING"),))
+        marker = ValueError("NATIVE_PAGE_LEASE_MISSING")
+        raise PageTargetOwnershipError((marker,)) from marker
     return _native_page_owner(page, lease)
 
 

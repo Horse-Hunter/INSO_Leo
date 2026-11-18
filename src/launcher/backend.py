@@ -611,6 +611,8 @@ def _website_failure(exc):
     if "V13_FX_UNAVAILABLE" in reasons:
         return "汇率网站"
     if (reasons & {"CDP_SESSION_UNAVAILABLE", "CDP_RECONNECT_EXHAUSTED",
+                   "CDP_PAGE_OWNERSHIP_UNCONFIRMED", "CDP_PAGE_CREATION_UNCONFIRMED",
+                   "CDP_PAGE_CLEANUP_UNCONFIRMED",
                    "GOOGLE_OPERATION_NOT_CLOSED", "INSO_OPERATION_NOT_CLOSED"}
             or any(isinstance(e, BrowserBootstrapError) for e in chain)):
         return "Browser/CDP"
@@ -3314,7 +3316,7 @@ class ProductionBackend(GuiBackend):
         self._notify()
         return True
 
-    def _record_fault_diagnostic(self, reason, *, site=None, cause_class=None,
+    def _record_fault_diagnostic(self, reason, *, site=None, stage=None, cause_class=None,
             escalation="", external_effect="尚未确认", uncertainty="", impact="",
             next_retry_at=None, deferred=False, log_hint="runtime/logs/INSO_V1.3.log"):
         """Remember one Owner-facing fault record.  Never invents a cause."""
@@ -3328,7 +3330,7 @@ class ProductionBackend(GuiBackend):
                 first = site_first
             self._fault_last_seen[reason] = now
             count = self._fault_counts[reason] = self._fault_counts.get(reason, 0) + 1
-            diagnostic = build_diagnostic(reason, site=site, cause_class=cause_class,
+            diagnostic = build_diagnostic(reason, site=site, stage=stage, cause_class=cause_class,
                 first_seen=first, last_seen=now, occurrences=count,
                 escalation=escalation, external_effect=external_effect,
                 uncertainty=uncertainty, impact=impact, next_retry_at=next_retry_at,
@@ -3403,6 +3405,12 @@ class ProductionBackend(GuiBackend):
                 log.warning("Fault recovery could not be persisted (%s)",
                             type(error).__name__)
 
+    def _current_module_stage(self):
+        """Which module was running when the fault fired (for the page)."""
+
+        contexts = getattr(self, "_module_contexts", None) or ()
+        return contexts[-1] if contexts else None
+
     def _fault_cause_label(self, exc):
         """A stable label for the page: exception class plus a machine reason code.
 
@@ -3419,7 +3427,12 @@ class ProductionBackend(GuiBackend):
             return None
         name = type(deepest).__name__
         code = getattr(deepest, "reason_code", None)
-        if isinstance(code, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", code):
+        if not (isinstance(code, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", code)):
+            # Some faults carry their stable sub-reason as the message itself
+            # (e.g. ValueError("TAB_TARGET_ID_MISMATCH")); only our own codes match.
+            marker = str(deepest).strip()
+            code = marker if re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", marker) else None
+        if code:
             return f"{name}({code})"
         return name
 
@@ -3577,6 +3590,7 @@ class ProductionBackend(GuiBackend):
             "runtime_reason": safe_reason, "runtime_cause": type(root_cause).__name__,
         })
         diagnostic = self._record_fault_diagnostic(reason, site=site,
+            stage=self._current_module_stage(),
             cause_class=self._fault_cause_label(exc),
             escalation=("连续三小时未恢复，已停止共享业务" if prolonged else
                         "已停止共享业务；本次没有达到三小时升级门限"),
@@ -4051,6 +4065,11 @@ class ProductionBackend(GuiBackend):
         site = next((value for code, value in sites.items() if reason.startswith(code+"_")), None)
         if reason == "GOOGLE_READ_RETRY_EXHAUSTED":
             site = "Google Sheets"
+        if reason.startswith("CDP_PAGE_"):
+            # A page-resource stop is a Browser/CDP fault: without this the record
+            # has no site, so no successful module could ever settle it and the
+            # page would keep a stale red fault across restarts.
+            site = "Browser/CDP"
         proof = None
         from src.workflow.notification_review import RUNTIME_SAFETY_REASONS
         if (not manual_login and self._runtime_stop_reason == reason
