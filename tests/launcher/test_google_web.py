@@ -21,7 +21,7 @@ from src.sheets.quotation_input import (
     QuotationInputLocation,
     QuotationInputUnavailable,
 )
-from src.workflow.v12_faults import V12Fault
+from src.workflow.v12_faults import FaultScope, V12Fault
 from tests.launcher.test_google_quote_update import Browser, Page
 
 TITLES = {'2026': 0, 'SHAHAB': 17, '报价输入': 29}
@@ -1765,3 +1765,62 @@ def test_browser_fallback_inflight_write_blocks_second_client(web, monkeypatch):
     assert not thread.is_alive() and results == []
     second.update(spreadsheetId="test", range="'2026'!F2",
                   valueInputOption="RAW", body={"values": [["SECOND"]]}).execute()
+
+
+# --- 2026-11-19: the runtime's own page channel can go deaf ------------------
+
+def _playwright_timeout(message="Timeout 30000ms exceeded."):
+    return type("TimeoutError", (Exception,),
+                {"__module__": "playwright._impl._errors"})(message)
+
+
+def test_a_stalled_client_is_replaced_and_the_same_read_still_succeeds(web):
+    """A deaf attachment must be rebuilt, not waited on for 32 hours."""
+
+    service, _browser, _rows, _original = web
+    real, calls, reported = service._session, {"n": 0}, []
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise _playwright_timeout()
+        return real()
+
+    service._session = flaky
+    service._on_transport_stalled = lambda: reported.append(1)
+
+    rows = GoogleSheetsRowReader(service).read_rows(WorksheetIdentity("test", "2026"))
+
+    assert rows
+    assert reported == [1]      # exactly one rebuild request for this poll
+    assert calls["n"] == 2      # the retry used the rebuilt client, not the dead one
+
+
+def test_an_authentication_stop_never_asks_for_a_rebuild(web):
+    """Auth is an answer; swapping the client would hide a real login problem."""
+
+    service, _browser, _rows, _original = web
+    reported = []
+    service._on_transport_stalled = lambda: reported.append(1)
+
+    def denied():
+        raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_AUTHENTICATION_REQUIRED")
+
+    service._session = denied
+
+    from src.sheets.google_reader import GoogleSheetsReadError
+
+    with pytest.raises(GoogleSheetsReadError):
+        GoogleSheetsRowReader(service).read_rows(WorksheetIdentity("test", "2026"))
+    assert reported == []
+
+
+def test_one_poll_requests_at_most_one_rebuild(web):
+    service, _browser, _rows, _original = web
+    reported = []
+    service._on_transport_stalled = lambda: reported.append(1)
+
+    service._note_transport_stall()
+    service._note_transport_stall()
+
+    assert reported == [1]

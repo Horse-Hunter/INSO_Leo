@@ -19,6 +19,18 @@ BG, NAV, CARD, LINE = "#141b23", "#10161e", "#1c2733", "#2b3949"
 TEXT, MUTED, BLUE = "#e7edf4", "#9baabd", "#557fae"
 GREEN, AMBER, RED = "#8bc9ac", "#e5bb7b", "#ed9b9b"
 NAMES = {"inquiry": "询价采购", "quotation": "报价跟进", "tp": "目标价调研"}
+# Only step labels this program writes itself; the page never echoes page text.
+STAGE_NAMES = {
+    "google-session": "连接共享浏览器",
+    "google-open-sheet": "打开表格页面",
+    "google-sheet-ready": "等待表格网格就绪",
+    "google-select-sheet": "切换到目标工作表",
+    "google-download-read": "导出并读取表格",
+    "google-write-select-cell": "定位写入单元格",
+    "google-write-edit": "写入单元格",
+    "google-write-save": "等待表格保存",
+    "google-write-readback": "回读校验",
+}
 SITES = {
     "ic.net": "IC.net",
     "findchips": "Findchips",
@@ -165,9 +177,10 @@ def order_exception_block(order, state, status_text):
 
 
 def _stage_label(stage):
-    """Name the module that was running when the fault fired."""
+    """Name the step that was running when the fault fired."""
 
-    return f"{NAMES.get(stage, stage)}（{stage}）"
+    named = STAGE_NAMES.get(stage) or NAMES.get(stage)
+    return f"{named}（{stage}）" if named else stage
 
 
 def fault_block(fault):

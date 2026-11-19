@@ -76,7 +76,17 @@ def _sanitized_line(record: logging.LogRecord) -> str:
     runtime_cause = getattr(record, "runtime_cause", None)
     if (isinstance(runtime_reason, str) and re.fullmatch(r"[A-Z_]{1,64}", runtime_reason)
             and isinstance(runtime_cause, str) and _CAUSE_NAME.fullmatch(runtime_cause)):
-        return f"runtime fault reason={runtime_reason} cause={runtime_cause}"
+        runtime_stage = getattr(record, "runtime_stage", None)
+        runtime_chain = getattr(record, "runtime_chain", None)
+        # Both are our own vocabulary: a step label and a chain of class names.
+        stage_suffix = (f" stage={runtime_stage}"
+                        if isinstance(runtime_stage, str) and _STEP_LABEL.fullmatch(runtime_stage)
+                        else "")
+        chain_suffix = (f" chain={runtime_chain}"
+                        if isinstance(runtime_chain, str)
+                        and re.fullmatch(r"[A-Za-z_]{1,64}(?:<-[A-Za-z_]{1,64}){0,4}", runtime_chain)
+                        else "")
+        return f"runtime fault reason={runtime_reason} cause={runtime_cause}{stage_suffix}{chain_suffix}"
 
     cycle = getattr(record,"cycle_id",None)
     scheduled = getattr(record, "scheduled_module", None)

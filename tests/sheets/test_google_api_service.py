@@ -678,3 +678,54 @@ def test_api_inflight_write_blocks_a_second_client_before_its_request():
     second.update(spreadsheetId=SHEET, range="'2026'!F9", valueInputOption="RAW",
                   body={"values": [["TI"]]}).execute()
     assert api.calls == 2
+
+
+# --- 2026-11-19: the API client must follow the route the browser uses -------
+
+def test_the_system_proxy_is_read_from_the_same_place_chrome_uses(monkeypatch):
+    """Chrome reads the sheet through the system proxy; a direct API call does not."""
+
+    import sys
+    import winreg
+
+    from src.sheets import google_api_service
+
+    values = {"ProxyEnable": (1, 4), "ProxyServer": ("127.0.0.1:7890", 1)}
+
+    class Key:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+    monkeypatch.setattr(google_api_service.os, "name", "nt")
+    monkeypatch.setattr(winreg, "OpenKey", lambda *_a, **_k: Key())
+    monkeypatch.setattr(winreg, "QueryValueEx", lambda _k, name: values[name])
+    if "winreg" not in sys.modules:  # pragma: no cover - Windows only
+        pytest.skip("winreg is Windows-only")
+
+    assert google_api_service.system_proxy_address() == ("127.0.0.1", 7890)
+
+
+def test_a_per_scheme_proxy_list_uses_the_http_entry(monkeypatch):
+    from src.sheets import google_api_service
+
+    monkeypatch.setattr(google_api_service, "system_proxy_address",
+                        lambda: ("10.0.0.2", 8080))
+    info, label = google_api_service._proxy_info("auto")
+
+    assert info is not None and (info.proxy_host, info.proxy_port) == ("10.0.0.2", 8080)
+    assert label == "system 10.0.0.2:8080"
+
+
+def test_proxy_can_be_disabled_or_given_explicitly(monkeypatch):
+    from src.sheets import google_api_service
+
+    monkeypatch.setattr(google_api_service, "system_proxy_address",
+                        lambda: ("127.0.0.1", 7890))
+
+    assert google_api_service._proxy_info("none") == (None, "direct")
+    info, label = google_api_service._proxy_info("http://192.168.1.9:3128")
+    assert (info.proxy_host, info.proxy_port) == ("192.168.1.9", 3128)
+    assert label == "configured 192.168.1.9:3128"

@@ -17,6 +17,8 @@ as serial numbers and identifiers never lose their leading zeros.
 """
 
 import json
+import logging
+import os
 import re
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -161,6 +163,80 @@ def load_service_account_info(source: str | Path) -> dict:
     return info
 
 
+def system_proxy_address() -> tuple[str, int] | None:
+    """The Windows system proxy the Owner's own browser is using, if any.
+
+    Measured 2026-11-19: with the VPN in system-proxy mode Chrome reads the
+    sheet while a direct ``httplib2`` connection to ``sheets.googleapis.com``
+    times out (WinError 10060). The API client must follow the same route the
+    browser does, otherwise the product reports "表格不可用" for a sheet the
+    Owner can open.
+    """
+
+    if os.name != "nt":
+        return None
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\CurrentVersion\Internet Settings") as key:
+            enabled = winreg.QueryValueEx(key, "ProxyEnable")[0]
+            server = winreg.QueryValueEx(key, "ProxyServer")[0]
+    except (OSError, ValueError, ImportError):
+        return None
+    if not enabled or not isinstance(server, str) or not server.strip():
+        return None
+    # "host:port" or per-scheme "http=host:port;https=host:port".
+    candidate = server.strip()
+    for part in candidate.split(";"):
+        if "=" in part:
+            scheme, _, value = part.partition("=")
+            if scheme.strip().lower() in {"http", "https"}:
+                candidate = value.strip()
+                break
+    host, separator, port = candidate.rpartition(":")
+    if not separator or not host:
+        return None
+    host = host.strip("[]")
+    try:
+        number = int(port)
+    except ValueError:
+        return None
+    if not 0 < number < 65536 or not host:
+        return None
+    return host, number
+
+
+def _proxy_info(choice):
+    """Resolve ``google_api.proxy``: ``auto`` (default), ``none`` or a URL."""
+
+    if choice in (None, "", "auto", "system"):
+        address = system_proxy_address()
+        label = "system"
+    elif choice == "none":
+        return None, "direct"
+    elif isinstance(choice, str):
+        text = choice.strip()
+        host, _, port = text.split("//")[-1].rpartition(":")
+        try:
+            address = (host, int(port))
+        except ValueError:
+            raise GoogleSheetsAuthorizationError(
+                "google_api.proxy must be 'auto', 'none' or http://host:port") from None
+        label = "configured"
+    else:
+        return None, "direct"
+    if address is None:
+        return None, "direct"
+    from httplib2 import ProxyInfo, socks
+
+    # httplib2 0.32 leaves ``socks`` as None unless PySocks is installed, so the
+    # documented constant is read defensively instead of failing on None.
+    proxy_type = getattr(socks, "PROXY_TYPE_HTTP", 3)
+    host, port = address
+    return ProxyInfo(proxy_type, host, port), f"{label} {host}:{port}"
+
+
 def build_service_account_sheets_service(
     service_account_file: str | Path,
     *,
@@ -169,6 +245,7 @@ def build_service_account_sheets_service(
     on_read_success=lambda: None,
     timer=monotonic,
     page_admission=None,
+    proxy="auto",
 ) -> "GoogleApiSheetsService":
     """Build the API transport once; no OAuth consent, no refresh token."""
     if scope not in {READ_ONLY_SCOPE, READ_WRITE_SCOPE}:
@@ -184,13 +261,14 @@ def build_service_account_sheets_service(
         ) from exc
 
     info = load_service_account_info(service_account_file)
+    proxy_value, proxy_label = _proxy_info(proxy)
     try:
         # The key material stays in memory only; nothing is cached to disk.
         credentials = service_account.Credentials.from_service_account_info(
             info, scopes=[scope]
         )
         http = google_auth_httplib2.AuthorizedHttp(
-            credentials, http=httplib2.Http(timeout=timeout)
+            credentials, http=httplib2.Http(timeout=timeout, proxy_info=proxy_value)
         )
         service = build("sheets", "v4", http=http, cache_discovery=False)
     except GoogleSheetsAuthorizationError:
@@ -199,6 +277,8 @@ def build_service_account_sheets_service(
         raise GoogleSheetsAuthorizationError(
             "Unable to authorize read/write Google Sheets access"
         ) from None
+    logging.getLogger("inso.diagnostics").info(
+        "Google Sheets API transport route=%s", proxy_label)
     return GoogleApiSheetsService(
         service, timer=timer, on_read_success=on_read_success, page_admission=page_admission)
 

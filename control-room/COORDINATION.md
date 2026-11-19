@@ -10,6 +10,20 @@
 
 ## 此前 Executor 现场结案及协同历史（保留）
 
+# Executor 2026-11-19 结案：32 小时"表格不可用"实为 API 连接绕过了系统代理（已修、已装、业务已恢复）
+
+**事件记录：[INCIDENT-20261119.md](INCIDENT-20261119.md)**（现场版本、实测证据、两次根因判定、修复、负向测试、三次门禁安装、新订单处理结果）。
+
+**状态：`ROOT_CAUSE_CORRECTED_TO_PROXY_ROUTE / FIXED / INSTALLED_RUNNING / BUSINESS_VERIFIED`。**
+
+- **不是表格问题，也不是"CDP 被关"：** 表格在浏览器里一直可读；真正失效的是**程序自己的 Google 接口连接**——`google_api.enabled=true` 时源表读取走 `sheets.googleapis.com`，`httplib2` **直连**，而本机直连 Google 被阻断（`curl code=000`、`WinError 10060`），经 Windows 系统代理 `127.0.0.1:7890` 才通。Chrome 用系统代理，所以 Owner 看到的是"表格好好的"。
+- **为什么重启、换版本都没用：** 环境与路由问题，不是进程状态；11-18 17:36 前正常是因为当时 VPN 处于 TUN 模式。
+- **修复：** API 客户端按 **Windows 系统代理**连接（`google_api.proxy` = `auto`/`none`/`http://host:port`），并补齐 `httplib2` 的 CONNECT 依赖 **PySocks**（打包 `hiddenimports += ["socks"]`，已核实 EXE 归档内含 `socks`）；`GOOGLE_WAITING_RECOVERY` 文案改为"浏览器能打开表格不等于本程序能连上"。
+- **顺带补的真实缺口（非本次根因）：** 页面通道失聪时旧代码永远不重连（`is_connected()` 仍为 True），现改为一次轮询最多一次丢弃自有 client 并重新 attach，绝不 kill Chrome；INSO 单据面打开时不换。新增 `GOOGLE_PAGE_UNRESPONSIVE` + `stage=`/`chain=` 日志。
+- **测试：** 新增 9 项；全量 `4328 passed / 1 skipped`。
+- **现场：** 终版 EXE `fa7a8544…`（清单 `cc7f4868…`），22:29:57 启动；22:30 inquiry 13.5 s → quotation 74.8 s → tp 0.55 s 全部 completed，**0 条 runtime fault**。
+- **新订单：** SHAHAB 142（IMS1141-02DB）六来源均无报价 → `NO_MATCHING_PRODUCT`，按设计不发采购并发邮件；SHAHAB 143（TRJC476K016RRJ）`PARTIAL_SUCCESS` → 采购 `SAVED`。
+
 # Executor 2026-11-18 结案：CDP 页面归属停机已定位、修复、安装并恢复业务
 
 **事件记录：[INCIDENT-20261118.md](INCIDENT-20261118.md)**（版本核验、时间线、证据链、根因、修复、负向测试、门禁、最终现场）。

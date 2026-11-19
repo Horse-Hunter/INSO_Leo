@@ -123,6 +123,9 @@ from .google_quote_update import (
     GoogleReadTargetUnavailable,
     build_v13_quotation_updater,
 )
+from .google_web import _chain_label as _failure_chain
+from .google_web import _failure_stage as _failure_stage_label
+from .google_web import _transport_stalled as _page_channel_stalled
 from .google_web import build_google_web_service
 from .inso_session import (
     InsoAuthenticationError,
@@ -727,6 +730,11 @@ class ProductionBackend(GuiBackend):
         self._next_poll_at = None
         self._site_outages = {}
         self._site_manual_wait = set()
+        # Shared-CDP attachment health for the Google transport: a stalled page
+        # channel is repaired once per poll by dropping only our own client.
+        self._google_stall_at: datetime | None = None
+        self._google_reattached_at: float | None = None
+        self._web_attach_args = None
         # Wall-clock first-fault time per site/reason.  The outage clock above is
         # monotonic and cannot be shown to the Owner or survive a restart.
         self._site_fault_since: dict[str, datetime] = {}
@@ -1256,7 +1264,11 @@ class ProductionBackend(GuiBackend):
                 rc.cdp.cdp_url, provider=lambda: self._google_playwright_provider(rc, cfg),
                 on_read_success=lambda: self._site_recovered("Google Sheets"),
                 read_guard=self._page_admission.require_open,
-                stop_requested=self._immediate_stop_requested, page_admission=self._page_admission)
+                stop_requested=self._immediate_stop_requested, page_admission=self._page_admission,
+                on_transport_stalled=self._note_google_transport_stall)
+            # A stalled Google page channel is repaired by re-attaching the CDP
+            # client (never by killing Chrome), and only while this run owns it.
+            self._web_attach_args = (rc, cfg)
             # ONE default-off switch. The CDP transport stays the fallback and keeps
             # owning the protected browser pages and the native 更新报价 button.
             sheet_service = self._sheet_service_for(cfg, web_service)
@@ -1747,7 +1759,10 @@ class ProductionBackend(GuiBackend):
         try:
             return build_service_account_sheets_service(
                 resolved, on_read_success=lambda: self._site_recovered("Google Sheets"),
-                page_admission=getattr(self, "_page_admission", None))
+                page_admission=getattr(self, "_page_admission", None),
+                # The Owner browses Google through the system proxy; the API client
+                # must follow the same route, or a readable sheet looks unreachable.
+                proxy=section.get("proxy", "auto"))
         except (GoogleSheetsAuthorizationError, GoogleSheetsDependencyError) as exc:
             raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_AUTH_UNAVAILABLE") from exc
 
@@ -3219,6 +3234,42 @@ class ProductionBackend(GuiBackend):
             if self._state is RunState.QUOTATION_RUNNING:
                 self._state = RunState.RUNNING
 
+    def _note_google_transport_stall(self):
+        """Remember that a page-level command went unanswered in this poll."""
+
+        self._google_stall_at = utc_now()
+
+    def _recover_google_transport(self):
+        """Drop and rebuild our own CDP client after a stalled page channel.
+
+        Chrome is never killed, replaced or repointed: the standing rule is one
+        browser, one profile, one port. Only the program's own attachment is
+        rebuilt, which is exactly what a manual restart used to do by hand.
+        """
+
+        if self._google_stall_at is None or self._web_attach_args is None:
+            return False
+        if self._inso_session is not None or self._active_inso_inquiry is not None:
+            return False  # An INSO order surface may be mid-write; keep its client.
+        if (self._google_reattached_at is not None
+                and monotonic() - self._google_reattached_at < 120):
+            return False  # Bounded: one re-attach per two minutes, never a loop.
+        rc, cfg = self._web_attach_args
+        self._google_stall_at = None
+        self._google_reattached_at = monotonic()
+        handle = self._browser_handle
+        log.warning("Google page channel stalled; re-attaching the CDP client")
+        try:
+            if handle is not None:
+                handle.disconnect()
+            self._browser_handle = None
+            self._v13_browser(rc, cfg)
+        except Exception as exc:  # noqa: BLE001 - the deferral below still holds
+            log.warning("CDP re-attach after a stalled read failed (%s)",
+                        type(exc).__name__)
+            return False
+        return True
+
     def _defer_website_poll(self, exc, interval, *, notify=True, recoverable_read=False):
         site = _website_failure(exc)
         if site is None:
@@ -3267,16 +3318,28 @@ class ProductionBackend(GuiBackend):
                   "汇率网站": "FX_WAITING_RECOVERY", "Findchips": "FINDCHIPS_WAITING_RECOVERY",
                   "华强": "HQEW_WAITING_RECOVERY", "立创": "LCSC_WAITING_RECOVERY",
                   "正能量": "BOM_AI_WAITING_RECOVERY"}[site]
+        stalled = site == "Google Sheets" and _page_channel_stalled(exc)
+        reattached = self._recover_google_transport() if stalled else False
+        if stalled:
+            # The sheet is reachable; the program's own page channel is not. Say
+            # so, instead of reporting a Google outage the Owner can disprove.
+            reason = "GOOGLE_PAGE_UNRESPONSIVE"
         log.warning("Website recovery deferred", extra={
-            "runtime_reason": reason, "runtime_cause": type(exc).__name__})
+            "runtime_reason": reason, "runtime_cause": type(exc).__name__,
+            "runtime_stage": _failure_stage_label(exc) or "",
+            "runtime_chain": _failure_chain(exc)})
         # A deferral that sends no mail and raises no alert is still a fault the
         # Owner must be able to read in the GUI. After the TLS fix this is the
         # most common fault path, so silence here would be a hole, not a feature:
         # record it locally, never mail it, never alert an order, keep the run.
         if recoverable_read or not notify:
             self._record_fault_diagnostic(reason, site=site,
+                stage=_failure_stage_label(exc),
                 cause_class=self._fault_cause_label(exc),
-                escalation="已自动推迟到下一轮，业务未停止；本次不发邮件提醒",
+                escalation=("已自动断开并重新连接程序自己的浏览器连接（Chrome 未被关闭），"
+                            "下一轮继续读取；业务未停止，本次不发邮件提醒"
+                            if reattached else
+                            "已自动推迟到下一轮，业务未停止；本次不发邮件提醒"),
                 external_effect="本次仅记录读取/连接重试，未新增外部写入意图",
                 next_retry_at=utc_now() + interval, deferred=True)
         if notify and not recoverable_read and self._v13_ledger_ready:

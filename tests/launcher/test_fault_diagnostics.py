@@ -623,3 +623,79 @@ def test_a_legacy_unclassified_record_picks_up_the_catalogue_wording():
     assert "targetId" in restored.cause
     assert "保留当前 Chrome" in restored.action
     assert restored.first_seen == legacy["first_seen"]  # the evidence is untouched
+
+
+# --- 2026-11-19: a page channel that answers nothing is our transport ---------
+
+def _playwright_timeout(message="Timeout 30000ms exceeded."):
+    """A stand-in with exactly the classifier's measured signature."""
+
+    return type("TimeoutError", (Exception,),
+                {"__module__": "playwright._impl._errors"})(message)
+
+
+def _google_backend(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from tests.launcher.test_runtime_safety_notice import harness
+
+    backend, worker, smtp = harness(tmp_path, monkeypatch)
+    backend._web_attach_args = (SimpleNamespace(cdp=SimpleNamespace(cdp_url="http://127.0.0.1:9222")), {})
+    swaps = []
+    monkeypatch.setattr(backend, "_v13_browser", lambda rc, cfg: swaps.append((rc, cfg)))
+    return backend, worker, smtp, swaps
+
+
+def test_a_stalled_google_channel_is_named_as_our_transport_not_the_sheet(tmp_path, monkeypatch):
+    """The Owner can open the sheet; saying "表格不可用" was the actual defect."""
+
+    from src.sheets.google_reader import GoogleSheetsReadUnavailable
+
+    backend, _worker, _smtp, swaps = _google_backend(tmp_path, monkeypatch)
+    backend._note_google_transport_stall()
+    attach = TimeoutError("GOOGLE_WEB_SESSION_UNAVAILABLE")
+    attach.inso_stage = "google-session"
+    attach.__cause__ = _playwright_timeout()
+    exc = GoogleSheetsReadUnavailable("Google read retry exhausted")
+    exc.__cause__ = attach
+
+    assert backend._defer_website_poll(exc, timedelta(minutes=15),
+                                       notify=False, recoverable_read=True)
+
+    item = backend._fault_diagnostics()[0]
+    assert item.code == "GOOGLE_PAGE_UNRESPONSIVE"
+    assert item.title == "表格页面通道没有回应（不是表格不可用）"
+    assert item.site == "Google Sheets"
+    assert item.stage == "google-session"
+    assert "Chrome 未被关闭" in item.escalation
+    assert swaps, "the run must rebuild its own CDP client instead of waiting forever"
+    block = fault_block(item)
+    assert "发生阶段：连接共享浏览器（google-session）" in block
+    assert "检查网络/VPN" not in block
+
+
+def test_a_network_style_read_failure_never_rebuilds_the_client(tmp_path, monkeypatch):
+    """An answered request with a net:: error is the site, not a deaf client."""
+
+    from src.sheets.google_reader import GoogleSheetsReadUnavailable
+
+    backend, _worker, _smtp, swaps = _google_backend(tmp_path, monkeypatch)
+    backend._note_google_transport_stall()
+    exc = GoogleSheetsReadUnavailable("Google read retry exhausted")
+    exc.__cause__ = TimeoutError("GOOGLE_WEB_READ_UNAVAILABLE")  # answered net::ERR_*
+
+    assert backend._defer_website_poll(exc, timedelta(minutes=15),
+                                       notify=False, recoverable_read=True)
+
+    assert backend._fault_diagnostics()[0].code == "GOOGLE_WAITING_RECOVERY"
+    assert swaps == []
+
+
+def test_the_client_is_never_swapped_while_an_inso_order_is_open(tmp_path, monkeypatch):
+    backend, _worker, _smtp, swaps = _google_backend(tmp_path, monkeypatch)
+    backend._active_inso_inquiry = "inq_" + "b" * 24
+    backend._note_google_transport_stall()
+
+    assert backend._recover_google_transport() is False
+    assert swaps == []
+    assert backend._google_stall_at is not None
