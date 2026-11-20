@@ -1524,3 +1524,95 @@ def test_external_write_reload_still_fails_closed_on_a_login_surface():
 
     assert raised.value.reason == "GOOGLE_AUTHENTICATION_REQUIRED"
     assert actions._protected is True
+
+
+# --- 2026-11-20: a page this client never leased is "not ours", not a fault ---
+
+def test_a_foreign_page_is_not_an_ownership_fault_for_a_pure_read():
+    """A tab the Owner or another module opened must never stop all business."""
+
+    from src.launcher.google_quote_update import GoogleReadTargetUnavailable
+
+    actions, browser = adapter()
+    foreign = browser.contexts[0].pages[0]
+    foreign.url = location().url
+    actions._read_only = True
+    actions._page = foreign          # deliberately never leased by this client
+
+    with pytest.raises(GoogleReadTargetUnavailable):
+        actions._require_owned_page()
+
+    assert actions._page is None     # the read rebuilds its own page
+    assert not foreign.closed        # never adopt, never close
+    assert not actions._protected
+
+
+def test_closing_an_unleased_blank_or_error_page_is_a_no_op_not_a_stop():
+    actions, browser = adapter()
+    foreign = browser.contexts[0].pages[0]
+    foreign.url = "about:blank"
+    actions._read_only = True
+    actions._page = foreign
+
+    actions.close()                  # must not raise: nothing proves it is ours
+
+    assert not foreign.closed
+    assert actions._protected is True
+
+
+def test_page_is_owned_only_accepts_a_leased_target():
+    from src.research.cdp_pages import page_is_owned
+
+    actions, browser = adapter()
+    human = browser.contexts[0].pages[0]
+    page = actions.open_sheet(select_worksheet=True, worksheet="2026")
+
+    assert page_is_owned(page) is True
+    assert page_is_owned(human) is False
+    actions.close()
+
+
+# --- 2026-11-20: a page this client never leased is "not ours", not a fault ---
+
+def test_a_foreign_page_is_not_an_ownership_fault_for_a_pure_read():
+    """A tab the Owner or another module opened must never stop all business."""
+
+    from src.launcher.google_quote_update import GoogleReadTargetUnavailable
+
+    actions, browser = adapter()
+    foreign = browser.contexts[0].pages[0]
+    foreign.url = location().url
+    actions._read_only = True
+    actions._page = foreign          # deliberately never leased by this client
+
+    with pytest.raises(GoogleReadTargetUnavailable):
+        actions._require_owned_page()
+
+    assert actions._page is None     # the read rebuilds its own page
+    assert not foreign.closed        # never adopt, never close
+    assert not actions._protected
+
+
+def test_closing_an_unleased_blank_or_error_page_is_a_no_op_not_a_stop():
+    actions, browser = adapter()
+    foreign = browser.contexts[0].pages[0]
+    foreign.url = "about:blank"
+    actions._read_only = True
+    actions._page = foreign
+
+    actions.close()                  # must not raise: nothing proves it is ours
+
+    assert not foreign.closed
+    assert actions._protected is True
+
+
+def test_page_is_owned_only_accepts_a_leased_target():
+    from src.research.cdp_pages import page_is_owned
+
+    actions, browser = adapter()
+    human = browser.contexts[0].pages[0]
+    page = actions.open_sheet(select_worksheet=True, worksheet="2026")
+
+    assert page_is_owned(page) is True
+    assert page_is_owned(human) is False
+    actions.close()

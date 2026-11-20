@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import sys
 import threading
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -460,6 +461,18 @@ def _native_page_owner(page, lease):
     return owner
 
 
+def page_is_owned(page: Any) -> bool:
+    """True only for a target this client created and still holds a lease on.
+
+    Scanning ``context.pages`` also enumerates the Owner's own tabs and pages of
+    other modules. Those can never pass a native proof, so a scan must ask this
+    first instead of treating them as an ownership *conflict* (measured
+    2026-11-20: a foreign page in the shared Chrome stopped all business).
+    """
+
+    return getattr(page, "_inso_native_page_owner", None) is not None
+
+
 def native_page_owner(page: Any) -> str | None:
     """Verify this client's factory-created target without evaluating its document.
 
@@ -471,6 +484,12 @@ def native_page_owner(page: Any) -> str | None:
     lease = getattr(page, "_inso_native_page_owner", None)
     if lease is None:
         marker = ValueError("NATIVE_PAGE_LEASE_MISSING")
+        # Our own call-site vocabulary only (never page text), so the next
+        # occurrence is locatable from the log instead of guessed.
+        caller = sys._getframe(1).f_code.co_name.replace("_", "-").strip("-").lower()[:20]
+        logging.getLogger("inso.diagnostics").warning(
+            "native lease missing", extra={"inso_step": "lease-missing-" + caller,
+                                           "inso_cause": "ValueError"})
         raise PageTargetOwnershipError((marker,)) from marker
     return _native_page_owner(page, lease)
 

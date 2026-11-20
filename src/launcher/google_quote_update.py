@@ -20,6 +20,7 @@ from src.research.cdp_pages import (
     google_document_key,
     native_page_owner,
     new_background_page,
+    page_is_owned,
     page_owner,
 )
 from src.sheets.quotation_input import (
@@ -490,6 +491,15 @@ class GoogleQuotationUpdateActions:
                     require_owner()  # The Owner may have adopted the page during close.
 
     def _require_owned_page(self):
+        if self._page is not None and not page_is_owned(self._page):
+            # This client never leased the target (an Owner/manual tab, or a page
+            # another module created). Nothing proves it is ours, so it is never
+            # operated on or closed -- and a pure read simply rebuilds its own
+            # page instead of stopping every module (measured 2026-11-20).
+            self._page, self._poll_entry, self._protected = None, None, False
+            if self._read_only:
+                raise GoogleReadTargetUnavailable("GOOGLE_READ_TARGET_UNAVAILABLE")
+            raise V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_TAB_IDENTITY_UNCONFIRMED")
         try:
             owned = (self._page is not None and native_page_owner(self._page) == self._page_role
                      and page_owner(self._page) == self._page_role)
@@ -727,6 +737,7 @@ class GoogleQuotationUpdateActions:
         if (entry is not None and not entry["protected"] and self._read_only
                 and entry.get("read_only") is True
                 and entry["page"].url == "chrome-error://chromewebdata/"
+                and page_is_owned(entry["page"])
                 and native_page_owner(entry["page"]) == self._page_role):
             # Preserve the failed target. A browser error page cannot prove
             # the previous document state and must never be closed or reused.
@@ -1165,6 +1176,13 @@ class GoogleQuotationUpdateActions:
             return
         # Earlier ownership cannot authorize closing a surface Owner moved/adopted.
         special = self._page.url in {"about:blank", "chrome-error://chromewebdata/"}
+        if special and not page_is_owned(self._page):
+            # A neutral/error surface this client never leased may belong to the
+            # Owner (a blank tab he opened, or a page from another module).
+            # Nothing here can prove it is ours, so we must not close it -- and
+            # that impossibility is not an ownership conflict worth stopping for.
+            self._protected = True
+            return
         try:
             actual, expected = urlsplit(self._page.url), urlsplit(self._location.url)
             owner = native_page_owner(self._page) if special else page_owner(self._page)
