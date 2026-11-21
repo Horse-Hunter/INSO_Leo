@@ -1,3 +1,25 @@
+# INSO LEO — 新 CEO 接管入口（2026-11-21，RFQ-024 结案）
+
+**当前权威结论：`RFQ024_SOURCE_AND_EVIDENCE_PASS / PRODUCTION_RUNNING_EXECUTOR_REPORTED / NO_PENDING_QUOTE_EXECUTOR_REPORTED / REVIEW_CLOSED`。** 当前没有待修复或待发布的阻断任务；保持运行中的正式生产版，不重新启动已结案 RFQ、不重发已完成订单。
+
+## 90 秒接管读序
+
+1. [AI_START_HERE.md](../AI_START_HERE.md)、[AGENTS.md](../AGENTS.md)：Owner/CEO/唯一 Executor 权责、真实可用生产版以及“异常与通知”自解释红线。
+2. [COORDINATION.md](COORDINATION.md) 顶部 → [RFQ-024/CEO_SYNC_20261121.md](RFQ-024/CEO_SYNC_20261121.md) → [RFQ-024/REVIEW.md](RFQ-024/REVIEW.md)。如需根因，读 [INCIDENT-20261119.md](INCIDENT-20261119.md) 第 8–10 节（最终代理根因）、[INCIDENT-20261120.md](INCIDENT-20261120.md)（外部页面租约）。
+3. 查实际远端 HEAD；具备现场能力时按 AI_START_HERE 核验本地工作树、进程、实物版本、配置及安全状态；仅能读 GitHub 时明确 Windows 现场 NOT_INDEPENDENTLY_VERIFIED，不能声称已读取生产库。
+
+## 现行生产基线与下一步
+
+- Repo：`Horse-Hunter/INSO_Leo`；分支 `workbuddy/v16-rfq016-stabilization`。已接受修复 `64d3ec2c`、`89e931bf`，审核输入 HEAD `b1b5b8151bc4468698dde93146f78a90322d32c3`（其后的 CEO 结案提交仅文档）。
+- 最终 EXE SHA256 `9a0cb3d3d2101745deb014d4fa0f4c66072dc0da295923aa927f0e0387db2710`；清单 SHA256 `5bd7d7a792d9e4c91f32058fd8ce3affb11a7c29d387168fee65294bf26263ff`；2,872 文件；最终 JUnit 4332/0/0/1（4331 passed）。源码与清单已独立审核；Windows 装机和业务状态来自 Executor。
+- 截至 11-21 10:11，Executor 报告当前进程自 11-20 14:50:55 正常运行约 19 小时，今日 117 轮业务零故障、无“采购已报价”滞留行。不要把模块轮次误称订单数，不把短期稳定误称永久稳定。当前没有需主动处理的故障。
+- **仅待 Owner 产品决策**：是否调整重启后中断的无写入、无 hold 任务自动重排；未授权前保持原策略。不得自动重发实际已保存或结果未确认的采购/报价、清 UNKNOWN/SENT/hold。两项非阻断代码维护建议已记 REVIEW，不另起发布。
+- 保留正常生产 GUI、完整业务功能和准确故障说明；绝不以安全预览版、禁用功能冒充正式版，不增加重复审批和 Review 循环。若 Owner 提出新任务，先按真实状态确定范围，委派唯一 Executor，独立审核证据即可；避免无故打扰正常运行。
+
+**新窗口准备动作：** 阅读上述入口，确认接管状态及待决项，用中文简要报告已准备接管，不自行启动新任务或做生产改动。不要从历史聊天重新拼凑规则。
+
+## 以下为旧 CEO 交接历史（非当前权威状态）
+
 # INSO LEO — CEO 复核入口（2026-11-17 生产故障结案 + 新版上线）
 
 **一句话入口：`Review RFQ-022`。** 当前有效状态 `DELIVERED_FOR_CEO_REVIEW / INSTALLED_RUNNING / BUSINESS_VERIFIED`。
