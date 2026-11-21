@@ -1,4 +1,41 @@
-# INSO LEO — 新 CEO 接管入口（2026-11-21，RFQ-024 结案）
+# INSO LEO — 新 CEO 接管入口（2026-11-21，V1.6 已晋升 / RFQ-025 第一轮交付）
+
+**当前权威结论：`V1_6_PROMOTED_TO_MAIN / V1_7_BASELINE_READY / PASTE_SNIFF_PARTIAL / NO_BUSINESS_EFFECT`。**
+`main` 已是 Owner 验收的 V1.6（`d954e0a5`），V1.1 引导陷阱关闭；V1.7 开发基线就绪；粘贴录单的页面取证部分完成，
+真实点通仍待一次授权的登录窗口。**生产程序保持原样运行，不要重启、不要重发订单、不要清理历史 hold。**
+
+## 90 秒接管读序
+
+1. [AI_START_HERE.md](../AI_START_HERE.md)、[AGENTS.md](../AGENTS.md)、[BRANCH_POLICY](../docs/BRANCH_POLICY.md)：
+   权责、三条长期线、"首次对齐已完成"的现状（不要再按"main 还是 V1.1"行事）。
+2. [COORDINATION.md](COORDINATION.md) 顶部 → [RFQ-025/TASK_SPEC.md](RFQ-025/TASK_SPEC.md) →
+   [RFQ-025/FINAL_REPORT.md](RFQ-025/FINAL_REPORT.md) → [RFQ-025/EXECUTION_LOG.md](RFQ-025/EXECUTION_LOG.md) →
+   脱敏页面证据 [`docs/evidence/rfq025/paste-import-sniff.md`](../docs/evidence/rfq025/paste-import-sniff.md)。
+3. 需要 RFQ-024 的结案背景时再读 [RFQ-024/REVIEW.md](RFQ-024/REVIEW.md)、[INCIDENT-20261119.md](INCIDENT-20261119.md)、
+   [INCIDENT-20261120.md](INCIDENT-20261120.md)。
+4. 查实际远端 HEAD；具备现场能力时核验本地工作树、进程、实物版本、配置；仅能读 GitHub 时明确
+   Windows 现场 `NOT_INDEPENDENTLY_VERIFIED`，不能声称已读取生产库。
+
+## 现行基线与下一步
+
+- **三条长期线：** `main` = `d954e0a5`（V1.6 现版，EXE `9a0cb3d3…`、清单 `5bd7d7a7…`）；
+  `develop` = `143fdadc`（V1.7 基线，**已含 V1.6 源码**）；`release/previous` = `d244241e`（未动，`NOT_VERIFIED`）。
+- **不可变发布记录：** `release/v1.6-official-20261121`、`release/v1.1-main-superseded-20261121`、
+  `release/previous-superseded-20261121`、`preserve/sheets-v1-local-main-c3a597d9`。
+- **`release/previous` 为什么还是 `d244241e`：** 本项目没有"经 Owner 在三分支制度下验收过的上一正式版"，
+  用历史 V1.1 顶替就是伪造回退关系。下一次晋升起，被取代者才是 `d954e0a5`。
+- **V1.7 待办（Owner 已定目标）：** 用 INSO 原生"粘贴"替换 AI 录单。替换点与可复用代码已在
+  [RFQ-025/EXECUTION_LOG.md](RFQ-025/EXECUTION_LOG.md) 第 3 节写清；**当前 `src/` 零改动**。
+- **唯一的现场阻碍：** 粘贴弹窗需要登录后的 ERP 外壳。补齐六项 `NOT_VERIFIED` 需要一次明确授权的登录窗口
+  （或维护窗口），不得在 V1.6 跑业务时擅自登录覆盖共享 `erp_token`。
+- **仍待 Owner 产品决策（沿用 RFQ-024，未变）：** 重启时中断的无写入、无 hold 任务是否自动重排。未授权前保持原策略。
+- 保持正常生产 GUI、完整业务功能和准确故障说明；不增加重复审批，不以安全预览冒充正式版。
+  现场状态在下次实际维护前重新只读核验。
+
+---
+
+# 历史交接（2026-11-21 RFQ-024 结案，结论仍有效）
+
 
 **当前权威结论：`RFQ024_SOURCE_AND_EVIDENCE_PASS / PRODUCTION_RUNNING_EXECUTOR_REPORTED / NO_PENDING_QUOTE_EXECUTOR_REPORTED / REVIEW_CLOSED`。** 当前没有待修复或待发布的阻断任务；保持运行中的正式生产版，不重新启动已结案 RFQ、不重发已完成订单。
 

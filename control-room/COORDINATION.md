@@ -1,4 +1,31 @@
-# CEO 最新权威状态（2026-11-21）：RFQ-024 已审核结案
+# Executor 2026-11-21：V1.6 已晋升为现版；V1.7 基线就绪；粘贴录单嗅探部分完成（待 CEO 复核）
+
+**状态：`V1_6_PROMOTED_TO_MAIN / V1_7_BASELINE_READY / PASTE_SNIFF_PARTIAL / NO_BUSINESS_EFFECT`。**
+入口：[RFQ-025/TASK_SPEC.md](RFQ-025/TASK_SPEC.md) → [EXECUTION_LOG.md](RFQ-025/EXECUTION_LOG.md) →
+[FINAL_REPORT.md](RFQ-025/FINAL_REPORT.md) → 脱敏页面证据 [`docs/evidence/rfq025/paste-import-sniff.md`](../docs/evidence/rfq025/paste-import-sniff.md)。
+
+- **三条长期线（本轮实测）：** `main` = `d954e0a5`（Owner 验收的 V1.6，`be9d0a51..d954e0a5` 纯快进）；
+  `develop` = `143fdadc`（**首次真正包含 V1.6 源码**的 V1.7 基线）；`release/previous` = `d244241e`
+  （**故意未动**，仍 `NOT_VERIFIED` —— 本项目没有经 Owner 验收的上一正式版，用 V1.1 顶替即伪造回退关系）。
+  晋升前指针全部冻结为 annotated tag：`release/v1.6-official-20261121`、`release/v1.1-main-superseded-20261121`、
+  `release/previous-superseded-20261121`、`preserve/sheets-v1-local-main-c3a597d9`。
+- **重要事实修正：** 晋升前的 `develop` 建于 `9ad9ccb8`（11-14），此后只有政策/文档 14 个提交，
+  **不含 RFQ-017…024 的任何业务修复**。本轮以合并把 V1.6 源码带入；`src/`、`tests/` 合并后与 `d954e0a5` 逐字节相同。
+- **V1.7 目标（Owner）：** 用 INSO 原生"粘贴"替换 AI 录单。已查清：`#product_import_`（粘贴）与
+  `#ai_import_`（AI录单）是同一行兄弟按钮；粘贴页默认映射前三列即 `型号/数量/品牌`、分隔符默认 `竖线('|')`；
+  "保存数据"=`pasteImport(1)` 为**纯客户端回填**（无 AJAX、无 BillID、不发采购），且被 `importPreviewReady` 强制"先预览后保存"。
+  **必须避开**列表页批量导入弹窗（同名"粘贴导入"，其"保存数据"是 `Import()` → 服务端 `action=Import` 并建单）。
+- **未完成：** 真实点通五步。阻碍唯一：粘贴弹窗只能由**登录后**的 ERP 外壳创建（独立页 `windows()` 自调用栈溢出）。
+  本轮未登录（会覆盖共享 `erp_token`，且 V1.6 正在跑业务）；六项 `NOT_VERIFIED` 见 TASK_SPEC 第 4 节。
+- **生产未受影响：** 未停机、未重启、未覆盖 V1.6；采集期间 10:43:07–10:43:10 inquiry 轮次仍 completed，
+  `fatal.log` 0 字节，PID 56032/75380 未变，唯一 `runtime fault` 仍是 2026-11-20 14:29 那条已结案的。
+- **下一轮（待 Owner 指令，不自动开工）：** `workbuddy/v17-native-paste` 从 `develop` 起；
+  先补一次明确授权的登录窗口把六项验证完，再动 `prepare()` 的第 5–8 步；`src/` 零改动直到验证补齐。
+
+---
+
+# 此前状态：RFQ-024 已审核结案（结论仍有效，非当前最新动作）
+
 
 **结论：`RFQ024_SOURCE_AND_EVIDENCE_PASS / PRODUCTION_RUNNING_EXECUTOR_REPORTED / NO_PENDING_QUOTE_EXECUTOR_REPORTED / REVIEW_CLOSED`。** [CEO 最终 REVIEW](RFQ-024/REVIEW.md)；[现场摘要](RFQ-024/CEO_SYNC_20261121.md)。保留正常运行版本，无新开发、发布、停机或重放任务。历史 RFQ-021/022/023 审核状态不再是当前生产状态。
 
