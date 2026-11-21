@@ -9,15 +9,15 @@ import pytest
 
 import src.inso.purchase_writer as purchase_writer_module
 from src.inso.purchase_writer import (
-    _PASTE_DIALOG,
     _BINDINGS,
     _ID_ONLY_ACTIONS,
     _MENU_CHECKBOX,
     _OPEN_SELECT_MENU,
-    PasteImportPanel,
+    _PASTE_DIALOG,
     InsoPurchaseWriter,
-    PlaywrightPastePreviewReader,
+    PasteImportPanel,
     PlaywrightParentProductFields,
+    PlaywrightPastePreviewReader,
     _PlaywrightActionPort,
 )
 from src.inso.session import SecurityViolation

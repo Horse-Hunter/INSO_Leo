@@ -397,7 +397,7 @@ scripts/build_windows_release.ps1 -BuildOnly -Version 1.7 \
 | `--self-check` | 退出码 0（脚本内建，未通过则构建失败） |
 | `--idle-self-check` | 退出码 0，`gui_rendered: true`，标题 `INSO LEO V1.7 — Procurement Automation Control Center`，`business_thread_started: false` |
 | 清单 | `docs/evidence/rfq025/INSO_V1.7-artifact-manifest.sha256`（2,872 行），SHA256 `27d46b1cc4b7901121bf800534fb617daeb091e29a4a76d91257afaf696f3f9a` |
-| 源码 commit | `332b8695`（构建时源码即此状态；其后的记录提交只改文档） |
+| 源码 commit | `332b8695`（构建时源码即此状态；其后提交只改文档与测试导入顺序，不影响产物） |
 
 `--idle-self-check` 会往产物里写 `runtime/logs/v13-idle-self-check.json`，已删除，文件数回到 2,872。
 
