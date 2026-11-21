@@ -9,7 +9,7 @@ from typing import ClassVar
 import pytest
 
 from src.inso import (
-    AiRecognitionResult,
+    DraftPreviewResult,
     ParentProductFields,
     PlaywrightParentProductFields,
 )
@@ -30,7 +30,7 @@ from src.workflow.v12_contracts import (
     PurchaseOutcome,
     ReconciliationOutcome,
 )
-from src.workflow.v12_rules import build_ai_input
+from src.workflow.v12_rules import build_paste_input
 from src.workflow.v12_smtp_transport import QQSMTPConfig, QQSMTPTransport
 from src.workflow.v12_store import ReadOnlySaveReconciler
 
@@ -60,21 +60,24 @@ class _PrepareActions:
     def set_purchaser(self, value):
         self.calls.append(("purchaser", value))
 
-    def open_ai_entry(self):
-        self.calls.append(("open_ai",))
+    def open_paste_entry(self):
+        self.calls.append(("open_paste",))
 
-    def set_ai_input(self, value):
-        self.calls.append(("ai_input", value))
+    def assert_paste_preview_fresh(self):
+        self.calls.append(("paste_fresh",))
 
-    def run_ai_recognition(self):
-        self.calls.append(("recognize",))
+    def set_paste_data(self, value):
+        self.calls.append(("paste_input", value))
 
-    def read_ai_result(self):
+    def run_paste_import(self):
+        self.calls.append(("paste_import",))
+
+    def read_paste_preview(self):
         self.calls.append(("read_preview",))
-        return AiRecognitionResult(*self.preview)
+        return DraftPreviewResult(*self.preview)
 
-    def commit_ai_entry(self):
-        self.calls.append(("commit_ai",))
+    def commit_paste_entry(self):
+        self.calls.append(("commit_paste",))
 
 
 class _ParentFields:
@@ -130,7 +133,7 @@ class _UnreadableParentFields(_ParentFields):
 class _FailingCommitActions(_PrepareActions):
     """The 保存数据 commit itself never landed."""
 
-    def commit_ai_entry(self):
+    def commit_paste_entry(self):
         self.calls.append(("commit_ai",))
         raise TimeoutError("the 保存数据 control never became visible")
 
@@ -249,7 +252,7 @@ def _command():
         market_minimum_reference_price=Decimal(1),
         quotation_type="需要问全价格",
         purchaser="颜浩坚",
-        ai_input=build_ai_input("LM358", "Texas Instruments", 123),
+        paste_input=build_paste_input("LM358", "Texas Instruments", 123),
     )
 
 
@@ -264,8 +267,10 @@ def _purchase_writer(actions=None, parent=None):
 @pytest.mark.parametrize("method,label", [
     ("new_draft", "prepare-new-draft"), ("set_customer", "prepare-customer"),
     ("set_quotation_type", "prepare-quote-type"), ("set_purchaser", "prepare-purchaser"),
-    ("open_ai_entry", "prepare-ai-open"), ("set_ai_input", "prepare-ai-input"),
-    ("run_ai_recognition", "prepare-ai-run"),
+    ("open_paste_entry", "prepare-paste-open"),
+    ("assert_paste_preview_fresh", "prepare-paste-fresh"),
+    ("set_paste_data", "prepare-paste-input"),
+    ("run_paste_import", "prepare-paste-import"),
 ])
 def test_prepare_failure_reports_fixed_step_without_sensitive_exception(monkeypatch, method, label):
     import src.launcher.v12_composition as composition
@@ -500,11 +505,12 @@ def test_prepare_lets_the_erp_fill_the_row_then_reads_it_back() -> None:
         ("customer", "深圳阿尔克贸易有限公司"),
         ("quotation_type", "需要问全价格"),
         ("purchaser", "颜浩坚"),
-        ("open_ai",),
-        ("ai_input", _command().ai_input),
-        ("recognize",),
+        ("open_paste",),
+        ("paste_fresh",),
+        ("paste_input", _command().paste_input),
+        ("paste_import",),
         ("read_preview",),
-        ("commit_ai",),
+        ("commit_paste",),
     ]
     assert not hasattr(writer, "save_data")
 
@@ -528,13 +534,13 @@ def test_prepare_commits_the_ai_panel_before_reading_the_parent_grid() -> None:
     order: list[str] = []
 
     class _OrderedActions(_PrepareActions):
-        def read_ai_result(self):
+        def read_paste_preview(self):
             order.append("read_preview")
-            return super().read_ai_result()
+            return super().read_paste_preview()
 
-        def commit_ai_entry(self):
+        def commit_paste_entry(self):
             order.append("commit_ai")
-            super().commit_ai_entry()
+            super().commit_paste_entry()
 
     class _OrderedParentFields(_ParentFields):
         def wait_for_model(self, expected_model, timeout_seconds):
@@ -616,7 +622,7 @@ def _purchase_steps(caplog) -> list[tuple[str, str | None]]:
 @pytest.mark.parametrize(
     ("actions", "parent", "expected_step", "expected_cause"),
     [
-        (_FailingCommitActions, _ParentFields, "commit-ai-entry", "TimeoutError"),
+        (_FailingCommitActions, _ParentFields, "commit-paste-entry", "TimeoutError"),
         (_PrepareActions, _LateParentFields, "parent-row-missing", None),
         (_PrepareActions, _UnreadableParentFields, "parent-read", "ValueError"),
     ],

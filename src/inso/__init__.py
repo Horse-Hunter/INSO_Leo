@@ -9,14 +9,14 @@ from .duplicate_history import (
     InsoDuplicateHistoryReader,
 )
 from .purchase_writer import (
-    AiEntryPanel,
-    AiFrameProvider,
-    AiRecognitionResult,
-    AiResultReader,
+    DraftPreviewReader,
+    DraftPreviewResult,
     InsoPurchaseWriter,
     ParentProductFields,
-    PlaywrightAiResultReader,
+    PasteImportPanel,
+    PastePanel,
     PlaywrightParentProductFields,
+    PlaywrightPastePreviewReader,
 )
 from .session import (
     BrowserIdentity,
@@ -31,13 +31,11 @@ from .session import (
 )
 
 __all__ = [
-    "AiEntryPanel",
-    "AiFrameProvider",
-    "AiRecognitionResult",
-    "AiResultReader",
     "BrowserIdentity",
     "BrowserOwnership",
     "ContextIdentity",
+    "DraftPreviewReader",
+    "DraftPreviewResult",
     "DuplicateHistoryCapture",
     "DuplicateHistoryFailure",
     "DuplicateHistoryRecord",
@@ -51,7 +49,9 @@ __all__ = [
     "OperationPage",
     "PageIdentity",
     "ParentProductFields",
-    "PlaywrightAiResultReader",
+    "PasteImportPanel",
+    "PastePanel",
     "PlaywrightParentProductFields",
+    "PlaywrightPastePreviewReader",
     "SecurityViolation",
 ]

@@ -15,13 +15,13 @@ from src.workflow.v12_rules import (
     Purchaser,
     PurchaseRoutingOutcome,
     QuotationType,
-    build_ai_input,
+    build_paste_input,
     duplicate_notification_required,
     evaluate_duplicate_history,
     purchase_routing_decision,
     route_after_research,
     should_send_important_order_notification,
-    validate_ai_recognition,
+    validate_draft_preview,
 )
 
 NOW = datetime(2026, 9, 25, tzinfo=UTC)
@@ -151,14 +151,52 @@ def test_missing_b_or_c_estimated_total_is_indeterminate(tier: str) -> None:
     assert decision.purchaser is None
 
 
-def test_ai_input_uses_exact_six_space_delimiters() -> None:
-    assert build_ai_input("M-1", "Brand", 7) == "M-1      Brand      7"
-    with pytest.raises(TypeError):
-        build_ai_input("M-1", "Brand", True)
+def test_paste_input_is_model_quantity_brand_separated_by_pipes() -> None:
+    """The dialog maps column 0/1/2 to 型号/数量/品牌 and splits on ``|``.
+
+    The order is 型号·数量·品牌 -- not the retired AI order 型号·品牌·数量 -- so a
+    silent swap would put the quantity in the brand column.
+    """
+
+    assert build_paste_input("M-1", "Brand", 7) == "M-1|7|Brand"
+    assert build_paste_input("TRJC476K016RRJ", "Kyocera AVX", 200) == (
+        "TRJC476K016RRJ|200|Kyocera AVX"
+    )
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"mpn": "M-1", "brand": "Brand", "quantity": True},
+        {"mpn": "M-1", "brand": "Brand", "quantity": 0},
+        {"mpn": "M-1", "brand": "Brand", "quantity": -3},
+        {"mpn": "", "brand": "Brand", "quantity": 7},
+        {"mpn": "M-1", "brand": "", "quantity": 7},
+    ],
+)
+def test_paste_input_rejects_values_the_format_cannot_express(kwargs) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        build_paste_input(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"mpn": "M|1", "brand": "Brand", "quantity": 7},
+        {"mpn": "M-1", "brand": "Bra|nd", "quantity": 7},
+        {"mpn": "M-1", "brand": "Bra\nnd", "quantity": 7},
+        {"mpn": "M\r1", "brand": "Brand", "quantity": 7},
+    ],
+)
+def test_paste_input_never_lets_a_field_shift_the_columns(kwargs) -> None:
+    """A delimiter inside a field cannot be expressed in three columns at all."""
+
+    with pytest.raises(ValueError):
+        build_paste_input(**kwargs)
 
 
 def test_ai_recognition_keeps_mpn_and_quantity_exact() -> None:
-    matches = validate_ai_recognition(
+    matches = validate_draft_preview(
         command_id="draft-1",
         completed_at=NOW,
         expected_mpn=" abc-123 ",
@@ -183,7 +221,7 @@ def test_ai_recognition_keeps_mpn_and_quantity_exact() -> None:
             "recognized_quantity": 7,
         }
         candidate.update(values)
-        result = validate_ai_recognition(
+        result = validate_draft_preview(
             command_id="draft-1",
             completed_at=NOW,
             expected_mpn="ABC-123",
@@ -203,7 +241,7 @@ def test_ai_recognition_accepts_a_partial_brand_but_not_an_unrelated_one() -> No
     """
 
     def outcome(recognized_brand: str) -> PurchaseOutcome:
-        return validate_ai_recognition(
+        return validate_draft_preview(
             command_id="draft-1",
             completed_at=NOW,
             expected_mpn="GT17V-10DP-DS-SB(70)",
@@ -231,7 +269,7 @@ def test_owner_suffix_duplicate_latest_and_ambiguity_keep_submission_exact():
         target_mpn="WGI210IT", current_quantity=7,
         records=(newest, HistoricalInquiryRecord("WGI210XX", NOW, 7, "tie", Decimal(0))), checked_at=NOW)
     assert tied.outcome is DuplicateOutcome.AMBIGUOUS and tied.repeated is None
-    ai = validate_ai_recognition(command_id="draft-1", completed_at=NOW,
+    ai = validate_draft_preview(command_id="draft-1", completed_at=NOW,
         expected_mpn="WGI210IT", expected_brand="Brand", expected_quantity=7,
         recognized_mpn=newest.mpn, recognized_brand="Brand", recognized_quantity=7)
     assert ai.outcome is PurchaseOutcome.VALIDATION_FAILED

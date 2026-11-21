@@ -1,5 +1,10 @@
 """Purchase draft preparation using the existing INSO action boundary.
 
+Draft entry is the ERP's own native paste import: the 粘贴 dialog parses
+``型号|数量|品牌`` server-side, hands the rows back client-side, and the ERP's
+``appendRow()`` writes them into the bill grid. No AI recognition service is
+used anywhere on the production path.
+
 Save Data stays closed. Owner-authorized Save-and-Send is durable-before-click;
 generic Send remains forbidden.
 """
@@ -25,7 +30,18 @@ from .write_safety import (
     WriteAction,
 )
 
-AI_ENTRY_PATH = "/skins/etaoerp/product/Import_ai.aspx"
+#: The purchase form's own 粘贴 dialog. Verified live 2026-11-21: the form's
+#: ``product_import()`` opens ``windows('粘贴导入', 1050, 600,
+#: 'product/Import.aspx?BillPage=…&VendorID=…', …, appendRow)``.
+PASTE_ENTRY_PATH = "/skins/etaoerp/product/Import.aspx"
+
+#: The business-inquiry LIST page's bulk import. Same dialog title, different
+#: handler: its 保存数据 binds ``Import()`` -> ``$.post(?action=Import)`` and
+#: requires a returned ``BillID``, so it creates server-side bills. Owner
+#: 2026-11-21: this path must never be used for the draft flow, so it is
+#: rejected by identity rather than merely avoided.
+BULK_IMPORT_PATH = "/skins/etaoerp/innerenquiry/yewuxj/import.aspx"
+
 _QUOTATION_TYPES = frozenset({"需要问全价格", "普通询价"})
 _CUSTOMERS = frozenset({"深圳阿尔克贸易有限公司"})
 _PURCHASERS = frozenset({"颜浩坚", "陈熙"})
@@ -44,11 +60,12 @@ _log = logging.getLogger("inso.purchase_writer")
 
 
 @dataclass(frozen=True, slots=True)
-class AiRecognitionResult:
-    """Verified AI preview; product_id is a legacy, unused compatibility field.
+class DraftPreviewResult:
+    """One verified paste-preview row: model, brand, quantity and the ERP code.
 
-    Owner 2026-10-06: only model, brand and quantity are checked. ERP generates
-    its product code after AI entry commit; it is not a preview prerequisite.
+    ``product_id`` is the 编码/型号 the ERP resolved for this model. It is read
+    as evidence only: the Owner contract validates exactly model, brand and
+    quantity, and nothing on the draft path may write or invent that code.
     """
 
     product_id: str
@@ -58,16 +75,24 @@ class AiRecognitionResult:
     ready: bool
 
 
-class AiResultReader(Protocol):
-    def read(self) -> AiRecognitionResult | None: ...
+class DraftPreviewReader(Protocol):
+    def read(self) -> DraftPreviewResult | None: ...
+
+
+class PastePanel(Protocol):
+    """Anything that can hand back the verified 粘贴 dialog frame."""
+
+    def frame(self) -> Any: ...
+
+    def assert_fresh(self) -> None: ...
 
 
 class ParentProductFields(Protocol):
     """Read-only view of the parent form's product row.
 
     There are deliberately no setters. The 采购临时询价 form is the operator's
-    surface and the ERP fills its 编码/型号/品牌/数量 row itself when the AI录单
-    panel commits (``pasteImport`` -> ``ai_appendRow``); typing those cells was
+    surface and the ERP fills its 编码/型号/品牌/数量 row itself when the 粘贴
+    dialog commits (``pasteImport(1)`` -> ``appendRow``); typing those cells was
     a process defect (Owner finding, 2026-10-01), not a shortcut this seam may
     offer.
     """
@@ -90,13 +115,13 @@ class PlaywrightParentProductFields:
 
     The first grid column is ``编码/型号`` and is bound to ``ProductID``; the
     型号 column is a separate ``PartNo`` cell. Both are filled by the ERP when
-    the AI录单 panel commits its row.
+    the 粘贴 dialog commits its rows.
 
     This seam is read-only by design: no row creation, no cell writing, no
     import, Save, or Send behaviour. It exists to prove what the ERP put in the
     row, not to manufacture it. ``wait_for_row`` absorbs the one genuine
-    asynchrony -- ``ai_appendRow`` reloads the grid through ``layui.table``, so
-    a read issued the instant the dialog closes can still see the old body.
+    asynchrony -- ``appendRow`` updates the grid through ``layui.table``, so a
+    read issued the instant the dialog closes can still see the old body.
     """
 
     _FORM_FRAME_SELECTOR = "iframe#winIframealert_enquiry"
@@ -212,20 +237,20 @@ class SaveDispatchStore(Protocol):
     ) -> None: ...
 
 
-class AiFrameProvider(Protocol):
-    """Anything that can hand back the verified AI entry frame."""
+class PasteImportPanel:
+    """The purchase form's own 粘贴 dialog; an in-page frame, not a tab.
 
-    def frame(self) -> Any: ...
+    Verified live 2026-11-21. The form's ``#product_import_`` control is the one
+    labelled "粘贴"; the LIST page has an identically identified control labelled
+    "导入" that opens a *different* dialog which creates server-side bills, so
+    position and label are both checked and the frame URL is pinned to
+    :data:`PASTE_ENTRY_PATH`.
 
-
-class AiEntryPanel:
-    """The purchase form's own AI录单 dialog; an in-page frame, not a tab.
-
-    The verified entry is the form's ``#ai_import_`` control (labelled "AI录单"),
-    which opens a ``details-dialog`` layer holding an ``Import_ai.aspx`` iframe
-    inside the same serial ERP page -- exactly what the Phase A read-only
-    verification recorded. Nothing here creates or navigates a page, because
-    the live product never opens one.
+    Clicking it runs ``product_import()``, which calls the ERP's own
+    ``windows('粘贴导入', 1050, 600, 'product/Import.aspx?BillPage=…&VendorID=…',
+    [导入, 保存数据], appendRow)``. The dialog is an in-page ``details-dialog``
+    holding that iframe inside the same serial ERP page, so nothing here creates
+    or navigates a page.
     """
 
     def __init__(
@@ -238,10 +263,10 @@ class AiEntryPanel:
         self._form_page = form_page
         self._frame: Any | None = None
         self._wait_seconds = (
-            _AI_ENTRY_WAIT_SECONDS if wait_seconds is None else wait_seconds
+            _PASTE_ENTRY_WAIT_SECONDS if wait_seconds is None else wait_seconds
         )
         self._poll_milliseconds = (
-            _AI_ENTRY_POLL_MILLISECONDS
+            _PASTE_ENTRY_POLL_MILLISECONDS
             if poll_milliseconds is None
             else poll_milliseconds
         )
@@ -249,36 +274,70 @@ class AiEntryPanel:
     def open(self) -> None:
         page = self._form_page.page
         _require_inso_origin(page.url)
-        entry = page.frame_locator(_FORM_SCOPE_FRAME).locator(_AI_ENTRY_CONTROL)
+        entry = page.frame_locator(_FORM_SCOPE_FRAME).locator(_PASTE_ENTRY_CONTROL)
         if (
             entry.count() != 1
             or not entry.is_visible()
             or not entry.is_enabled()
-            or (entry.inner_text() or "").strip() != _AI_ENTRY_LABEL
+            or (entry.inner_text() or "").strip() != _PASTE_ENTRY_LABEL
         ):
-            raise SecurityViolation("AI entry control is not uniquely actionable")
+            raise SecurityViolation("paste entry control is not uniquely actionable")
         entry.click()
         self._frame = self._await_frame(page)
 
     def frame(self) -> Any:
         frame = self._frame
         if frame is None or _frame_is_detached(frame):
-            raise SecurityViolation("AI entry panel is not open")
-        _require_ai_entry_url(str(getattr(frame, "url", "")))
+            raise SecurityViolation("paste dialog is not open")
+        _require_paste_entry_url(str(getattr(frame, "url", "")))
         return frame
 
+    def host(self) -> Any:
+        """The dialog element hosting this exact paste frame.
+
+        Resolved through the frame it holds, so no unrelated dialog can be
+        mistaken for this one and its footer controls are always the ones that
+        belong to the import we just ran.
+        """
+
+        frame = self.frame()
+        parent = frame.parent_frame
+        dialog = parent.locator(_PASTE_DIALOG)
+        if dialog.count() != 1:
+            raise SecurityViolation("paste dialog is not unique")
+        # Anchored by the iframe the dialog must hold. ``filter(has=…)`` cannot
+        # be used here: the element handle belongs to the parent frame while the
+        # locator would be resolved in it, and Playwright rejects that mix.
+        if dialog.locator(_PASTE_DIALOG_IFRAME).count() != 1:
+            raise SecurityViolation("paste dialog does not hold the paste frame")
+        return dialog
+
+    def assert_fresh(self) -> None:
+        """Prove the preview is empty *before* the parse is triggered.
+
+        The single leftover-risk this flow has is reading a previous order's
+        rows. The ERP itself closes that door: the 保存数据 control starts
+        disabled and the grid is only populated by a parse response. Checking
+        both here means the row read later can only come from our own import.
+        """
+
+        frame = self.frame()
+        rows = _paste_preview_rows(frame)
+        if rows is None:
+            raise SecurityViolation("paste preview state is unreadable")
+        if rows:
+            raise SecurityViolation("paste preview already held rows before import")
+        button = self._form_page.page.locator(_PASTE_COMMIT_CONTROL)
+        if button.count() != 1:
+            raise SecurityViolation("paste commit control is not unique")
+        if button.is_enabled():
+            raise SecurityViolation("paste commit control was enabled before import")
+
     def close(self) -> bool:
-        """Close only this AI录单 panel; the draft form stays open for Save.
+        """Dismiss only this dialog; the draft form stays open for Save.
 
-        Anchored on the dialog that actually contains the verified AI frame
-        (the Phase A read-only recipe), so no unrelated dialog can be dismissed
-        by mistake. The frame-scoped selector is a fallback for the case where
-        the frame handle is already gone.
-
-        Returns whether the panel was dismissed, and never claims a dismissal it
-        did not observe: a leftover dialog the ERP keeps hidden has no clickable
-        close control, so that case is reported instead of being mistaken for a
-        closed panel.
+        Verified live: closing hides the dialog and leaves its iframe in the
+        DOM, so a closed dialog is detected by visibility, never by absence.
         """
 
         frame = self._frame
@@ -288,40 +347,41 @@ class AiEntryPanel:
             _require_inso_origin(page.url)
         except SecurityViolation:
             _log.warning(
-                "AI entry panel was not dismissed: INSO page identity is not verified"
+                "paste dialog was not dismissed: INSO page identity is not verified"
             )
             return False
         if frame is not None and self._close_frame_dialog(frame):
             return True
-        button = page.locator(_AI_ENTRY_CLOSE_CONTROL)
-        if button.count() == 1 and button.is_visible():
-            button.click()
-            return True
         if frame is not None:
-            _log.warning(
-                "AI entry panel was not dismissed: its dialog has no clickable close control"
-            )
+            try:
+                if not frame.frame_element().is_visible():
+                    return True
+            except Exception:  # noqa: BLE001 - a detached frame means it is gone
+                return True
+        _log.warning("paste dialog was not dismissed: no clickable close control")
         return False
 
     @staticmethod
     def _close_frame_dialog(frame: Any) -> bool:
-        """Close the unique dialog containing this exact AI frame.
-
-        This is the Phase A read-only close recipe: resolve the dialog by the
-        frame it holds, then click that dialog's own close control.
-        """
+        """Close the unique dialog containing this exact paste frame."""
 
         try:
             parent = frame.parent_frame
-            handle = frame.frame_element()
-            dialog = parent.locator("details-dialog._dialog1").filter(has=handle)
+            dialog = parent.locator(_PASTE_DIALOG)
             if dialog.count() != 1:
                 return False
-            close = dialog.locator('button[title="关闭窗口"]')
-            if close.count() != 1 or not close.is_visible() or not close.is_enabled():
+            if dialog.locator(_PASTE_DIALOG_IFRAME).count() != 1:
                 return False
-            close.click(timeout=10_000)
-            return True
+            for selector in (_PASTE_DIALOG_CLOSE_CONTROL, _PASTE_CANCEL_CONTROL):
+                control = dialog.locator(selector)
+                if (
+                    control.count() == 1
+                    and control.is_visible()
+                    and control.is_enabled()
+                ):
+                    control.click(timeout=10_000)
+                    return True
+            return False
         except Exception:  # noqa: BLE001 - browser ambiguity fails closed
             return False
 
@@ -329,41 +389,47 @@ class AiEntryPanel:
         deadline = time.monotonic() + self._wait_seconds
         while True:
             for frame in page.frames:
-                if _is_verified_ai_entry_url(str(getattr(frame, "url", ""))):
+                if _is_verified_paste_entry_url(str(getattr(frame, "url", ""))):
                     return frame
             if time.monotonic() >= deadline:
-                raise SecurityViolation("AI entry panel did not open")
+                raise SecurityViolation("paste dialog did not open")
             page.wait_for_timeout(self._poll_milliseconds)
 
 
-class PlaywrightAiResultReader:
-    """Read the verified one-row AI preview and ready button state.
+class PlaywrightPastePreviewReader:
+    """Read the verified single-row paste preview and its readiness.
 
-    Recognition arrives asynchronously, so ``read`` polls the exact readiness
-    predicate until it holds or ``_AI_READY_WAIT_SECONDS`` elapses. It still
-    returns ``None`` for any state that never becomes a clean single ready row,
-    which keeps the caller's fail-closed contract intact.
+    Readiness is two conditions taken from the page itself, never a delay: the
+    ERP's own table cache holds exactly the expected rows, and the 保存数据
+    control has been enabled by a successful parse. Either one missing still
+    returns ``None`` so the caller fails closed.
+
+    Values are read from ``layui.table.cache['dg']``, not from rendered cells: a
+    long MPN is visually elided by the fixed-width table (a real order showed
+    ``TRJC476K01...`` while the value was complete), so text is never trusted.
     """
 
     def __init__(
         self,
-        ai_panel: AiFrameProvider,
+        panel: PastePanel,
         *,
+        expected_rows: int = 1,
         wait_seconds: float | None = None,
         poll_milliseconds: int | None = None,
     ) -> None:
-        self._ai_panel = ai_panel
+        self._panel = panel
+        self._expected_rows = expected_rows
         self._wait_seconds = (
-            _AI_READY_WAIT_SECONDS if wait_seconds is None else wait_seconds
+            _PASTE_READY_WAIT_SECONDS if wait_seconds is None else wait_seconds
         )
         self._poll_milliseconds = (
-            _AI_READY_POLL_MILLISECONDS
+            _PASTE_READY_POLL_MILLISECONDS
             if poll_milliseconds is None
             else poll_milliseconds
         )
 
-    def read(self) -> AiRecognitionResult | None:
-        frame = self._ai_panel.frame()
+    def read(self) -> DraftPreviewResult | None:
+        frame = self._panel.frame()
         deadline = time.monotonic() + self._wait_seconds
         while True:
             result = self._read_once(frame)
@@ -373,33 +439,72 @@ class PlaywrightAiResultReader:
                 return None
             frame.wait_for_timeout(self._poll_milliseconds)
 
-    def _read_once(self, frame: Any) -> AiRecognitionResult | None:
-        ready = frame.locator("button#ai-recognize")
-        if ready.count() != 1 or ready.inner_text().strip() != "重新识别":
+    def _read_once(self, frame: Any) -> DraftPreviewResult | None:
+        button = frame.parent_frame.locator(_PASTE_COMMIT_CONTROL)
+        if button.count() != 1 or not button.is_enabled():
             return None
-        rows = frame.locator("#preview-body > tr")
-        if rows.count() != 1:
+        rows = _paste_preview_rows(frame)
+        if rows is None or len(rows) != self._expected_rows:
             return None
-        row = rows.nth(0)
-        fields = {
-            name: row.locator(f'input[data-f="{field}"]')
-            for name, field in (
-                ("model", "PartNo"),
-                ("brand", "Brand"),
-                ("quantity", "Qty"),
-            )
-        }
-        if any(locator.count() != 1 for locator in fields.values()):
+        row = rows[0]
+        model = row.get("PartNo")
+        brand = row.get("Brand")
+        quantity = _strict_positive_int(row.get("Qty"))
+        if not isinstance(model, str) or not model:
             return None
-        model = fields["model"].input_value()
-        brand = fields["brand"].input_value()
-        quantity_text = fields["quantity"].input_value()
-        if not model or not brand or not quantity_text.isdecimal():
+        if not isinstance(brand, str) or not brand:
             return None
-        quantity = int(quantity_text)
-        if quantity <= 0:
+        if quantity is None:
             return None
-        return AiRecognitionResult("", model, brand, quantity, ready=True)
+        product_id = row.get("ProductID")
+        return DraftPreviewResult(
+            product_id if isinstance(product_id, str) else "",
+            model,
+            brand,
+            quantity,
+            ready=True,
+        )
+
+
+def _paste_preview_rows(frame: Any) -> list[dict[str, Any]] | None:
+    """The ERP's own preview row cache, or ``None`` when it is unreadable.
+
+    ``table.cache['dg']`` is what the dialog hands to ``appendRow``; reading it
+    is reading the same data the commit will use, not a rendering of it.
+    """
+
+    try:
+        value = frame.evaluate(
+            "() => { const t = window.layui && layui.table && layui.table.cache;"
+            " const rows = t ? t['dg'] : null;"
+            " return rows ? JSON.parse(JSON.stringify(rows)) : null; }"
+        )
+    except Exception:  # noqa: BLE001 - an unreadable cache is not an empty one
+        return None
+    if value is None:
+        # Before the first parse the table has never been initialised; the
+        # dialog's own disabled commit control is what proves that state.
+        return []
+    if not isinstance(value, list):
+        return None
+    return [row for row in value if isinstance(row, dict)]
+
+
+def _strict_positive_int(value: Any) -> int | None:
+    """An exact positive integer, or ``None``.
+
+    Deliberately strict: a quantity that arrives as ``"200.0"``, ``"2e2"`` or
+    ``"200 个"`` is not the number we sent, and accepting it would let a wrong
+    quantity pass by truncation. Only ASCII digits are an integer here.
+    """
+
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text or not text.isascii() or not text.isdigit():
+        return None
+    number = int(text)
+    return number if number > 0 else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -415,11 +520,14 @@ class _Binding:
 #: attribute reports ``type="submit"``, and "submit" is a denied semantic, so
 #: these are identified by their verified id alone instead.
 _ID_ONLY_ACTIONS = frozenset({
-    WriteAction.SAVE_DATA, WriteAction.AI_ENTRY_COMMIT, WriteAction.SAVE_AND_SEND,
+    WriteAction.SAVE_DATA,
+    WriteAction.RUN_PASTE_IMPORT,
+    WriteAction.PASTE_ENTRY_COMMIT,
+    WriteAction.SAVE_AND_SEND,
 })
 
-#: Scopes that only exist while the verified AI录单 panel is open.
-_AI_SCOPES = frozenset({"ai", "ai-dialog"})
+#: Scopes that only exist while the verified 粘贴 dialog is open.
+_PASTE_SCOPES = frozenset({"paste", "paste-dialog"})
 
 _BINDINGS: dict[WriteAction, _Binding] = {
     WriteAction.NEW_DRAFT: _Binding(
@@ -467,41 +575,36 @@ _BINDINGS: dict[WriteAction, _Binding] = {
         ),
         "form",
     ),
-    WriteAction.SET_AI_INPUT: _Binding(
-        "ai-input",
-        "ai-entry",
-        "textarea#paste-area",
+    WriteAction.SET_PASTE_DATA: _Binding(
+        "paste-data-input",
+        "paste-import",
+        "textarea#pasteData",
         ControlSemantics(
             "textbox",
             "",
             "",
-            (("id", "paste-area"), ("type", "textarea")),
+            (("id", "pasteData"), ("type", "textarea")),
         ),
-        "ai",
+        "paste",
     ),
-    WriteAction.RUN_AI_RECOGNITION: _Binding(
-        "ai-recognition-button",
-        "ai-entry",
-        "button#ai-recognize",
-        ControlSemantics(
-            "button",
-            "AI 智能识别",
-            "AI 智能识别",
-            (("id", "ai-recognize"), ("type", "button")),
-        ),
-        "ai",
-    ),
-    WriteAction.AI_ENTRY_COMMIT: _Binding(
-        "ai-entry-commit",
-        "ai-entry-dialog",
-        'button:has-text("保存数据")',
+    WriteAction.RUN_PASTE_IMPORT: _Binding(
+        "paste-import-control",
+        "paste-import-dialog",
+        "#win_btn__dialog11",
         # Bound by id alone, exactly like SAVE_DATA: a bare <button> reports
         # type="submit", and a "type=submit" attribute would trip the denied
-        # semantics guard even though this control is the client-side hand-back.
-        ControlSemantics(
-            "button", "保存数据", "保存数据", (("id", "win_btn__dialog11"),)
-        ),
-        "ai-dialog",
+        # semantics guard even though this control only runs the ERP's parse.
+        ControlSemantics("button", "导入", "导入", (("id", "win_btn__dialog11"),)),
+        "paste-dialog",
+    ),
+    WriteAction.PASTE_ENTRY_COMMIT: _Binding(
+        "paste-entry-commit",
+        "paste-import-dialog",
+        "#win_btn__dialog12",
+        # 保存数据 hands the preview rows back to the parent form; it is not a
+        # server Save. Verified live 2026-11-21 with a request listener.
+        ControlSemantics("button", "保存数据", "保存数据", (("id", "win_btn__dialog12"),)),
+        "paste-dialog",
     ),
     WriteAction.SAVE_DATA: _Binding(
         "save-data-control",
@@ -538,7 +641,7 @@ _FORM_SCOPE_FRAME = "iframe#winIframealert_enquiry"
 #
 # The customer menu closes itself once an option is picked, but the purchaser
 # menu does not: after 颜浩坚 is chosen the menu is still open and its own table
-# cells keep covering #ai_import_, so the AI录单 control can never be clicked
+# cells keep covering #product_import_, so the 粘贴 control can never be clicked
 # (verified live). The site closes that menu on a document click, so a pick is
 # always followed by the site's own dismiss click and a fail-closed check.
 # The purchaser control is a checkbox multi-select: its own ``data-options``
@@ -567,26 +670,37 @@ _MENU_WAIT_SECONDS = 20.0
 _MENU_RECLICK_SECONDS = 2.0
 _MENU_RECLICKS = 3
 
-# The AI entry is the purchase form's own control, exactly as the Phase A
-# read-only verification recorded it: #ai_import_ ("AI录单") opens a
-# details-dialog layer holding an Import_ai.aspx iframe inside the same ERP
-# page. It is an in-page panel, never a new tab, so nothing in this module
-# creates a page. The recognition controls then live in that frame.
-_AI_ENTRY_CONTROL = "#ai_import_"
-_AI_ENTRY_LABEL = "AI录单"
-_AI_ENTRY_CLOSE_CONTROL = 'details-dialog._dialog1 button[title="关闭窗口"]'
-# The AI录单 dialog's own commit control. Live read (2026-10-01): its handler is
-# ``pasteImport()`` -- literally ``AiImport.doImport()`` -- which is the same
-# action as the panel's in-frame 导入到单据 button. It calls
-# ``returnSet(buildResult())`` + ``windowsClose()``; the dialog's close callback
-# (``alertboxs[1].closeMtd = function(){ ai_appendRow() }``) then reloads the bill
-# grid with the recognized row. Purely client-side: ``doImport``, ``windowsClose``
-# and ``ai_appendRow`` contain no request call, unlike the form's 保存
-# (``button#btnSave`` -> ``bill_save_auto``), which stays denied.
-_AI_ENTRY_COMMIT_CONTROL = 'button:has-text("保存数据")'
-_AI_ENTRY_COMMIT_ID = "win_btn__dialog11"
+# The draft entry is the purchase form's own 粘贴 control, verified live
+# 2026-11-21: ``#product_import_`` (labelled "粘贴") runs ``product_import()``,
+# which opens ``windows('粘贴导入', 1050, 600,
+# 'product/Import.aspx?BillPage=…&VendorID=…', [导入, 保存数据], appendRow)``.
+# It is an in-page panel, never a new tab, so nothing in this module creates a
+# page.
+#
+# The same id exists on the business-inquiry LIST page where it is labelled
+# "导入" and opens ``innerenquiry/yewuxj/Import.aspx``; that dialog's 保存数据 is
+# ``Import()`` -> ``$.post(?action=Import)`` and returns a ``BillID``, i.e. it
+# creates server-side bills. Pinning the iframe path below is what keeps the two
+# apart, because position and label alone would not.
+_PASTE_ENTRY_CONTROL = "#product_import_"
+_PASTE_ENTRY_LABEL = "粘贴"
+_PASTE_DIALOG = "details-dialog._dialog1"
+_PASTE_DIALOG_IFRAME = "#winIframe_dialog1"
+_PASTE_DIALOG_CLOSE_CONTROL = 'button[title="关闭窗口"]'
+_PASTE_CANCEL_CONTROL = 'button:has-text("取消")'
 
-# The 采购临时询价 window is its own dialog and the AI录单 panel is a sibling
+# The dialog's own footer. Live read 2026-11-21: 导入 is ``#win_btn__dialog11``
+# and runs ``pasteImport(0)`` -> ``$.post('/services/product/import.ashx
+# ?action=PasteImport…')``, which is the ERP's *parse*; 保存数据 is
+# ``#win_btn__dialog12``, starts ``disabled``, and runs ``pasteImport(1)``, which
+# is ``returnSet(DetailData)`` + ``windowsClose()`` with no request of any kind.
+# The dialog's close callback ``appendRow()`` then writes the rows into the bill
+# grid. Neither control is the form's 保存 (``button#btnSave`` -> bill_save_auto),
+# which stays gated.
+_PASTE_IMPORT_CONTROL = "#win_btn__dialog11"
+_PASTE_COMMIT_CONTROL = "#win_btn__dialog12"
+
+# The 采购临时询价 window is its own dialog and the 粘贴 dialog is a sibling
 # dialog of it. Both live on the INSO home page rather than on a page of their
 # own, so clearing them returns the session to the home page and its 业务询价
 # list without navigating anywhere.
@@ -594,37 +708,35 @@ _AI_ENTRY_COMMIT_ID = "win_btn__dialog11"
 # Closing a dialog here only sets ``display:none``. The dialog, its close control
 # and its iframe document all stay in the DOM (read-only live read,
 # 2026-09-30: ``iframe#winIframealert_enquiry`` count stayed 1 with the hosting
-# ``details-dialog.alert_enquiry`` at ``display:none``, and the same held for the
-# AI panel). Presence therefore can never prove a window is gone -- an earlier
-# version of this module used ``count() == 0`` as its cleared check and so
-# reported every surface as unclearable, which would have refused every order at
-# the purchase step with ``CONTROL_NOT_FOUND``. Only visibility can, and a window
-# that is already hidden is a success, not a failure.
+# ``details-dialog.alert_enquiry`` at ``display:none``; the 粘贴 dialog behaves
+# the same, confirmed 2026-11-21). Presence therefore can never prove a window is
+# gone -- an earlier version of this module used ``count() == 0`` as its cleared
+# check and so reported every surface as unclearable, which would have refused
+# every order at the purchase step with ``CONTROL_NOT_FOUND``. Only visibility
+# can, and a window that is already hidden is a success, not a failure.
 _ORDER_WINDOW_DIALOG = "details-dialog"
-_AI_ENTRY_DIALOG = "details-dialog._dialog1"
 _DIALOG_CLOSE_CONTROL = 'button[title="关闭窗口"]'
 _DIALOG_CLOSE_TIMEOUT_MS = 10_000
-_AI_ENTRY_WAIT_SECONDS = 15.0
-_AI_ENTRY_POLL_MILLISECONDS = 200
+_PASTE_ENTRY_WAIT_SECONDS = 15.0
+_PASTE_ENTRY_POLL_MILLISECONDS = 200
 
-# The AI entry runs recognition asynchronously. Immediately after the click the
-# button still carries a progress caption ("🔗 正在连接 AI 服务... 0%", then
-# "✅ 正在校验品牌与物料库... 66%", "✨ 即将完成，请稍候... 95%") and the preview
-# has no rows at all; after recognition it becomes "重新识别" with one
-# populated row. A single immediate read therefore always saw "not ready". The
-# reader now polls the exact same predicate until it holds or the deadline
-# passes. A genuine failure -- no unique row, or a field mismatch -- still
-# fails closed, it just is not mistaken for the in-flight state.
-_AI_READY_WAIT_SECONDS = 20.0
-_AI_READY_POLL_MILLISECONDS = 250
+# The parse runs server-side and arrives asynchronously: right after the click
+# the grid is still empty and 保存数据 is still disabled, and only a successful
+# response populates ``layui.table.cache['dg']`` and enables the commit control.
+# Readiness is therefore two page conditions -- expected row count and an
+# enabled commit control -- polled until they hold. A fixed delay is never used
+# as the condition, and a genuine failure (no row, wrong row count, unreadable
+# cache) still fails closed rather than being mistaken for the in-flight state.
+_PASTE_READY_WAIT_SECONDS = 30.0
+_PASTE_READY_POLL_MILLISECONDS = 250
 
 
 class _PlaywrightActionPort:
     """Private exact-selector bridge; callers only receive business methods."""
 
-    def __init__(self, form_page: OperationPage, ai_panel: AiFrameProvider) -> None:
+    def __init__(self, form_page: OperationPage, paste_panel: PastePanel) -> None:
         self._form_page = form_page
-        self._ai_panel = ai_panel
+        self._paste_panel = paste_panel
 
     def _locator(self, binding: _Binding) -> Any:
         if binding.frame == "list":
@@ -645,22 +757,18 @@ class _PlaywrightActionPort:
             return self._form_page.page.frame_locator(_FORM_SCOPE_FRAME).locator(
                 binding.selector
             )
-        if binding.frame == "ai":
-            # The recognition controls live in the form's own AI录单 frame, so
-            # the frame is re-verified on every use rather than trusted once.
-            frame = self._ai_panel.frame()
-            _require_ai_entry_url(str(getattr(frame, "url", "")))
+        if binding.frame == "paste":
+            # The paste box lives in the form's own 粘贴 dialog frame, so the
+            # frame is re-verified on every use rather than trusted once.
+            frame = self._paste_panel.frame()
+            _require_paste_entry_url(str(getattr(frame, "url", "")))
             return frame.locator(binding.selector)
-        if binding.frame == "ai-dialog":
-            # The commit control sits in the dialog that *hosts* the AI frame,
-            # not in the frame itself. It is resolved through that same frame, so
-            # the control can only ever be reached while the verified panel is
-            # open, and a dialog that is not the panel's own fails closed.
-            frame = self._ai_panel.frame()
-            _require_ai_entry_url(str(getattr(frame, "url", "")))
-            dialog = frame.parent_frame.locator(_AI_ENTRY_DIALOG)
-            if dialog.count() != 1:
-                raise SecurityViolation("AI entry dialog is not unique")
+        if binding.frame == "paste-dialog":
+            # The footer controls sit in the dialog that *hosts* the paste frame,
+            # not in the frame itself. They are resolved through that same frame,
+            # so they can only ever be reached while this dialog is open, and a
+            # dialog that is not this one fails closed.
+            dialog = self._paste_panel.host()
             return dialog.locator(binding.selector)
         raise SecurityViolation("unknown INSO selector scope")
 
@@ -773,7 +881,7 @@ class _PlaywrightActionPort:
 
         Verified live: the customer menu closes on its own once an option is
         picked, but the purchaser menu stays open and its own table cells keep
-        covering ``#ai_import_``, so the AI录单 control can never be clicked.
+        covering ``#product_import_``, so the 粘贴 control can never be clicked.
         The site dismisses that menu on a document click, so this issues the
         same click and then insists, fail-closed, that no menu is left open.
         """
@@ -789,9 +897,9 @@ class _PlaywrightActionPort:
                 raise SecurityViolation("select menu did not close")
             page.wait_for_timeout(150)
 
-    def _ai_panel_is_ready(self) -> bool:
+    def _paste_dialog_is_ready(self) -> bool:
         try:
-            self._ai_panel.frame()
+            self._paste_panel.frame()
         except SecurityViolation:
             return False
         return True
@@ -850,7 +958,7 @@ class _PlaywrightActionPort:
         return tuple(
             candidate
             for action in _BINDINGS
-            if _BINDINGS[action].frame not in _AI_SCOPES or self._ai_panel_is_ready()
+            if _BINDINGS[action].frame not in _PASTE_SCOPES or self._paste_dialog_is_ready()
             for candidate in self._candidate(action)
         )
 
@@ -893,7 +1001,7 @@ class _PlaywrightActionPort:
             if purchaser_id.count() != 1 or not purchaser_id.input_value():
                 raise SecurityViolation("purchaser selection was not confirmed")
             return
-        if action is WriteAction.SET_AI_INPUT:
+        if action is WriteAction.SET_PASTE_DATA:
             if value is None:
                 raise SecurityViolation("field value is required")
             locator.fill(value)
@@ -907,14 +1015,14 @@ class _PlaywrightActionPort:
             if locator.input_value() != value:
                 raise SecurityViolation("quotation type read-back did not match")
             return
-        if action is WriteAction.RUN_AI_RECOGNITION:
+        if action is WriteAction.RUN_PASTE_IMPORT:
             locator.click()
             return
-        if action is WriteAction.AI_ENTRY_COMMIT:
-            # Client-side hand-back: the panel returns the recognized row and
-            # closes itself, so this click must not be mistaken for a Save. The
-            # recognized row landing in the bill grid is verified separately by
-            # the caller's read-back, never assumed from this click.
+        if action is WriteAction.PASTE_ENTRY_COMMIT:
+            # Client-side hand-back: the dialog returns the parsed rows and closes
+            # itself, so this click must not be mistaken for a Save. The rows
+            # landing in the bill grid is verified separately by the caller's
+            # read-back, never assumed from this click.
             locator.click()
             return
         if action in {WriteAction.SAVE_DATA, WriteAction.SAVE_AND_SEND}:
@@ -930,17 +1038,17 @@ class InsoPurchaseWriter:
         self,
         *,
         form_page: OperationPage,
-        ai_panel: AiFrameProvider | None = None,
+        paste_panel: PastePanel | None = None,
         gate: FeatureGate | None = None,
-        ai_result_reader: AiResultReader | None = None,
+        preview_reader: DraftPreviewReader | None = None,
     ) -> None:
         self._gate = gate or ProductionWriteGate()
         self._form_page = form_page
-        self._ai_panel = ai_panel or AiEntryPanel(form_page)
-        self._ai_result_reader = ai_result_reader or PlaywrightAiResultReader(
-            self._ai_panel
+        self._paste_panel = paste_panel or PasteImportPanel(form_page)
+        self._preview_reader = preview_reader or PlaywrightPastePreviewReader(
+            self._paste_panel
         )
-        self._port = _PlaywrightActionPort(form_page, self._ai_panel)
+        self._port = _PlaywrightActionPort(form_page, self._paste_panel)
         self._registry = SelectorRegistry()
         for action, binding in _BINDINGS.items():
             if (action is WriteAction.SAVE_AND_SEND
@@ -985,58 +1093,63 @@ class InsoPurchaseWriter:
             raise SecurityViolation("quotation type is not allowlisted")
         self._actions.set_quotation_type(_value)
 
-    def open_ai_entry(self) -> None:
-        """Open the form's own AI录单 panel; it is an in-page frame, not a tab.
+    def open_paste_entry(self) -> None:
+        """Open the form's own 粘贴 dialog; it is an in-page frame, not a tab.
 
         The form's select menu can still be open when this runs (the purchaser
-        pick leaves its menu covering ``#ai_import_``), so the panel's own
-        control check fails closed unless the form is clear first.
+        pick leaves its menu covering the toolbar), so the dialog's own control
+        check fails closed unless the form is clear first.
         """
 
         _require_inso_origin(self._form_page.page.url)
-        self._ai_panel.open()
+        self._paste_panel.open()
 
-    def set_ai_input(self, value: str) -> None:
-        self._actions.set_ai_input(value)
+    def assert_paste_preview_fresh(self) -> None:
+        """Refuse to import on top of a preview that was not ours."""
 
-    def run_ai_recognition(self) -> None:
-        self._actions.run_ai_recognition()
+        self._paste_panel.assert_fresh()
 
-    def read_ai_result(self) -> AiRecognitionResult:
-        if self._ai_result_reader is None:
-            raise SecurityViolation("AI result selectors are not verified")
-        result = self._ai_result_reader.read()
+    def set_paste_data(self, value: str) -> None:
+        self._actions.set_paste_data(value)
+
+    def run_paste_import(self) -> None:
+        self._actions.run_paste_import()
+
+    def read_paste_preview(self) -> DraftPreviewResult:
+        if self._preview_reader is None:
+            raise SecurityViolation("paste preview selectors are not verified")
+        result = self._preview_reader.read()
         if result is None or not result.ready:
-            raise SecurityViolation("AI recognition is not ready")
+            raise SecurityViolation("paste preview is not ready")
         return result
 
-    def close_ai_entry(self) -> None:
-        """Close the AI录单 panel; the draft form itself is left open for Save."""
+    def close_paste_entry(self) -> None:
+        """Dismiss the 粘贴 dialog; the draft form itself is left open for Save."""
 
-        panel_close = getattr(self._ai_panel, "close", None)
+        panel_close = getattr(self._paste_panel, "close", None)
         if callable(panel_close):
             panel_close()
 
-    def commit_ai_entry(self) -> None:
-        """Let the ERP fill the bill row itself; nothing is typed into the bill.
+    def commit_paste_entry(self) -> None:
+        """Let the ERP fill the bill rows itself; nothing is typed into the bill.
 
         The 采购临时询价 form is the operator's surface, and its 编码/型号/品牌/数量
-        cells are not ours to type into. The ERP's own path is the AI录单 panel's
-        保存数据, whose handler is ``pasteImport() -> AiImport.doImport()``:
-        ``returnSet(buildResult())`` hands the recognized row back and
-        ``windowsClose()`` fires the dialog's close callback
-        (``ai_appendRow()``), which reloads the bill grid with that row.
+        cells are not ours to type into. The ERP's own path is the 粘贴 dialog's
+        保存数据, whose handler is ``pasteImport(1)``: ``returnSet(DetailData)``
+        hands the parsed rows back and ``windowsClose()`` fires the dialog's
+        close callback (``appendRow()``), which writes those rows into the bill
+        grid. Verified live 2026-11-21: no request leaves the browser.
         """
 
-        self._actions.commit_ai_entry()
+        self._actions.commit_paste_entry()
 
     def dismiss_order_surface(self) -> bool:
         """Return the INSO session to the 业务询价 list between orders.
 
         Owner rule (2026-09-30): every new order starts from the INSO home page
         entered through 业务询价, with nothing of the previous order left open.
-        The ERP keeps the 采购临时询价 window -- customer selector and AI录单
-        panel included -- across orders, so the next order ran against the
+        The ERP keeps the 采购临时询价 window -- customer selector and its sibling
+        dialogs included -- across orders, so the next order ran against the
         previous order's form: the purchaser control ended holding both
         ``陈熙`` and ``颜浩坚``, and the only symptom was ``CONTROL_NOT_FOUND``.
 
@@ -1053,11 +1166,11 @@ class InsoPurchaseWriter:
                 self._port.dismiss_select_menu()
             except SecurityViolation:
                 return False
-        if self._ai_panel_is_open():
-            self.close_ai_entry()
+        if self._paste_dialog_is_open():
+            self.close_paste_entry()
         if self._order_window_is_open() and not self._close_order_window():
             return False
-        if self._order_window_is_open() or self._ai_panel_is_open():
+        if self._order_window_is_open() or self._paste_dialog_is_open():
             return False
         return page.locator(_OPEN_SELECT_MENU).count() == 0
 
@@ -1098,16 +1211,16 @@ class InsoPurchaseWriter:
             return True
         return window is not None and window.is_visible()
 
-    def _ai_panel_is_open(self) -> bool:
-        """Whether the AI录单 panel is showing; ambiguity reads as open."""
+    def _paste_dialog_is_open(self) -> bool:
+        """Whether the 粘贴 dialog is showing; ambiguity reads as open."""
 
-        panel = self._form_page.page.locator(_AI_ENTRY_DIALOG)
-        count = panel.count()
+        dialog = self._form_page.page.locator(_PASTE_DIALOG)
+        count = dialog.count()
         if count == 0:
             return False
         if count != 1:
             return True
-        return panel.is_visible()
+        return dialog.is_visible()
 
     def _close_order_window(self) -> bool:
         """Close the 采购临时询价 window, resolved by the form it holds.
@@ -1186,30 +1299,38 @@ def _is_verified_inso_url(url: str) -> bool:
     return not urlsplit(url).path.casefold().endswith("/login.aspx")
 
 
-def _require_ai_entry_url(url: str) -> None:
-    """The AI录单 frame is the verified entry page on the verified origin.
+def _require_paste_entry_url(url: str) -> None:
+    """The 粘贴 frame is the form's own paste page on the verified origin.
+
+    Two dialogs in this ERP share the title "粘贴导入" and only this one may be
+    used: the form's ``product/Import.aspx``, whose 保存数据 is a client-side
+    hand-back. The list page's ``innerenquiry/yewuxj/Import.aspx`` looks the same
+    but its 保存数据 posts ``action=Import`` and creates server-side bills, so it
+    is rejected explicitly rather than merely not linked to.
 
     The ERP appends its own routing query (``BillPage``, ``VendorID``, ``h``) and
-    ``VendorID`` is populated with the real vendor in production, so the query
-    is intentionally not pinned; scheme, host, path and the absence of embedded
-    credentials/fragment are the identity boundary.
+    ``VendorID`` is empty on a fresh draft, so the query is intentionally not
+    pinned; scheme, host, path and the absence of embedded credentials/fragment
+    are the identity boundary.
     """
 
     parsed = urlsplit(url)
+    if parsed.path.casefold() == BULK_IMPORT_PATH:
+        raise SecurityViolation("bulk import dialog is forbidden")
     if (
         parsed.scheme != "https"
         or parsed.hostname != "yingsuo.alperp.cn"
-        or parsed.path != AI_ENTRY_PATH
+        or parsed.path != PASTE_ENTRY_PATH
         or parsed.username
         or parsed.password
         or parsed.fragment
     ):
-        raise SecurityViolation("AI entry frame identity is not verified")
+        raise SecurityViolation("paste dialog frame identity is not verified")
 
 
-def _is_verified_ai_entry_url(url: str) -> bool:
+def _is_verified_paste_entry_url(url: str) -> bool:
     try:
-        _require_ai_entry_url(url)
+        _require_paste_entry_url(url)
     except SecurityViolation:
         return False
     return True
