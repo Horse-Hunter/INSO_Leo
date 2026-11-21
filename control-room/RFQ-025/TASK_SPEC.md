@@ -1,6 +1,12 @@
-# RFQ-025 — V1.6 正式晋升 + V1.7 页面嗅探
+# RFQ-025 — V1.6 晋升 + V1.7 原生粘贴录单（三阶段）
 
-**状态：`V1_6_PROMOTED_TO_MAIN / V1_7_BASELINE_READY / PASTE_SNIFF_COMPLETE / NO_BUSINESS_EFFECT`**
+**当前状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_NOT_YET_VERIFIED`**
+（V1.7 已装进 `dist\INSO_V1.7` 并正常生产运行；`main` 仍是 V1.6，未晋升）
+
+阶段状态：
+`V1_6_PROMOTED_TO_MAIN / V1_7_BASELINE_READY / PASTE_SNIFF_COMPLETE / V1_7_IMPLEMENTED /
+LIVE_DRAFT_VERIFIED / REGRESSION_PASS / RELEASE_CANDIDATE_READY / V1_7_INSTALLED /
+PRODUCTION_RUNNING / REAL_PURCHASE_NOT_YET_VERIFIED`
 
 Owner 一句话即可复核：本文件 → [EXECUTION_LOG](EXECUTION_LOG.md) → [FINAL_REPORT](FINAL_REPORT.md)
 → 脱敏页面证据 [`docs/evidence/rfq025/paste-import-sniff.md`](../../docs/evidence/rfq025/paste-import-sniff.md)。
@@ -137,6 +143,24 @@ Sheets 读写、报价更新、TP、邮件、调度周期、代理与 CDP 修复
 
 候选 EXE 交 CEO 审核；**未安装、未覆盖 `dist/INSO_V1.6`、未重启生产、未发送任何真实采购单**。
 V1.7 仍是前瞻版本，未经 Owner 验收不得晋升 `main`。
+
+## 6b. 第三阶段：收尾、安装与生产试运行（2026-11-21 晚）
+
+**结论：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_NOT_YET_VERIFIED`。**
+
+| 事项 | 结果 |
+|---|---|
+| 22 条 TP 失败 | 确认是测试时基问题（TP 按"上月同日"截止 + 夹具订单固定 2026-10-20 + 未固定时钟），非 V1.7 回归；只改时基，TP 规则与限制未动；全量转绿 |
+| 粘贴单一订单异常 | 三列表达不了的订单改走既有单笔无效输入通道，不再中断整轮 |
+| 字段映射/分隔符 | `#cmb0..2` / `#combox101` 默认只读；不一致时用弹窗自带下拉改回并复读；改不回即 fail-closed |
+| 最终回归 | 4365 collected / 0 failed / 0 errors / 1 skipped（ruff 仍只剩 3 条既有 F811） |
+| 候选 | `INSO_V1.7.exe` 8,510,418 B / `6e258a50…c780` / 2,872 文件 / 清单 `e148a4d2…5397` |
+| 安装 | `-FreshInstall` 装到 `dist\INSO_V1.7`，`INSTALL_RESULT = PASS`；V1.6 目录一个字节未动 |
+| 生产运行 | PID 85452（GUI）+ 84368（watcher），inquiry/quotation/tp 三模块按 900 s 正常运行，零故障 |
+| 真实采购 | **未发生**：无合法待处理订单（最新状态全为 `PURCHASE_RECORDED`/`HUMAN_COMPLETED`）；未造单、未重发 |
+| 台账副作用 | purchase 行数 40 与装前一致；hold 3 条原样；open write intents 0 |
+
+细节见 [EXECUTION_LOG](EXECUTION_LOG.md) 第 14–21 节。
 
 ## 7. 下一轮（待 Owner 指令，不自动开工）
 

@@ -60,3 +60,33 @@ surface_cleared_after_order: True
   收益低于风险。
 - **没有验证"数量为小数/异常品牌"在真实 ERP 上的表现**：同理，属于故意构造非法输入，
   由 `_strict_positive_int` 与 `build_paste_input` 的单元测试与源码契约保证。
+
+## 5. 第三次实测：加上字段映射守卫之后（2026-11-21 晚）
+
+最终候选在 `prepare()` 里增加了一步 `prepare-paste-layout`：读 `#cmb0/#cmb1/#cmb2`
+（隐藏值 = `PartNo`/`Qty`/`Brand`）与 `#combox101`（`3` = 竖线 `|`），默认正确时**只读不点**，
+不正确时通过弹窗自带的下拉控件改回并复读确认，改不回来就 fail-closed。
+
+同一个生产代码路径再跑一次，证明这一步没有引入多余页面交互、也没有改变结果：
+
+```
+paste_input: TRJC476K016RRJ|200|Kyocera AVX
+outcome: AI_RECOGNIZED
+reason: None
+recognized: TRJC476K016RRJ Kyocera AVX 200
+non_get_requests: [... services/product/import.ashx ×1]
+ai_traffic: []
+bill_id_after_prepare: (空)
+VERDICT: PASS
+surface_cleared_after_order: True
+```
+
+对照字段控件实测结构（同一次登录内只读采集）：
+
+| 控件 | 结构 | 默认值 |
+|---|---|---|
+| `#cmb0/#cmb1/#cmb2` | `input type=hidden` + 兄弟 `div.select-box` 内 `#cmbN_text`（只显示中文）+ `summary` | `PartNo` / `Qty` / `Brand`（显示 型号/数量/品牌） |
+| `#combox101` | 同上，`input type=hidden` + `#combox101_text` + `summary` | `3`，即 `/config/etaoerp/FenGeFu.json` 里的 `竖线('|')` |
+
+`#combox101_text` 的显示值可能是过期占位（实测读到 `Tab('\t')`），而 `pasteImport` 只读隐藏值，
+所以守卫只认隐藏 input，不读 `_text` —— 这与"不能把视觉文本当数据"是同一条规则。

@@ -402,3 +402,208 @@ scripts/build_windows_release.ps1 -BuildOnly -Version 1.7 \
 `--idle-self-check` 会往产物里写 `runtime/logs/v13-idle-self-check.json`，已删除，文件数回到 2,872。
 
 **未做**：未安装到 `dist/INSO_V1.6`、未覆盖运行目录、未启动正常业务、未发真实采购单。
+
+---
+
+# 第三阶段：收尾、安装与生产试运行（2026-11-21 晚）
+
+Owner 指令：第二阶段核心功能通过，本轮一次性完成收尾、跨版本安装适配、正式安装、正常生产启动与真实业务试运行。
+
+## 14. TP 22 条失败的真实根因（确认 CEO 判断）
+
+**不是** V1.7 引入的回归，是测试时基问题。
+
+`automatic_admission.age_reason()` 对 TP 采用"上月同日"截止：`2026-11-21` 运行时截止为 `2026-10-21`。
+合成订单的 `rfq_date` 固定为 `2026-10-20`（`tests/sheets/test_tp_brief.py` 的 `brief()` 默认值），
+而 `TpCycle.read_orders()` 在未拿到 `now` 时回落到 `datetime.now(UTC)` —— 于是订单在自己的夹具里"过期"了。
+
+22 条失败全部同源，证据分三类：
+
+| 失败签名 | 含义 |
+|---|---|
+| `ValueError: not enough values to unpack (expected 1, got 0)` | `read_orders()` 被年龄过滤成空列表（19 条） |
+| `assert cycle.issues` == `{}` | 同上，连"过期"记录都没留下 |
+| `assert 'RESEARCHING' == 'FAILED'` | 手动路径读到空 → 没有任务可失败（1 条连带） |
+
+### 修复（只动测试时基，不动业务规则）
+
+1. `tests/workflow/test_tp_research.py::build()` 给 `TpCycle` 传入 `clock=lambda: NOW`。
+   `clock` 是**既有参数**，本来就是这个用途；钉住后所有省略 `now` 的调用点（`read_orders`、
+   `backend._execute_order_action` 的手动路径）都用测试时基，不再读墙上时钟。
+2. `TpCycle._run()` 统一时间基准：原来 `read_orders` 用 `clock`、而 `claim()` 却拿到原始 `now`——
+   加了 clock 之后会出现"读到了订单，claim 又按墙上时钟判它过期"的自相矛盾（这正是 `[research]/[mail]`
+   两个参数化用例改后先变红的原因）。现在 claim/recover/finish/execute_tp/complete_order 全用
+   `current_now`；**`worker.run_due(now=now)` 刻意保留调用方的 `now`**，因为"到期"是调度不是准入。
+3. 生产语义不变：生产不传 `clock`，`current_now` 就是 `now`，逐字节等价。
+
+**没有**修改 TP 准入规则、没有放宽一个月限制、没有改真实订单日期、没有删除或跳过任何用例。
+
+### 同类问题（顺带修掉，否则安装门禁跑不起来）
+
+`scripts/test_install_gates.ps1` 的夹具数据库事件时间固定在 `2026-11-15T08:00`，而门禁要求
+72 小时内 —— 2026-11-18 之后整套测试必然失败（与 TP 同一个病）。现改为相对当前时间生成；
+`-Scenario` 分支原本显式传死时间，也一并改成相对值。
+
+## 15. 粘贴录单的两处收尾
+
+### 15.1 无法用三列表达的订单不再中断整轮
+
+`build_paste_input()` 对含 `|` 或换行的型号/品牌抛 `ValueError`，而它在 `v12_flow.py` 构造
+`PurchaseDraftCommand` 时调用，位置在采购步骤自身的异常处理**之前**——一旦命中，整轮 poll 直接抛穿，
+同批其他订单一起丢。
+
+现在改为在构造命令前先算 `paste_input`，`ValueError` 走**既有的**单笔无效输入通道：
+`PURCHASE_EXCEPTION` + `PURCHASE_INPUT_INVALID`，只停这一单。
+新增测试 `test_a_model_that_cannot_be_pasted_fails_only_its_own_order` 用两行夹具证明：
+坏行被park、好行照常生成 `Mpn-2|8|Brand-X`。
+
+### 15.2 字段映射与分隔符：默认只读，不默认就改回
+
+实测结构（`product/Import.aspx`）：
+
+| 控件 | 结构 | 默认 |
+|---|---|---|
+| `#cmb0/#cmb1/#cmb2` | `input type=hidden`（值 = `PartNo`/`Qty`/`Brand`）+ 兄弟 `div.select-box`（`#cmbN_text` 只显示中文 + `summary`） | 型号/数量/品牌 |
+| `#combox101` | `input type=hidden`（值 `3`）+ `#combox101_text` + `summary` | `3` = `竖线('|')`（`/config/etaoerp/FenGeFu.json`） |
+
+`#combox101_text` 的显示值可能是过期占位（实测读到 `Tab('\t')`），而 `pasteImport` 只读隐藏值——
+所以守卫**只读隐藏 input**，与"不能把视觉文本当数据"同一条规则。
+
+`PasteImportPanel.ensure_layout()`：
+正常情况只读四个值、**一个控件都不点**；发现不一致时点该 `select-box` 的 `summary`，
+在弹出的 `details-menu li` 里按精确文本选回目标项，再复读隐藏值确认；选不到或值没变就 fail-closed。
+`prepare()` 新增步骤 `prepare-paste-layout`（放在打开弹窗之后、写数据之前），
+诊断上与"弹窗打不开"区分开。
+
+测试：4 条（默认只读、错误映射被改回、选项不出现即拒、点了但值没变即拒）；
+真实环境复测一次（见 `docs/evidence/rfq025/v17-live-verification.md` 第 5 节），结果不变。
+
+## 16. 冻结后的完整回归
+
+```
+4365 collected / 4364 passed / 0 failed / 0 errors / 1 skipped in 765 s
+```
+
+- 由 `4359 + 6`（新增布局守卫 4 条、单笔隔离 1 条、编排步骤 1 条）而来；
+- **上一轮的 22 条 TP 失败全部转绿**，无删除、无跳过、无 `xfail`；
+- `ruff check src tests` 仍是基准的 3 条既有 F811（`test_google_quote_update.py` 重复用例名）；
+- JUnit：`docs/evidence/rfq025/pytest-v17-full.xml`。
+
+## 17. 最终候选（源码变更后重建）
+
+| 项 | 值 |
+|---|---|
+| 源码 commit | `1ce1671f`（构建后只提交过文档） |
+| 路径 | `build/windows-release-stage-1.7/dist/INSO_V1.7/INSO_V1.7.exe` |
+| 大小 | 8,510,418 B |
+| SHA256 | `6e258a5021792a1b4b88a72ca12d355064aab8c398e64eb58240ef542dece780` |
+| 文件数 | 2,872（无 `runtime/`） |
+| 清单 | `docs/evidence/rfq025/INSO_V1.7-artifact-manifest.sha256`（2,872 行） |
+| 清单 SHA256 | `e148a4d22a5c2b9a7b81b484fc6228ec162cd112e896eed3aa67ace2426f5397` |
+| `verify_release_candidate` | PASS（2872/2872，missing 0，mismatch 0，unexpected 0） |
+| `--self-check` | 退出码 0 |
+| `--idle-self-check` | 退出码 0，`gui_rendered: true`，标题 `INSO LEO V1.7 — Procurement Automation Control Center`，`business_thread_started: false` |
+
+`--idle-self-check` 会往产物写 `runtime/logs/`，已删除，文件数回到 2,872。
+
+## 18. 安装脚本：跨版本适配
+
+`scripts/install_release_candidate.ps1`（不改结构、不重写，只做参数化 + 一个显式模式）：
+
+- **两个 EXE 名分开**：`-PreviousExeName`（默认 `INSO_V1.6.exe`，被替换的那个）与
+  `-CandidateExeName`（默认空 = 从候选清单里读，必须恰好一个根级 EXE）。
+  旧实现把 `INSO_V1.6.exe` 写死在十余处（快照比对、切换、post-copy 校验、回滚、进程门禁、仅校验模式）。
+- **进程门禁同时查新旧两个名字**：一次切换前后，任何一侧的残留进程都是同一台账上的第二个调度器。
+- **回滚路径同步**：恢复时先删掉失败切换留下的 *候选* EXE（名字可能不同），再放回旧 EXE。
+- **新增 `-FreshInstall`**：装进自己的目录，V1.6 目录**一个字节都不动**。要求目标为空、
+  候选不带 `runtime`、创建并复验 `runtime` **Junction**、跑 `Assert-DatabaseReport`、
+  新旧两个安装目录都不得有活进程；失败时只删本次创建的东西并报 `FAIL_CLEANED`。
+- **数据库门禁抽成 `Assert-DatabaseReport`**，两种模式共用：切换模式要求报告属于本安装，
+  全新安装模式不要求（报告属于共享 runtime 的那套安装），但仍要求报告描述的就是配置里那个台账。
+
+`scripts/test_install_gates.ps1` 新增 3 组用例（跨版本切换、跨版本切换失败回滚、全新安装 + 拒绝覆盖），
+`checks = 202 / GATE_TEST_RESULT = PASS`。
+
+## 19. 正式安装
+
+前置（全部实测）：
+
+| 项 | 证据 |
+|---|---|
+| V1.6 是否真的停 | 日志最后一条 `10:59:11`；两进程 CPU 零增量；无窗口；`-wal` 不存在（台账已 checkpoint） |
+| 停止残留进程 | PID 56032 / 75380 已终止（窗口早已销毁，无正常停机入口；业务已静默 10.5 h） |
+| 回退快照 | `dist\release-backups\RFQ-025-pre-v17-20261121T132826Z`，`BACKUP_RESULT = PASS`，`exe_sha256 = 9a0cb3d3…2710` |
+| 数据库回退 | 同目录 `database\workflow.sqlite3`，`DB_VERIFY_RESULT = PASS`，`purchase_rows = 40`，`write_intent_state = NONE_PROVEN`，`event_age_hours = 10.51` |
+
+安装（`-FreshInstall`，未触碰 V1.6）：
+
+```
+INSTALL_RESULT = PASS
+install_dir = D:/Program_Leo/INSO_Leo/dist/INSO_V1.7
+installed_exe_sha256 = 6e258a5021792a1b4b88a72ca12d355064aab8c398e64eb58240ef542dece780
+installed_files_verified = 2872
+runtime_junction = D:/Program_Leo/INSO_Leo/dist/INSO_V1.4/runtime
+rollback_kind = PREVIOUS_INSTALL_UNTOUCHED
+rollback_previous_install = D:/Program_Leo/INSO_Leo/dist/INSO_V1.6
+```
+
+配置继承：`dist\INSO_V1.7\runtime` 是 **Junction** → `dist\INSO_V1.4\runtime`，
+`production.json`（`tp_enabled=True`、`v16_enabled=True`、`google_api.enabled=True`）、
+`research.json`、生产 SQLite 全部沿用同一份，没有复制、没有新建第二套配置。
+
+V1.6 目录未被改动：`INSO_V1.6.exe` 仍是 `9a0cb3d3…2710`。
+
+启动入口：桌面 `INSO V1.7（最新版）.lnk` 指向 `dist\INSO_V1.7\INSO_V1.7.exe`
+（由原 V1.6 快捷方式按同长度替换生成，815 B 结构不变）；原 `INSO V1.6（最新版）.lnk`
+改名为 `INSO V1.6（旧版，仅回退用）.lnk`，保留可回退但不会再被误点。
+
+## 20. 正常生产启动与业务观察
+
+启动方式：正式生产模式（非 `--safe-preview`、非 `--scoped-start`），
+`INSO_V1.7.exe --start-inquiry` —— 该开关就是 GUI「开始运行」按钮调用的同一个 `backend.start()`，
+所以业务是"点过开始运行"的状态，不是受限预览。
+
+```
+PID 85452  INSO_V1.7  CPU 22.4s  窗口：INSO LEO V1.7 — Procurement Automation Control Center
+PID 84368  INSO_V1.7             （watcher，observer.json 已记录 target/observer 对应关系）
+runtime-run_id = edc94a2c5c684066ae0b3eea8a3d28a5，fatal.log = 0 字节
+```
+
+三个模块都按 900 s 周期跑起来了，且**零故障**：
+
+| 时间 | 模块 | 用时 | 结果 |
+|---|---|---|---|
+| 21:31:58 | inquiry | 9.6 s | completed，无采购动作（无待处理订单） |
+| 21:32:07 | quotation | 77.5 s | 47 条处理完毕，全部为既有的年龄/无新报价类结果 |
+| 21:33:29 | tp | 1.2 s | completed，既有 5 条 TP 任务仍为 `MAIL_QUEUED` |
+| 21:47:07 | inquiry（第二轮） | 4.1 s | completed，同样无采购动作 |
+
+今日日志里 `ERROR` / `SHEETS_*` / `fault` / `exception` 命中数 **0**；Google Sheets 读取正常
+（否则询价模块不会枚举出 47 条历史询价）。
+
+**没有产生任何真实采购**：
+
+| 项 | 值 |
+|---|---|
+| `workflow_v12_purchase_state` 行数 | 40（与装前备份一致） |
+| 最后一条采购 | `inq_17724bfe8d738fdd3bd0f166` / `SAVED` / 2026-11-19 |
+| 活动 hold | 3（原样保留，未清未改） |
+| open write intents | 0（报告 `NONE_PROVEN`） |
+
+**原因不是故障，是没有合法待处理订单**：`workflow_v12_inquiry_state` 最新状态全是
+`PURCHASE_RECORDED` / `HUMAN_COMPLETED`，询价模块两轮都无事可做。
+按 Owner 指令"没有合法待处理订单时不制造订单、不重发历史订单"，本轮如实标注
+`REAL_PURCHASE_NOT_YET_VERIFIED`。
+
+既有现象（未变、非本次引入，如实记录）：`inq_d65be9df3c7cc40b65cbffaa` 的
+`QUOTE_INPUT_WRITE_FAILED` 与 `inq_71f4a2f5ef8678223385b6e2` 的 `UPDATE_RESULT_UNCONFIRMED`
+在 11-20 的日志里每一轮都以同样签名出现，属报价输入表的历史条件，不在本次改动范围内。
+
+## 21. 本轮结束时的状态
+
+`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_NOT_YET_VERIFIED`
+
+- V1.7 已装进独立目录并正常生产运行；V1.6 目录、回退快照、数据库备份、hold 全部原样保留；
+- 正常生产路径不含 AI 录单（源码守卫测试 + 两次真实运行的 AI 请求计数为 0）；
+- 真实"保存并发送"与最终业务结果**尚未验证**，等有合法待处理订单时自然发生；
+- `main` 仍是 V1.6，`release/previous` 未动，V1.7 未晋升。
