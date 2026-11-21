@@ -101,7 +101,19 @@ CoordinatorPurchaseDraftWriter.prepare`），不是临时探针。
 
 ### 5. V1.7 候选
 
-见 [EXECUTION_LOG](EXECUTION_LOG.md) 第 13 节：EXE 路径、SHA256、清单与对应源码 commit。
+| 项 | 值 |
+|---|---|
+| 路径 | `build/windows-release-stage-1.7/dist/INSO_V1.7/INSO_V1.7.exe`（未安装，`dist/` 未被触碰） |
+| 大小 | 8,508,798 B |
+| SHA256 | `5707b9c598546c6476f96bfde217d712d1f7768732acf5032ef79657004af253` |
+| 文件数 | 2,872（无 `runtime/`） |
+| 清单 | `docs/evidence/rfq025/INSO_V1.7-artifact-manifest.sha256`，SHA256 `27d46b1cc4b7901121bf800534fb617daeb091e29a4a76d91257afaf696f3f9a` |
+| 发布扫描 | `RELEASE_SCAN_OK` |
+| `--self-check` | 退出码 0 |
+| `--idle-self-check` | 退出码 0，`gui_rendered: true`，标题含 `V1.7` |
+| 源码 | `332b8695`（其后提交仅文档/测试导入顺序） |
+
+构建复用 V1.6 时代的 `.venv-release`，走既有 `-BuildOnly`，只产出 staging。
 
 ### 6. V1.6 当前实际状态
 
