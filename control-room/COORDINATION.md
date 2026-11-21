@@ -18,7 +18,7 @@
   `EventType.AI_RECOGNITION_*` 是 SQLite/事件目录里的持久值，未改名（需数据迁移）；用户可见文案已改为"粘贴录单"。
 - **未做：** 未安装、未覆盖 `dist/INSO_V1.6`、未重启生产、未发任何真实采购单、未点 `保存`/`保存并发送`。
   V1.7 仍是前瞻版本，未经 Owner 验收不得晋升 `main`。
-- **回归：** 冻结后全量 `4358 collected / 4336 passed / 22 failed / 1 skipped`。22 条失败全在 TP 模块，
+- **回归：** 冻结后全量 `4359 collected / 4336 passed / 22 failed / 1 skipped`。22 条失败全在 TP 模块，
   同一根因（`TpCycle.read_orders('test')` 读不到订单），改动文件里没有一条 TP/Google 模块，
   且在未改动的 `develop` 上同样复现 —— 记为既存失败集合，未删未跳。
 - **候选：** `INSO_V1.7.exe` 8,508,798 B / SHA256 `5707b9c5…f253` / 2,872 文件 / 清单 `27d46b1c…3f9a`；

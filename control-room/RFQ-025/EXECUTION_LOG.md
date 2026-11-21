@@ -335,7 +335,7 @@ attach_inso_research_session(login=..., fresh_page=True)
 ## 12. 完整回归结果（源码冻结后一次）
 
 ```
-4358 collected / 4336 passed / 22 failed / 0 errors / 1 skipped in 589 s
+4359 collected / 4336 passed / 22 failed / 0 errors / 1 skipped in 589 s
 ```
 
 JUnit：`docs/evidence/rfq025/pytest-v17-full.xml`。唯一 skip 是既有的 Windows 符号链接权限条件。

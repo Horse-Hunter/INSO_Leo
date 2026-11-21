@@ -65,6 +65,8 @@ class _PurchasePrepareActions(Protocol):
 
     def open_paste_entry(self) -> None: ...
 
+    def ensure_paste_layout(self) -> None: ...
+
     def assert_paste_preview_fresh(self) -> None: ...
 
     def set_paste_data(self, value: str) -> None: ...
@@ -308,6 +310,10 @@ class CoordinatorPurchaseDraftWriter:
             ("prepare-quote-type", self._actions.set_quotation_type, (command.quotation_type,)),
             ("prepare-purchaser", self._actions.set_purchaser, (command.purchaser,)),
             ("prepare-paste-open", self._actions.open_paste_entry, ()),
+            # The three columns and the 竖线 separator must still be the ERP's
+            # defaults; a wrong mapping is restored, or this order fails closed
+            # before any text is typed into the wrong fields.
+            ("prepare-paste-layout", self._actions.ensure_paste_layout, ()),
             # Prove the preview is empty before the parse runs, so the row read
             # afterwards can only come from our own import.
             ("prepare-paste-fresh", self._actions.assert_paste_preview_fresh, ()),

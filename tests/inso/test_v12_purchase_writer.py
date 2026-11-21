@@ -454,6 +454,7 @@ class _FakePastePanel:
         self.opened = False
         self.close_calls = 0
         self.fresh_checks = 0
+        self.layout_checks = 0
         self._on_close = on_close
         self.host_obj = None
 
@@ -479,6 +480,11 @@ class _FakePastePanel:
         if self.host_obj.count() != 1:
             raise SecurityViolation("paste dialog is not unique")
         return self.host_obj
+
+    def ensure_layout(self) -> None:
+        self.layout_checks += 1
+        if not self.opened:
+            raise SecurityViolation("paste dialog is not open")
 
     def assert_fresh(self) -> None:
         self.fresh_checks += 1
@@ -1885,3 +1891,163 @@ def test_the_production_draft_path_carries_no_ai_entry_anywhere() -> None:
     bound = " ".join(binding.selector for binding in _BINDINGS.values())
     for forbidden in ("ai_import", "ai-recognize", "Import_ai"):
         assert forbidden not in bound, forbidden
+
+
+class _LayoutFrame:
+    """The dialog frame as the layout guard sees it: four hidden inputs.
+
+    Live shape (2026-11-21): ``#cmb0``/``#cmb1``/``#cmb2``/``#combox101`` are
+    ``type="hidden"`` inputs holding the chosen ERP value, each paired with a
+    rendered ``select-box`` whose summary opens the option list.
+    """
+
+    url = (
+        "https://yingsuo.alperp.cn/skins/etaoerp/product/Import.aspx"
+        "?BillPage=Enquiry&VendorID=&h=510"
+    )
+
+    def __init__(self, values, *, menu=(), restore=None):
+        self.values = dict(values)
+        self.menu = set(menu)
+        self.restore = dict(restore or {})
+        self.summary_clicks = 0
+        self.picks = []
+        self.timeouts = 0
+
+    def is_detached(self):
+        return False
+
+    def wait_for_timeout(self, _milliseconds):
+        self.timeouts += 1
+
+    def locator(self, selector):
+        assert selector.startswith("input#"), selector
+        return _LayoutControl(self, selector.split("#", 1)[1])
+
+
+class _LayoutControl:
+    def __init__(self, frame, ident):
+        self.frame = frame
+        self.ident = ident
+
+    def count(self):
+        return 1 if self.ident in self.frame.values else 0
+
+    def input_value(self):
+        return self.frame.values[self.ident]
+
+    def locator(self, _selector):
+        return _LayoutBox(self.frame, self.ident)
+
+
+class _LayoutBox:
+    """The select-box wrapper: one summary plus whatever option list it renders."""
+
+    def __init__(self, frame, ident):
+        self.frame = frame
+        self.ident = ident
+
+    def count(self):
+        return 1
+
+    def locator(self, selector):
+        assert selector == "summary", selector
+        return self
+
+    def click(self, **_kwargs):
+        self.frame.summary_clicks += 1
+
+    def get_by_text(self, label, exact=False):
+        assert exact is True
+        return _LayoutOption(self.frame, self.ident, label)
+
+
+class _LayoutOption:
+    def __init__(self, frame, ident, label):
+        self.frame = frame
+        self.ident = ident
+        self.label = label
+
+    def count(self):
+        return 1 if self.label in self.frame.menu else 0
+
+    def click(self, **_kwargs):
+        self.frame.picks.append((self.ident, self.label))
+        if self.label in self.frame.restore:
+            self.frame.values[self.ident] = self.frame.restore[self.label]
+
+
+def _layout_panel(frame) -> PasteImportPanel:
+    panel = PasteImportPanel(
+        _OperationPage(SimpleNamespace()), wait_seconds=0.05, poll_milliseconds=1
+    )
+    panel._frame = frame
+    return panel
+
+
+def test_paste_layout_is_only_read_when_the_erp_defaults_hold() -> None:
+    """The normal path must not click anything in the dialog.
+
+    Both the read-only sniff and the live run found the ERP defaults already
+    correct, so reconfiguring per order would be needless page interaction on
+    every single draft.
+    """
+
+    frame = _LayoutFrame(
+        {"cmb0": "PartNo", "cmb1": "Qty", "cmb2": "Brand", "combox101": "3"}
+    )
+
+    _layout_panel(frame).ensure_layout()
+
+    assert frame.summary_clicks == 0
+    assert frame.picks == []
+    assert frame.values == {
+        "cmb0": "PartNo",
+        "cmb1": "Qty",
+        "cmb2": "Brand",
+        "combox101": "3",
+    }
+
+
+def test_paste_layout_restores_a_wrong_mapping_through_the_dialogs_own_widget() -> None:
+    """A mapping someone left wrong is corrected, not merely reported."""
+
+    frame = _LayoutFrame(
+        {"cmb0": "Type", "cmb1": "Qty", "cmb2": "Brand", "combox101": "1"},
+        menu=("型号", "数量", "品牌", "竖线('|')", "Tab('\\t')"),
+        restore={"型号": "PartNo", "竖线('|')": "3"},
+    )
+
+    _layout_panel(frame).ensure_layout()
+
+    assert frame.picks == [("cmb0", "型号"), ("combox101", "竖线('|')")]
+    assert frame.values["cmb0"] == "PartNo"
+    assert frame.values["combox101"] == "3"
+    # Only the two wrong controls were opened; the correct ones were left alone.
+    assert frame.summary_clicks == 2
+
+
+def test_paste_layout_fails_closed_when_the_option_never_appears() -> None:
+    frame = _LayoutFrame(
+        {"cmb0": "Type", "cmb1": "Qty", "cmb2": "Brand", "combox101": "3"}
+    )
+
+    with pytest.raises(SecurityViolation):
+        _layout_panel(frame).ensure_layout()
+
+    assert frame.values["cmb0"] == "Type"
+
+
+def test_paste_layout_fails_closed_when_the_pick_does_not_change_the_value() -> None:
+    """A click that leaves the hidden value wrong is not a restore."""
+
+    frame = _LayoutFrame(
+        {"cmb0": "Type", "cmb1": "Qty", "cmb2": "Brand", "combox101": "3"},
+        menu=("型号",),
+    )
+
+    with pytest.raises(SecurityViolation):
+        _layout_panel(frame).ensure_layout()
+
+    assert frame.picks == [("cmb0", "型号")]
+    assert frame.values["cmb0"] == "Type"

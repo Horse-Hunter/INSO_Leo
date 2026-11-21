@@ -63,6 +63,9 @@ class _PrepareActions:
     def open_paste_entry(self):
         self.calls.append(("open_paste",))
 
+    def ensure_paste_layout(self):
+        self.calls.append(("paste_layout",))
+
     def assert_paste_preview_fresh(self):
         self.calls.append(("paste_fresh",))
 
@@ -268,6 +271,7 @@ def _purchase_writer(actions=None, parent=None):
     ("new_draft", "prepare-new-draft"), ("set_customer", "prepare-customer"),
     ("set_quotation_type", "prepare-quote-type"), ("set_purchaser", "prepare-purchaser"),
     ("open_paste_entry", "prepare-paste-open"),
+    ("ensure_paste_layout", "prepare-paste-layout"),
     ("assert_paste_preview_fresh", "prepare-paste-fresh"),
     ("set_paste_data", "prepare-paste-input"),
     ("run_paste_import", "prepare-paste-import"),
@@ -506,6 +510,7 @@ def test_prepare_lets_the_erp_fill_the_row_then_reads_it_back() -> None:
         ("quotation_type", "需要问全价格"),
         ("purchaser", "颜浩坚"),
         ("open_paste",),
+        ("paste_layout",),
         ("paste_fresh",),
         ("paste_input", _command().paste_input),
         ("paste_import",),

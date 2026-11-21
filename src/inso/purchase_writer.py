@@ -84,6 +84,8 @@ class PastePanel(Protocol):
 
     def frame(self) -> Any: ...
 
+    def ensure_layout(self) -> None: ...
+
     def assert_fresh(self) -> None: ...
 
 
@@ -311,6 +313,55 @@ class PasteImportPanel:
         if dialog.locator(_PASTE_DIALOG_IFRAME).count() != 1:
             raise SecurityViolation("paste dialog does not hold the paste frame")
         return dialog
+
+    def ensure_layout(self) -> None:
+        """Confirm the dialog maps 型号/数量/品牌 onto columns 0/1/2 and ``|``.
+
+        The normal path must cost nothing: when the ERP's own defaults are in
+        place -- which is what both the read-only sniff and the live run found --
+        these four values are read and no control is touched. Only a mapping left
+        wrong by an earlier operator is driven back, through the dialog's own
+        select widget (the ``select-box`` summary plus the option it renders),
+        and the hidden value is re-read afterwards. A mapping that cannot be
+        restored fails closed here rather than letting the columns land in the
+        wrong ERP fields.
+        """
+
+        frame = self.frame()
+        for ident, expected, label in _PASTE_COLUMNS:
+            self._ensure_choice(frame, ident, expected, label)
+        self._ensure_choice(
+            frame, _PASTE_SEPARATOR_ID, _PASTE_SEPARATOR_VALUE, _PASTE_SEPARATOR_LABEL
+        )
+
+    def _ensure_choice(
+        self, frame: Any, ident: str, expected: str, label: str
+    ) -> None:
+        control = frame.locator(f"input#{ident}")
+        if control.count() != 1:
+            raise SecurityViolation("paste column mapping control is not unique")
+        if (control.input_value() or "").strip() == expected:
+            return
+        # The widget wraps this input either inside the select-box (separator) or
+        # as its previous sibling (column selects).
+        box = control.locator("xpath=ancestor::div[contains(@class,'select-box')][1]")
+        if box.count() != 1:
+            box = control.locator("xpath=following::div[contains(@class,'select-box')][1]")
+        if box.count() != 1:
+            raise SecurityViolation("paste column mapping widget is not unique")
+        summary = box.locator("summary")
+        if summary.count() != 1:
+            raise SecurityViolation("paste column mapping widget cannot be opened")
+        summary.click()
+        option = box.get_by_text(label, exact=True)
+        deadline = time.monotonic() + _PASTE_LAYOUT_WAIT_SECONDS
+        while option.count() != 1:
+            if time.monotonic() >= deadline:
+                raise SecurityViolation("paste column mapping option did not appear")
+            frame.wait_for_timeout(self._poll_milliseconds)
+        option.click()
+        if (control.input_value() or "").strip() != expected:
+            raise SecurityViolation("paste column mapping could not be restored")
 
     def assert_fresh(self) -> None:
         """Prove the preview is empty *before* the parse is triggered.
@@ -699,6 +750,25 @@ _PASTE_CANCEL_CONTROL = 'button:has-text("取消")'
 # which stays gated.
 _PASTE_IMPORT_CONTROL = "#win_btn__dialog11"
 _PASTE_COMMIT_CONTROL = "#win_btn__dialog12"
+
+# Which dialog column must receive which value. Live read 2026-11-21: ``cmb0``,
+# ``cmb1`` and ``cmb2`` are *hidden* inputs holding the ERP field name, each with
+# a visible ``<id>_text`` sibling that only carries the Chinese label. The order
+# this flow writes (型号, 数量, 品牌) is exactly the ERP default, so in normal
+# operation these four values are only read and nothing is clicked.
+_PASTE_COLUMNS = (
+    ("cmb0", "PartNo", "型号"),
+    ("cmb1", "Qty", "数量"),
+    ("cmb2", "Brand", "品牌"),
+)
+#: Separator control. ``3`` is 竖线('|') per ``/config/etaoerp/FenGeFu.json``
+#: (1=Tab, 2=逗号, 3=竖线, 4=空格, 5=两个空格). Its ``combox101_text`` sibling is
+#: a stale placeholder -- it can read ``Tab('\t')`` while the real value is 3 --
+#: so only the hidden input is ever trusted.
+_PASTE_SEPARATOR_ID = "combox101"
+_PASTE_SEPARATOR_VALUE = "3"
+_PASTE_SEPARATOR_LABEL = "竖线('|')"
+_PASTE_LAYOUT_WAIT_SECONDS = 5.0
 
 # The 采购临时询价 window is its own dialog and the 粘贴 dialog is a sibling
 # dialog of it. Both live on the INSO home page rather than on a page of their
@@ -1103,6 +1173,11 @@ class InsoPurchaseWriter:
 
         _require_inso_origin(self._form_page.page.url)
         self._paste_panel.open()
+
+    def ensure_paste_layout(self) -> None:
+        """Confirm the dialog's column order and separator before anything is typed."""
+
+        self._paste_panel.ensure_layout()
 
     def assert_paste_preview_fresh(self) -> None:
         """Refuse to import on top of a preview that was not ours."""
