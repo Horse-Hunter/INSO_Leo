@@ -1,3 +1,16 @@
+# CEO 最新权威状态（2026-11-21）：RFQ-024 已审核结案
+
+**结论：`RFQ024_SOURCE_AND_EVIDENCE_PASS / PRODUCTION_RUNNING_EXECUTOR_REPORTED / NO_PENDING_QUOTE_EXECUTOR_REPORTED / REVIEW_CLOSED`。** [CEO 最终 REVIEW](RFQ-024/REVIEW.md)；[现场摘要](RFQ-024/CEO_SYNC_20261121.md)。保留正常运行版本，无新开发、发布、停机或重放任务。历史 RFQ-021/022/023 审核状态不再是当前生产状态。
+
+- **现行执行分支：** `workbuddy/v16-rfq016-stabilization`；审核输入 HEAD `b1b5b8151bc4468698dde93146f78a90322d32c3`；修复 `64d3ec2c`（Google API 系统代理）及 `89e931bf`（外部页面租约识别）。
+- **现行正式 EXE（Executor 据报装机）：** `9a0cb3d3d2101745deb014d4fa0f4c66072dc0da295923aa927f0e0387db2710`；8,505,470 B / 2,872 files；清单 `5bd7d7a792d9e4c91f32058fd8ce3affb11a7c29d387168fee65294bf26263ff`，CEO 已独立复算。全量 JUnit 4332 项，4331 PASS / 0 failures / 0 errors / 1 skip。
+- **两起独立故障已接受修复：** [11-19 事件](INCIDENT-20261119.md) 最终根因是 API 绕过 Windows 系统代理（不是 CDP 失聪；早先假设已推翻）；[11-20 事件](INCIDENT-20261120.md) 外部无租约页面误判归属冲突。保持 `google_api.proxy=auto` 的既有配置、一个 Chrome/profile/9222、不操作他人标签页，真实身份/写入不明仍 fail-closed。
+- **截至 11-21 10:11（Executor 现场报告，非 CEO 实机核验）：** PID 56032/75380，11-20 14:50:55 启动，约 19 小时持续运行（同步报告约 19.5 h），当日 117 模块轮次全部 completed、0 runtime fault、fatal.log 空，SHAHAB 142/143 已报价给客户，2026 尾部行已退出采购已报价积压。无“采购已报价”滞留行不等于无其他待办或历史 hold；不应重新执行已完成订单或清理旧 hold。
+- **唯一待 Owner 产品决策：** 重启时中断订单标记“人工处理完成”，213/215 已人工处置。是否允许确证无写入、无 hold 的中断任务自动重排暂不修改，非当前故障/发布阻断。代理覆盖面、同名重复测试属于未来正常维护项，详见 REVIEW。
+- **交接入口：** [CEO_HANDOVER.md](CEO_HANDOVER.md) 最新顶部。保持完整生产 GUI 与可自解释异常页；无新任务时不擅自开发、改配置、停机、再发采购或切换分支。现场状态在下次实际维护前重新只读核验。
+
+## 以下为历史事故记录及旧版结案（保留追溯）
+
 # CEO 2026-11-18 独立事故复核：CDP 页面归属故障已接受修复（当前权威状态）
 
 **最新 CEO 结论：`INC20261118_SOURCE_AND_OFFLINE_PASS / PRODUCTION_RESUMED_EXECUTOR_REPORTED / NO_FURTHER_DEVELOPMENT_REQUIRED`.** 详见 [INCIDENT-20261118-CEO-REVIEW.md](INCIDENT-20261118-CEO-REVIEW.md)；Executor 完整现场记录 [INCIDENT-20261118.md](INCIDENT-20261118.md)。此前“待现场取证”的状态为历史，不是目前产品状态。
