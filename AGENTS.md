@@ -17,9 +17,9 @@ Read [AI_START_HERE.md](AI_START_HERE.md). **Current rules here outrank historic
 
 ## Branch promotion is Owner-only
 
-**Bootstrap trap:** repository default `main` still contains historic V1.1. Every replacement CEO/Executor must explicitly open current `develop` entry docs before treating any branch as the project baseline. Do not auto-promote.
+**Bootstrap trap (resolved 2026-11-21, do not reintroduce):** repository default `main` used to carry historic V1.1. It now carries the Owner-accepted V1.6 (`d954e0a5`). Every replacement CEO/Executor must still explicitly open current `develop` entry docs before treating any branch as the project baseline. Do not auto-promote.
 
-Three long-lived lines: `develop` (R&D + installed trial), `main` (only Owner-accepted current), `release/previous` (prior Owner-accepted current). **Packaging, installation, live operation, successful tests or elapsed time never promote a version.** Only explicit Owner approval may advance `main`; see [BRANCH_POLICY](docs/BRANCH_POLICY.md). During initial migration, `main` still contains legacy V1.1 and MUST NOT be presented as the verified current V1.6. Preserve existing DeepSeek worktree/branch.
+Three long-lived lines: `develop` (R&D + installed trial), `main` (only Owner-accepted current), `release/previous` (prior Owner-accepted current). **Packaging, installation, live operation, successful tests or elapsed time never promote a version.** Only explicit Owner approval may advance `main`; see [BRANCH_POLICY](docs/BRANCH_POLICY.md). `main` is a production baseline, not a management entry point. Preserve existing DeepSeek worktree/branch.
 
 ## 故障原因必须在产品界面自解释（Owner 强制验收要求，2026-11-17）
 

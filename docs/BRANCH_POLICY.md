@@ -10,7 +10,7 @@
 
 ## 新窗口必须先定位正确分支
 
-GitHub 默认分支现仍为历史 `main` (V1.1)。**CEO/Executor 新窗口先显式打开 `develop` 的 `AI_START_HERE.md`、本制度和当前 RFQ 文件**；不得直接把默认 `main` 当成最新管理入口。若当前分支/现场/Owner 验收证据无法确认，停止版本指针变动，先做只读核实。对于本项目，工作会话可断、Windows 业务进程可能仍在运行；续接时先检查旧进程与真实业务状态，禁止重复启动。
+GitHub 默认分支为 `main`；自 2026-11-21 起 `main` 是 **Owner 验收的 V1.6 现版**（`d954e0a5`），不再是历史 V1.1。**CEO/Executor 新窗口仍须先显式打开 `develop` 的 `AI_START_HERE.md`、本制度和当前 RFQ 文件**：`main` 是生产基准，不是开发或管理入口，也不是最近一次部署候选。若当前分支/现场/Owner 验收证据无法确认，停止版本指针变动，先做只读核实。对于本项目，工作会话可断、Windows 业务进程可能仍在运行；续接时先检查旧进程与真实业务状态，禁止重复启动。
 
 ## 严格区分 4 种状态
 
@@ -18,12 +18,17 @@ GitHub 默认分支现仍为历史 `main` (V1.1)。**CEO/Executor 新窗口先�
 
 前三项**全部仍属于前瞻版**：正式 EXE 覆盖、启动成功、自然轮询、测试通过、连续稳定多天，都**不能**自动推进 `main`，也不应自动改写 `release/previous`。试运行持续多久由 Owner 决定，没有默认天数/自动晋升计时器。CEO/Executor 只能提出附证据的晋升建议。
 
-## 初始化过渡状态（必须持续标注，直到真实对齐）
+## 首次对齐已完成（2026-11-21，Owner 授权）
 
-- `develop` 建于 `9ad9ccb8dce6102b2a68c6be47be6aa436381a4d`；原 DeepSeek 工作分支 `workbuddy/v16-rfq016-stabilization` **保留**，原工作树/未提交内容不被修改。未来安全检查后将其新增工作以 PR 合入 `develop`。
-- `main` **原本仍是 V1.1 历史 SHA** `be9d0a51d0375884dfa3e5e9e4317958899fdc75`；当前不是经核实的“现版”锚点。**禁止为凑三条线而自行挪到最新 V1.6**。只有确认 Owner 已接受的现版及相应 Git/EXE 源码证据后，才做一次受控基线对齐。
-- `release/previous` 暂以 `d244241eafe564c79812f860b2491c903a4cee1e` 保存**上一次报告部署的 EXE** `00ac7d68…` 所对应的可追溯源码；这是**待核实的回退候选**，不宣称已经获得 Owner 正式“旧版”认可。
-- 最近报告安装的 `b357889d…` 由 `24b73be7…` 源码构建；**安装≠现版验收**。Windows 真实进程、配置、订单状态仍须重新核实，RFQ-016 业务未通过验收。
+首次对齐已按“首次对齐与日常晋升不同”一节完成，此前的过渡状态一并作废：
+
+- `main`：`be9d0a51`（历史 V1.1）→ **`d954e0a5`（V1.6 现版）**，纯快进，未强推。EXE `9a0cb3d3…`，清单 `5bd7d7a7…`（2,872 文件）；审核依据 `control-room/RFQ-024/REVIEW.md`。
+- 晋升前指针全部以 annotated tag 冻结，可永久追溯：`release/v1.1-main-superseded-20261121`（`be9d0a51`）、`preserve/sheets-v1-local-main-c3a597d9`（本地 `main` 曾停留的 SHEETS 线 `c3a597d9`，含 5 个不在 `origin/main` 的提交）、`release/previous-superseded-20261121`（`d244241e`）、`release/v1.6-official-20261121`（`d954e0a5`）。
+- `release/previous` **仍停在 `d244241e`，状态仍为 `NOT_VERIFIED`**。按 Owner 2026-11-21 指令与本节“不得冒充”原则，**没有把它改指历史 V1.1**：本项目尚不存在“经 Owner 在三分支制度下验收过的上一正式版本”，用 V1.1 顶替即为伪造旧版关系。真正的运行级回退证据另记于 `control-room/RFQ-025/`（上一装机版 EXE `fa7a8544…`／源码 `64d3ec2c`，实物保留在 `dist/INSO_V1.6/INSO_V1.6.exe.prev-20261120T065005Z`），但它同样不是 Owner 验收过的正式版。
+- `develop`：自 `9ad9ccb8` 起长期只承载政策/文档，已与 V1.6 源码线分叉；2026-11-21 以合并（非强推、非重置）把已验收 V1.6 源码带入 `develop`，此后 `develop` 才真正成为 V1.7 开发与集成分支。`workbuddy/v16-rfq016-stabilization` 保留不动。
+- 历史事实（保留追溯）：`develop` 建于 `9ad9ccb8dce6102b2a68c6be47be6aa436381a4d`；`release/previous` 曾以 `d244241e…` 保存“上一次报告部署的 EXE `00ac7d68…`”的可追溯源码；`b357889d…` 由 `24b73be7…` 构建，安装≠现版验收。
+
+下次晋升起，`main` 的“被取代者”就是本次的 `d954e0a5`，按常规“现版→旧版、前瞻→现版”程序执行。
 
 ## 首次对齐与日常晋升不同
 

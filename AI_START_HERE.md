@@ -2,11 +2,11 @@
 
 **An interrupted CEO or Executor is replaceable without the prior conversation.** Only live systems and canonical repo records are authoritative; this file is the small routing map.
 
-**Version routing:** read [three-branch policy](docs/BRANCH_POLICY.md). `develop` is the integration line; `main` only after **explicit Owner sign-off following real trial**; `release/previous` holds rollback source. **During initial migration, `main` is still the old V1.1 pointer and not the verified running V1.6.** Do not auto-promote after deployment.
+**Version routing:** read [three-branch policy](docs/BRANCH_POLICY.md). `develop` is the integration line; `main` only after **explicit Owner sign-off following real trial**; `release/previous` holds rollback source. **Since 2026-11-21 `main` carries the Owner-accepted V1.6 (`d954e0a5`)**, so the historic V1.1 bootstrap trap is closed. Do not auto-promote after deployment.
 
-## GitHub default-branch trap (mandatory)
+## Branch selection (mandatory)
 
-GitHub currently opens historical `main` (V1.1) by default. **Every new CEO/Executor must explicitly select `develop` first**, then open this current entry file and [BRANCH_POLICY](docs/BRANCH_POLICY.md). Do **not** copy rules/code from default `main`, assume its HEAD is the installed EXE, or fast-forward it because a trial build was deployed. When in doubt, list GitHub branch SHAs before reading.
+GitHub opens `main` by default. **Every new CEO/Executor must explicitly select `develop` first**, then open this current entry file and [BRANCH_POLICY](docs/BRANCH_POLICY.md). `main` is the production baseline, **not** a management entry point or the newest deployment candidate. Do **not** copy rules/code from a branch without checking its SHA, or fast-forward `main` because a trial build was deployed. When in doubt, list branch SHAs before reading.
 
 ## Mandatory 90-second recovery
 
