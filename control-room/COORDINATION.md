@@ -20,6 +20,10 @@
 - **现场：** EXE `9a0cb3d3…` / 清单 `5bd7d7a7…`，14:50:55 启动（PID 56032 + 75380）；14:51–14:53 三个模块全部 completed，**0 条 runtime fault**。
 - **报价跟进：** 142 `UPDATED_INSERTED`；143 采购 NO STOCK；217 已变"已报价给客户"；223/224 采购价未降低（按设计不重复报价）；**213/215 因重启被判人工、219 因活动 hold，保持人工**，可用"重跑报价流程"单笔恢复。
 
+# CEO 同步 2026-11-21：[RFQ-024/CEO_SYNC_20261121.md](RFQ-024/CEO_SYNC_20261121.md)
+
+**状态：`FIXED / INSTALLED_RUNNING / 19.5h_ZERO_FAULT / NO_PENDING_QUOTE`。** 两次停机（API 未走系统代理、外部页面误判归属丢失）均已修复装机；今日 117 轮业务全部 completed、0 条 runtime fault；滞留报价已全部处理到"已报价给客户"。
+
 ## 此前 Executor 现场结案及协同历史（保留）
 
 # Executor 2026-11-19 结案：32 小时"表格不可用"实为 API 连接绕过了系统代理（已修、已装、业务已恢复）
