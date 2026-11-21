@@ -1,13 +1,13 @@
-# RFQ-025 — V1.6 正式晋升 + V1.7 页面嗅探（第一轮）
+# RFQ-025 — V1.6 正式晋升 + V1.7 页面嗅探
 
-**状态：`V1_6_PROMOTED_TO_MAIN / V1_7_BASELINE_READY / PASTE_SNIFF_PARTIAL / NO_BUSINESS_EFFECT`**
+**状态：`V1_6_PROMOTED_TO_MAIN / V1_7_BASELINE_READY / PASTE_SNIFF_COMPLETE / NO_BUSINESS_EFFECT`**
 
 Owner 一句话即可复核：本文件 → [EXECUTION_LOG](EXECUTION_LOG.md) → [FINAL_REPORT](FINAL_REPORT.md)
 → 脱敏页面证据 [`docs/evidence/rfq025/paste-import-sniff.md`](../../docs/evidence/rfq025/paste-import-sniff.md)。
 
-本轮的定性：**版本晋升与开发基线已完成并推送；粘贴录单的页面结构、字段映射与两个按钮的真实语义已查清；
-但"真实点通一遍"未完成**，因为弹窗依赖登录后的 ERP 外壳，而本轮未获登录授权、且 V1.6 正在运行。
-不得把本轮描述为 V1.7 开发完成。
+本轮的定性：**版本晋升与开发基线已完成并推送；粘贴录单的五步已在真实生产环境完整跑通，
+按钮标识、字段映射、预览取值路径、两个按钮的真实语义与副作用边界全部实测确认。** 业务代码仍未改动，
+`src/` 未新增任何实现，等第二轮实现指令。
 
 ## 1. Owner 原始要求（本轮范围）
 
@@ -29,10 +29,10 @@ Owner 明确禁止：重做 RFQ-024 已结案内容；改/装/重启运行中的
 | 5 | 不覆盖前任工作、不删历史分支、不动脏工作树 | 完成（本地 `main` 脏工作树未触碰） |
 | 6 | 粘贴按钮定位方式 | 完成（`button#product_import_`） |
 | 7 | 三字段顺序、分隔符、字段映射是否需每次设置 | 完成（默认即 `型号\|数量\|品牌` + `竖线('|')`） |
-| 8 | 数据预览的可靠读取方式 | 结构已查清；**真实取值路径未验证** |
-| 9 | "保存数据"语义与副作用边界 | 完成（源码级证明纯客户端 + 预览闸门） |
-| 10 | 与运行中 V1.6 的隔离 | 完成（自有页面，采集后关闭，进程/PID 未变，0 新增故障） |
-| 11 | 真实点通 5 步 | **未完成**（需登录，见第 4 节） |
+| 8 | 数据预览的可靠读取方式 | 完成（`layui.table.cache['dg']`，实测取到完整型号） |
+| 9 | "保存数据"语义与副作用边界 | 完成（**实测零非 GET 请求** + 源码 + 预览闸门） |
+| 10 | 与运行中 V1.6 的隔离 | 完成（第 1 轮只读期间进程/PID 未变、0 新增故障） |
+| 11 | 真实点通 5 步 | **完成**（Owner 停机授权后全链路跑通，未建单、未发送） |
 
 ## 3. 本轮结论摘要
 
@@ -53,30 +53,43 @@ Owner 明确禁止：重做 RFQ-024 已结案内容；改/装/重启运行中的
 - **但有同名陷阱**：列表页的批量导入弹窗（`innerenquiry/yewuxj/Import.aspx`）里，"保存数据"绑的是
   `Import()`，`$.post(?action=Import)` 且要求服务端返回 `BillID` —— 会在服务端建单。
   V1.7 **必须只用单据内 `product/Import.aspx` 路径**，不得走列表批量路径。
-- **数据预览是服务端解析的结果**：`导入`（`pasteImport(0)`）POST 到
-  `/services/product/import.ashx?action=PasteImport`，返回预览行并启用"保存数据"。
-  只切"数据预览"标签不会自己出数据。这与 Owner 描述的"点数据预览即可看"不同，属真实页面行为差异，已按实测记录。
+- **数据预览是服务端解析的结果**：`导入`（`pasteImport(0)`）**实测恰好一次 POST**
+  `/services/product/import.ashx?action=PasteImport&VendorID=0&BillPage=Enquiry`，返回 20 列、1 行预览，
+  同时把"保存数据"由禁用变为可用。只切"数据预览"标签不会自己出数据。
+  这与 Owner 描述的"点数据预览即可看"不同，属真实页面行为差异，已按实测记录。
 - **截断**：预览里的 `TRJC476K01...` 是单元格宽度省略，真实值在表格数据里；程序核对必须读数据源，不能读渲染文本。
+  实测同一行渲染文本与缓存值一致（本机列宽足够），但契约按"读缓存"执行。
 
-## 4. 未完成与阻碍（如实）
+## 4. 真实链路实测结果（Owner 停机授权后完成）
 
-**阻断项：弹窗需要"登录后的 ERP 外壳"，本轮未登录。**
+一次会话内完整执行：登录 → 业务询价 → `新增`（空草稿）→ `粘贴` → 写示例 → `导入` → 读预览 →
+`保存数据` → 读父表单行 → `返回列表` 关闭。**全程未点 `保存` / `保存并发送`。**
 
-- 共享 profile 的 Cookie 仍在，`List.aspx`、`product/Import.aspx`、`sale/Enquiry/Bill.aspx` 都能直接只读加载；
-- 但 `windows()` / `main_alertbox()` 只在登录后的首页存在。独立列表页里的 `windows()` 定义为
-  `function windows(a,b,c,d,e,f,g){parent.windows(...)}`，页顶时自调用 → 栈溢出被吞 → 弹窗永不出现
-  （实测点 `#product_add_`、`#product_import_` 均无反应）。
-- 要真正点通，必须先登录。**本轮不登录**：登录会覆盖共享 profile 的 `erp_token`，
-  而 V1.6 正在跑业务，属干扰生产登录状态，未获授权。
+| 验收点 | 实测结果 |
+|---|---|
+| 弹窗归属 | `#winIframe_dialog1` → `product/Import.aspx?BillPage=Enquiry&VendorID=&h=510` |
+| `导入` 控件 | `#win_btn__dialog11` |
+| `保存数据` 控件 | `#win_btn__dialog12`，**初始 `disabled`**，解析成功后转可用 |
+| `新增` 是否建单 | **否**：`#BillID` 与 `#BillNo` 全程为空 |
+| 型号是否逐字节保持 | **是**：缓存 `PartNo` = 输入 `TRJC476K016RRJ` |
+| ERP 自动补编码 | **是**：`ProductID` = `P1463619`（输入中不存在） |
+| 数量类型 | 缓存里是**字符串** `"200"` → 实现时必须显式转 `int` 并校验 `>0` |
+| `保存数据` 网络行为 | **零个非 GET 请求**（实测监听，非推断） |
+| `保存数据` 后父表单 | 明细行写入成功，单元格含 `P1463619` / `TRJC476K016RRJ` / `Kyocera AVX` / `200` |
+| `保存数据` 后 `#BillID` | 仍为空 → **没有产生服务端单据** |
+| 事后核对 | 业务询价列表最新单号仍为 `XJ-261119-150055`，**无 11-21 新单** |
+| 收尾 | `btnBack`（`goback()`）关闭表单，未保存、未发送 |
 
-因此以下六项标记 `NOT_VERIFIED`，V1.7 实现前必须补齐（需一次明确授权的登录窗口）：
+**结论："保存数据"具备与 AI 录单"保存数据"完全相同的客户端草稿回填语义，无外部持久化，可安全纳入 V1.7。**
 
-1. 真实 5 步点击链路；
-2. 弹窗底部按钮 DOM id 与禁用态切换；
-3. 预览单元格/表格数据的取值路径；
-4. 型号经解析后是否逐字节保持；
-5. `appendRow()` 后父表单行的最终列值；
-6. `import.ashx?action=PasteImport` 的响应结构与副作用。
+## 4b. 遗留（不影响结论）
+
+1. **弹窗关闭是隐藏而非移除**：`保存数据` 后 dialog 置为隐藏，`Import.aspx` iframe 仍留在 DOM。
+   判断"关了"必须看可见性，不能看存在 —— 与既有 INSO 契约一致，实现时不要用 `count()==0`。
+2. **可靠等待条件**：`导入` 后应同时满足 (a) `layui.table.cache['dg']` 行数符合预期，
+   (b) `#win_btn__dialog12` 不再 `disabled`，再读数据；任一不成立 fail-closed，不点保存。禁止固定睡眠。
+3. **登录是生产动作**：第 1 轮之所以没做，正是因为登录会覆盖共享 profile 的 `erp_token`。
+   实现阶段若需要现场跑通，仍须按"Owner 停机或维护窗口"处理，不得在 V1.6 跑业务时登录。
 
 ## 5. 代码改动
 
@@ -86,9 +99,12 @@ Owner 明确禁止：重做 RFQ-024 已结案内容；改/装/重启运行中的
 ## 6. 下一轮建议（待 Owner 指令，不自动开工）
 
 1. `workbuddy/v17-native-paste` 从 `develop` 起分支；
-2. 用一次**明确授权的登录窗口**补齐第 4 节六项，重点是预览取值路径与 `appendRow()` 后的父表单行；
-3. 替换点：`CoordinatorPurchaseDraftWriter.prepare()` 的 `prepare-ai-open`…`commit-ai-entry` 五步，
-   换成 `粘贴` 弹窗的 `打开 → 写入 pasteData → 导入 → 读预览 → 保存数据`，
-   其余（`new_draft`/`set_customer`/`set_purchaser`/`set_quotation_type`、`save_data`、`save_and_send`、
-   去重、`UNKNOWN/SENT`、hold、Sheets 回写、通知）一律不动。
-4. 保留"预览核对"为程序内部自动核对，不加人工审批；核对失败即 fail-closed，不点"保存数据"。
+2. 实现替换点：`CoordinatorPurchaseDraftWriter.prepare()` 的 `prepare-ai-open` … `commit-ai-entry`，
+   换成 `粘贴` 弹窗的 `打开 → 写入 #pasteData → 点 #win_btn__dialog11 → 读 layui.table.cache['dg'] → 点 #win_btn__dialog12`；
+   其余（`new_draft` / `set_customer` / `set_purchaser` / `set_quotation_type`、`save_data`、`save_and_send`、
+   去重、`UNKNOWN/SENT`、hold、Sheets 回写、通知）一律不动；
+3. 输入改为 `型号|数量|品牌`（注意：AI 旧格式是 `型号·品牌·数量`，**顺序也变了**）；
+4. 预览核对为程序内部自动核对、不加人工审批；型号/品牌逐字节比对、数量转 `int` 后比对，
+   任一不符即 fail-closed，不点"保存数据"；
+5. 等待条件用状态而非睡眠：预览行数符合预期 + `#win_btn__dialog12` 解除禁用；
+6. 只用单据内 `product/Import.aspx` 路径，**禁止**走列表页批量导入（那是服务端建单）。

@@ -1,11 +1,11 @@
 # Executor 2026-11-21：V1.6 已晋升为现版；V1.7 基线就绪；粘贴录单嗅探部分完成（待 CEO 复核）
 
-**状态：`V1_6_PROMOTED_TO_MAIN / V1_7_BASELINE_READY / PASTE_SNIFF_PARTIAL / NO_BUSINESS_EFFECT`。**
+**状态：`V1_6_PROMOTED_TO_MAIN / V1_7_BASELINE_READY / PASTE_SNIFF_COMPLETE / NO_BUSINESS_EFFECT`。**
 入口：[RFQ-025/TASK_SPEC.md](RFQ-025/TASK_SPEC.md) → [EXECUTION_LOG.md](RFQ-025/EXECUTION_LOG.md) →
 [FINAL_REPORT.md](RFQ-025/FINAL_REPORT.md) → 脱敏页面证据 [`docs/evidence/rfq025/paste-import-sniff.md`](../docs/evidence/rfq025/paste-import-sniff.md)。
 
 - **三条长期线（本轮实测）：** `main` = `d954e0a5`（Owner 验收的 V1.6，`be9d0a51..d954e0a5` 纯快进）；
-  `develop` = `143fdadc`（**首次真正包含 V1.6 源码**的 V1.7 基线）；`release/previous` = `d244241e`
+  `develop`（**首次真正包含 V1.6 源码**的 V1.7 基线，合并提交 `d2473a2a`，tip 见 `git log develop`）；`release/previous` = `d244241e`
   （**故意未动**，仍 `NOT_VERIFIED` —— 本项目没有经 Owner 验收的上一正式版，用 V1.1 顶替即伪造回退关系）。
   晋升前指针全部冻结为 annotated tag：`release/v1.6-official-20261121`、`release/v1.1-main-superseded-20261121`、
   `release/previous-superseded-20261121`、`preserve/sheets-v1-local-main-c3a597d9`。
@@ -15,12 +15,17 @@
   `#ai_import_`（AI录单）是同一行兄弟按钮；粘贴页默认映射前三列即 `型号/数量/品牌`、分隔符默认 `竖线('|')`；
   "保存数据"=`pasteImport(1)` 为**纯客户端回填**（无 AJAX、无 BillID、不发采购），且被 `importPreviewReady` 强制"先预览后保存"。
   **必须避开**列表页批量导入弹窗（同名"粘贴导入"，其"保存数据"是 `Import()` → 服务端 `action=Import` 并建单）。
-- **未完成：** 真实点通五步。阻碍唯一：粘贴弹窗只能由**登录后**的 ERP 外壳创建（独立页 `windows()` 自调用栈溢出）。
-  本轮未登录（会覆盖共享 `erp_token`，且 V1.6 正在跑业务）；六项 `NOT_VERIFIED` 见 TASK_SPEC 第 4 节。
+- **真实链路已跑通（Owner 停机授权后）：** 登录 → 业务询价 → `新增` → `粘贴` → 写 `型号|数量|品牌` →
+  `导入` → 读预览 → `保存数据` → 父表单行写入 → `返回列表` 关闭。实测：`新增` 不建单（`#BillID` 为空）；
+  `导入` 只发 1 次 `POST import.ashx?action=PasteImport`；**`保存数据` 零非 GET 请求**；型号逐字节保持；
+  ERP 自动补 `ProductID=P1463619`；事后列表无 11-21 新单。**未点 `保存`/`保存并发送`。**
+- **实现约束（实测得出）：** `Qty` 在缓存里是字符串 `"200"` → 必须转 `int` 并校验 `>0`；
+  等待条件用"预览行数 + `#win_btn__dialog12` 解禁"，禁止固定睡眠；弹窗关闭是隐藏，判断看可见性。
+- **下一轮（待 Owner 指令，不自动开工）：** `workbuddy/v17-native-paste` 从 `develop` 起；
+  只改 `prepare()` 的 AI 五步为粘贴五步；`src/` 至今零改动。实现阶段如需现场跑通，仍须停机或维护窗口（登录改写共享 `erp_token`）。
 - **生产未受影响：** 未停机、未重启、未覆盖 V1.6；采集期间 10:43:07–10:43:10 inquiry 轮次仍 completed，
   `fatal.log` 0 字节，PID 56032/75380 未变，唯一 `runtime fault` 仍是 2026-11-20 14:29 那条已结案的。
-- **下一轮（待 Owner 指令，不自动开工）：** `workbuddy/v17-native-paste` 从 `develop` 起；
-  先补一次明确授权的登录窗口把六项验证完，再动 `prepare()` 的第 5–8 步；`src/` 零改动直到验证补齐。
+  真实链路实测（Owner 停机后）全程无新 cycle 行，脚本未与生产调度并行。
 
 ---
 

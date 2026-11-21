@@ -109,7 +109,7 @@ git diff --name-only origin/workbuddy/v16-rfq016-stabilization           # 仅 5
 | 分支 | HEAD | 说明 |
 |---|---|---|
 | `main` | `d954e0a5` | V1.6 正式现版 |
-| `develop` | `143fdadc` | V1.7 基线与集成分支（含 V1.6 源码） |
+| `develop` | 合并 `d2473a2a` + 政策同步 + 本轮记录（tip 见 `git log develop`） | V1.7 基线与集成分支（含 V1.6 源码） |
 | `release/previous` | `d244241e` | 未动，`NOT_VERIFIED` |
 
 ## 3. 原 AI 录单调用链（供最小替换）
@@ -176,11 +176,55 @@ src/launcher/v12_composition.py:302-380
 
 每次采集后：`own_page_closed`，`/json/list` 页面数回到基线；PID 56032/75380 未变；`fatal.log` 仍 0 字节。
 
+## 4b. 真实链路实测（11:05 前后，Owner 停机并授权）
+
+Owner 指示"1.6 已停止，可以用真实生产业务流程做嗅探"。开工前先核实：
+
+- `Get-Process INSO_V1.6` 仍返回 PID 56032 / 75380 —— **进程没退**（已知缺陷：关窗后 Tk 主循环结束但
+  非守护线程仍在）。但 GUI 窗口仍在、20 秒 CPU 增量 0、10:59:11 之后日志无新轮次 → 判定业务已停止、不跑批。
+- 据此按"业务已停"执行，并全程监控日志：实测期间**没有任何新的 cycle 行**，即脚本从未与生产调度并行。
+
+脚本 `probe_live_b.py`（一次性，不入库）在一次会话内完成并记录：
+
+```
+login.aspx?t=islogin -> 普通登录 -> 首页外壳 (after_login: https://yingsuo.alperp.cn/)
+-> 业务询价 -> 新增 -> iframe#winIframealert_enquiry
+   form_url = /skins/etaoerp//sale/Enquiry/Bill.aspx
+   #BillID 打开后 = ""        <- 新增不建单
+-> 点 button#product_import_（文本"粘贴"）
+   弹窗 iframe #winIframe_dialog1 -> product/Import.aspx?BillPage=Enquiry&VendorID=&h=510
+   底部按钮: #win_btn__dialog11 = 导入 (可用) | #win_btn__dialog12 = 保存数据 (disabled) | 取消
+-> 填写 textarea#pasteData = "TRJC476K016RRJ|200|Kyocera AVX"，回读一致
+   #combox101 = 3 / 竖线('|')；cmb0..4 = 型号/数量/品牌/品名/编码-型号
+-> 点 #win_btn__dialog11 (导入)
+   POST /services/product/import.ashx?action=PasteImport&VendorID=0&BillPage=Enquiry   (仅此 1 次)
+   之后 #win_btn__dialog12 解除 disabled
+   预览 20 列；layui.table.cache['dg'] = [{PartNo:TRJC476K016RRJ, Qty:"200",
+        Brand:"Kyocera AVX", ProductID:"P1463619", ...}]
+-> 点 #win_btn__dialog12 (保存数据)
+   非 GET 请求数 = 0          <- 实测，不是推断
+   父表单明细 cache 同上一行；单元格 = P1463619 / TRJC476K016RRJ / Kyocera AVX / 200
+   #BillID 仍 = ""            <- 没有服务端单据
+-> button#btnBack (goback()) 关闭表单，未保存、未发送
+```
+
+事后只读核对业务询价列表：最新单号 `XJ-261119-150055`，**无 2026-11-21 新单** —— 草稿已随表单关闭丢弃，
+未在 ERP 留下任何空单据。
+
+三个对实现有约束的实测点：
+
+1. `Qty` 在缓存里是字符串 `"200"`，实现必须 `int()` 并校验 `> 0`。
+2. 等待条件用状态：预览行数 + `#win_btn__dialog12` 解禁；禁止固定睡眠。
+3. 弹窗关闭是隐藏，`Import.aspx` iframe 仍在 DOM；判断关闭看可见性。
+
 ## 5. 生产未受影响（可复核）
 
 - 采集期间 10:43:07–10:43:10 `scheduled_module=inquiry phase=completed elapsed_s=3.438`。
 - 日志中唯一 `runtime fault` 仍是 `2026-11-20 14:29:09 CDP_PAGE_OWNERSHIP_UNCONFIRMED`（已修结案）。
-- 未登录、未点击导入/保存、未建单、未发采购、未写 Sheets、未碰生产库。
+- 第 1 轮（V1.6 运行中，只读）：未登录、未点击导入/保存、未建单、未发采购、未写 Sheets、未碰生产库。
+- 第 2 轮（Owner 停机授权后，真实链路）：登录 1 次；`新增` 空草稿 1 个，关闭后丢弃；
+  `导入` 1 次（解析接口）；`保存数据` 1 次（纯客户端）；**未点 `保存`、未点 `保存并发送`、未建单**。
+  事后列表核对无 11-21 新单。未写 Sheets、未碰生产库。
 - 未停止、未重启、未覆盖 V1.6；未关闭他人标签页。
 
 ## 6. 改动清单
@@ -199,7 +243,10 @@ M control-room/CEO_HANDOVER.md
 
 `src/`、`tests/`、配置、打包脚本：**零改动**。
 
-## 7. 未验证（V1.7 实现前必须补齐）
+## 7. 未验证
 
-见 [TASK_SPEC](TASK_SPEC.md) 第 4 节六项。核心阻碍只有一个：
-**弹窗需要登录后的 ERP 外壳，本轮未获登录授权。**
+无遗留验证缺口。首轮标记的六项已在 4b 节全部实测补齐（真实链路、按钮 id、预览取值路径、
+型号逐字节、父表单行值、`import.ashx` 响应与副作用）。
+
+唯一仍未做的、也是刻意不做的：**没有点过 `保存`（`#btnSave`）与 `保存并发送`（`#btnSave2`）**。
+这两步是正式建单与对外发送，属真实业务效果，不在本轮嗅探授权范围内。
