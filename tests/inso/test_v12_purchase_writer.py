@@ -9,15 +9,15 @@ import pytest
 
 import src.inso.purchase_writer as purchase_writer_module
 from src.inso.purchase_writer import (
-    _AI_ENTRY_DIALOG,
     _BINDINGS,
     _ID_ONLY_ACTIONS,
     _MENU_CHECKBOX,
     _OPEN_SELECT_MENU,
-    AiEntryPanel,
+    _PASTE_DIALOG,
     InsoPurchaseWriter,
-    PlaywrightAiResultReader,
+    PasteImportPanel,
     PlaywrightParentProductFields,
+    PlaywrightPastePreviewReader,
     _PlaywrightActionPort,
 )
 from src.inso.session import SecurityViolation
@@ -95,14 +95,14 @@ class _Locator:
         if selector == "iframe#winIframealert_enquiry":
             return 1 if self.page.form_in_dom else 0
         if selector == "details-dialog":
-            return int(self.page.form_in_dom) + int(self.page.ai_panel_in_dom)
-        if selector == _AI_ENTRY_DIALOG:
-            return 1 if self.page.ai_panel_in_dom else 0
+            return int(self.page.form_in_dom) + int(self.page.paste_in_dom)
+        if selector == _PASTE_DIALOG:
+            return 1 if self.page.paste_in_dom else 0
         if selector in _FIELD_ATTRIBUTES:
             return 1
         if selector == "input#UserName":
             return 1
-        if selector == "button#ai-recognize":
+        if selector == "_PASTE_IMPORT":
             return 1
         if selector == "button#btnSave":
             return self.page.save_count
@@ -111,8 +111,8 @@ class _Locator:
         return 0
 
     def is_visible(self) -> bool:
-        if self.selector == _AI_ENTRY_DIALOG:
-            return self.page.ai_panel_open
+        if self.selector == _PASTE_DIALOG:
+            return self.page.paste_open
         return True
 
     def evaluate_all(self, _script):
@@ -294,8 +294,8 @@ class _FakeFormPage:
         self.window_close_available = True
         self.order_window_ambiguous = False
         # The sibling AI录单 dialog behaves the same way.
-        self.ai_panel_in_dom = True
-        self.ai_panel_open = False
+        self.paste_in_dom = True
+        self.paste_open = False
         self.open_menu = None
         self.body_clicks = 0
         self.dismiss_resistant = False
@@ -357,87 +357,142 @@ class _FakeFormPage:
         self.open_menu = None if menu != "input#UserName_text" else menu
 
 
-class _FakeAiFrame:
-    """The AI录单 frame: recognition readiness plus the single preview row."""
+DEFAULT_PREVIEW_ROW = {
+    "PartNo": "LM358",
+    "Brand": "Texas Instruments",
+    "Qty": "123",
+    "ProductID": "P216328",
+}
+
+
+class _FakePasteFrame:
+    """The 粘贴 dialog frame: its textarea, commit state and row cache.
+
+    Modelled on the live page (2026-11-21): the dialog holds
+    ``textarea#pasteData``, the 保存数据 control lives in the hosting dialog's
+    footer and starts disabled, and the parsed rows live in
+    ``layui.table.cache['dg']`` -- not in the rendered cells, which elide long
+    part numbers.
+    """
 
     url = (
-        "https://yingsuo.alperp.cn/skins/etaoerp/product/Import_ai.aspx"
-        "?BillPage=Enquiry&VendorID=4525909&h=510"
+        "https://yingsuo.alperp.cn/skins/etaoerp/product/Import.aspx"
+        "?BillPage=Enquiry&VendorID=&h=510"
     )
 
-    def __init__(self, *, ready: bool = True, values=None, progress=(), endless: bool = False):
+    def __init__(
+        self,
+        *,
+        rows=None,
+        ready: bool = True,
+        commit_enabled: bool | None = None,
+        settle_after: int = 0,
+        never_settles: bool = False,
+    ):
+        self.final_rows = [dict(r) for r in (rows if rows is not None else [DEFAULT_PREVIEW_ROW])]
         self.ready = ready
-        self.values = values or {
-            "ProductID": "P216328",
-            "PartNo": "LM358",
-            "Brand": "Texas Instruments",
-            "Qty": "123",
-        }
-        # Live recognition is asynchronous: the button shows progress captions
-        # and the preview stays empty until the final state arrives. ``endless``
-        # models a caption that never settles.
-        self.progress = list(progress)
-        self.endless = endless
+        self.commit_enabled = ready if commit_enabled is None else commit_enabled
+        self.settle_after = settle_after
+        self.never_settles = never_settles
+        self.text = ""
         self.polls = 0
+        # The commit control lives in the hosting dialog, not in the frame.
+        self.parent_frame = _DialogFooter(commit_enabled=self.commit_enabled)
 
     def is_detached(self) -> bool:
         return False
 
     def wait_for_timeout(self, _milliseconds: int) -> None:
         self.polls += 1
-        if self.progress and not self.endless:
-            self.progress.pop(0)
-            if not self.progress:
-                self.ready = True
+        if self.never_settles or self.ready:
+            return
+        if self.polls >= self.settle_after:
+            self.ready = True
+            self.commit_enabled = True
+            # The footer is the dialog's, not the frame's: keep it in step with
+            # the parse that just succeeded.
+            self.parent_frame.commit_enabled = True
 
     def locator(self, selector: str):
-        if selector == "button#ai-recognize":
-            if self.ready:
-                text = "重新识别"
-            elif self.progress:
-                text = self.progress[0]
-            else:
-                text = "AI 智能识别"
-            return _Locator(self, selector, text=text)
-        if selector == "#preview-body > tr":
-            return _Rows(self)
+        if selector == "textarea#pasteData":
+            return _Locator(self, selector, value=self.text)
         return _Locator(self, selector)
 
+    def evaluate(self, _script: str):
+        return [dict(row) for row in self.final_rows] if self.ready else []
 
-class _FakeAiPanel:
-    """The form's AI录单 entry: opening it yields the in-page AI frame.
+    def frame_element(self):
+        return self
 
-    It deliberately has no page of its own -- the live product opens an iframe
-    inside the purchase form, never a new tab.
+
+class _FakePastePanel:
+    """The form's 粘贴 entry: opening it yields the in-page dialog frame.
+
+    It deliberately has no page of its own -- the live product opens a dialog
+    inside the purchase ERP page, never a new tab.
     """
 
     def __init__(
         self,
         *,
+        rows=None,
         ready: bool = True,
-        values=None,
-        progress=(),
-        endless: bool = False,
+        commit_enabled: bool | None = None,
+        settle_after: int = 0,
+        never_settles: bool = False,
         opens: bool = True,
         on_close=None,
     ):
-        self.frame_obj = _FakeAiFrame(
-            ready=ready, values=values, progress=progress, endless=endless
+        self.frame_obj = _FakePasteFrame(
+            rows=rows,
+            ready=ready,
+            commit_enabled=commit_enabled,
+            settle_after=settle_after,
+            never_settles=never_settles,
         )
         self.opens = opens
         self.opened = False
         self.close_calls = 0
+        self.fresh_checks = 0
+        self.layout_checks = 0
         self._on_close = on_close
+        self.host_obj = None
 
     def open(self) -> None:
         if not self.opens:
-            raise SecurityViolation("AI entry panel did not open")
+            raise SecurityViolation("paste dialog did not open")
         self.opened = True
 
     def frame(self):
         if not self.opened:
-            raise SecurityViolation("AI entry panel is not open")
+            raise SecurityViolation("paste dialog is not open")
         return self.frame_obj
+
+    def host(self):
+        if not self.opened:
+            raise SecurityViolation("paste dialog is not open")
+        if self.host_obj is None:
+            return SimpleNamespace(
+                locator=lambda _selector: _DialogButton(
+                    enabled=self.frame_obj.commit_enabled
+                )
+            )
+        if self.host_obj.count() != 1:
+            raise SecurityViolation("paste dialog is not unique")
+        return self.host_obj
+
+    def ensure_layout(self) -> None:
+        self.layout_checks += 1
+        if not self.opened:
+            raise SecurityViolation("paste dialog is not open")
+
+    def assert_fresh(self) -> None:
+        self.fresh_checks += 1
+        frame = self.frame()
+        if frame.ready:
+            raise SecurityViolation("paste preview already held rows before import")
+        if frame.commit_enabled:
+            raise SecurityViolation("paste commit control was enabled before import")
 
     def close(self) -> None:
         self.close_calls += 1
@@ -446,32 +501,30 @@ class _FakeAiPanel:
             self._on_close()
 
 
-class _Rows:
-    def __init__(self, page):
-        self.page = page
+class _DialogButton:
+    """A footer control that only answers count/is_enabled."""
+
+    def __init__(self, *, enabled: bool = True) -> None:
+        self.enabled = enabled
 
     def count(self):
-        return 1 if self.page.ready else 0
+        return 1
 
-    def nth(self, _index: int):
-        return _Row(self.page)
+    def is_enabled(self) -> bool:
+        return self.enabled
 
+    def is_visible(self) -> bool:
+        return True
 
-class _Row:
-    def __init__(self, page):
-        self.page = page
-
-    def locator(self, selector: str):
-        field = selector.split('data-f="', 1)[1].split('"', 1)[0]
-        return _Locator(self.page, selector, value=self.page.values[field])
-
+    def click(self, **_kwargs) -> None:
+        self.enabled = True
 
 @pytest.mark.parametrize("value", ["需要问全价格", "普通询价"])
 def test_quotation_type_maps_to_exact_importance_control(value: str) -> None:
     form_page = _FakeFormPage()
     writer = InsoPurchaseWriter(
         form_page=_OperationPage(form_page),
-        ai_panel=_FakeAiPanel(),
+        paste_panel=_FakePastePanel(),
         gate=FakeWriteGate(enabled=True),
     )
 
@@ -483,7 +536,7 @@ def test_quotation_type_maps_to_exact_importance_control(value: str) -> None:
 def test_quotation_type_rejects_values_outside_the_two_business_routes() -> None:
     writer = InsoPurchaseWriter(
         form_page=_OperationPage(_FakeFormPage()),
-        ai_panel=_FakeAiPanel(),
+        paste_panel=_FakePastePanel(),
         gate=FakeWriteGate(enabled=True),
     )
 
@@ -495,7 +548,7 @@ def test_production_gate_is_closed_and_generic_send_methods_do_not_exist() -> No
     form_page = _FakeFormPage()
     writer = InsoPurchaseWriter(
         form_page=_OperationPage(form_page),
-        ai_panel=_FakeAiPanel(),
+        paste_panel=_FakePastePanel(),
     )
 
     assert hasattr(writer, "save_data")
@@ -522,17 +575,43 @@ def test_only_owner_authorized_save_and_send_has_a_binding_not_generic_send() ->
 
 
 class _DialogFooter:
-    """The AI录单 dialog's own footer, mirroring the live DOM (2026-10-01)."""
+    """The 粘贴 dialog's own footer, mirroring the live DOM (2026-11-21).
 
-    def __init__(self, *, dialog_count: int = 1, buttons: int = 1) -> None:
+    导入 is ``#win_btn__dialog11`` (always enabled) and 保存数据 is
+    ``#win_btn__dialog12`` (disabled until a parse succeeds).
+    """
+
+    def __init__(
+        self,
+        *,
+        dialog_count: int = 1,
+        buttons: int = 1,
+        commit_enabled: bool = True,
+    ) -> None:
         self.dialog_count = dialog_count
         self.buttons = buttons
+        self.commit_enabled = commit_enabled
         self.outer: list[str] = []
         self.inner: list[str] = []
+        self.clicks: list[str] = []
 
     def locator(self, selector):
         self.outer.append(selector)
+        if selector in ('button[title="关闭窗口"]', 'button:has-text("取消")'):
+            return _DialogButtons(self.host_of(selector))
         return _DialogLocator(self)
+
+    def host_of(self, selector):
+        return self
+
+    def filter(self, **_kwargs):
+        return self
+
+    def count(self):
+        return self.dialog_count
+
+    def is_visible(self) -> bool:
+        return True
 
 
 class _DialogLocator:
@@ -541,6 +620,12 @@ class _DialogLocator:
 
     def count(self):
         return self.host.dialog_count
+
+    def is_enabled(self) -> bool:
+        return self.host.commit_enabled
+
+    def filter(self, **_kwargs):
+        return self
 
     def locator(self, selector):
         self.host.inner.append(selector)
@@ -554,8 +639,17 @@ class _DialogButtons:
     def count(self):
         return self.host.buttons
 
+    def is_visible(self) -> bool:
+        return True
 
-class _DialogAiFrame(_FakeAiFrame):
+    def is_enabled(self) -> bool:
+        return True
+
+    def click(self, **_kwargs) -> None:
+        self.host.clicks.append("click")
+
+
+class _DialogPasteFrame(_FakePasteFrame):
     """The panel frame, hosted by the dialog that owns its footer."""
 
     def __init__(self, dialog: _DialogFooter, **kwargs) -> None:
@@ -564,68 +658,89 @@ class _DialogAiFrame(_FakeAiFrame):
 
 
 def _commit_port(dialog: _DialogFooter) -> _PlaywrightActionPort:
-    panel = _FakeAiPanel()
-    panel.frame_obj = _DialogAiFrame(dialog)
+    panel = _FakePastePanel()
+    panel.frame_obj = _DialogPasteFrame(dialog)
+    panel.host_obj = dialog
     panel.open()
     return _PlaywrightActionPort(_OperationPage(SimpleNamespace()), panel)
 
 
-def test_ai_entry_commit_binding_targets_the_panels_own_commit_control() -> None:
-    """保存数据 lives in the dialog's footer, next to the AI frame.
+def test_paste_commit_binding_targets_the_dialogs_own_commit_control() -> None:
+    """保存数据 hands the preview rows back; it is not the form's 保存.
 
     A bare ``<button>`` reports ``type="submit"``, and "submit" is a denied
-    semantic, so the control is bound by its verified id alone -- exactly the
-    concession SAVE_DATA already makes for the same reason.
+    semantic, so the control is bound by its verified id alone -- the same
+    concession SAVE_DATA makes for the same reason. Live 2026-11-21: the parse
+    control is ``#win_btn__dialog11`` (导入) and the hand-back is
+    ``#win_btn__dialog12`` (保存数据); they must never be confused.
     """
 
-    binding = _BINDINGS[WriteAction.AI_ENTRY_COMMIT]
+    binding = _BINDINGS[WriteAction.PASTE_ENTRY_COMMIT]
 
-    assert binding.frame == "ai-dialog"
-    assert binding.selector == 'button:has-text("保存数据")'
+    assert binding.frame == "paste-dialog"
+    assert binding.selector == "#win_btn__dialog12"
     assert binding.semantics == ControlSemantics(
-        "button", "保存数据", "保存数据", (("id", "win_btn__dialog11"),)
+        "button", "保存数据", "保存数据", (("id", "win_btn__dialog12"),)
     )
-    assert WriteAction.AI_ENTRY_COMMIT in _ID_ONLY_ACTIONS
+    assert WriteAction.PASTE_ENTRY_COMMIT in _ID_ONLY_ACTIONS
     assert_safe_control_semantics(binding.semantics)
 
 
-def test_ai_entry_commit_resolves_only_inside_the_ai_dialogs_own_footer() -> None:
+def test_paste_import_binding_is_the_parse_control_not_the_commit() -> None:
+    binding = _BINDINGS[WriteAction.RUN_PASTE_IMPORT]
+
+    assert binding.frame == "paste-dialog"
+    assert binding.selector == "#win_btn__dialog11"
+    assert binding.semantics == ControlSemantics(
+        "button", "导入", "导入", (("id", "win_btn__dialog11"),)
+    )
+    assert WriteAction.RUN_PASTE_IMPORT in _ID_ONLY_ACTIONS
+    assert binding.selector != _BINDINGS[WriteAction.PASTE_ENTRY_COMMIT].selector
+
+
+def test_paste_data_binding_is_the_dialog_textarea() -> None:
+    binding = _BINDINGS[WriteAction.SET_PASTE_DATA]
+
+    assert binding.frame == "paste"
+    assert binding.selector == "textarea#pasteData"
+
+
+def test_paste_commit_resolves_only_inside_the_dialogs_own_footer() -> None:
     dialog = _DialogFooter()
 
-    locator = _commit_port(dialog)._locator(_BINDINGS[WriteAction.AI_ENTRY_COMMIT])
+    locator = _commit_port(dialog)._locator(_BINDINGS[WriteAction.PASTE_ENTRY_COMMIT])
 
     assert locator.count() == 1
-    assert dialog.outer == [_AI_ENTRY_DIALOG]
-    assert dialog.inner == ['button:has-text("保存数据")']
+    assert dialog.outer == ["#win_btn__dialog12"]
 
 
-def test_ai_entry_commit_fails_closed_when_the_host_dialog_is_not_unique() -> None:
+def test_paste_commit_fails_closed_when_the_host_dialog_is_not_unique() -> None:
     with pytest.raises(SecurityViolation):
         _commit_port(_DialogFooter(dialog_count=2))._locator(
-            _BINDINGS[WriteAction.AI_ENTRY_COMMIT]
+            _BINDINGS[WriteAction.PASTE_ENTRY_COMMIT]
         )
 
 
 def test_writer_lets_the_erp_fill_the_row_and_offers_no_way_to_type_it() -> None:
     writer = InsoPurchaseWriter(
         form_page=_OperationPage(SimpleNamespace()),
-        ai_panel=_FakeAiPanel(),
+        paste_panel=_FakePastePanel(),
         gate=FakeWriteGate(enabled=False),
     )
 
-    assert hasattr(writer, "commit_ai_entry")
+    assert hasattr(writer, "commit_paste_entry")
     for name in ("set_product_id", "set_model", "set_brand", "set_quantity"):
         assert not hasattr(writer, name)
 
 
-def _opened_panel(**kwargs) -> _FakeAiPanel:
-    panel = _FakeAiPanel(**kwargs)
+def _opened_panel(**kwargs) -> _FakePastePanel:
+    panel = _FakePastePanel(**kwargs)
     panel.open()
     return panel
 
 
-def test_ai_reader_returns_only_ready_single_row_result() -> None:
-    reader = PlaywrightAiResultReader(_opened_panel())
+def test_paste_reader_returns_the_parsed_row_and_the_erp_code() -> None:
+    reader = PlaywrightPastePreviewReader(_opened_panel())
 
     result = reader.read()
     assert result is not None
@@ -636,7 +751,7 @@ def test_ai_reader_returns_only_ready_single_row_result() -> None:
         result.quantity,
         result.ready,
     ) == (
-        "",
+        "P216328",
         "LM358",
         "Texas Instruments",
         123,
@@ -645,17 +760,18 @@ def test_ai_reader_returns_only_ready_single_row_result() -> None:
 
 
 @pytest.mark.parametrize("product_id", [None, "", "P216328", "P999999"])
-def test_ai_reader_accepts_business_fields_without_a_product_code(product_id) -> None:
-    """Owner rule: the ERP generates its code on import, not in AI validation."""
-    values = {
-        "PartNo": "LM358",
-        "Brand": "Texas Instruments",
-        "Qty": "123",
-    }
+def test_paste_reader_accepts_business_fields_without_a_product_code(product_id) -> None:
+    """Owner contract: only model, brand and quantity gate the commit.
+
+    The ERP resolves 编码/型号 itself; a missing or unexpected code is evidence,
+    never a reason to invent one or to block the draft.
+    """
+
+    row = {"PartNo": "LM358", "Brand": "Texas Instruments", "Qty": "123"}
     if product_id is not None:
-        values["ProductID"] = product_id
-    reader = PlaywrightAiResultReader(
-        _opened_panel(values=values),
+        row["ProductID"] = product_id
+    reader = PlaywrightPastePreviewReader(
+        _opened_panel(rows=[row]),
         wait_seconds=0.05,
         poll_milliseconds=1,
     )
@@ -665,49 +781,31 @@ def test_ai_reader_accepts_business_fields_without_a_product_code(product_id) ->
     assert (result.model, result.brand, result.quantity, result.ready) == (
         "LM358", "Texas Instruments", 123, True,
     )
-    assert result.product_id == ""  # Legacy field, not a success prerequisite.
+    assert result.product_id == (product_id or "")
 
 
-def test_ai_reader_waits_for_the_async_progress_before_reading() -> None:
-    """Live recognition reports progress captions before the preview exists.
+def test_paste_reader_waits_for_the_async_parse_before_reading() -> None:
+    """The parse is a server round-trip: rows and enablement arrive later.
 
-    Reading once immediately after the click observed "🔗 正在连接 AI 服务... 0%"
-    and zero rows, so every run raised "AI recognition is not ready". The reader
-    must poll past the in-flight captions to the final ready row.
+    A single immediate read sees an empty grid and a disabled 保存数据, so the
+    reader must poll on page state rather than on a fixed delay.
     """
 
-    panel = _opened_panel(
-        ready=False,
-        progress=(
-            "🔗 正在连接 AI 服务... 0%",
-            "✅ 正在校验品牌与物料库... 66%",
-            "✨ 即将完成，请稍候... 95%",
-        ),
-    )
-    reader = PlaywrightAiResultReader(panel)
+    panel = _opened_panel(ready=False, settle_after=3)
+    reader = PlaywrightPastePreviewReader(panel)
 
     result = reader.read()
 
     assert result is not None
-    assert (
-        result.product_id,
-        result.model,
-        result.brand,
-        result.quantity,
-        result.ready,
-    ) == (
-        "",
-        "LM358",
-        "Texas Instruments",
-        123,
-        True,
+    assert (result.model, result.brand, result.quantity) == (
+        "LM358", "Texas Instruments", 123,
     )
     assert panel.frame_obj.polls == 3
 
 
-def test_ai_reader_fails_closed_until_ready_state() -> None:
-    reader = PlaywrightAiResultReader(
-        _opened_panel(ready=False),
+def test_paste_reader_fails_closed_until_the_parse_settles() -> None:
+    reader = PlaywrightPastePreviewReader(
+        _opened_panel(ready=False, never_settles=True),
         wait_seconds=0.05,
         poll_milliseconds=1,
     )
@@ -715,31 +813,66 @@ def test_ai_reader_fails_closed_until_ready_state() -> None:
     assert reader.read() is None
 
 
-def test_ai_reader_requires_an_open_panel() -> None:
-    """Reading before the panel exists is misuse, not an AI state: it must fail."""
+def test_paste_reader_requires_an_open_dialog() -> None:
+    """Reading before the dialog exists is misuse, not a preview state."""
 
-    reader = PlaywrightAiResultReader(_FakeAiPanel(), wait_seconds=0.05, poll_milliseconds=1)
+    reader = PlaywrightPastePreviewReader(
+        _FakePastePanel(), wait_seconds=0.05, poll_milliseconds=1
+    )
 
     with pytest.raises(SecurityViolation):
         reader.read()
 
 
-def test_ai_reader_still_fails_closed_when_progress_never_settles() -> None:
-    """An endless in-flight caption must time out to None, never to a result."""
+@pytest.mark.parametrize("quantity", ["123.0", "1e3", "123 个", "", "0", "-5", " ", True, 123])
+def test_paste_reader_rejects_any_quantity_that_is_not_exactly_positive_integer(quantity) -> None:
+    """Truncating ``"123.0"`` would let a wrong quantity pass; only digits do."""
 
-    panel = _opened_panel(
-        ready=False,
-        progress=("🔗 正在连接 AI 服务... 0%",),
-        endless=True,
-    )
-    reader = PlaywrightAiResultReader(
-        panel,
+    row = {"PartNo": "LM358", "Brand": "Texas Instruments", "Qty": quantity}
+    reader = PlaywrightPastePreviewReader(
+        _opened_panel(rows=[row]),
         wait_seconds=0.05,
         poll_milliseconds=1,
     )
 
     assert reader.read() is None
 
+
+@pytest.mark.parametrize("rows", [[], [DEFAULT_PREVIEW_ROW, dict(DEFAULT_PREVIEW_ROW)]])
+def test_paste_reader_requires_exactly_one_preview_row(rows) -> None:
+    """One order is one row: an empty or multi-row preview is not this draft."""
+
+    reader = PlaywrightPastePreviewReader(
+        _opened_panel(rows=rows),
+        wait_seconds=0.05,
+        poll_milliseconds=1,
+    )
+
+    assert reader.read() is None
+
+
+def test_paste_reader_requires_the_commit_control_to_be_enabled() -> None:
+    """Rows without an enabled 保存数据 means the parse did not succeed."""
+
+    reader = PlaywrightPastePreviewReader(
+        _opened_panel(rows=[DEFAULT_PREVIEW_ROW], commit_enabled=False),
+        wait_seconds=0.05,
+        poll_milliseconds=1,
+    )
+
+    assert reader.read() is None
+
+
+def test_paste_panel_refuses_to_import_on_top_of_a_previous_preview() -> None:
+    """The only stale-row risk this flow has, closed by the ERP itself."""
+
+    fresh = _opened_panel(ready=False, commit_enabled=False)
+    fresh.assert_fresh()
+    assert fresh.fresh_checks == 1
+
+    stale = _opened_panel(ready=True)
+    with pytest.raises(SecurityViolation):
+        stale.assert_fresh()
 
 class _SaveStore:
     def __init__(self, *, recognized: bool = True, events=None):
@@ -759,7 +892,7 @@ def test_save_persists_unknown_before_the_only_fake_save_dispatch() -> None:
     store = _SaveStore(events=form.events)
     writer = InsoPurchaseWriter(
         form_page=_OperationPage(form),
-        ai_panel=_FakeAiPanel(),
+        paste_panel=_FakePastePanel(),
         gate=FakeWriteGate(enabled=True),
     )
 
@@ -774,7 +907,7 @@ def test_save_preflights_unique_visible_enabled_exact_control() -> None:
     store = _SaveStore()
     writer = InsoPurchaseWriter(
         form_page=_OperationPage(form),
-        ai_panel=_FakeAiPanel(),
+        paste_panel=_FakePastePanel(),
         gate=FakeWriteGate(enabled=True),
     )
 
@@ -797,7 +930,7 @@ def test_closed_production_gate_never_reaches_store_or_save_control() -> None:
     store = _SaveStore()
     writer = InsoPurchaseWriter(
         form_page=_OperationPage(form),
-        ai_panel=_FakeAiPanel(),
+        paste_panel=_FakePastePanel(),
         gate=ProductionWriteGate(),
     )
 
@@ -813,7 +946,7 @@ def test_non_ai_recognized_store_state_never_dispatches_save() -> None:
     store = _SaveStore(recognized=False)
     writer = InsoPurchaseWriter(
         form_page=_OperationPage(form),
-        ai_panel=_FakeAiPanel(),
+        paste_panel=_FakePastePanel(),
         gate=FakeWriteGate(enabled=True),
     )
 
@@ -1111,8 +1244,8 @@ def test_list_actions_fall_back_to_the_wrapper_frame() -> None:
 def _writer(form_page: _FakeFormPage) -> InsoPurchaseWriter:
     return InsoPurchaseWriter(
         form_page=_OperationPage(form_page),
-        ai_panel=_FakeAiPanel(
-            on_close=lambda: setattr(form_page, "ai_panel_open", False)
+        paste_panel=_FakePastePanel(
+            on_close=lambda: setattr(form_page, "paste_open", False)
         ),
         gate=FakeWriteGate(enabled=True),
     )
@@ -1149,7 +1282,7 @@ def test_purchaser_pick_dismisses_the_menu_the_site_leaves_open() -> None:
     """Live failure (2026-09-29): the purchaser menu does not close on its own.
 
     After 颜浩坚 was picked the menu was still open and its own table cells kept
-    covering ``#ai_import_``, so the AI录单 control could never be clicked. The
+    covering ``#product_import_``, so the AI录单 control could never be clicked. The
     pick therefore has to be followed by the site's own document-click dismiss.
     """
 
@@ -1173,17 +1306,17 @@ def test_a_menu_that_will_not_close_fails_closed(monkeypatch) -> None:
         _writer(form_page).set_purchaser("颜浩坚")
 
 
-def test_close_ai_entry_closes_only_the_panel_not_the_draft() -> None:
+def test_close_paste_entry_closes_only_the_dialog_not_the_draft() -> None:
     form_page = _FakeFormPage()
-    panel = _FakeAiPanel()
+    panel = _FakePastePanel()
     writer = InsoPurchaseWriter(
         form_page=_OperationPage(form_page),
-        ai_panel=panel,
+        paste_panel=panel,
         gate=FakeWriteGate(enabled=True),
     )
     panel.open()
 
-    writer.close_ai_entry()
+    writer.close_paste_entry()
 
     assert panel.close_calls == 1
     assert panel.opened is False
@@ -1191,7 +1324,7 @@ def test_close_ai_entry_closes_only_the_panel_not_the_draft() -> None:
     assert form_page.events == []
 
 
-class _AiEntryControl:
+class _PasteEntryControl:
     def __init__(self, host):
         self.host = host
 
@@ -1212,13 +1345,13 @@ class _AiEntryControl:
         self.host.revealed = True
 
 
-class _AiEntryForm:
+class _PasteEntryForm:
     def __init__(self, host):
         self.host = host
 
     def locator(self, selector):
-        assert selector == "#ai_import_"
-        return _AiEntryControl(self.host)
+        assert selector == "#product_import_"
+        return _PasteEntryControl(self.host)
 
 
 class _AbsentLocator:
@@ -1232,8 +1365,8 @@ class _AbsentLocator:
         raise AssertionError("an absent control must never be clicked")
 
 
-class _AiEntryHost:
-    """The ERP page as the AI entry sees it: form frame + in-page panel iframe."""
+class _PasteEntryHost:
+    """The ERP page as the 粘贴 entry sees it: form frame + in-page dialog iframe."""
 
     url = "https://yingsuo.alperp.cn/"
 
@@ -1243,7 +1376,7 @@ class _AiEntryHost:
         control_count: int = 1,
         control_visible: bool = True,
         control_enabled: bool = True,
-        control_label: str = "AI录单",
+        control_label: str = "粘贴",
         frame_url: str | None = None,
     ):
         self.control_count = control_count
@@ -1255,14 +1388,14 @@ class _AiEntryHost:
         self.entry_frame = SimpleNamespace(
             url=frame_url
             or (
-                "https://yingsuo.alperp.cn/skins/etaoerp/product/Import_ai.aspx"
+                "https://yingsuo.alperp.cn/skins/etaoerp/product/Import.aspx"
                 "?BillPage=Enquiry&VendorID=4525909&h=510"
             )
         )
 
     def frame_locator(self, selector):
         assert selector == "iframe#winIframealert_enquiry"
-        return _AiEntryForm(self)
+        return _PasteEntryForm(self)
 
     def locator(self, _selector):
         return _AbsentLocator()
@@ -1275,11 +1408,11 @@ class _AiEntryHost:
         return [self.entry_frame] if self.revealed else []
 
 
-def test_ai_entry_opens_the_forms_own_in_page_panel() -> None:
-    """The AI录单 entry is the form's own iframe, never a new tab."""
+def test_paste_entry_opens_the_forms_own_in_page_dialog() -> None:
+    """The 粘贴 entry is the form's own dialog, never a new tab."""
 
-    host = _AiEntryHost()
-    panel = AiEntryPanel(_OperationPage(host), wait_seconds=0.05, poll_milliseconds=1)
+    host = _PasteEntryHost()
+    panel = PasteImportPanel(_OperationPage(host), wait_seconds=0.05, poll_milliseconds=1)
 
     panel.open()
 
@@ -1297,9 +1430,9 @@ def test_ai_entry_opens_the_forms_own_in_page_panel() -> None:
         {"control_label": "识别"},
     ),
 )
-def test_ai_entry_fails_closed_without_the_verified_control(kwargs) -> None:
-    host = _AiEntryHost(**kwargs)
-    panel = AiEntryPanel(_OperationPage(host), wait_seconds=0.05, poll_milliseconds=1)
+def test_paste_entry_fails_closed_without_the_verified_control(kwargs) -> None:
+    host = _PasteEntryHost(**kwargs)
+    panel = PasteImportPanel(_OperationPage(host), wait_seconds=0.05, poll_milliseconds=1)
 
     with pytest.raises(SecurityViolation):
         panel.open()
@@ -1307,11 +1440,32 @@ def test_ai_entry_fails_closed_without_the_verified_control(kwargs) -> None:
     assert host.clicked == 0
 
 
-def test_ai_entry_refuses_a_frame_on_another_origin() -> None:
-    host = _AiEntryHost(
-        frame_url="https://evil.example.invalid/skins/etaoerp/product/Import_ai.aspx"
+def test_paste_entry_refuses_a_frame_on_another_origin() -> None:
+    host = _PasteEntryHost(
+        frame_url="https://evil.example.invalid/skins/etaoerp/product/Import.aspx"
     )
-    panel = AiEntryPanel(_OperationPage(host), wait_seconds=0.05, poll_milliseconds=1)
+    panel = PasteImportPanel(_OperationPage(host), wait_seconds=0.05, poll_milliseconds=1)
+
+    with pytest.raises(SecurityViolation):
+        panel.open()
+
+
+def test_paste_entry_refuses_the_list_pages_bulk_import_dialog() -> None:
+    """Same title, different handler: that one's 保存数据 creates a server bill.
+
+    ``innerenquiry/yewuxj/Import.aspx`` binds 保存数据 to ``Import()`` ->
+    ``$.post(?action=Import)`` and requires a returned ``BillID``. It must never
+    be reachable from the draft flow, so the frame identity rejects it even
+    though the origin and the page title match.
+    """
+
+    host = _PasteEntryHost(
+        frame_url=(
+            "https://yingsuo.alperp.cn/skins/etaoerp/"
+            "innerenquiry/yewuxj/Import.aspx"
+        )
+    )
+    panel = PasteImportPanel(_OperationPage(host), wait_seconds=0.05, poll_milliseconds=1)
 
     with pytest.raises(SecurityViolation):
         panel.open()
@@ -1565,11 +1719,11 @@ def test_an_ai_panel_left_open_is_closed_as_well() -> None:
 
     form_page = _FakeFormPage()
     form_page.form_window_open = False
-    form_page.ai_panel_open = True
+    form_page.paste_open = True
     writer = _writer(form_page)
 
     assert writer.dismiss_order_surface() is True
-    assert form_page.ai_panel_open is False
+    assert form_page.paste_open is False
 
 
 def test_an_ambiguous_window_lookup_refuses_instead_of_guessing() -> None:
@@ -1605,12 +1759,12 @@ class _AiFrameHandle:
         self._frame = frame
 
 
-class _AiEntryFrame:
-    """The verified Import_ai.aspx frame: it knows its parent document."""
+class _PasteEntryFrame:
+    """The verified Import.aspx frame: it knows its parent document."""
 
     url = (
         "https://yingsuo.alperp.cn/skins/etaoerp/product/"
-        "Import_ai.aspx?BillPage=Enquiry&VendorID=4525909&h=510"
+        "Import.aspx?BillPage=Enquiry&VendorID=4525909&h=510"
     )
 
     def __init__(self, parent):
@@ -1624,21 +1778,31 @@ class _AiEntryFrame:
         return _AiFrameHandle(self)
 
 
-class _AiDialog:
+class _PasteDialog:
+    """The dialog layer: it holds the paste iframe and its own close control."""
+
     def __init__(self, button):
         self._button = button
-        self.filtered_with = None
-
-    def filter(self, *, has):
-        self.filtered_with = has
-        return self
+        self.looked_up: list[str] = []
 
     def count(self):
         return 1
 
+    def filter(self, **_kwargs):
+        return self
+
     def locator(self, selector):
-        assert selector == 'button[title="关闭窗口"]'
-        return self._button
+        self.looked_up.append(selector)
+        if selector == "#winIframe_dialog1":
+            return _PresentControl()
+        if selector in ('button[title="关闭窗口"]', 'button:has-text("取消")'):
+            return self._button
+        return _AbsentLocator()
+
+
+class _PresentControl:
+    def count(self):
+        return 1
 
 
 class _ShellFrame:
@@ -1653,7 +1817,7 @@ class _ShellFrame:
         return self._dialog
 
 
-class _AiClosePage:
+class _PasteClosePage:
     url = "https://yingsuo.alperp.cn/"
 
     def __init__(self, shell, fallback):
@@ -1666,37 +1830,224 @@ class _AiClosePage:
         return self._fallback
 
 
-def test_ai_panel_close_anchors_on_the_dialog_that_contains_the_ai_frame() -> None:
-    """The close must target the AI frame's own dialog, not a selector guess."""
+def test_paste_dialog_close_anchors_on_the_dialog_holding_the_paste_frame() -> None:
+    """The close must target the paste frame's own dialog, not a selector guess."""
 
     button = _CloseButton()
-    dialog = _AiDialog(button)
+    dialog = _PasteDialog(button)
     shell = _ShellFrame(dialog)
-    frame = _AiEntryFrame(shell)
+    frame = _PasteEntryFrame(shell)
     fallback = _CloseButton()
-    page = _AiClosePage(shell, fallback)
+    page = _PasteClosePage(shell, fallback)
 
-    panel = AiEntryPanel(_OperationPage(page))
+    panel = PasteImportPanel(_OperationPage(page))
     panel._frame = frame
     panel.close()
 
     assert button.clicks == 1
     assert fallback.clicks == 0
     assert page.fallback_lookups == 0
-    assert dialog.filtered_with is not None
+    # The dialog is proven to be this one by the iframe it holds.
+    assert "#winIframe_dialog1" in dialog.looked_up
     assert panel._frame is None
 
 
-def test_ai_panel_close_falls_back_to_the_scoped_selector_when_the_frame_is_gone() -> None:
+def test_paste_dialog_close_never_falls_back_to_a_page_level_selector() -> None:
+    """With no frame to anchor on, guessing a global close control is unsafe.
+
+    The 采购临时询价 window carries its own ``button[title="关闭窗口"]``, so a
+    page-wide match could close the draft instead of the paste dialog. When the
+    frame is already gone this reports "not dismissed" and clicks nothing; the
+    order-surface cleanup closes the window, which disposes of the dialog too.
+    """
+
     button = _CloseButton()
-    dialog = _AiDialog(button)
+    dialog = _PasteDialog(button)
     shell = _ShellFrame(dialog)
     fallback = _CloseButton()
-    page = _AiClosePage(shell, fallback)
+    page = _PasteClosePage(shell, fallback)
 
-    panel = AiEntryPanel(_OperationPage(page))
-    panel.close()
+    panel = PasteImportPanel(_OperationPage(page))
 
+    assert panel.close() is False
     assert button.clicks == 0
-    assert fallback.clicks == 1
-    assert page.fallback_lookups == 1
+    assert fallback.clicks == 0
+    assert page.fallback_lookups == 0
+
+
+def test_the_production_draft_path_carries_no_ai_entry_anywhere() -> None:
+    """V1.7 replaces AI录单 with native paste; the old path must be gone.
+
+    This is a source guard, not a behavioural one: the failure mode it prevents
+    is a future edit quietly re-binding the draft steps to ``#ai_import_`` /
+    ``Import_ai.aspx`` and silently re-introducing the external AI dependency the
+    Owner asked to remove.
+    """
+
+    source = Path(purchase_writer_module.__file__).read_text(encoding="utf-8")
+    for forbidden in ("Import_ai.aspx", "#ai_import_", "ai-recognize", "AI录单"):
+        assert forbidden not in source, forbidden
+
+    bound = " ".join(binding.selector for binding in _BINDINGS.values())
+    for forbidden in ("ai_import", "ai-recognize", "Import_ai"):
+        assert forbidden not in bound, forbidden
+
+
+class _LayoutFrame:
+    """The dialog frame as the layout guard sees it: four hidden inputs.
+
+    Live shape (2026-11-21): ``#cmb0``/``#cmb1``/``#cmb2``/``#combox101`` are
+    ``type="hidden"`` inputs holding the chosen ERP value, each paired with a
+    rendered ``select-box`` whose summary opens the option list.
+    """
+
+    url = (
+        "https://yingsuo.alperp.cn/skins/etaoerp/product/Import.aspx"
+        "?BillPage=Enquiry&VendorID=&h=510"
+    )
+
+    def __init__(self, values, *, menu=(), restore=None):
+        self.values = dict(values)
+        self.menu = set(menu)
+        self.restore = dict(restore or {})
+        self.summary_clicks = 0
+        self.picks = []
+        self.timeouts = 0
+
+    def is_detached(self):
+        return False
+
+    def wait_for_timeout(self, _milliseconds):
+        self.timeouts += 1
+
+    def locator(self, selector):
+        assert selector.startswith("input#"), selector
+        return _LayoutControl(self, selector.split("#", 1)[1])
+
+
+class _LayoutControl:
+    def __init__(self, frame, ident):
+        self.frame = frame
+        self.ident = ident
+
+    def count(self):
+        return 1 if self.ident in self.frame.values else 0
+
+    def input_value(self):
+        return self.frame.values[self.ident]
+
+    def locator(self, _selector):
+        return _LayoutBox(self.frame, self.ident)
+
+
+class _LayoutBox:
+    """The select-box wrapper: one summary plus whatever option list it renders."""
+
+    def __init__(self, frame, ident):
+        self.frame = frame
+        self.ident = ident
+
+    def count(self):
+        return 1
+
+    def locator(self, selector):
+        assert selector == "summary", selector
+        return self
+
+    def click(self, **_kwargs):
+        self.frame.summary_clicks += 1
+
+    def get_by_text(self, label, exact=False):
+        assert exact is True
+        return _LayoutOption(self.frame, self.ident, label)
+
+
+class _LayoutOption:
+    def __init__(self, frame, ident, label):
+        self.frame = frame
+        self.ident = ident
+        self.label = label
+
+    def count(self):
+        return 1 if self.label in self.frame.menu else 0
+
+    def click(self, **_kwargs):
+        self.frame.picks.append((self.ident, self.label))
+        if self.label in self.frame.restore:
+            self.frame.values[self.ident] = self.frame.restore[self.label]
+
+
+def _layout_panel(frame) -> PasteImportPanel:
+    panel = PasteImportPanel(
+        _OperationPage(SimpleNamespace()), wait_seconds=0.05, poll_milliseconds=1
+    )
+    panel._frame = frame
+    return panel
+
+
+def test_paste_layout_is_only_read_when_the_erp_defaults_hold() -> None:
+    """The normal path must not click anything in the dialog.
+
+    Both the read-only sniff and the live run found the ERP defaults already
+    correct, so reconfiguring per order would be needless page interaction on
+    every single draft.
+    """
+
+    frame = _LayoutFrame(
+        {"cmb0": "PartNo", "cmb1": "Qty", "cmb2": "Brand", "combox101": "3"}
+    )
+
+    _layout_panel(frame).ensure_layout()
+
+    assert frame.summary_clicks == 0
+    assert frame.picks == []
+    assert frame.values == {
+        "cmb0": "PartNo",
+        "cmb1": "Qty",
+        "cmb2": "Brand",
+        "combox101": "3",
+    }
+
+
+def test_paste_layout_restores_a_wrong_mapping_through_the_dialogs_own_widget() -> None:
+    """A mapping someone left wrong is corrected, not merely reported."""
+
+    frame = _LayoutFrame(
+        {"cmb0": "Type", "cmb1": "Qty", "cmb2": "Brand", "combox101": "1"},
+        menu=("型号", "数量", "品牌", "竖线('|')", "Tab('\\t')"),
+        restore={"型号": "PartNo", "竖线('|')": "3"},
+    )
+
+    _layout_panel(frame).ensure_layout()
+
+    assert frame.picks == [("cmb0", "型号"), ("combox101", "竖线('|')")]
+    assert frame.values["cmb0"] == "PartNo"
+    assert frame.values["combox101"] == "3"
+    # Only the two wrong controls were opened; the correct ones were left alone.
+    assert frame.summary_clicks == 2
+
+
+def test_paste_layout_fails_closed_when_the_option_never_appears() -> None:
+    frame = _LayoutFrame(
+        {"cmb0": "Type", "cmb1": "Qty", "cmb2": "Brand", "combox101": "3"}
+    )
+
+    with pytest.raises(SecurityViolation):
+        _layout_panel(frame).ensure_layout()
+
+    assert frame.values["cmb0"] == "Type"
+
+
+def test_paste_layout_fails_closed_when_the_pick_does_not_change_the_value() -> None:
+    """A click that leaves the hidden value wrong is not a restore."""
+
+    frame = _LayoutFrame(
+        {"cmb0": "Type", "cmb1": "Qty", "cmb2": "Brand", "combox101": "3"},
+        menu=("型号",),
+    )
+
+    with pytest.raises(SecurityViolation):
+        _layout_panel(frame).ensure_layout()
+
+    assert frame.picks == [("cmb0", "型号")]
+    assert frame.values["cmb0"] == "Type"

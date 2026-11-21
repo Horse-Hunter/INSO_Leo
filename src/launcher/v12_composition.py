@@ -10,7 +10,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Protocol
 
 from src.core import CredentialProvider
-from src.inso import AiRecognitionResult, InsoOperationAccess, ParentProductFields
+from src.inso import DraftPreviewResult, InsoOperationAccess, ParentProductFields
 from src.inso.duplicate_history import (
     DETAIL_LINK_SELECTOR_TEMPLATE,
     PlaywrightDuplicateHistoryPage,
@@ -38,7 +38,7 @@ from src.workflow.v12_notifications import (
     NotificationTransport,
     V12NotificationWorker,
 )
-from src.workflow.v12_rules import validate_ai_recognition
+from src.workflow.v12_rules import validate_draft_preview
 from src.workflow.v12_safety import MpnPolicy, mpn_matches
 from src.workflow.v12_smtp_transport import QQSMTPConfig, QQSMTPTransport
 from src.workflow.v12_store import (
@@ -63,15 +63,19 @@ class _PurchasePrepareActions(Protocol):
 
     def set_purchaser(self, value: str) -> None: ...
 
-    def open_ai_entry(self) -> None: ...
+    def open_paste_entry(self) -> None: ...
 
-    def set_ai_input(self, value: str) -> None: ...
+    def ensure_paste_layout(self) -> None: ...
 
-    def run_ai_recognition(self) -> None: ...
+    def assert_paste_preview_fresh(self) -> None: ...
 
-    def read_ai_result(self) -> AiRecognitionResult: ...
+    def set_paste_data(self, value: str) -> None: ...
 
-    def commit_ai_entry(self) -> None: ...
+    def run_paste_import(self) -> None: ...
+
+    def read_paste_preview(self) -> DraftPreviewResult: ...
+
+    def commit_paste_entry(self) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,9 +309,16 @@ class CoordinatorPurchaseDraftWriter:
             ("prepare-customer", self._actions.set_customer, ("深圳阿尔克贸易有限公司",)),
             ("prepare-quote-type", self._actions.set_quotation_type, (command.quotation_type,)),
             ("prepare-purchaser", self._actions.set_purchaser, (command.purchaser,)),
-            ("prepare-ai-open", self._actions.open_ai_entry, ()),
-            ("prepare-ai-input", self._actions.set_ai_input, (command.ai_input,)),
-            ("prepare-ai-run", self._actions.run_ai_recognition, ()),
+            ("prepare-paste-open", self._actions.open_paste_entry, ()),
+            # The three columns and the 竖线 separator must still be the ERP's
+            # defaults; a wrong mapping is restored, or this order fails closed
+            # before any text is typed into the wrong fields.
+            ("prepare-paste-layout", self._actions.ensure_paste_layout, ()),
+            # Prove the preview is empty before the parse runs, so the row read
+            # afterwards can only come from our own import.
+            ("prepare-paste-fresh", self._actions.assert_paste_preview_fresh, ()),
+            ("prepare-paste-input", self._actions.set_paste_data, (command.paste_input,)),
+            ("prepare-paste-import", self._actions.run_paste_import, ()),
         )
         for step, action, args in steps:
             try:
@@ -316,11 +327,13 @@ class CoordinatorPurchaseDraftWriter:
                 return self._failed(command, ReasonCode.CONTROL_NOT_FOUND, step=step, error=exc)
 
         try:
-            preview = self._actions.read_ai_result()
-        except Exception as exc:  # noqa: BLE001 - recognition must settle before any commit
-            return self._failed(command, ReasonCode.CONTROL_NOT_FOUND, step="ai-result-read", error=exc)
+            preview = self._actions.read_paste_preview()
+        except Exception as exc:  # noqa: BLE001 - the parse must settle before any commit
+            return self._failed(
+                command, ReasonCode.CONTROL_NOT_FOUND, step="paste-preview-read", error=exc
+            )
 
-        preview_check = validate_ai_recognition(
+        preview_check = validate_draft_preview(
             command_id=command.command_id,
             completed_at=self._clock(),
             expected_mpn=command.mpn,
@@ -333,25 +346,24 @@ class CoordinatorPurchaseDraftWriter:
         if preview_check.outcome is not PurchaseOutcome.AI_RECOGNIZED:
             return preview_check
 
-        # Let the ERP fill its own bill row. The 采购临时询价 form is the
+        # Let the ERP fill its own bill rows. The 采购临时询价 form is the
         # operator's surface: its 编码/型号/品牌/数量 are not ours to type into.
-        # 保存数据 on the AI录单 dialog runs ``pasteImport()`` -- literally
-        # ``AiImport.doImport()`` -- which is ``returnSet(buildResult())`` plus
-        # ``windowsClose()``, and that close callback is
-        # ``alertboxs[1].closeMtd = function(){ ai_appendRow() }``: the row is
-        # handed back and ``layui`` reloads the bill grid with it. Nothing here
-        # writes a cell, and the click is not a Save -- ``bill_save_auto`` stays
-        # behind the closed ``ProductionWriteGate``.
+        # 保存数据 on the 粘贴 dialog runs ``pasteImport(1)`` -- ``returnSet`` plus
+        # ``windowsClose()`` -- and that close callback is ``appendRow()``: the
+        # parsed rows are handed back and written into the bill grid. Measured
+        # live 2026-11-21: no request leaves the browser and no ``BillID`` is
+        # produced, so this is not a Save -- ``bill_save_auto`` stays behind the
+        # closed ``ProductionWriteGate``.
         try:
-            self._actions.commit_ai_entry()
+            self._actions.commit_paste_entry()
         except Exception as exc:  # noqa: BLE001 - every control failure maps to an explicit reason code
             return self._failed(
-                command, ReasonCode.CONTROL_NOT_FOUND, step="commit-ai-entry", error=exc
+                command, ReasonCode.CONTROL_NOT_FOUND, step="commit-paste-entry", error=exc
             )
 
         try:
-            # ERP generates its code on import. Wait for the model row, then
-            # validate only Owner's three business fields below.
+            # ERP resolves its code during the parse. Wait for the model row,
+            # then validate only Owner's three business fields below.
             rendered = self._parent_fields.wait_for_model(
                 preview.model, _PARENT_ROW_WAIT_SECONDS
             )
@@ -368,7 +380,7 @@ class CoordinatorPurchaseDraftWriter:
                 command, ReasonCode.CONTROL_NOT_FOUND, step="parent-row-missing"
             )
 
-        return validate_ai_recognition(
+        return validate_draft_preview(
             command_id=command.command_id,
             completed_at=self._clock(),
             expected_mpn=command.mpn,
@@ -390,7 +402,7 @@ class CoordinatorPurchaseDraftWriter:
         if step is not None:
             # The run log carries no ERP detail by design, so the step label is
             # the whole diagnosis: without it a draft that never reached the
-            # AI录单 panel and one that died after the ERP handed its row back
+            # 粘贴 dialog and one that died after the ERP handed its rows back
             # are the same one-line failure. Only our own labels travel; the
             # runtime filter in ``src/gui/main.py`` rebuilds the file line from
             # exactly ``step`` and the cause's class name.

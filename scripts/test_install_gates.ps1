@@ -69,9 +69,21 @@ function Write-FixtureDatabaseScript {
     param([string]$Base)
     $code = @'
 import sqlite3, sys
+from datetime import datetime, timedelta, timezone
 path = sys.argv[1]
-when = sys.argv[2] if len(sys.argv) > 2 else "2026-11-15T08:00:00+00:00"
+# Fixture time is relative to the run: a frozen stamp silently ages out of the
+# 72-hour recency gate and turns every provenance case into "not current".
+w = sys.argv[2] if len(sys.argv) > 2 else (
+    datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+when = w
+# The two ordering stamps the scenarios rely on (save at 09:00, uncertainty at
+# 08:00) follow the same base, so a scenario keeps its meaning whatever day it
+# runs on.
+w1 = (datetime.fromisoformat(w) + timedelta(hours=1)).isoformat()
 scenario = sys.argv[3] if len(sys.argv) > 3 else ""
+def _sql(text):
+    return text.replace("2026-11-15T08:00:00+00:00", w).replace(
+        "2026-11-15T09:00:00+00:00", w1)
 con = sqlite3.connect(path)
 # Real V1.2 column set: the verifier reads outcome/event_type/reason_code, so a
 # fixture without them would test a schema that does not exist.
@@ -151,7 +163,7 @@ SCENARIOS = {
 if scenario:
     if scenario not in SCENARIOS:
         raise SystemExit("unknown fixture scenario: " + scenario)
-    con.executescript(SCENARIOS[scenario])
+    con.executescript(_sql(SCENARIOS[scenario]))
 con.commit(); con.close()
 '@
     # `python -c` mangles quotes on Windows, so the fixture is a real file.
@@ -185,7 +197,11 @@ function New-Fixture {
     Write-FixtureDatabaseScript $Base
     $liveDb = Join-Path $liveDbDir "workflow.sqlite3"
     if ($Scenario) {
-        & $python (Join-Path $Base "make_db.py") $liveDb "2026-11-15T08:00:00+00:00" $Scenario
+        # Scenario rows must stay inside the recency gate as well; a fixed stamp
+        # here would make every legacy case fail on "not current" instead of on
+        # the property it is meant to prove.
+        $fixtureWhen = (Get-Date).ToUniversalTime().AddHours(-1).ToString("yyyy-MM-ddTHH:mm:ss") + "+00:00"
+        & $python (Join-Path $Base "make_db.py") $liveDb $fixtureWhen $Scenario
     }
     else {
         & $python (Join-Path $Base "make_db.py") $liveDb
@@ -268,6 +284,15 @@ function New-Snapshot {
         [void]$failures.Add("snapshot database-state resolves a different file than the fixture ledger")
     }
     return $out
+}
+
+function New-CrossVersionCandidate {
+    # Same fixture, different release name: the V1.6 -> V1.7 case, where the
+    # installed EXE and the candidate EXE do not share a file name.
+    param([pscustomobject]$Fixture, [string]$ExeName)
+    Remove-Item -LiteralPath (Join-Path $Fixture.Candidate "INSO_V1.6.exe") -Force
+    Write-TextNoBom -Path (Join-Path $Fixture.Candidate $ExeName) -Lines @($ExeName, ("c" * 4000))
+    Write-Manifest -Root $Fixture.Candidate -Manifest $Fixture.CandidateManifest
 }
 
 function Get-DatabaseReport {
@@ -684,6 +709,78 @@ try {
     if ((Get-FileHash -LiteralPath (Join-Path $f.Target "_internal\a.dll" -ErrorAction SilentlyContinue) -Algorithm SHA256).Hash.ToLowerInvariant() -ne $oldDll) {
         [void]$failures.Add("post-copy corruption : the old payload bytes were not restored")
     }
+
+    # --- cross-version switch: V1.6 installed, V1.7 candidate ----------------
+    $f = New-Fixture (Join-Path $root "cross-version")
+    New-Snapshot $f | Out-Null
+    Get-DatabaseReport $f | Out-Null
+    New-CrossVersionCandidate $f "INSO_V1.7.exe"
+    $cross = Invoke-Child "install_release_candidate.ps1" (New-InstallArgs $f)
+    Assert-Output "cross-version switch installs the new EXE" $cross "INSTALL_RESULT = PASS"
+    $script:checks++
+    if ((Get-FileHash -LiteralPath (Join-Path $f.Target "INSO_V1.7.exe") -Algorithm SHA256).Hash.ToLowerInvariant() -ne
+        (Get-FileHash -LiteralPath (Join-Path $f.Candidate "INSO_V1.7.exe") -Algorithm SHA256).Hash.ToLowerInvariant()) {
+        [void]$failures.Add("cross-version : installed EXE is not the candidate")
+    }
+    $script:checks++
+    if ((Test-Path -LiteralPath (Join-Path $f.Target "INSO_V1.6.exe")) -or
+        @(Get-ChildItem -LiteralPath $f.Target -File -Filter "INSO_V1.6.exe.prev-*").Count -ne 1) {
+        [void]$failures.Add("cross-version : the replaced EXE was not kept as .prev- and retired")
+    }
+    Assert-Output "cross-version installed verify" (Invoke-Child "install_release_candidate.ps1" @{
+        TargetDir = $f.Target; Manifest = $f.CandidateManifest; VerifyInstalledOnly = $true
+    }) "INSTALLED_VERIFY = PASS"
+
+    # A failed cross-version switch must put V1.6 back and leave no V1.7 behind.
+    $f = New-Fixture (Join-Path $root "cross-version-fault")
+    New-Snapshot $f | Out-Null
+    Get-DatabaseReport $f | Out-Null
+    New-CrossVersionCandidate $f "INSO_V1.7.exe"
+    $oldSha = (Get-FileHash -LiteralPath (Join-Path $f.Target "INSO_V1.6.exe") -Algorithm SHA256).Hash.ToLowerInvariant()
+    $xfault = Invoke-Child "install_release_candidate.ps1" (New-InstallArgs $f @{ InjectSwitchFault = $true })
+    Assert-Output "cross-version failure is not PASS" $xfault "INSTALL_RESULT = FAIL_RESTORED"
+    $script:checks++
+    if (((Get-FileHash -LiteralPath (Join-Path $f.Target "INSO_V1.6.exe") -Algorithm SHA256).Hash.ToLowerInvariant() -ne $oldSha) -or
+        (Test-Path -LiteralPath (Join-Path $f.Target "INSO_V1.7.exe"))) {
+        [void]$failures.Add("cross-version failure : V1.6 was not restored cleanly, or V1.7 was left behind")
+    }
+
+    # --- fresh install into a release directory of its own -------------------
+    $f = New-Fixture (Join-Path $root "fresh")
+    New-Snapshot $f | Out-Null
+    Get-DatabaseReport $f | Out-Null
+    New-CrossVersionCandidate $f "INSO_V1.7.exe"
+    $freshTarget = Join-Path $f.Base "release-v1.7"
+    $previousSha = (Get-FileHash -LiteralPath (Join-Path $f.Target "INSO_V1.6.exe") -Algorithm SHA256).Hash.ToLowerInvariant()
+    $fresh = Invoke-Child "install_release_candidate.ps1" @{
+        CandidateDir = $f.Candidate; Manifest = $f.CandidateManifest
+        TargetDir = $freshTarget; RuntimeTarget = $f.RuntimeLive
+        DatabaseBackup = $f.BackupDatabase; DatabaseReport = $f.DatabaseReport
+        ConfirmDatabaseBackupVerified = $true; ConfirmSwitch = $true; FreshInstall = $true
+    }
+    Assert-Output "fresh install" $fresh "INSTALL_RESULT = PASS"
+    $script:checks++
+    if (-not (Test-Path -LiteralPath (Join-Path $freshTarget "INSO_V1.7.exe")) -or
+        -not (Test-Path -LiteralPath (Join-Path $freshTarget "_internal\sub\b.dll"))) {
+        [void]$failures.Add("fresh install : the program was not copied")
+    }
+    $script:checks++
+    $freshJunction = Get-Item -LiteralPath (Join-Path $freshTarget "runtime") -Force
+    if ($freshJunction.LinkType -ne "Junction" -or
+        (([string]@($freshJunction.Target)[0]).TrimEnd('\') -ne (Resolve-Path -LiteralPath $f.RuntimeLive).Path.TrimEnd('\'))) {
+        [void]$failures.Add("fresh install : runtime is not the expected junction")
+    }
+    $script:checks++
+    if ((Get-FileHash -LiteralPath (Join-Path $f.Target "INSO_V1.6.exe") -Algorithm SHA256).Hash.ToLowerInvariant() -ne $previousSha) {
+        [void]$failures.Add("fresh install : the previous install's EXE was modified")
+    }
+    # Running it again must refuse, never overwrite.
+    Assert-Refused "fresh install never overwrites" (Invoke-Child "install_release_candidate.ps1" @{
+        CandidateDir = $f.Candidate; Manifest = $f.CandidateManifest
+        TargetDir = $freshTarget; RuntimeTarget = $f.RuntimeLive
+        DatabaseBackup = $f.BackupDatabase; DatabaseReport = $f.DatabaseReport
+        ConfirmDatabaseBackupVerified = $true; ConfirmSwitch = $true; FreshInstall = $true
+    }) "never overwrites"
 
     # --- a restore that cannot finish must say so ----------------------------
     $f = New-Fixture (Join-Path $root "restore-interrupted")

@@ -72,10 +72,10 @@ def test_closed_enum_and_public_api_have_no_send_or_generic_click_methods() -> N
         "SET_CUSTOMER",
         "SET_QUOTATION_TYPE",
         "SET_PURCHASER",
-        "OPEN_AI_ENTRY",
-        "SET_AI_INPUT",
-        "RUN_AI_RECOGNITION",
-        "AI_ENTRY_COMMIT",
+        "OPEN_PASTE_ENTRY",
+        "SET_PASTE_DATA",
+        "RUN_PASTE_IMPORT",
+        "PASTE_ENTRY_COMMIT",
         "SAVE_DATA",
         "SAVE_AND_SEND",
     }
@@ -83,14 +83,15 @@ def test_closed_enum_and_public_api_have_no_send_or_generic_click_methods() -> N
     assert not {"send", "submit", "final_submit", "click", "dispatch"} & methods
 
 
-def test_commit_ai_entry_is_client_side_while_save_data_stays_gated() -> None:
-    """保存数据 on the AI录单 panel is not the bill's Save.
+def test_commit_paste_entry_is_client_side_while_save_data_stays_gated() -> None:
+    """保存数据 on the 粘贴 dialog is not the bill's Save.
 
-    Verified live (2026-10-01): it runs ``pasteImport() -> AiImport.doImport()``,
-    which is ``returnSet(buildResult())`` + ``windowsClose()``; the dialog's own
-    close callback then runs ``ai_appendRow()`` to reload the bill grid. Nothing
-    reaches the server, so the closed production gate must not block it -- while
-    the real Save (``button#btnSave`` -> ``bill_save_auto``) must stay blocked.
+    Verified live (2026-11-21) with a request listener: it runs
+    ``pasteImport(1)``, which is ``returnSet(DetailData)`` + ``windowsClose()``,
+    and the dialog's close callback ``appendRow()`` writes the rows into the bill
+    grid. Zero non-GET requests leave the page, so the closed production gate
+    must not block it -- while the real Save (``button#btnSave`` ->
+    ``bill_save_auto``) must stay blocked.
     """
 
     registry = SelectorRegistry()
@@ -101,12 +102,12 @@ def test_commit_ai_entry_is_client_side_while_save_data_stays_gated() -> None:
         candidate().semantics,
     )
     commit_semantics = ControlSemantics(
-        "button", "保存数据", "保存数据", (("id", "win_btn__dialog11"),)
+        "button", "保存数据", "保存数据", (("id", "win_btn__dialog12"),)
     )
     registry.register(
-        WriteAction.AI_ENTRY_COMMIT,
-        "ai-entry-commit",
-        "ai-entry-dialog",
+        WriteAction.PASTE_ENTRY_COMMIT,
+        "paste-entry-commit",
+        "paste-import-dialog",
         commit_semantics,
     )
     dispatcher = FakeDispatcher()
@@ -116,15 +117,17 @@ def test_commit_ai_entry_is_client_side_while_save_data_stays_gated() -> None:
         candidate_source=FakeCandidateSource(
             (
                 candidate(),
-                ControlCandidate("ai-entry-commit", "ai-entry-dialog", commit_semantics),
+                ControlCandidate(
+                    "paste-entry-commit", "paste-import-dialog", commit_semantics
+                ),
             )
         ),
         dispatcher=dispatcher,
     )
 
-    api.commit_ai_entry()
+    api.commit_paste_entry()
     assert dispatcher.dispatched == [
-        (WriteAction.AI_ENTRY_COMMIT, "ai-entry-commit", None)
+        (WriteAction.PASTE_ENTRY_COMMIT, "paste-entry-commit", None)
     ]
 
     with pytest.raises(SecurityViolation):

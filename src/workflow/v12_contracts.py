@@ -366,7 +366,7 @@ class PurchaseDraftCommand:
     market_minimum_reference_price: Decimal | None
     quotation_type: str
     purchaser: str
-    ai_input: str
+    paste_input: str
 
 
 @dataclass(frozen=True, slots=True)

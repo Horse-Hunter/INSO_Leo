@@ -1123,3 +1123,43 @@ def test_a_human_completed_order_keeps_no_answered_alert_open(tmp_path):
     flow.poll_and_process(_advanced_reader("成交"), SHEET, now=NOW + timedelta(minutes=1))
 
     assert not store.active_alerts(inquiry_id)
+
+
+class _PasteHostileRowReader:
+    """Two pending rows: one whose model cannot be written as three paste columns."""
+
+    def __init__(self) -> None:
+        self.rows = (
+            WorksheetRow(3, {"A": "未发", "C": "A", "D": "Synthetic Customer",
+                             "E": "M|1", "F": "Brand-X", "G": 7}),
+            WorksheetRow(4, {"A": "未发", "C": "A", "D": "Synthetic Customer",
+                             "E": "Mpn-2", "F": "Brand-X", "G": 8}),
+        )
+
+    def read_rows(self, worksheet: WorksheetIdentity):
+        assert worksheet == SHEET
+        return self.rows
+
+
+def test_a_model_that_cannot_be_pasted_fails_only_its_own_order(tmp_path: Path) -> None:
+    """A ``|`` inside the model is that order's problem, not the batch's.
+
+    ``build_paste_input`` raises for a value the three-column format cannot
+    express. Raised while the command is being built, it would escape the
+    purchase step's own exception handling and abandon the whole poll -- every
+    later order included. It is routed to the existing per-order invalid-input
+    outcome instead, so the rest of the batch still drafts normally.
+    """
+
+    flow, _workflow_store, _store, _research, _checker, _facts, writer, _notifications = _make_flow(
+        tmp_path,
+        facts=ResearchBusinessFacts("货足", Decimal(60001), Decimal("2.00")),
+    )
+
+    results = flow.poll_and_process(_PasteHostileRowReader(), SHEET, now=NOW)
+
+    by_reason = [r for r in results if r.waiting_reason == "PURCHASE_INPUT_INVALID"]
+    assert len(by_reason) == 1
+    assert by_reason[0].business_state is BusinessState.PURCHASE_EXCEPTION
+    assert [command.mpn for command in writer.commands] == ["Mpn-2"]
+    assert [command.paste_input for command in writer.commands] == ["Mpn-2|8|Brand-X"]

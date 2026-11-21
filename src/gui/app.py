@@ -201,8 +201,8 @@ def _event_display_text(event: Any) -> str:
         "NOTIFICATION_DELIVERY_SUCCEEDED": "通知发送成功",
         "ALERT_RECOVERED": "异常已恢复",
         "PURCHASE_DRAFT_STARTED": "开始准备未保存采购草稿",
-        "AI_RECOGNITION_READY": "AI 录单及回读校验通过",
-        "AI_RECOGNITION_MISMATCH": "采购录单或校验未通过",
+        "AI_RECOGNITION_READY": "粘贴录单及回读校验通过",
+        "AI_RECOGNITION_MISMATCH": "粘贴录单或校验未通过",
         "SECURITY_CHECK_FAILED": "安全校验未通过",
         "DATA_QUALITY_MISSING_CUSTOMER": "客户资料缺失",
         "DATA_QUALITY_INVALID_QUANTITY": "数量资料无效",
@@ -221,7 +221,7 @@ def _event_display_text(event: Any) -> str:
     if event.reason_code is not None:
         reason = {
             "CONTROL_NOT_FOUND": "采购页面控件未就绪，需修复程序",
-            "AI_RECOGNITION_MISMATCH": "录单结果未通过校验",
+            "AI_RECOGNITION_MISMATCH": "粘贴录单结果未通过校验",
             "SESSION_STALE": "登录已失效",
         }.get(event.reason_code.value)
         if reason:

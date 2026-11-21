@@ -1,6 +1,12 @@
-# RFQ-025 — V1.6 正式晋升 + V1.7 页面嗅探
+# RFQ-025 — V1.6 晋升 + V1.7 原生粘贴录单（三阶段）
 
-**状态：`V1_6_PROMOTED_TO_MAIN / V1_7_BASELINE_READY / PASTE_SNIFF_COMPLETE / NO_BUSINESS_EFFECT`**
+**当前状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_NOT_YET_VERIFIED`**
+（V1.7 已装进 `dist\INSO_V1.7` 并正常生产运行；`main` 仍是 V1.6，未晋升）
+
+阶段状态：
+`V1_6_PROMOTED_TO_MAIN / V1_7_BASELINE_READY / PASTE_SNIFF_COMPLETE / V1_7_IMPLEMENTED /
+LIVE_DRAFT_VERIFIED / REGRESSION_PASS / RELEASE_CANDIDATE_READY / V1_7_INSTALLED /
+PRODUCTION_RUNNING / REAL_PURCHASE_NOT_YET_VERIFIED`
 
 Owner 一句话即可复核：本文件 → [EXECUTION_LOG](EXECUTION_LOG.md) → [FINAL_REPORT](FINAL_REPORT.md)
 → 脱敏页面证据 [`docs/evidence/rfq025/paste-import-sniff.md`](../../docs/evidence/rfq025/paste-import-sniff.md)。
@@ -96,7 +102,67 @@ Owner 明确禁止：重做 RFQ-024 已结案内容；改/装/重启运行中的
 **本轮零业务代码改动。** 仅文档与发布记录：`docs/BRANCH_POLICY.md`、`AGENTS.md`、`AI_START_HERE.md`、
 `control-room/*`、`docs/evidence/rfq025/*`。`src/` 与 `tests/` 无任何变更（与 `d954e0a5` 逐字节一致）。
 
-## 6. 下一轮建议（待 Owner 指令，不自动开工）
+## 6. 第二阶段：V1.7 实现（2026-11-21，Owner 现场授权）
+
+Owner 指令：`RFQ-025 第一阶段 Review PASS`，允许 V1.6 暂停、直接在现有生产环境完成 V1.7 开发、
+调试与实机验证；一次性完成开发、验证、回归与候选构建。
+
+### 6.1 实现范围（只换录单方式）
+
+| 文件 | 改动 |
+|---|---|
+| `src/inso/purchase_writer.py` | AI 面板适配器整体替换为 `PasteImportPanel` + `PlaywrightPastePreviewReader`；三个写动作改为 `SET_PASTE_DATA` / `RUN_PASTE_IMPORT` / `PASTE_ENTRY_COMMIT`；帧身份钉死 `product/Import.aspx` 并**显式拒绝** `innerenquiry/yewuxj/Import.aspx` |
+| `src/inso/write_safety.py` | `WriteAction` 的 AI 成员换为粘贴成员；公开方法改名 |
+| `src/launcher/v12_composition.py` | `prepare()` 的五个 AI 步骤换为 `open → assert_fresh → set_data → import → read → validate → commit` |
+| `src/workflow/v12_rules.py` | `build_ai_input` → `build_paste_input`（`型号|数量|品牌`）；`validate_ai_recognition` → `validate_draft_preview` |
+| `src/workflow/v12_contracts.py` | `PurchaseDraftCommand.ai_input` → `paste_input` |
+| `src/workflow/v12_flow.py` | 调用点同步 |
+| `src/gui/app.py`、`src/gui/workbench.py` | 用户可见文案由"AI 识别"改为"粘贴录单" |
+| `src/core/app_paths.py`、`src/launcher/backend.py`、`packaging/INSO_V1.1.spec`、`scripts/build_windows_release.ps1` | 版本标识 1.6 → 1.7 |
+
+**刻意保留的内部名称：** `PurchaseOutcome.AI_RECOGNIZED`、`ReasonCode.AI_RECOGNITION_MISMATCH`、
+`EventType.AI_RECOGNITION_READY/MISMATCH`。它们是 SQLite 与事件目录里的历史标识，
+改名需要数据迁移；Owner 明确允许保留必要内部名称。语义是"预览已核对通过"，用户可见文案已改。
+
+**未改动：** 去重、七天窗口、准入规则、`save_data`、`save_and_send`、`UNKNOWN/SENT`、hold、
+Sheets 读写、报价更新、TP、邮件、调度周期、代理与 CDP 修复。
+
+### 6.2 三个关键设计（都有实测依据）
+
+1. **先证明"空"再解析**：`assert_paste_preview_fresh` 在点 `导入` 之前要求预览为空且"保存数据"仍禁用，
+   这样后面读到的行只可能来自本次解析，不可能是上一单残留。
+2. **按状态等待，不按时间**：同时满足"缓存行数符合预期"与"`#win_btn__dialog12` 解禁"，否则 fail-closed。
+3. **数量只接受 ASCII 纯数字**：`"200.0"` / `"2e2"` 一律拒绝而不是截断 —— 截断正是让错误数量通过的方式。
+
+### 6.3 真实页面验证与回归
+
+见 [EXECUTION_LOG](EXECUTION_LOG.md) 第 8 节与
+[`docs/evidence/rfq025/v17-live-verification.md`](../../docs/evidence/rfq025/v17-live-verification.md)。
+
+### 6.4 交付边界
+
+候选 EXE 交 CEO 审核；**未安装、未覆盖 `dist/INSO_V1.6`、未重启生产、未发送任何真实采购单**。
+V1.7 仍是前瞻版本，未经 Owner 验收不得晋升 `main`。
+
+## 6b. 第三阶段：收尾、安装与生产试运行（2026-11-21 晚）
+
+**结论：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_NOT_YET_VERIFIED`。**
+
+| 事项 | 结果 |
+|---|---|
+| 22 条 TP 失败 | 确认是测试时基问题（TP 按"上月同日"截止 + 夹具订单固定 2026-10-20 + 未固定时钟），非 V1.7 回归；只改时基，TP 规则与限制未动；全量转绿 |
+| 粘贴单一订单异常 | 三列表达不了的订单改走既有单笔无效输入通道，不再中断整轮 |
+| 字段映射/分隔符 | `#cmb0..2` / `#combox101` 默认只读；不一致时用弹窗自带下拉改回并复读；改不回即 fail-closed |
+| 最终回归 | 4365 collected / 0 failed / 0 errors / 1 skipped（ruff 仍只剩 3 条既有 F811） |
+| 候选 | `INSO_V1.7.exe` 8,510,418 B / `6e258a50…c780` / 2,872 文件 / 清单 `e148a4d2…5397` |
+| 安装 | `-FreshInstall` 装到 `dist\INSO_V1.7`，`INSTALL_RESULT = PASS`；V1.6 目录一个字节未动 |
+| 生产运行 | PID 85452（GUI）+ 84368（watcher），inquiry/quotation/tp 三模块按 900 s 正常运行，零故障 |
+| 真实采购 | **未发生**：无合法待处理订单（最新状态全为 `PURCHASE_RECORDED`/`HUMAN_COMPLETED`）；未造单、未重发 |
+| 台账副作用 | purchase 行数 40 与装前一致；hold 3 条原样；open write intents 0 |
+
+细节见 [EXECUTION_LOG](EXECUTION_LOG.md) 第 14–21 节。
+
+## 7. 下一轮（待 Owner 指令，不自动开工）
 
 1. `workbuddy/v17-native-paste` 从 `develop` 起分支；
 2. 实现替换点：`CoordinatorPurchaseDraftWriter.prepare()` 的 `prepare-ai-open` … `commit-ai-entry`，

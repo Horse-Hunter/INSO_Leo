@@ -1538,7 +1538,7 @@ class ProductionBackend(GuiBackend):
             self._set_health(("正常", "待命", "正常", "正常"), "正常")
 
             independent = cfg.get("v16_enabled", getattr(sys, "frozen", False)
-                and Path(sys.executable).stem == "INSO_V1.6") is True
+                and Path(sys.executable).stem in {"INSO_V1.6", "INSO_V1.7"}) is True
             if independent:
                 configured = cfg.get("module_intervals_seconds", {})
                 if not isinstance(configured, dict) or set(configured) - {"inquiry", "quotation", "tp"}:

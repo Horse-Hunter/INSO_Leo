@@ -233,15 +233,44 @@ def _duplicate_invalid(
     )
 
 
-def build_ai_input(mpn: str, brand: str, quantity: int) -> str:
+#: The ERP's paste dialog defaults to this delimiter (``#combox101 = 3``,
+#: displayed as 竖线('|')), and its default column map is
+#: ``cmb0=型号 / cmb1=数量 / cmb2=品牌``.
+PASTE_FIELD_SEPARATOR = "|"
+
+
+def build_paste_input(mpn: str, brand: str, quantity: int) -> str:
+    """One three-column paste line: ``型号|数量|品牌``.
+
+    Verified live 2026-11-21: the dialog maps column 0/1/2 to PartNo/Qty/Brand by
+    default and splits on ``|``, so no per-order reconfiguration is needed. The
+    field order differs from the retired AI format (型号 · 品牌 · 数量).
+
+    A value that itself contains the delimiter or a line break cannot be
+    expressed in three columns at all, so it is rejected rather than silently
+    shifting the columns. That is a format impossibility, not an extra input
+    rule.
+
+    Nothing else is validated here on purpose. Empty values and non-positive
+    quantities are the *caller's* business (``v12_flow`` already rejects a blank
+    model/brand before it builds a command, and the preview reader refuses a
+    quantity that is not a positive integer), so raising here would turn a
+    handled business case into a crash on the run's main path.
+    """
+
     if not isinstance(mpn, str) or not isinstance(brand, str):
         raise TypeError("MPN and brand must be strings")
     if isinstance(quantity, bool) or not isinstance(quantity, int):
         raise TypeError("quantity must be an integer")
-    return f"{mpn}{' ' * 6}{brand}{' ' * 6}{quantity}"
+    for name, value in (("MPN", mpn), ("brand", brand)):
+        if PASTE_FIELD_SEPARATOR in value or "\n" in value or "\r" in value:
+            raise ValueError(
+                f"{name} cannot contain the paste delimiter or a line break"
+            )
+    return f"{mpn}{PASTE_FIELD_SEPARATOR}{quantity}{PASTE_FIELD_SEPARATOR}{brand}"
 
 
-def validate_ai_recognition(
+def validate_draft_preview(
     *,
     command_id: str,
     completed_at: datetime,
@@ -252,7 +281,14 @@ def validate_ai_recognition(
     recognized_brand: str | None,
     recognized_quantity: int | None,
 ) -> PurchaseDraftResult:
-    """Produce a typed result; any uncertain or mismatched field fails closed."""
+    """Produce a typed result; any uncertain or mismatched field fails closed.
+
+    The outcome value ``AI_RECOGNIZED`` and the reason code
+    ``AI_RECOGNITION_MISMATCH`` are **persisted identifiers** from the retired
+    AI-entry era. They are kept unchanged so historical rows, ledgers and the
+    GUI event catalogue keep resolving; only their user-facing wording says
+    "粘贴录单". Do not rename them without a data migration.
+    """
 
     if completed_at.tzinfo is None:
         raise ValueError("completion timestamp must be timezone-aware")

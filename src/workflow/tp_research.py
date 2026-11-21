@@ -370,6 +370,13 @@ class TpCycle:
     def _run(self, spreadsheet, *, now, manual_key=None):
         orders = self.read_orders(spreadsheet, manual_key=manual_key, now=now)
         found = False
+        # One time base for the whole cycle. ``read_orders`` already prefers the
+        # cycle's clock, so every later decision -- claim eligibility, crash
+        # recovery, state timestamps, the outbox -- has to use the same value.
+        # Otherwise a cycle holding a clock would find an eligible order and then
+        # refuse it at claim time because the wall clock says it aged out. In
+        # production no clock is installed, so ``current_now`` is just ``now``.
+        current_now = self.clock() if self.clock else now
         for order in orders:
             if self.stop_requested():
                 break
@@ -377,7 +384,6 @@ class TpCycle:
             if manual_key is not None and manual_key != key:
                 continue
             from .automatic_admission import age_reason
-            current_now = self.clock() if self.clock else now
             if manual_key is None and age_reason(order.rfq_date, current_now, module="tp"):
                 self.issues[key] = "TP_AGE_EXCLUDED"
                 continue
@@ -385,7 +391,9 @@ class TpCycle:
             self.store.register(order, current_now)
             found = True
             try:
-                command = self.store.claim(key, order, now, manual=manual_key is not None)
+                command = self.store.claim(
+                    key, order, current_now, manual=manual_key is not None
+                )
             except ValueError as exc:
                 if not tp_local_failure_reason(exc):
                     raise
@@ -400,7 +408,7 @@ class TpCycle:
             try:
                 self.prepare(key)
                 try:
-                    result = self.research.execute_tp(key, order, now=now)
+                    result = self.research.execute_tp(key, order, now=current_now)
                 except (TypeError, AttributeError, ArithmeticError) as exc:
                     # Plain computation/data failures are TP-local. Typed or
                     # wrapped infrastructure/security exceptions remain shared.
@@ -408,22 +416,28 @@ class TpCycle:
                             or exc.__cause__ is not None or exc.__context__ is not None):
                         raise
                     raise _TpDataError("TP_RESEARCH_DATA_INVALID") from None
-                self.complete_order(order, key, command, result, now=now, manual=manual_key is not None)
+                self.complete_order(
+                    order, key, command, result, now=current_now,
+                    manual=manual_key is not None,
+                )
             except Exception as exc:
                 # An enqueue may have committed before a crash/error. Inspect its
                 # immutable key before making read-only research eligible again.
-                self.store.recover(now, key=key)
+                self.store.recover(current_now, key=key)
                 if self.store.get(key)["state"] == "PENDING":
-                    self.store.finish(key, "FAILED", now, "TP_RESEARCH_UNCONFIRMED")
+                    self.store.finish(key, "FAILED", current_now, "TP_RESEARCH_UNCONFIRMED")
                 reason = tp_local_failure_reason(exc)
                 if reason:
                     if self.store.get(key)["state"] == "FAILED":
-                        self.store.finish(key, "FAILED", now, reason)
+                        self.store.finish(key, "FAILED", current_now, reason)
                     self.issues[key] = reason
                     if manual_key is None:
                         continue
                     raise TpLocalError(reason) from None
                 raise
+        # Outbox retries are scheduling, not admission: they fall due relative to
+        # the poll that is running now, so this deliberately keeps the caller's
+        # ``now`` rather than the cycle clock.
         self.worker.run_due(now=now)
         if manual_key is not None and not found:
             raise ValueError("TP_SOURCE_UNMATCHED")

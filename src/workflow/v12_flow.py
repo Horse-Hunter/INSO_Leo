@@ -54,11 +54,11 @@ from .v12_notifications import V12NotificationWorker
 from .v12_rules import (
     PostResearchRoute,
     PurchaseRoutingOutcome,
-    build_ai_input,
+    build_paste_input,
     purchase_routing_decision,
     route_after_research,
     should_send_important_order_notification,
-    validate_ai_recognition,
+    validate_draft_preview,
 )
 from .v12_store import V12DatabaseError, V12Store
 
@@ -183,7 +183,7 @@ class FakePurchaseDraftWriter:
         mpn, brand, quantity = self._recognized
         if mpn is None and brand is None and quantity is None:
             mpn, brand, quantity = command.mpn, command.brand, command.quantity
-        return validate_ai_recognition(
+        return validate_draft_preview(
             command_id=command.command_id,
             completed_at=self._completed_at,
             expected_mpn=command.mpn,
@@ -986,6 +986,17 @@ class V12WorkflowCoordinator:
             self._set_state(inquiry_id, BusinessState.PURCHASE_EXCEPTION, EventType.SECURITY_CHECK_FAILED, now, ReasonCode.AI_RECOGNITION_MISMATCH)
             return self._result(inquiry_id, route=route, waiting_reason="PURCHASE_INPUT_INVALID")
 
+        try:
+            paste_input = build_paste_input(mpn, brand.strip(), quantity)
+        except ValueError:
+            # A model or brand that itself carries the column separator (or a
+            # line break) cannot be written as three paste columns at all. That
+            # is this one order's unusable input, not a program fault, so it
+            # takes the same per-order exception path as any other invalid
+            # purchase input and the rest of the batch keeps running.
+            self._set_state(inquiry_id, BusinessState.PURCHASE_EXCEPTION, EventType.SECURITY_CHECK_FAILED, now, ReasonCode.AI_RECOGNITION_MISMATCH)
+            return self._result(inquiry_id, route=route, waiting_reason="PURCHASE_INPUT_INVALID")
+
         command_id = _command_id(inquiry_id, "purchase")
         command = PurchaseDraftCommand(
             command_id=command_id,
@@ -1000,7 +1011,7 @@ class V12WorkflowCoordinator:
             market_minimum_reference_price=facts.market_minimum_reference_price,
             quotation_type=purchase_decision.quotation_type.value,
             purchaser=purchase_decision.purchaser.value,
-            ai_input=build_ai_input(mpn, brand.strip(), quantity),
+            paste_input=paste_input,
         )
         if not self._record_admitted(record, now, fresh=True):
             return self._result(inquiry_id, waiting_reason="AUTOMATIC_ADMISSION_EXCLUDED")

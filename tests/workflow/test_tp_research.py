@@ -55,8 +55,15 @@ def build(tmp_path, outcomes=(DeliveryOutcome.SENT,), *, day=None):
         lines = [BriefLine(2, tuple(data[h] for h in BRIEF_HEADERS))]
     reader = SimpleNamespace(rows=[source()], read_rows=lambda _: tuple(reader.rows))
     research = Research()
+    # TP admits on a rolling one-month cutoff (same day of the previous month).
+    # Without a clock, every call site that omits ``now`` -- ``read_orders``,
+    # the manual path in ``backend._execute_order_action`` -- would read the wall
+    # clock, so this fixed synthetic order (rfq_date 2026-10-20) silently aged
+    # out of the window as real time moved past 2026-11-20. Pinning the cycle's
+    # own clock to the test's NOW makes the fixture independent of the calendar
+    # without touching the admission rule or the data itself.
     cycle = TpCycle(store=store, brief=SimpleNamespace(read=lambda _: tuple(lines)),
-        reader=reader, research=research, outbox=outbox, worker=worker)
+        reader=reader, research=research, outbox=outbox, worker=worker, clock=lambda: NOW)
     return cycle, lines, reader, transport, path
 
 

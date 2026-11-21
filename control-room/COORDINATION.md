@@ -1,4 +1,64 @@
-# Executor 2026-11-21：V1.6 已晋升为现版；V1.7 基线就绪；粘贴录单嗅探部分完成（待 CEO 复核）
+# Executor 2026-11-21（晚）：V1.7 已安装并正常生产运行；真实采购尚未验证
+
+**状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_NOT_YET_VERIFIED`**
+（`main` 仍是 V1.6；V1.7 未晋升。回归与安装细节见
+[RFQ-025/EXECUTION_LOG.md](RFQ-025/EXECUTION_LOG.md) 第 14–21 节。）
+
+入口：[RFQ-025/TASK_SPEC.md](RFQ-025/TASK_SPEC.md) → [EXECUTION_LOG.md](RFQ-025/EXECUTION_LOG.md) →
+[FINAL_REPORT.md](RFQ-025/FINAL_REPORT.md) → 证据 [`docs/evidence/rfq025/`](../docs/evidence/rfq025/)。
+
+- **22 条 TP 失败＝测试时基问题，不是回归。** TP 按"上月同日"算截止，夹具订单固定 `2026-10-20`，
+  省略 `now` 的调用点读墙上时钟 → 在 `2026-11-21` 运行时被自己的夹具判过期。修法：给合成 `TpCycle`
+  传 `clock=lambda: NOW`，并让 `_run()` 全流程只用一个时间基准（原来 `claim` 还拿原始 `now`，自相矛盾）。
+  TP 规则、一个月限制、订单日期、用例一条没动。
+- **粘贴两处收尾：** 三列表达不了的订单改走既有单笔无效输入通道（不再中断整轮）；
+  新增 `prepare-paste-layout`，默认只读 `#cmb0..2`/`#combox101`，不一致时用弹窗自带下拉改回，改不回即拒。
+- **回归：** `4365 collected / 4364 passed / 0 failed / 0 errors / 1 skipped`。ruff 仍只有 3 条既有 F811。
+- **安装：** `-FreshInstall` 装到 `dist\INSO_V1.7`，`INSTALL_RESULT = PASS`；
+  EXE `6e258a50…c780`，2,872 文件逐项复核；`runtime` 是 Junction → `dist\INSO_V1.4\runtime`。
+  **V1.6 目录一个字节未动**（`9a0cb3d3…2710`），另有快照 + 数据库备份在
+  `dist\release-backups\RFQ-025-pre-v17-20261121T132826Z`。
+- **生产：** PID 85452（GUI）+ 84368（watcher），inquiry/quotation/tp 均按 900 s 跑完至少一轮，
+  零 ERROR、零 Sheets 故障。桌面入口已换成 `INSO V1.7（最新版）`，原 V1.6 快捷方式改名"旧版，仅回退用"。
+- **真实采购：未发生**（无合法待处理订单；最新状态全为 `PURCHASE_RECORDED`/`HUMAN_COMPLETED`）。
+  purchase 行数 40 与装前一致，hold 3 条原样，open write intents 0。不造单、不重发。
+- **未验证：** 真实"保存并发送"与 ERP 单据/Sheets 回写的最终业务验收；等自然出现合法订单。
+- **安装脚本：** `-PreviousExeName` / 候选 EXE 名从清单读取 / 进程门禁同查新旧两名 / 回滚先删候选 EXE /
+  新增 `-FreshInstall` / 数据库门禁抽成 `Assert-DatabaseReport`；门禁测试 `checks = 202 PASS`。
+
+---
+
+# 此前：V1.7 粘贴录单已实现、实测并构建候选（第二阶段，CEO 已 PASS）
+
+**状态：`V1_7_IMPLEMENTED / LIVE_DRAFT_VERIFIED / RELEASE_CANDIDATE_READY / READY_FOR_CEO_REVIEW`**
+（回归结果见本节末与 [RFQ-025/EXECUTION_LOG.md](RFQ-025/EXECUTION_LOG.md) 第 12 节。）
+
+入口：[RFQ-025/TASK_SPEC.md](RFQ-025/TASK_SPEC.md) → [EXECUTION_LOG.md](RFQ-025/EXECUTION_LOG.md) →
+[FINAL_REPORT.md](RFQ-025/FINAL_REPORT.md) → 证据 [`docs/evidence/rfq025/`](../docs/evidence/rfq025/)。
+
+- **做了什么：** 把 `CoordinatorPurchaseDraftWriter.prepare()` 的五个 AI 步骤换成 INSO 原生粘贴：
+  `open_paste_entry → assert_paste_preview_fresh → set_paste_data → run_paste_import →
+  read_paste_preview → validate → commit_paste_entry`。输入改为 `型号|数量|品牌`。其余业务一律未动。
+- **生产路径不再依赖 AI：** `src/inso/purchase_writer.py` 内已无 `Import_ai.aspx` / `#ai_import_` /
+  `ai-recognize` 任何引用（有源码守卫测试）。真实运行中 AI 端点请求数为 **0**。
+- **真实页面验证（生产代码路径，非探针）：** 一次单笔 + 一次同页连续两单，均 `AI_RECOGNIZED`；
+  型号/品牌/数量回读一致；解析请求恰 1 次；`#BillID` 始终为空；两个真实缺陷在过程中被修掉
+  （跨帧 `filter(has=…)`、旧的页面级关窗回退会误关单据）。
+- **保留的历史标识：** `PurchaseOutcome.AI_RECOGNIZED`、`ReasonCode.AI_RECOGNITION_MISMATCH`、
+  `EventType.AI_RECOGNITION_*` 是 SQLite/事件目录里的持久值，未改名（需数据迁移）；用户可见文案已改为"粘贴录单"。
+- **未做：** 未安装、未覆盖 `dist/INSO_V1.6`、未重启生产、未发任何真实采购单、未点 `保存`/`保存并发送`。
+  V1.7 仍是前瞻版本，未经 Owner 验收不得晋升 `main`。
+- **回归：** 冻结后全量 `4359 collected / 4336 passed / 22 failed / 1 skipped`。22 条失败全在 TP 模块，
+  同一根因（`TpCycle.read_orders('test')` 读不到订单），改动文件里没有一条 TP/Google 模块，
+  且在未改动的 `develop` 上同样复现 —— 记为既存失败集合，未删未跳。
+- **候选：** `INSO_V1.7.exe` 8,508,798 B / SHA256 `5707b9c5…f253` / 2,872 文件 / 清单 `27d46b1c…3f9a`；
+  `RELEASE_SCAN_OK`、`--self-check` 0、`--idle-self-check` `gui_rendered: true`。**未安装。**
+- **版本：** 标识已升到 1.7（`app_paths`、`backend` 的独立调度判定、spec、构建脚本）。
+  候选 EXE 路径/哈希见 FINAL_REPORT 与 `docs/evidence/rfq025/`。
+
+---
+
+# 此前：V1.6 已晋升为现版；V1.7 基线就绪；粘贴录单嗅探完成（CEO 一阶段 PASS）
 
 **状态：`V1_6_PROMOTED_TO_MAIN / V1_7_BASELINE_READY / PASTE_SNIFF_COMPLETE / NO_BUSINESS_EFFECT`。**
 入口：[RFQ-025/TASK_SPEC.md](RFQ-025/TASK_SPEC.md) → [EXECUTION_LOG.md](RFQ-025/EXECUTION_LOG.md) →

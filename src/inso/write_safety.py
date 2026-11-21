@@ -19,10 +19,10 @@ class WriteAction(StrEnum):
     SET_CUSTOMER = "SET_CUSTOMER"
     SET_QUOTATION_TYPE = "SET_QUOTATION_TYPE"
     SET_PURCHASER = "SET_PURCHASER"
-    OPEN_AI_ENTRY = "OPEN_AI_ENTRY"
-    SET_AI_INPUT = "SET_AI_INPUT"
-    RUN_AI_RECOGNITION = "RUN_AI_RECOGNITION"
-    AI_ENTRY_COMMIT = "AI_ENTRY_COMMIT"
+    OPEN_PASTE_ENTRY = "OPEN_PASTE_ENTRY"
+    SET_PASTE_DATA = "SET_PASTE_DATA"
+    RUN_PASTE_IMPORT = "RUN_PASTE_IMPORT"
+    PASTE_ENTRY_COMMIT = "PASTE_ENTRY_COMMIT"
     SAVE_DATA = "SAVE_DATA"
     SAVE_AND_SEND = "SAVE_AND_SEND"
 
@@ -226,27 +226,35 @@ class InsoDraftActions:
     def set_purchaser(self, value: str) -> None:
         self._run(WriteAction.SET_PURCHASER, value)
 
-    def open_ai_entry(self) -> None:
-        self._run(WriteAction.OPEN_AI_ENTRY)
+    def open_paste_entry(self) -> None:
+        """Open the purchase form's own 粘贴 dialog (native paste import)."""
 
-    def set_ai_input(self, value: str) -> None:
-        self._run(WriteAction.SET_AI_INPUT, value)
+        self._run(WriteAction.OPEN_PASTE_ENTRY)
 
-    def run_ai_recognition(self) -> None:
-        self._run(WriteAction.RUN_AI_RECOGNITION)
+    def set_paste_data(self, value: str) -> None:
+        """Type the three-column ``型号|数量|品牌`` line into the paste box."""
 
-    def commit_ai_entry(self) -> None:
-        """Hand the recognized row back through the panel's own commit control.
+        self._run(WriteAction.SET_PASTE_DATA, value)
 
-        Verified live (2026-10-01): the AI录单 dialog's 保存数据 control runs
-        ``pasteImport() -> AiImport.doImport()``, which is ``returnSet(buildResult())``
-        plus ``windowsClose()`` -- a purely client-side hand-back whose dialog
-        close callback then runs ``ai_appendRow()`` to reload the bill grid.
-        It is *not* a server Save; that remains the gated ``WriteAction.SAVE_DATA``
-        (``button#btnSave`` -> ``bill_save_auto``), and it stays unreachable here.
+    def run_paste_import(self) -> None:
+        """Trigger the ERP's own paste parse, which builds the preview grid."""
+
+        self._run(WriteAction.RUN_PASTE_IMPORT)
+
+    def commit_paste_entry(self) -> None:
+        """Hand the verified preview rows back to the parent inquiry form.
+
+        Verified live (2026-11-21): the 粘贴 dialog's 保存数据 control runs
+        ``pasteImport(1)``, which is ``returnSet(DetailData)`` plus
+        ``windowsClose()``; the dialog's close callback then runs
+        ``appendRow()`` to write the rows into the bill grid. Measured with a
+        request listener: **no request leaves the browser** and no ``BillID`` is
+        produced, so this is a client-side draft hand-back, not a Save. The
+        server Save remains the gated ``WriteAction.SAVE_DATA``
+        (``button#btnSave`` -> ``bill_save_auto``) and stays unreachable here.
         """
 
-        self._run(WriteAction.AI_ENTRY_COMMIT)
+        self._run(WriteAction.PASTE_ENTRY_COMMIT)
 
     def save_data(self) -> None:
         self._run(WriteAction.SAVE_DATA)
@@ -260,7 +268,7 @@ class InsoDraftActions:
         # The production gate protects standalone Save; the explicit Owner
         # exception below protects Save-and-Send separately. The
         # V1.2 pre-save workflow is explicitly allowed to prepare an unsaved
-        # draft and validate AI read-back while this gate remains closed.
+        # draft and validate the paste preview while this gate remains closed.
         if action is WriteAction.SAVE_DATA:
             self._gate.require_open()
         if action is WriteAction.SAVE_AND_SEND:

@@ -193,7 +193,12 @@ def _check_cached_tk_workbench(monkeypatch):
         app._start_on_ready = True
         app._view.show_page("任务中心")
         app._root.update_idletasks()
-        assert "V1.6" in app._root.title()
+        # The title carries the product version, which changes with each release
+        # candidate; what matters here is that it is the product title, not a
+        # hard-coded version string that has to be edited every release.
+        from src.core.app_paths import application_name
+
+        assert application_name().replace("INSO_", "") in app._root.title()
         assert app._view.pages == ("总览", "任务中心", "异常与通知", "运行记录", "设置")
         assert tuple(app._view.nav_buttons) == app._view.pages
         assert "调研结果" not in app._view.frames

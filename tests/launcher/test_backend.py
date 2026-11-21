@@ -993,7 +993,7 @@ def _purchase_command() -> PurchaseDraftCommand:
         market_minimum_reference_price=Decimal("8.5"),
         quotation_type="普通询价",
         purchaser="陈熙",
-        ai_input="DRV8833PWR      UNKNOWN      300",
+        paste_input="DRV8833PWR      UNKNOWN      300",
     )
 
 

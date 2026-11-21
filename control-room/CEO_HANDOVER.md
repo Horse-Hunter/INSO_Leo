@@ -1,4 +1,62 @@
-# INSO LEO — 新 CEO 接管入口（2026-11-21，V1.6 已晋升 / RFQ-025 第一轮交付）
+# INSO LEO — 新 CEO 接管入口（2026-11-21 晚，V1.7 已安装并生产运行）
+
+**当前权威结论：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_NOT_YET_VERIFIED`。**
+`main` 仍是 Owner 验收的 V1.6（`d954e0a5`）；V1.7 已装进 `dist\INSO_V1.7` 并运行，
+但**尚未晋升**，真实采购验收也还没发生（当前没有合法待处理订单）。
+
+## 90 秒接管读序
+
+1. [AI_START_HERE.md](../AI_START_HERE.md)、[AGENTS.md](../AGENTS.md)、[BRANCH_POLICY](../docs/BRANCH_POLICY.md)。
+2. [RFQ-025/FINAL_REPORT.md](RFQ-025/FINAL_REPORT.md) → [EXECUTION_LOG](RFQ-025/EXECUTION_LOG.md) 第 14–21 节 →
+   证据 [`docs/evidence/rfq025/`](../docs/evidence/rfq025/)。
+3. 一/二阶段背景见 [TASK_SPEC](RFQ-025/TASK_SPEC.md) 与 `paste-import-sniff.md`。
+
+## 现场状态（务必先看，别重复装）
+
+| 项 | 值 |
+|---|---|
+| 正在运行 | `dist\INSO_V1.7\INSO_V1.7.exe`，PID 85452（GUI）+ 84368（watcher），业务运行中 |
+| 生产 runtime | `dist\INSO_V1.7\runtime` 是 Junction → `dist\INSO_V1.4\runtime`（配置/库/日志共享） |
+| 生产库 | `production.json` 里 `sqlite_path` 指向 `dist\INSO_V1.2\runtime\production\workflow.sqlite3`（历史指向，经 junction 到同一文件） |
+| V1.6 | 目录未动，`INSO_V1.6.exe` = `9a0cb3d3…2710`；桌面快捷方式已改名"旧版，仅回退用" |
+| 回退 | `dist\release-backups\RFQ-025-pre-v17-20261121T132826Z`（程序快照 + 数据库 + 校验报告） |
+
+## 下一步（等 CEO 审核与 Owner 决定）
+
+- **真实业务验收未完成。** 有合法待处理订单时，让它自然走完
+  `Sheets 读取 → 调研/判断 → 草稿 → 粘贴 → 导入 → 预览核对 → 保存数据 → 保存并发送 → 回写`，
+  再以 ERP 单据 + Sheets 状态独立确认。不要为了验收造单或重发。
+- **晋升由 Owner 决定。** 即使试运行通过，也不得自行把 `main` 移向 V1.7。
+- **V1.6 不要再启动。** 两套调度器共用同一台账；需要回退时先停 V1.7，再按回退材料恢复。
+- **仍待 Owner 产品决策（沿用 RFQ-024，未变）：** 重启时中断的无写入、无 hold 任务是否自动重排。
+
+---
+
+# 此前：V1.7 候选已构建，待审核安装
+
+**当前权威结论：`V1_7_IMPLEMENTED / LIVE_DRAFT_VERIFIED / RELEASE_CANDIDATE_READY / READY_FOR_CEO_REVIEW`。**
+`main` 仍是 Owner 验收的 V1.6（`d954e0a5`）；V1.7 只在 `workbuddy/v17-native-paste`，未安装、未晋升。
+生产程序当前处于**停止**状态（Owner 授权开发期间暂停），进程仍在但业务未运行。
+
+## 90 秒接管读序
+
+1. [AI_START_HERE.md](../AI_START_HERE.md)、[AGENTS.md](../AGENTS.md)、[BRANCH_POLICY](../docs/BRANCH_POLICY.md)。
+2. [RFQ-025/FINAL_REPORT.md](RFQ-025/FINAL_REPORT.md)（六项交付 + 七段式）→
+   [RFQ-025/EXECUTION_LOG.md](RFQ-025/EXECUTION_LOG.md) 第 8–12 节 →
+   证据 [`docs/evidence/rfq025/`](../docs/evidence/rfq025/)。
+3. 需要一阶段背景时再读 [TASK_SPEC](RFQ-025/TASK_SPEC.md) 与 `paste-import-sniff.md`。
+
+## 下一步（等 CEO 审核与 Owner 指令）
+
+- **候选 EXE 未安装。** 安装/试运行是下一轮：走既有 `install_release_candidate.ps1` 门禁，
+  V1.6 目录与回退材料不得覆盖或删除。
+- **真实发送未验证。** 本轮只做草稿链路；`保存并发送` 与完整业务结果验收留到安装试运行阶段。
+- **生产未运行。** 若要恢复 V1.6 业务，用原 GUI 正常启动即可；本轮未改 `dist/` 下任何文件。
+- **仍待 Owner 产品决策（沿用 RFQ-024，未变）：** 重启时中断的无写入、无 hold 任务是否自动重排。
+
+---
+
+# 此前：V1.6 已晋升 / RFQ-025 第一轮交付
 
 **当前权威结论：`V1_6_PROMOTED_TO_MAIN / V1_7_BASELINE_READY / PASTE_SNIFF_COMPLETE / NO_BUSINESS_EFFECT`。**
 `main` 已是 Owner 验收的 V1.6（`d954e0a5`），V1.1 引导陷阱关闭；V1.7 开发基线就绪；粘贴录单五步已在真实生产环境
