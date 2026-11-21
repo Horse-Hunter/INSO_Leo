@@ -1,0 +1,35 @@
+{
+  "ok": true,
+  "rounds": [
+    {
+      "round": 1,
+      "acquired": true,
+      "title": "INSO LEO V1.6 — Procurement Automation Control Center",
+      "blockers": [
+        "PREVIEW_ONLY"
+      ],
+      "start_button": "安全预览（不启动业务）",
+      "start_state": "disabled",
+      "business_thread_started": false,
+      "order_thread_started": false,
+      "mail_service_started": false,
+      "process_services_consumed": false,
+      "state": "已停止"
+    },
+    {
+      "round": 2,
+      "acquired": true,
+      "title": "INSO LEO V1.6 — Procurement Automation Control Center",
+      "blockers": [
+        "PREVIEW_ONLY"
+      ],
+      "start_button": "安全预览（不启动业务）",
+      "start_state": "disabled",
+      "business_thread_started": false,
+      "order_thread_started": false,
+      "mail_service_started": false,
+      "process_services_consumed": false,
+      "state": "已停止"
+    }
+  ]
+}

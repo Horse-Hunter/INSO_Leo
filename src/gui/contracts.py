@@ -238,6 +238,7 @@ class V12OrderStateDTO:
     source_verified_at: datetime | None = None
     source_fresh: bool = False
     processing_history: str | None = None
+    source_link_unproven: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.business_label, V12BusinessLabel):
@@ -371,6 +372,9 @@ class WorkbenchSnapshot:
     cycle_durations: tuple[tuple[str, float], ...] = ()
     planned_check_at: datetime | None = None
     recovery_site: str | None = None
+    # Owner-facing fault records: reason code, first/last time, cause, impact and
+    # the next actionable step.  Built from measured runtime evidence only.
+    faults: tuple = ()
 
 
 @dataclass(frozen=True, slots=True)

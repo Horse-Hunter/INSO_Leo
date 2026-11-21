@@ -446,6 +446,45 @@ class WorkflowStateStore:
             )
             return cursor.rowcount == 1
 
+    def rebind_identity(
+        self,
+        item_id: int,
+        record_identity: SheetRecordIdentity,
+        *,
+        now: datetime | None = None,
+    ) -> bool:
+        """Point an existing order at the cells it currently occupies.
+
+        Only the Owner's explicit "recover from the sheet" action calls this: the human
+        looked at the line and asked the ledger to agree with it. Nothing else is
+        reset — status, attempts and history stay untouched — and the original quote
+        date is preserved so the age gate keeps working on the original day.
+        """
+
+        changed_at = _as_utc(now or datetime.now(UTC))
+        with closing(self._connect()) as connection, connection:
+            original = connection.execute(
+                "SELECT record_identity_json FROM workflow_items WHERE id = ?", (item_id,)
+            ).fetchone()
+            if original is None:
+                return False
+            original_date = json.loads(original["record_identity_json"]).get("source_order_date")
+            snapshot = record_identity.identifying_snapshot
+            cursor = connection.execute(
+                "UPDATE workflow_items SET record_identity_json = ?, mpn_json = ?, brand_json = ?,"
+                " quantity_json = ?, importance_raw_json = ?, updated_at = ? WHERE id = ?",
+                (
+                    _identity_to_json(record_identity, source_order_date=original_date),
+                    _value_to_json(snapshot.model),
+                    _value_to_json(snapshot.brand),
+                    _value_to_json(snapshot.quantity),
+                    _value_to_json(snapshot.importance_raw),
+                    _time_to_text(changed_at),
+                    item_id,
+                ),
+            )
+            return cursor.rowcount == 1
+
     def record_brand_update(
         self,
         item_id: int,

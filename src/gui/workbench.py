@@ -19,6 +19,18 @@ BG, NAV, CARD, LINE = "#141b23", "#10161e", "#1c2733", "#2b3949"
 TEXT, MUTED, BLUE = "#e7edf4", "#9baabd", "#557fae"
 GREEN, AMBER, RED = "#8bc9ac", "#e5bb7b", "#ed9b9b"
 NAMES = {"inquiry": "询价采购", "quotation": "报价跟进", "tp": "目标价调研"}
+# Only step labels this program writes itself; the page never echoes page text.
+STAGE_NAMES = {
+    "google-session": "连接共享浏览器",
+    "google-open-sheet": "打开表格页面",
+    "google-sheet-ready": "等待表格网格就绪",
+    "google-select-sheet": "切换到目标工作表",
+    "google-download-read": "导出并读取表格",
+    "google-write-select-cell": "定位写入单元格",
+    "google-write-edit": "写入单元格",
+    "google-write-save": "等待表格保存",
+    "google-write-readback": "回读校验",
+}
 SITES = {
     "ic.net": "IC.net",
     "findchips": "Findchips",
@@ -41,6 +53,164 @@ def unknown_mail(order, state=None):
 
 def stamp(value):
     return value.astimezone().strftime("%m-%d %H:%M:%S") if value else "暂无记录"
+
+
+def _when(value):
+    """Render one ISO timestamp from a fault record in local time."""
+
+    if not value:
+        return "暂无记录"
+    try:
+        moment = datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return str(value)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return stamp(moment)
+
+
+# Order-level reason codes and what the Owner can actually do about them.  The
+# wording stays strictly about THIS order: a program-wide fault must never be
+# projected onto one order as "its write failed".
+ORDER_REASON_ACTION = {
+    "SAVE_OUTCOME_UNKNOWN": (
+        "保存后没有收到确认回执，无法判定这笔采购单是否已生成。",
+        "先到 INSO 核对这笔单是否已存在；已存在就不要重发，确实没有再用「重跑采购流程」。"),
+    "CONTROL_NOT_FOUND": (
+        "采购页面上的目标控件没有找到。",
+        "确认 INSO 采购页面已完整展开、没有加载中或弹窗遮挡，再用「重跑采购流程」。"),
+    "CONTROL_AMBIGUOUS": (
+        "采购页面上匹配到多个目标控件，无法安全选择。",
+        "确认只打开一个采购录入页面后重跑；不要手工猜测点哪一个。"),
+    "CONTROL_DENIED": (
+        "采购页面拒绝了对该控件的操作。",
+        "确认当前账号有该采购操作权限后再重跑。"),
+    "SESSION_STALE": (
+        "INSO 登录会话已失效。",
+        "在已授权的 Chrome 里重新登录 INSO（需要验证码时由本人完成），再重跑该单。"),
+    "SESSION_IDENTITY_UNVERIFIED": (
+        "无法确认当前 ERP 会话属于本人。",
+        "重新登录并确认页面显示本人账号后，再重跑该单。"),
+    "INQUIRY_INPUT_INVALID": (
+        "源表该行的输入不完整或不合法，程序拒绝下单。",
+        "核对这一行的型号、数量、客户与品牌列，补齐后重跑。"),
+    "INQUIRY_QUANTITY_INVALID": (
+        "源表该行数量不是有效数字。",
+        "改正数量列后重跑。"),
+    "CUSTOMER_NAME_MISSING": (
+        "源表缺少客户名称。",
+        "补齐客户列后重跑。"),
+    "DUPLICATE_ORDER_DETECTED": (
+        "系统判定这笔与历史订单重复。",
+        "先确认是否同一客户同一型号的重复询价；确认重复则无需处理，不必重跑。"),
+    "DUPLICATE_LOOKUP_AMBIGUOUS": (
+        "历史订单比对出现同时间同型号的多条记录，无法判定是否重复。",
+        "人工确认历史记录后，再决定是否重跑。"),
+    "DUPLICATE_LOOKUP_UNAVAILABLE": (
+        "历史订单比对所需的查询不可用。",
+        "等查询恢复后重跑；期间不要手工重复下单。"),
+    "UPDATE_RESULT_UNCONFIRMED": (
+        "报价更新点击后没有拿到确认结果，写入状态未确认。",
+        "先核对该单在报价表里的实际内容；确认未写入再重报，不要直接重发。"),
+    "QUOTE_INPUT_WRITE_FAILED": (
+        "报价输入表写入失败。",
+        "核对报价输入表对应位置是否可写、是否被占用，再重跑报价。"),
+    "AI_RECOGNITION_MISMATCH": (
+        "ERP 的智能识别结果与源表型号/品牌/数量不一致。",
+        "核对录单页的识别结果，修正后再重跑。"),
+    "RECONCILIATION_AMBIGUOUS": (
+        "保存结果的复核无法判定成功或失败。",
+        "到 ERP 人工核对该单，再决定是否重跑；不要重发。"),
+    "RECONCILIATION_UNREADABLE": (
+        "保存结果的复核记录不可读。",
+        "到 ERP 人工核对该单，并保留现有台账；不要重发。"),
+    "NOTIFICATION_UNKNOWN": (
+        "通知邮件的结果未确认。",
+        "先核对收件人是否已收到；系统不会自动重发同一封。"),
+    "NOTIFICATION_PERMANENT": (
+        "通知邮件被永久拒绝。",
+        "核对收件地址后人工补发；不要依赖自动重试。"),
+    "NOTIFICATION_TRANSIENT": (
+        "通知邮件暂时投递失败，系统会按既定策略重试。",
+        "通常无需处理；若长时间未送达再核对邮件配置。"),
+    "UNKNOWN_EXTERNAL_FAILURE": (
+        "一次外部操作失败且结果未知。",
+        "保留现场并先核对实际结果，再决定是否重跑。"),
+    "PURCHASE_FOLLOW_UP_REQUIRED": (
+        "采购已发出但供应商尚未报价，已到跟进时间。",
+        "联系采购催价；不需要重发采购单。"),
+}
+
+
+def _order_location(order):
+    """Where this order lives, so the Owner can look at it directly."""
+
+    sheet = getattr(order, "source_sheet", None)
+    row = getattr(order, "source_row", None)
+    parts = []
+    if sheet:
+        parts.append(f"{sheet} 第 {row} 行" if row else str(sheet))
+    parts.append("任务 " + order.inquiry_id[-12:])
+    return "、".join(parts)
+
+
+def order_exception_block(order, state, status_text):
+    """One order's exception with a reason-specific next step, never a slogan."""
+
+    lines = [f"{NAMES.get(order.module_id)}｜{order.model}｜{status_text}"]
+    reasons = []
+    if state is not None:
+        reasons = [alert.reason_code.value for alert in state.active_alerts]
+    if not reasons:
+        lines.append("该单停在已记录状态；本单没有记录到带原因的异常，需人工核对表格与台账。")
+    for code in dict.fromkeys(reasons):
+        reason, action = ORDER_REASON_ACTION.get(code, (None, None))
+        if reason is None:
+            lines.append(f"异常代码：{code}（该代码没有已确认的中文说明，原因尚未确认）")
+            lines.append("建议：保留现场并把本页这一条转给技术处理；不要重复提交。")
+        else:
+            lines.append(f"原因：{reason}")
+            lines.append(f"建议：{action}")
+    lines.append("位置：" + _order_location(order))
+    lines.append("本页不会重新发送或提交；程序也不会自动重试未确认的写入。")
+    return "\n".join(lines)
+
+
+def _stage_label(stage):
+    """Name the step that was running when the fault fired."""
+
+    named = STAGE_NAMES.get(stage) or NAMES.get(stage)
+    return f"{named}（{stage}）" if named else stage
+
+
+def fault_block(fault):
+    """One Owner-readable fault: what broke, when, what it stopped, what to do."""
+
+    lines = [
+        ("【已恢复】" if not fault.active else "【故障】") + str(fault.title),
+        "故障代码：" + str(fault.code),
+        "发生时间：" + _when(fault.last_seen)
+        + f"（首次 {_when(fault.first_seen)} · 最近 {_when(fault.last_seen)}"
+        + f" · 共 {fault.occurrences} 次）",
+        ("发生阶段：" + _stage_label(fault.stage)) if getattr(fault, "stage", None) else None,
+        "影响模块：" + (
+            "、".join(fault.related_modules)
+            if fault.related_modules else (fault.site or "自动业务")
+        ) + ("（同一原因引起，非独立故障）" if fault.knock_on else ""),
+        ("业务影响：" + str(fault.impact)) if getattr(fault, "impact", None) else None,
+        "具体原因：" + str(fault.cause),
+        ("未确认部分：" + str(fault.uncertainty)) if fault.uncertainty else None,
+        "恢复过程：" + (
+            f"已于 {_when(fault.recovered_at)} 恢复"
+            if not fault.active else str(fault.escalation or fault.phase)
+        ),
+        ("下一轮预计：" + _when(fault.next_retry_at))
+        if fault.active and getattr(fault, "next_retry_at", None) else None,
+        "外部写入：" + str(fault.external_effect),
+        "建议操作：" + str(fault.action),
+        "诊断位置：" + (str(fault.evidence) or "runtime/logs/INSO_V1.3.log"),
+    ]
+    return "\n".join(line for line in lines if line)
 
 
 def elapsed(module, now=None):
@@ -113,6 +283,30 @@ _REVIEW_STATES = {
     V12BusinessLabel.INTERRUPTED_UNSENT, V12BusinessLabel.SOURCE_CHANGED,
 }
 
+# Outcomes that are answers rather than open questions: the Owner finished the line,
+# or the row was never a real order. Those report their own outcome instead of a
+# staleness hint.
+_SETTLED_LABELS = frozenset({
+    V12BusinessLabel.HUMAN_COMPLETED,
+    V12BusinessLabel.SKIPPED_INVALID_INPUT,
+})
+
+# Labels that must never paint a row as an exception. A placed purchase waits for the
+# supplier, which is a normal business state, not something the Owner has to look at.
+_CALM_LABELS = _SETTLED_LABELS | {V12BusinessLabel.PURCHASE_SENT}
+
+
+def _settled(state) -> bool:
+    return (state is not None and state.business_label in _SETTLED_LABELS
+            and not state.source_link_unproven
+            and not state.active_alerts and state.latest_active_alert is None)
+
+
+def _calm(state) -> bool:
+    return (state is not None and state.business_label in _CALM_LABELS
+            and not state.source_link_unproven
+            and not state.active_alerts and state.latest_active_alert is None)
+
 
 def _source_is_fresh(state, now=None):
     at = state.source_verified_at
@@ -122,7 +316,7 @@ def _source_is_fresh(state, now=None):
 
 
 def _state_needs_review(state):
-    return bool(state.active_alerts or state.latest_active_alert) or state.business_label in (
+    return bool(state.active_alerts or state.latest_active_alert or state.source_link_unproven) or state.business_label in (
         _REVIEW_STATES | _STATUS_ISSUES.keys()
     ) or "待核对" in (state.waiting_label or "") or "待人工核对" in (state.waiting_label or "")
 
@@ -147,10 +341,20 @@ def order_status(order, state=None):
     if order.delivery_status == "SENT":
         return "调研邮件已发送"
     if state is not None:
-        source = state.source_status if _source_is_fresh(state) and isinstance(state.source_status, str) else None
-        label = source.strip() if source and source.strip() else "状态待同步"
+        # The Owner reads this column as "what the sheet says now", so the sheet's own
+        # status wins whenever we have one — a finished order included. Only when no
+        # source status is known at all does the order's own outcome stand in. A row
+        # that can no longer be proven to belong to this order never borrows another
+        # order's status.
+        if state.source_link_unproven:
+            return "来源待核对"
+        sheet_status = (state.source_status.strip()
+                        if isinstance(state.source_status, str) and state.source_status.strip()
+                        else None)
+        if sheet_status is None:
+            return state.business_label.value
         issue = _STATUS_ISSUES.get(state.business_label)
-        return label + (" · " + (issue or "待核对") if _state_needs_review(state) else "")
+        return sheet_status + (" · " + (issue or "待核对") if _state_needs_review(state) else "")
     return (
         order.business_status
         or {
@@ -178,7 +382,17 @@ def select_orders(
     def keep(o):
         state = (states or {}).get(o.inquiry_id)
         if state is not None and o.delivery_status is None:
-            if not _source_is_fresh(state) or _state_needs_review(state) or o.status is OrderStatus.ERROR:
+            if state.source_link_unproven or _state_needs_review(state):
+                category = "需核对"
+            elif _calm(state):
+                # Between cycles a calm order's last source read is often older than
+                # 15 minutes. That is not a review item, and the row is already
+                # painted calm; the filter must agree with the colour.
+                category = ("已完成" if state.source_status == "已报价给客户"
+                            else "待处理" if state.source_status in {
+                                "未发", "发给采购", "采购已报价"}
+                            else "需核对")
+            elif not _source_is_fresh(state) or o.status is OrderStatus.ERROR:
                 category = "需核对"
             elif state.source_status == "已报价给客户":
                 category = "已完成"
@@ -747,12 +961,15 @@ class WorkbenchView:
                 if o.min_reference_price is not None
                 else "暂无价格",
             )
+            settled = _calm(state)
             tag = (
                 "error"
-                if o.status is OrderStatus.ERROR
-                or o.delivery_status in {"UNKNOWN", "PERMANENT_FAILURE"}
-                else "warning" if state is not None and (
+                if not settled and (
+                    o.status is OrderStatus.ERROR
+                    or o.delivery_status in {"UNKNOWN", "PERMANENT_FAILURE"})
+                else "warning" if state is not None and not settled and (
                     not _source_is_fresh(state) or _state_needs_review(state))
+                else "legacy" if settled
                 else "recent"
             )
             if self._row_values.get(o.inquiry_id) != (values, tag):
@@ -1107,10 +1324,16 @@ class WorkbenchView:
             )
         elif self.page == "异常与通知" and changed:
             entries = []
+            # Faults first: the Owner asked for the reason, not a pointer to one.
+            for fault in getattr(snapshot, "faults", ()):
+                entries.append(fault_block(fault))
             for m in snapshot.modules:
-                if m.status in {"需要人工处理", "已暂停"}:
+                if m.status in {"需要人工处理", "已暂停"} and not getattr(snapshot, "faults", ()):
+                    # Without a recorded fault the honest statement is the
+                    # module's own observed wait reason, never a guess.
                     entries.append(
-                        f"{m.name}｜{stamp(m.changed_at)}｜{m.status}\n{m.waiting_reason or '请人工核对'}"
+                        f"{m.name}｜{stamp(m.changed_at)}｜{m.status}\n"
+                        + (m.waiting_reason or "本轮没有记录到可用的故障原因。")
                     )
             for o in snapshot.orders:
                 state = self.states.get(o.inquiry_id)
@@ -1122,24 +1345,10 @@ class WorkbenchView:
                 elif o.status in {OrderStatus.ERROR, OrderStatus.UNKNOWN} or (
                     state and state.active_alerts
                 ):
-                    entries.append(
-                        f"{NAMES.get(o.module_id)}｜{o.model}｜{order_status(o)}\n"
-                        + ("请按已记录状态人工核对；本页不会重新发送或提交。")
-                    )
-                if state:
-                    for alert in state.active_alerts:
-                        entries.append(
-                            f"{NAMES.get(o.module_id)}｜任务 {o.inquiry_id[-12:]}｜需人工核对\n"
-                            f"{stamp(alert.raised_at)} · {alert.alert_type.value} / {alert.reason_code.value}\n"
-                            + (
-                                MAIL_UNKNOWN
-                                if alert.reason_code.value == "NOTIFICATION_UNKNOWN"
-                                else "请核对已记录异常；本页不推断未证实的原因。"
-                            )
-                        )
+                    entries.append(order_exception_block(o, state, order_status(o)))
             text = (
                 "\n\n".join(entries[:200])
-                or "当前已加载记录中没有待展示异常；未加载的数据不作判断。"
+                or "当前没有记录到故障或待处理异常。"
             )
             if text != self._notice_signature:
                 self.write_box(self.notices, text)

@@ -57,6 +57,22 @@ _FONT_SMALL = ("Microsoft YaHei UI", 10)
 _FONT_NUMBER = ("Microsoft YaHei UI", 20, "bold")
 
 
+def _scope_button(blockers) -> dict[str, str] | None:
+    """Disabled Start presentation for a preview or an unscoped launch.
+
+    Pure so the release contract can be asserted without a window: ``None``
+    means Start behaves normally, anything else means it must stay disabled.
+    """
+    if not blockers:
+        return None
+    preview = tuple(blockers) == ("PREVIEW_ONLY",)
+    return {
+        "text": "安全预览（不启动业务）" if preview else "未配置受控试运行范围",
+        "state": "disabled",
+        "fg_color": _GRAY,
+    }
+
+
 def _status_color(status: str) -> str:
     status_l = status.lower()
     if status_l == "全局基础设施故障":
@@ -70,8 +86,14 @@ def _status_color(status: str) -> str:
     return _TEXT_SECONDARY
 
 
-def _order_row_style(
-    order: Order,
+# Business labels that describe a finished order. They are painted as history even
+# when the item row still carries an error-ish workflow status, because the outcome
+# itself is settled: "human handled it" and "skipped as invalid input" are answers,
+# not open questions waiting for the Owner.
+_SETTLED_LABELS = frozenset({"人工处理完成", "已跳过（数据异常）"})
+
+
+def _order_row_style(    order: Order,
     now: datetime | None = None,
     v12_state: V12OrderStateDTO | None = None,
 ) -> str:
@@ -87,13 +109,16 @@ def _order_row_style(
     if v12_state is not None and v12_state.latest_active_alert is not None:
         if v12_state.business_label.value in {"已发采购（待确认）", "采购已处理，表格状态待人工更新"}:
             return "warning"
-        if v12_state.business_label.value == "人工处理完成":
-            return "legacy"
+        # A settled label is calm only when nothing is still open. An active alert
+        # keeps a failed mail or unresolved effect visible instead of history.
         return "error"
+    if v12_state is not None and v12_state.source_link_unproven:
+        # The status column says 来源待核对; the row must not look calm/history.
+        return "warning"
     if v12_state is not None:
         if v12_state.business_label.value in {"已发采购（待确认）", "采购已处理，表格状态待人工更新"}:
             return "warning"
-        if v12_state.business_label.value == "人工处理完成":
+        if v12_state.business_label.value in _SETTLED_LABELS:
             return "legacy"
         if v12_state.business_label.value in {"处理中断（未发送）", "处理中断（可能已发送，请先核对）", "源订单已变更", "重复订单"}:
             return "error"
@@ -369,6 +394,11 @@ class InsoDashboardApp:
     def _on_order_mail(self) -> None:
         if self._closing:
             return
+        if getattr(self._backend, "effect_actions_blocked", lambda: False)():
+            # RFQ-021 P0-C: the backend refuses anyway; say why instead of
+            # leaving the operator with a button that silently does nothing.
+            messagebox.showinfo("自动订单录单", "安全预览或受控试运行模式下不执行订单录单。")
+            return
         if self._backend.start_order_mail_check():
             self._shown_order_mail_report = None
             self._order_mail_button.configure(text="正在检查并填写订单…", state="disabled")
@@ -377,9 +407,10 @@ class InsoDashboardApp:
 
     def _sync_order_mail(self) -> None:
         running = self._backend.order_mail_running()
+        blocked = getattr(self._backend, "effect_actions_blocked", lambda: False)()
         self._order_mail_button.configure(
             text="正在检查并填写订单…" if running else "自动订单录单",
-            state="disabled" if running else "normal",
+            state="disabled" if (running or blocked) else "normal",
         )
         report = self._backend.get_order_mail_report()
         if report is None or report == self._shown_order_mail_report:
@@ -395,6 +426,9 @@ class InsoDashboardApp:
 
     def _on_login_all(self) -> None:
         if self._login_all_running:
+            return
+        if getattr(self._backend, "effect_actions_blocked", lambda: False)():
+            messagebox.showinfo("一键登录", "安全预览或受控试运行模式下不执行一键登录。")
             return
         if self._status.state in {RunState.RUNNING, RunState.QUOTATION_RUNNING, RunState.STOPPING_AFTER_CYCLE}:
             messagebox.showwarning(
@@ -417,7 +451,8 @@ class InsoDashboardApp:
             self._show_login_all_report(report)
         running = bool(self._backend.login_all_running())
         self._login_all_running = running
-        busy = running or self._status.state in {
+        blocked = getattr(self._backend, "effect_actions_blocked", lambda: False)()
+        busy = running or blocked or self._status.state in {
             RunState.RUNNING,
             RunState.QUOTATION_RUNNING,
             RunState.STOPPING_AFTER_CYCLE,
@@ -465,6 +500,12 @@ class InsoDashboardApp:
         self._assert_main_thread()
         self._status = status
         if hasattr(self, "_view"):
+            scope_button = _scope_button(getattr(self._backend, "scope_blockers", lambda: ())())
+            if scope_button is not None:
+                # RFQ-021: a preview or an unscoped release build must never
+                # present a clickable Start that would silently do nothing.
+                self._view.configure(self._action_button, **scope_button)
+                return
             running = status.state in {RunState.RUNNING, RunState.QUOTATION_RUNNING}
             stopping = status.state is RunState.STOPPING_AFTER_CYCLE
             self._view.configure(self._action_button,
@@ -532,7 +573,8 @@ class InsoDashboardApp:
             return
         self._tree.selection_set(inquiry)
         menu = Menu(self._tree, tearoff=False)
-        for label, action in (("重跑采购流程", "purchase"), ("重跑报价流程", "quotation"),
+        for label, action in (("按表格恢复状态", "resync"),
+                              ("重跑采购流程", "purchase"), ("重跑报价流程", "quotation"),
                               ("重跑 TP 价格", "tp")):
             enabled = (self._backend.order_action_hint(inquiry, action) if hasattr(self, "_view")
                        else self._backend.can_order_action(inquiry, action))

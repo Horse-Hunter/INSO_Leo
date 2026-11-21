@@ -5,7 +5,12 @@ import json
 from pathlib import Path
 
 from src.core import get_login
-from src.research.cdp_pages import new_background_page, page_owner
+from src.research.cdp_pages import (
+    PageResourceAdmission,
+    bind_page_admission,
+    new_background_page,
+    page_owner,
+)
 from src.research.runtime import load_runtime_config
 
 from .browser_bootstrap import acquire_cdp_browser
@@ -95,8 +100,13 @@ def prepare_sales_rows(order, client):
     return tuple(rows)
 
 
-def run_sales_header_check(*, config_path, production_path, root, notify=None, resolve_notify=None):
-    """One explicit click -> oldest unfilled mail -> new owned unsaved order."""
+def run_sales_header_check(*, config_path, production_path, root, notify=None, resolve_notify=None,
+                           page_admission=None):
+    """One explicit click -> oldest unfilled mail -> new owned unsaved order.
+
+    The shared page admission is mandatory: without a proven-open, same-root
+    admission this entry point must not acquire a browser or create a page.
+    """
     from datetime import UTC, datetime
     from uuid import uuid4
     from zoneinfo import ZoneInfo
@@ -120,12 +130,20 @@ def run_sales_header_check(*, config_path, production_path, root, notify=None, r
     from src.research.credentials import CoreResearchCredentials
     from src.research.icnet import CdpIcNetClient
 
+    if not isinstance(page_admission, PageResourceAdmission):
+        return "STOPPED", "页面安全准入未就绪；未创建页面、未读取邮件、未执行录单。"
+    try:
+        page_admission.require_open()
+    except Exception:  # noqa: BLE001 - fail closed before any browser/mail access
+        return "STOPPED", "页面安全准入已失效；未创建页面、未读取邮件、未执行录单。"
+
     invocation = uuid4().hex
     handle, order, page = None, None, None
     owner = "v14-sales-" + invocation[:24]
     try:
         config, production = sales_config(config_path, production_path)
         handle = acquire_cdp_browser(config.cdp.cdp_url, root, production)
+        bind_page_admission(handle.browser, page_admission)
         if handle.owned or len(handle.browser.contexts) != 1:
             raise OrderError("INSO")
         page = new_background_page(handle.browser, handle.browser.contexts[0], timeout_ms=10000, owner=owner)
@@ -146,7 +164,8 @@ def run_sales_header_check(*, config_path, production_path, root, notify=None, r
             raise OrderError("PDF", pi_no=order.pi_no) from None
         client = CdpIcNetClient(cdp_url=config.cdp.cdp_url, timeout_ms=config.browser.timeout_ms,
             login_provider=CoreResearchCredentials().icnet, tab_owner="v14-icnet",
-            playwright_factory=shared_playwright_factory(lambda: (handle.playwright, handle.browser)))
+            playwright_factory=shared_playwright_factory(
+                lambda: (handle.playwright, handle.browser), admission=page_admission))
         expected = prepare_sales_rows(order, client)
         handle, page, _reused = acquire_sales_tab(config_path=config_path,
             production_path=production_path, root=root, handle=handle, owner=owner, reuse=False, page=page)

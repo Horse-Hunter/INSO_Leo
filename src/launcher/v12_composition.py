@@ -302,7 +302,7 @@ class CoordinatorPurchaseDraftWriter:
     def prepare(self, command: PurchaseDraftCommand) -> PurchaseDraftResult:
         steps = (
             ("prepare-new-draft", self._actions.new_draft, ()),
-            ("prepare-customer", self._actions.set_customer, ("Win Source Elec. Tech. Ltd",)),
+            ("prepare-customer", self._actions.set_customer, ("深圳阿尔克贸易有限公司",)),
             ("prepare-quote-type", self._actions.set_quotation_type, (command.quotation_type,)),
             ("prepare-purchaser", self._actions.set_purchaser, (command.purchaser,)),
             ("prepare-ai-open", self._actions.open_ai_entry, ()),

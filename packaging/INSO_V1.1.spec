@@ -43,6 +43,10 @@ hiddenimports += collect_submodules(
     filter=lambda name: not name.startswith("websocket.tests")
     and name != "websocket._wsdump",
 )
+# httplib2 imports PySocks lazily, only when a proxy is configured. On the
+# Owner's network the Sheets API is reachable only through the system proxy, so
+# a build without it makes every API read time out (measured 2026-11-19).
+hiddenimports += ["socks"]
 
 a = Analysis(
     [str(repo_root / "scripts" / "windows_release_entry.py")],

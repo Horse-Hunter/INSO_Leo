@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 import re
+import sys
 import threading
 from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Self
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 _LOG = logging.getLogger(__name__)
@@ -16,6 +18,38 @@ _LOG = logging.getLogger(__name__)
 
 _OWNER_PREFIX = "INSO_OWNER_TAB:"
 NATIVE_PROTOCOL_TIMEOUT_MS = 10000
+
+# Re-proving a page's identity is a read-only protocol query.  When the query it-
+# self does not answer (deadline, torn session, closed target) nothing about the
+# page has been proven, so it is retried a bounded number of times before the
+# resource is declared unowned.  A *mismatched* target id is never retried.
+NATIVE_OWNER_PROOF_ATTEMPTS = 3
+
+
+def ownership_failure_marker(error) -> str:
+    """A stable, secret-free label for the GUI and the log.
+
+    Only a class name and one of our own ``[A-Z_]`` marker codes are read; an
+    exception message can carry site text and is never copied.
+    """
+
+    name = type(error).__name__
+    marker = str(error).strip()
+    if marker and re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", marker):
+        return f"{name}({marker})"
+    return name
+
+
+def _transient_ownership_proof_failure(error) -> bool:
+    """Did the proof *not answer*, as opposed to answering "not yours"?"""
+
+    name = type(error).__name__
+    if isinstance(error, (TimeoutError, ConnectionError, OSError)):
+        return True
+    return (type(error).__module__ or "").startswith("playwright") and name in {
+        "Error", "TimeoutError", "TargetClosedError", "BrowserClosedError",
+        "WebSocketError", "ConnectionClosedError",
+    }
 
 
 def bounded_browser_call(port, operation, *args, timeout_ms=None, **kwargs):
@@ -49,6 +83,70 @@ class ReadOnlyPageClosed(RuntimeError):
     """Only the scoped read may retry; never an uncertain write or global reset."""
 
 
+class DocumentWriteHeld(RuntimeError):
+    """A shared Google document has an unresolved/protected write.
+
+    This is an admission-layer fact, not a business outcome. Callers translate
+    it to their existing busy/fail-closed surface; they must never treat it as
+    "nothing was written" or retry the original effect.
+    """
+
+    def __init__(self, reason: str, document) -> None:
+        super().__init__(str(reason))
+        self.reason = str(reason)
+        self.document = tuple(document)
+        self.failure_classes: tuple[str, ...] = ()
+
+
+class DocumentWriteBusy(RuntimeError):
+    """Another owner currently holds the atomic in-flight write lease.
+
+    Busy is not an unknown outcome; the caller may defer/retry according to its
+    existing policy. It is never converted into a durable UNKNOWN hold.
+    """
+
+    def __init__(self, document) -> None:
+        super().__init__("GOOGLE_DOCUMENT_WRITE_BUSY")
+        self.reason = "GOOGLE_DOCUMENT_WRITE_BUSY"
+        self.document = tuple(document)
+        self.failure_classes: tuple[str, ...] = ()
+
+
+class DocumentWriteBlocked(DocumentWriteHeld):
+    """A write that the approved run scope, or the durable ledger, forbids.
+
+    Deliberately a ``DocumentWriteHeld``: every existing caller already treats a
+    hold as "do not dispatch, do not retry", which is exactly right here. The
+    reason distinguishes a policy refusal from a business uncertainty.
+    """
+
+    def __init__(self, reason: str, document) -> None:
+        super().__init__(reason or "EXTERNAL_WRITE_NOT_IN_SCOPE", document)
+
+
+def google_document_key(url: str) -> tuple[str, str, str]:
+    """Exact Google document identity shared by quote/browser/API writers."""
+    if not isinstance(url, str):
+        raise TypeError("GOOGLE_DOCUMENT_UNCONFIRMED")
+    parsed = urlsplit(url)
+    if (parsed.scheme != "https" or parsed.hostname != "docs.google.com"
+            or not parsed.path.startswith("/spreadsheets/")):
+        raise ValueError("GOOGLE_DOCUMENT_UNCONFIRMED")
+    return (parsed.scheme, parsed.hostname, parsed.path)
+
+
+def google_document_key_for_spreadsheet(spreadsheet_id: str) -> tuple[str, str, str]:
+    """Canonical key for an ID passed to the Sheets API transport."""
+    if not isinstance(spreadsheet_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", spreadsheet_id):
+        raise ValueError("GOOGLE_SPREADSHEET_UNCONFIRMED")
+    return ("https", "docs.google.com", f"/spreadsheets/d/{spreadsheet_id}/edit")
+
+
+def _intent_document_key(document) -> str:
+    """Stable text key for the durable journal; never contains field values."""
+    return "|".join(str(part) for part in document)
+
+
 class PageResourceAdmission:
     """One injected, fail-closed admission shared by attached clients.
 
@@ -56,10 +154,74 @@ class PageResourceAdmission:
     cannot clear uncertainty. Reconciliation requires a new reviewed lifecycle.
     """
 
-    def __init__(self, *, parent=None):
+    def __init__(self, *, parent=None, write_policy=None):
         self._parent = parent
         self._lock = threading.Lock()
         self._failure = None
+        # Document key -> {owner token: sanitized reason}. The root admission
+        # owns every hold so sibling/child services cannot bypass it.
+        self._document_holds = {}
+        # Document key -> {owner token: reentrant in-flight write count}.
+        self._document_writers = {}
+        # Root-only: approved-scope gate for every Google write (RFQ-021 B5).
+        self._write_policy = write_policy
+        # Root-only: durable write-intent journal (RFQ-021 B6). Optional so the
+        # in-memory admission keeps working where no database exists.
+        self._write_journal = None
+        # Document key + owner -> intent id, so a hold can open the intent.
+        self._write_intents = {}
+
+    def attach_write_journal(self, journal):
+        """Attach the durable ledger on the root admission, before any write."""
+        root = self._document_root()
+        with root._lock:
+            root._write_journal = journal
+
+    def _journal(self):
+        root = self._document_root()
+        return root._write_journal
+
+    def _require_write_allowed(self, key):
+        """Refuse before any dispatch when the approved scope forbids writes."""
+        root = self._document_root()
+        policy = root._write_policy
+        if policy is None or policy.allows("google"):
+            return
+        raise DocumentWriteBlocked(policy.denial_reason("google"), key)
+
+    def _begin_write_intent(self, key, kind):
+        """Persist the intent before the caller can dispatch anything."""
+        journal = self._journal()
+        if journal is None:
+            return None
+        try:
+            reason = journal.open_reason(_intent_document_key(key))
+            if reason:
+                raise DocumentWriteHeld(reason, key)
+            return journal.begin(_intent_document_key(key), kind)
+        except DocumentWriteHeld:
+            raise
+        except Exception:  # noqa: BLE001 - an unreadable ledger must block writes
+            raise DocumentWriteHeld("WRITE_LEDGER_UNAVAILABLE", key) from None
+
+    def _end_write_intent(self, key, intent_id, *, held_reason=None):
+        """Settle or keep the intent open.
+
+        A settlement failure is deliberately *not* raised: the row simply stays
+        PENDING/UNKNOWN, which is exactly the fail-closed state a later process
+        must see. Raising here would also mask whatever the caller was already
+        handling when the lease ended.
+        """
+        journal = self._journal()
+        if journal is None or intent_id is None:
+            return
+        try:
+            if held_reason:
+                journal.mark_unknown(intent_id, held_reason)
+            else:
+                journal.settle(intent_id)
+        except Exception:  # noqa: BLE001 - an unsettled row keeps blocking writes
+            return
 
     def invalidate(self, error):
         with self._lock:
@@ -93,17 +255,145 @@ class PageResourceAdmission:
             error.reason, error.failure_classes = reason, classes
             raise error
 
+    def _document_root(self):
+        node = self
+        seen = set()
+        while node._parent is not None:
+            if id(node) in seen:
+                raise RuntimeError("PAGE_ADMISSION_CYCLE")
+            seen.add(id(node))
+            node = node._parent
+        return node
+
+    def hold_document(self, document, owner, reason="GOOGLE_WRITE_UNCONFIRMED", *, page=None):
+        """Record one fail-closed owner on the shared root for this document.
+
+        ``page`` is optional: when supplied, the hold is dropped once that exact
+        page is provably closed. It never treats a closed page as a confirmed
+        write; it only ends page-level uncertainty. Durable business holds remain
+        independent.
+        """
+        key = tuple(document)
+        root = self._document_root()
+        with root._lock:
+            holds = root._document_holds.setdefault(key, {})
+            holds.setdefault(owner, (str(reason), page))
+            # The durable intent must say UNKNOWN even if this process dies
+            # between publishing the hold and releasing the lease. Pop it so a
+            # later lease release cannot settle what just became uncertain.
+            intent_id = root._write_intents.pop((key, owner), None)
+        if intent_id is not None:
+            self._end_write_intent(key, intent_id, held_reason=str(reason))
+
+    def release_document(self, document, owner):
+        """Release only this owner's hold; never clear another uncertainty."""
+        key = tuple(document)
+        root = self._document_root()
+        with root._lock:
+            holds = root._document_holds.get(key)
+            if holds is None:
+                return
+            holds.pop(owner, None)
+            if not holds:
+                root._document_holds.pop(key, None)
+
+    def begin_document_write(self, document, owner, *, kind="GOOGLE_WRITE"):
+        """Atomically claim the one in-flight write lease for this document.
+
+        Same-owner reentry is allowed. A competing owner gets
+        ``DocumentWriteBusy`` before any page/API dispatch. An unresolved hold
+        is still a hard ``DocumentWriteHeld``. The claim is released only by
+        ``end_document_write``; it is never a durable UNKNOWN by itself.
+
+        With a journal attached, the intent row is committed here -- before the
+        caller can dispatch -- and a document left open by an earlier process
+        refuses this write instead of quietly retrying over it.
+        """
+        key = tuple(document)
+        self._require_write_allowed(key)
+        root = self._document_root()
+        with root._lock:
+            holds = root._document_holds.get(key)
+            if holds:
+                raise DocumentWriteHeld(next(iter(holds.values()))[0], key)
+            writers = root._document_writers.setdefault(key, {})
+            if owner in writers:
+                writers[owner] += 1
+                return
+            if writers:
+                raise DocumentWriteBusy(key)
+            intent_id = self._begin_write_intent(key, kind)
+            writers[owner] = 1
+            if intent_id is not None:
+                root._write_intents[(key, owner)] = intent_id
+
+    def end_document_write(self, document, owner):
+        """Release this owner's in-flight write lease (idempotent)."""
+        key = tuple(document)
+        root = self._document_root()
+        held_reason = None
+        with root._lock:
+            writers = root._document_writers.get(key)
+            if not writers or owner not in writers:
+                return
+            writers[owner] -= 1
+            settled = writers[owner] <= 0
+            if settled:
+                writers.pop(owner, None)
+            if not writers:
+                root._document_writers.pop(key, None)
+            intent_id = root._write_intents.pop((key, owner), None) if settled else None
+            holds = root._document_holds.get(key)
+            if holds:
+                held_reason = next(iter(holds.values()))[0]
+        if intent_id is not None:
+            # A document that still carries a hold must keep its intent open;
+            # that is the only thing a restarted process can see.
+            self._end_write_intent(key, intent_id, held_reason=held_reason)
+
+    def document_hold(self, document):
+        """Return the sanitized reason when this document has any active hold."""
+        key = tuple(document)
+        node = self
+        seen = set()
+        while node is not None:
+            if id(node) in seen:
+                raise RuntimeError("PAGE_ADMISSION_CYCLE")
+            seen.add(id(node))
+            with node._lock:
+                holds = node._document_holds.get(key)
+                if holds:
+                    # Page closure is NOT evidence that an uncertain write
+                    # settled. Only release_document(owner) may clear this.
+                    return next(iter(holds.values()))[0]
+            node = node._parent
+        # A write left in flight by an earlier process is only visible here.
+        journal = self._document_root()._write_journal
+        if journal is None:
+            return None
+        try:
+            return journal.open_reason(_intent_document_key(key))
+        except Exception:  # noqa: BLE001 - an unreadable ledger must block writes
+            return "WRITE_LEDGER_UNAVAILABLE"
+
+    def require_document_writable(self, document):
+        """Fail closed before any page creation or cell write on this document."""
+        reason = self.document_hold(document)
+        if reason is not None:
+            raise DocumentWriteHeld(reason, document)
+
 
 def bind_page_admission(browser, admission):
     """All clients of one runtime must bind the same admission before use."""
     old = getattr(browser, "_inso_page_admission", None)
     if old is not None and old is not admission:
-        error = PageTargetOwnershipError((ValueError("CDP_ADMISSION_REBIND_REFUSED"),))
+        marker = ValueError("CDP_ADMISSION_REBIND_REFUSED")
+        error = PageTargetOwnershipError((marker,))
         admission.invalidate(error)
         if isinstance(old, PageResourceAdmission):
             old.invalidate(error)
         browser._inso_page_resource_failed = True
-        raise error
+        raise error from marker
     browser._inso_page_admission = admission
     if getattr(browser, "_inso_page_resource_failed", False) is True:
         admission.invalidate(PageTargetCleanupError(()))
@@ -122,27 +412,65 @@ def _native_page_owner(page, lease):
     admission = getattr(browser, "_inso_page_admission", None)
     if isinstance(admission, PageResourceAdmission):
         admission.require_open()
-    session = None
-    try:
-        session = bounded_browser_call(context, "new_cdp_session", page)
-        actual = bounded_browser_call(session, "send", "Target.getTargetInfo")["targetInfo"]["targetId"]
-        if actual != target_id:
-            raise ValueError("TAB_TARGET_ID_MISMATCH")
-    except Exception as failure:
+    failure = None
+    for _attempt in range(NATIVE_OWNER_PROOF_ATTEMPTS):
+        if page.is_closed():
+            return None  # A target that is gone owns nothing; the caller makes a new one.
+        session = None
+        detach_failure = None
+        try:
+            session = bounded_browser_call(context, "new_cdp_session", page)
+            actual = bounded_browser_call(session, "send", "Target.getTargetInfo")["targetInfo"]["targetId"]
+            if actual != target_id:
+                # A different target answers for this wrapper: never adopt it and
+                # never retry -- that is a real identity conflict, not a hiccup.
+                marker = ValueError("TAB_TARGET_ID_MISMATCH")
+                error = PageTargetOwnershipError((marker,))
+                _invalidate_page_resource(browser, error)
+                # Keep our own marker in the chain so the Owner-facing fault can
+                # say *why* ownership was refused; the message is our code only.
+                raise error from marker
+            failure = None
+        except PageTargetOwnershipError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - every unanswered proof is classified below
+            failure = exc
+        finally:
+            if session is not None:
+                try:
+                    bounded_browser_call(session, "detach")
+                except Exception as exc:  # noqa: BLE001 - an undetached session is a leak
+                    detach_failure = exc
+        if detach_failure is not None:
+            error = PageTargetCleanupError((detach_failure,))
+            _invalidate_page_resource(browser, error)
+            raise error from detach_failure
+        if failure is None:
+            break
+        if not _transient_ownership_proof_failure(failure):
+            break
+        _LOG.warning("Native page ownership proof unanswered (%s); re-proving",
+                     ownership_failure_marker(failure))
+    if failure is not None:
         error = PageTargetOwnershipError((failure,))
         _invalidate_page_resource(browser, error)
+        _LOG.warning("Native page ownership unproven: %s", ownership_failure_marker(failure))
         raise error from failure
-    finally:
-        if session is not None:
-            try:
-                bounded_browser_call(session, "detach")
-            except Exception as failure:
-                error = PageTargetCleanupError((failure,))
-                _invalidate_page_resource(browser, error)
-                raise error from failure
     if isinstance(admission, PageResourceAdmission):
         admission.require_open()
     return owner
+
+
+def page_is_owned(page: Any) -> bool:
+    """True only for a target this client created and still holds a lease on.
+
+    Scanning ``context.pages`` also enumerates the Owner's own tabs and pages of
+    other modules. Those can never pass a native proof, so a scan must ask this
+    first instead of treating them as an ownership *conflict* (measured
+    2026-11-20: a foreign page in the shared Chrome stopped all business).
+    """
+
+    return getattr(page, "_inso_native_page_owner", None) is not None
 
 
 def native_page_owner(page: Any) -> str | None:
@@ -155,7 +483,14 @@ def native_page_owner(page: Any) -> str | None:
         return None
     lease = getattr(page, "_inso_native_page_owner", None)
     if lease is None:
-        raise PageTargetOwnershipError((ValueError("NATIVE_PAGE_LEASE_MISSING"),))
+        marker = ValueError("NATIVE_PAGE_LEASE_MISSING")
+        # Our own call-site vocabulary only (never page text), so the next
+        # occurrence is locatable from the log instead of guessed.
+        caller = sys._getframe(1).f_code.co_name.replace("_", "-").strip("-").lower()[:20]
+        logging.getLogger("inso.diagnostics").warning(
+            "native lease missing", extra={"inso_step": "lease-missing-" + caller,
+                                           "inso_cause": "ValueError"})
+        raise PageTargetOwnershipError((marker,)) from marker
     return _native_page_owner(page, lease)
 
 

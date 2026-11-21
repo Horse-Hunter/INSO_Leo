@@ -592,6 +592,7 @@ def is_isolated_source_read_error(error):
 
     from src.sheets.google_reader import (
         TEMPORARY_READ_NETWORK_CODES,
+        TRANSIENT_TLS_READ_ERRORS,
         GoogleDownloadReadTimeout,
         GoogleReadArtifactLost,
         GoogleSheetsReadError,
@@ -638,8 +639,10 @@ def is_isolated_source_read_error(error):
                 codes = re.findall(r"net::(ERR_[A-Z_]+)", str(cause))
                 if not codes or any(code not in TEMPORARY_READ_NETWORK_CODES for code in codes):
                     return False
+        elif isinstance(cause, TRANSIENT_TLS_READ_ERRORS):
+            pass  # TLS teardown mid-read: the encrypted form of a dropped socket.
         elif not isinstance(cause, (GoogleSheetsReadError, TimeoutError, ConnectionError)):
-            return False  # DB, authentication, ownership, TLS and unknown faults stay closed.
+            return False  # DB, authentication, ownership and unknown faults stay closed.
         earlier, previous, cause = previous, cause, cause.__cause__ or cause.__context__
     return allowed and cause is None
 

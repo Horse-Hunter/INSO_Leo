@@ -270,7 +270,7 @@ class _FakeFormPage:
 
     url = "https://yingsuo.alperp.cn/"
     options = ("需要问全价格", "普通询价")
-    company_rows = ("RS TRADING", "Win Source Elec. Tech. Ltd")
+    company_rows = ("RS TRADING", "深圳阿尔克贸易有限公司")
     purchaser_rows = ("陈熙", "颜浩坚")
     # The ids the live controlled menu renders (read-only live read, 2026-09-30).
     purchaser_ids: ClassVar[dict[str, str]] = {"陈熙": "7432", "颜浩坚": "16665"}
@@ -1130,9 +1130,9 @@ def test_customer_is_picked_from_the_site_menu_so_the_next_step_is_reachable() -
     form_page = _FakeFormPage()
     writer = _writer(form_page)
 
-    writer.set_customer("Win Source Elec. Tech. Ltd")
+    writer.set_customer("深圳阿尔克贸易有限公司")
 
-    assert form_page.customer == "Win Source Elec. Tech. Ltd"
+    assert form_page.customer == "深圳阿尔克贸易有限公司"
     assert form_page.open_menu is None
     writer.set_quotation_type("需要问全价格")
     assert form_page.importance == "需要问全价格"
@@ -1320,7 +1320,7 @@ def test_ai_entry_refuses_a_frame_on_another_origin() -> None:
 @pytest.mark.parametrize(
     "rows",
     [
-        ("Win Source Elec. Tech. Ltd", "Win Source Elec. Tech. Ltd"),
+        ("深圳阿尔克贸易有限公司", "深圳阿尔克贸易有限公司"),
         ("RS TRADING", "Systrome Technologies Private Ltd"),
     ],
 )
@@ -1332,8 +1332,128 @@ def test_customer_option_must_be_present_exactly_once(
     form_page = _FakeFormPage()
     form_page.company_rows = rows
     with pytest.raises(SecurityViolation):
-        _writer(form_page).set_customer("Win Source Elec. Tech. Ltd")
+        _writer(form_page).set_customer("深圳阿尔克贸易有限公司")
     assert form_page.open_menu == "input#CompanyName"
+
+
+def test_customer_menu_that_never_opens_reports_its_own_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Live 2026-11-14: two drafts reported SELECT_OPTION_UNAVAILABLE and nothing
+    # said whether the popup opened at all. The two cases carry distinct codes.
+    monkeypatch.setattr(purchase_writer_module, "_MENU_WAIT_SECONDS", 0.05)
+
+    class _NeverOpenMenu:
+        def count(self) -> int:
+            return 0
+
+    class _Scope:
+        def locator(self, _selector: str) -> _NeverOpenMenu:
+            return _NeverOpenMenu()
+
+    class _Page:
+        url = "https://yingsuo.alperp.cn/"
+
+        def frame_locator(self, _selector: str) -> _Scope:
+            return _Scope()
+
+        def wait_for_timeout(self, _milliseconds: int) -> None:
+            return None
+
+    class _Field:
+        def __init__(self) -> None:
+            self.clicks = 0
+
+        def fill(self, _value: str) -> None:
+            return None
+
+        def click(self) -> None:
+            self.clicks += 1
+
+    port = SimpleNamespace(_form_page=SimpleNamespace(page=_Page()))
+    field = _Field()
+
+    with pytest.raises(SecurityViolation, match="select menu did not open"):
+        _PlaywrightActionPort._pick_menu_option(port, field, "深圳阿尔克贸易有限公司")
+    assert field.clicks >= 1
+
+
+class _Cell:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    def inner_text(self) -> str:
+        return self.text
+
+
+class _Cells:
+    def __init__(self, texts: tuple[str, ...]) -> None:
+        self.texts = texts
+
+    def count(self) -> int:
+        return len(self.texts)
+
+    def nth(self, index: int) -> _Cell:
+        return _Cell(self.texts[index])
+
+
+class _MenuRow:
+    def __init__(self, texts: tuple[str, ...]) -> None:
+        self.texts = texts
+
+    def locator(self, selector: str) -> _Cells:
+        assert selector == "td"
+        return _Cells(self.texts)
+
+    def inner_text(self) -> str:
+        return " ".join(self.texts)
+
+
+class _Menu:
+    def __init__(self, rows: list[_MenuRow]) -> None:
+        self.rows = rows
+
+    def locator(self, selector: str) -> _MenuRows:
+        return _MenuRows(self.rows if selector == "tr" else [])
+
+
+class _MenuRows:
+    def __init__(self, rows: list[_MenuRow]) -> None:
+        self.rows = rows
+
+    def count(self) -> int:
+        return len(self.rows)
+
+    def nth(self, index: int) -> _MenuRow:
+        return self.rows[index]
+
+
+# Live layout read-only on 2026-11-14: the ERP renders two separate customer
+# records with the identical name/phone/contact/owner; only the record id cell
+# differs (4525995 and 4526000). The Owner chose the first row, which is the
+# 4526000 record, so the pick is bound to that id instead of to menu order.
+_DUPLICATE_CUSTOMER_ROWS = (
+    ("深圳阿尔克贸易有限公司", "+86 18029977831", "Majic", "彭星烁", "4525995"),
+    ("深圳阿尔克贸易有限公司", "+86 18029977831", "Majic", "彭星烁", "4526000"),
+)
+
+
+def test_customer_pick_uses_the_owner_marker_not_the_menu_order() -> None:
+    rows = [_MenuRow(texts) for texts in _DUPLICATE_CUSTOMER_ROWS]
+
+    option = _PlaywrightActionPort._unique_menu_option(
+        None, _Menu(rows), "深圳阿尔克贸易有限公司", "4526000"
+    )
+
+    assert option is rows[1]
+
+
+def test_customer_pick_without_a_matching_marker_stays_closed() -> None:
+    rows = [_MenuRow(texts) for texts in _DUPLICATE_CUSTOMER_ROWS]
+
+    assert _PlaywrightActionPort._unique_menu_option(
+        None, _Menu(rows), "深圳阿尔克贸易有限公司", "9999999"
+    ) is None
 
 
 def test_purchaser_pick_confirms_the_echoed_identifier() -> None:

@@ -49,6 +49,7 @@ _SECURITY_DETAILS = {
     "parent form frame is not unique": "PARENT_FRAME_NOT_UNIQUE",
     "parent product field is not uniquely actionable": "PARENT_FIELD_UNAVAILABLE",
     "select menu option is missing or ambiguous": "SELECT_OPTION_UNAVAILABLE",
+    "select menu did not open": "SELECT_MENU_NOT_OPENED",
     "select menu did not close": "SELECT_MENU_NOT_CLOSED",
     "field read-back did not match input": "FIELD_READBACK_MISMATCH",
     "purchaser selection was not confirmed": "PURCHASER_NOT_CONFIRMED",

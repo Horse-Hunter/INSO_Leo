@@ -22,7 +22,8 @@ from src.launcher.diagnostics import (
     LOGIN_FAILURE_REASONS,
     SECURITY_DETAIL_CODES,
 )
-from src.launcher.single_instance import SingleInstanceGuard
+from src.launcher.run_scope import ScopeError, parse_run_scope
+from src.launcher.single_instance import PREVIEW_MUTEX_NAME, SingleInstanceGuard
 
 from .app import InsoDashboardApp
 from .mock_backend import MockBackend
@@ -75,7 +76,17 @@ def _sanitized_line(record: logging.LogRecord) -> str:
     runtime_cause = getattr(record, "runtime_cause", None)
     if (isinstance(runtime_reason, str) and re.fullmatch(r"[A-Z_]{1,64}", runtime_reason)
             and isinstance(runtime_cause, str) and _CAUSE_NAME.fullmatch(runtime_cause)):
-        return f"runtime fault reason={runtime_reason} cause={runtime_cause}"
+        runtime_stage = getattr(record, "runtime_stage", None)
+        runtime_chain = getattr(record, "runtime_chain", None)
+        # Both are our own vocabulary: a step label and a chain of class names.
+        stage_suffix = (f" stage={runtime_stage}"
+                        if isinstance(runtime_stage, str) and _STEP_LABEL.fullmatch(runtime_stage)
+                        else "")
+        chain_suffix = (f" chain={runtime_chain}"
+                        if isinstance(runtime_chain, str)
+                        and re.fullmatch(r"[A-Za-z_]{1,64}(?:<-[A-Za-z_]{1,64}){0,4}", runtime_chain)
+                        else "")
+        return f"runtime fault reason={runtime_reason} cause={runtime_cause}{stage_suffix}{chain_suffix}"
 
     cycle = getattr(record,"cycle_id",None)
     scheduled = getattr(record, "scheduled_module", None)
@@ -180,8 +191,61 @@ def main(*, guard_factory=None, backend_factory=None, diagnostics=None) -> int:
         parser.add_argument(
             "--start-inquiry", action="store_true", help="start the existing inquiry workflow after GUI initialization"
         )
+        parser.add_argument(
+            "--safe-preview", action="store_true",
+            help="render the dashboard only: no process service, mail, CDP or Start",
+        )
+        parser.add_argument(
+            "--scoped-start", action="store_true",
+            help="enable business Start inside the explicit controlled scope",
+        )
+        parser.add_argument("--scope-inquiries", default="", help="comma separated inquiry ids")
+        parser.add_argument(
+            "--scope-modules", default="inquiry",
+            help="comma separated subset of inquiry,quotation,tp,notification",
+        )
+        parser.add_argument(
+            "--scope-writes", default="",
+            help="comma separated subset of google,inso,smtp; empty denies every write",
+        )
+        parser.add_argument(
+            "--scope-approval", default="",
+            help="Owner approval reference, required as soon as a write target is named",
+        )
         args = parser.parse_args()
-        guard = (guard_factory or SingleInstanceGuard)()
+
+        # Owner order 2026-11-16: a plain launch is the FULL production program
+        # again -- Start enabled, process services allowed, every module and
+        # write target available exactly as configured.  The read-only mode is
+        # kept behind an explicit --safe-preview, and --scoped-start still
+        # narrows a run to named orders when the operator wants that.
+        preview = bool(args.safe_preview) and not args.mock
+        enforce_scope = bool(args.scoped_start) and not args.mock
+        scope = None
+        if enforce_scope:
+            try:
+                scope = parse_run_scope(
+                    inquiry_ids=args.scope_inquiries,
+                    modules=args.scope_modules,
+                    write_targets=args.scope_writes,
+                    approval=args.scope_approval,
+                )
+            except ScopeError as exc:
+                logging.getLogger("inso.startup").error(
+                    "Controlled start scope refused (%s)", exc.reason)
+                _show_error(f"受控试运行范围无效：{exc.reason}")
+                return 2
+        if args.start_inquiry and preview:
+            logging.getLogger("inso.startup").error(
+                "Start requested under --safe-preview; refusing")
+            _show_error("安全预览模式不执行任何业务，请去掉 --safe-preview。")
+            return 2
+
+        guard = (
+            (guard_factory or SingleInstanceGuard)(name=PREVIEW_MUTEX_NAME)
+            if guard_factory is None and preview
+            else (guard_factory or SingleInstanceGuard)()
+        )
         if not guard.acquire():
             if diagnostics is not None:
                 diagnostics.request_exit("duplicate_instance")
@@ -190,9 +254,19 @@ def main(*, guard_factory=None, backend_factory=None, diagnostics=None) -> int:
         backend = (
             MockBackend(cycle_seconds=12.0)
             if args.mock
-            else backend_factory() if backend_factory else ProductionBackend(defer_local_view=True)
+            else backend_factory() if backend_factory else ProductionBackend(
+                defer_local_view=True,
+                run_scope=scope,
+                enforce_scope=enforce_scope,
+                preview_mode=preview,
+            )
         )
-        if not args.mock and hasattr(backend, "start_process_services"):
+        if not args.mock and hasattr(backend, "may_start_process_services"):
+            # RFQ-021 P0-B: mail research opens IMAP and can send mail; it must
+            # never start on a preview or outside an approved notification scope.
+            if backend.may_start_process_services():
+                backend.start_process_services()
+        elif not args.mock and hasattr(backend, "start_process_services") and not preview:
             backend.start_process_services()
         app = (InsoDashboardApp(backend) if diagnostics is None
                else InsoDashboardApp(backend, diagnostics=diagnostics))

@@ -10,6 +10,7 @@ from dataclasses import replace
 
 import pytest
 
+from src.research.cdp_pages import PageResourceAdmission
 from src.sheets.google_api_service import GoogleApiSheetsService
 from src.sheets.google_reader import GoogleSheetsRowReader
 from src.sheets.google_writer import (
@@ -70,6 +71,12 @@ class FakeSheetsApi:
             raise self.update_error
         return _Exec({"spreadsheetId": kwargs["spreadsheetId"],
                       "updatedRange": kwargs["range"], "updatedCells": _cells(kwargs["range"])})
+
+
+def _service(api, **kwargs):
+    """Controlled test construction: every writable API client gets a shared admission."""
+    kwargs.setdefault("page_admission", PageResourceAdmission())
+    return GoogleApiSheetsService(api, **kwargs)
 
 
 def _cells(range_name):
@@ -149,7 +156,7 @@ def read_chain(service):
 
 def test_api_read_then_single_cell_writes_keep_the_old_contract():
     api = FakeSheetsApi()
-    service = GoogleApiSheetsService(api)
+    service = _service(api)
 
     rows = read_chain(service)
     assert rows[1].cells["E"] == "000123"  # leading zeros preserved
@@ -167,7 +174,7 @@ def test_api_read_then_single_cell_writes_keep_the_old_contract():
 
 def test_unknown_api_write_holds_the_order_and_never_clicks(tmp_path):
     api = FakeSheetsApi(update_error=RuntimeError("response lost after the server applied it"))
-    service = GoogleApiSheetsService(api)
+    service = _service(api)
     _db, _store, _sheets, holds, _ledger, _quotes, _make, _observed = hold_fixture(tmp_path, [()])
     identity = found().record_identity
     cycle = updater(service, holds, identity=identity)
@@ -200,7 +207,7 @@ def test_unknown_api_write_holds_the_order_and_never_clicks(tmp_path):
 
 def test_confirmed_api_write_reloads_once_then_clicks_once(tmp_path):
     api = FakeSheetsApi()
-    service = GoogleApiSheetsService(api)
+    service = _service(api)
     _db, _store, _sheets, holds, _ledger, _quotes, _make, _observed = hold_fixture(tmp_path, [()])
     cycle = updater(service, holds, identity=found().record_identity)
 
@@ -222,7 +229,7 @@ def test_unconfirmed_receipt_stops_before_the_button(tmp_path):
             return _Exec({"spreadsheetId": kwargs["spreadsheetId"],
                           "updatedRange": kwargs["range"], "updatedCells": 1})
 
-    service = GoogleApiSheetsService(ShortReceipt())
+    service = _service(ShortReceipt())
     _db, _store, _sheets, holds, _ledger, _quotes, _make, _observed = hold_fixture(tmp_path, [()])
     cycle = updater(service, holds, identity=found().record_identity)
 
@@ -236,7 +243,7 @@ def test_a_15_cell_input_range_is_refused_before_any_call(tmp_path):
     from src.sheets.quotation_input import QuotationInputUnavailable
 
     api = FakeSheetsApi()
-    service = GoogleApiSheetsService(api)
+    service = _service(api)
     with pytest.raises(QuotationInputUnavailable):
         # first_column 1 with a 15-wide location is rejected by the transport.
         GoogleQuotationInput(service, location(first_column=0),
@@ -246,7 +253,7 @@ def test_a_15_cell_input_range_is_refused_before_any_call(tmp_path):
 
 def test_quote_payload_keeps_the_raw14_contract_through_the_api(tmp_path):
     api = FakeSheetsApi()
-    service = GoogleApiSheetsService(api)
+    service = _service(api)
     writer = GoogleQuotationInput(service, location(), expected_columns=_columns())
     writer.write_payload(RAW)
     assert api.update_calls[0]["body"]["values"] == [list(RAW)]

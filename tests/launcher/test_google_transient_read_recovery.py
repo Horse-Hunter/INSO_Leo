@@ -146,6 +146,85 @@ def _exhausted_google_read():
     return exhausted
 
 
+def _exhausted_tls_read():
+    """2026-11-17 17:55: an SSLEOFError torn down mid-read, wrapped by the reader."""
+    import ssl
+
+    exhausted = GoogleSheetsReadUnavailable("Google read retry exhausted")
+    exhausted.__cause__ = ssl.SSLEOFError(8, "EOF occurred in violation of protocol")
+    return exhausted
+
+
+def _tls_fault():
+    fault = V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE")
+    fault.__cause__ = _exhausted_tls_read()
+    return fault
+
+
+def test_tls_eof_mid_read_is_a_bounded_isolated_retry(tmp_path, monkeypatch):
+    """A dropped TLS session is a dropped connection, not a Google-wide outage.
+
+    Measured 2026-11-17: one `SSLEOFError` on a table read stopped every module
+    because TLS faults were excluded from the isolated-read contract.  The Owner
+    rule is the opposite: a transient read is retried and isolated.
+    """
+    from datetime import timedelta
+
+    from src.workflow.v13_integration import is_isolated_source_read_error
+
+    assert is_isolated_source_read_error(_tls_fault())
+
+    backend, worker, smtp = harness(tmp_path, monkeypatch)
+    faults = []
+    monkeypatch.setattr(backend, "_notify_runtime_fault", lambda *a, **k: faults.append((a, k)))
+
+    assert backend._defer_website_poll(_tls_fault(), timedelta(minutes=15), notify=False)
+    assert faults == []
+    assert "Google Sheets" in backend._site_outages
+    assert backend._state is RunState.RUNNING
+    worker.run_due(now=NOW)
+    assert smtp.send_attempts == 0
+
+
+def test_a_tls_eof_never_becomes_a_shared_stop(tmp_path, monkeypatch):
+    """The module keeps its cadence; no GLOBAL/MODULE pause from a torn socket."""
+    from src.workflow.service import WorkflowRuntime
+
+    backend, worker, smtp = harness(tmp_path, monkeypatch)
+    clock = SimpleNamespace(tick=0.0)
+    monkeypatch.setattr("src.launcher.backend.monotonic", lambda: clock.tick)
+    runtime = WorkflowRuntime(None, None, ())
+    runtime.configure_modules({"inquiry": 7, "quotation": 11, "tp": 13}, timer=lambda: clock.tick)
+    backend._module_runtime = runtime
+    backend._module_execute = lambda module: (_ for _ in ()).throw(_tls_fault())
+
+    assert runtime.claim_due_module() == "inquiry"
+    backend._run_independent_job("inquiry")
+    assert "Google Sheets" in backend._site_outages
+    assert not runtime.module_plans()["inquiry"][2]  # No permanent pause.
+    assert backend._state is not RunState.GLOBAL_STOP
+    assert not backend._stop.is_set()
+    worker.run_due(now=NOW)
+    assert smtp.send_attempts == 0
+
+
+def test_a_certificate_verdict_on_a_read_still_fails_closed(tmp_path, monkeypatch):
+    """Only the TLS *teardown* is transient; a certificate verdict stays closed."""
+    import ssl
+    from datetime import timedelta
+
+    from src.workflow.v13_integration import is_isolated_source_read_error
+
+    exhausted = GoogleSheetsReadUnavailable("Google read retry exhausted")
+    exhausted.__cause__ = ssl.SSLCertVerificationError(1, "certificate verify failed")
+    fault = V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_READ_UNAVAILABLE")
+    fault.__cause__ = exhausted
+
+    assert not is_isolated_source_read_error(fault)
+    backend, _worker, _smtp = harness(tmp_path, monkeypatch)
+    assert not backend._defer_website_poll(fault, timedelta(minutes=15), notify=False)
+
+
 def test_transient_google_read_never_creates_fault_evidence_or_an_alert(tmp_path, monkeypatch):
     from datetime import timedelta
 

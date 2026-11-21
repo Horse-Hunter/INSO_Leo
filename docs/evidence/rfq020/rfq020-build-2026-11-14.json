@@ -1,7 +1,7 @@
 {
   "rfq": "RFQ-020",
   "title": "Isolated candidate build and release self-check",
-  "generated_at": "2026-11-14T23:00:00+08:00",
+  "generated_at": "2026-11-14T22:52:00+08:00",
   "status": "PASS_BUILD_AND_SELF_CHECK",
   "flags": {
     "installed": false,
@@ -81,11 +81,17 @@
     "manifest_sha256": "c8806aea1b4d9f3df1d39261bc4aa81a213ab3ea9c335b4a40970f12c57d5b65",
     "internal_vs_running_program": {
       "prod_only_files": 0,
-      "candidate_only_files": ["_internal/tzdata-2026.4.dist-info/REQUESTED"]
+      "candidate_only_files": [
+        "_internal/tzdata-2026.4.dist-info/REQUESTED"
+      ]
     }
   },
   "self_checks": {
-    "self_check": {"exit_code": 0, "writes_files": false, "network": false},
+    "self_check": {
+      "exit_code": 0,
+      "writes_files": false,
+      "network": false
+    },
     "idle_self_check": {
       "exit_code": 0,
       "duration_seconds": 3,
@@ -103,15 +109,25 @@
       "wrote_only": "build/windows-release-stage-1.6/dist/INSO_V1.6/runtime/logs/v13-idle-self-check.json",
       "byproduct_removed_inside_staging": true
     },
-    "artifact_scan": {"result": "RELEASE_SCAN_OK", "exit_code": 0, "rerun_independently": true},
+    "artifact_scan": {
+      "result": "RELEASE_SCAN_OK",
+      "exit_code": 0,
+      "rerun_independently": true
+    },
     "api_self_check": "NOT_RUN_OUT_OF_SCOPE",
     "cdp_self_check": "NOT_RUN_PROTECTED_CDP"
   },
   "production_invariance": {
     "exe_sha256_before": "e9e3da33417414abac53f8a88a67d9f053bcdaeab9730eae9ad8bd7870dffad0",
     "exe_sha256_after": "e9e3da33417414abac53f8a88a67d9f053bcdaeab9730eae9ad8bd7870dffad0",
-    "processes_before": [38948, 34304],
-    "processes_after": [38948, 34304],
+    "processes_before": [
+      38948,
+      34304
+    ],
+    "processes_after": [
+      38948,
+      34304
+    ],
     "sqlite_size_bytes": 1191936,
     "sqlite_mtime_epoch_before": 1794667137,
     "sqlite_mtime_epoch_after": 1794667137,
@@ -120,7 +136,7 @@
     "chrome_9222_pages_after": 15,
     "invariance_scope": "self-check window 22:38-22:45 only",
     "later_observation": {
-      "at": "2026-11-14T23:00:00+08:00",
+      "at": "2026-11-14T22:47:00+08:00",
       "sqlite_mtime_epoch": 1794667251,
       "chrome_9222_pages": 14,
       "cause": "live production program still running its own business session; not caused by this RFQ (no CDP attach, no page open/close, no DB write)"
@@ -140,10 +156,27 @@
     "internal_prev_dirs": 16,
     "internal_prev_dirs_note": "RFQ-019 reported 17; difference is pre-existing and was not modified by this RFQ",
     "backups": [
-      {"name": "INSO_V1.6-header-block-20261114T021508Z", "files": 2875, "size_mb": 262, "exe_sha256": "00ac7d68d88e1a27eb52e3b7457b4192b699211df1b1f5e3efe0be406eef30bd"},
-      {"name": "INSO_V1.6-customer-20261114T113817Z", "files": 1, "exe_sha256": "b357889d48e5abe6ec6504eddd610442c877e438018f156c4c932477070814f6"},
-      {"name": "INSO_V1.6-before-diagnostics-20261112T212500", "files": 5759, "size_mb": 524},
-      {"name": "INSO_V1.6-shahab-liveness-20261109T061911Z", "files": 2993, "size_mb": 269}
+      {
+        "name": "INSO_V1.6-header-block-20261114T021508Z",
+        "files": 2875,
+        "size_mb": 262,
+        "exe_sha256": "00ac7d68d88e1a27eb52e3b7457b4192b699211df1b1f5e3efe0be406eef30bd"
+      },
+      {
+        "name": "INSO_V1.6-customer-20261114T113817Z",
+        "files": 1,
+        "exe_sha256": "b357889d48e5abe6ec6504eddd610442c877e438018f156c4c932477070814f6"
+      },
+      {
+        "name": "INSO_V1.6-before-diagnostics-20261112T212500",
+        "files": 5759,
+        "size_mb": 524
+      },
+      {
+        "name": "INSO_V1.6-shahab-liveness-20261109T061911Z",
+        "files": 2993,
+        "size_mb": 269
+      }
     ],
     "complete_rollback_snapshot_of_running_version": false
   },
@@ -167,5 +200,10 @@
   "documentation_gaps_observed": [
     "docs/BRANCH_POLICY.md does not exist on this branch",
     "control-room/RFQ-019/REVIEW.md does not exist"
+  ],
+  "corrections_2026_11_15": [
+    "generated_at was previously recorded as 23:00+08:00, which post-dates the commit containing it; the evidence was produced earlier in the same window and the field now reflects the commit time.",
+    "the later_observation block below was measured at about 22:47, before commit 6f1b1d25; its 'at' field is corrected.",
+    "docs/BRANCH_POLICY.md is absent on the executor branch but present on develop; control-room/RFQ-019/REVIEW.md was added by CEO commit 64dba150."
   ]
 }

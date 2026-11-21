@@ -34,6 +34,7 @@ from src.gui.contracts import (
     SiteLoginReport,
     SiteLoginResult,
     SourceDetail,
+    V12AlertCode,
     V12BusinessLabel,
     V12ReasonCode,
     WorkbenchSnapshot,
@@ -44,6 +45,7 @@ from src.inso.purchase_writer import InsoPurchaseWriter, PlaywrightParentProduct
 from src.inso.session import SecurityViolation
 from src.inso.write_safety import OwnerAuthorizedSaveAndSendGate
 from src.launcher.purchase_completion import PurchaseCompletionActions
+from src.launcher.run_scope import ExternalWritePolicy, ScopedInsoWriteGate, ScopeError
 from src.research import ResearchInput, ResearchResult
 from src.research.cdp_pages import (
     PageResourceAdmission,
@@ -80,6 +82,8 @@ from src.workflow.inso_query import run_inso_query
 from src.workflow.purchase_follow_up import PurchaseFollowUp
 from src.workflow.service import OrderResourceOwnershipError
 from src.workflow.v12_contracts import (
+    AlertType,
+    BusinessState,
     DeliveryOutcome,  # noqa: F401 - compatibility injection seam
     EventType,
     NotificationCommand,
@@ -88,6 +92,7 @@ from src.workflow.v12_contracts import (
     PurchaseDraftResult,
     PurchaseOutcome,
     ReasonCode,
+    WorkflowEvent,
 )
 from src.workflow.v12_duplicate import InsoDuplicateHistoryChecker
 from src.workflow.v12_faults import FaultScope, V12Fault
@@ -105,6 +110,7 @@ from src.workflow.v13_follow_up_store import V13PurchaseFollowUpStore
 from src.workflow.v13_integration import CombinedCycle, V13HoldStore, V13IntegratedCycle
 from src.workflow.v13_price_store import ProcurementPriceStore
 from src.workflow.v13_quotation import V13QuotationCycle, V13Stopped
+from src.workflow.write_intents import SqliteWriteIntentJournal
 
 from .browser_bootstrap import (
     BrowserBootstrapError,
@@ -117,6 +123,9 @@ from .google_quote_update import (
     GoogleReadTargetUnavailable,
     build_v13_quotation_updater,
 )
+from .google_web import _chain_label as _failure_chain
+from .google_web import _failure_stage as _failure_stage_label
+from .google_web import _transport_stalled as _page_channel_stalled
 from .google_web import build_google_web_service
 from .inso_session import (
     InsoAuthenticationError,
@@ -272,12 +281,22 @@ class _LivePurchaseDraftWriter:
     """
 
     def __init__(self, access, *, session_guard_factory=None, login_problem=None,
-                 store: V12Store | None = None, observe=None) -> None:
+                 store: V12Store | None = None, observe=None, write_policy=None) -> None:
         self._access = access
         self._session_guard_factory = session_guard_factory
         self._login_problem = login_problem
         self._store = store
         self._observe = observe
+        self._write_policy = write_policy
+
+    def _purchase_write_gate(self):
+        """Existing Owner exception, narrowed to the approved scope when enforced."""
+        if self._store is None:
+            return None
+        gate = OwnerAuthorizedSaveAndSendGate()
+        if self._write_policy is None or not self._write_policy.enforced:
+            return gate
+        return ScopedInsoWriteGate(gate, self._write_policy, "inso")
 
     def _guard(self):
         if self._session_guard_factory is None:
@@ -363,7 +382,7 @@ class _LivePurchaseDraftWriter:
         with access.operation_page() as form:
             writer = InsoPurchaseWriter(
                 form_page=form,
-                gate=OwnerAuthorizedSaveAndSendGate() if self._store is not None else None,
+                gate=self._purchase_write_gate(),
             )
             # A crashed or interrupted run can skip the close below, so the
             # surface is also cleared here, before this order touches the form.
@@ -517,6 +536,19 @@ def _fault_detail(exc, limit=3):
     return " <- ".join(parts)
 
 
+#: Manual order actions and what they actually need (RFQ-021-R3 P0-C):
+#: the module that must be enabled and every external write family they reach.
+#: ``edit`` writes a Google cell, ``purchase`` reruns a flow that ends in a
+#: status write, so both need more than "the order is in scope".
+_ACTION_MODULE = {"quotation": "quotation", "tp": "tp", "purchase": "inquiry"}
+_ACTION_WRITES = {
+    "edit": ("google",),
+    "purchase": ("inso", "google"),
+    "quotation": ("google",),
+    "tp": ("google",),
+}
+
+
 def _website_failure(exc):
     """Identify a failed dependency without treating local data errors as outages."""
     from .market_continuation import MarketContinuationFault
@@ -543,12 +575,17 @@ def _website_failure(exc):
         return "INSO"
     from src.sheets.google_reader import (
         TEMPORARY_READ_NETWORK_CODES,
+        TRANSIENT_TLS_READ_ERRORS,
         GoogleSheetsReadError,
     )
     read_error = any(isinstance(e, GoogleSheetsReadError) for e in chain)
     if read_error:
         from ssl import SSLError
         for item in chain:
+            # A TLS session the route tore down mid-read is a dropped connection,
+            # not a certificate verdict: it keeps the bounded isolated retry.
+            if isinstance(item, TRANSIENT_TLS_READ_ERRORS):
+                continue
             if isinstance(item, SSLError):
                 return None
             if type(item).__module__.startswith("playwright") and type(item).__name__ != "TimeoutError":
@@ -577,6 +614,8 @@ def _website_failure(exc):
     if "V13_FX_UNAVAILABLE" in reasons:
         return "汇率网站"
     if (reasons & {"CDP_SESSION_UNAVAILABLE", "CDP_RECONNECT_EXHAUSTED",
+                   "CDP_PAGE_OWNERSHIP_UNCONFIRMED", "CDP_PAGE_CREATION_UNCONFIRMED",
+                   "CDP_PAGE_CLEANUP_UNCONFIRMED",
                    "GOOGLE_OPERATION_NOT_CLOSED", "INSO_OPERATION_NOT_CLOSED"}
             or any(isinstance(e, BrowserBootstrapError) for e in chain)):
         return "Browser/CDP"
@@ -596,14 +635,33 @@ class ProductionBackend(GuiBackend):
         defer_local_view: bool = False,
         inquiry_ids: frozenset[str] | None = None,
         market_actor_factory=None,
+        run_scope=None,
+        enforce_scope: bool = False,
+        preview_mode: bool = False,
     ):
         self.root = Path(root) if root is not None else app_root()
         self._inquiry_scope = inquiry_ids
+        # RFQ-021 P0-A: the launcher passes a RunScope, not `inquiry_ids`. Without
+        # this binding `compose_v12_production` receives None and the run would
+        # process every order while claiming to be scoped.
+        if run_scope is not None:
+            if self._inquiry_scope is None:
+                self._inquiry_scope = run_scope.inquiry_ids
+            elif frozenset(self._inquiry_scope) != frozenset(run_scope.inquiry_ids):
+                # Two different order sets cannot both be "the scope"; refuse
+                # rather than silently pick one.
+                raise ScopeError("SCOPE_INQUIRY_IDS_CONFLICT")
+        # RFQ-021: a packaged release never starts without an explicit scope,
+        # and it can render a read-only preview without any process service.
+        self._run_scope = run_scope
+        self._enforce_scope = bool(enforce_scope)
+        self._preview_mode = bool(preview_mode)
+        self._write_policy = ExternalWritePolicy(run_scope, enforced=self._enforce_scope)
         self.config_path = Path(config_path) if config_path is not None else runtime_config_path("research.json", root=self.root)
         self.production_path = Path(production_config_path) if production_config_path is not None else runtime_config_path("production.json", root=self.root)
         self.cdp_probe = cdp_probe
         self._browser_acquirer = browser_acquirer
-        self._page_admission = PageResourceAdmission()
+        self._page_admission = PageResourceAdmission(write_policy=self._write_policy)
         self._background_research_budget = ResearchBudget()
         self._mail_research_service = None
         self._mail_research_prepared = None
@@ -672,6 +730,19 @@ class ProductionBackend(GuiBackend):
         self._next_poll_at = None
         self._site_outages = {}
         self._site_manual_wait = set()
+        # Shared-CDP attachment health for the Google transport: a stalled page
+        # channel is repaired once per poll by dropping only our own client.
+        self._google_stall_at: datetime | None = None
+        self._google_reattached_at: float | None = None
+        self._web_attach_args = None
+        # Wall-clock first-fault time per site/reason.  The outage clock above is
+        # monotonic and cannot be shown to the Owner or survive a restart.
+        self._site_fault_since: dict[str, datetime] = {}
+        self._fault_first_seen: dict[str, datetime] = {}
+        self._fault_last_seen: dict[str, datetime] = {}
+        self._fault_counts: dict[str, int] = {}
+        self._faults: tuple = ()
+        self._faults_hydrated = False
         self._keepalive_protected_targets = set()
         self._idle_empty_polls = 0
         self._idle_login_since = utc_now()
@@ -728,6 +799,10 @@ class ProductionBackend(GuiBackend):
 
     def start_process_services(self):
         """Start before business workers, serialized with process shutdown."""
+        if not self.may_start_process_services():
+            # Preview, or a scope with no authorised mail: never open IMAP or
+            # SMTP on the strength of "the launcher called it anyway".
+            return
         with self._mail_start_retry_lock:
             with self._lock:
                 if (self._closed or self._closing_intent.is_set() or self._mail_initial_start_consumed
@@ -755,6 +830,8 @@ class ProductionBackend(GuiBackend):
 
     def retry_failed_process_service(self):
         """Retry a pristine config read, completed preparation, or a drained owner."""
+        if not self.may_start_process_services():
+            return
         with self._lock:
             service = self._mail_research_service
             prior = self._mail_start_retry_thread
@@ -974,7 +1051,107 @@ class ProductionBackend(GuiBackend):
         with self._lock:
             return self._run_id
 
+    @property
+    def preview_mode(self) -> bool:
+        """Read-only preview: render status, never start a process service."""
+        return self._preview_mode
+
+    @property
+    def run_scope(self):
+        return self._run_scope
+
+    def scope_blockers(self) -> tuple[str, ...]:
+        """Why Start would be refused right now (empty means allowed)."""
+        if self._preview_mode:
+            return ("PREVIEW_ONLY",)
+        if not self._enforce_scope:
+            return ()
+        if self._run_scope is None:
+            return ("SCOPE_MISSING",)
+        return ()
+
+    def _module_allowed(self, name: str) -> bool:
+        """Scope narrowing for optional modules; never widens the config."""
+        if not self._enforce_scope:
+            return True
+        scope = self._run_scope
+        return scope is not None and scope.allows_module(name)
+
+    def _run_notifications(self, now):
+        """Single dispatch choke point: no SMTP outside the approved scope."""
+        composition = self._v12_composition
+        if composition is None:
+            return 0
+        if not self._module_allowed("notification") or not self._write_policy.allows("smtp"):
+            return 0
+        return composition.coordinator.run_notifications(now=now)
+
+    def _attach_write_journal(self, db_path) -> None:
+        """Load the durable write-intent ledger before any business work.
+
+        A ledger that cannot be opened, created or read is a safety failure, not
+        a warning: every external write is blocked for that reason until it is
+        repaired. Nothing is cleared automatically.
+        """
+        try:
+            if not Path(db_path).is_file():
+                raise FileNotFoundError("workflow database is not initialised")
+            journal = SqliteWriteIntentJournal(db_path)
+            journal.migrate()
+            pending = journal.open_documents()
+        except Exception as exc:  # noqa: BLE001 - fail closed on any ledger failure
+            self._write_policy.block_all_writes("WRITE_LEDGER_UNAVAILABLE")
+            self._append_log("ERROR", "写入意图账本不可用，已禁止全部外部写入。")
+            log.warning("write intent ledger unavailable; class=%s", type(exc).__name__)
+            return
+        self._page_admission.attach_write_journal(journal)
+        if pending:
+            self._append_log(
+                "WARNING",
+                f"存在 {len(pending)} 个未结算写入意图，相关文档的写入保持阻断。",
+            )
+
+    def effect_actions_blocked(self) -> bool:
+        """RFQ-021 P0-C: the mail/login buttons must stay disabled here.
+
+        Both drive Chrome, IMAP or order entry with no per-order filter, so a
+        preview and any scoped run refuse them outright.
+        """
+        return self._preview_mode or self._enforce_scope
+
+    def _external_action_allowed(self, target: str, label: str) -> bool:
+        """RFQ-021 P0-C: operator actions are gated exactly like business writes."""
+        if self._preview_mode:
+            self._append_log("WARNING", f"安全预览模式不执行：{label}。")
+            return False
+        if not self._enforce_scope:
+            return True
+        if self._write_policy.allows(target):
+            return True
+        self._append_log("WARNING", f"当前受控范围不允许：{label}。")
+        return False
+
+    def may_start_process_services(self) -> bool:
+        """RFQ-021 P0-B: IMAP/SMTP research starts only when explicitly allowed.
+
+        ``start_process_services`` builds the mail-research service, which opens
+        an IMAP session and can send mail. That is an independent external
+        effect, so a preview never starts it and a scoped run starts it only
+        when the scope names the notification module *and* the smtp target.
+        """
+        if self._preview_mode:
+            return False
+        if not self._enforce_scope:
+            return True
+        return self._module_allowed("notification") and self._write_policy.allows("smtp")
+
     def start(self):
+        if self._preview_mode:
+            self._append_log("WARNING", "安全预览模式不启动业务。")
+            return False
+        if self._enforce_scope and self._run_scope is None:
+            self._append_log("ERROR", "未配置受控试运行范围，已拒绝启动业务。")
+            return False
         if not self._mail_start_retry_lock.acquire(blocking=False):
             if monotonic() >= self._mail_start_busy_log_at:
                 self._mail_start_busy_log_at = monotonic()+60
@@ -1087,7 +1264,11 @@ class ProductionBackend(GuiBackend):
                 rc.cdp.cdp_url, provider=lambda: self._google_playwright_provider(rc, cfg),
                 on_read_success=lambda: self._site_recovered("Google Sheets"),
                 read_guard=self._page_admission.require_open,
-                stop_requested=self._immediate_stop_requested, page_admission=self._page_admission)
+                stop_requested=self._immediate_stop_requested, page_admission=self._page_admission,
+                on_transport_stalled=self._note_google_transport_stall)
+            # A stalled Google page channel is repaired by re-attaching the CDP
+            # client (never by killing Chrome), and only while this run owns it.
+            self._web_attach_args = (rc, cfg)
             # ONE default-off switch. The CDP transport stays the fallback and keeps
             # owning the protected browser pages and the native 更新报价 button.
             sheet_service = self._sheet_service_for(cfg, web_service)
@@ -1122,6 +1303,11 @@ class ProductionBackend(GuiBackend):
             # Otherwise process startup already completed this quiesced migration.
             # Do not repeat a quiescence assertion while independent SMTP runs.
             self._v12_store = V12Store(db)
+            # RFQ-021: the durable write ledger is attached only after the V1.2
+            # migration has created/validated this database. Creating the table
+            # earlier would produce an empty file that the V1.1 baseline check
+            # would (correctly) reject as a schema mismatch.
+            self._attach_write_journal(db)
             follow_up_store = None
             if cfg.get("v13_enabled") is True or (
                     getattr(sys, "frozen", False) and Path(sys.executable).stem == "INSO_V1.3"):
@@ -1150,6 +1336,10 @@ class ProductionBackend(GuiBackend):
                 workflow_store=self._store, v12_store=self._v12_store,
                 reader=reader, writer_factory=get_status_writer, follow_up_store=follow_up_store,
                 mail_evidence=self._fault_evidence,
+                # RFQ-021-R3 P0-A: background status reconciliation is an
+                # automatic Google write; it must never touch an order that is
+                # outside the approved scope.
+                inquiry_ids=self._inquiry_scope,
                 automatic_admission=lambda iid, at: getattr(self, "_owner_single_order", None) == iid
                     or self._current_mail_source(iid, at, module="inquiry") is not None,
             )
@@ -1198,6 +1388,7 @@ class ProductionBackend(GuiBackend):
                         login_problem=self._manual_review,
                         store=self._v12_store,
                         observe=self._observe_stage,
+                        write_policy=self._write_policy,
                     ),
                     smtp_config=QQSMTPConfig(sender_address="1069599116@qq.com"),
                     recipients=(
@@ -1249,8 +1440,10 @@ class ProductionBackend(GuiBackend):
                 WorkflowWorker(self._store, research_observer, brand_updater=None),
                 worksheets,
             )
-            self._v13_enabled = cfg.get("v13_enabled") is True or (
-                getattr(sys, "frozen", False) and Path(sys.executable).stem == "INSO_V1.3")
+            self._v13_enabled = (
+                cfg.get("v13_enabled") is True
+                or (getattr(sys, "frozen", False) and Path(sys.executable).stem == "INSO_V1.3")
+            ) and self._module_allowed("quotation")
             self._observation.enable(quotation=self._v13_enabled, tp=cfg.get("tp_enabled") is True)
             if self._v13_enabled:
                 holds = V13HoldStore(db)
@@ -1331,7 +1524,7 @@ class ProductionBackend(GuiBackend):
             # even when reads and writes use the API transport.
             self._manual_page_service = web_service
             self._tp = None
-            if cfg.get("tp_enabled") is True:
+            if cfg.get("tp_enabled") is True and self._module_allowed("tp"):
                 from .tp_composition import build_tp_cycle
                 def prepare_tp(key):
                     self._begin_inso_inquiry(key)
@@ -1405,9 +1598,7 @@ class ProductionBackend(GuiBackend):
                                 if self._immediate_stop_requested():
                                     return
                                 self._purchase_completion.retry_saved_statuses(at=utc_now())
-                                self._v12_composition.coordinator.run_notifications(
-                                    now=utc_now()
-                                )
+                                self._run_notifications(utc_now())
                                 browser_state = "已连接" if self._research_ready else "待命"
                                 if not self._site_outages:
                                     self._set_health(("正常", browser_state, "正常", "正常"), "正常")
@@ -1461,14 +1652,14 @@ class ProductionBackend(GuiBackend):
 
             def worker_loop():
                 try:
-                    if independent:
+                    if independent and self._module_allowed("notification") and self._write_policy.allows("smtp"):
                         self._v12_composition.notification_worker.bind_delivery_thread()
                     while not self._stop.is_set():
                         try:
                             BrowserHandle.drain_deferred_stops()
                             self._refresh()
                             if self._v12_composition is not None:
-                                self._v12_composition.coordinator.run_notifications(now=utc_now())
+                                self._run_notifications(utc_now())
                             self._release_idle_browser()
                         except Exception as exc:
                             if not self._defer_website_poll(exc, runtime.poll_interval):
@@ -1485,12 +1676,12 @@ class ProductionBackend(GuiBackend):
                         # this never pretends the browser owner has drained.
                         if self._runtime_stop_reason and self._v12_composition is not None:
                             try:
-                                self._v12_composition.coordinator.run_notifications(now=utc_now())
+                                self._run_notifications(utc_now())
                             except Exception as error:  # noqa: BLE001 - original outbox owns retry/UNKNOWN
                                 log.warning("Pending drain notification unavailable; class=%s", type(error).__name__)
                     try:
                         if self._runtime_stop_reason and self._v12_composition is not None:
-                            self._v12_composition.coordinator.run_notifications(now=utc_now())
+                            self._run_notifications(utc_now())
                     except Exception as error:  # noqa: BLE001 - preserve original durable retry/UNKNOWN
                         log.warning("Final notification pass unavailable; class=%s", type(error).__name__)
                     finally:
@@ -1567,7 +1758,11 @@ class ProductionBackend(GuiBackend):
         )
         try:
             return build_service_account_sheets_service(
-                resolved, on_read_success=lambda: self._site_recovered("Google Sheets"))
+                resolved, on_read_success=lambda: self._site_recovered("Google Sheets"),
+                page_admission=getattr(self, "_page_admission", None),
+                # The Owner browses Google through the system proxy; the API client
+                # must follow the same route, or a readable sheet looks unreachable.
+                proxy=section.get("proxy", "auto"))
         except (GoogleSheetsAuthorizationError, GoogleSheetsDependencyError) as exc:
             raise V12Fault(FaultScope.GLOBAL_STOP, "SHEETS_AUTH_UNAVAILABLE") from exc
 
@@ -1769,6 +1964,10 @@ class ProductionBackend(GuiBackend):
                 raise self._module_pause_requested
             self._module_failures.pop(module, None)
             outcome = "stopped" if self._stop.is_set() else "completed"
+            if outcome == "completed":
+                # A module that ran end-to-end is the only proof that its sites
+                # recovered: an old red banner must not outlive the evidence.
+                self._resolve_faults_after_success(module)
         except V13Stopped:
             outcome = "stopped"
             raise
@@ -1965,8 +2164,44 @@ class ProductionBackend(GuiBackend):
             and self._poll_idle.is_set() and not self._stop.is_set()
             and not self._manual_busy and self._manual_request is None)
 
+    def _order_in_scope(self, inquiry_id) -> bool:
+        """RFQ-021-R4: the single definition of "this run may touch this order".
+
+        An unscoped run keeps its historical behaviour. A scoped run must be
+        positive about the order: no scope object means no order is in scope.
+        """
+        if not getattr(self, "_enforce_scope", False):
+            return True
+        scope = getattr(self, "_run_scope", None)
+        return scope is not None and inquiry_id in scope.inquiry_ids
+
+    def _action_in_scope(self, action) -> bool:
+        """RFQ-021-R3 P0-C: audit a manual action against modules and targets.
+
+        A scoped run has no per-order filter for quotation/TP, so those actions
+        are refused by module; a purchase needs the INSO write target.
+        """
+        if not self._enforce_scope:
+            return True
+        module = _ACTION_MODULE.get(action)
+        if module is not None and not self._module_allowed(module):
+            return False
+        for target in _ACTION_WRITES.get(action, ()):
+            if not self._write_policy.allows(target):
+                return False
+        return True
+
     def can_order_action(self, inquiry_id, action):
         with self._lock:
+            # RFQ-021 P0-C: a preview must not expose an action that would drive
+            # Chrome, mail or an external write; a scoped run only exposes the
+            # orders it named.
+            if self._preview_mode:
+                return False
+            if not self._order_in_scope(inquiry_id):
+                return False
+            if not self._action_in_scope(action):
+                return False
             if not self._manual_idle() or self._store is None or self._manual_reader is None:
                 return False
             try:
@@ -1982,6 +2217,11 @@ class ProductionBackend(GuiBackend):
                     except ValueError:
                         return False
                     return True
+                if action == "resync":
+                    # Owner action: re-read the row the human is pointing at and make
+                    # the ledger agree with it. Requires a live source read, so the
+                    # execution path owns the real checks.
+                    return True
                 return action == "edit"
             except (KeyError, sqlite3.Error, V12DatabaseError):
                 return False
@@ -1989,6 +2229,15 @@ class ProductionBackend(GuiBackend):
     def order_action_hint(self, inquiry_id, action):
         # Display only: no business lock, SQL, or cached authorization. The
         # canonical request/execute path always checks durable permissions.
+        if getattr(self, "_preview_mode", False):
+            return False
+        if not self._order_in_scope(inquiry_id):
+            return False
+        # RFQ-021-R4: the hint must agree with the execution guard, or the button
+        # advertises an action the backend will refuse. The guard stays canonical;
+        # this only stops promising what it will not allow.
+        if not self._action_in_scope(action):
+            return False
         if not self._manual_idle() or self._store is None or self._manual_reader is None:
             return False
         order = next((o for o in self._view_snapshot.orders if o.inquiry_id == inquiry_id), None)
@@ -2006,17 +2255,35 @@ class ProductionBackend(GuiBackend):
         if action == "purchase":
             cached = self._view_state_cache.get(inquiry_id)
             dto = cached[1] if cached else None
+            # A purchase exception is exactly what this one-order retry resolves:
+            # a successfully restarted purchase clears the same ``ai-recognition``
+            # scope. Blocking the hint on that very alert deadlocked the only
+            # supported entry (live 2026-11-14: a CONTROL_NOT_FOUND exception left
+            # 重跑采购流程 grey with no way to clear it). Authorisation is not
+            # relaxed here -- it stays with can_order_action, which re-reads the
+            # durable ledger and refuses every unknown/possibly-sent outcome.
+            blocking = tuple(
+                alert for alert in (dto.active_alerts if dto is not None else ())
+                if alert.alert_type is not V12AlertCode.PURCHASE_EXCEPTION
+            )
             return (self._state is RunState.RUNNING and self._v12_store is not None
-                and dto is not None and not dto.active_alerts
+                and dto is not None and not blocking
                 and dto.business_label not in {
                     V12BusinessLabel.SUBMIT_UNCONFIRMED, V12BusinessLabel.INTERRUPTED_POSSIBLY_SENT,
                     V12BusinessLabel.STATUS_WRITE_PENDING, V12BusinessLabel.PURCHASE_SENT,
                     V12BusinessLabel.HUMAN_COMPLETED,
                 }
                 and order.delivery_status != "UNKNOWN")
-        return action == "edit" or (action == "quotation" and self._manual_quote is not None)
+        return (action == "edit" or action == "resync"
+                or (action == "quotation" and self._manual_quote is not None))
 
     def request_order_action(self, inquiry_id, action, *, field=None, value=None):
+        if self._preview_mode:
+            return "安全预览模式不执行任何订单操作。"
+        if not self._order_in_scope(inquiry_id):
+            return "该订单不在本次受控试运行范围内。"
+        if not self._action_in_scope(action):
+            return "当前受控范围不允许该操作（模块或写入目标未授权）。"
         with self._manual_condition:
             if not self.can_order_action(inquiry_id, action):
                 if action == "quotation" and self._manual_quote is not None:
@@ -2127,10 +2394,151 @@ class ProductionBackend(GuiBackend):
         finally:
             self._owner_single_order = previous
 
+    @staticmethod
+    def _resync_row_matches_article(identity, row, rows) -> bool:
+        """The physical line is this order only when its article still matches.
+
+        The explicit Owner action may correct quantity, importance, brand or complete
+        the model text. The article text must remain non-empty and match the stored
+        model (equal, or one completing the other), and the line must be the unique
+        row for that model family. A wholly different part or a duplicate line still
+        fails closed. Status is deliberately excluded: that is the field recovered.
+        """
+
+        from src.sheets.worksheet_schema import worksheet_schema
+
+        schema = worksheet_schema(identity.worksheet.worksheet)
+        stored_model = str(identity.identifying_snapshot.model or "").strip().casefold()
+
+        def matches(candidate):
+            live_model = str(candidate.cells.get(schema.model_column) or "").strip().casefold()
+            if not stored_model or not live_model:
+                return False
+            if stored_model == live_model:
+                return True
+            if len(stored_model) < 4 or len(live_model) < 4:
+                return False
+            return stored_model in live_model or live_model in stored_model
+
+        unique = [candidate for candidate in rows if matches(candidate)]
+        return len(unique) == 1 and unique[0].row_position == row.row_position
+
+    def _resync_effects_settled(self, inquiry_id, state, purchase) -> bool:
+        """No unresolved purchase effect may be closed by a Sheet status edit.
+
+        A saved purchase does not prove a pending Google status write or a
+        possibly-sent Save was settled; those states stay blocked until their own
+        receipts are reconciled. A pre-save projection with any dispatch receipt is
+        also treated as unresolved because the projection and events disagree.
+        """
+
+        if state in {BusinessState.INTERRUPTED_POSSIBLY_SENT,
+                     BusinessState.STATUS_WRITE_PENDING,
+                     BusinessState.SUBMIT_UNCONFIRMED}:
+            return False
+        unresolved = {
+            PurchaseOutcome.UNKNOWN_WRITE_OUTCOME,
+            PurchaseOutcome.READ_ONLY_RECONCILIATION_REQUIRED,
+            PurchaseOutcome.MANUAL_REVIEW,
+            PurchaseOutcome.SUBMIT_UNCONFIRMED,
+        }
+        if purchase in unresolved:
+            return False
+        if purchase in {PurchaseOutcome.SAVED, PurchaseOutcome.CONFIRMED_NOT_SAVED}:
+            return True
+        dispatch_events = {
+            EventType.SAVE_DISPATCH_ARMED,
+            EventType.SAVE_CLICK_COMPLETED,
+            EventType.SAVE_OUTCOME_UNKNOWN,
+            EventType.PURCHASE_DATA_SAVED,
+        }
+        return not any(
+            event.event_type in dispatch_events
+            for event in self._v12_store.event_history(inquiry_id))
+
+    def _recover_order_from_sheet(self, item, identity) -> str:
+        """Owner action: make this order agree with the row it currently occupies.
+
+        The human right-clicks the line they can see, so the physical row is the
+        binding. The action stays fail-closed: a completed status is accepted only
+        when the row still identifies the same article, the durable purchase is
+        settled, and no quotation effect is held. It then re-points the ledger at
+        the observed cells and closes only alerts that settled outcome answers; a
+        possibly sent Save, failed mail or unknown quote stays visible and protected.
+        """
+
+        from src.sheets.pending import identify_worksheet_row
+        from src.sheets.purchase_status import PURCHASE_COMPLETED_STATUSES
+        from src.sheets.worksheet_schema import worksheet_schema
+
+        schema = worksheet_schema(identity.worksheet.worksheet)
+        rows = tuple(self._manual_reader.read_rows(identity.worksheet))
+        anchors = [row for row in rows if row.row_position == identity.row_position]
+        if len(anchors) != 1:
+            raise ValueError("表格里找不到这一行（可能已删除），未做任何修改。")
+        row = anchors[0]
+        observed = row.cells.get(schema.status_column)
+        status = observed.strip() if isinstance(observed, str) else ""
+        if status not in PURCHASE_COMPLETED_STATUSES:
+            raise ValueError(f"该行当前状态是「{status or '空'}」，不是已完成状态，未做任何修改。")
+        if not self._resync_row_matches_article(identity, row, rows):
+            raise ValueError("这一行已不是该订单（型号或数量不符，或存在重复行），未做任何修改。")
+
+        try:
+            state = self._v12_store.business_state(item.inquiry_id)
+        except KeyError:
+            state = None
+        try:
+            purchase = self._v12_store.purchase_state(item.inquiry_id)
+        except KeyError:
+            purchase = None
+        if not self._resync_effects_settled(item.inquiry_id, state, purchase):
+            raise ValueError(
+                "该订单的采购结果未确认（可能已保存或仍待核实），不能按表格结案；"
+                "原保护保留，请先在 INSO 核实。")
+        if V13HoldStore(self._v12_store.database_path).blocks_inquiry_retry(
+                item.inquiry_id, identity):
+            raise ValueError(
+                "该订单还有未结算的报价保护，不能按表格结案；"
+                "请先核对原报价结果。")
+
+        refreshed = identify_worksheet_row(identity.worksheet, row)
+        if not self._store.rebind_identity(item.id, refreshed):
+            raise ValueError("订单记录未能更新，未做任何修改。")
+        now = utc_now()
+        self._v12_store.set_business_state(
+            item.inquiry_id, BusinessState.HUMAN_COMPLETED,
+            WorkflowEvent(f"evt_{uuid.uuid4().hex}", item.inquiry_id,
+                          EventType.HUMAN_RESOLUTION_RECORDED, now, "workflow"),
+        )
+        recoverable = {AlertType.DATA_QUALITY}
+        if purchase in {PurchaseOutcome.SAVED, PurchaseOutcome.CONFIRMED_NOT_SAVED,
+                        PurchaseOutcome.VALIDATION_FAILED,
+                        PurchaseOutcome.PRE_SAVE_READY, PurchaseOutcome.AI_RECOGNIZED}:
+            recoverable.add(AlertType.PURCHASE_EXCEPTION)
+        self._v12_store.recover_stale_alerts(
+            item.inquiry_id, at=now, alert_types=frozenset(recoverable))
+        with self._lock:
+            # The quotation observation for this order described the old state.
+            self._v13_states.pop(item.inquiry_id, None)
+            self._v13_unbound.pop(item.inquiry_id, None)
+        return f"已按表格恢复：当前状态「{status}」，该订单已结案。"
+
     @foreground_resources
     def _execute_order_action_impl(self, request):
         request_id, inquiry, action, field, value = request
         success, message = False, "操作未执行。"
+        # RFQ-021-R5: the request gate is not the only entrance -- tests, recovery
+        # code and any future caller reach this executor directly. The final
+        # function therefore repeats the same scope judgement before the first
+        # effect, so no manual action can run outside an approved scope.
+        if not self._order_in_scope(inquiry) or not self._action_in_scope(action):
+            with self._lock:
+                self._manual_result = ManualOrderResult(
+                    request_id, inquiry, action, False,
+                    "该操作不在本次受控试运行范围内，未执行。")
+            self._notify()
+            return
         try:
             if action == "tp":
                 from src.sheets.tp_brief import TpLocalError
@@ -2153,6 +2561,13 @@ class ProductionBackend(GuiBackend):
                 return
             item = self._store.get_by_inquiry_id(inquiry)
             identity = item.record_identity
+            if action == "resync":
+                message = self._recover_order_from_sheet(item, identity)
+                self._refresh_history(force=True)
+                with self._lock:
+                    self._manual_result = ManualOrderResult(request_id, inquiry, action, True, message)
+                self._notify()
+                return
             record, status = current_record(self._manual_reader, identity.worksheet, identity.row_position)
             scoped_reader = SingleRowReader(self._manual_reader, identity.worksheet, identity.row_position)
             if action == "edit":
@@ -2469,7 +2884,7 @@ class ProductionBackend(GuiBackend):
             self._seen(result.inquiry_id)
             settled = self._purchase_completion.process(result, at=utc_now())
             preserve = settled is not True
-            self._v12_composition.coordinator.run_notifications(now=utc_now())
+            self._run_notifications(utc_now())
             self._invalidate_order_view(result.inquiry_id)
             if settled is False:
                 preserve = True
@@ -2781,11 +3196,23 @@ class ProductionBackend(GuiBackend):
         return SaveReconciliationTarget(item.mpn, brand, item.quantity)
 
     def _site_recovered(self, site):
+        # RFQ-021-R5: an incident record can carry per-order evidence about any
+        # order on that site. A scoped trial settles the program-level incidents
+        # (and its own orders) but leaves an out-of-scope order's alert evidence
+        # exactly as it was; an unscoped run keeps the historical behaviour.
         if self._v12_store is not None and callable(getattr(self._v12_store, "resolve_incidents", None)):
-            self._v12_store.resolve_incidents(site, at=utc_now())
+            if getattr(self, "_enforce_scope", False):
+                scope = getattr(self, "_run_scope", None)
+                self._v12_store.resolve_incidents(
+                    site, at=utc_now(),
+                    within=(scope.inquiry_ids if scope is not None else frozenset()))
+            else:
+                self._v12_store.resolve_incidents(site, at=utc_now())
         with self._lock:
             self._site_outages.pop(site, None)
             self._site_manual_wait.discard(site)
+            self._site_fault_since.pop(site, None)
+        self._resolve_faults(site=site)
 
     def _check_site_recovery(self, rc=None, cfg=None):
         with self._lock:
@@ -2807,6 +3234,42 @@ class ProductionBackend(GuiBackend):
             if self._state is RunState.QUOTATION_RUNNING:
                 self._state = RunState.RUNNING
 
+    def _note_google_transport_stall(self):
+        """Remember that a page-level command went unanswered in this poll."""
+
+        self._google_stall_at = utc_now()
+
+    def _recover_google_transport(self):
+        """Drop and rebuild our own CDP client after a stalled page channel.
+
+        Chrome is never killed, replaced or repointed: the standing rule is one
+        browser, one profile, one port. Only the program's own attachment is
+        rebuilt, which is exactly what a manual restart used to do by hand.
+        """
+
+        if self._google_stall_at is None or self._web_attach_args is None:
+            return False
+        if self._inso_session is not None or self._active_inso_inquiry is not None:
+            return False  # An INSO order surface may be mid-write; keep its client.
+        if (self._google_reattached_at is not None
+                and monotonic() - self._google_reattached_at < 120):
+            return False  # Bounded: one re-attach per two minutes, never a loop.
+        rc, cfg = self._web_attach_args
+        self._google_stall_at = None
+        self._google_reattached_at = monotonic()
+        handle = self._browser_handle
+        log.warning("Google page channel stalled; re-attaching the CDP client")
+        try:
+            if handle is not None:
+                handle.disconnect()
+            self._browser_handle = None
+            self._v13_browser(rc, cfg)
+        except Exception as exc:  # noqa: BLE001 - the deferral below still holds
+            log.warning("CDP re-attach after a stalled read failed (%s)",
+                        type(exc).__name__)
+            return False
+        return True
+
     def _defer_website_poll(self, exc, interval, *, notify=True, recoverable_read=False):
         site = _website_failure(exc)
         if site is None:
@@ -2824,6 +3287,7 @@ class ProductionBackend(GuiBackend):
             if self._stop.is_set():
                 return True  # Explicit Owner stop always wins over automatic recovery.
             since = self._site_outages.setdefault(site, monotonic())
+            self._site_fault_since.setdefault(site, utc_now())
             if not recoverable_read and site != "Browser/CDP" and monotonic() - since >= 3 * 60 * 60:
                 return False
             cause, visited = exc, set()
@@ -2854,10 +3318,33 @@ class ProductionBackend(GuiBackend):
                   "汇率网站": "FX_WAITING_RECOVERY", "Findchips": "FINDCHIPS_WAITING_RECOVERY",
                   "华强": "HQEW_WAITING_RECOVERY", "立创": "LCSC_WAITING_RECOVERY",
                   "正能量": "BOM_AI_WAITING_RECOVERY"}[site]
+        stalled = site == "Google Sheets" and _page_channel_stalled(exc)
+        reattached = self._recover_google_transport() if stalled else False
+        if stalled:
+            # The sheet is reachable; the program's own page channel is not. Say
+            # so, instead of reporting a Google outage the Owner can disprove.
+            reason = "GOOGLE_PAGE_UNRESPONSIVE"
         log.warning("Website recovery deferred", extra={
-            "runtime_reason": reason, "runtime_cause": type(exc).__name__})
+            "runtime_reason": reason, "runtime_cause": type(exc).__name__,
+            "runtime_stage": _failure_stage_label(exc) or "",
+            "runtime_chain": _failure_chain(exc)})
+        # A deferral that sends no mail and raises no alert is still a fault the
+        # Owner must be able to read in the GUI. After the TLS fix this is the
+        # most common fault path, so silence here would be a hole, not a feature:
+        # record it locally, never mail it, never alert an order, keep the run.
+        if recoverable_read or not notify:
+            self._record_fault_diagnostic(reason, site=site,
+                stage=_failure_stage_label(exc),
+                cause_class=self._fault_cause_label(exc),
+                escalation=("已自动断开并重新连接程序自己的浏览器连接（Chrome 未被关闭），"
+                            "下一轮继续读取；业务未停止，本次不发邮件提醒"
+                            if reattached else
+                            "已自动推迟到下一轮，业务未停止；本次不发邮件提醒"),
+                external_effect="本次仅记录读取/连接重试，未新增外部写入意图",
+                next_retry_at=utc_now() + interval, deferred=True)
         if notify and not recoverable_read and self._v13_ledger_ready:
-            self._notify_runtime_fault( f"{self._run_id or 'run'}:{site}:{since}", reason, at=utc_now())
+            self._notify_runtime_fault( f"{self._run_id or 'run'}:{site}:{since}", reason,
+                at=utc_now(), cause_class=self._fault_cause_label(exc))
         elif notify and not recoverable_read:
             self._alert_owner_of_login(stop_reason=f"{site}等待恢复；程序未停止")
         self._notify()
@@ -2885,11 +3372,158 @@ class ProductionBackend(GuiBackend):
         })
         if self._v13_ledger_ready:
             self._notify_runtime_fault( self._cycle_id or self._run_id or "run",
-                "GOOGLE_READ_RETRY_EXHAUSTED", at=utc_now())
+                "GOOGLE_READ_RETRY_EXHAUSTED", at=utc_now(),
+                cause_class=self._fault_cause_label(exc))
         else:
             self._alert_owner_of_login(stop_reason="Google表格等待恢复；程序未停止")
         self._notify()
         return True
+
+    def _record_fault_diagnostic(self, reason, *, site=None, stage=None, cause_class=None,
+            escalation="", external_effect="尚未确认", uncertainty="", impact="",
+            next_retry_at=None, deferred=False, log_hint="runtime/logs/INSO_V1.3.log"):
+        """Remember one Owner-facing fault record.  Never invents a cause."""
+
+        from .fault_diagnostics import build_diagnostic
+        now = utc_now()
+        with self._lock:
+            first = self._fault_first_seen.setdefault(reason, now)
+            site_first = self._site_fault_since.get(site) if site else None
+            if site_first is not None and site_first < first:
+                first = site_first
+            self._fault_last_seen[reason] = now
+            count = self._fault_counts[reason] = self._fault_counts.get(reason, 0) + 1
+            diagnostic = build_diagnostic(reason, site=site, stage=stage, cause_class=cause_class,
+                first_seen=first, last_seen=now, occurrences=count,
+                escalation=escalation, external_effect=external_effect,
+                uncertainty=uncertainty, impact=impact, next_retry_at=next_retry_at,
+                deferred=deferred, log_hint=log_hint)
+            rest = tuple(item for item in self._faults if item.code != reason)
+            self._faults = (diagnostic,) + rest[:11]
+        return diagnostic
+
+    def _resolve_faults_after_success(self, module):
+        """Clear faults that a completed module has just disproved."""
+
+        sites = {"inquiry": ("Google Sheets", "INSO", "Browser/CDP"),
+                 "quotation": ("Google Sheets", "INSO", "Browser/CDP"),
+                 "tp": ("Google Sheets",)}.get(module, ())
+        with self._lock:
+            still_out = set(self._site_outages)
+        for site in sites:
+            if site not in still_out:
+                self._resolve_faults(site=site)
+
+    def _resolve_faults(self, *, site=None, reason=None):
+        """Mark a recovered fault resolved and persist that evidence.
+
+        The page must not show history as live, and a restart must not either:
+        the same incident row that carries the diagnostic is settled here.
+        """
+
+        settled = []
+        with self._lock:
+            updated, changed = [], False
+            for item in self._faults:
+                match = (reason is not None and item.code == reason) or (
+                    reason is None and site is not None and item.site == site)
+                if match and item.recovered_at is None:
+                    item = replace(item, recovered_at=utc_now().isoformat(),
+                                   phase="已恢复", next_retry_at=None)
+                    settled.append(item)
+                    changed = True
+                updated.append(item)
+            if changed:
+                self._faults = tuple(updated)
+        for item in settled:
+            self._persist_fault_recovery(item)
+
+    def _persist_fault_recovery(self, diagnostic):
+        """Settle the durable incident that carries this diagnostic.
+
+        Only the shared-runtime / same-site incident rows flip to inactive.
+        Order alerts, holds and UNKNOWN/SENT outcomes are never touched here.
+
+        A scoped run has standing only for the orders it was given: the same
+        rule ``_site_recovered`` already applies must govern this path too, or a
+        recovery here would close another order's incident and make the next
+        real outage look "already recovered".
+        """
+
+        store = self._v12_store
+        if store is None or not callable(getattr(store, "resolve_incidents", None)):
+            return
+        within = None
+        if getattr(self, "_enforce_scope", False):
+            scope = getattr(self, "_run_scope", None)
+            within = frozenset(scope.inquiry_ids) if scope is not None else frozenset()
+        modules = [module for module in ("business_runtime", diagnostic.site)
+                   if isinstance(module, str) and module]
+        for module in dict.fromkeys(modules):
+            try:
+                store.resolve_incidents(module, at=utc_now(),
+                                        diagnostic_code=diagnostic.code,
+                                        within=within)
+            except (sqlite3.Error, V12DatabaseError) as error:
+                log.warning("Fault recovery could not be persisted (%s)",
+                            type(error).__name__)
+
+    def _current_module_stage(self):
+        """Which module was running when the fault fired (for the page)."""
+
+        contexts = getattr(self, "_module_contexts", None) or ()
+        return contexts[-1] if contexts else None
+
+    def _fault_cause_label(self, exc):
+        """A stable label for the page: exception class plus a machine reason code.
+
+        Only a class name and an ``[A-Z_]`` style code are ever read; messages are
+        where URLs, sheet titles and tokens hide.
+        """
+
+        node, deepest, visited = exc, None, set()
+        while node is not None and id(node) not in visited:
+            visited.add(id(node))
+            deepest = node
+            node = node.__cause__ or node.__context__
+        if deepest is None:
+            return None
+        name = type(deepest).__name__
+        code = getattr(deepest, "reason_code", None)
+        if not (isinstance(code, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", code)):
+            # Some faults carry their stable sub-reason as the message itself
+            # (e.g. ValueError("TAB_TARGET_ID_MISMATCH")); only our own codes match.
+            marker = str(deepest).strip()
+            code = marker if re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", marker) else None
+        if code:
+            return f"{name}({code})"
+        return name
+
+    def _fault_diagnostics(self) -> tuple:
+        # GUI pure read: the tuple is replaced atomically by its writers, so the
+        # projection never waits on the business lock.
+        return self._faults
+
+    def _hydrate_fault_diagnostics(self):
+        """Load unresolved historical faults once, from the existing ledger rows."""
+
+        if self._faults_hydrated:
+            return
+        store = self._v12_store
+        if store is None or not callable(getattr(store, "recent_fault_diagnostics", None)):
+            return
+        self._faults_hydrated = True
+        try:
+            historical = store.recent_fault_diagnostics(12)
+        except Exception:  # noqa: BLE001 - observation must never stop business
+            log.debug("Historical fault projection unavailable")
+            return
+        if not historical:
+            return
+        with self._lock:
+            known = {item.code for item in self._faults}
+            restored = tuple(item for item in historical if item.code not in known)
+            self._faults = self._faults + restored[:12 - len(self._faults)] if restored else self._faults
 
     def accept_market_fault(self, fault):
         """Original owner consumes immutable actor fault via existing stop path.
@@ -3018,6 +3652,12 @@ class ProductionBackend(GuiBackend):
         log.warning("Runtime fault", extra={
             "runtime_reason": safe_reason, "runtime_cause": type(root_cause).__name__,
         })
+        diagnostic = self._record_fault_diagnostic(reason, site=site,
+            stage=self._current_module_stage(),
+            cause_class=self._fault_cause_label(exc),
+            escalation=("连续三小时未恢复，已停止共享业务" if prolonged else
+                        "已停止共享业务；本次没有达到三小时升级门限"),
+            external_effect=self._external_effect_state())
         # The canonical manual-login path already mailed this exact legacy pause.
         if (isinstance(exc, V12Fault) and exc.reason == "Research requires session repair"
                 and self._inquiries and self._inquiries[-1] in self._manual_inquiries):
@@ -3026,12 +3666,30 @@ class ProductionBackend(GuiBackend):
             self._record_fault_alert(fault_inquiry, "FAULT", reason)
         if (shared_fault or fault_inquiry is None) and self._v13_ledger_ready:
             try:
-                self._notify_runtime_fault(self._run_id or "run",reason,at=utc_now())
-                self._v12_composition.coordinator.run_notifications(now=utc_now())
+                self._notify_runtime_fault(self._run_id or "run",reason,at=utc_now(),
+                                           diagnostic=diagnostic)
+                self._run_notifications(utc_now())
             except (sqlite3.Error,V12DatabaseError):
                 self._alert_owner_of_login(stop_reason=reason)
         elif self._purchase_completion is None or fault_inquiry is None:
             self._alert_owner_of_login(stop_reason=reason)
+
+    def _external_effect_state(self) -> str:
+        """What the write ledger can actually prove about pending external writes."""
+
+        store = self._v12_store
+        path = getattr(store, "database_path", None) if store is not None else None
+        if path is None:
+            return "尚未确认"
+        try:
+            from src.workflow.write_intents import SqliteWriteIntentJournal
+            open_documents = SqliteWriteIntentJournal(path).open_documents()
+        except Exception:  # noqa: BLE001 - an unreadable ledger is never "clean"
+            return "写入台账不可读，外部写入结果尚未确认；不可盲目重试"
+        if not open_documents:
+            return "没有未结清的外部写入意图；本次未确认任何新的外部写入"
+        return (f"仍有 {len(open_documents)} 个文档的写入结果未确认；"
+                "这些写入不会自动重试，请先人工核对")
 
     def _record_fault_alert(self, inquiry_id, phase, reason):
         if isinstance(inquiry_id, str) and inquiry_id.startswith("tp_"):
@@ -3041,7 +3699,7 @@ class ProductionBackend(GuiBackend):
         try:
             self._purchase_completion.notify(inquiry_id, phase, reason, at=utc_now())
             if self._v12_composition is not None:
-                self._v12_composition.coordinator.run_notifications(now=utc_now())
+                self._run_notifications(utc_now())
         except (sqlite3.Error, V12DatabaseError):
             self._state = RunState.MODULE_PAUSED
             self._stop.set()
@@ -3460,7 +4118,7 @@ class ProductionBackend(GuiBackend):
                 uncertainty="录单未完成，未发采购；不据此认定网站故障。")
         return proof
 
-    def _notify_runtime_fault(self, key, reason, *, at):
+    def _notify_runtime_fault(self, key, reason, *, at, diagnostic=None, cause_class=None):
         from src.sheets.worksheet_schema import worksheet_schema
         from src.workflow.automatic_admission import binding_key
         inquiry = self._active_inso_inquiry
@@ -3470,6 +4128,11 @@ class ProductionBackend(GuiBackend):
         site = next((value for code, value in sites.items() if reason.startswith(code+"_")), None)
         if reason == "GOOGLE_READ_RETRY_EXHAUSTED":
             site = "Google Sheets"
+        if reason.startswith("CDP_PAGE_"):
+            # A page-resource stop is a Browser/CDP fault: without this the record
+            # has no site, so no successful module could ever settle it and the
+            # page would keep a stale red fault across restarts.
+            site = "Browser/CDP"
         proof = None
         from src.workflow.notification_review import RUNTIME_SAFETY_REASONS
         if (not manual_login and self._runtime_stop_reason == reason
@@ -3517,7 +4180,12 @@ class ProductionBackend(GuiBackend):
             incident_key = f"program-blocked:{site}"
             # Only a previously bound active task can establish affected business.
             # Read failures are not evidence that Google as a whole is unavailable.
-            candidates = [i for i in self._store.all_items() if i.status.value in {"QUEUED", "RETRY_WAIT", "RESEARCHING"}] if self._store else []
+            # RFQ-021-R4: the incident record itself is program-wide, but its
+            # per-order proof must not attach to an order this run was not asked
+            # to touch -- that would be an event/alert on out-of-scope history.
+            candidates = [i for i in self._store.all_items()
+                if i.status.value in {"QUEUED", "RETRY_WAIT", "RESEARCHING"}
+                and self._order_in_scope(i.inquiry_id)] if self._store else []
             for item in candidates:
                 current = self._current_mail_source(item.inquiry_id, at, module="inquiry", persistent=True)
                 if current is not None and current[1].cells.get(worksheet_schema(item.record_identity.worksheet.worksheet).status_column) == "未发":
@@ -3532,6 +4200,16 @@ class ProductionBackend(GuiBackend):
             if proof is not None:
                 proof.update(active=True, verified_at=at.isoformat(), retries_exhausted=True,
                              needs_owner=reason.endswith("OUTAGE_THREE_HOURS"))
+        # One durable, Owner-readable record per fault.  It rides the existing
+        # incident row instead of a second, divergent state store.
+        if diagnostic is None:
+            diagnostic = self._record_fault_diagnostic(reason, site=site,
+                cause_class=cause_class,
+                escalation="已自动推迟本轮，等待下一轮重试" if not self._stop.is_set()
+                           else "业务已停止等待人工处理",
+                external_effect=self._external_effect_state())
+        if proof is not None:
+            proof["diagnostic"] = diagnostic.to_dict()
         notify_runtime_fault(self._v12_store, key, reason, at=at, evidence=proof,
                              occurrence=self._cycle_id or key)
 
@@ -3824,6 +4502,20 @@ class ProductionBackend(GuiBackend):
 
     def get_v12_order_state(self, inquiry_id):
         dto = self._v13_states.get(inquiry_id)
+        if dto is not None and self._v12_store is not None:
+            # A closed order must not keep a quotation observation alive: the Owner
+            # finished that line in the sheet, so "quote failed / status not synced"
+            # would colour a finished order for the rest of the session. A purchased
+            # order keeps a genuine quotation failure visible, but not a "write the
+            # status back" reminder — the sheet is the authority for that.
+            try:
+                state = self._v12_store.business_state(inquiry_id)
+                if (state is BusinessState.HUMAN_COMPLETED
+                        or (state is BusinessState.PURCHASE_RECORDED
+                            and dto.business_label is V12BusinessLabel.QUOTATION_STATUS_PENDING)):
+                    dto = None
+            except KeyError:
+                pass
         if dto is None:
             if self._v12_store is None:
                 preview = self._startup_interruptions.get(inquiry_id)
@@ -3853,6 +4545,10 @@ class ProductionBackend(GuiBackend):
     def _idle_login_tick(self, *, now):
         """Optional maintenance at the serial poll boundary; never a business fault."""
         if not self._v13_enabled:
+            return
+        # RFQ-021-R4: idle keep-alive opens Chrome pages for no particular order.
+        # A scoped trial or a preview has no standing to do that.
+        if getattr(self, "_preview_mode", False) or getattr(self, "_enforce_scope", False):
             return
         paused = self._combined is not None and self._combined.v12_paused
         if self._state is not RunState.RUNNING or paused or self._immediate_stop_requested():
@@ -3915,6 +4611,8 @@ class ProductionBackend(GuiBackend):
         self._idle_login_since = utc_now()  # New idle window begins after the sweep finishes.
 
     def start_order_mail_check(self) -> bool:
+        if not self._external_action_allowed("smtp", "订单邮件检查"):
+            return False
         if not self._mail_start_retry_lock.acquire(blocking=False):
             return False
         try:
@@ -3967,6 +4665,7 @@ class ProductionBackend(GuiBackend):
                 config_path=self.config_path,
                 production_path=self.production_path, root=self.root, notify=self._notify_order_exception,
                 resolve_notify=self._resolve_order_exception,
+                page_admission=self._page_admission,
             )
         except Exception:  # noqa: BLE001 - never leak provider/customer data
             stage, text = "STOPPED", "订单头部检查未完成；未保存或提交，请检查配置后重试。"
@@ -3975,6 +4674,12 @@ class ProductionBackend(GuiBackend):
             self._order_mail_report = text
 
     def start_login_all_sites(self) -> None:
+        # RFQ-021-R3 P0-C: the sweep drives every site's login with no order
+        # filter. A Google write permission says nothing about that, so an
+        # enforced scope refuses it outright rather than checking a target.
+        if self._preview_mode or self._enforce_scope:
+            self._append_log("WARNING", "一键登录在预览或受控试运行模式下不可用。")
+            return
         if not self._mail_start_retry_lock.acquire(blocking=False):
             self._append_log("WARNING", "独立服务正在初始化，请稍后再执行登录检查。")
             return
@@ -4049,6 +4754,15 @@ class ProductionBackend(GuiBackend):
     @foreground_resources
     def _run_login_sweep(self, *, background=False, check_only=False, only_sites=None) -> tuple[SiteLoginResult, ...]:
         """Attach the approved CDP browser, sweep it, then give it back."""
+
+        # RFQ-021-R4/R5: a login sweep is a whole-browser effect with no order
+        # filter, so it cannot belong to a scoped trial or a preview. The button
+        # already refused it; these two automatic paths (`business_continuations`,
+        # `_idle_login_tick`) are the same refusal, and `check_only` is included
+        # because it still attaches the protected browser and parks a target.
+        if getattr(self, "_preview_mode", False) or getattr(self, "_enforce_scope", False):
+            self._append_log("WARNING", "预览或受控试运行不执行跨站点登录巡检。")
+            return ()
 
         try:
             production_config = json.loads(
@@ -4280,7 +4994,8 @@ class ProductionBackend(GuiBackend):
             modules=modules, cycle_started_at=started, cycle_started_monotonic=tick,
             cycle_finished_at=finished, local_loading=self._view_loading,
             timings=timings, cycle_durations=durations,
-            planned_check_at=planned, recovery_site=recovery)
+            planned_check_at=planned, recovery_site=recovery,
+            faults=self._fault_diagnostics())
 
     def _invalidate_order_view(self, key):
         # Existing callbacks may run alongside the existing refresh worker.
@@ -4300,6 +5015,7 @@ class ProductionBackend(GuiBackend):
                         self._view_snapshot = replace(self._view_snapshot, session=session)
                 return
             self._view_last_refresh = monotonic()
+            self._hydrate_fault_diagnostics()
             with self._snapshot_lock:
                 dirty, self._view_dirty = self._view_dirty, set()
             for key in dirty:
@@ -4348,9 +5064,20 @@ class ProductionBackend(GuiBackend):
                         and target.module_id == "tp" and target.model == order.model
                         and target.quantity == order.quantity else None)
                 cached = self._view_state_cache.get(key)
-                if cached is None or cached[0] != order or force:
+                # The cached observation is only valid while the durable state is
+                # unchanged: an order that the Owner (or the reconciliation) closes
+                # would otherwise keep showing its old "needs review" label and
+                # colour for the rest of the session, because the local order row
+                # itself never changes.
+                try:
+                    durable_state = (self._v12_store.business_state(key)
+                                     if self._v12_store is not None else None)
+                except (KeyError, V12DatabaseError, sqlite3.Error):
+                    durable_state = None
+                signature = (order, durable_state)
+                if cached is None or cached[0] != signature or force:
                     dto = self.get_v12_order_state(key) if not key.startswith("tp_") else None
-                    self._view_state_cache[key] = (order, dto)
+                    self._view_state_cache[key] = (signature, dto)
                 dto = self._view_state_cache[key][1]
                 if dto is not None:
                     # Re-evaluate freshness and in-progress source reads even

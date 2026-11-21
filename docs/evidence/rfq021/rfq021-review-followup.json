@@ -1,0 +1,136 @@
+{
+  "rfq": "RFQ-021-R2",
+  "title": "CEO review follow-up: three P0 fixes plus INC-20261115 forensics",
+  "generated_at": "2026-11-15T10:35:00+08:00",
+  "status": "PASS_SOURCE_SCOPE",
+  "release_hold": true,
+  "flags": {
+    "installed": false,
+    "production_stopped": false,
+    "business_start": false,
+    "production_sqlite_written": false,
+    "chrome_9222_touched": false,
+    "merged": false,
+    "tests_deleted_or_skipped": false
+  },
+  "p0_fixes": {
+    "P0-A_scope_binding": {
+      "defect": "run_scope.inquiry_ids never reached ProductionBackend._inquiry_scope, so compose_v12_production received None",
+      "fix": [
+        "_inquiry_scope falls back to run_scope.inquiry_ids when inquiry_ids is not passed",
+        "quotation / tp / notification refused by RunScope (SCOPE_MODULE_NOT_ISOLATABLE) because no per-order filter exists",
+        "smtp write target refused (SCOPE_SMTP_NOT_ISOLATABLE)"
+      ],
+      "tests": [
+        "test_run_scope_binds_the_order_scope_it_was_given",
+        "test_explicit_inquiry_ids_still_win_over_the_scope",
+        "test_composition_receives_the_scoped_orders (real _run, asserts compose kwargs)",
+        "test_a_module_without_order_isolation_is_refused",
+        "test_mail_cannot_be_named_as_a_write_target"
+      ],
+      "status": "FIXED_AND_TESTED"
+    },
+    "P0-B_mail_service": {
+      "defect": "start_process_services() ran unconditionally outside preview, opening IMAP/SMTP outside any scope",
+      "fix": [
+        "may_start_process_services(): False in preview; in an enforced scope requires notification module AND smtp target; unchanged on the legacy path",
+        "launcher asks before starting; start_process_services and retry_failed_process_service refuse on their own"
+      ],
+      "tests": [
+        "test_preview_never_may_start_process_services",
+        "test_scoped_run_without_mail_scope_never_starts_process_services",
+        "test_legacy_composition_is_unchanged",
+        "test_launcher_does_not_start_mail_when_the_backend_refuses"
+      ],
+      "status": "FIXED_AND_TESTED"
+    },
+    "P0-C_effect_entries": {
+      "defect": "only the Start button was disabled in preview; order-mail, login-all and per-order actions stayed reachable",
+      "fix": [
+        "start_order_mail_check and start_login_all_sites gated by _external_action_allowed",
+        "can_order_action / order_action_hint / request_order_action refuse in preview and for orders outside the scope",
+        "effect_actions_blocked() drives the two buttons; handlers explain the refusal"
+      ],
+      "tests": [
+        "test_preview_refuses_order_mail_and_login_sweep",
+        "test_scoped_run_refuses_order_actions_outside_the_named_orders",
+        "test_order_mail_handler_explains_the_refusal",
+        "test_login_all_handler_explains_the_refusal"
+      ],
+      "status": "FIXED_AND_TESTED"
+    }
+  },
+  "capability_reduction": {
+    "quotation": "refused in a scope (no per-order filter)",
+    "tp": "refused in a scope (no per-order filter)",
+    "notification": "refused in a scope (queue has no per-order filter)",
+    "smtp": "cannot be named as a write target",
+    "consequence": "a scoped trial can only run the inquiry module, restricted to the named orders"
+  },
+  "candidate": {
+    "source_commit": "1314da5d",
+    "base_commit": "8cded532",
+    "exe_size_bytes": 8457679,
+    "exe_sha256": "74586eb29ed19e037e2045f481d4ed2226aa555a8f6ef7951028c873fa68d0ed",
+    "file_count": 2872,
+    "manifest": "docs/evidence/rfq021/INSO_V1.6-artifact-manifest.sha256",
+    "manifest_sha256": "74ae29c793fb759e84a7c9bc450c77e75cf56df948ed778af67a0dcecbe77118",
+    "previous_manifest": "docs/evidence/rfq021/INSO_V1.6-artifact-manifest-r1.sha256",
+    "previous_exe_sha256": "63bcd6cea66003f84ce016cfa8742dc479a9d67ce3f579a92b5b7c398bf4465b",
+    "verification": {"tool": "verify_release_candidate.ps1", "matched": 2872, "missing": 0, "mismatch": 0, "unexpected": 0, "result": "PASS"}
+  },
+  "self_checks": {
+    "self_check": 0,
+    "idle_self_check": 0,
+    "preview_self_check": {"exit": 0, "rounds": 2, "duration_seconds": 4, "ok": true,
+      "blockers": ["PREVIEW_ONLY"], "start_state": "disabled",
+      "business_thread_started": false, "mail_service_started": false,
+      "process_services_consumed": false},
+    "artifact_scan": "RELEASE_SCAN_OK"
+  },
+  "tests": {
+    "full_suite": {"collected": 4237, "passed": 4234, "failed": 2, "skipped": 1, "duration_seconds": 424.76,
+      "report": "docs/evidence/rfq021/pytest-report-r2.xml"},
+    "failed_nodeids": [
+      "tests/launcher/test_release_infrastructure.py::test_backend_closes_only_owned_browser_after_runtime_thread_exits[False]",
+      "tests/launcher/test_release_infrastructure.py::test_backend_closes_only_owned_browser_after_runtime_thread_exits[True]"
+    ],
+    "captured_cause": "V12Fault(WORKFLOW_LEDGER_UNAVAILABLE) <- sqlite3.OperationalError(attempt to write a readonly database) in the pytest temp directory",
+    "baseline_same_environment": {"tree": "e59ce62f via git archive", "failed": 2, "same_nodeids": true,
+      "note": "the untouched parent commit fails the same two nodeids"},
+    "isolated_rerun": "the pair passes when the test run is allowed to write its temp directory",
+    "new_tests": 16
+  },
+  "incident_inc_20261115": {
+    "running_exe_sha256": "e9e3da33417414abac53f8a88a67d9f053bcdaeab9730eae9ad8bd7870dffad0",
+    "running_pids": [38948, 34304],
+    "started_at": "2026-11-14T13:47:50+08:00",
+    "cmdline": "--start-inquiry",
+    "fault": "SHEETS_READ_UNAVAILABLE",
+    "cause_class": "SSLEOFError",
+    "first_fault_at": "2026-11-15T06:06:49.995+08:00",
+    "failed_cycle": {"module": "quotation", "begin": "06:06:28.904", "failed": "06:06:48.243", "elapsed_s": 19.344},
+    "last_good_cycle_at": "2026-11-15T05:51:33+08:00",
+    "process_crashed": false,
+    "crash_evidence": "fatal.log empty; no Application Error events 05:30-07:00",
+    "state": "MODULE_PAUSED",
+    "unconfirmed_external_effects": "none found",
+    "effect_evidence": [
+      "no per-row result lines in the failed cycle",
+      "0 workflow_v12_events after 2026-11-14T21:52Z",
+      "purchase states unchanged: 26 SAVED / 7 VALIDATION_FAILED / 3 AI_RECOGNIZED / 1 MANUAL_REVIEW",
+      "3 active V13 holds unchanged, no fourth hold",
+      "0 active V12 alerts"
+    ],
+    "root_cause_status": "CONFIRMED_CLASS_NOT_NETWORK_MOMENT",
+    "network_moment": "NOT_VERIFIED (no packet capture, no system network events)"
+  },
+  "still_open": [
+    "B3 complete rollback snapshot of the running version",
+    "B4 clean stop evidence",
+    "quotation / TP / notification cannot be order-scoped",
+    "SSLEOFError is not treated as a recoverable read, so one TLS drop parks the runtime",
+    "no real scoped business run has been executed",
+    "candidate not installed; build is not bit-reproducible"
+  ]
+}

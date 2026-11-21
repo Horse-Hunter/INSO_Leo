@@ -105,3 +105,43 @@ def test_restart_preserves_only_recent_proven_unsubmitted_read_retry(tmp_path,mo
         assert state is BusinessState.RESEARCH_RETRY_WAIT and store.get_by_inquiry_id(iid).status.value=="QUEUED"
     else:
         assert state in {BusinessState.INTERRUPTED_UNSENT,BusinessState.INTERRUPTED_POSSIBLY_SENT}
+
+
+def test_a_repeated_rfq_header_block_never_hides_the_rows_below_it():
+    """2026-11-17 rows 982/983: blank rows, a second header block, then 未发.
+
+    The Owner's table repeats its RFQ header for every block, so a second header
+    is normal structure, not a shifted row. Discovery must still return the rows
+    below it with their exact physical positions, and the same-day quote_date
+    must pass the seven-day gate.
+    """
+    from dataclasses import replace
+
+    from src.sheets.google_reader import _to_worksheet_rows
+
+    grid = [
+        [""] * 7,                                                        # 979
+        [""] * 7,                                                        # 980
+        ["STATUS", "WHAT", "CLASS", "WHO", "MPN", "MFR", "Qty"],          # 981 header
+        ["未发", "", "A", "Majic", "ADS1115IDGSR", "TI", 1500],           # 982
+        ["未发", "", "A", "Majic", "G60N100BNTD", "", 400],               # 983
+    ]
+    rows = _to_worksheet_rows(grid, first_row=979)
+    rows = tuple(replace(row, source_order_date="2026-11-17") for row in rows)
+    records = query_pending_records(SimpleNamespace(read_rows=lambda _: rows), WS)
+
+    assert [record.row_position for record in records] == [982, 983]
+    assert [record.model for record in records] == ["ADS1115IDGSR", "G60N100BNTD"]
+    assert [record.quantity for record in records] == [1500, 400]
+    today = datetime(2026, 11, 17, 10, tzinfo=timezone.utc)
+    for record, row in zip(records, rows[3:]):
+        result = admit(record.record_identity, row, (), lambda: None, now=today, module="inquiry")
+        assert result.allowed and result.date_source == "SOURCE_ORDER_DATE"
+
+    # And the same rows are still refused once the source date is older than the
+    # seven-day window: the gate was not widened to make the incident disappear.
+    stale = tuple(replace(row, source_order_date="2026-11-09") for row in rows)
+    stale_records = query_pending_records(SimpleNamespace(read_rows=lambda _: stale), WS)
+    for record, row in zip(stale_records, stale[3:]):
+        assert not admit(record.record_identity, row, (), lambda: None,
+                         now=today, module="inquiry").allowed

@@ -22,7 +22,12 @@ from time import monotonic
 from urllib.parse import parse_qs, urlsplit
 
 from src.research.cdp_pages import (
+    DocumentWriteBusy,
+    DocumentWriteHeld,
+    PageResourceAdmission,
+    bind_page_admission,
     bounded_browser_call,
+    google_document_key_for_spreadsheet,
     page_owner,
     shared_playwright_factory,
 )
@@ -182,6 +187,57 @@ def _readback_mismatch_code(confirmed, expected, first):
     return "GOOGLE_READBACK_DIFF_" + "_".join(columns) if columns else "GOOGLE_READBACK_SHAPE_UNCONFIRMED"
 
 
+def _transport_stalled(exc):
+    """True only when a page/session command went *unanswered*.
+
+    A site that answers with a network error page, a download that reports
+    ``net::ERR_*`` or an authentication prompt is an answer, and re-attaching the
+    client would change nothing. A Playwright deadline with no protocol reply is
+    the signature measured on 2026-11-19: Chrome was reachable from a fresh
+    client while the runtime's own attachment answered nothing for 32 hours.
+    """
+
+    cause, visited = exc, set()
+    while cause is not None and id(cause) not in visited:
+        visited.add(id(cause))
+        if type(cause).__module__.startswith("playwright") and type(cause).__name__ in {
+            "TimeoutError", "TargetClosedError", "Error",
+        }:
+            if type(cause).__name__ == "TimeoutError":
+                return True
+            if re.search(r"Target (page, context or browser )?closed|Connection closed|Browser closed",
+                         str(cause)):
+                return True
+        elif isinstance(cause, TimeoutError) and str(cause) == "GOOGLE_WEB_SESSION_UNAVAILABLE":
+            return True
+        cause = cause.__cause__ or cause.__context__
+    return False
+
+
+def _failure_stage(exc):
+    """The first own step label carried by the failure, if one was recorded."""
+
+    cause, visited = exc, set()
+    while cause is not None and id(cause) not in visited:
+        visited.add(id(cause))
+        stage = getattr(cause, "inso_stage", None)
+        if isinstance(stage, str) and stage:
+            return stage
+        cause = cause.__cause__ or cause.__context__
+    return None
+
+
+def _chain_label(exc):
+    """Class names only (never a message): enough to locate the failing hop."""
+
+    names, cause, visited = [], exc, set()
+    while cause is not None and id(cause) not in visited and len(names) < 5:
+        visited.add(id(cause))
+        names.append(type(cause).__name__)
+        cause = cause.__cause__ or cause.__context__
+    return "<-".join(names)
+
+
 def _no_read_guard():
     return None
 
@@ -190,8 +246,10 @@ class GoogleSheetsWebService:
     """One thread-safe transport injected into existing readers and writers."""
     def __init__(self, session, *, actions_factory=GoogleQuotationUpdateActions, on_read_success=lambda: None,
                  timer=monotonic, read_guard=_no_read_guard, stop_requested=lambda: False,
-                 retain_pages=False, retire_session=None, isolated_read=False):
+                 retain_pages=False, retire_session=None, isolated_read=False, page_admission=None,
+                 on_transport_stalled=None):
         self._session, self._actions_factory = session, actions_factory
+        self._page_admission = page_admission
         self._isolated_read = isolated_read
         self._grid_lock = threading.RLock() if isolated_read else _GOOGLE_GRID_LOCK
         if isolated_read:
@@ -199,6 +257,11 @@ class GoogleSheetsWebService:
             self._actions_factory = partial(actions_factory, page_role="google-mail-read")
         self._retire_session = retire_session or session
         self._on_read_success = on_read_success
+        # The Owner must never have to restart the program because the shared CDP
+        # attachment went deaf: report the first stalled page channel of a poll so
+        # the launcher can re-attach once, then re-use the same safety gates.
+        self._on_transport_stalled = on_transport_stalled
+        self._stall_reported = False
         self._timer, self._read_guard, self._stop_requested = timer, read_guard, stop_requested
         # One bounded process-service cache; no pages, files or caller-mutable rows.
         self._snapshots = OrderedDict()
@@ -278,6 +341,7 @@ class GoogleSheetsWebService:
             pages.enter_context(google_operation_scope(
                 retained=self._retained_pages, lock=self._grid_lock))
             token = self._poll_handle.set({"handle": None, "lifetime": lifetime, "pages": pages})
+            self._stall_reported = False
             try:
                 yield
             finally:
@@ -306,7 +370,7 @@ class GoogleSheetsWebService:
                 retained=self._retained_pages, lock=self._grid_lock))
 
     @contextmanager
-    def _operation_session(self):
+    def _operation_session(self, *, allow_reattach=True):
         state = self._poll_handle.get()
         with ExitStack() as lifetime:
             try:
@@ -319,12 +383,29 @@ class GoogleSheetsWebService:
             except Exception as exc:
                 # Only attachment failed; no UI operation/write has begun.
                 if _temporary_web_read_failure(exc):
-                    raise TimeoutError("GOOGLE_WEB_SESSION_UNAVAILABLE") from exc
+                    log_step("google-session", cause=exc)
+                    if allow_reattach:
+                        self._note_transport_stall()
+                    error = TimeoutError("GOOGLE_WEB_SESSION_UNAVAILABLE")
+                    error.inso_stage = "google-session"
+                    raise error from exc
                 raise
             if state is None and self._retained_pages is not None:
                 lifetime.enter_context(google_operation_scope(
                     retained=self._retained_pages, lock=self._grid_lock))
             yield handle
+
+    def _note_transport_stall(self):
+        """Ask the launcher to drop and rebuild its CDP client, once per poll."""
+
+        if self._stall_reported or self._on_transport_stalled is None:
+            return
+        self._stall_reported = True
+        try:
+            self._on_transport_stalled()
+        except Exception as exc:  # noqa: BLE001 - a failed re-attach must not mask the read
+            logging.getLogger("inso.diagnostics").warning(
+                "CDP re-attach request failed", extra={"runtime_cause": type(exc).__name__})
 
     def operations_idle(self):
         """Optional original-Owner checkpoint under the unchanged global lock."""
@@ -525,10 +606,34 @@ class GoogleSheetsWebService:
         if write and (geometry is None or options.get("valueInputOption") != "RAW"):
             raise ValueError("GOOGLE_WRITE_UNCONFIRMED")
         base = f"https://docs.google.com/spreadsheets/d/{spreadsheet}/edit#gid=0"
-        with self._grid_lock, self._operation_session() as handle:
+        document = google_document_key_for_spreadsheet(spreadsheet)
+        with self._grid_lock, self._operation_session(allow_reattach=not write) as handle:
+            admission = self._page_admission
+            if admission is None:
+                admission = getattr(handle.browser, "_inso_page_admission", None)
+            if isinstance(admission, PageResourceAdmission):
+                bind_page_admission(handle.browser, admission)
+            elif write:
+                # A write with no shared admission cannot prove that no other
+                # client already owns an unresolved effect on this document.
+                raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_PAGE_ADMISSION_UNCONFIRMED")
+            write_owner = None
+            if write:
+                try:
+                    admission.require_document_writable(document)
+                except DocumentWriteHeld as exc:
+                    raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from exc
             actions = self._actions_factory(browser_handle=handle, location=_Location(base))
             actions._read_only = not write
             dirty = False
+            if write:
+                try:
+                    write_owner = object()
+                    admission.begin_document_write(document, write_owner)
+                except DocumentWriteHeld as exc:
+                    raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from exc
+                except DocumentWriteBusy as exc:
+                    raise QuotationInputBusy("GOOGLE_QUOTATION_INPUT_BUSY") from exc
             stage = "google-open-sheet"
             try:
                 if write and geometry[0] == "报价输入":
@@ -649,12 +754,21 @@ class GoogleSheetsWebService:
                         "runtime_reason": reason, "runtime_cause": type(exc).__name__})
                 if dirty:
                     actions._protected = True
+                    if isinstance(admission, PageResourceAdmission):
+                        admission.hold_document(document, self, "GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED")
                     raise QuotationInputUnavailable("GOOGLE_WRITE_SETTLEMENT_UNCONFIRMED") from None
                 # Same bounded retry/next-15-minute policy as existing transient reads.
                 # Never turn auth, unknown errors or write ambiguity into a retry.
                 if not write:
                     temporary = _temporary_web_read_failure(exc)
                     log_step(stage, cause=exc)
+                    if temporary and _transport_stalled(exc):
+                        # A page channel that answers nothing is the runtime's own
+                        # transport, not the site: ask for one bounded re-attach so
+                        # the next attempt uses a live client instead of failing
+                        # for the rest of the run.
+                        exc.inso_stage = stage
+                        self._note_transport_stall()
                     reason = ("GOOGLE_WEB_READ_UNAVAILABLE" if temporary else
                               getattr(exc, "reason", "GOOGLE_WEB_READ_UNCLASSIFIED"))
                     if isinstance(exc, UpdateAttemptUnconfirmed) and str(exc) in {
@@ -690,6 +804,8 @@ class GoogleSheetsWebService:
                 raise
             finally:
                 actions.close()  # Own tab only; reuse existing auth/script protection.
+                if write_owner is not None:
+                    admission.end_document_write(document, write_owner)
 
     @staticmethod
     def _headers(rows, title):
@@ -829,7 +945,8 @@ class GoogleSheetsWebService:
 
 def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, browser_handle=None,
                              on_read_success=lambda: None, read_guard=_no_read_guard,
-                             stop_requested=lambda: False, isolated_read=False, page_admission=None):
+                             stop_requested=lambda: False, isolated_read=False, page_admission=None,
+                             on_transport_stalled=None):
     """Reuse the existing shared Playwright provider; attach only, never launch/login."""
     if cdp_url.rstrip("/") != "http://127.0.0.1:9222":
         raise ValueError("CANONICAL_CDP_REQUIRED")
@@ -855,4 +972,5 @@ def build_google_web_service(cdp_url="http://127.0.0.1:9222", *, provider=None, 
 
     return GoogleSheetsWebService(session, on_read_success=on_read_success,
                                   read_guard=read_guard, stop_requested=stop_requested, retain_pages=not isolated_read, isolated_read=isolated_read,
-                                  retire_session=lambda: session(retire=True))
+                                  retire_session=lambda: session(retire=True), page_admission=page_admission,
+                                  on_transport_stalled=on_transport_stalled)

@@ -343,7 +343,9 @@ def test_compact_order_status_keeps_source_and_unconfirmed_write_visible():
                    waiting_label="已报价给客户；原写入待人工核对，不会自动重做")
     assert order_status(item, held) == "已报价给客户 · 待核对"
     stale = replace(held, source_fresh=False)
-    assert order_status(item, stale) == "状态待同步 · 待核对"
+    # Owner 2026-11-14: the column must show the sheet's own status. An old read no
+    # longer replaces it with a staleness hint; the "待核对" issue stays visible.
+    assert order_status(item, stale) == "已报价给客户 · 待核对"
     assert held.waiting_label.endswith("不会自动重做")
 
 
@@ -354,6 +356,7 @@ def test_task_filters_use_fresh_source_status_and_preserve_holds():
     quoted = order("quoted")
     held = order("held")
     stale = order("stale")
+    unproven = order("unproven")
     states = {
         "pending": V12OrderStateDTO("pending", V12BusinessLabel.PURCHASE_SENT, None,
                                     source_status="发给采购", source_fresh=True, source_verified_at=datetime.now(UTC)),
@@ -363,15 +366,21 @@ def test_task_filters_use_fresh_source_status_and_preserve_holds():
                                  source_status="已报价给客户", source_fresh=True, source_verified_at=datetime.now(UTC)),
         "stale": V12OrderStateDTO("stale", V12BusinessLabel.PURCHASE_SENT, None,
                                   source_status="已报价给客户", source_fresh=False),
+        "unproven": V12OrderStateDTO("unproven", V12BusinessLabel.HUMAN_COMPLETED, None,
+                                     source_status=None, source_link_unproven=True),
     }
-    items = (pending, quoted, held, stale)
+    items = (pending, quoted, held, stale, unproven)
     assert select_orders(items, status="待处理", states=states) == (pending,)
-    assert select_orders(items, status="已完成", states=states) == (quoted,)
-    assert select_orders(items, status="需核对", states=states) == (held, stale)
+    # A calm order's source can be older than 15 minutes between cycles; it is not
+    # a review item merely because the last successful read aged. An unproven
+    # source link still is.
+    assert select_orders(items, status="已完成", states=states) == (quoted, stale)
+    assert select_orders(items, status="需核对", states=states) == (held, unproven)
     assert sort_orders(items, "status", states=states)[0] is pending
 
 
 def test_status_expires_without_snapshot_change_and_preserves_issue(monkeypatch):
+    """Expiry must not hide the sheet status or the issue (Owner 2026-11-14)."""
     from src.gui import workbench
     from src.gui.contracts import V12BusinessLabel, V12OrderStateDTO
 
@@ -384,7 +393,7 @@ def test_status_expires_without_snapshot_change_and_preserves_issue(monkeypatch)
         def now(cls, tz=None):
             return now + timedelta(minutes=16)
     monkeypatch.setattr(workbench, "datetime", Clock)
-    assert order_status(item, state) == "状态待同步 · 重复订单"
+    assert order_status(item, state) == "未发 · 重复订单"
     assert select_orders((item,), status="需核对", states={item.inquiry_id: state}) == (item,)
 
 
@@ -416,3 +425,86 @@ def test_unknown_mail_does_not_hide_durable_purchase_alert_under_quotation_state
     state = V12OrderStateDTO(item.inquiry_id, V12BusinessLabel.QUOTATION_COMPLETED,
                              alert, active_alerts=(alert,))
     assert order_status(item, state) == "邮件及写入待核对"
+
+
+def test_the_exceptions_page_shows_the_reason_not_a_pointer_to_it():
+    """Owner 2026-11-17: opening 异常与通知 must answer "what broke and what now".
+
+    The old page printed "请按已记录状态人工核对" and forced a log hunt.  The
+    fault record is already the durable, secret-free projection, so the page only
+    has to render it.
+    """
+    from src.gui.app import InsoDashboardApp
+    from src.launcher.fault_diagnostics import build_diagnostic
+
+    fault = build_diagnostic(
+        "SHEETS_READ_UNAVAILABLE", site="Google Sheets", cause_class="SSLEOFError",
+        first_seen=datetime(2026, 11, 17, 9, 55, 5, tzinfo=UTC),
+        last_seen=datetime(2026, 11, 17, 9, 55, 8, tzinfo=UTC),
+        escalation="已停止共享业务；本次没有达到三小时升级门限",
+        external_effect="没有未结清的外部写入意图")
+    view = snapshot(faults=(fault,), modules=(
+        ModuleSnapshot("inquiry", "询价采购", status="需要人工处理",
+                       changed_at=datetime(2026, 11, 17, 9, 55, 8, tzinfo=UTC)),))
+    import tkinter
+
+    try:
+        app = InsoDashboardApp(MockBackend())
+    except tkinter.TclError:  # A broken Tcl interpreter is an environment limit.
+        import pytest
+
+        pytest.skip("Tcl/Tk is unavailable in this process; the release EXE is verified live")
+    try:
+        app._view.show_page("异常与通知")
+        app._view.render(view, force=True)
+        text = app._view.notices.get("1.0", "end")
+    finally:
+        app._view.close()
+        app._root.destroy()
+
+    assert "Google Sheets 数据读取失败" in text
+    assert "SHEETS_READ_UNAVAILABLE" in text
+    assert "SSLEOFError" in text
+    assert "询价采购、报价跟进、目标价调研" in text
+    assert "没有达到三小时升级门限" in text
+    assert "建议操作：" in text
+    assert "请按已记录状态人工核对" not in text
+
+
+def test_a_real_deferred_read_reaches_the_tk_page(tmp_path, monkeypatch):
+    """CEO RFQ-022 P1-A: backend -> snapshot -> Tk, not a hand-built snapshot.
+
+    The TLS fix turned a shared stop into a deferred read, so this is now the
+    most common fault path; it must be visible without any mail or alert.
+    """
+    import tkinter
+    from datetime import timedelta
+
+    from src.gui.app import InsoDashboardApp
+    from tests.launcher.test_google_transient_read_recovery import _tls_fault
+    from tests.launcher.test_runtime_safety_notice import harness
+
+    backend, _worker, _smtp = harness(tmp_path, monkeypatch)
+    backend._defer_website_poll(_tls_fault(), timedelta(minutes=15),
+                                notify=False, recoverable_read=True)
+    view = backend.get_workbench_snapshot()
+    assert view.faults and view.faults[0].code == "GOOGLE_WAITING_RECOVERY"
+
+    try:
+        app = InsoDashboardApp(MockBackend())
+    except tkinter.TclError:  # A broken Tcl interpreter is an environment limit.
+        import pytest
+
+        pytest.skip("Tcl/Tk is unavailable in this process; the release EXE is verified live")
+    try:
+        app._view.show_page("异常与通知")
+        app._view.render(view, force=True)
+        text = app._view.notices.get("1.0", "end")
+    finally:
+        app._view.close()
+        app._root.destroy()
+
+    assert "Google 表格等待恢复" in text
+    assert "已自动推迟到下一轮" in text
+    assert "下一轮预计：" in text
+    assert "没有未结清的外部写入意图" in text or "未新增外部写入意图" in text

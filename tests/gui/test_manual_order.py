@@ -49,8 +49,10 @@ def test_context_menu_uses_backend_eligibility_and_selected_row(monkeypatch, ena
     gui._on_order_context(SimpleNamespace(y=0, x_root=0, y_root=0))
     assert selected == ["id"]
     assert [(c["label"], c["state"]) for c in commands] == [
+        ("按表格恢复状态", "normal" if enabled_action == "resync" else "disabled"),
         ("重跑采购流程", "disabled"),
         ("重跑报价流程", "normal" if enabled_action == "quotation" else "disabled"),
         ("重跑 TP 价格", "normal" if enabled_action == "tp" else "disabled")]
-    commands[1 if enabled_action == "quotation" else 2]["command"]()
+    index = {"resync": 0, "quotation": 2, "tp": 3}[enabled_action]
+    commands[index]["command"]()
     assert requests == [("id", enabled_action)]

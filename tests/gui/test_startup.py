@@ -29,7 +29,11 @@ def test_explicit_start_flag_reuses_backend_after_gui_and_keeps_default_idle(mon
         def run(self):
             assert getattr(self, '_start_on_ready', False) == (start and loading)
             events.append('gui-run')
-    monkeypatch.setattr(sys, 'argv', ['INSO_V1.4.exe'] + (['--start-inquiry'] if start else []))
+    # RFQ-021: an explicit Start now requires the controlled scope; the test's
+    # intent (explicit start reuses the backend after GUI init) is unchanged.
+    started = ['--scoped-start', '--scope-inquiries', 'inq_' + 'a' * 24]
+    monkeypatch.setattr(sys, 'argv', ['INSO_V1.4.exe'] + (started if start else [])
+                        + (['--start-inquiry'] if start else []))
     monkeypatch.setattr(launcher, 'app_root', lambda: tmp_path)
     monkeypatch.setattr(launcher, '_configure_startup_log', lambda _: None)
     monkeypatch.setattr(launcher, 'InsoDashboardApp', App)

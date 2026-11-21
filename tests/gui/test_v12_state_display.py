@@ -62,6 +62,29 @@ def test_safe_pre_save_success_is_not_displayed_as_sent_or_still_processing():
     assert _v12_status_text(pending, "部分成功") == "处理中"
 
 
+def test_settled_label_keeps_a_failed_mail_alert_visible():
+    now = datetime(2026, 11, 14, tzinfo=UTC)
+    order = Order("inq", "MPN", "Brand", 5, "货足", None, None,
+                  OrderStatus.COMPLETED, processed_at=now)
+    alert = OrderAlertDTO("alert-mail", V12AlertCode.NOTIFICATION_FAILED,
+                          V12ReasonCode.NOTIFICATION_PERMANENT, now, True)
+    settled = V12OrderStateDTO("inq", V12BusinessLabel.HUMAN_COMPLETED, alert,
+                               active_alerts=(alert,))
+    assert _order_row_style(order, now, settled) == "error"
+
+    calm = V12OrderStateDTO("inq", V12BusinessLabel.HUMAN_COMPLETED, None)
+    assert _order_row_style(order, now, calm) == "legacy"
+
+
+def test_unproven_source_link_is_a_warning_not_history():
+    now = datetime(2026, 11, 14, tzinfo=UTC)
+    order = Order("inq", "MPN", "Brand", 5, "货足", None, None,
+                  OrderStatus.COMPLETED, processed_at=now)
+    state = V12OrderStateDTO("inq", V12BusinessLabel.HUMAN_COMPLETED, None,
+                             source_link_unproven=True)
+    assert _order_row_style(order, now, state) == "warning"
+
+
 def test_purchase_failure_does_not_push_research_sources_below_event_history(monkeypatch):
     from types import SimpleNamespace
 

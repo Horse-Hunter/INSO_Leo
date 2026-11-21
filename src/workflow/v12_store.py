@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sqlite3
+import time
 import uuid
 from collections.abc import Callable
 from contextlib import AbstractContextManager
@@ -294,6 +295,14 @@ class V12Store:
                         event.occurred_at, scope_key="ai-recognition")
                     _recover_alerts(connection, inquiry_id, AlertType.DUPLICATE_ORDER, event,
                         event.occurred_at, scope_key="")
+            elif state is BusinessState.HUMAN_COMPLETED and event.event_type is EventType.HUMAN_RESOLUTION_RECORDED:
+                # The order was closed because the Owner finished it in the sheet
+                # itself. Only the stale data-quality complaint is answered by that
+                # edit. Purchase, quotation, mail and security alerts stay active:
+                # a sheet status change is not evidence that an external effect
+                # actually completed. The append-only events stay for the audit.
+                _recover_alerts(connection, inquiry_id, AlertType.DATA_QUALITY, event,
+                    event.occurred_at)
 
     def record_missing_customer(self, inquiry_id: str, at: datetime) -> None:
         event = WorkflowEvent(
@@ -492,6 +501,79 @@ class V12Store:
                 at=event.occurred_at,
             )
         return alert_id
+
+    def recover_stale_alerts(
+        self,
+        inquiry_id: str,
+        *,
+        at: datetime,
+        alert_types: frozenset[AlertType] | None = None,
+    ) -> tuple[AlertType, ...]:
+        """Close alerts a finished order can no longer act on.
+
+        A completed order keeps whatever alerts were raised while it was still in
+        flight, and nothing else ever clears them, so a done order can stay on the
+        exception list forever. Only the caller decides which alert kinds became
+        moot (never a blanket clear), and the append-only rows are preserved.
+        """
+
+        with _transaction(self.database_path) as connection:
+            rows = connection.execute(
+                "SELECT DISTINCT alert_type FROM workflow_v12_active_alerts "
+                "WHERE inquiry_id=? AND active=1",
+                (inquiry_id,),
+            ).fetchall()
+            stale = {AlertType(row["alert_type"]) for row in rows}
+            if alert_types is not None:
+                stale &= set(alert_types)
+            if not stale:
+                return ()
+            event = WorkflowEvent(
+                _new_id("evt"), inquiry_id, EventType.ALERT_RECOVERED, at, "workflow"
+            )
+            _insert_event(connection, event)
+            for alert_type in sorted(stale):
+                _recover_alerts(connection, inquiry_id, alert_type, event, at)
+        return tuple(sorted(stale))
+
+    def recent_fault_diagnostics(self, limit=12):
+        """Unresolved runtime faults already recorded in the incident ledger.
+
+        The GUI must still explain a fault after the window was closed and the
+        program restarted, so the record is read back from the same incident row
+        that already carries the stop proof -- never from a second store.
+        """
+
+        from src.launcher.fault_diagnostics import FaultDiagnostic
+        if type(limit) is not int or not 1 <= limit <= 50:
+            raise ValueError("FAULT_HISTORY_LIMIT_UNCONFIRMED")
+        with _connect(self.database_path) as db:
+            rows = db.execute(
+                "SELECT command_id, created_at, review_json FROM workflow_v12_notification_commands"
+                " WHERE review_json LIKE '%\"diagnostic\"%' ORDER BY created_at DESC LIMIT 256"
+            ).fetchall()
+        restored, seen = [], set()
+        for row in rows:
+            if len(restored) >= limit:
+                break
+            try:
+                proof = json.loads(row["review_json"] or "{}")
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(proof, dict) or proof.get("active") is not True:
+                continue  # A settled incident is history, not a live fault.
+            data = proof.get("diagnostic")
+            if not isinstance(data, dict):
+                continue
+            try:
+                item = FaultDiagnostic.from_dict(data)
+            except (TypeError, ValueError):
+                continue
+            if item.code in seen:
+                continue
+            seen.add(item.code)
+            restored.append(item)
+        return tuple(restored)
 
     def notification_command(self, command_id, *, timeout=30, deadline=None):
         """Read an original command without claiming, reopening or editing it."""
@@ -854,16 +936,35 @@ class V12Store:
                            (command.inquiry_id, command_id))
         return command_id
 
-    def resolve_incidents(self, module, *, at, reason_code=None):
+    def resolve_incidents(self, module, *, at, reason_code=None, within=None,
+                          diagnostic_code=None):
+        """Mark a recovered site's incidents inactive.
+
+        ``within`` narrows the settlement to incidents whose evidence names no
+        order or an order in that set. A scoped trial passes its own order set:
+        a program-level incident is still settled, an incident that is evidence
+        about an order this run never touched is left exactly as it was.
+        """
+        allowed = None if within is None else frozenset(within)
         with _transaction(self.database_path) as db:
             rows = db.execute("SELECT command_id,review_json FROM workflow_v12_notification_commands "
                               "WHERE command_id LIKE 'incident:%'").fetchall()
             for command_id, payload in rows:
                 proof = json.loads(payload or "null")
-                if proof and proof.get("module") == module and proof.get("active") and (reason_code is None or proof.get("reason_code") == reason_code):
-                    proof.update(active=False, recovered_at=_time_text(at))
-                    db.execute("UPDATE workflow_v12_notification_commands SET review_json=? WHERE command_id=?",
-                               (json.dumps(proof, sort_keys=True), command_id))
+                if not (proof and proof.get("module") == module and proof.get("active")
+                        and (reason_code is None or proof.get("reason_code") == reason_code)):
+                    continue
+                if allowed is not None:
+                    bound = proof.get("inquiry_id")
+                    if bound is not None and bound not in allowed:
+                        continue
+                if diagnostic_code is not None:
+                    diagnostic = proof.get("diagnostic")
+                    if not isinstance(diagnostic, dict) or diagnostic.get("code") != diagnostic_code:
+                        continue
+                proof.update(active=False, recovered_at=_time_text(at))
+                db.execute("UPDATE workflow_v12_notification_commands SET review_json=? WHERE command_id=?",
+                           (json.dumps(proof, sort_keys=True), command_id))
 
     def record_notification_result(
         self,
@@ -1833,17 +1934,59 @@ def _all_recipients_sent(connection: sqlite3.Connection, command_id: str) -> boo
     return bool(row[0]) and row[0] == row[1]
 
 
+#: Bounded retry for a *contended* `BEGIN IMMEDIATE`. Measured on this host: a
+#: sibling connection (the GUI projection reads the same ledger) can hold the
+#: write lock past the connection timeout, and the refusal is then transient.
+#: Four attempts and 0.35 s total: long enough for the sibling to finish, short
+#: enough that a real problem still surfaces inside one poll tick.
+_BEGIN_RETRY_DELAYS: tuple[float, ...] = (0.02, 0.05, 0.08, 0.20)
+
+#: Only contention is retried. SQLITE_READONLY is *not* in this set: a ledger
+#: that cannot be written will not become writable 20 ms later, and retrying it
+#: would delay the fail-closed path while hiding the real fault. Nothing has
+#: been dispatched at BEGIN time, so a retry can never replay a business effect.
+_BEGIN_RETRY_CODES = frozenset({
+    getattr(sqlite3, "SQLITE_BUSY", 5),
+    getattr(sqlite3, "SQLITE_LOCKED", 6),
+})
+
+
+def _retryable_begin(exc: sqlite3.OperationalError) -> bool:
+    code = getattr(exc, "sqlite_errorcode", None)
+    if isinstance(code, int):
+        # Extended codes (e.g. SQLITE_BUSY_SNAPSHOT) share the low byte.
+        return (code & 0xFF) in _BEGIN_RETRY_CODES
+    text = str(exc).casefold()
+    return "locked" in text or "busy" in text
+
+
 def _transaction(database_path: Path, *, timeout=30, deadline=None):
     connection = _connect(database_path, timeout=timeout, deadline=deadline)
 
     class Transaction:
         def __enter__(self) -> sqlite3.Connection:
-            try:
-                connection.execute("BEGIN IMMEDIATE")
-                return connection
-            except Exception:
-                connection.close()
-                raise
+            nonlocal connection
+            attempt = 0
+            while True:
+                try:
+                    connection.execute("BEGIN IMMEDIATE")
+                    return connection
+                except sqlite3.OperationalError as exc:
+                    connection.close()
+                    # RFQ-021-R5: a `BEGIN IMMEDIATE` that lost the lock race is
+                    # retried on a fresh connection. Nothing of the body has run
+                    # yet, so this can never replay a business effect; a ledger
+                    # that is genuinely read-only or corrupt is not retried at
+                    # all and fails closed immediately.
+                    if attempt >= len(_BEGIN_RETRY_DELAYS) or not _retryable_begin(exc):
+                        raise
+                    time.sleep(_BEGIN_RETRY_DELAYS[attempt])
+                    attempt += 1
+                    connection = _connect(
+                        database_path, timeout=timeout, deadline=deadline)
+                except Exception:
+                    connection.close()
+                    raise
 
         def __exit__(self, exc_type, exc, tb) -> None:
             try:
