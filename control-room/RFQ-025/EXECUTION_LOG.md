@@ -332,6 +332,48 @@ attach_inso_research_session(login=..., fresh_page=True)
 
 **完整回归**：结果见第 12 节（同一份 JUnit 归档在 `docs/evidence/rfq025/`）。
 
+## 12. 完整回归结果（源码冻结后一次）
+
+```
+4358 collected / 4336 passed / 22 failed / 0 errors / 1 skipped in 589 s
+```
+
+JUnit：`docs/evidence/rfq025/pytest-v17-full.xml`。唯一 skip 是既有的 Windows 符号链接权限条件。
+
+### 22 个失败全部落在 TP 模块，且同一个根因
+
+| 文件 | 失败数 |
+|---|---|
+| `tests/launcher/test_google_snapshot_cache.py` | 7 |
+| `tests/launcher/test_tp_continuation.py` | 7 |
+| `tests/workflow/test_tp_research.py` | 5 |
+| `tests/launcher/test_tp_integration.py` | 2 |
+| `tests/launcher/test_market_owner_recovery.py` | 1 |
+
+失败签名统一为 `TpCycle.read_orders('test')` 返回空列表，随后
+`assert 0 == 1` / `ValueError: not enough values to unpack (expected 1, got 0)`；
+`test_tp_integration` 那条也是"没有工作项，所以没有派发"的连带结果。
+**它们都在采购草稿写入之前就失败了，没有一条走到本次改动的代码。**
+
+### 为什么判定与本次改动无关
+
+1. `git diff` 里没有任何 TP / Google 模块文件：改动只在
+   `src/inso/`、`src/launcher/v12_composition.py`、`src/workflow/v12_{rules,contracts,flow}.py`、
+   `src/gui/{app,workbench}.py` 的文案、`src/core/app_paths.py`、`src/launcher/backend.py` 一行判定、spec 与构建脚本。
+2. 在**未改动的 `develop` 工作树**上单跑 `tests/workflow/test_tp_research.py`：
+   `5 failed, 69 passed` —— 与本次完全相同的 5 条，同样签名。
+3. 失败发生在 `read_orders` 这一步，即 TP 从自己的数据源读不到订单；
+   本轮的改动只影响"拿到订单之后如何录单"。
+
+**没有删除、没有跳过、没有改动这些用例。** 它们是既存的失败集合，记录在此供 CEO 判断。
+（V1.6 在 11-20 的全量是 4332/0/0/1，说明这 22 条是 11-20 之后由环境/数据状态引入的，
+不是 V1.7 带来的；本轮没有权限也没有理由在本轮修 TP 模块。）
+
+### 定向测试（开发迭代期，全部通过）
+
+`tests/inso` 299、`test_v12_composition` 40、`test_v12_rules` 38、
+`test_backend`/`test_manual_order`/`test_source_date_flow` 123、`test_workbench` 12。
+
 ## 13. V1.7 候选构建
 
 用既有打包体系，`-BuildOnly`，不触碰 `dist/`：
@@ -355,7 +397,7 @@ scripts/build_windows_release.ps1 -BuildOnly -Version 1.7 \
 | `--self-check` | 退出码 0（脚本内建，未通过则构建失败） |
 | `--idle-self-check` | 退出码 0，`gui_rendered: true`，标题 `INSO LEO V1.7 — Procurement Automation Control Center`，`business_thread_started: false` |
 | 清单 | `docs/evidence/rfq025/INSO_V1.7-artifact-manifest.sha256`（2,872 行），SHA256 `27d46b1cc4b7901121bf800534fb617daeb091e29a4a76d91257afaf696f3f9a` |
-| 源码 commit | 见本节末（构建时工作树 tip） |
+| 源码 commit | `332b8695`（构建时源码即此状态；其后的记录提交只改文档） |
 
 `--idle-self-check` 会往产物里写 `runtime/logs/v13-idle-self-check.json`，已删除，文件数回到 2,872。
 
