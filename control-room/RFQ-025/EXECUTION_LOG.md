@@ -250,3 +250,84 @@ M control-room/CEO_HANDOVER.md
 
 唯一仍未做的、也是刻意不做的：**没有点过 `保存`（`#btnSave`）与 `保存并发送`（`#btnSave2`）**。
 这两步是正式建单与对外发送，属真实业务效果，不在本轮嗅探授权范围内。
+
+---
+
+# 第二阶段：V1.7 实现（2026-11-21）
+
+Owner 一阶段 Review PASS，并授权直接在生产环境开发、调试、实机验证；本轮一次性完成实现、验证、回归与候选构建。
+
+## 8. 代码改动
+
+分支 `workbuddy/v17-native-paste`（自 `693bd983`）。提交 `38341aa5`。
+
+| 文件 | 改动 |
+|---|---|
+| `src/inso/purchase_writer.py` | `AiEntryPanel`/`PlaywrightAiResultReader` 整体替换为 `PasteImportPanel`/`PlaywrightPastePreviewReader`；新增 `assert_fresh()`；三个写动作改绑；帧身份钉死 `product/Import.aspx` 并显式拒绝列表批量导入 |
+| `src/inso/write_safety.py` | `WriteAction` 成员 `OPEN_PASTE_ENTRY`/`SET_PASTE_DATA`/`RUN_PASTE_IMPORT`/`PASTE_ENTRY_COMMIT`；公开方法同步改名 |
+| `src/launcher/v12_composition.py` | `prepare()` 换成 7 步：new_draft → customer → quote-type → purchaser → paste-open → **paste-fresh** → paste-input → paste-import → read → validate → commit → parent read-back → validate |
+| `src/workflow/v12_rules.py` | `build_ai_input` → `build_paste_input`（`型号|数量|品牌`）；`validate_ai_recognition` → `validate_draft_preview` |
+| `src/workflow/v12_contracts.py` | `PurchaseDraftCommand.ai_input` → `paste_input` |
+| `src/workflow/v12_flow.py` | 调用点同步 |
+| `src/gui/app.py`、`src/gui/workbench.py` | 用户可见文案改为"粘贴录单" |
+| `src/core/app_paths.py`、`src/launcher/backend.py`、`packaging/INSO_V1.1.spec`、`scripts/build_windows_release.ps1` | 版本 1.6 → 1.7 |
+
+**保留的历史标识**：`PurchaseOutcome.AI_RECOGNIZED`、`ReasonCode.AI_RECOGNITION_MISMATCH`、
+`EventType.AI_RECOGNITION_READY/MISMATCH`。它们是 SQLite 与事件目录里的持久值，改名需要数据迁移；
+语义是"预览已核对通过"。用户可见文案已全部改为"粘贴录单"。
+
+**未改动**：去重/七天窗口/准入、`save_data`、`save_and_send`、`UNKNOWN/SENT`、hold、Sheets 读写、
+报价更新、TP、邮件、调度周期、代理与 CDP 修复。`git diff --stat` 可逐条核。
+
+## 9. 实现过程中发现并修掉的两个真实缺陷
+
+1. **`filter(has=<iframe handle>)` 跨帧非法。** Playwright 报
+   `Inner "has" locator must belong to the same frame.`，第一次真实验证因此
+   `VALIDATION_FAILED / CONTROL_NOT_FOUND`。改为"以对话框内的 `#winIframe_dialog1` 为锚点"解析，
+   既合法又把对话框绑定到本帧。
+2. **旧 `close()` 的页面级回退可能误关单据。** 原实现找不到帧时会点全局
+   `button[title="关闭窗口"]`，而采购临时询价窗口本身就有同名按钮 —— 可能把单据关掉。
+   现改为：帧不在就报告"未关闭"、不点任何全局控件，由清场流程关窗口。
+
+## 10. 真实页面验证（生产代码路径）
+
+脚本不做任何"探针式"绕行，直接复用 `backend._prepare_on_page()` 的同一组合：
+
+```
+attach_inso_research_session(login=..., fresh_page=True)
+  -> access.operation_page()
+  -> InsoPurchaseWriter(form_page=form)
+  -> CoordinatorPurchaseDraftWriter(actions=writer, parent_fields=PlaywrightParentProductFields(form))
+  -> prepare(command)          # 唯一的正式路径
+```
+
+结果（`TRJC476K016RRJ|200|Kyocera AVX`）：
+
+| 项 | 实测 |
+|---|---|
+| outcome | `AI_RECOGNIZED`（历史持久值，语义"预览已核对通过"） |
+| 回读 | `TRJC476K016RRJ` / `Kyocera AVX` / `200`，与订单一致 |
+| 解析请求 | 恰好 1 次 `POST /services/product/import.ashx` |
+| AI 请求 | **0**（`Import_ai.aspx`、`ai_import` 命中数为零） |
+| `#BillID` | 空 —— 未创建任何服务端单据 |
+| 清场 | 前后 `dismiss_order_surface()` 均 True |
+| 保存/发送 | **未点击** |
+
+多单同页复测（同一会话连开两单）与完整证据见
+[`docs/evidence/rfq025/v17-live-verification.md`](../../docs/evidence/rfq025/v17-live-verification.md)。
+
+## 11. 测试
+
+**定向**（开发迭代期，逐项通过）：
+
+- `tests/inso/test_v12_purchase_writer.py` 78 项；
+- `tests/inso/test_v12_write_safety.py` 11 项；
+- `tests/launcher/test_v12_composition.py` 40 项；
+- `tests/workflow/test_v12_rules.py` 38 项；
+- `tests/launcher/test_backend.py`、`test_manual_order.py`、`test_source_date_flow.py` 123 项；
+- `tests/gui/test_workbench.py` 12 项。
+
+新增/改写的覆盖点：字段拼接顺序与完整性、分隔符内含字符、数量为字符串/小数/无效值、
+预览空/多行/未解禁、解析超时、弹窗仅隐藏、批量导入路径拒绝、生产路径不得再引用 AI 端点。
+
+**完整回归**：结果见第 12 节（同一份 JUnit 归档在 `docs/evidence/rfq025/`）。

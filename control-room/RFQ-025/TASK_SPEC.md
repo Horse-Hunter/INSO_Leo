@@ -96,7 +96,49 @@ Owner 明确禁止：重做 RFQ-024 已结案内容；改/装/重启运行中的
 **本轮零业务代码改动。** 仅文档与发布记录：`docs/BRANCH_POLICY.md`、`AGENTS.md`、`AI_START_HERE.md`、
 `control-room/*`、`docs/evidence/rfq025/*`。`src/` 与 `tests/` 无任何变更（与 `d954e0a5` 逐字节一致）。
 
-## 6. 下一轮建议（待 Owner 指令，不自动开工）
+## 6. 第二阶段：V1.7 实现（2026-11-21，Owner 现场授权）
+
+Owner 指令：`RFQ-025 第一阶段 Review PASS`，允许 V1.6 暂停、直接在现有生产环境完成 V1.7 开发、
+调试与实机验证；一次性完成开发、验证、回归与候选构建。
+
+### 6.1 实现范围（只换录单方式）
+
+| 文件 | 改动 |
+|---|---|
+| `src/inso/purchase_writer.py` | AI 面板适配器整体替换为 `PasteImportPanel` + `PlaywrightPastePreviewReader`；三个写动作改为 `SET_PASTE_DATA` / `RUN_PASTE_IMPORT` / `PASTE_ENTRY_COMMIT`；帧身份钉死 `product/Import.aspx` 并**显式拒绝** `innerenquiry/yewuxj/Import.aspx` |
+| `src/inso/write_safety.py` | `WriteAction` 的 AI 成员换为粘贴成员；公开方法改名 |
+| `src/launcher/v12_composition.py` | `prepare()` 的五个 AI 步骤换为 `open → assert_fresh → set_data → import → read → validate → commit` |
+| `src/workflow/v12_rules.py` | `build_ai_input` → `build_paste_input`（`型号|数量|品牌`）；`validate_ai_recognition` → `validate_draft_preview` |
+| `src/workflow/v12_contracts.py` | `PurchaseDraftCommand.ai_input` → `paste_input` |
+| `src/workflow/v12_flow.py` | 调用点同步 |
+| `src/gui/app.py`、`src/gui/workbench.py` | 用户可见文案由"AI 识别"改为"粘贴录单" |
+| `src/core/app_paths.py`、`src/launcher/backend.py`、`packaging/INSO_V1.1.spec`、`scripts/build_windows_release.ps1` | 版本标识 1.6 → 1.7 |
+
+**刻意保留的内部名称：** `PurchaseOutcome.AI_RECOGNIZED`、`ReasonCode.AI_RECOGNITION_MISMATCH`、
+`EventType.AI_RECOGNITION_READY/MISMATCH`。它们是 SQLite 与事件目录里的历史标识，
+改名需要数据迁移；Owner 明确允许保留必要内部名称。语义是"预览已核对通过"，用户可见文案已改。
+
+**未改动：** 去重、七天窗口、准入规则、`save_data`、`save_and_send`、`UNKNOWN/SENT`、hold、
+Sheets 读写、报价更新、TP、邮件、调度周期、代理与 CDP 修复。
+
+### 6.2 三个关键设计（都有实测依据）
+
+1. **先证明"空"再解析**：`assert_paste_preview_fresh` 在点 `导入` 之前要求预览为空且"保存数据"仍禁用，
+   这样后面读到的行只可能来自本次解析，不可能是上一单残留。
+2. **按状态等待，不按时间**：同时满足"缓存行数符合预期"与"`#win_btn__dialog12` 解禁"，否则 fail-closed。
+3. **数量只接受 ASCII 纯数字**：`"200.0"` / `"2e2"` 一律拒绝而不是截断 —— 截断正是让错误数量通过的方式。
+
+### 6.3 真实页面验证与回归
+
+见 [EXECUTION_LOG](EXECUTION_LOG.md) 第 8 节与
+[`docs/evidence/rfq025/v17-live-verification.md`](../../docs/evidence/rfq025/v17-live-verification.md)。
+
+### 6.4 交付边界
+
+候选 EXE 交 CEO 审核；**未安装、未覆盖 `dist/INSO_V1.6`、未重启生产、未发送任何真实采购单**。
+V1.7 仍是前瞻版本，未经 Owner 验收不得晋升 `main`。
+
+## 7. 下一轮（待 Owner 指令，不自动开工）
 
 1. `workbuddy/v17-native-paste` 从 `develop` 起分支；
 2. 实现替换点：`CoordinatorPurchaseDraftWriter.prepare()` 的 `prepare-ai-open` … `commit-ai-entry`，
