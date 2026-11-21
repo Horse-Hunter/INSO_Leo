@@ -249,18 +249,20 @@ def build_paste_input(mpn: str, brand: str, quantity: int) -> str:
     A value that itself contains the delimiter or a line break cannot be
     expressed in three columns at all, so it is rejected rather than silently
     shifting the columns. That is a format impossibility, not an extra input
-    rule: nothing else about the model, brand or quantity is altered here.
+    rule.
+
+    Nothing else is validated here on purpose. Empty values and non-positive
+    quantities are the *caller's* business (``v12_flow`` already rejects a blank
+    model/brand before it builds a command, and the preview reader refuses a
+    quantity that is not a positive integer), so raising here would turn a
+    handled business case into a crash on the run's main path.
     """
 
     if not isinstance(mpn, str) or not isinstance(brand, str):
         raise TypeError("MPN and brand must be strings")
     if isinstance(quantity, bool) or not isinstance(quantity, int):
         raise TypeError("quantity must be an integer")
-    if quantity <= 0:
-        raise ValueError("quantity must be positive")
     for name, value in (("MPN", mpn), ("brand", brand)):
-        if not value:
-            raise ValueError(f"{name} must not be empty")
         if PASTE_FIELD_SEPARATOR in value or "\n" in value or "\r" in value:
             raise ValueError(
                 f"{name} cannot contain the paste delimiter or a line break"

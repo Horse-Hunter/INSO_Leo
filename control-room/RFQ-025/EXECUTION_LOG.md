@@ -331,3 +331,32 @@ attach_inso_research_session(login=..., fresh_page=True)
 预览空/多行/未解禁、解析超时、弹窗仅隐藏、批量导入路径拒绝、生产路径不得再引用 AI 端点。
 
 **完整回归**：结果见第 12 节（同一份 JUnit 归档在 `docs/evidence/rfq025/`）。
+
+## 13. V1.7 候选构建
+
+用既有打包体系，`-BuildOnly`，不触碰 `dist/`：
+
+```
+scripts/build_windows_release.ps1 -BuildOnly -Version 1.7 \
+  -PythonExecutable <v16 worktree>\.venv-release\Scripts\python.exe
+```
+
+复用 V1.6 时代那套已装好依赖的 `.venv-release`（PyInstaller 6.16.0 / Python 3.12.10），
+没有新建第二套打包环境。
+
+| 项 | 值 |
+|---|---|
+| 路径 | `build/windows-release-stage-1.7/dist/INSO_V1.7/INSO_V1.7.exe` |
+| 大小 | 8,508,798 B |
+| SHA256 | `5707b9c598546c6476f96bfde217d712d1f7768732acf5032ef79657004af253` |
+| 文件数 | 2,872 |
+| 含 runtime/ | 否 |
+| 发布扫描 | `RELEASE_SCAN_OK`（脚本内建） |
+| `--self-check` | 退出码 0（脚本内建，未通过则构建失败） |
+| `--idle-self-check` | 退出码 0，`gui_rendered: true`，标题 `INSO LEO V1.7 — Procurement Automation Control Center`，`business_thread_started: false` |
+| 清单 | `docs/evidence/rfq025/INSO_V1.7-artifact-manifest.sha256`（2,872 行），SHA256 `27d46b1cc4b7901121bf800534fb617daeb091e29a4a76d91257afaf696f3f9a` |
+| 源码 commit | 见本节末（构建时工作树 tip） |
+
+`--idle-self-check` 会往产物里写 `runtime/logs/v13-idle-self-check.json`，已删除，文件数回到 2,872。
+
+**未做**：未安装到 `dist/INSO_V1.6`、未覆盖运行目录、未启动正常业务、未发真实采购单。

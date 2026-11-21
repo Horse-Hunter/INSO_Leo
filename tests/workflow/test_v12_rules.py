@@ -168,15 +168,27 @@ def test_paste_input_is_model_quantity_brand_separated_by_pipes() -> None:
     "kwargs",
     [
         {"mpn": "M-1", "brand": "Brand", "quantity": True},
-        {"mpn": "M-1", "brand": "Brand", "quantity": 0},
-        {"mpn": "M-1", "brand": "Brand", "quantity": -3},
-        {"mpn": "", "brand": "Brand", "quantity": 7},
-        {"mpn": "M-1", "brand": "", "quantity": 7},
+        {"mpn": "M-1", "brand": "Brand", "quantity": "7"},
+        {"mpn": None, "brand": "Brand", "quantity": 7},
+        {"mpn": "M-1", "brand": None, "quantity": 7},
     ],
 )
-def test_paste_input_rejects_values_the_format_cannot_express(kwargs) -> None:
-    with pytest.raises((TypeError, ValueError)):
+def test_paste_input_rejects_wrong_types_only(kwargs) -> None:
+    """Type errors stay; business-invalid values are the caller's business.
+
+    A blank model/brand is already rejected by ``v12_flow`` before a command is
+    built, and a non-positive quantity is refused by the preview reader. Raising
+    for them here would convert a handled business outcome into a crash on the
+    run's main path, which is strictly worse.
+    """
+
+    with pytest.raises(TypeError):
         build_paste_input(**kwargs)
+
+
+@pytest.mark.parametrize("quantity", [0, -3])
+def test_paste_input_does_not_raise_for_a_non_positive_quantity(quantity) -> None:
+    assert build_paste_input("M-1", "Brand", quantity) == f"M-1|{quantity}|Brand"
 
 
 @pytest.mark.parametrize(

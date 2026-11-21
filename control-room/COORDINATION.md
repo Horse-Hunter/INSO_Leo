@@ -1,4 +1,29 @@
-# Executor 2026-11-21：V1.6 已晋升为现版；V1.7 基线就绪；粘贴录单嗅探部分完成（待 CEO 复核）
+# Executor 2026-11-21：V1.7 粘贴录单已实现、实测并构建候选（待 CEO 审核）
+
+**状态：`V1_7_IMPLEMENTED / LIVE_DRAFT_VERIFIED / RELEASE_CANDIDATE_READY / READY_FOR_CEO_REVIEW`**
+（回归结果见本节末与 [RFQ-025/EXECUTION_LOG.md](RFQ-025/EXECUTION_LOG.md) 第 12 节。）
+
+入口：[RFQ-025/TASK_SPEC.md](RFQ-025/TASK_SPEC.md) → [EXECUTION_LOG.md](RFQ-025/EXECUTION_LOG.md) →
+[FINAL_REPORT.md](RFQ-025/FINAL_REPORT.md) → 证据 [`docs/evidence/rfq025/`](../docs/evidence/rfq025/)。
+
+- **做了什么：** 把 `CoordinatorPurchaseDraftWriter.prepare()` 的五个 AI 步骤换成 INSO 原生粘贴：
+  `open_paste_entry → assert_paste_preview_fresh → set_paste_data → run_paste_import →
+  read_paste_preview → validate → commit_paste_entry`。输入改为 `型号|数量|品牌`。其余业务一律未动。
+- **生产路径不再依赖 AI：** `src/inso/purchase_writer.py` 内已无 `Import_ai.aspx` / `#ai_import_` /
+  `ai-recognize` 任何引用（有源码守卫测试）。真实运行中 AI 端点请求数为 **0**。
+- **真实页面验证（生产代码路径，非探针）：** 一次单笔 + 一次同页连续两单，均 `AI_RECOGNIZED`；
+  型号/品牌/数量回读一致；解析请求恰 1 次；`#BillID` 始终为空；两个真实缺陷在过程中被修掉
+  （跨帧 `filter(has=…)`、旧的页面级关窗回退会误关单据）。
+- **保留的历史标识：** `PurchaseOutcome.AI_RECOGNIZED`、`ReasonCode.AI_RECOGNITION_MISMATCH`、
+  `EventType.AI_RECOGNITION_*` 是 SQLite/事件目录里的持久值，未改名（需数据迁移）；用户可见文案已改为"粘贴录单"。
+- **未做：** 未安装、未覆盖 `dist/INSO_V1.6`、未重启生产、未发任何真实采购单、未点 `保存`/`保存并发送`。
+  V1.7 仍是前瞻版本，未经 Owner 验收不得晋升 `main`。
+- **版本：** 标识已升到 1.7（`app_paths`、`backend` 的独立调度判定、spec、构建脚本）。
+  候选 EXE 路径/哈希见 FINAL_REPORT 与 `docs/evidence/rfq025/`。
+
+---
+
+# 此前：V1.6 已晋升为现版；V1.7 基线就绪；粘贴录单嗅探完成（CEO 一阶段 PASS）
 
 **状态：`V1_6_PROMOTED_TO_MAIN / V1_7_BASELINE_READY / PASTE_SNIFF_COMPLETE / NO_BUSINESS_EFFECT`。**
 入口：[RFQ-025/TASK_SPEC.md](RFQ-025/TASK_SPEC.md) → [EXECUTION_LOG.md](RFQ-025/EXECUTION_LOG.md) →
