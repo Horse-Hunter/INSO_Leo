@@ -1,6 +1,6 @@
-# RFQ-025 — 最终汇报（第三阶段：收尾、安装与生产试运行）
+# RFQ-025 — 最终汇报（第四阶段：误报登录故障已修，V1.7 重装重启）
 
-**状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_NOT_YET_VERIFIED`**
+**状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / FALSE_AUTH_ALARM_FIXED / REAL_PURCHASE_NOT_YET_VERIFIED`**
 
 一句话：V1.7 已装进自己的目录并正常生产运行，22 条 TP 失败查明是测试时基问题并已修正，
 全量回归零失败；**没有发生真实采购**，因为当前没有合法待处理订单——这一点如实标注，不算业务验收通过。
@@ -132,6 +132,38 @@ run_id edc94a2c…，fatal.log 0 字节
 
 按 Owner 指令，不造单、不重发历史订单，故标注 `REAL_PURCHASE_NOT_YET_VERIFIED`。
 真正的业务验收（保存并发送 → ERP 单据 → Sheets 回写）要等出现合法待处理订单时自然发生。
+
+## 七点五、2026-11-22 早上那次"需要人工验证"：误报，已修
+
+**现象**：07:27 报价轮次失败 → `runtime fault reason=INSO_AUTHENTICATION_REQUIRED` → 全局停止 82.5 分钟；
+GUI 提示"INSO 需要人工登录/验证"。Owner 到 INSO 看过，**不需要验证**。
+
+**三条反证**：日志里登录尝试 0 次（无 `session is being established by logging in`、无
+`INSO_LOGIN_RETRY_EXHAUSTED`）；08:49 恢复后同一个会话读完同样的 47 条，结果与故障前一致；
+进程 PID 未变（进程内停止 → 重新开始）。
+
+**根因**：`InsoQuotationReader` 把**任何** `SecurityViolation` 都翻译成"登录失效"。而这条路径上的
+违规全部来自租约/页面身份 —— `verified shell page is closed`、`page identity changed`、
+`browser or context is stale`、`operation identity is required`。页面问题冒充登录问题，
+于是提示 Owner 去做一件根本不存在的事。
+
+**修复**：
+- 只按原因码判登录失效（`MANUAL_VERIFICATION_REQUIRED` / `CREDENTIAL_REJECTED` /
+  `AUTHENTICATION_REQUIRED` / `SESSION_IDENTITY_UNVERIFIED`）；其余变成既有的
+  "本次读取未结算、单独重试"，不再影响整轮；
+- `_reopen()` 遇到页面类违规不再停全世界，改走 `open()` 已有的全新页面路径；
+- `close()` 无法核验页面时**仍然**保留该页、**仍然**停止（页面归属 fail-closed 不变），
+  但原因码改为 `INSO_OPERATION_NOT_CLOSED`；`preserve()` 记住原因，下一阶段报真实原因；
+- 诊断文案新增该码，明确写"这**不需要**你去做登录或验证码"。
+
+**没有放宽的东西**：真验证码/密码被拒仍全局停止（CAPTCHA / 手机验证码 / 设备验证三例覆盖）；
+页面保留策略、写入门禁、UNKNOWN/SENT/hold 一律未动。
+
+**重装**：源码变更 → 重建 `67cede70…da05`（清单 `cd085807…f2c0`）→ 就地切换
+`INSTALL_RESULT = PASS` → PID 90384/90508 重新开始，14:31 起 inquiry/quotation 正常、零 ERROR。
+
+**顺带**：装第二遍时暴露 `backup_running_release.ps1` 与 `verify_database_backup.ps1` 各自写死
+`INSO_V1.6.exe`；后者会**漏掉** V1.7 进程，等于能出具假的"已停机"证明。两处都改成按目录/按版本族识别。
 
 ## 八、尚未验证 / 未完成
 
