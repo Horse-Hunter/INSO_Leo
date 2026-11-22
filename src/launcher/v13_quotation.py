@@ -2,6 +2,7 @@
 from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 
+from src.inso.quotation_read import INSO_LOGIN_VIOLATION_CODES
 from src.inso.session import SecurityViolation
 from src.research.cdp_pages import PageTargetOwnershipError, mark_owned_page, page_owner
 from src.workflow.v12_faults import FaultScope, V12Fault
@@ -121,14 +122,34 @@ class V13QuotationOperations:
             if self._retain:
                 mark_owned_page(self._session.operation_access().operation_page().page, "quotation-operation")
             return self._session.operation_access()
-        except InsoAuthenticationError:
+        except InsoAuthenticationError as exc:
             # Existing RFQ-002 attachment preserves manual-verification pages.
-            self.preserve()
-            raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED") from None
+            self._session_failure(exc, preserve=True)
         except V12Fault:
             raise
         except Exception:  # noqa: BLE001 - shared acquisition failure, never no quotation
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE") from None
+
+    def _session_failure(self, exc, *, preserve):
+        """Report a dead session honestly: a page that would not load is not a challenge.
+
+        The module handler already knows what to do with an InsoAuthenticationError:
+        it identifies INSO as the failing site, defers this cycle ("等待 INSO 恢复")
+        and marks a manual wait only for the four codes that really need a human
+        (defer_website_poll). Wrapping every dead session into a GLOBAL_STOP is
+        what told the Owner to complete an INSO verification after the login page
+        had merely failed to load (2026-11-21 23:27, InsoAuthenticationError
+        (LOGIN_PAGE_UNAVAILABLE)).
+        """
+
+        code = str(getattr(exc, "reason_code", "") or "")
+        if code and code not in INSO_LOGIN_VIOLATION_CODES:
+            # Environment: page/network did not let the session be established.
+            self._session = None
+            raise exc
+        if preserve:
+            self.preserve()
+        raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED") from None
 
     def _reopen(self, page, inquiry_id):
         try:
@@ -145,9 +166,8 @@ class V13QuotationOperations:
             )
             self._released = False
             return self._session.operation_access()
-        except InsoAuthenticationError:
-            self.preserve()
-            raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED") from None
+        except InsoAuthenticationError as exc:
+            self._session_failure(exc, preserve=True)
         except SecurityViolation:
             # The tab could not be re-proven as the verified shell. That is a page
             # identity problem, not a login verdict, so drop the lease and take
