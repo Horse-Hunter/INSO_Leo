@@ -680,3 +680,34 @@ Owner 于是去查了一个并不存在的验证码。
 "租约失效=登录失守"这一误判，已改名为
 `test_midquery_lost_shell_identity_is_not_reported_as_a_login_problem` 并改断言真实原因码；
 新增 4 条读取器分类用例与 1 条"保留页面后下一阶段报页面问题"用例。
+
+## 25. 修复后的重建、重装与重启
+
+源码变更 → 必须重建候选，不能拿旧候选冒充。
+
+| 项 | 值 |
+|---|---|
+| 回归 | `4371 passed / 0 failed / 0 errors / 1 skipped`（4365 + 6 条新用例） |
+| 源码 commit | `e0fba99a` |
+| EXE | 8,510,928 B / SHA256 `67cede70a38e73796456b143c25d440ce74d85042ab542e30d3e65f6a6e5da05` |
+| 文件数 | 2,872 |
+| 清单 | `docs/evidence/rfq025/INSO_V1.7-artifact-manifest.sha256`，SHA256 `cd085807aaa08deb4897348316fd3e7fec000222e718de62736b6c0aa8b6f2c0` |
+| `--self-check` / `--idle-self-check` | 退出码 0；`gui_rendered: true`，标题含 V1.7 |
+| 安装方式 | **就地切换**（同一目录升级，`-PreviousExeName INSO_V1.7.exe`） |
+| 安装结果 | `INSTALL_RESULT = PASS`，`installed_exe_sha256 = 67cede70…`，`installed_files_verified = 2872` |
+| 回退 | `INSO_V1.7.exe.prev-20261122T063011Z` + `_internal.prev-20261122T063011Z`；另有快照目录 `dist\release-backups\RFQ-025-pre-v17fix-20261122T062633Z`（程序 + 数据库 + 校验报告） |
+| 数据库 | `DB_VERIFY_RESULT = PASS`，40 条采购记录，`write_intent_state = NONE_PROVEN`，`event_age_hours = 0.31` |
+| 重启 | PID 90384（GUI）+ 90508（watcher），14:31 起正常跑 quotation |
+
+### 顺带修掉的两处跨版本硬编码
+
+装第二遍时暴露的：`backup_running_release.ps1` 把 `INSO_V1.6.exe` 写死，导致对着 V1.7 目录做快照直接报
+`No INSO_V1.6.exe`；`verify_database_backup.ps1` 的进程门禁只查 `Name='INSO_V1.6.exe'`，
+**会漏掉从本安装跑的 V1.7 进程**——这正是"一个安装被判定为已停止"的假证明。
+
+- 备份脚本改为从目录里读唯一的根级 EXE（多于一个就拒绝），不再假定版本名；
+- 数据库校验改为 `Name LIKE 'INSO[_]V%.exe'`，任何版本的残留进程都算"未停止"；
+- 停机文案从"INSO_V1.6"改为中性表述，避免再次误导。
+
+安装脚本成功输出里那句"首次启动必须 `--safe-preview`"也一并改成与当前 Owner 指令一致：
+从自己的目录正常启动（普通启动即完整生产模式），并且**绝不能与旧安装同时运行**（同一本台账两个调度器）。
