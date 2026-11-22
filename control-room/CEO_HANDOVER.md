@@ -1,4 +1,33 @@
-# INSO LEO — 新 CEO 接管入口（2026-11-21 晚，V1.7 已安装并生产运行）
+# INSO LEO — 新 CEO 接管入口（2026-11-22，V1.7 运行中；误报登录故障已修）
+
+**当前权威结论：`V1_7_INSTALLED / PRODUCTION_RUNNING / FALSE_AUTH_ALARM_FIXED / REAL_PURCHASE_NOT_YET_VERIFIED`。**
+
+11-22 早上那次“INSO 需要人工验证”是**误报**：报价读取把页面租约失效当成了登录失效，导致停止 82 分钟，
+而 INSO 根本不需要验证。已按原因码区分并重装重启，详见
+[RFQ-025/EXECUTION_LOG.md](RFQ-025/EXECUTION_LOG.md) 第 22–25 节。
+
+## 现场状态（先看这里）
+
+| 项 | 值 |
+|---|---|
+| 正在运行 | `dist\INSO_V1.7\INSO_V1.7.exe`，PID 90384（GUI）+ 90508（watcher） |
+| 已安装 EXE | SHA256 `67cede70a38e73796456b143c25d440ce74d85042ab542e30d3e65f6a6e5da05`（8,510,928 B） |
+| 回退（同目录） | `INSO_V1.7.exe.prev-20261122T063011Z` + `_internal.prev-20261122T063011Z` |
+| 回退（整目录） | `dist\release-backups\RFQ-025-pre-v17fix-20261122T062633Z`（程序+数据库+`DB_VERIFY_RESULT = PASS`） |
+| V1.6 | 目录未动；桌面快捷方式已改名“旧版，仅回退用” |
+| 真实采购 | **仍未发生**（无合法待处理订单），不得按已验收对待 |
+
+## 下一步
+
+- 有合法待处理订单时让它自然跑完一次“保存并发送”，再以 ERP 单据 + Sheets 回写独立确认；
+  不要为验收造单或重发。
+- 晋升 `main` 由 Owner 决定。
+- 若再看到“INSO 无法核验页面/操作未关闭”这类提示：那是页面问题，**不需要**做登录或验证码，
+  重新开始即可；只有“INSO 需要人工登录/验证”才需要本人处理。
+
+---
+
+# 此前：V1.7 已安装并生产运行（2026-11-21 晚）
 
 **当前权威结论：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_NOT_YET_VERIFIED`。**
 `main` 仍是 Owner 验收的 V1.6（`d954e0a5`）；V1.7 已装进 `dist\INSO_V1.7` 并运行，

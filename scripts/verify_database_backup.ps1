@@ -87,14 +87,17 @@ function Get-StopState([string]$InstallRoot, [string]$FaultMode) {
         return @{ Stopped = $null; Detail = "a process executable path could not be read (offline fault simulation)" }
     }
     try {
-        $processes = @(Get-CimInstance Win32_Process -Filter "Name='INSO_V1.6.exe'" -ErrorAction Stop)
+        # Any release EXE, not one hardcoded version: a V1.7 process running from
+        # this install is exactly as "not stopped" as a V1.6 one, and a name the
+        # query does not mention would be silently missed.
+        $processes = @(Get-CimInstance Win32_Process -Filter "Name LIKE 'INSO[_]V%.exe'" -ErrorAction Stop)
     }
     catch {
         return @{ Stopped = $null; Detail = "process enumeration failed: $($_.Exception.Message)" }
     }
     $unidentified = @($processes | Where-Object { [string]::IsNullOrWhiteSpace([string]$_.ExecutablePath) })
     if ($unidentified.Count -gt 0) {
-        return @{ Stopped = $null; Detail = "cannot read the executable path of $($unidentified.Count) INSO_V1.6.exe process(es) (PIDs: $($unidentified.ProcessId -join ', '))" }
+        return @{ Stopped = $null; Detail = "cannot read the executable path of $($unidentified.Count) INSO process(es) (PIDs: $($unidentified.ProcessId -join ', '))" }
     }
     $running = @($processes | Where-Object {
         ([string]$_.ExecutablePath).StartsWith($InstallRoot, [StringComparison]::OrdinalIgnoreCase)
@@ -102,7 +105,7 @@ function Get-StopState([string]$InstallRoot, [string]$FaultMode) {
     if ($running.Count -gt 0) {
         return @{ Stopped = $false; Detail = "PIDs $($running.ProcessId -join ', ')" }
     }
-    return @{ Stopped = $true; Detail = "$($processes.Count) other INSO_V1.6 process(es), none under this install" }
+    return @{ Stopped = $true; Detail = "$($processes.Count) other INSO process(es), none under this install" }
 }
 
 # A clean stop is also a fact about handles, not only about process names: any
@@ -171,10 +174,10 @@ if (-not [string]::IsNullOrWhiteSpace($InstallDir)) {
     $root = (Resolve-Path -LiteralPath $InstallDir).Path.TrimEnd('\')
     $stop = Get-StopState $root $processFault
     if ($null -eq $stop.Stopped) {
-        Write-Failure "cannot prove INSO_V1.6 is stopped for ${root}: $($stop.Detail). An unproven process state is not a clean stop."
+        Write-Failure "cannot prove the INSO program is stopped for ${root}: $($stop.Detail). An unproven process state is not a clean stop."
     }
     if (-not $stop.Stopped) {
-        Write-Failure ("INSO_V1.6 is still running from {0} ({1})" -f $root, $stop.Detail)
+        Write-Failure ("the INSO program is still running from {0} ({1})" -f $root, $stop.Detail)
     }
     Write-Output "process_state = stopped (proven; $($stop.Detail))"
 }
@@ -472,7 +475,7 @@ $payload = [ordered]@{
     source_size_bytes = $item.Length
     install_dir = (Resolve-Path -LiteralPath $InstallDir).Path
     program_stopped = $true
-    process_state = "stopped (proven: process enumeration succeeded, every INSO_V1.6 process had a readable executable path, none ran from install_dir)"
+    process_state = "stopped (proven: process enumeration succeeded, every INSO process had a readable executable path, none ran from install_dir)"
     quiescence = "no process runs from install_dir; the ledger file accepted an exclusive handle; both WAL sides are empty"
     wal_clean = $true
     size_bytes = $item.Length

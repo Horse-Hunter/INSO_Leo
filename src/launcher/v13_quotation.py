@@ -85,12 +85,16 @@ class V13QuotationOperations:
         self._handle, self._login, self._attach = browser_handle, login, attach
         self._session = None
         self._protected = False
+        # Why the tab was preserved decides what the next stage reports: a real
+        # login verdict and an unverifiable tab are different problems and must
+        # not share the "go and verify the login" wording.
+        self._protected_reason = "INSO_AUTHENTICATION_REQUIRED"
         self._retain = False
         self._released = False
 
     def open(self, inquiry_id):
         if self._protected:
-            raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED")
+            raise V12Fault(FaultScope.GLOBAL_STOP, self._protected_reason)
         if self._session is not None:
             if not self._retain or not self._released:
                 raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_OPERATION_NOT_CLOSED")
@@ -141,16 +145,23 @@ class V13QuotationOperations:
             )
             self._released = False
             return self._session.operation_access()
-        except (SecurityViolation, InsoAuthenticationError):
+        except InsoAuthenticationError:
             self.preserve()
             raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED") from None
+        except SecurityViolation:
+            # The tab could not be re-proven as the verified shell. That is a page
+            # identity problem, not a login verdict, so drop the lease and take
+            # the ordinary fresh-page path open() already uses for a lost menu.
+            self._session = None
+            return self.open(inquiry_id)
         except V12Fault:
             raise
         except Exception:  # noqa: BLE001 - shared acquisition failure, never no quotation
             raise V12Fault(FaultScope.GLOBAL_STOP, "CDP_SESSION_UNAVAILABLE") from None
 
-    def preserve(self):
+    def preserve(self, reason: str = "INSO_AUTHENTICATION_REQUIRED"):
         self._protected = True
+        self._protected_reason = reason
 
     def reset(self):
         # Failed reads still close BEFORE the existing 120-second retry wait.
@@ -168,8 +179,10 @@ class V13QuotationOperations:
             try:
                 page = session.operation_access().operation_page().page
             except SecurityViolation:
-                self.preserve()
-                raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED") from None
+                # An unverifiable tab is preserved, never closed, and the reason
+                # is its identity -- not a login challenge it cannot prove.
+                self.preserve("INSO_OPERATION_NOT_CLOSED")
+                raise V12Fault(FaultScope.GLOBAL_STOP, "INSO_OPERATION_NOT_CLOSED") from None
             if self._retain:
                 self._released = True
                 return

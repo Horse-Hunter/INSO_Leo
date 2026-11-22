@@ -1,4 +1,28 @@
-# Executor 2026-11-21（晚）：V1.7 已安装并正常生产运行；真实采购尚未验证
+# Executor 2026-11-22：误报“INSO 需要人工验证”已定位并修复，V1.7 已重装重启
+
+**状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / FALSE_AUTH_ALARM_FIXED / REAL_PURCHASE_NOT_YET_VERIFIED`**
+
+- **事故：** 11-22 07:27 报价轮次失败后抛 `INSO_AUTHENTICATION_REQUIRED`，GUI 显示“INSO 需要人工登录/验证”，
+  整轮停止 82.5 分钟；Owner 到 INSO 查看**并不需要验证**。恢复后同一个会话读完了同样的 47 条，
+  全程没有任何登录尝试。
+- **根因：** `InsoQuotationReader` 把**任何** `SecurityViolation` 都当成登录失效，而这条路径上的
+  `SecurityViolation` 全部来自租约/页面身份（`verified shell page is closed`、`page identity changed`、
+  `operation identity is required` …）。页面问题被冒充成登录问题，才让 Owner 去查了一个不存在的验证码。
+- **修复：** 只按原因码判定登录失效（`MANUAL_VERIFICATION_REQUIRED` / `CREDENTIAL_REJECTED` /
+  `AUTHENTICATION_REQUIRED` / `SESSION_IDENTITY_UNVERIFIED`），其余转成既有的“本次读取未结算、单独重试”；
+  `_reopen()` 不再整轮停止而是走全新页面路径；`close()` 保留页面仍停止但改报 `INSO_OPERATION_NOT_CLOSED`；
+  诊断文案明确写“这不需要你去做登录或验证码”。真挑战/密码被拒仍全局停止（三种挑战用例覆盖）。
+- **回归：** `4371 passed / 0 failed / 0 errors / 1 skipped`；安装门禁 `checks = 202 PASS`。
+- **重装：** 源码变更后重建（`67cede70…da05`，清单 `cd085807…f2c0`），就地切换安装
+  `INSTALL_RESULT = PASS`，旧 EXE 保留为 `INSO_V1.7.exe.prev-20261122T063011Z`，
+  另有快照 `dist\release-backups\RFQ-025-pre-v17fix-20261122T062633Z`（程序+数据库+报告）。
+- **运行：** PID 90384（GUI）+ 90508（watcher），14:31 起 inquiry/quotation 正常，零 ERROR。
+- **顺带修掉：** 备份脚本与数据库校验脚本里各自的 `INSO_V1.6.exe` 硬编码（后者会漏掉 V1.7 进程，
+  等于产出假的“已停机”证明）。
+
+---
+
+# 此前：V1.7 已安装并正常生产运行；真实采购尚未验证
 
 **状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_NOT_YET_VERIFIED`**
 （`main` 仍是 V1.6；V1.7 未晋升。回归与安装细节见

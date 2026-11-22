@@ -1,6 +1,6 @@
 # RFQ-025 — V1.6 晋升 + V1.7 原生粘贴录单（三阶段）
 
-**当前状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_NOT_YET_VERIFIED`**
+**当前状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / FALSE_AUTH_ALARM_FIXED / REAL_PURCHASE_NOT_YET_VERIFIED`**
 （V1.7 已装进 `dist\INSO_V1.7` 并正常生产运行；`main` 仍是 V1.6，未晋升）
 
 阶段状态：
@@ -160,7 +160,20 @@ V1.7 仍是前瞻版本，未经 Owner 验收不得晋升 `main`。
 | 真实采购 | **未发生**：无合法待处理订单（最新状态全为 `PURCHASE_RECORDED`/`HUMAN_COMPLETED`）；未造单、未重发 |
 | 台账副作用 | purchase 行数 40 与装前一致；hold 3 条原样；open write intents 0 |
 
-细节见 [EXECUTION_LOG](EXECUTION_LOG.md) 第 14–21 节。
+### 6c. 第四阶段：误报"INSO 需要人工验证"（2026-11-22）
+
+| 事项 | 结果 |
+|---|---|
+| 现象 | 07:27 报价轮次抛 `INSO_AUTHENTICATION_REQUIRED` → 全局停止 82.5 分钟；GUI 称"需要人工登录/验证"，而 INSO 实际不需要 |
+| 反证 | 日志中登录尝试 0 次；恢复后同一会话读完同样 47 条；进程未重启 |
+| 根因 | 报价读取把**任何** `SecurityViolation` 当成登录失效，而实际全部来自租约/页面身份 |
+| 修复 | 只按原因码判登录失效；页面类转"本次读取未结算、单独重试"；`_reopen` 走全新页面；`close`/`preserve` 改报 `INSO_OPERATION_NOT_CLOSED`；诊断文案说明"不需要登录/验证码" |
+| 不变 | 真挑战 / 密码被拒仍全局停止；页面保留与写入门禁不动 |
+| 回归 | `4371 passed / 0 failed / 1 skipped` |
+| 重装 | `67cede70…da05`，就地切换 `INSTALL_RESULT = PASS`，旧 EXE 与整目录快照均可回退 |
+| 顺带 | 备份/数据库校验脚本各自的 `INSO_V1.6.exe` 硬编码（后者会漏掉 V1.7 进程）一并去掉 |
+
+细节见 [EXECUTION_LOG](EXECUTION_LOG.md) 第 14–25 节。
 
 ## 7. 下一轮（待 Owner 指令，不自动开工）
 

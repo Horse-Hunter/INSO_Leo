@@ -6,16 +6,19 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from src.inso.duplicate_history import (
+    DuplicateHistoryFailure,
     InsoDuplicateHistoryError,
     PlaywrightProcurementHistoryPage,
 )
 from src.inso.quotation_read import (
     QUOTATION_COLUMNS,
+    InsoQuotationAuthenticationError,
     InsoQuotationReader,
     V13QuotationRow,
     capture_quotation_page,
     select_recent_lowest,
 )
+from src.inso.session import SecurityViolation
 from tests.inso.test_procurement_duplicate_history import LowerFrame, row
 
 NOW = datetime(2026, 10, 7, 0, 5, tzinfo=ZoneInfo("Asia/Shanghai"))
@@ -291,3 +294,49 @@ def test_separated_model_no_stock_quote_is_retrieved_and_selected_without_fx():
     selected = select_recent_lowest(records, queried_mpn=original.payload[1], now=NOW,
         currency_rate=lambda _: pytest.fail("zero quote must not fetch FX"))
     assert selected.payload == tuple(values)
+
+
+class _CodedViolation(SecurityViolation):
+    """A violation that names a login problem, the way the session guard does."""
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.reason_code = code
+
+
+class _RaisingAccess:
+    """An operation access whose page cannot be reached at all."""
+
+    def __init__(self, error):
+        self._error = error
+
+    def operation_page(self):
+        raise self._error
+
+
+@pytest.mark.parametrize("code", ["MANUAL_VERIFICATION_REQUIRED", "CREDENTIAL_REJECTED"])
+def test_a_real_login_verdict_is_still_an_authentication_stop(code):
+    """The narrowing must not soften a genuine challenge or rejection."""
+
+    with pytest.raises(InsoQuotationAuthenticationError):
+        InsoQuotationReader().read(_RaisingAccess(_CodedViolation(code)), "MPN")
+
+
+@pytest.mark.parametrize("message", [
+    "verified shell page is closed",
+    "session lease is not active",
+    "operation identity is required",
+    "page identity changed",
+])
+def test_a_lost_page_identity_is_an_unsettled_read_not_a_login_verdict(message):
+    """2026-11-22 07:27: an unverifiable lease was reported as "verify your login".
+
+    Nothing about these conditions is a login verdict -- there was no challenge,
+    no login attempt, and the next cycle read the same rows without logging in.
+    They must stay a bounded read failure so the engine retries this row alone.
+    """
+
+    with pytest.raises(InsoDuplicateHistoryError) as raised:
+        InsoQuotationReader().read(_RaisingAccess(SecurityViolation(message)), "MPN")
+
+    assert raised.value.code is DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED

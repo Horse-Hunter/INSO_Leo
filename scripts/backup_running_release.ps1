@@ -30,8 +30,15 @@ function Get-Sha256([string]$path) {
 $source = (Resolve-Path -LiteralPath $SourceDir).Path
 if (Test-Path -LiteralPath $Destination) { throw "Destination already exists; refusing to overwrite: $Destination" }
 
-$exe = Join-Path $source "INSO_V1.6.exe"
-if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "No INSO_V1.6.exe in $source" }
+# The release this snapshot must be able to restore is whatever EXE the install
+# actually holds. Reading it from the directory (exactly one root EXE) keeps the
+# snapshot correct across a version rename instead of hardcoding one release.
+$exeCandidates = @(Get-ChildItem -LiteralPath $source -File -Filter "*.exe")
+if ($exeCandidates.Count -ne 1) {
+    throw "$source holds $($exeCandidates.Count) root EXE(s); a snapshot needs exactly one"
+}
+$exe = $exeCandidates[0].FullName
+$exeName = $exeCandidates[0].Name
 
 # The configuration that belongs to THIS installation is whatever its runtime
 # junction points at. Everything else is somebody else's settings.
@@ -68,8 +75,8 @@ if ($sourceFiles.Count -lt 1) {
 }
 
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-Copy-Item -LiteralPath $exe -Destination (Join-Path $Destination "INSO_V1.6.exe")
-$copiedExe = Join-Path $Destination "INSO_V1.6.exe"
+Copy-Item -LiteralPath $exe -Destination (Join-Path $Destination $exeName)
+$copiedExe = Join-Path $Destination $exeName
 if ((Get-Sha256 $copiedExe) -ne (Get-Sha256 $exe)) {
     throw "The copied EXE does not hash to the running EXE; refusing to write a snapshot that cannot be trusted."
 }
