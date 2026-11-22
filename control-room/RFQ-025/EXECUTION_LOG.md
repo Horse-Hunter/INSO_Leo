@@ -607,3 +607,76 @@ runtime-run_id = edc94a2c5c684066ae0b3eea8a3d28a5，fatal.log = 0 字节
 - 正常生产路径不含 AI 录单（源码守卫测试 + 两次真实运行的 AI 请求计数为 0）；
 - 真实"保存并发送"与最终业务结果**尚未验证**，等有合法待处理订单时自然发生；
 - `main` 仍是 V1.6，`release/previous` 未动，V1.7 未晋升。
+
+---
+
+# 第四阶段：误报"INSO 需要人工验证"导致全局停止（2026-11-22）
+
+Owner 报告：早上报过一次"INSO 需要人工验证"并全局停止；本人到 INSO 看过，**并不需要验证**。
+
+## 22. 现场证据
+
+日志（`dist\INSO_V1.4\runtime\logs\INSO_V1.3.log`）：
+
+```
+07:25:47  INFO  scheduled_module=quotation phase=begin            （正常开始）
+07:26:53  WARNING ... stage=quotation result=QUOTE_AGE_EXPIRED      （前 47 条照常处理）
+07:27:05  INFO  scheduled_module=quotation phase=failed elapsed_s=77.766
+07:27:07  WARNING runtime fault reason=INSO_AUTHENTICATION_REQUIRED cause=V12Fault
+   ……82.5 分钟无任何调度……
+08:49:40  INFO  scheduled_module=inquiry phase=begin                （Owner 重新开始后恢复）
+08:49:50  WARNING ... stage=quotation result=QUOTE_AGE_EXPIRED      （同样 47 条，正常读完）
+```
+
+三条关键反证：
+
+1. **全程没有任何登录尝试**：`the INSO session is being established by logging in` 与
+   `INSO_LOGIN_RETRY_EXHAUSTED` 在日志里命中数为 0。会话守卫根本没有被触发。
+2. **恢复后没有登录**：08:49 起直接沿用同一个会话读完了同样的 47 条，结果与故障前一致。
+3. **进程从未重启**：PID 85452 自 11-21 13:31 起未变，属"进程内停止 → 重新开始"。
+
+## 23. 根因
+
+`src/inso/quotation_read.py` 把**任何** `SecurityViolation` 都翻译成"登录失效"：
+
+```python
+except SecurityViolation:
+    raise InsoQuotationAuthenticationError("INSO_AUTHENTICATION_REQUIRED") from None
+```
+
+而这条读取路径里的 `SecurityViolation` 全部来自**租约/页面身份**，与登录无关：
+
+- `InsoSessionLease._assert_identity()`：`verified shell page is closed`、`page identity changed`、
+  `browser or context is stale`、`session lease is not active`；
+- `InsoOperationAccess.operation_page()`：`operation identity is required`。
+
+其中任何一条 → `InsoQuotationAuthenticationError` → `v13_quotation` 抛
+`V12Fault(GLOBAL_STOP, "INSO_AUTHENTICATION_REQUIRED")` → 停止整轮，GUI 按
+`INSO_AUTHENTICATION_REQUIRED` 显示"INSO 需要人工登录/验证，ERP 会话失效或需要验证码"。
+Owner 于是去查了一个并不存在的验证码。
+
+**判定不是"页面出错就不该停"，而是"页面出错不能冒充登录失效"**：假诊断让 Owner 做无效操作，
+也让真正的登录问题淹没在假告警里。
+
+## 24. 修复（只改判定与文案，不改安全边界）
+
+1. `quotation_read.py`：按**原因码**区分。只有
+   `MANUAL_VERIFICATION_REQUIRED` / `CREDENTIAL_REJECTED` / `AUTHENTICATION_REQUIRED` /
+   `SESSION_IDENTITY_UNVERIFIED` 才转成登录失效；其余 `SecurityViolation` 转成
+   `InsoDuplicateHistoryError(QUERY_SETTLEMENT_UNCONFIRMED)` —— 走既有的"本次读取未结算、单独重试"通道。
+2. `v13_quotation.py`：
+   - `_reopen()` 遇到非登录类的 `SecurityViolation` 不再整轮停止，而是丢掉这个租约、走
+     `open()` 已有的全新页面路径（这与"菜单丢失"的既有恢复方式一致）；
+   - `close()` 无法核验页面时依旧保留该页、依旧停止（页面归属 fail-closed 不变），
+     但原因码改为 `INSO_OPERATION_NOT_CLOSED`；
+   - `preserve()` 记录保留原因，下一阶段 `open()` 报出**真实**原因，不再一律报登录失效。
+3. `fault_diagnostics.py`：新增 `INSO_OPERATION_NOT_CLOSED` 文案 ——
+   "INSO 页面无法核验（不是登录问题）…这**不需要**你去做登录或验证码"。
+
+**未改**：真正的挑战/密码被拒仍然全局停止（`test_actual_rfq002_authentication_keeps_human_page_in_v13_cycle`
+覆盖 CAPTCHA / 手机验证码 / 设备验证三种）；页面保留策略、写入门禁、UNKNOWN/SENT/hold 一律未动。
+
+测试变化：`test_midquery_session_guard_failure_keeps_existing_owned_page` 原名与断言都固化了
+"租约失效=登录失守"这一误判，已改名为
+`test_midquery_lost_shell_identity_is_not_reported_as_a_login_problem` 并改断言真实原因码；
+新增 4 条读取器分类用例与 1 条"保留页面后下一阶段报页面问题"用例。

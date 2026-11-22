@@ -73,7 +73,20 @@ def test_actual_rfq002_authentication_keeps_human_page_in_v13_cycle(monkeypatch,
     assert quotes.calls == [] and waits == []
 
 
-def test_midquery_session_guard_failure_keeps_existing_owned_page():
+def test_midquery_lost_shell_identity_is_not_reported_as_a_login_problem():
+    """Production 2026-11-22 07:27: an unverifiable shell was read as "go verify".
+
+    A quotation read whose lease had lost its verified page identity became
+    INSO_AUTHENTICATION_REQUIRED, the GUI told the Owner to finish an INSO
+    verification that was never asked for, and the program stopped for 82
+    minutes. Nothing in that event was a login verdict: no challenge, no login
+    attempt, and the next cycle read the same rows with no login at all.
+
+    The safety behaviour is unchanged -- an unverifiable tab is preserved, never
+    closed, and the run still stops -- but it now names the page problem it
+    actually has instead of sending the Owner to check a login.
+    """
+
     from src.inso.quotation_read import InsoQuotationReader
     lease, browser, context, page = make_lease(BrowserOwnership.REUSED, owns_operation_page=True)
     class History:
@@ -91,10 +104,26 @@ def test_midquery_session_guard_failure_keeps_existing_owned_page():
     with pytest.raises(V12Fault) as raised:
         service.run(WS)
     assert raised.value.scope is FaultScope.GLOBAL_STOP
-    assert raised.value.reason == "INSO_AUTHENTICATION_REQUIRED"
+    assert raised.value.reason == "INSO_OPERATION_NOT_CLOSED"
     operations.close()
     assert not page.closed and browser.connected and not context.closed
     assert waits == []
+
+
+def test_a_preserved_tab_after_a_lost_shell_reports_the_page_problem():
+    """The next stage must not turn "I kept an unverifiable tab" into a login stop."""
+
+    lease, _, _, page = make_lease(BrowserOwnership.REUSED, owns_operation_page=True)
+    operations = V13QuotationOperations(browser_handle=SimpleNamespace(owned=False), login=object(),
+        attach=lambda *a, **kw: SimpleNamespace(owns_operation_page=True,
+            operation_access=lambda: lease.adapter_access("quotation"),
+            close_owned_operation_tab=lambda: lease.adapter_access("quotation").close_owned_operation_tab()))
+    operations.open("first")
+    operations.preserve("INSO_OPERATION_NOT_CLOSED")
+    with pytest.raises(V12Fault) as raised:
+        operations.open("second")
+    assert raised.value.reason == "INSO_OPERATION_NOT_CLOSED"
+    assert not page.closed
 
 
 def test_adapter_rejects_owned_browser_and_overlapping_operations():

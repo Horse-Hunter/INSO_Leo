@@ -21,6 +21,18 @@ from .duplicate_history import (
 )
 from .session import InsoOperationAccess, SecurityViolation
 
+#: The only security violations that mean "a human has to deal with the login".
+#: Everything else -- a lease that lost its page identity, a closed shell, an
+#: operation id that is gone -- is a page/control condition, and reporting one of
+#: those as an authentication failure is what told the Owner to go and verify an
+#: INSO login that was never challenged (2026-11-22 07:27).
+INSO_LOGIN_VIOLATION_CODES = frozenset({
+    "MANUAL_VERIFICATION_REQUIRED",
+    "CREDENTIAL_REJECTED",
+    "AUTHENTICATION_REQUIRED",
+    "SESSION_IDENTITY_UNVERIFIED",
+})
+
 try:
     SHANGHAI = ZoneInfo("Asia/Shanghai")
 except ZoneInfoNotFoundError:
@@ -203,8 +215,16 @@ class InsoQuotationReader:
             return tuple(result)
         except NativeProtocolTimeout as exc:
             raise InsoDuplicateHistoryError(DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED) from exc
-        except SecurityViolation:
-            raise InsoQuotationAuthenticationError("INSO_AUTHENTICATION_REQUIRED") from None
+        except SecurityViolation as exc:
+            # Only a real login verdict may stop the program. A lease/page
+            # identity violation is this read's own problem: it is reported as an
+            # unsettled read so the engine retries it in isolation, exactly like
+            # any other transient read failure.
+            if getattr(exc, "reason_code", "") in INSO_LOGIN_VIOLATION_CODES:
+                raise InsoQuotationAuthenticationError("INSO_AUTHENTICATION_REQUIRED") from None
+            raise InsoDuplicateHistoryError(
+                DuplicateHistoryFailure.QUERY_SETTLEMENT_UNCONFIRMED
+            ) from None
         except InsoDuplicateHistoryError:
             raise
         except Exception:  # noqa: BLE001 - sanitized incomplete query, never empty
