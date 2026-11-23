@@ -917,6 +917,11 @@ class V12Store:
         if occurrence not in cycles:
             cycles = (cycles+[occurrence])[-3:]
         proof = {**proof, "cycles": cycles, "completed_cycles": len(cycles)}
+        if active and previous.get("blocked_since") and proof.get("blocked_since"):
+            # One outage can outlive the process. Keep the start the earlier
+            # observation recorded, so the duration rule measures the outage and
+            # not the time since the last restart.
+            proof["blocked_since"] = previous["blocked_since"]
         reviewed = replace(command, command_id=command_id, review=json.dumps(proof, sort_keys=True), payload_version=2)
         if not active:
             self.enqueue_notification(reviewed)

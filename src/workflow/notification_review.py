@@ -76,6 +76,18 @@ def review_reason(command, now):
                     or command.inquiry_id is not None):
                 return "RUNTIME_STOP_UNVERIFIED"
             return None
+        if category == "resource_stop":
+            # A program-level resource outage carries no order and therefore no
+            # inquiry day: it is not a business event that can age out. What it
+            # must carry is the outage's own start, which the dispatcher measures
+            # against the wall clock (backend._review_current_mail).
+            if (proof.get("module") != "Browser/CDP"
+                    or proof.get("reason_code") != "PROGRAM_OPERATION_BLOCKED"
+                    or command.inquiry_id is not None
+                    or not proof.get("retries_exhausted")
+                    or not isinstance(proof.get("blocked_since"), str)):
+                return "RESOURCE_EVENT_UNVERIFIED"
+            return None
         if not proof.get("manual") and not quote_timeout and age_reason(proof.get("inquiry_day"), now, module=proof.get("business_module", "quotation")):
             return "ORDER_AGE_EXCLUDED"
         if category == "persistent_stop":
