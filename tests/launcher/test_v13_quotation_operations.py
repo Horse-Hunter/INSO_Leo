@@ -271,3 +271,47 @@ def test_failed_query_reset_physically_closes_before_retry_inside_poll(retained_
         assert next_page is not first
         operation.close()
     assert next_page.closed
+
+
+def test_a_login_page_that_did_not_load_is_not_a_human_challenge():
+    """2026-11-21 23:27: the guard reported DEAD because the page never loaded.
+
+    The notification said "ERP 会话失效或需要验证码" and the run stopped, while
+    the reason code was LOGIN_PAGE_UNAVAILABLE -- a page/network failure. The
+    module handler already defers an InsoAuthenticationError as "waiting for
+    INSO" and only marks a manual wait for the four codes that need a human, so
+    the adapter must let this one through instead of wrapping it in GLOBAL_STOP.
+    """
+
+    from src.launcher.inso_session import InsoAuthenticationError
+
+    operations = V13QuotationOperations(
+        browser_handle=SimpleNamespace(owned=False), login=object()
+    )
+
+    with pytest.raises(InsoAuthenticationError) as raised:
+        operations._session_failure(
+            InsoAuthenticationError("LOGIN_PAGE_UNAVAILABLE"), preserve=True
+        )
+
+    assert raised.value.reason_code == "LOGIN_PAGE_UNAVAILABLE"
+    assert not operations._protected
+
+
+@pytest.mark.parametrize("code", [
+    "MANUAL_VERIFICATION_REQUIRED", "CREDENTIAL_REJECTED",
+    "AUTHENTICATION_REQUIRED", "SESSION_IDENTITY_UNVERIFIED",
+])
+def test_a_real_login_verdict_still_stops_the_run(code):
+    from src.launcher.inso_session import InsoAuthenticationError
+
+    operations = V13QuotationOperations(
+        browser_handle=SimpleNamespace(owned=False), login=object()
+    )
+
+    with pytest.raises(V12Fault) as raised:
+        operations._session_failure(InsoAuthenticationError(code), preserve=True)
+
+    assert raised.value.scope is FaultScope.GLOBAL_STOP
+    assert raised.value.reason == "INSO_AUTHENTICATION_REQUIRED"
+    assert operations._protected

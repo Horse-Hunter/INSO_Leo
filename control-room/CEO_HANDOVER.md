@@ -1,4 +1,35 @@
-# INSO LEO — 新 CEO 接管入口（2026-11-22，V1.7 运行中；误报登录故障已修）
+# INSO LEO — 新 CEO 接管入口（2026-11-23，V1.7 运行中；真实采购已成交）
+
+**当前权威结论：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED`。**
+
+V1.7 的粘贴录单已经跑出第一笔真实成交：`AMPLA1004S-R22MT` / Abracon / 60（SHAHAB 145），
+11-22 23:06 完成，ERP 对账确认已保存、Sheets 回写 SETTLED、重复检查 repeated=0。
+细节见 [RFQ-025/FINAL_REPORT.md](RFQ-025/FINAL_REPORT.md) 第七节与
+[EXECUTION_LOG](RFQ-025/EXECUTION_LOG.md) 第 26–31 节。
+
+## 现场状态（先看这里）
+
+| 项 | 值 |
+|---|---|
+| 正在运行 | `dist\\INSO_V1.7\\INSO_V1.7.exe`，PID 102276（GUI）+ 102836（watcher） |
+| 已安装 EXE | SHA256 `6674f37b55a5410ed853ff9883815769a2175b109271edaca26f9ea211d1dc03`（8,511,663 B） |
+| 回退（同目录） | `INSO_V1.7.exe.prev-20261123T034618Z` + `_internal.prev-20261123T034618Z` |
+| 回退（整目录） | `dist\\release-backups\\RFQ-025-pre-r5-20261123T034455Z`（程序 + 库 + `DB_VERIFY_RESULT = PASS`） |
+| V1.6 | 目录未动（`9a0cb3d3…2710`）；桌面快捷方式为“旧版，仅回退用” |
+| 分支 | `develop` 含整条 V1.7 线；`main` 仍 V1.6；V1.7 **未晋升** |
+
+## 下一步
+
+- **晋升 `main` 由 Owner 决定**，即使已有真实成交也不自行晋升。
+- **观察点**：上一版在 11:22 后曾出现 22 分钟无轮次（原定 11:37 应有一轮），无故障无停止记录。
+  若新构建复现，需单独排查调度线程是否被静默挂起。
+- 再看到“INSO 无法核验页面 / 操作未关闭”：那是页面问题，**不需要**登录或验证码，重新开始即可。
+  只有明确写“需要人工登录/验证”才需本人处理。
+- 若长时间只见 `BROWSER_WAITING_RECOVERY`：关闭 Chrome 窗口（不要强杀、不要换 profile），程序会自动重连。
+
+---
+
+# 此前：V1.7 运行中；误报登录故障已修（2026-11-22）
 
 **当前权威结论：`V1_7_INSTALLED / PRODUCTION_RUNNING / FALSE_AUTH_ALARM_FIXED / REAL_PURCHASE_NOT_YET_VERIFIED`。**
 

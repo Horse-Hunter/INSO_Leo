@@ -1,6 +1,6 @@
 # RFQ-025 — V1.6 晋升 + V1.7 原生粘贴录单（三阶段）
 
-**当前状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / FALSE_AUTH_ALARM_FIXED / REAL_PURCHASE_NOT_YET_VERIFIED`**
+**当前状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED`**（真实采购已于 2026-11-22 23:06 成交并通过 ERP 对账）
 （V1.7 已装进 `dist\INSO_V1.7` 并正常生产运行；`main` 仍是 V1.6，未晋升）
 
 阶段状态：
@@ -173,7 +173,20 @@ V1.7 仍是前瞻版本，未经 Owner 验收不得晋升 `main`。
 | 重装 | `67cede70…da05`，就地切换 `INSTALL_RESULT = PASS`，旧 EXE 与整目录快照均可回退 |
 | 顺带 | 备份/数据库校验脚本各自的 `INSO_V1.6.exe` 硬编码（后者会漏掉 V1.7 进程）一并去掉 |
 
-细节见 [EXECUTION_LOG](EXECUTION_LOG.md) 第 14–25 节。
+### 6d. 第五阶段：真实成交 + CDP 卡死 + 两处误报修复（2026-11-23）
+
+| 事项 | 结果 |
+|---|---|
+| **第一笔真实采购** | `inq_7bd2f5…`（SHAHAB 145，`AMPLA1004S-R22MT` / Abracon / 60）11-22 23:06 成交：重复检查 `CONFIRMED/repeated=0` → 粘贴预览核对 → `#btnSave2` 保存并发送 → ERP 对账 `CONFIRMED_SAVED` → Sheets 回写 `SETTLED` |
+| CDP 卡死 | 20:43–23:04（2h21m）：HTTP 端点正常但 WS 握手 15 s/60 s 均超时；程序按设计推迟轮次、不全局停止、不杀 Chrome；Owner 关闭 Chrome 窗口后自动恢复，订单未丢 |
+| 该次未外发告警 | 证据里 `active=False`、`recovered_at` 已落地 → `EVENT_NOT_CURRENT` 抑制。既有策略，未改（是否改为强制外发待 Owner 决定） |
+| 修复一 | `LOGIN_PAGE_UNAVAILABLE` 不再被当成"需要人工验证"（模块层本来就能正确分类，适配器抢先包成了全局停止） |
+| 修复二 | header 行每轮重复写 `HUMAN_RESOLUTION_RECORDED`（累计 499 条）→ 改为只记一次；生产实测不再增长 |
+| 回归 | `4376 passed / 0 failed / 1 skipped` |
+| 重装 | `6674f37b…dc03`（8,511,663 B，清单 `2291898c…77fb`），就地切换 `INSTALL_RESULT = PASS` |
+| 运行 | PID 102276 + 102836，11:47 起三轮正常、零 ERROR |
+
+细节见 [EXECUTION_LOG](EXECUTION_LOG.md) 第 14–31 节。
 
 ## 7. 下一轮（待 Owner 指令，不自动开工）
 

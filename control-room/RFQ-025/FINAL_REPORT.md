@@ -1,9 +1,10 @@
-# RFQ-025 — 最终汇报（第四阶段：误报登录故障已修，V1.7 重装重启）
+# RFQ-025 — 最终汇报（第五阶段：真实采购已成交，V1.7 收尾完成）
 
-**状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / FALSE_AUTH_ALARM_FIXED / REAL_PURCHASE_NOT_YET_VERIFIED`**
+**状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED`**
 
-一句话：V1.7 已装进自己的目录并正常生产运行，22 条 TP 失败查明是测试时基问题并已修正，
-全量回归零失败；**没有发生真实采购**，因为当前没有合法待处理订单——这一点如实标注，不算业务验收通过。
+一句话：V1.7 装在 `dist\INSO_V1.7` 正常跑生产，**第一笔真实采购已于 2026-11-22 23:06 走完整条粘贴链路成交**
+（ERP 对账回读确认为已保存、Sheets 回写 SETTLED、重复检查 repeated=0）；期间两次"误报"已修掉，
+其中一次是登录页没加载被写成"需要验证码"，另一次是同一行单据每轮重复写"人工处理已记录"499 次。
 
 ## 七段式
 
@@ -115,23 +116,32 @@ V1.6 目录本身一个字节未动，`INSO_V1.6.exe` 仍是 `9a0cb3d3…2710`�
 ## 六、实际 GUI 与生产运行状态
 
 ```
-PID 85452  INSO_V1.7  「INSO LEO V1.7 — Procurement Automation Control Center」
-PID 84368  INSO_V1.7  （watcher）
-run_id edc94a2c…，fatal.log 0 字节
+PID 102276  INSO_V1.7  「INSO LEO V1.7 — Procurement Automation Control Center」
+PID 102836  INSO_V1.7  （watcher）
+fatal.log 0 字节；安装 EXE = 6674f37b…dc03
 ```
 
 以正式生产模式启动（`--start-inquiry` 就是「开始运行」调用的同一个 `backend.start()`），
-三个模块都按 900 s 跑起来且零故障：inquiry 9.6 s / quotation 77.5 s / tp 1.2 s，
-21:47 第二轮 inquiry 4.1 s 完成。日志中 `ERROR`、`SHEETS_*`、`fault` 命中数 0。
+首轮三个模块全部完成且零 ERROR：inquiry 11.1 s / quotation 71.8 s / tp 0.5 s。
+上一版（`67cede70…da05`）在 11-22 14:31–11-23 11:22 期间持续运行，期间完成过真实成交，
+`ERROR` / `SHEETS_*` / `fault` 命中数 0。
 
-## 七、真实采购结果
+## 七、真实采购结果：已成交
 
-**没有发生，且不是故障。** 最新业务状态全为 `PURCHASE_RECORDED` / `HUMAN_COMPLETED`，
-询价模块两轮都无单可做；purchase 行数 40（与装前备份一致），最后一条采购是 11-19，
-活动 hold 3 条原样保留，open write intents 0。
+`inq_7bd2f5dbc94f50e27a474821` —— SHAHAB 第 145 行，`AMPLA1004S-R22MT` / `Abracon` / `60`，
+2026-11-22 23:06（本地）完成：
 
-按 Owner 指令，不造单、不重发历史订单，故标注 `REAL_PURCHASE_NOT_YET_VERIFIED`。
-真正的业务验收（保存并发送 → ERP 单据 → Sheets 回写）要等出现合法待处理订单时自然发生。
+| 环节 | 证据 |
+|---|---|
+| 七天重复检查 | `outcome=CONFIRMED`、`repeated=0`（没有重复采购） |
+| 录单 | `PURCHASE_DRAFT_STARTED` → 粘贴 → `AI_RECOGNITION_READY`（预览核对通过） |
+| 保存并发送 | `SAVE_DISPATCH_ARMED` → `SAVE_CLICK_COMPLETED`，控件为 `#btnSave2` |
+| 结果确认 | `SAVE_OUTCOME_UNKNOWN` → `RECONCILIATION_CONFIRMED_SAVED`（**ERP 对账回读确认**） |
+| Sheets 回写 | `GOOGLE_WRITE` 15:06:18 建立、15:06:19 `SETTLED` |
+| 台账 | purchase 行 41 条、`outcome=SAVED`；工作项 `COMPLETED`，`attempt_count=1` |
+
+这一单在成交前曾被 CDP 卡死推迟（20:43–23:04，见下节），恢复后自行续跑完成，
+说明"推迟 → 恢复 → 继续"这条路径也是通的，且订单没有丢。
 
 ## 七点五、2026-11-22 早上那次"需要人工验证"：误报，已修
 
@@ -165,10 +175,31 @@ GUI 提示"INSO 需要人工登录/验证"。Owner 到 INSO 看过，**不需要
 **顺带**：装第二遍时暴露 `backup_running_release.ps1` 与 `verify_database_backup.ps1` 各自写死
 `INSO_V1.6.exe`；后者会**漏掉** V1.7 进程，等于能出具假的"已停机"证明。两处都改成按目录/按版本族识别。
 
+## 七点六、2026-11-23：CDP 卡死与两处误报
+
+**CDP WebSocket 卡死（20:43–23:04，2 h 21 min）**：`/json/version` 与 `/json/list` 都正常返回，
+但 Playwright 浏览器级 WS 握手 15 s 超时、放宽到 60 s 仍超时 —— 是卡死，不是慢。
+程序按设计把轮次推迟（不全局停止、不杀 Chrome、不换 profile），Owner 关闭 Chrome 窗口后自动恢复。
+那段时间**没有外发告警**：程序生成了 `PROGRAM_OPERATION_BLOCKED`，但其证据里 `active=False`、
+`recovered_at` 已落地，派发前被 `EVENT_NOT_CURRENT` 抑制 —— 这是既有策略（Browser/CDP 属等待重试类），
+本轮未改；是否要改成必须外发，请 Owner 决定。
+
+**修复一：登录页没加载 ≠ 需要人工验证。** 11-21 23:27 那条告警正文其实写着
+`InsoAuthenticationError(LOGIN_PAGE_UNAVAILABLE)`，却被表述成"需要验证码"。原因是报价适配器把任何
+`InsoAuthenticationError` 抢先包成全局停止，压过了模块层本来正确的分类。现在只有 4 个真验证码/凭据码
+才全局停止，其余交回模块层走"等待 INSO 恢复"。
+
+**修复二：header 行的"已跳过"原因每轮重复写。** `inq_9886…` 是 `2026` 表第 146 行、型号字段就是表头字
+`MPN`；`INVALID_INPUT_SKIPPED` 本身在可对账集合里，导致每 15 分钟重复记一次
+`HUMAN_RESOLUTION_RECORDED`，累计 **499 条**。现在只记一次，告警清理仍每轮执行。
+生产实测：新构建跑完首轮后该单事件数仍为 499。
+
 ## 八、尚未验证 / 未完成
 
-1. **真实"保存并发送"与最终业务结果**：本轮无合法待处理订单，未验证。
-2. **安装后程序内实测粘贴路径**：尚未有订单触发；现有证据是"同一份源码的真实运行 + 装机二进制与候选逐字节一致"。
+1. **`main` 晋升**：V1.7 已安装并成交，但仍是前瞻版本；晋升由 Owner 决定，本轮未动 `main` / `release/previous`。
+2. **一处待观察现象**：上一版在 11:22:21 之后 22 分钟没有新轮次（原定 11:37 应有一轮），
+   GUI 存活、CPU 只有事件循环、无故障无停止记录。无在途写入，故直接停机重装；新构建首轮正常。
+   **若在新构建上复现，需要单独排查调度线程是否被静默挂起**，本轮无证据判定原因。
 3. **数据库路径**：`production.json` 的 `sqlite_path` 仍指向 `dist\INSO_V1.2\runtime\production\...`
    （历史遗留指向，经 junction 解析到同一文件）。本轮未改，属独立清理项。
 4. 既有现象（非本次引入）：`inq_d65be9df3c7cc40b65cbffaa` 的 `QUOTE_INPUT_WRITE_FAILED`、

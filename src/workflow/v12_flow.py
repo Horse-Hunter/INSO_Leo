@@ -432,8 +432,18 @@ class V12WorkflowCoordinator:
                     and self._owner_completion_is_safe(item, state)
                     and str(item.record_identity.identifying_snapshot.model or "").strip()
                     in _SOURCE_HEADER_WORDS):
-                self._set_state(item.inquiry_id, BusinessState.INVALID_INPUT_SKIPPED,
-                    EventType.HUMAN_RESOLUTION_RECORDED, now)
+                # "Once" has to be enforced, not assumed: INVALID_INPUT_SKIPPED is
+                # itself in the reconcilable set, so re-recording on every poll
+                # wrote a HUMAN_RESOLUTION_RECORDED event every 16 minutes for
+                # ever (499 of them on inq_9886... between 2026-10-07 and 11-23).
+                # That noise also makes "a human resolved this" unreadable in the
+                # GUI, because the same notice keeps reappearing.
+                if state is not BusinessState.INVALID_INPUT_SKIPPED:
+                    self._set_state(item.inquiry_id, BusinessState.INVALID_INPUT_SKIPPED,
+                        EventType.HUMAN_RESOLUTION_RECORDED, now)
+                # The alert sweep is idempotent on its own and still runs, so a
+                # data-quality alert raised later is cleared without re-announcing
+                # the skipped state.
                 self._v12_store.recover_stale_alerts(
                     item.inquiry_id, at=now,
                     alert_types=frozenset({AlertType.DATA_QUALITY}))

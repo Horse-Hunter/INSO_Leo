@@ -711,3 +711,127 @@ Owner 于是去查了一个并不存在的验证码。
 
 安装脚本成功输出里那句"首次启动必须 `--safe-preview`"也一并改成与当前 Owner 指令一致：
 从自己的目录正常启动（普通启动即完整生产模式），并且**绝不能与旧安装同时运行**（同一本台账两个调度器）。
+
+---
+
+# 第五阶段：真实成交、CDP 卡死、两处误报修复（2026-11-23）
+
+## 26. 第一笔真实采购成交（V1.7 的端到端验收）
+
+`inq_7bd2f5dbc94f50e27a474821` —— SHAHAB 第 145 行，`AMPLA1004S-R22MT` / `Abracon` / `60`。
+
+它在 11-22 22:18 被 CDP 卡死推迟（见第 27 节），23:04 恢复后自行续跑，23:06 完成。事件链（全部来自台账）：
+
+| 时间（UTC） | 事件 | 含义 |
+|---|---|---|
+| 15:04:34 | `DUPLICATE_CHECK_CONFIRMED` | 七天重复检查通过 |
+| 15:04:34 | `PURCHASE_DRAFT_STARTED` | 建草稿 |
+| 15:06:07 | `AI_RECOGNITION_READY` | 预览已核对通过（历史事件名，V1.7 语义为粘贴预览） |
+| 15:06:07 | `SAVE_DISPATCH_ARMED` | 提交前检查完成 |
+| 15:06:07 | `SAVE_CLICK_COMPLETED` | `#btnSave2`（保存并发送）点击一次 |
+| 15:06:14 | `SAVE_OUTCOME_UNKNOWN` | 点击后立即置未知，等待对账 |
+| 15:06:16 | `RECONCILIATION_CONFIRMED_SAVED` | **ERP 对账回读确认已保存** |
+| 15:06:16 | `PURCHASE_DATA_SAVED` | 业务状态落地 `PURCHASE_RECORDED` |
+
+旁证：
+
+- `workflow_v12_duplicate_results`：`outcome=CONFIRMED`、`repeated=0` —— 没有重复采购；
+- `workflow_write_intents`：`GOOGLE_WRITE` 于 15:06:18 建立、15:06:19 `SETTLED` —— **Sheets 回写成功且有确证**；
+- `workflow_items`：第 145 行 `status=COMPLETED`，`attempt_count=1`；
+- `workflow_v12_purchase_state`：41 条（装前 40 + 这 1 条），`outcome=SAVED`。
+
+**判定：`REAL_PURCHASE_VERIFIED`。** 录单走的是粘贴路径（生产代码里已无 AI 端点，真实运行 AI 请求计数为 0），
+保存并发送走的是 `#btnSave2`，不是 `#btnSave`。
+
+## 27. CDP WebSocket 卡死（20:43 → 23:04，2 小时 21 分）
+
+现象：`runtime fault reason=BROWSER_WAITING_RECOVERY` + `workflow step failed at login-sweep-cdp (BrowserBootstrapError)`，
+inquiry/quotation 连续 `phase=deferred`，tp 仍照常（不需要浏览器）。
+
+只读探测（与程序同一套检查项）：
+
+| 检查 | 结果 |
+|---|---|
+| `GET /json/version`、`/json/list` | 正常返回（Chrome/156.0.8078.81） |
+| Playwright `connect_over_cdp`，15 s | 超时于 `<ws connecting> ws://127.0.0.1:9222/devtools/browser/39afa3…` |
+| 同一连接，60 s | 仍然超时 → 是**卡死**，不是慢 |
+
+结论：Chrome 的 HTTP 调试端点活着，但浏览器级 WebSocket 握手不再被处理。程序按既有设计等待并推迟轮次
+（不全局停止、不杀 Chrome、不换 profile），Owner 关闭 Chrome 窗口后 23:04 自动恢复，**订单没有丢**，
+恢复后同一单继续跑完并成交。
+
+关于"为什么没有收到告警"：程序确实生成了 `PROGRAM_OPERATION_BLOCKED` 通知，但它的证据里
+`active=False`、`recovered_at` 已落地，派发前被判定 `EVENT_NOT_CURRENT` 而抑制。这是**既有策略**
+（Browser/CDP 属于等待重试类，恢复后不再外发），本轮未改。代价是这次 2.5 小时无人知晓，
+Owner 是自己发现的。是否要把"浏览器通道持续不可用"改成必须外发，属产品决定，留给 Owner。
+
+## 28. 修复一：登录页没加载 ≠ 需要人工验证
+
+11-21 23:27 那条告警的正文里写着 `InsoAuthenticationError(LOGIN_PAGE_UNAVAILABLE)` ——
+登录页根本没加载出来，却被写成"ERP 会话失效或需要验证码"。原因在
+`src/launcher/v13_quotation.py`：它把**任何** `InsoAuthenticationError` 都包成
+`V12Fault(GLOBAL_STOP, INSO_AUTHENTICATION_REQUIRED)`，抢在模块层判定之前。
+
+而模块层本来就会正确分类：`_website_failure` 把 `InsoAuthenticationError` 认成站点 INSO、推迟本轮，
+只有 4 个真验证码/凭据码才标记人工处理（`_defer_website_poll`）。修复即让适配器不再抢先：
+
+- 新增 `_session_failure()`：原因码属于 `INSO_LOGIN_VIOLATION_CODES`（与读取器共用同一集合）→ 全局停止；
+  其余（`LOGIN_PAGE_UNAVAILABLE` 等环境类）→ 原样抛给模块层，走"等待 INSO 恢复"。
+- `open()` / `_reopen()` 都改走这个判定。
+
+测试：`test_a_login_page_that_did_not_load_is_not_a_human_challenge`（环境类不外发、不保护页面）+
+4 个真验证码码参数化的 `test_a_real_login_verdict_still_stops_the_run`。
+
+## 29. 修复二：header 行的"已跳过"原因每轮重复写（499 条）
+
+`inq_988613911e961720d88cff52` 是 `2026` 表第 146 行，型号字段的值就是表头字 `MPN` ——
+一行被误当成订单接纳的表头。`v12_flow.py` 的分支会把它标成 `INVALID_INPUT_SKIPPED` 并记录
+`HUMAN_RESOLUTION_RECORDED`，注释写着"records the real reason once"。
+
+问题：`INVALID_INPUT_SKIPPED` 本身就在 `_OWNER_RECONCILABLE_STATES` 里，所以**下一轮又满足条件**，
+再记一次、再置一次 —— 从 2026-10-07 到 2026-11-23 累计 **499 条**同样的事件，GUI 上"人工处理已记录"
+每隔 15 分钟重复出现一次。这既污染台账，也让真正的"人工已处理"无法辨认。
+
+修复：该分支只在状态还不是 `INVALID_INPUT_SKIPPED` 时写入状态与事件；数据质量告警的清理
+本身幂等，仍然每轮执行（后续新告警仍能被清掉）。
+
+测试：扩展 `test_header_row_recovery_only_clears_data_quality_alerts`，再跑两轮不得新增事件。
+反证：移除守卫后该断言以 `3 != 1` 失败，说明它不是同义反复。
+
+生产验证：新构建 11:47 跑完第一轮后，该单事件数仍为 **499**，不再增长。
+
+## 30. 回归与候选（源码变更后重建）
+
+| 项 | 值 |
+|---|---|
+| 全量回归 | `4376 passed / 0 failed / 0 errors / 1 skipped in 611.81 s` |
+| 源码 commit | `6a5104cf` |
+| EXE | 8,511,663 B / SHA256 `6674f37b55a5410ed853ff9883815769a2175b109271edaca26f9ea211d1dc03` |
+| 文件数 | 2,872（无 `runtime/`） |
+| 清单 | `docs/evidence/rfq025/INSO_V1.7-artifact-manifest.sha256`，SHA256 `2291898ca1990ac5e372f8d4b7f3971f8472e31b7c941b7f050e016822d177fb` |
+| 候选校验 | `VERIFY_RESULT = PASS`（missing 0 / hash_mismatch 0 / unexpected 0） |
+| `--self-check` | 退出码 0 |
+| `--idle-self-check` | 退出码 0，`gui_rendered: true`，标题含 V1.7 |
+
+`ruff check src tests` 仍只有基准的 3 条既有 F811（`test_google_quote_update.py`）。
+
+## 31. 停机、重装、重启
+
+停机前：`open_write_intents = 0`、`active_alerts = 0`、当日无新增采购行、`-wal` 不存在（已 checkpoint）。
+
+| 项 | 值 |
+|---|---|
+| 回退快照 | `dist\release-backups\RFQ-025-pre-r5-20261123T034455Z`（`BACKUP_RESULT = PASS`，`exe_sha256 = 67cede70…`） |
+| 数据库 | 同目录 `database\workflow.sqlite3`，`DB_VERIFY_RESULT = PASS`，`purchase_rows = 41`，`write_intent_state = NONE_PROVEN`，`event_age_hours = 0.39` |
+| 安装 | 就地切换 `INSTALL_RESULT = PASS`，`installed_exe_sha256 = 6674f37b…`，`installed_files_verified = 2872` |
+| 旧版留存 | `INSO_V1.7.exe.prev-20261123T034618Z` + `_internal.prev-20261123T034618Z` |
+| 重启 | PID 102276（GUI）+ 102836（watcher），11:47 起 enquiry/quotation/tp 各跑完一轮，**零 ERROR** |
+
+V1.6 目录仍未动（`9a0cb3d3…2710`）；`runtime` 仍是 Junction → `dist\INSO_V1.4\runtime`。
+
+### 一处如实记录的观察
+
+上一轮运行在 11:22:21 完成 inquiry 后不再产生任何轮次：按 900 s 周期本该在 11:37 有一轮，实际到 11:44
+停机时仍无。GUI 存活、CPU 只有事件循环（约 1 s/分钟）、无 `runtime fault`、无 `ERROR`、事件流无 `stop` 记录。因无在途写入，按最保守方式直接停机重装。
+新构建自 11:47 起三轮正常。**若同样现象在新构建上再出现，需要单独排查调度线程是否被静默挂起**，
+本轮没有证据判定是人为停止还是程序侧问题，故只记录不结论。
