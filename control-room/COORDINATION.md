@@ -1,4 +1,30 @@
-# Executor 2026-11-22：误报“INSO 需要人工验证”已定位并修复，V1.7 已重装重启
+# Executor 2026-11-23：真实采购已成交；CDP 卡死与两处误报已处理
+
+**状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED`**
+
+- **第一笔真实采购成交（V1.7 端到端）**：`inq_7bd2f5…`，SHAHAB 第 145 行，
+  `AMPLA1004S-R22MT` / `Abracon` / `60`，11-22 23:06 完成。重复检查 `repeated=0`；
+  录单走粘贴预览核对；保存并发送走 `#btnSave2`；**ERP 对账回读 `RECONCILIATION_CONFIRMED_SAVED`**；
+  Sheets 回写 `GOOGLE_WRITE … SETTLED`；purchase 行 41、工作项 `COMPLETED`。
+  这单在成交前被 CDP 卡死推迟过，恢复后自行续跑完成 —— "推迟→恢复→继续"也被验证。
+- **CDP WebSocket 卡死（20:43–23:04）**：HTTP 端点正常，但浏览器级 WS 握手 15 s / 60 s 均超时。
+  程序按设计推迟轮次、不全局停止、不杀 Chrome；Owner 关闭 Chrome 窗口后自动恢复，订单未丢。
+  期间未外发告警：证据里 `active=False`、`recovered_at` 已落地 → `EVENT_NOT_CURRENT` 抑制（既有策略，未改）。
+- **修复一（`6b5e6e20`）**：`LOGIN_PAGE_UNAVAILABLE` 不再被当成"需要人工验证"。
+  模块层本来就能正确分类，是报价适配器抢先包成了全局停止；现在只有 4 个真验证码/凭据码才停。
+- **修复二（`6a5104cf`）**：header 行的"已跳过"原因原本每轮重复写，
+  `inq_9886…` 累计 499 条 `HUMAN_RESOLUTION_RECORDED`；改为只记一次，告警清理仍每轮执行。
+  生产实测新构建首轮后该单事件数仍为 499。
+- **回归**：`4376 passed / 0 failed / 0 errors / 1 skipped`；ruff 仍只有 3 条既有 F811。
+- **重装**：`6674f37b…dc03`（8,511,663 B，清单 `2291898c…77fb`），就地切换 `INSTALL_RESULT = PASS`；
+  旧版留 `INSO_V1.7.exe.prev-20261123T034618Z`；整目录快照 + 库校验 `PASS`
+  （`dist\release-backups\RFQ-025-pre-r5-20261123T034455Z`，`purchase_rows = 41`）。
+- **运行**：PID 102276（GUI）+ 102836（watcher），11:47 起 inquiry/quotation/tp 各一轮、零 ERROR。
+- **未动**：`main` 仍 V1.6（`d954e0a5`），`release/previous` 未动，V1.7 未晋升；V1.6 目录一个字节未改。
+
+---
+
+# 此前：误报“INSO 需要人工验证”已定位并修复，V1.7 已重装重启
 
 **状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / FALSE_AUTH_ALARM_FIXED / REAL_PURCHASE_NOT_YET_VERIFIED`**
 
