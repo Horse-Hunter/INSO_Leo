@@ -70,7 +70,10 @@ _CATALOGUE: dict[str, tuple[str, str, str]] = {
     "BROWSER_WAITING_RECOVERY": (
         "浏览器（CDP）连接未就绪",
         "程序无法连接到已授权的 Chrome 会话，本轮业务推迟到下一轮。",
-        "1) 确认授权 Chrome 仍在运行；2) 关闭无响应标签页；3) 不要关闭该 Chrome 或换用新配置。",
+        (
+            "1) 关闭该 Chrome 的窗口（不必强杀进程，程序会自行重连）；"
+            "2) 不要更换浏览器配置或另开一个 Chrome；3) 关闭窗口后无需重启程序，下一轮会自动继续。"
+        ),
     ),
     "CDP_RECONNECT_EXHAUSTED": (
         "浏览器（CDP）重连失败",

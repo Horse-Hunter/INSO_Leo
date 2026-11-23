@@ -1,6 +1,7 @@
 # RFQ-025 — 最终汇报（第五阶段：真实采购已成交，V1.7 收尾完成）
 
-**状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED`**
+**状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED / BROWSER_BLOCK_NOTICE_ON`**
+（Owner 2026-11-23 决定：浏览器持续受阻要通知；V1.7 暂不晋升 `main`）
 
 一句话：V1.7 装在 `dist\INSO_V1.7` 正常跑生产，**第一笔真实采购已于 2026-11-22 23:06 走完整条粘贴链路成交**
 （ERP 对账回读确认为已保存、Sheets 回写 SETTLED、重复检查 repeated=0）；期间两次"误报"已修掉，
@@ -194,9 +195,27 @@ GUI 提示"INSO 需要人工登录/验证"。Owner 到 INSO 看过，**不需要
 `HUMAN_RESOLUTION_RECORDED`，累计 **499 条**。现在只记一次，告警清理仍每轮执行。
 生产实测：新构建跑完首轮后该单事件数仍为 499。
 
+## 七点七、浏览器通道持续受阻：现在会通知（2026-11-23 下午）
+
+**原设计为什么一定不发**：`*_WAITING_RECOVERY` 属于 `persistent_stop`，其 `needs_owner`
+只在三小时升级时为真；而 Browser/CDP 被显式排除在三小时之外；`review_reason` 的第一道门槛
+又要求 `needs_owner` —— 三者相加，通知永远停在 `EVENT_NOT_CURRENT`。11-22 那条记录的字段正是
+`needs_owner=False`、`completed_cycles=2`、`recovered_at` 已落地。
+
+**改法（只动 Browser/CDP）**：该站点的 `needs_owner` 不再等三小时；通知仍受
+`completed_cycles >= 3`（约 45 分钟）与"派发时仍在停摆"约束 ——
+卡一两轮就好的不发，发之前已恢复的取消。收件人仍只有 Owner，Google 等待类仍按三小时规则。
+
+**文案纠正**：原建议写着"不要关闭该 Chrome"，而实际清掉 11-22 那次卡死的正是关闭窗口；
+邮件与诊断现在都写"关闭该 Chrome 的窗口（不必强杀进程、不要换配置），程序下一轮自行继续"。
+
+**证据**：4 条新用例（真实后端 + 假 SMTP），去掉 `needs_owner` 那行后第一条以 `0 == 1` 失败；
+全量 `4380 passed / 0 failed / 1 skipped`；新 EXE `c796b705…ff6e`（8,511,862 B，
+清单 `5e2dfe9a…1e4e`），`INSTALL_RESULT = PASS`，16:26 起三个模块各一轮、零 ERROR。
+
 ## 八、尚未验证 / 未完成
 
-1. **`main` 晋升**：V1.7 已安装并成交，但仍是前瞻版本；晋升由 Owner 决定，本轮未动 `main` / `release/previous`。
+1. **`main` 晋升**：Owner 2026-11-23 明确"暂不晋升"。`main` 保持 V1.6，`release/previous` 未动。
 2. **一处待观察现象**：上一版在 11:22:21 之后 22 分钟没有新轮次（原定 11:37 应有一轮），
    GUI 存活、CPU 只有事件循环、无故障无停止记录。无在途写入，故直接停机重装；新构建首轮正常。
    **若在新构建上复现，需要单独排查调度线程是否被静默挂起**，本轮无证据判定原因。
