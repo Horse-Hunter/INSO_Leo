@@ -1,6 +1,7 @@
 # INSO LEO — 新 CEO 接管入口（2026-11-23 下午，V1.7 运行中；浏览器受阻会通知）
 
 **当前权威结论：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED / BROWSER_BLOCK_NOTICE_ON`。**
+（2026-11-23 晚已按 CEO Review 修正：通知阈值改为"同一次故障持续 45 分钟"，且不再要求存在待采购订单。）
 V1.7 已成交一笔真实采购；浏览器通道连续三轮（约 45 分钟）不可用时会发一封给 Owner 的提醒。
 **Owner 已明确：V1.7 暂不晋升 `main`**，`main` 保持 V1.6。
 

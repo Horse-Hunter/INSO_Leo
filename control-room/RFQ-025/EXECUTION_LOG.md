@@ -912,3 +912,113 @@ Owner 指令：第五阶段汇报中"浏览器卡死 2 小时 21 分无人知晓
 上一版（`6674f37b`）在 11:47–16:24 之间持续运行：inquiry / quotation / tp 按 900 s 正常轮转，
 **零 ERROR、零 runtime fault**；`inq_9886…` 的事件数始终是 499（header 行重复写已根治）；
 采购行仍 41、open write intents 0、活动告警 0。也就是说 11:22 那次"22 分钟无轮次"没有复现。
+
+---
+
+# 第七阶段：CEO Review 两处边界修复（2026-11-23 晚）
+
+CEO Review 结论：`CHANGES_REQUESTED`，只修两个实际边界，不重复开发、不回滚运行中的 V1.7。
+
+## 36. 边界一：阈值改为"同一次故障的持续时长
+
+**问题（属实）**：`completed_cycles` 收集的是 `self._cycle_id`，而 inquiry 与 quotation 是**不同的 cycle id**。
+同一刻钟里两个模块各失败一次，就会贡献两条不同的 occurrence，`completed_cycles` 迅速到 3 ——
+原本想要"连续三轮 ≈ 45 分钟"，实际可能 15~20 分钟就触发。
+
+**改法**：
+
+- `_notify_runtime_fault` 把该站点的**故障起始时刻**写进证据：`blocked_since`（来自 `_site_fault_since`，
+  恢复时会被清掉，所以它是"这一次故障"的起点，不是历史）。
+- 派发时（`_review_current_mail`）比较 `now - blocked_since >= 45 分钟`（常量
+  `_BROWSER_BLOCK_NOTICE_AFTER`）；不满足则 `CURRENT_REVIEW_PENDING`（worker 会 `defer` 重试，不是永久抑制）。
+- `observe_incident` 在事件仍 active 时**继承上一条的 `blocked_since`**，所以跨重启也是量故障本身，
+  而不是量"本次进程启动以来"。
+
+效果：两个模块同时失败不再提前凑数；卡满 45 分钟才发。
+
+## 37. 边界二：不再依赖一张待采购订单
+
+**问题（属实）**：`persistent_stop` 的证据必须绑定一张 QUEUED/RETRY_WAIT/RESEARCHING 且源表 `未发` 的订单。
+浏览器卡死时如果只有报价任务、或根本没有待采购订单，`proof` 为 `None` —— 一封也发不出。
+
+**改法**：Browser/CDP 改用**程序级**证据，不再找订单：
+
+```
+category = "resource_stop"
+module = "Browser/CDP"
+reason_code = "PROGRAM_OPERATION_BLOCKED"
+blocked_since = <故障起始>
+（无 inquiry_id）
+```
+
+- 走的仍是 `notify_runtime_fault` → 同一个 `workflow_v12_notification_commands` 账本、同一套 incident 去重、
+  同一个 Owner 收件人（`linan229@qq.com`）；**没有第二套通知系统**。
+- `notification_review.review_reason` 新增 `resource_stop` 分支（在"订单年龄"那道门前，因为程序级事件没有
+  `inquiry_day`，不该按订单过期处理）。
+- `_review_current_mail` 新增同名分支：要求该站点仍在停摆集合、时长 ≥ 45 分钟、收件人只有 Owner、无订单号。
+- Google 保持原样：仍然是有订单绑定的 `persistent_stop` + 三小时规则，未放宽。
+
+生产表 `inquiry_id` 本就可空（现存 106 条程序级通知），无需迁移。
+
+## 38. 保持不变的约束
+
+| 约束 | 怎么保证 |
+|---|---|
+| 只通知一次 | 同一 incident 行 + `SENT` 不可变（`_legacy_notice_protected`）；用例第 4 次观察仍只有 1 封 |
+| 恢复后取消 | 派发时要求站点仍在 `_site_outages`；用例覆盖 |
+| Google 三小时不变 | 有专门用例：同样条件下 Google 仍 0 封 |
+| SENT/UNKNOWN 保护 | 未动 |
+| 关窗建议不外扩 | 该文案只出现在 Browser/CDP 的证据 `action` 与 `BROWSER_WAITING_RECOVERY` 诊断条目；其他页面错误文案未动 |
+
+## 39. 测试（可控时钟）与反证
+
+测试全部用同一个可控时钟：后端 `utc_now`、证据 `at`、SMTP 传输三处读同一个 `_Clock`，
+避免"证据时间在未来 → 传输层判永久失败"这种伪失败。
+
+| 用例 | 断言 |
+|---|---|
+| `test_a_browser_block_is_reported_once_the_outage_passes_45_minutes` | 0/15/30 分钟 0 封；46 分钟 1 封；61 分钟仍 1 封 |
+| `test_two_modules_failing_in_the_same_window_do_not_shorten_the_threshold` | 0/5/10 分钟三次不同 cycle id → 0 封；46 分钟 → 1 封 |
+| `test_a_browser_block_with_no_order_at_all_still_reports` | 空账本（无任何工作项）+ 46 分钟 → 1 封 |
+| `test_a_recovered_browser_block_does_not_mail_after_the_fact` | 派发前恢复 → 0 封 |
+| `test_a_restarted_outage_clock_earns_its_own_45_minutes` | 新故障起点 +10 分钟 → 不发 |
+| `test_google_waits_keep_their_three_hour_rule` | Google 90 分钟 + 三轮 → 0 封 |
+
+反证（各做一次，确认测试真的守在这两行上）：
+
+- 关掉时长判断 → 前两条立即失败（提前发）；
+- 把 Browser/CDP 退回"必须找订单" → 空账本条与 45 分钟条等 4 条失败。
+
+## 40. 回归、重建、重装、重启
+
+| 项 | 值 |
+|---|---|
+| 全量回归 | `4382 passed / 0 failed / 0 errors / 1 skipped in 596 s`（4383 collected） |
+| 定向 | `test_runtime_safety_notice` 17、`test_fault_diagnostics`、`test_rfq016_regressions` 共 121 通过 |
+| `ruff check src tests` | 基准的 3 条既有 F811 |
+| 源码 commit | `e59ca657` |
+| EXE | 8,512,677 B / SHA256 `a5b9e49801f7ff4afca8f0d0e749da669cdcc1f25cd32062311937e05ba22dc5` |
+| 清单 | SHA256 `845fe377ffc96240434033e3644fab348e54cee9d4e7312f267a69a71d5ed79c`（2,872 行） |
+| 候选校验 / 自检 | `VERIFY_RESULT = PASS`；`--self-check`、`--idle-self-check` 均 0，`gui_rendered: true` |
+| 停机前 | `-wal` 存在（强停），先 `wal_checkpoint(TRUNCATE)` + `integrity_check = ok` 再备份 |
+| 回退快照 | `dist\release-backups\RFQ-025-pre-r7-20261123T130656Z`（程序 + 库，`DB_VERIFY_RESULT = PASS`，41 行） |
+| 安装 | 就地切换 `INSTALL_RESULT = PASS`，2,872 文件逐项复核 |
+| 旧版留存 | `INSO_V1.7.exe.prev-20261123T130811Z` |
+| 重启 | PID 101212（GUI）+ 104084（watcher），21:08:47 起 |
+
+### 重启后现场：Google 走代理 502（与本次改动无关）
+
+```
+21:11 inquiry  defer（SOURCE_MAIN_SHEET_READ_DEFERRED）
+21:13 GOOGLE_WAITING_RECOVERY（GoogleSheetsReadUnavailable <- TimeoutError）
+21:15 quotation defer
+21:15 tp 照常
+```
+
+同机复测（程序同款 urllib）：ERP `https://yingsuo.alperp.cn` **200 / 0.2 s**；
+`https://sheets.googleapis.com` **URLError: Tunnel connection failed: 502 Bad Gateway**（走 7890 与直连都一样）。
+即：Clash 当前节点的 Google 隧道失效，百度 200、ERP 200。程序按 Owner 规则处理（有界重试、隔离、不全局停止、
+不发技术邮件），inquiry/quotation 本轮推迟，tp 不受影响。
+
+这不是本次改动引入的：上一版在 16:26–21:03 期间零 ERROR，说明该时段 Google 通路正常；
+21:11 起代理隧道开始 502，属运行环境。
