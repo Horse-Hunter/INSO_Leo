@@ -1,4 +1,30 @@
-# INSO LEO — 新 CEO 接管入口（2026-11-23，V1.7 运行中；真实采购已成交）
+# INSO LEO — 新 CEO 接管入口（2026-11-23 下午，V1.7 运行中；浏览器受阻会通知）
+
+**当前权威结论：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED / BROWSER_BLOCK_NOTICE_ON`。**
+V1.7 已成交一笔真实采购；浏览器通道连续三轮（约 45 分钟）不可用时会发一封给 Owner 的提醒。
+**Owner 已明确：V1.7 暂不晋升 `main`**，`main` 保持 V1.6。
+
+## 现场状态
+
+| 项 | 值 |
+|---|---|
+| 正在运行 | `dist\\INSO_V1.7\\INSO_V1.7.exe`，PID 101176（GUI）+ 100144（watcher） |
+| 已安装 EXE | SHA256 `c796b705a9fbae59314af59c846a290550349b0fb9760689c11326783174ff6e`（8,511,862 B） |
+| 回退（同目录） | `INSO_V1.7.exe.prev-20261123T082603Z` + `_internal.prev-20261123T082603Z` |
+| 回退（整目录） | `dist\\release-backups\\RFQ-025-pre-r6-20261123T082453Z`（程序 + 库 + `DB_VERIFY_RESULT = PASS`） |
+| V1.6 | 目录未动（`9a0cb3d3…2710`）；桌面入口为"旧版，仅回退用" |
+| 分支 | `develop` 含整条 V1.7 线；`main` = `d954e0a5`（V1.6）；V1.7 **未晋升（Owner 指示）** |
+
+## 下一步
+
+- **不要再自动晋升 `main`。** 已有真实成交也仍是前瞻版本，等 Owner 另行决定。
+- 会收到的新提醒：「【需要处理】Browser/CDP业务持续受阻」，正文会写"关闭该 Chrome 的窗口"。
+  收到即照做（关窗口、不强杀、不换配置、不重启程序），下一轮程序自行继续。
+- 再看到「INSO 无法核验页面 / 操作未关闭」：页面问题，不需要登录或验证码，重新开始即可。
+
+---
+
+# 此前：V1.7 运行中；真实采购已成交（2026-11-23 上午）
 
 **当前权威结论：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED`。**
 

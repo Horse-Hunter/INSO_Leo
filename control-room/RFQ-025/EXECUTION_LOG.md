@@ -887,3 +887,28 @@ Owner 指令：第五阶段汇报中"浏览器卡死 2 小时 21 分无人知晓
 | `test_google_waits_keep_their_three_hour_rule` | 同样条件下 Google 仍 0 封（作用域没被放宽） |
 
 反证：把 `needs_owner` 里的 Browser/CDP 分支去掉，第一条立即以 `0 == 1` 失败 —— 说明测试真的在守这行。
+
+## 35. 回归、重建、重装、重启（本轮）
+
+| 项 | 值 |
+|---|---|
+| 全量回归 | `4380 passed / 0 failed / 0 errors / 1 skipped in 598 s`（4381 collected） |
+| `ruff check src tests` | 基准的 3 条既有 F811 |
+| 源码 commit | `871419ba` |
+| EXE | 8,511,862 B / SHA256 `c796b705a9fbae59314af59c846a290550349b0fb9760689c11326783174ff6e` |
+| 文件数 | 2,872（无 `runtime/`） |
+| 清单 | `docs/evidence/rfq025/INSO_V1.7-artifact-manifest.sha256`，SHA256 `5e2dfe9a2f472e913a0445bacfd5235d1e2fae642875c6bc2b3ca7c503ca1e4e` |
+| 候选校验 | `VERIFY_RESULT = PASS`（missing 0 / hash_mismatch 0 / unexpected 0） |
+| `--self-check` / `--idle-self-check` | 均退出码 0，`gui_rendered: true` |
+| 停机前 | `open_write_intents = 0`、`active_alerts = 0`、采购行 41（与上一次一致）、`-wal` 不存在 |
+| 回退快照 | `dist\release-backups\RFQ-025-pre-r6-20261123T082453Z`（`BACKUP_RESULT = PASS`，`exe_sha256 = 6674f37b…`） |
+| 数据库 | 同目录 `database\workflow.sqlite3`，`DB_VERIFY_RESULT = PASS`，`purchase_rows = 41`，`event_age_hours = 5.06` |
+| 安装 | 就地切换 `INSTALL_RESULT = PASS`，`installed_exe_sha256 = c796b705…`，`installed_files_verified = 2872` |
+| 旧版留存 | `INSO_V1.7.exe.prev-20261123T082603Z` + `_internal.prev-20261123T082603Z` |
+| 重启 | PID 101176（GUI）+ 100144（watcher），16:26 起 inquiry 10 s / quotation 75 s / tp 3 s 完成，零 ERROR |
+
+### 附：这一轮之前那段运行的观察结果
+
+上一版（`6674f37b`）在 11:47–16:24 之间持续运行：inquiry / quotation / tp 按 900 s 正常轮转，
+**零 ERROR、零 runtime fault**；`inq_9886…` 的事件数始终是 499（header 行重复写已根治）；
+采购行仍 41、open write intents 0、活动告警 0。也就是说 11:22 那次"22 分钟无轮次"没有复现。

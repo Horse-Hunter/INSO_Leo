@@ -1,4 +1,25 @@
-# Executor 2026-11-23：真实采购已成交；CDP 卡死与两处误报已处理
+# Executor 2026-11-23（下午）：浏览器通道持续受阻现在会通知 Owner
+
+**状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED / BROWSER_BLOCK_NOTICE_ON`**
+
+- **Owner 决定：** 第五阶段汇报里"浏览器卡死 2 小时 21 分无人知晓"一条同意改；V1.7 **暂不晋升** `main`。
+- **原设计为何一定不发：** `WAITING_RECOVERY` 的 `needs_owner` 只在三小时升级时为真，而 Browser/CDP
+  被显式排除在三小时之外，于是 `review_reason` 第一道门槛直接判 `EVENT_NOT_CURRENT`。
+  11-22 那条证据正是 `needs_owner=False` + `completed_cycles=2` + `recovered_at` 已落地。
+- **改法：** Browser/CDP 的 `needs_owner` 不再等三小时；通知仍受 `completed_cycles >= 3`
+  （约 45 分钟）与"派发时仍在停摆"两条约束 —— 卡一两轮就好的不发、发之前已恢复的取消。
+- **文案纠正：** 原"处理"建议写着"不要关闭该 Chrome"，与实际有效处置相反；邮件与诊断都改为
+  "关闭该 Chrome 的窗口（不必强杀进程、不要换配置），程序下一轮自行继续"。
+- **作用域：** 只有 Browser/CDP；Google 等待类仍按三小时规则（有用例守住），收件人仍只有 Owner。
+- **回归：** `4380 passed / 0 failed / 1 skipped`；新增 4 条用例，去掉改动后第一条以 `0 == 1` 失败。
+- **重装：** `c796b705…ff6e`（8,511,862 B，清单 `5e2dfe9a…1e4e`），就地切换 `INSTALL_RESULT = PASS`；
+  旧版留 `INSO_V1.7.exe.prev-20261123T082603Z`；快照 `RFQ-025-pre-r6-20261123T082453Z`（含库校验 PASS）。
+- **运行：** PID 101176 + 100144，16:26 起三个模块各一轮、零 ERROR。
+- **未动：** `main` 仍 V1.6（`d954e0a5`），`release/previous` 未动，V1.7 未晋升（Owner 明确暂不晋升）。
+
+---
+
+# 此前：真实采购已成交；CDP 卡死与两处误报已处理
 
 **状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED`**
 
