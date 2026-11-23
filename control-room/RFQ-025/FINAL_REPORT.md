@@ -213,6 +213,24 @@ GUI 提示"INSO 需要人工登录/验证"。Owner 到 INSO 看过，**不需要
 全量 `4380 passed / 0 failed / 1 skipped`；新 EXE `c796b705…ff6e`（8,511,862 B，
 清单 `5e2dfe9a…1e4e`），`INSTALL_RESULT = PASS`，16:26 起三个模块各一轮、零 ERROR。
 
+## 七点八、CEO Review 后的两处边界修正（2026-11-23 晚）
+
+Review 结论 `CHANGES_REQUESTED`，两条都成立：
+
+1. **阈值原本数周期，会被两个模块提前凑够。** `completed_cycles` 收集的是 `cycle_id`，inquiry 与 quotation
+   的 id 不同，同一刻钟两次失败就贡献两条，理论上 15~20 分钟即可触发。改为量**同一次故障的持续时长**：
+   证据带 `blocked_since`（故障起点，恢复即清），派发时要求 ≥ 45 分钟；事件仍 active 时跨重启继承原起点。
+2. **原本必须有待采购订单。** 只有报价任务、或没有待采购订单时，证据根本建不起来。
+   现在 Browser/CDP 用**程序级证据**（`category=resource_stop`，无 `inquiry_id`），
+   仍走同一个通知账本、同一套 incident 去重、同一个 Owner 收件人 —— 没有第二套通知系统。
+
+保持：只通知一次、恢复后取消、Google 三小时规则、SENT/UNKNOWN 保护；"关窗"建议只挂在这一个
+确认的 Browser/CDP 等待故障上，没有外扩到其他页面错误。
+
+**验证**：6 条新用例（后端/证据/传输共用一个可控时钟），两处各做反证（关掉时长判断 → 提前发；
+退回"必须找订单" → 空账本条目失败）。全量 `4382 passed / 0 failed / 1 skipped`；
+新 EXE `a5b9e498…2dc5`（8,512,677 B，清单 `845fe377…d79c`），`INSTALL_RESULT = PASS`，21:08 重启。
+
 ## 八、尚未验证 / 未完成
 
 1. **`main` 晋升**：Owner 2026-11-23 明确"暂不晋升"。`main` 保持 V1.6，`release/previous` 未动。
@@ -221,5 +239,8 @@ GUI 提示"INSO 需要人工登录/验证"。Owner 到 INSO 看过，**不需要
    **若在新构建上复现，需要单独排查调度线程是否被静默挂起**，本轮无证据判定原因。
 3. **数据库路径**：`production.json` 的 `sqlite_path` 仍指向 `dist\INSO_V1.2\runtime\production\...`
    （历史遗留指向，经 junction 解析到同一文件）。本轮未改，属独立清理项。
-4. 既有现象（非本次引入）：`inq_d65be9df3c7cc40b65cbffaa` 的 `QUOTE_INPUT_WRITE_FAILED`、
+4. **运行环境（2026-11-23 21:11 起）**：本机到 `sheets.googleapis.com` 经代理返回
+   **502 Bad Gateway**（同机 ERP 200、百度 200），inquiry/quotation 按规则推迟、tp 正常。
+   属代理节点问题，需 Owner 侧处理；程序行为符合既有"暂时读失败"规则。
+5. 既有现象（非本次引入）：`inq_d65be9df3c7cc40b65cbffaa` 的 `QUOTE_INPUT_WRITE_FAILED`、
    `inq_71f4a2f5ef8678223385b6e2` 的 `UPDATE_RESULT_UNCONFIRMED`，自 11-20 起每轮同签名出现。

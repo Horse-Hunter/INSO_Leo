@@ -178,6 +178,12 @@ _LOGIN_ALERT_RECIPIENT = "linan229@qq.com"
 # READ_EMPTY/READ_UNAVAILABLE are read failures, not authentication failures.
 _INSO_AUTH_STOP_CODES = AUTH_SESSION_STOP_REASONS
 
+#: How long one Browser/CDP outage must last before the Owner hears about it.
+#: Measured from the outage's own start, never from a cycle count: inquiry and
+#: quotation report different cycle ids, so two modules failing in the same
+#: quarter hour used to look like two of the three "cycles" the threshold wants.
+_BROWSER_BLOCK_NOTICE_AFTER = timedelta(minutes=45)
+
 
 class ProductionConfigurationError(RuntimeError):
     """Safe startup failure for missing local production configuration."""
@@ -4178,35 +4184,52 @@ class ProductionBackend(GuiBackend):
                     "uncertainty": "相关来源操作尚未恢复；不能据此推断任何订单已发送或失败。"}
         elif site and (reason.endswith(("WAITING_RECOVERY", "OUTAGE_THREE_HOURS")) or reason == "GOOGLE_READ_RETRY_EXHAUSTED"):
             incident_key = f"program-blocked:{site}"
-            # Only a previously bound active task can establish affected business.
-            # Read failures are not evidence that Google as a whole is unavailable.
-            # RFQ-021-R4: the incident record itself is program-wide, but its
-            # per-order proof must not attach to an order this run was not asked
-            # to touch -- that would be an event/alert on out-of-scope history.
-            candidates = [i for i in self._store.all_items()
-                if i.status.value in {"QUEUED", "RETRY_WAIT", "RESEARCHING"}
-                and self._order_in_scope(i.inquiry_id)] if self._store else []
-            for item in candidates:
-                current = self._current_mail_source(item.inquiry_id, at, module="inquiry", persistent=True)
-                if current is not None and current[1].cells.get(worksheet_schema(item.record_identity.worksheet.worksheet).status_column) == "未发":
-                    proof = {"incident_key": incident_key, "inquiry_id": item.inquiry_id,
-                        "category": "persistent_stop", "module": site, "business_module": "inquiry",
-                        "source_binding": binding_key(item.record_identity),
-                        "inquiry_day": str(current[4]), "reason_code": "PROGRAM_OPERATION_BLOCKED",
-                        "original_event": incident_key, "last_success": current[2].isoformat(),
-                        "current_business": True, "verified": True, "uncertainty": "当前订单来源已在本轮核实；无法据此判断Google整站可用性",
-                        "action": ("请关闭该 Chrome 的窗口（不必强杀进程，程序会自行重连），"
-                                   "不要更换浏览器配置或另开 Chrome；恢复后本轮会继续，不要重发采购。"
-                                   if site == "Browser/CDP" else
-                                   "请检查原程序的读取/授权提示，并核对受保护订单；不要重发采购。")}
-                    break
+            # How long *this* outage has lasted, from the moment the site first
+            # failed. Cycle counts cannot stand in for it: inquiry and quotation
+            # carry different cycle ids, so the same quarter hour can contribute
+            # two occurrences and "three cycles" could mean twenty minutes.
+            blocked_since = self._site_fault_since.get(site) or at
+            if site == "Browser/CDP":
+                # A stuck browser stops every browser task at once, so the
+                # affected business is the program, not one order. Gating this on
+                # a pending purchase order made the notice impossible exactly when
+                # only quotation work (or nothing) was waiting.
+                proof = {"incident_key": incident_key,
+                    "category": "resource_stop", "module": site, "business_module": "browser",
+                    "reason_code": "PROGRAM_OPERATION_BLOCKED",
+                    "original_event": incident_key,
+                    "blocked_since": blocked_since.isoformat(),
+                    "current_business": True, "verified": True,
+                    "action": ("请关闭该 Chrome 的窗口（不必强杀进程，程序会自行重连），"
+                               "不要更换浏览器配置或另开 Chrome；恢复后本轮会继续，不要重发采购。"),
+                    "uncertainty": "浏览器通道本轮不可用；不能据此判断Google整体不可用，也未据此判定任何订单写入结果。"}
+            else:
+                # Only a previously bound active task can establish affected business.
+                # Read failures are not evidence that Google as a whole is unavailable.
+                # RFQ-021-R4: the incident record itself is program-wide, but its
+                # per-order proof must not attach to an order this run was not asked
+                # to touch -- that would be an event/alert on out-of-scope history.
+                candidates = [i for i in self._store.all_items()
+                    if i.status.value in {"QUEUED", "RETRY_WAIT", "RESEARCHING"}
+                    and self._order_in_scope(i.inquiry_id)] if self._store else []
+                for item in candidates:
+                    current = self._current_mail_source(item.inquiry_id, at, module="inquiry", persistent=True)
+                    if current is not None and current[1].cells.get(worksheet_schema(item.record_identity.worksheet.worksheet).status_column) == "未发":
+                        proof = {"incident_key": incident_key, "inquiry_id": item.inquiry_id,
+                            "category": "persistent_stop", "module": site, "business_module": "inquiry",
+                            "source_binding": binding_key(item.record_identity),
+                            "inquiry_day": str(current[4]), "reason_code": "PROGRAM_OPERATION_BLOCKED",
+                            "original_event": incident_key, "last_success": current[2].isoformat(),
+                            "current_business": True, "verified": True, "uncertainty": "当前订单来源已在本轮核实；无法据此判断Google整站可用性",
+                            "action": "请检查原程序的读取/授权提示，并核对受保护订单；不要重发采购。"}
+                        break
             if proof is not None:
                 # Browser/CDP is a wait-only site: it is excluded from the
                 # three-hour escalation on purpose, so without this line it could
                 # never tell anyone. It stayed silent through a 2h21m stall on
                 # 2026-11-22 while the Owner had to notice by himself.
-                # `review_reason` still withholds the notice until three completed
-                # cycles, so a reconnect blip of one or two polls never mails.
+                # The hold-back is the outage duration, not a cycle count: see
+                # _BROWSER_BLOCK_NOTICE_AFTER.
                 proof.update(active=True, verified_at=at.isoformat(), retries_exhausted=True,
                              needs_owner=(reason.endswith("OUTAGE_THREE_HOURS")
                                           or site == "Browser/CDP"))
@@ -4322,6 +4345,27 @@ class ProductionBackend(GuiBackend):
                     or not self._v12_store.quotation_event_active(command.inquiry_id, proof.get("original_event"), "UPDATE_RESULT_UNCONFIRMED")
                     or not self._v12_store.unknown_write_active(command.inquiry_id, proof.get("original_event"))):
                 return "EVENT_RECOVERED"
+            return None
+        if proof.get("category") == "resource_stop":
+            # A program-level resource outage: no order has to be involved, so the
+            # only evidence that matters is "still the same outage, and by now it
+            # has lasted long enough".
+            if (proof.get("module") not in {"Browser/CDP"}
+                    or command.inquiry_id is not None
+                    or proof.get("reason_code") != "PROGRAM_OPERATION_BLOCKED"
+                    or {r.address.strip().casefold() for r in command.recipients} != {"linan229@qq.com"}):
+                return "RESOURCE_EVENT_UNVERIFIED"
+            if proof["module"] not in self._site_outages:
+                return "EVENT_NOT_CURRENT"
+            since = proof.get("blocked_since")
+            try:
+                since_at = datetime.fromisoformat(since) if isinstance(since, str) else None
+            except ValueError:
+                since_at = None
+            if since_at is None or since_at.tzinfo is None or since_at > now:
+                return "RESOURCE_EVENT_UNVERIFIED"
+            if now - since_at < _BROWSER_BLOCK_NOTICE_AFTER:
+                return "CURRENT_REVIEW_PENDING"
             return None
         if proof.get("category") == "persistent_stop":
             item = self._store.get_by_inquiry_id(command.inquiry_id)

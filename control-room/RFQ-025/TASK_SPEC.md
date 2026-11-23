@@ -1,6 +1,7 @@
 # RFQ-025 — V1.6 晋升 + V1.7 原生粘贴录单（三阶段）
 
 **当前状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED / BROWSER_BLOCK_NOTICE_ON`**
+（2026-11-23 晚按 CEO Review 修正：阈值改为"同一次故障持续 45 分钟"，且不再依赖待采购订单）
 （真实采购已于 2026-11-22 23:06 成交并通过 ERP 对账；浏览器通道连续受阻三轮起会通知 Owner）
 （V1.7 已装进 `dist\INSO_V1.7` 并正常生产运行；`main` 仍是 V1.6，未晋升）
 

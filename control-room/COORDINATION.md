@@ -1,4 +1,28 @@
-# Executor 2026-11-23（下午）：浏览器通道持续受阻现在会通知 Owner
+# Executor 2026-11-23（晚）：按 CEO Review 修正通知的两个边界
+
+**状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED / BROWSER_BLOCK_NOTICE_ON`**
+
+CEO Review `CHANGES_REQUESTED`，两条都属实，已按"只修边界"处置，未回滚运行中的 V1.7。
+
+- **边界一：阈值原本是"周期数"，会被两个模块提前凑够。** `completed_cycles` 收集 `cycle_id`，
+  而 inquiry 与 quotation 的 `cycle_id` 不同，同一刻钟两次失败就算两条 → 可能 15~20 分钟就触发。
+  现在改为量**同一次故障的持续时长**：证据带 `blocked_since`（故障起点，恢复即清），派发时要求
+  `now - blocked_since >= 45 分钟`；事件仍 active 时跨重启继承原起点，所以量的是故障不是进程。
+- **边界二：原本必须有待采购订单。** 浏览器卡死时若只有报价任务、或没有待采购订单，证据根本建不起来。
+  现在 Browser/CDP 用**程序级证据**（`category=resource_stop`、无 `inquiry_id`），
+  仍走同一个 `notify_runtime_fault` 账本、同一套 incident 去重、同一个 Owner 收件人，没有第二套系统。
+- **没变的**：只通知一次（SENT 不可变）、恢复后取消、Google 仍三小时、SENT/UNKNOWN 保护；
+  "关窗"建议只挂在这一个确认的 Browser/CDP 等待故障上，未外扩到其他页面错误。
+- **回归**：`4382 passed / 0 failed / 1 skipped`；新的通知用例 6 条（可控时钟），两处各做过反证。
+- **重装**：`a5b9e498…2dc5`（8,512,677 B，清单 `845fe377…d79c`），就地切换 `INSTALL_RESULT = PASS`，
+  旧版留 `INSO_V1.7.exe.prev-20261123T130811Z`；停机前发现 `-wal` 未收敛，先 checkpoint + integrity_check 再备份。
+- **运行**：PID 101212 + 104084，21:08:47 起。
+- **环境注意（与本次改动无关）**：21:11 起本机到 `sheets.googleapis.com` 走代理 **502 Bad Gateway**
+  （ERP 200、百度 200），inquiry/quotation 按规则推迟，tp 正常。需 Owner 检查代理节点。
+
+---
+
+# 此前（下午）：浏览器通道持续受阻现在会通知 Owner
 
 **状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED / BROWSER_BLOCK_NOTICE_ON`**
 

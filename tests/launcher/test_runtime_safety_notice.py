@@ -6,12 +6,10 @@ import pytest
 
 from src.gui.contracts import RunState
 from src.launcher.backend import ProductionBackend
-from src.sheets import WorksheetIdentity
-from src.sheets.pending import IdentifyingSnapshot, SheetRecordIdentity
 from src.workflow.v12_faults import FaultScope, V12Fault
 from src.workflow.v12_notifications import V12NotificationWorker
 from src.workflow.v12_smtp_transport import QQSMTPConfig, QQSMTPTransport
-from tests.workflow.test_v12_notifications import INQUIRY, NOW, prepared_store
+from tests.workflow.test_v12_notifications import NOW, prepared_store
 from tests.workflow.test_v12_smtp_transport import FakeCredentials, ScriptedSMTP, login
 
 
@@ -152,80 +150,138 @@ def test_owner_stop_cleanup_does_not_become_a_new_business_failure_notice(tmp_pa
     assert smtp.send_attempts == 0
 
 
+class _Clock:
+    """One controllable clock for the backend, the evidence and the transport."""
+
+    def __init__(self, now=NOW):
+        self.now = now
+
+
+class _Clock:
+    """One controllable clock for the backend, the evidence and the transport."""
+
+    def __init__(self, now=NOW):
+        self.now = now
+
+
 def _blocked_browser(tmp_path, monkeypatch):
-    """A real backend whose one pending order proves the block affects business."""
-    backend, worker, smtp = harness(tmp_path, monkeypatch)
-    identity = SheetRecordIdentity(
-        WorksheetIdentity("test", "2026"), 2,
-        IdentifyingSnapshot("未发", "A", "M-1", "Brand", 5))
-    item = SimpleNamespace(status=SimpleNamespace(value="QUEUED"),
-                           inquiry_id=INQUIRY, record_identity=identity)
-    record = SimpleNamespace(cells={"A": "未发"})
-    backend._store = SimpleNamespace(all_items=lambda: [item],
-                                     get_by_inquiry_id=lambda _inquiry_id: item)
-    backend._order_in_scope = lambda _inquiry_id: True
-    backend._current_mail_source = lambda *a, **kw: (
-        identity, record, NOW - timedelta(minutes=5), "source", NOW.date())
-    # Still blocked: the site is in the outage set, as `_defer_website_poll` leaves it.
+    """A real backend on a controllable clock with the browser channel down."""
+    clock = _Clock()
+    backend, _worker, _smtp = harness(tmp_path, monkeypatch)
+    monkeypatch.setattr("src.launcher.backend.utc_now", lambda: clock.now)
+    server = ScriptedSMTP()
+    transport = QQSMTPTransport(
+        config=QQSMTPConfig(sender_address="sender@example.invalid"),
+        credentials=FakeCredentials(login()),
+        smtp_factory=lambda *a, **kw: server, clock=lambda: clock.now)
+    worker = V12NotificationWorker(backend._v12_store, transport,
+                                  review_current=backend._review_current_mail, scope="business")
+    # Still blocked, as `_defer_website_poll` leaves it.
     backend._site_outages = {"Browser/CDP": 0.0}
-    return backend, worker, smtp
+    backend._site_fault_since = {"Browser/CDP": clock.now}
+    return backend, worker, server, clock
 
 
-def test_a_persistent_browser_block_is_reported_after_three_cycles(tmp_path, monkeypatch):
-    """Owner decision 2026-11-23: a stuck browser must say so.
+def _block(backend, worker, clock, minutes, *, cycle):
+    clock.now = NOW + timedelta(minutes=minutes)
+    backend._cycle_id = cycle
+    backend._notify_runtime_fault("browser-blocked", "BROWSER_WAITING_RECOVERY", at=clock.now)
+    return worker.run_due(now=clock.now)
 
-    On 2026-11-22 the CDP channel was unusable for 2h21m. The program behaved
-    correctly (wait, retry, never kill Chrome) but stayed silent, because
-    Browser/CDP is deliberately excluded from the three-hour escalation, so its
-    proof never carried `needs_owner` and the notice was suppressed as
-    EVENT_NOT_CURRENT -- after it had already recovered, nobody was ever told.
 
-    Three completed cycles (about 45 minutes of polling) is the line: a single
-    reconnect blip keeps its silence, a stuck browser does not.
+def test_a_browser_block_is_reported_once_the_outage_passes_45_minutes(tmp_path, monkeypatch):
+    """Owner decision 2026-11-23: a stuck browser must say so, by duration.
+
+    Amended after review: the trigger is the length of *this* outage, not a count
+    of cycles. Inquiry and quotation report different cycle ids, so a count could
+    be satisfied by two modules failing inside the same quarter hour.
     """
 
-    backend, worker, smtp = _blocked_browser(tmp_path, monkeypatch)
+    backend, worker, smtp, clock = _blocked_browser(tmp_path, monkeypatch)
 
-    for cycle in range(3):
-        backend._cycle_id = f"cycle-{cycle}"
-        backend._notify_runtime_fault("browser-blocked", "BROWSER_WAITING_RECOVERY", at=NOW)
-        worker.run_due(now=NOW)
-        assert smtp.send_attempts == int(cycle == 2)
+    for minutes in (0, 15, 30):
+        _block(backend, worker, clock, minutes, cycle=f"cycle-{minutes}")
+        assert smtp.send_attempts == 0, f"{minutes} minutes must stay silent"
+
+    _block(backend, worker, clock, 46, cycle="cycle-46")
+    assert smtp.send_attempts == 1
 
     assert smtp.message["To"] == "linan229@qq.com"
     text = smtp.message.get_body(preferencelist=("plain",)).get_content()
     assert "Browser/CDP" in text and "关闭该 Chrome 的窗口" in text
 
+    # Once, not once per cycle: the incident keeps its SENT protection.
+    _block(backend, worker, clock, 61, cycle="cycle-61")
+    assert smtp.send_attempts == 1
 
-def test_a_browser_block_that_clears_within_two_cycles_stays_silent(tmp_path, monkeypatch):
-    backend, worker, smtp = _blocked_browser(tmp_path, monkeypatch)
 
-    for cycle in range(2):
-        backend._cycle_id = f"cycle-{cycle}"
-        backend._notify_runtime_fault("browser-blocked", "BROWSER_WAITING_RECOVERY", at=NOW)
-        worker.run_due(now=NOW)
+def test_two_modules_failing_in_the_same_window_do_not_shorten_the_threshold(tmp_path, monkeypatch):
+    """The review finding: inquiry and quotation cycles must not add up to 45 min."""
 
-    assert smtp.send_attempts == 0
+    backend, worker, smtp, clock = _blocked_browser(tmp_path, monkeypatch)
+
+    # Three observations inside ten minutes, each a different cycle id -- the old
+    # rule counted this as "3 completed cycles" and mailed immediately.
+    for minutes, cycle in ((0, "inquiry-cycle-a"), (5, "quotation-cycle-b"),
+                           (10, "inquiry-cycle-c")):
+        _block(backend, worker, clock, minutes, cycle=cycle)
+        assert smtp.send_attempts == 0
+
+    _block(backend, worker, clock, 46, cycle="quotation-cycle-d")
+    assert smtp.send_attempts == 1
+
+
+def test_a_browser_block_with_no_order_at_all_still_reports(tmp_path, monkeypatch):
+    """No pending purchase order: the block is still program-level news.
+
+    The store holds no items here, so the old order-bound proof could never be
+    built and the Owner heard nothing however long the browser stayed dead.
+    """
+
+    backend, worker, smtp, clock = _blocked_browser(tmp_path, monkeypatch)
+    backend._store = SimpleNamespace(all_items=list, get_by_inquiry_id=lambda _id: None)
+
+    _block(backend, worker, clock, 46, cycle="cycle-46")
+
+    assert smtp.send_attempts == 1
+    text = smtp.message.get_body(preferencelist=("plain",)).get_content()
+    assert "Browser/CDP" in text
 
 
 def test_a_recovered_browser_block_does_not_mail_after_the_fact(tmp_path, monkeypatch):
-    """Recovery still cancels the notice: this reports a stuck browser, not history."""
+    backend, worker, smtp, clock = _blocked_browser(tmp_path, monkeypatch)
 
-    backend, worker, smtp = _blocked_browser(tmp_path, monkeypatch)
-    for cycle in range(3):
-        backend._cycle_id = f"cycle-{cycle}"
-        backend._notify_runtime_fault("browser-blocked", "BROWSER_WAITING_RECOVERY", at=NOW)
+    clock.now = NOW + timedelta(minutes=46)
+    backend._cycle_id = "cycle-46"
+    backend._notify_runtime_fault("browser-blocked", "BROWSER_WAITING_RECOVERY", at=clock.now)
     backend._site_outages = {}  # reconnected before the worker ran
-    worker.run_due(now=NOW)
+    worker.run_due(now=clock.now)
 
     assert smtp.send_attempts == 0
+
+
+def test_a_restarted_outage_clock_earns_its_own_45_minutes(tmp_path, monkeypatch):
+    """A new outage after recovery starts its own clock, whatever came before."""
+
+    backend, worker, smtp, clock = _blocked_browser(tmp_path, monkeypatch)
+    _block(backend, worker, clock, 46, cycle="cycle-46")
+    assert smtp.send_attempts == 1
+
+    # Recovered, then blocked again ten minutes before this observation.
+    backend._site_outages = {"Browser/CDP": 0.0}
+    backend._site_fault_since = {"Browser/CDP": NOW + timedelta(minutes=50)}
+    _block(backend, worker, clock, 60, cycle="cycle-60")
+
+    assert smtp.send_attempts == 1
 
 
 def test_google_waits_keep_their_three_hour_rule(tmp_path, monkeypatch):
     """The change is scoped to Browser/CDP; Google still needs the 3-hour mark."""
 
-    backend, worker, smtp = _blocked_browser(tmp_path, monkeypatch)
+    backend, worker, smtp = harness(tmp_path, monkeypatch)
     backend._site_outages = {"Google Sheets": 0.0}
+    backend._site_fault_since = {"Google Sheets": NOW - timedelta(minutes=90)}
+
     for cycle in range(3):
         backend._cycle_id = f"cycle-{cycle}"
         backend._notify_runtime_fault("google-blocked", "GOOGLE_WAITING_RECOVERY", at=NOW)
