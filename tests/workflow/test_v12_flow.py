@@ -1080,6 +1080,21 @@ def test_header_row_recovery_only_clears_data_quality_alerts(tmp_path):
             "WHERE command_id IN ('header-sent','header-unknown') ORDER BY command_id")]
     assert outcomes == ["SENT", "UNKNOWN"]
 
+    # The skipped reason is recorded once, not once per poll. INVALID_INPUT_SKIPPED
+    # is itself a reconcilable state, so without an explicit guard every 15-minute
+    # cycle wrote another HUMAN_RESOLUTION_RECORDED (499 of them in production on
+    # inq_988613911e961720d88cff52 between 2026-10-07 and 2026-11-23).
+    def recorded():
+        return sum(1 for event in store.event_history(inquiry_id)
+                   if event.event_type is EventType.HUMAN_RESOLUTION_RECORDED)
+
+    before = recorded()
+    flow.poll_and_process(reader, SHEET, now=NOW + timedelta(minutes=5))
+    flow.poll_and_process(reader, SHEET, now=NOW + timedelta(minutes=10))
+
+    assert recorded() == before
+    assert store.business_state(inquiry_id) is BusinessState.INVALID_INPUT_SKIPPED
+
 
 def test_closing_a_parked_order_recovers_its_answered_data_quality_alert(tmp_path):
     flow, store, inquiry_id = _parked_order(tmp_path, BusinessState.INTERRUPTED_UNSENT,
