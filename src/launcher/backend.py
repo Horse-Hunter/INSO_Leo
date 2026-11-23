@@ -4195,11 +4195,21 @@ class ProductionBackend(GuiBackend):
                         "inquiry_day": str(current[4]), "reason_code": "PROGRAM_OPERATION_BLOCKED",
                         "original_event": incident_key, "last_success": current[2].isoformat(),
                         "current_business": True, "verified": True, "uncertainty": "当前订单来源已在本轮核实；无法据此判断Google整站可用性",
-                        "action": "请检查原程序的读取/授权提示，并核对受保护订单；不要重发采购。"}
+                        "action": ("请关闭该 Chrome 的窗口（不必强杀进程，程序会自行重连），"
+                                   "不要更换浏览器配置或另开 Chrome；恢复后本轮会继续，不要重发采购。"
+                                   if site == "Browser/CDP" else
+                                   "请检查原程序的读取/授权提示，并核对受保护订单；不要重发采购。")}
                     break
             if proof is not None:
+                # Browser/CDP is a wait-only site: it is excluded from the
+                # three-hour escalation on purpose, so without this line it could
+                # never tell anyone. It stayed silent through a 2h21m stall on
+                # 2026-11-22 while the Owner had to notice by himself.
+                # `review_reason` still withholds the notice until three completed
+                # cycles, so a reconnect blip of one or two polls never mails.
                 proof.update(active=True, verified_at=at.isoformat(), retries_exhausted=True,
-                             needs_owner=reason.endswith("OUTAGE_THREE_HOURS"))
+                             needs_owner=(reason.endswith("OUTAGE_THREE_HOURS")
+                                          or site == "Browser/CDP"))
         # One durable, Owner-readable record per fault.  It rides the existing
         # incident row instead of a second, divergent state store.
         if diagnostic is None:

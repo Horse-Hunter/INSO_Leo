@@ -6,10 +6,12 @@ import pytest
 
 from src.gui.contracts import RunState
 from src.launcher.backend import ProductionBackend
+from src.sheets import WorksheetIdentity
+from src.sheets.pending import IdentifyingSnapshot, SheetRecordIdentity
 from src.workflow.v12_faults import FaultScope, V12Fault
 from src.workflow.v12_notifications import V12NotificationWorker
 from src.workflow.v12_smtp_transport import QQSMTPConfig, QQSMTPTransport
-from tests.workflow.test_v12_notifications import NOW, prepared_store
+from tests.workflow.test_v12_notifications import INQUIRY, NOW, prepared_store
 from tests.workflow.test_v12_smtp_transport import FakeCredentials, ScriptedSMTP, login
 
 
@@ -147,4 +149,86 @@ def test_owner_stop_cleanup_does_not_become_a_new_business_failure_notice(tmp_pa
     backend.request_stop_after_cycle()
     backend._runtime_error(V12Fault(FaultScope.GLOBAL_STOP, "GOOGLE_OPERATION_NOT_CLOSED"))
     worker.run_due(now=NOW)
+    assert smtp.send_attempts == 0
+
+
+def _blocked_browser(tmp_path, monkeypatch):
+    """A real backend whose one pending order proves the block affects business."""
+    backend, worker, smtp = harness(tmp_path, monkeypatch)
+    identity = SheetRecordIdentity(
+        WorksheetIdentity("test", "2026"), 2,
+        IdentifyingSnapshot("未发", "A", "M-1", "Brand", 5))
+    item = SimpleNamespace(status=SimpleNamespace(value="QUEUED"),
+                           inquiry_id=INQUIRY, record_identity=identity)
+    record = SimpleNamespace(cells={"A": "未发"})
+    backend._store = SimpleNamespace(all_items=lambda: [item],
+                                     get_by_inquiry_id=lambda _inquiry_id: item)
+    backend._order_in_scope = lambda _inquiry_id: True
+    backend._current_mail_source = lambda *a, **kw: (
+        identity, record, NOW - timedelta(minutes=5), "source", NOW.date())
+    # Still blocked: the site is in the outage set, as `_defer_website_poll` leaves it.
+    backend._site_outages = {"Browser/CDP": 0.0}
+    return backend, worker, smtp
+
+
+def test_a_persistent_browser_block_is_reported_after_three_cycles(tmp_path, monkeypatch):
+    """Owner decision 2026-11-23: a stuck browser must say so.
+
+    On 2026-11-22 the CDP channel was unusable for 2h21m. The program behaved
+    correctly (wait, retry, never kill Chrome) but stayed silent, because
+    Browser/CDP is deliberately excluded from the three-hour escalation, so its
+    proof never carried `needs_owner` and the notice was suppressed as
+    EVENT_NOT_CURRENT -- after it had already recovered, nobody was ever told.
+
+    Three completed cycles (about 45 minutes of polling) is the line: a single
+    reconnect blip keeps its silence, a stuck browser does not.
+    """
+
+    backend, worker, smtp = _blocked_browser(tmp_path, monkeypatch)
+
+    for cycle in range(3):
+        backend._cycle_id = f"cycle-{cycle}"
+        backend._notify_runtime_fault("browser-blocked", "BROWSER_WAITING_RECOVERY", at=NOW)
+        worker.run_due(now=NOW)
+        assert smtp.send_attempts == int(cycle == 2)
+
+    assert smtp.message["To"] == "linan229@qq.com"
+    text = smtp.message.get_body(preferencelist=("plain",)).get_content()
+    assert "Browser/CDP" in text and "关闭该 Chrome 的窗口" in text
+
+
+def test_a_browser_block_that_clears_within_two_cycles_stays_silent(tmp_path, monkeypatch):
+    backend, worker, smtp = _blocked_browser(tmp_path, monkeypatch)
+
+    for cycle in range(2):
+        backend._cycle_id = f"cycle-{cycle}"
+        backend._notify_runtime_fault("browser-blocked", "BROWSER_WAITING_RECOVERY", at=NOW)
+        worker.run_due(now=NOW)
+
+    assert smtp.send_attempts == 0
+
+
+def test_a_recovered_browser_block_does_not_mail_after_the_fact(tmp_path, monkeypatch):
+    """Recovery still cancels the notice: this reports a stuck browser, not history."""
+
+    backend, worker, smtp = _blocked_browser(tmp_path, monkeypatch)
+    for cycle in range(3):
+        backend._cycle_id = f"cycle-{cycle}"
+        backend._notify_runtime_fault("browser-blocked", "BROWSER_WAITING_RECOVERY", at=NOW)
+    backend._site_outages = {}  # reconnected before the worker ran
+    worker.run_due(now=NOW)
+
+    assert smtp.send_attempts == 0
+
+
+def test_google_waits_keep_their_three_hour_rule(tmp_path, monkeypatch):
+    """The change is scoped to Browser/CDP; Google still needs the 3-hour mark."""
+
+    backend, worker, smtp = _blocked_browser(tmp_path, monkeypatch)
+    backend._site_outages = {"Google Sheets": 0.0}
+    for cycle in range(3):
+        backend._cycle_id = f"cycle-{cycle}"
+        backend._notify_runtime_fault("google-blocked", "GOOGLE_WAITING_RECOVERY", at=NOW)
+        worker.run_due(now=NOW)
+
     assert smtp.send_attempts == 0
