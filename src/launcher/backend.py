@@ -4285,6 +4285,20 @@ class ProductionBackend(GuiBackend):
                             "current_business": True, "verified": True, "uncertainty": "当前订单来源已在本轮核实；无法据此判断Google整站可用性",
                             "action": "请检查原程序的读取/授权提示，并核对受保护订单；不要重发采购。"}
                         break
+                if proof is None and site == "INSO":
+                    # An ERP outage blocks quotation as well as purchasing, and it is
+                    # news even when no purchase order happens to be waiting: on
+                    # 2026-11-25 the ERP page kept failing with nothing pending and
+                    # the Owner heard nothing at all.
+                    proof = {"incident_key": incident_key,
+                        "category": "resource_stop", "module": site, "business_module": "inquiry",
+                        "reason_code": "PROGRAM_OPERATION_BLOCKED",
+                        "original_event": incident_key,
+                        "blocked_since": blocked_since.isoformat(),
+                        "current_business": True, "verified": True,
+                        "action": ("请确认程序使用的 Chrome 能正常打开 ERP 页面并保持登录；"
+                                   "程序会自动重试，恢复后本轮继续，不要重发采购。"),
+                        "uncertainty": "ERP 页面/会话本轮不可用；不能据此判断任何订单写入成功或失败。"}
             if proof is not None:
                 # Browser/CDP is a wait-only site: it is excluded from the
                 # three-hour escalation on purpose, so without this line it could
@@ -4294,7 +4308,7 @@ class ProductionBackend(GuiBackend):
                 # _BROWSER_BLOCK_NOTICE_AFTER.
                 proof.update(active=True, verified_at=at.isoformat(), retries_exhausted=True,
                              needs_owner=(reason.endswith("OUTAGE_THREE_HOURS")
-                                          or site == "Browser/CDP"))
+                                          or (proof.get("category") == "resource_stop")))
         # One durable, Owner-readable record per fault.  It rides the existing
         # incident row instead of a second, divergent state store.
         if diagnostic is None:
@@ -4412,7 +4426,7 @@ class ProductionBackend(GuiBackend):
             # A program-level resource outage: no order has to be involved, so the
             # only evidence that matters is "still the same outage, and by now it
             # has lasted long enough".
-            if (proof.get("module") not in {"Browser/CDP"}
+            if (proof.get("module") not in {"Browser/CDP", "INSO"}
                     or command.inquiry_id is not None
                     or proof.get("reason_code") != "PROGRAM_OPERATION_BLOCKED"
                     or {r.address.strip().casefold() for r in command.recipients} != {"linan229@qq.com"}):

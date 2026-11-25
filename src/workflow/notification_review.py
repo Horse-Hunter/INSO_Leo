@@ -81,7 +81,7 @@ def review_reason(command, now):
             # inquiry day: it is not a business event that can age out. What it
             # must carry is the outage's own start, which the dispatcher measures
             # against the wall clock (backend._review_current_mail).
-            if (proof.get("module") != "Browser/CDP"
+            if (proof.get("module") not in {"Browser/CDP", "INSO"}
                     or proof.get("reason_code") != "PROGRAM_OPERATION_BLOCKED"
                     or command.inquiry_id is not None
                     or not proof.get("retries_exhausted")
