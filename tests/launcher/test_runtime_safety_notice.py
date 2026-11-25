@@ -6,6 +6,7 @@ import pytest
 
 from src.gui.contracts import RunState
 from src.launcher.backend import ProductionBackend
+from src.launcher.inso_session import InsoAuthenticationError
 from src.workflow.v12_faults import FaultScope, V12Fault
 from src.workflow.v12_notifications import V12NotificationWorker
 from src.workflow.v12_smtp_transport import QQSMTPConfig, QQSMTPTransport
@@ -157,15 +158,8 @@ class _Clock:
         self.now = now
 
 
-class _Clock:
-    """One controllable clock for the backend, the evidence and the transport."""
-
-    def __init__(self, now=NOW):
-        self.now = now
-
-
-def _blocked_browser(tmp_path, monkeypatch):
-    """A real backend on a controllable clock with the browser channel down."""
+def _blocked_site(tmp_path, monkeypatch, *, site="Browser/CDP"):
+    """A real backend on a controllable clock with one site in outage."""
     clock = _Clock()
     backend, _worker, _smtp = harness(tmp_path, monkeypatch)
     monkeypatch.setattr("src.launcher.backend.utc_now", lambda: clock.now)
@@ -177,15 +171,20 @@ def _blocked_browser(tmp_path, monkeypatch):
     worker = V12NotificationWorker(backend._v12_store, transport,
                                   review_current=backend._review_current_mail, scope="business")
     # Still blocked, as `_defer_website_poll` leaves it.
-    backend._site_outages = {"Browser/CDP": 0.0}
-    backend._site_fault_since = {"Browser/CDP": clock.now}
+    backend._site_outages = {site: 0.0}
+    backend._site_fault_since = {site: clock.now}
     return backend, worker, server, clock
 
 
-def _block(backend, worker, clock, minutes, *, cycle):
+def _blocked_browser(tmp_path, monkeypatch):
+    return _blocked_site(tmp_path, monkeypatch)
+
+
+def _block(backend, worker, clock, minutes, *, cycle, site="Browser/CDP"):
     clock.now = NOW + timedelta(minutes=minutes)
     backend._cycle_id = cycle
-    backend._notify_runtime_fault("browser-blocked", "BROWSER_WAITING_RECOVERY", at=clock.now)
+    reason = "INSO_WAITING_RECOVERY" if site == "INSO" else "BROWSER_WAITING_RECOVERY"
+    backend._notify_runtime_fault(f"blocked-{site}", reason, at=clock.now)
     return worker.run_due(now=clock.now)
 
 
@@ -288,3 +287,42 @@ def test_google_waits_keep_their_three_hour_rule(tmp_path, monkeypatch):
         worker.run_due(now=NOW)
 
     assert smtp.send_attempts == 0
+
+
+def _stopped_chain(code):
+    """The shape production produced: a wrapper that hides the real reason."""
+    try:
+        raise InsoAuthenticationError(code)
+    except InsoAuthenticationError:
+        try:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE") from None
+        except V12Fault as fault:
+            return fault
+
+
+def test_an_unclassified_internal_stop_still_reaches_the_owner(tmp_path, monkeypatch):
+    """2026-11-24 20:52: the stop was recorded, then silently suppressed.
+
+    Its evidence carried actual_stop_reason="V12_INTERNAL_FAILURE", which cannot
+    match the review's `[A-Z_]{1,64}` shape, so the notice died as
+    RUNTIME_STOP_UNVERIFIED and the program stayed down for 25 hours unnoticed.
+    """
+
+    backend, worker, smtp = harness(tmp_path, monkeypatch)
+    backend._runtime_error(V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE"))
+
+    assert worker.run_due(now=NOW) == 1
+    assert smtp.send_attempts == 1
+    text = smtp.message.get_body(preferencelist=("plain",)).get_content()
+    assert "INTERNAL_FAILURE_UNCLASSIFIED" in text
+
+
+def test_the_stop_mail_names_the_real_reason_when_the_wrapper_had_none(tmp_path, monkeypatch):
+    """The wrapper code has digits; the underlying reason does not, so use it."""
+
+    backend, worker, smtp = harness(tmp_path, monkeypatch)
+    backend._runtime_error(_stopped_chain("AUTHENTICATED_SHELL_UNAVAILABLE"))
+
+    assert worker.run_due(now=NOW) == 1
+    text = smtp.message.get_body(preferencelist=("plain",)).get_content()
+    assert "AUTHENTICATED_SHELL_UNAVAILABLE" in text

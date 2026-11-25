@@ -1,6 +1,8 @@
 # INSO LEO — 新 CEO 接管入口（2026-11-23 下午，V1.7 运行中；浏览器受阻会通知）
 
-**当前权威结论：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED / BROWSER_BLOCK_NOTICE_ON`。**
+**当前权威结论：`V1_7_INSTALLED / PRODUCTION_RUNNING / STOP_ALWAYS_MAILED`。**
+2026-11-25 修掉了一次 25 小时静默停摆的三个根因：页面失败不再全局停止；任何停机的原因码都能过审查、
+必发一封邮件；INSO 受阻即使没有待采购订单也发程序级通知。
 （2026-11-23 晚已按 CEO Review 修正：通知阈值改为"同一次故障持续 45 分钟"，且不再要求存在待采购订单。）
 V1.7 已成交一笔真实采购；浏览器通道连续三轮（约 45 分钟）不可用时会发一封给 Owner 的提醒。
 **Owner 已明确：V1.7 暂不晋升 `main`**，`main` 保持 V1.6。

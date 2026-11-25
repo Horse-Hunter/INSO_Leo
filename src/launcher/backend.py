@@ -184,6 +184,60 @@ _INSO_AUTH_STOP_CODES = AUTH_SESSION_STOP_REASONS
 #: quarter hour used to look like two of the three "cycles" the threshold wants.
 _BROWSER_BLOCK_NOTICE_AFTER = timedelta(minutes=45)
 
+#: Reason recorded for a shared stop that carries no code of its own. It has to
+#: satisfy the `[A-Z_]{1,64}` shape the notification review enforces. The old
+#: fallback "V12_INTERNAL_FAILURE" did not (it has digits), so every unclassified
+#: stop was silently un-mailable -- that is how the 2026-11-24 outage passed
+#: without a single notice.
+_UNCLASSIFIED_STOP_REASON = "INTERNAL_FAILURE_UNCLASSIFIED"
+
+#: INSO session codes that mean "the ERP page or its CDP connection did not come
+#: up", not "a human must finish a login". Produced by the session guard when it
+#: cannot prove the shell; the site-deferral path already knows how to retry them.
+_INSO_TRANSIENT_SESSION_CODES = frozenset({
+    "LOGIN_PAGE_UNAVAILABLE", "AUTHENTICATED_SHELL_UNAVAILABLE", "BROWSER_TIMEOUT",
+    "INSO_LOGIN_RETRY_EXHAUSTED",
+})
+
+
+def _is_transient_inso_session_failure(exc) -> bool:
+    """Whether this fault is an INSO page/connection failure rather than a challenge.
+
+    On 2026-11-24 a quotation read hit `InsoAuthenticationError(
+    AUTHENTICATED_SHELL_UNAVAILABLE)`; the module boundary treated every
+    SecurityViolation as a shared stop, so the program sat dead for 25 hours over a
+    page that simply had not loaded. Only a real challenge or a rejected credential
+    is worth stopping everything for.
+    """
+
+    cursor, seen = exc, set()
+    while cursor is not None and id(cursor) not in seen:
+        seen.add(id(cursor))
+        if (isinstance(cursor, InsoAuthenticationError)
+                and getattr(cursor, "reason_code", "") in _INSO_TRANSIENT_SESSION_CODES):
+            return True
+        cursor = cursor.__cause__ or cursor.__context__
+    return False
+
+
+def _classified_stop_reason(exc) -> str:
+    """A shared stop's code, chosen so the notification review can accept it.
+
+    Prefers the real code from the cause chain (wrappers such as
+    "V13_INTERNAL_FAILURE" are skipped because of their digits), and otherwise says
+    plainly that the failure is unclassified.
+    """
+
+    cursor, seen = exc, set()
+    while cursor is not None and id(cursor) not in seen:
+        seen.add(id(cursor))
+        for attribute in ("reason", "reason_code"):
+            value = getattr(cursor, attribute, None)
+            if isinstance(value, str) and re.fullmatch(r"[A-Z_]{1,64}", value):
+                return value
+        cursor = cursor.__cause__ or cursor.__context__
+    return _UNCLASSIFIED_STOP_REASON
+
 
 class ProductionConfigurationError(RuntimeError):
     """Safe startup failure for missing local production configuration."""
@@ -195,7 +249,8 @@ def _login_alert_body(stop_reason: str) -> str:
     # Keep only closed status hints; never copy raw source remarks.
     if "台账" in stop_reason or stop_reason == "WORKFLOW_LEDGER_UNAVAILABLE":
         return "情况：本机订单台账不可用，相关业务已暂停。\n处理：请检查本机台账和运行提示；不要重发采购单。"
-    if stop_reason in {"V12_INTERNAL_FAILURE", "V13_INTERNAL_FAILURE", "QUOTE_INPUT_CONFIGURATION_REQUIRED",
+    if stop_reason in {_UNCLASSIFIED_STOP_REASON, "V12_INTERNAL_FAILURE", "V13_INTERNAL_FAILURE",
+                       "QUOTE_INPUT_CONFIGURATION_REQUIRED",
                        "SHEETS_SCHEMA_UNAVAILABLE"}:
         return "情况：本机配置、表格结构或处理结果尚未确认，相关业务已暂停。\n处理：请核对程序提示；不能据此判断网站登录失效。"
     if any(token in stop_reason for token in ("全局", "基础设施", "台账", "GLOBAL_STOP")):
@@ -1983,6 +2038,7 @@ class ProductionBackend(GuiBackend):
             from src.workflow.v13_integration import is_isolated_source_read_error
             recoverable_inso = isinstance(exc, V12Fault) and exc.reason == "INSO_QUERY_RETRIES_EXHAUSTED"
             recoverable_read = recoverable_inso or is_isolated_source_read_error(exc) or isinstance(exc, GoogleReadTargetUnavailable)
+            transient_session = _is_transient_inso_session_failure(exc)
             cause, seen = exc, set()
             while cause is not None and id(cause) not in seen:
                 if isinstance(cause, V12Fault) and not recoverable_inso and not is_isolated_source_read_error(exc):
@@ -1993,7 +2049,8 @@ class ProductionBackend(GuiBackend):
                     self._state = RunState.GLOBAL_STOP
                     self._stop.set()
                     raise
-                if (isinstance(cause, (sqlite3.Error, V12DatabaseError, SecurityViolation, ProductionConfigurationError))
+                if ((isinstance(cause, (sqlite3.Error, V12DatabaseError, ProductionConfigurationError))
+                        or (isinstance(cause, SecurityViolation) and not transient_session))
                         or getattr(cause, "reason", "") in {"MODULE_RESOURCE_OWNERSHIP_LOST",
                             "NOTIFICATION_WORKER_OWNERSHIP_LOST", "INSO_OPERATION_NOT_CLOSED",
                             "GOOGLE_OPERATION_NOT_CLOSED", "WORKFLOW_LEDGER_UNAVAILABLE",
@@ -3617,7 +3674,7 @@ class ProductionBackend(GuiBackend):
         self._notify()
         # A shared fault is not a failure of the last historical order.
         fault_inquiry = self._active_inso_inquiry
-        reason = "V12_INTERNAL_FAILURE"
+        reason = _UNCLASSIFIED_STOP_REASON
         cause = exc
         while cause is not None:
             if isinstance(cause, V12Fault):
@@ -3648,9 +3705,14 @@ class ProductionBackend(GuiBackend):
         if prolonged and page_fault is None and safety_reason is None:
             reason = {"INSO": "INSO_OUTAGE_THREE_HOURS", "Google Sheets": "GOOGLE_OUTAGE_THREE_HOURS",
                       "IC.net": "IC_NET_OUTAGE_THREE_HOURS", "汇率网站": "FX_OUTAGE_THREE_HOURS"}[site]
+        if not (isinstance(reason, str) and re.fullmatch(r"[A-Z_]{1,64}", reason)):
+            # "V13_INTERNAL_FAILURE" cannot be recorded as-is (digits), so keep the
+            # deepest code the chain can actually name instead of a generic sentinel
+            # the notification review would reject.
+            reason = _classified_stop_reason(exc)
         shared_fault = self._stop.is_set() and self._state in {RunState.GLOBAL_STOP, RunState.MODULE_PAUSED}
         self._runtime_stop_reason = reason
-        safe_reason = reason if isinstance(reason, str) and re.fullmatch(r"[A-Z_]{1,64}", reason) else "V12_INTERNAL_FAILURE"
+        safe_reason = reason if isinstance(reason, str) and re.fullmatch(r"[A-Z_]{1,64}", reason) else _UNCLASSIFIED_STOP_REASON
         root_cause, visited = exc, set()
         while root_cause.__cause__ is not None and id(root_cause) not in visited:
             visited.add(id(root_cause))
@@ -4147,7 +4209,7 @@ class ProductionBackend(GuiBackend):
                 and self._state in {RunState.GLOBAL_STOP, RunState.MODULE_PAUSED}):
             stalled = reason == "PROGRAM_OPERATION_STALLED"
             internal_fault = reason not in RUNTIME_SAFETY_REASONS
-            actual_reason = reason if re.fullmatch(r"[A-Z_]{1,64}", reason) else "V12_INTERNAL_FAILURE"
+            actual_reason = reason if re.fullmatch(r"[A-Z_]{1,64}", reason) else _UNCLASSIFIED_STOP_REASON
             browser_fault = reason.startswith("CDP_PAGE_")
             auth_fault = reason == "GOOGLE_AUTHENTICATION_REQUIRED"
             stop_key = "program-safety-stop:"+("operation-progress" if stalled else "runtime-operation" if internal_fault else "google-login" if auth_fault else "browser-operation" if browser_fault else "google-operation")
@@ -4223,6 +4285,20 @@ class ProductionBackend(GuiBackend):
                             "current_business": True, "verified": True, "uncertainty": "当前订单来源已在本轮核实；无法据此判断Google整站可用性",
                             "action": "请检查原程序的读取/授权提示，并核对受保护订单；不要重发采购。"}
                         break
+                if proof is None and site == "INSO":
+                    # An ERP outage blocks quotation as well as purchasing, and it is
+                    # news even when no purchase order happens to be waiting: on
+                    # 2026-11-25 the ERP page kept failing with nothing pending and
+                    # the Owner heard nothing at all.
+                    proof = {"incident_key": incident_key,
+                        "category": "resource_stop", "module": site, "business_module": "inquiry",
+                        "reason_code": "PROGRAM_OPERATION_BLOCKED",
+                        "original_event": incident_key,
+                        "blocked_since": blocked_since.isoformat(),
+                        "current_business": True, "verified": True,
+                        "action": ("请确认程序使用的 Chrome 能正常打开 ERP 页面并保持登录；"
+                                   "程序会自动重试，恢复后本轮继续，不要重发采购。"),
+                        "uncertainty": "ERP 页面/会话本轮不可用；不能据此判断任何订单写入成功或失败。"}
             if proof is not None:
                 # Browser/CDP is a wait-only site: it is excluded from the
                 # three-hour escalation on purpose, so without this line it could
@@ -4232,7 +4308,7 @@ class ProductionBackend(GuiBackend):
                 # _BROWSER_BLOCK_NOTICE_AFTER.
                 proof.update(active=True, verified_at=at.isoformat(), retries_exhausted=True,
                              needs_owner=(reason.endswith("OUTAGE_THREE_HOURS")
-                                          or site == "Browser/CDP"))
+                                          or (proof.get("category") == "resource_stop")))
         # One durable, Owner-readable record per fault.  It rides the existing
         # incident row instead of a second, divergent state store.
         if diagnostic is None:
@@ -4305,7 +4381,7 @@ class ProductionBackend(GuiBackend):
                     or (proof.get("stop_reason") != self._runtime_stop_reason
                         if proof.get("stop_reason") != "PROGRAM_INTERNAL_STOP" else
                         proof.get("actual_stop_reason") != (self._runtime_stop_reason if isinstance(self._runtime_stop_reason, str)
-                            and re.fullmatch(r"[A-Z_]{1,64}", self._runtime_stop_reason) else "V12_INTERNAL_FAILURE"))
+                            and re.fullmatch(r"[A-Z_]{1,64}", self._runtime_stop_reason) else _UNCLASSIFIED_STOP_REASON))
                     or not self._stop.is_set()
                     or self._state not in {RunState.GLOBAL_STOP, RunState.MODULE_PAUSED}
                     or {r.address.strip().casefold() for r in command.recipients} != {"linan229@qq.com"}):
@@ -4350,7 +4426,7 @@ class ProductionBackend(GuiBackend):
             # A program-level resource outage: no order has to be involved, so the
             # only evidence that matters is "still the same outage, and by now it
             # has lasted long enough".
-            if (proof.get("module") not in {"Browser/CDP"}
+            if (proof.get("module") not in {"Browser/CDP", "INSO"}
                     or command.inquiry_id is not None
                     or proof.get("reason_code") != "PROGRAM_OPERATION_BLOCKED"
                     or {r.address.strip().casefold() for r in command.recipients} != {"linan229@qq.com"}):

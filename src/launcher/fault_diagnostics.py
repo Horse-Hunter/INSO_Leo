@@ -166,6 +166,11 @@ _CATALOGUE: dict[str, tuple[str, str, str]] = {
         "内部操作未能正常完成，具体原因未能归类。",
         "保留现场（数据库与日志）后交给技术处理；不要重复提交采购或报价。",
     ),
+    "INTERNAL_FAILURE_UNCLASSIFIED": (
+        "程序内部故障",
+        "内部操作未能正常完成，具体原因未能归类。",
+        "保留现场（数据库与日志）后交给技术处理；不要重复提交采购或报价。",
+    ),
 }
 
 # Modules that are paused only because a shared dependency stopped.  They must

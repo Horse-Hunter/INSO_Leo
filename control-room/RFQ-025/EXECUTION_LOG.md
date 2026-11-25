@@ -1022,3 +1022,83 @@ blocked_since = <故障起始>
 
 这不是本次改动引入的：上一版在 16:26–21:03 期间零 ERROR，说明该时段 Google 通路正常；
 21:11 起代理隧道开始 502，属运行环境。
+
+---
+
+# 第八阶段：25 小时静默停摆的根因与修复（2026-11-25）
+
+Owner 报告：程序停了一整天没人知道，也没有邮件。
+
+## 41. 现场
+
+| 项 | 实测 |
+|---|---|
+| 停机时刻 | 2026-11-24 20:52:26（`quotation phase=failed` 之后日志再无输出） |
+| Owner 发现 | 2026-11-25 22:13（**25 小时 21 分**无人知晓） |
+| GUI 状态 | "采购模块暂停"，异常列表首条「未分类故障（V13_INTERNAL_FAILURE）」，原始异常 `InsoAuthenticationError(AUTHENTICATED_SHELL_UNAVAILABLE)` |
+| 通知 | **存在一条记录，但被抑制**：`suppression_reason = RUNTIME_STOP_UNVERIFIED`，收件人 `SUPPRESSED`，`attempts = 0` |
+
+进程一直活着（只是业务停止），所以"看进程还在"并不能发现问题。
+
+## 42. 根因一：页面失败被当成全局停止
+
+`InsoAuthenticationError` 继承 `SecurityViolation`；`_run_independent_job_scoped` 的失败边界对
+**任何** `SecurityViolation` 直接 `raise` → `_runtime_error` → 停止共享业务。
+
+而 `AUTHENTICATED_SHELL_UNAVAILABLE` 的含义是"**登录后的外壳页没拿到**"，与挑战码无关。
+（11-24 的调用链是报价适配器的兜底 `except Exception` 把它包成 `V12Fault(GLOBAL_STOP,
+"V13_INTERNAL_FAILURE")`，`from None` 清掉 `__cause__`，只剩 `__context__`。）
+
+修复：边界只对 4 个真人码停止 —— `MANUAL_VERIFICATION_REQUIRED` / `CREDENTIAL_REJECTED` /
+`AUTHENTICATION_REQUIRED` / `SESSION_IDENTITY_UNVERIFIED`；页面/连接族
+（`LOGIN_PAGE_UNAVAILABLE`、`AUTHENTICATED_SHELL_UNAVAILABLE`、`BROWSER_TIMEOUT`、
+`INSO_LOGIN_RETRY_EXHAUSTED`）交给既有的站点推迟路径（有界退避，3 小时才升级为暂停）。
+
+**生产验证**：23:05 同一个 INSO 失败再次出现 —— 这次是
+`runtime fault reason=INSO_WAITING_RECOVERY` + `quotation phase=deferred`，`tp` 照常，
+程序没有停。修复前，这一条就是 25 小时停摆的起点。
+
+## 43. 根因二：停机邮件自己不合规
+
+停机的证据里 `actual_stop_reason` 兜底写死 `"V12_INTERNAL_FAILURE"`；通知审查要求该字段匹配
+`[A-Z_]{1,64}` —— **它含数字，匹配不上**，于是永远 `RUNTIME_STOP_UNVERIFIED`。
+11-14 那条 `V12_INTERNAL_FAILURE` 的历史记录也是同样被抑制的，说明这个坑从 11-14 就在。
+
+修复：
+- 兜底码改为 `INTERNAL_FAILURE_UNCLASSIFIED`（合规、且诚实地说"未归类"）；
+- 当包装码本身无法记录（如 `V13_INTERNAL_FAILURE`）时，**从原因链取真实原因码**，
+  本次会记成 `AUTHENTICATED_SHELL_UNAVAILABLE`，邮件直接指向页面问题而不是"内部故障"。
+
+## 44. 根因三：INSO 受阻在"没有待采购订单"时不通知
+
+11-25 22:42 的 INSO 推迟期间，账本里没有 QUEUED 订单，`persistent_stop` 证据建不起来，
+一条通知都不产生 —— 浏览器通道已在 11-23 补过这条，ERP 通道是同一个缺口。
+
+修复：INSO 在找不到绑定订单时退化到**程序级** `resource_stop` 证据（45 分钟、无订单也发、
+每轮故障只发一次、派发前恢复则取消、收件人仅 Owner）；有订单时仍走原来的 `persistent_stop`。
+Google 未动（仍是订单绑定 + 三小时规则）。
+
+**生产验证**（23:05:02）：
+
+```
+subject = 【需要处理】INSO业务持续受阻
+category = resource_stop, module = INSO, blocked_since = 23:05:02, needs_owner = true
+suppression_reason = CURRENT_REVIEW_PENDING   ← 正在等 45 分钟，不是不发
+recipient = linan229@qq.com  OPERATIONAL_PENDING
+```
+
+## 45. 测试、反证、回归、构建
+
+| 项 | 值 |
+|---|---|
+| 新增测试 | 11 条分类（4 真人码仍停、4 瞬时码不停、无关停机不受影响、原因码从链上取、兜底码合规）+ 5 条通知（未归类停机必发、链上真实码出现在正文、INSO 无订单 46 分钟发一封、30 分钟不发、不发第二次） |
+| 反证一 | 兜底码改回 `V12_INTERNAL_FAILURE` → 未归类停机那封立刻 0 封 |
+| 反证二 | 关掉 INSO 程序级退化 → 空账本两条立刻失败 |
+| 全量回归 | `4398 passed / 0 failed / 0 errors / 1 skipped in 610 s` |
+| `ruff` | 基准的 3 条既有 F811 |
+| 源码 commit | `75ba2dd4`（其后仅文档） |
+| EXE | 8,514,010 B / `4f3f86ba2956eb7a2964a7bf0d905d041b7abfc0844ecc3ecbc842a745164f80` |
+| 清单 | `18b08d7631507e6bc578533c59d3767a110997c2afca332fd9ba2d2aa3ae90`（2,872 行） |
+| 安装 | 就地切换 `INSTALL_RESULT = PASS`，2,872 文件；旧版 `.prev-20261125T150205Z` |
+| 回退 | `dist\release-backups\RFQ-025-pre-r9-20261125T150104Z`（程序 + 库，`DB_VERIFY_RESULT = PASS`，41 条采购） |
+| 重启 | PID 140236（GUI）+ 141460（watcher），23:02 起 |

@@ -1,6 +1,6 @@
 # RFQ-025 — 最终汇报（第五阶段：真实采购已成交，V1.7 收尾完成）
 
-**状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED / BROWSER_BLOCK_NOTICE_ON`**
+**状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / STOP_ALWAYS_MAILED`**
 （Owner 2026-11-23 决定：浏览器持续受阻要通知；V1.7 暂不晋升 `main`）
 
 一句话：V1.7 装在 `dist\INSO_V1.7` 正常跑生产，**第一笔真实采购已于 2026-11-22 23:06 走完整条粘贴链路成交**
@@ -230,6 +230,27 @@ Review 结论 `CHANGES_REQUESTED`，两条都成立：
 **验证**：6 条新用例（后端/证据/传输共用一个可控时钟），两处各做反证（关掉时长判断 → 提前发；
 退回"必须找订单" → 空账本条目失败）。全量 `4382 passed / 0 failed / 1 skipped`；
 新 EXE `a5b9e498…2dc5`（8,512,677 B，清单 `845fe377…d79c`），`INSTALL_RESULT = PASS`，21:08 重启。
+
+## 七点九、2026-11-24 的 25 小时静默停摆：三个根因
+
+**现场**：11-24 20:52 报价轮次抛 `InsoAuthenticationError(AUTHENTICATED_SHELL_UNAVAILABLE)`，
+程序停止共享业务；直到 11-25 22:13 才被发现。通知表里**有一条记录但被抑制**：
+`RUNTIME_STOP_UNVERIFIED`，收件人 `SUPPRESSED`，`attempts = 0`。
+
+1. **页面失败被当成全局停止。** `InsoAuthenticationError` 继承 `SecurityViolation`，模块边界对任何
+   SecurityViolation 直接停；而这个码的含义是"登录后的外壳页没拿到"。现在只对 4 个真人码停止，
+   页面/连接族交给既有站点推迟（有界退避、3 小时才升级为暂停）。
+2. **停机邮件的原因码自己不合规。** 兜底码 `V12_INTERNAL_FAILURE` 含数字，过不了审查的
+   `[A-Z_]{1,64}`，于是永远 `RUNTIME_STOP_UNVERIFIED`（11-14 起的历史记录同样被抑制）。
+   改为 `INTERNAL_FAILURE_UNCLASSIFIED`，并在包装码不可记录时从原因链取真实码。
+3. **INSO 受阻在无待采购订单时不通知。** 与 11-23 修的浏览器缺口同源，现在也走程序级
+   `resource_stop`（45 分钟、每轮故障一次、恢复取消、仅 Owner）。
+
+**生产验证**：23:05 同一 INSO 失败重现 —— `quotation phase=deferred`（不再停），
+并生成 `【需要处理】INSO业务持续受阻`，状态 `CURRENT_REVIEW_PENDING`（正在等 45 分钟）。
+
+**回归/构建**：`4398 passed / 0 failed / 1 skipped`；`4f3f86ba…4f80`（8,514,010 B），
+`INSTALL_RESULT = PASS`，23:02 重启。
 
 ## 八、尚未验证 / 未完成
 

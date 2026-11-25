@@ -1,4 +1,27 @@
-# Executor 2026-11-23（晚）：按 CEO Review 修正通知的两个边界
+# Executor 2026-11-25：25 小时静默停摆已修（页面失败不再停机 + 停机必发邮件）
+
+**状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / STOP_ALWAYS_MAILED`**
+
+- **事故**：11-24 20:52 报价轮次 `InsoAuthenticationError(AUTHENTICATED_SHELL_UNAVAILABLE)` →
+  被当成全局停止，程序静默 25 小时；**存在通知记录但被 `RUNTIME_STOP_UNVERIFIED` 抑制**（0 次尝试）。
+- **根因一**：`InsoAuthenticationError` 继承 `SecurityViolation`，模块边界对任何 SecurityViolation
+  直接停。而 `AUTHENTICATED_SHELL_UNAVAILABLE` 是"登录后的外壳页没拿到"。现在只对 4 个真人码停，
+  页面/连接族走既有站点推迟（有界退避）。
+- **根因二**：停机证据的兜底码 `V12_INTERNAL_FAILURE` 含数字，过不了 review 的 `[A-Z_]{1,64}`，
+  于是永远被抑制（11-14 起就有）。改为 `INTERNAL_FAILURE_UNCLASSIFIED`，并在包装码不可记录时
+  从原因链取真实码（本次记 `AUTHENTICATED_SHELL_UNAVAILABLE`）。
+- **根因三**：INSO 受阻时若没有待采购订单，一条通知都不建。现在退化到程序级通知
+  （45 分钟、每轮故障一次、恢复即取消、只发 Owner）。
+- **生产验证**：23:05 同一失败重现 → `INSO_WAITING_RECOVERY` + `quotation phase=deferred`（不再停）；
+  同时生成 `【需要处理】INSO业务持续受阻`（`resource_stop`，`CURRENT_REVIEW_PENDING` = 正在等 45 分钟）。
+- **回归**：`4398 passed / 0 failed / 1 skipped`；反证两条（兜底码回退→邮件 0 封；关掉 INSO 退化→测试失败）。
+- **构建/安装**：`4f3f86ba…4f80`（8,514,010 B，清单 `18b08d76…0d95`），就地 `INSTALL_RESULT = PASS`，
+  旧版 `.prev-20261125T150205Z`，快照 `RFQ-025-pre-r9-20261125T150104Z`（库校验 PASS）。
+- **运行**：PID 140236 + 141460，23:02 起；`main` 仍 V1.6，V1.7 未晋升。
+
+---
+
+# 此前（11-23 晚）：按 CEO Review 修正通知的两个边界
 
 **状态：`V1_7_INSTALLED / PRODUCTION_RUNNING / REAL_PURCHASE_VERIFIED / BROWSER_BLOCK_NOTICE_ON`**
 
