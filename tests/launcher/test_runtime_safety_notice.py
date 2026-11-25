@@ -6,6 +6,7 @@ import pytest
 
 from src.gui.contracts import RunState
 from src.launcher.backend import ProductionBackend
+from src.launcher.inso_session import InsoAuthenticationError
 from src.workflow.v12_faults import FaultScope, V12Fault
 from src.workflow.v12_notifications import V12NotificationWorker
 from src.workflow.v12_smtp_transport import QQSMTPConfig, QQSMTPTransport
@@ -288,3 +289,42 @@ def test_google_waits_keep_their_three_hour_rule(tmp_path, monkeypatch):
         worker.run_due(now=NOW)
 
     assert smtp.send_attempts == 0
+
+
+def _stopped_chain(code):
+    """The shape production produced: a wrapper that hides the real reason."""
+    try:
+        raise InsoAuthenticationError(code)
+    except InsoAuthenticationError:
+        try:
+            raise V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE") from None
+        except V12Fault as fault:
+            return fault
+
+
+def test_an_unclassified_internal_stop_still_reaches_the_owner(tmp_path, monkeypatch):
+    """2026-11-24 20:52: the stop was recorded, then silently suppressed.
+
+    Its evidence carried actual_stop_reason="V12_INTERNAL_FAILURE", which cannot
+    match the review's `[A-Z_]{1,64}` shape, so the notice died as
+    RUNTIME_STOP_UNVERIFIED and the program stayed down for 25 hours unnoticed.
+    """
+
+    backend, worker, smtp = harness(tmp_path, monkeypatch)
+    backend._runtime_error(V12Fault(FaultScope.GLOBAL_STOP, "V13_INTERNAL_FAILURE"))
+
+    assert worker.run_due(now=NOW) == 1
+    assert smtp.send_attempts == 1
+    text = smtp.message.get_body(preferencelist=("plain",)).get_content()
+    assert "INTERNAL_FAILURE_UNCLASSIFIED" in text
+
+
+def test_the_stop_mail_names_the_real_reason_when_the_wrapper_had_none(tmp_path, monkeypatch):
+    """The wrapper code has digits; the underlying reason does not, so use it."""
+
+    backend, worker, smtp = harness(tmp_path, monkeypatch)
+    backend._runtime_error(_stopped_chain("AUTHENTICATED_SHELL_UNAVAILABLE"))
+
+    assert worker.run_due(now=NOW) == 1
+    text = smtp.message.get_body(preferencelist=("plain",)).get_content()
+    assert "AUTHENTICATED_SHELL_UNAVAILABLE" in text
