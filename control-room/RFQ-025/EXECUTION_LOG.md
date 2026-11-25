@@ -1102,3 +1102,24 @@ recipient = linan229@qq.com  OPERATIONAL_PENDING
 | 安装 | 就地切换 `INSTALL_RESULT = PASS`，2,872 文件；旧版 `.prev-20261125T150205Z` |
 | 回退 | `dist\release-backups\RFQ-025-pre-r9-20261125T150104Z`（程序 + 库，`DB_VERIFY_RESULT = PASS`，41 条采购） |
 | 重启 | PID 140236（GUI）+ 141460（watcher），23:02 起 |
+
+## 46. 23:15 的现场补充：ERP 会话已过期
+
+只读核对（python urllib，与程序同款）：
+
+```
+GET .../InnerEnquiry/YeWuXJ/List.aspx
+  200 -> https://yingsuo.alperp.cn/home/checking?gourl=%2Fskins%2Fetaoerp%2F...
+  页面含 login.aspx，不含 _id_dg / DetailFieldValue / select_btns
+```
+
+即：ERP 会话已失效，列表页被重定向去登录。程序每轮都在重试（`force_login=True`），目前拿到的是
+`INSO_WAITING_RECOVERY`（页面/会话未能证明），不是挑战码，所以它推迟而不是停。
+
+**给 Owner 的直接处置**：在那台机器上用程序专属的 Chrome 登录一次 INSO（账号已保存），
+下一轮会自己继续；若登录时要求验证码，那才是真正需要本人完成的一步。
+
+**已知诊断缺口（本轮未改，留待下一轮）**：报价适配器的兜底 `except Exception` 用
+`from None` 把真实异常藏在 `__context__`，所以在"推迟"路径上界面只能看到
+`INSO_WAITING_RECOVERY`，看不到底层是登录页、超时还是凭据。停机路径本轮已能取到真实原因码
+（见第 43 节），推迟路径还没有。今晚不再重建，先让 45 分钟的通知在真实环境里发出去。
