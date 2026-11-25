@@ -1102,3 +1102,56 @@ recipient = linan229@qq.com  OPERATIONAL_PENDING
 | 安装 | 就地切换 `INSTALL_RESULT = PASS`，2,872 文件；旧版 `.prev-20261125T150205Z` |
 | 回退 | `dist\release-backups\RFQ-025-pre-r9-20261125T150104Z`（程序 + 库，`DB_VERIFY_RESULT = PASS`，41 条采购） |
 | 重启 | PID 140236（GUI）+ 141460（watcher），23:02 起 |
+
+## 46. 23:15 的现场补充：ERP 会话已过期
+
+只读核对（python urllib，与程序同款）：
+
+```
+GET .../InnerEnquiry/YeWuXJ/List.aspx
+  200 -> https://yingsuo.alperp.cn/home/checking?gourl=%2Fskins%2Fetaoerp%2F...
+  页面含 login.aspx，不含 _id_dg / DetailFieldValue / select_btns
+```
+
+即：ERP 会话已失效，列表页被重定向去登录。程序每轮都在重试（`force_login=True`），目前拿到的是
+`INSO_WAITING_RECOVERY`（页面/会话未能证明），不是挑战码，所以它推迟而不是停。
+
+**给 Owner 的直接处置**：在那台机器上用程序专属的 Chrome 登录一次 INSO（账号已保存），
+下一轮会自己继续；若登录时要求验证码，那才是真正需要本人完成的一步。
+
+**已知诊断缺口（本轮未改，留待下一轮）**：报价适配器的兜底 `except Exception` 用
+`from None` 把真实异常藏在 `__context__`，所以在"推迟"路径上界面只能看到
+`INSO_WAITING_RECOVERY`，看不到底层是登录页、超时还是凭据。停机路径本轮已能取到真实原因码
+（见第 43 节），推迟路径还没有。今晚不再重建，先让 45 分钟的通知在真实环境里发出去。
+
+## 47. 45 分钟通知的真实验证（23:50:04）
+
+```
+created 2026-11-25T15:05:02Z  subject 【需要处理】INSO业务持续受阻
+  before: suppression_reason = CURRENT_REVIEW_PENDING, recipient OPERATIONAL_PENDING, attempts 0
+  after : suppression_reason = None, recipient SENT / NOTIFICATION_SENT, attempts 1, at 15:50:04Z
+```
+
+即：从故障起点算起**整 45 分钟**才发出，只发一次，收件人只有 Owner。旧逻辑下这条要么根本不存在（无待采购订单），
+要么被 `RUNTIME_STOP_UNVERIFIED` 抑制。
+
+## 48. 顺带发现的两个"又会让你蒙在鼓里"的问题（今晚未改，留待下一轮）
+
+1. **标签误导。** 同一轮登录保活把 INSO 判成 `SiteLoginOutcome.NO_CREDENTIAL`，界面显示
+   "**缺少登录凭据**"。但底层原因是 `AUTHENTICATED_SHELL_UNAVAILABLE`（外壳页没拿到），
+   被 `_NO_CREDENTIAL_CODES` 这批码"因为名字里有 AUTHENTIC"归进去的。它不是"没配账号"，
+   是"登录后的页面没证明出来"。这句提示会把人引向错误的方向。
+2. **保活通知被吞。** 两条 `网站登录保活异常`（Findchips 登录失败、INSO ERP 缺凭据）在账本里
+   `suppression_reason = EVIDENCE_MISSING`，`review_json` 为空 —— 也就是这条路径压根不带证据，
+   按"无证据不外发"的规则永远发不出去。
+
+## 49. 当前 ERP 状况与处置（23:52 只读核对）
+
+```
+GET .../InnerEnquiry/YeWuXJ/List.aspx -> 200 -> /home/checking?gourl=...
+页面含 login.aspx，不含 _id_dg / DetailFieldValue / select_btns
+```
+
+ERP 会话已失效，列表页被要求登录；程序每轮重试但拿不到外壳页，所以持续 `INSO_WAITING_RECOVERY`。
+**处置**：在那台机器上用程序专属 Chrome 登录一次 INSO。登录后下一轮会自动继续；
+若登录要求验证码，那才是真正需要本人完成的一步（届时会按 `MANUAL_VERIFICATION_REQUIRED` 立即发信）。
